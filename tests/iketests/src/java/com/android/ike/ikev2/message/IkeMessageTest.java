@@ -16,4 +16,66 @@
 
 package com.android.ike.ikev2.message;
 
-public final class IkeMessageTest {}
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import org.junit.Test;
+
+public final class IkeMessageTest {
+    private static final String IKE_SA_INIT_RAW_PACKET =
+            "8f54bf6d8b48e6e100000000000000002120220800000000"
+                    + "00000150220000300000002c010100040300000c0100000c"
+                    + "800e00800300000803000002030000080400000200000008"
+                    + "020000022800008800020000b4a2faf4bb54878ae21d6385"
+                    + "12ece55d9236fc5046ab6cef82220f421f3ce6361faf3656"
+                    + "4ecb6d28798a94aad7b2b4b603ddeaaa5630adb9ece8ac37"
+                    + "534036040610ebdd92f46bef84f0be7db860351843858f8a"
+                    + "cf87056e272377f70c9f2d81e29c7b0ce4f291a3a72476bb"
+                    + "0b278fd4b7b0a4c26bbeb08214c707137607958729000024"
+                    + "c39b7f368f4681b89fa9b7be6465abd7c5f68b6ed5d3b4c7"
+                    + "2cb4240eb5c464122900001c00004004e54f73b7d83f6beb"
+                    + "881eab2051d8663f421d10b02b00001c00004005d915368c"
+                    + "a036004cb578ae3e3fb268509aeab1900000002069936922"
+                    + "8741c6d4ca094c93e242c9de19e7b7c60000000500000500";
+    private static final String IKE_INITIATOR_SPI = "8f54bf6d8b48e6e1";
+    private static final String IKE_RESPODNER_SPI = "0000000000000000";
+    private static final byte IKE_FIRST_PAYLOAD_TYPE = 33;
+    private static final byte IKE_MAJOR_VERSION = 2;
+    private static final byte IKE_MINOR_VERSION = 0;
+    private static final byte IKE_EXCHANGE_TYPE = 34;
+    private static final int IKE_MSG_ID = 0;
+    private static final int IKE_MSG_LENGTH = 336;
+
+    @Test
+    public void testDecodeIkeHeader() throws Exception {
+        byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        IkeHeader header = new IkeHeader(inputPacket);
+
+        long initSpi = Long.parseUnsignedLong(IKE_INITIATOR_SPI, 16);
+        assertEquals(initSpi, header.ikeInitiatorSpi);
+        long respSpi = Long.parseUnsignedLong(IKE_RESPODNER_SPI, 16);
+        assertEquals(respSpi, header.ikeResponderSpi);
+
+        assertEquals(IKE_FIRST_PAYLOAD_TYPE, header.nextPayloadType);
+        assertEquals(IKE_MAJOR_VERSION, header.majorVersion);
+        assertEquals(IKE_MINOR_VERSION, header.minorVersion);
+        assertEquals(IKE_EXCHANGE_TYPE, header.exchangeType);
+        assertFalse(header.isResponse);
+        assertTrue(header.fromIkeInitiator);
+        assertEquals(IKE_MSG_ID, header.messageId);
+        assertEquals(IKE_MSG_LENGTH, header.messageLength);
+    }
+
+    private byte[] hexStringToByteArray(String s) {
+        int len = s.length();
+        byte[] data = new byte[len / 2];
+        for (int i = 0; i < len; i += 2) {
+            data[i / 2] =
+                    (byte)
+                            ((Character.digit(s.charAt(i), 16) << 4)
+                                    + Character.digit(s.charAt(i + 1), 16));
+        }
+        return data;
+    }
+}
