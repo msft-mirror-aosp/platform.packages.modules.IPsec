@@ -19,6 +19,11 @@ package com.android.ike.ikev2.message;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 
 import org.junit.Test;
 
@@ -52,16 +57,13 @@ public final class IkeMessageTest {
 
     private static final int IKE_MSG_ID = 0;
     private static final int IKE_MSG_LENGTH = 336;
-    private static final int[] PAYLOAD_LENGTH_LIST = {48, 136, 36, 28, 28, 32};
-    private static final byte[] PAYLOAD_TYPE_LIST = {
-        IkePayload.PAYLOAD_TYPE_SA,
-        IkePayload.PAYLOAD_TYPE_KE,
-        IkePayload.PAYLOAD_TYPE_NONCE,
-        IkePayload.PAYLOAD_TYPE_NOTIFY,
-        IkePayload.PAYLOAD_TYPE_NOTIFY,
-        IkePayload.PAYLOAD_TYPE_VENDOR
-    };
-    private static final int PAYLOAD_NUMBER = 6;
+
+    private static final int FIRST_PAYLOAD_TYPE_POSITION = 16;
+    private static final int VERSION_POSITION = 17;
+    private static final int EXCHANGE_TYPE_POSITION = 18;
+    private static final int PAYLOAD_CRITICAL_BIT_POSITION = 1;
+
+    private static final int PAYLOAD_NUMBER = 0;
 
     @Test
     public void testDecodeIkeHeader() throws Exception {
@@ -90,11 +92,55 @@ public final class IkeMessageTest {
         byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         IkeHeader header = new IkeHeader(inputPacket);
         IkeMessage message = IkeMessage.decode(header, inputPacket);
+        assertEquals(PAYLOAD_NUMBER, message.ikePayloadList.size());
+    }
 
-        for (int i = 0; i < PAYLOAD_NUMBER; i++) {
-            IkePayload payload = message.ikePayloadList.get(i);
-            assertEquals(PAYLOAD_TYPE_LIST[i], payload.currentPayloadType);
-            assertEquals(PAYLOAD_LENGTH_LIST[i], payload.payloadLength);
+    @Test
+    public void testThrowInvalidMajorVersionException() throws Exception {
+        byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Set major version 3.
+        inputPacket[VERSION_POSITION] = (byte) 0x30;
+        // Set Exchange type 0
+        inputPacket[EXCHANGE_TYPE_POSITION] = (byte) 0x00;
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage.decode(header, inputPacket);
+            fail(
+                    "Expected InvalidMajorVersionException: major version is 3"
+                            + "and packet length is 0");
+        } catch (InvalidMajorVersionException expected) {
+            assertEquals(3, expected.receivedMajorVersion);
+        }
+    }
+
+    @Test
+    public void testThrowInvalidSyntaxException() throws Exception {
+        byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Set Exchange type 0
+        inputPacket[EXCHANGE_TYPE_POSITION] = (byte) 0x00;
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage.decode(header, inputPacket);
+            fail("Expected InvalidSyntaxException: packet length is 0");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testThrowUnsupportedCriticalPayloadException() throws Exception {
+        byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Set first payload unsupported critical
+        inputPacket[FIRST_PAYLOAD_TYPE_POSITION] = (byte) 0xff;
+        inputPacket[IkeHeader.IKE_HEADER_LENGTH + PAYLOAD_CRITICAL_BIT_POSITION] = (byte) 0x80;
+
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage.decode(header, inputPacket);
+            fail(
+                    "Expected UnsupportedCriticalPayloadException: first"
+                            + "payload is unsupported critical.");
+        } catch (UnsupportedCriticalPayloadException expected) {
+            assertEquals(1, expected.payloadTypeList.size());
         }
     }
 
