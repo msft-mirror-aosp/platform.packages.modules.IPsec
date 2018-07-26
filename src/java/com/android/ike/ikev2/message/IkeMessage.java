@@ -79,7 +79,8 @@ public final class IkeMessage {
         while (currentPayloadType != IkePayload.PAYLOAD_TYPE_NO_NEXT) {
             try {
                 Pair<IkePayload, Integer> pair =
-                        IkePayloadFactory.getIkePayload(currentPayloadType, inputBuffer);
+                        IkePayloadFactory.getIkePayload(
+                                currentPayloadType, inputBuffer);
                 IkePayload payload = pair.first;
 
                 if (!(payload instanceof IkeUnsupportedPayload)) {
