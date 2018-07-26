@@ -40,6 +40,9 @@ import java.util.List;
  */
 public final class IkeMessage {
 
+    public static final byte IPSEC_SPI_LEN = 4;
+    public static final byte IKE_SPI_LEN = 8;
+
     public final IkeHeader ikeHeader;
     public final List<IkePayload> ikePayloadList;
 
@@ -79,8 +82,7 @@ public final class IkeMessage {
         while (currentPayloadType != IkePayload.PAYLOAD_TYPE_NO_NEXT) {
             try {
                 Pair<IkePayload, Integer> pair =
-                        IkePayloadFactory.getIkePayload(
-                                currentPayloadType, inputBuffer);
+                        IkePayloadFactory.getIkePayload(currentPayloadType, inputBuffer);
                 IkePayload payload = pair.first;
 
                 if (!(payload instanceof IkeUnsupportedPayload)) {
