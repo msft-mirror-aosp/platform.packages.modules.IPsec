@@ -15,6 +15,8 @@
  */
 package com.android.ike.ikev2.exceptions;
 
+import com.android.ike.ikev2.message.IkeNotifyPayload;
+
 import java.util.List;
 
 /**
@@ -36,7 +38,7 @@ public final class UnsupportedCriticalPayloadException extends IkeException {
      * @param payloadList the list of all unsupported critical payload types
      */
     public UnsupportedCriticalPayloadException(List<Integer> payloadList) {
-        super(IkeException.UNSUPPORTED_CRITICAL_PAYLOAD);
+        super(IkeNotifyPayload.NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD);
         payloadTypeList = payloadList;
     }
 }
