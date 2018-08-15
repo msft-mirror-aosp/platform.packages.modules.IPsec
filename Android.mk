@@ -20,6 +20,8 @@ LOCAL_AIDL_INCLUDES := $(LOCAL_PATH)/src/java
 LOCAL_SRC_FILES := \
     $(call all-java-files-under, src/java)
 
+LOCAL_JAVA_LIBRARIES := bouncycastle
+
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE := ike
 

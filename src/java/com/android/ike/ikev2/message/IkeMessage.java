@@ -23,9 +23,11 @@ import android.util.Pair;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
+import com.android.org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.security.Provider;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -39,6 +41,9 @@ import java.util.List;
  *     Protocol Version 2 (IKEv2).
  */
 public final class IkeMessage {
+
+    // Currently use Bouncy Castle as crypto security provider
+    static final Provider SECURITY_PROVIDER = new BouncyCastleProvider();
 
     public final IkeHeader ikeHeader;
     public final List<IkePayload> ikePayloadList;
@@ -99,5 +104,9 @@ public final class IkeMessage {
             throw new UnsupportedCriticalPayloadException(unsupportedCriticalPayloadList);
         }
         return new IkeMessage(header, supportedPayloadList);
+    }
+
+    static Provider getProvider() {
+        return SECURITY_PROVIDER;
     }
 }
