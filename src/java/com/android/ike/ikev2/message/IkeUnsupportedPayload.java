@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import java.nio.ByteBuffer;
 /**
  * IkeUnsupportedPayload represents anunsupported payload.
  *
@@ -41,9 +42,20 @@ final class IkeUnsupportedPayload extends IkePayload {
      * @throws UnsupportedOperationException for this payload.
      */
     @Override
-    byte[] encode(@PayloadType int nextPayload) {
+    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
         throw new UnsupportedOperationException(
                 "It is not supported to encode a " + getTypeString());
+    }
+
+    /**
+     * Throw an Exception when trying to get payload length
+     *
+     * @throws UnsupportedOperationException for this payload.
+     */
+    @Override
+    protected int getPayloadLength() {
+        throw new UnsupportedOperationException(
+                "It is not supported to get payload length of " + getTypeString());
     }
 
     /**
