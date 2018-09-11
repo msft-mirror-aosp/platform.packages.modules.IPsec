@@ -92,4 +92,27 @@ public final class IkeKePayload extends IkePayload {
     }
     // TODO: Add a constructor for generating Dh value and building KE payload.
     // TODO: Add a method for doing DH exchange calculation.
+
+    /**
+     * Encode KE payload to byte array.
+     *
+     * @param nextPayload type of payload that follows this payload.
+     * @return encoded KE payload
+     */
+    @Override
+    byte[] encode(@PayloadType int nextPayload) {
+        throw new UnsupportedOperationException(
+                "It is not supported to encode a " + getTypeString());
+        // TODO: Implement encoding KE payload.
+    }
+
+    /**
+     * Return the payload type as a String.
+     *
+     * @return the payload type as a String.
+     */
+    @Override
+    public String getTypeString() {
+        return "KE Payload";
+    }
 }

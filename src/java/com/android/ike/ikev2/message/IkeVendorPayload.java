@@ -40,4 +40,25 @@ public final class IkeVendorPayload extends IkePayload {
         super(PAYLOAD_TYPE_VENDOR, critical);
         vendorId = payloadBody;
     }
+
+    /**
+     * Throw an Exception when trying to encode this payload.
+     *
+     * @throws UnsupportedOperationException for this payload.
+     */
+    @Override
+    byte[] encode(@PayloadType int nextPayload) {
+        throw new UnsupportedOperationException(
+                "It is not supported to encode a " + getTypeString());
+    }
+
+    /**
+     * Return the payload type as a String.
+     *
+     * @return the payload type as a String.
+     */
+    @Override
+    public String getTypeString() {
+        return "Vendor ID Payload";
+    }
 }

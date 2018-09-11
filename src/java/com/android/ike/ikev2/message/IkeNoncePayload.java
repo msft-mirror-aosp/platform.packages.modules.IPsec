@@ -69,4 +69,27 @@ public final class IkeNoncePayload extends IkePayload {
         nonceData = new byte[GENERATED_NONCE_LEN];
         new SecureRandom().nextBytes(nonceData);
     }
+
+    /**
+     * Encode Nonce payload to byte array.
+     *
+     * @param nextPayload type of payload that follows this payload.
+     * @return encoded Nonce payload
+     */
+    @Override
+    byte[] encode(@PayloadType int nextPayload) {
+        throw new UnsupportedOperationException(
+                "It is not supported to encode a " + getTypeString());
+        // TODO: Implement encoding Nonce payload.
+    }
+
+    /**
+     * Return the payload type as a String.
+     *
+     * @return the payload type as a String.
+     */
+    @Override
+    public String getTypeString() {
+        return "Nonce Payload";
+    }
 }
