@@ -17,8 +17,6 @@
 package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.ikev2.exceptions.IkeException;
@@ -47,20 +45,6 @@ public final class IkeMessageTest {
                     + "881eab2051d8663f421d10b02b00001c00004005d915368c"
                     + "a036004cb578ae3e3fb268509aeab1900000002069936922"
                     + "8741c6d4ca094c93e242c9de19e7b7c60000000500000500";
-    private static final String IKE_INITIATOR_SPI = "8f54bf6d8b48e6e1";
-    private static final String IKE_RESPODNER_SPI = "0000000000000000";
-
-    @IkePayload.PayloadType
-    private static final byte IKE_FIRST_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_SA;
-
-    private static final byte IKE_MAJOR_VERSION = 2;
-    private static final byte IKE_MINOR_VERSION = 0;
-
-    @IkeHeader.ExchangeType
-    private static final int IKE_EXCHANGE_TYPE = IkeHeader.EXCHANGE_TYPE_IKE_INIT_SA;
-
-    private static final int IKE_MSG_ID = 0;
-    private static final int IKE_MSG_LENGTH = 336;
 
     private static final int FIRST_PAYLOAD_TYPE_POSITION = 16;
     private static final int VERSION_POSITION = 17;
@@ -115,28 +99,6 @@ public final class IkeMessageTest {
                         }
                     }
                 };
-    }
-
-    @Test
-    public void testDecodeIkeHeader() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
-        IkeHeader header = new IkeHeader(inputPacket);
-
-        assertEquals(IKE_MSG_LENGTH, inputPacket.length);
-
-        long initSpi = Long.parseUnsignedLong(IKE_INITIATOR_SPI, 16);
-        assertEquals(initSpi, header.ikeInitiatorSpi);
-        long respSpi = Long.parseUnsignedLong(IKE_RESPODNER_SPI, 16);
-        assertEquals(respSpi, header.ikeResponderSpi);
-
-        assertEquals(IKE_FIRST_PAYLOAD_TYPE, header.nextPayloadType);
-        assertEquals(IKE_MAJOR_VERSION, header.majorVersion);
-        assertEquals(IKE_MINOR_VERSION, header.minorVersion);
-        assertEquals(IKE_EXCHANGE_TYPE, header.exchangeType);
-        assertFalse(header.isResponse);
-        assertTrue(header.fromIkeInitiator);
-        assertEquals(IKE_MSG_ID, header.messageId);
-        assertEquals(IKE_MSG_LENGTH, header.messageLength);
     }
 
     @Test
