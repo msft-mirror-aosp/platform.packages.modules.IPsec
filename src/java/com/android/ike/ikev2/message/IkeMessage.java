@@ -138,4 +138,22 @@ public final class IkeMessage {
 
         return byteBuffer.array();
     }
+
+    // TODO: Add a method that takes cyptographic algorithms and parameters to encrypt all payloads
+    // to a byte array.
+
+    /**
+     * Encode entire IKE message to a byte array.
+     *
+     * @param encodedIkeBody IKE message body in byte array. IKE message body is encrypted and
+     *     integrity protected except in an IKE_SA_INIT message.
+     * @return the entire encoded IKE message as a byte array.
+     */
+    public byte[] encode(byte[] encodedIkeBody) {
+        ByteBuffer outputBuffer =
+                ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + encodedIkeBody.length);
+        ikeHeader.encodeToByteBuffer(outputBuffer);
+        outputBuffer.put(encodedIkeBody);
+        return outputBuffer.array();
+    }
 }
