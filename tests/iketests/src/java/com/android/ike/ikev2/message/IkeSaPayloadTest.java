@@ -34,6 +34,7 @@ import com.android.ike.ikev2.message.IkeSaPayload.Attribute;
 import com.android.ike.ikev2.message.IkeSaPayload.AttributeDecoder;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.KeyLengthAttribute;
+import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.Proposal;
 import com.android.ike.ikev2.message.IkeSaPayload.Transform;
 import com.android.ike.ikev2.message.IkeSaPayload.TransformDecoder;
@@ -71,6 +72,7 @@ public final class IkeSaPayloadTest {
                     + "400001e030000080400001f030000080400000f030000080400001003"
                     + "00000804000012000000080400000e";
     private static final String ENCR_TRANSFORM_RAW_PACKET = "0300000c0100000c800e0080";
+    private static final String PRF_TRANSFORM_RAW_PACKET = "0000000802000002";
     private static final int TRANSFORM_TYPE_POSITION = 4;
     private static final int TRANSFORM_ID_POSITION = 7;
 
@@ -162,6 +164,30 @@ public final class IkeSaPayloadTest {
         try {
             new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES, 129);
             fail("Expected IllegalArgumentException for invalid key length.");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodePrfTransform() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(PRF_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(new LinkedList<Attribute>());
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+        assertEquals(Transform.TRANSFORM_TYPE_PRF, transform.type);
+        assertEquals(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1, transform.id);
+        assertTrue(transform.isSupported);
+    }
+
+    @Test
+    public void testConstructPrfTransformWithUnSupportedId() throws Exception {
+        try {
+            new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC + 1);
+            fail("Expected IllegalArgumentException for unsupported Transform ID");
         } catch (IllegalArgumentException expected) {
         }
     }
