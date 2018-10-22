@@ -24,12 +24,21 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import org.junit.Test;
 
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
 public final class IkeNotifyPayloadTest {
     private static final String NOTIFY_PAYLOAD_GENERIC_HEADER = "2900001c";
     private static final String NOTIFY_PAYLOAD_BODY_RAW_PACKET =
             "00004004e54f73b7d83f6beb881eab2051d8663f421d10b0";
+
+    private static final String NAT_DETECTION_SOURCE_IP_DATA_HEX_STRING =
+            "e54f73b7d83f6beb881eab2051d8663f421d10b0";
+    private static final String IKE_INITIATOR_SPI_HEX_STRING = "5f54bf6d8b48e6e1";
+    private static final String IKE_RESPODNER_SPI_HEX_STRING = "0000000000000000";
+    private static final String IP_ADDR = "10.80.80.13";
+    private static final int PORT = 500;
+
     private static final int EXPECTED_PROTOCOL_ID = IkePayload.PROTOCOL_ID_UNSET;
     private static final int EXPECTED_SPI_SIZE = IkePayload.SPI_LEN_NOT_INCLUDED;
 
@@ -65,6 +74,21 @@ public final class IkeNotifyPayloadTest {
             fail("Expected InvalidSyntaxException: Protocol ID should not be ESP");
         } catch (InvalidSyntaxException expected) {
         }
+    }
+
+    @Test
+    public void testGenerateNatDetectionData() throws Exception {
+        long initiatorIkeSpi = Long.parseLong(IKE_INITIATOR_SPI_HEX_STRING, 16);
+        long responderIkespi = Long.parseLong(IKE_RESPODNER_SPI_HEX_STRING, 16);
+        InetAddress inetAddress = InetAddress.getByName(IP_ADDR);
+
+        byte[] netDetectionData =
+                IkeNotifyPayload.generateNatDetectionData(
+                        initiatorIkeSpi, responderIkespi, inetAddress, PORT);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(NAT_DETECTION_SOURCE_IP_DATA_HEX_STRING);
+        assertArrayEquals(expectedBytes, netDetectionData);
     }
 
     @Test

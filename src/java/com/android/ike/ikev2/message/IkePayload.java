@@ -86,6 +86,9 @@ public abstract class IkePayload {
 
     public static final int SPI_NOT_INCLUDED = 0;
 
+    /** Length of port number in bytes*/
+    public static final int IP_PORT_LEN = 2;
+
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({DH_GROUP_1024_BIT_MODP, DH_GROUP_2048_BIT_MODP})
     public @interface DhGroup {}
