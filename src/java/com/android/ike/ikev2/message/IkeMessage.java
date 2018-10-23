@@ -25,11 +25,17 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import com.android.org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.security.Provider;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+
+import javax.crypto.Cipher;
+import javax.crypto.Mac;
+import javax.crypto.SecretKey;
 
 /**
  * IkeMessage represents an IKE message.
@@ -60,22 +66,66 @@ public final class IkeMessage {
     }
 
     /**
-     * Decode unenrypted IKE message body and create an instance of IkeMessage.
+     * Decrypt and decode encrypted IKE message body and create an instance of IkeMessage.
      *
-     * @param header the IKE header that is decoded but not validated
-     * @param inputPacket the byte array contains the whole IKE message
-     * @throws IkeException if there is any error
+     * @param header the IKE header that is decoded but not validated.
+     * @param inputPacket the byte array containing the whole IKE message.
+     * @param integrityMac the initialized Message Authentication Code (MAC) for integrity check.
+     * @param checksumLen the length of integrity checksum.
+     * @param decryptCipher the uninitialized Cipher for doing decryption.
+     * @param dKey the decryption key.
+     * @param ivLen the length of Initialization Vector.
+     * @return the IkeMessage instance.
+     * @throws IkeException if there is any protocol error.
+     * @throws IOException if there is any error during integrity check or decryption.
+     */
+    public static IkeMessage decode(
+            IkeHeader header,
+            byte[] inputPacket,
+            Mac integrityMac,
+            int checksumLen,
+            Cipher decryptCipher,
+            SecretKey dKey,
+            int ivLen)
+            throws IkeException, IOException {
+
+        header.checkValidOrThrow(inputPacket.length);
+
+        Pair<IkeSkPayload, Integer> pair =
+                IkePayloadFactory.getIkeSkPayload(
+                        inputPacket, integrityMac, checksumLen, decryptCipher, dKey, ivLen);
+        IkeSkPayload skPayload = pair.first;
+        int firstPayloadType = pair.second;
+
+        List<IkePayload> supportedPayloadList =
+                decodePayloadList(firstPayloadType, skPayload.unencryptedPayloads);
+        return new IkeMessage(header, supportedPayloadList);
+    }
+
+    /**
+     * Decode unencrypted IKE message body and create an instance of IkeMessage.
+     *
+     * @param header the IKE header that is decoded but not validated.
+     * @param inputPacket the byte array contains the whole IKE message.
+     * @return the IkeMessage instance.
+     * @throws IkeException if there is any protocol error.
      */
     public static IkeMessage decode(IkeHeader header, byte[] inputPacket) throws IkeException {
 
-        header.validate();
+        header.checkValidOrThrow(inputPacket.length);
 
-        ByteBuffer inputBuffer =
-                ByteBuffer.wrap(
-                        inputPacket,
-                        IkeHeader.IKE_HEADER_LENGTH,
-                        inputPacket.length - IkeHeader.IKE_HEADER_LENGTH);
-        @PayloadType int currentPayloadType = header.nextPayloadType;
+        byte[] unencryptedPayloads =
+                Arrays.copyOfRange(inputPacket, IkeHeader.IKE_HEADER_LENGTH, inputPacket.length);
+
+        List<IkePayload> supportedPayloadList =
+                decodePayloadList(header.nextPayloadType, unencryptedPayloads);
+        return new IkeMessage(header, supportedPayloadList);
+    }
+
+    private static List<IkePayload> decodePayloadList(
+            @PayloadType int firstPayloadType, byte[] unencryptedPayloads) throws IkeException {
+        ByteBuffer inputBuffer = ByteBuffer.wrap(unencryptedPayloads);
+        int currentPayloadType = firstPayloadType;
         // For supported payload
         List<IkePayload> supportedPayloadList = new LinkedList<>();
         // For unsupported critical payload
@@ -96,14 +146,23 @@ public final class IkeMessage {
 
                 currentPayloadType = pair.second;
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
+                // TODO: b/119791832. Add length check in each payload before getting data from
+                // ByteBuffer.
+
+                // Invalid length error when parsing payload bodies.
                 throw new InvalidSyntaxException("Malformed IKE Payload");
             }
+        }
+
+        if (inputBuffer.remaining() > 0) {
+            throw new InvalidSyntaxException(
+                    "Malformed IKE Payload: Unexpected bytes at the end of packet.");
         }
 
         if (unsupportedCriticalPayloadList.size() > 0) {
             throw new UnsupportedCriticalPayloadException(unsupportedCriticalPayloadList);
         }
-        return new IkeMessage(header, supportedPayloadList);
+        return supportedPayloadList;
     }
 
     static Provider getSecurityProvider() {
