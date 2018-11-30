@@ -24,6 +24,7 @@ import static org.junit.Assert.fail;
 import android.util.Pair;
 
 import com.android.ike.ikev2.IkeDhParams;
+import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.utils.BigIntegerUtils;
 
@@ -50,7 +51,7 @@ public final class IkeKePayloadTest {
     @IkePayload.PayloadType
     private static final int NEXT_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_NONCE;
 
-    private static final int EXPECTED_DH_GROUP = IkePayload.DH_GROUP_1024_BIT_MODP;
+    private static final int EXPECTED_DH_GROUP = SaProposal.DH_GROUP_1024_BIT_MODP;
 
     private static final int EXPECTED_KE_DATA_LEN = 128;
 
@@ -138,7 +139,7 @@ public final class IkeKePayloadTest {
     @Test
     public void testGetIkeKePayload() throws Exception {
         Pair<DHPrivateKeySpec, IkeKePayload> pair =
-                IkeKePayload.getKePayload(IkePayload.DH_GROUP_1024_BIT_MODP);
+                IkeKePayload.getKePayload(SaProposal.DH_GROUP_1024_BIT_MODP);
 
         // Test DHPrivateKeySpec
         DHPrivateKeySpec privateKeySpec = pair.first;
