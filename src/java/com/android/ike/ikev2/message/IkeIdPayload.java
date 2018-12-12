@@ -16,7 +16,11 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.IkeIdentification;
+import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkePayload.PayloadType;
 
 import java.nio.ByteBuffer;
@@ -32,10 +36,47 @@ import java.nio.ByteBuffer;
  *     Protocol Version 2 (IKEv2).
  */
 public final class IkeIdPayload extends IkePayload {
+    // Length of ID Payload header in octets.
+    private static final int ID_HEADER_LEN = 4;
+    // Length of reserved field in octets.
+    private static final int ID_HEADER_RESERVED_LEN = 3;
+
+    public final IkeIdentification ikeId;
+
+    /**
+     * Construct IkeIdPayload for received IKE packet in the context of {@link IkePayloadFactory}.
+     *
+     * @param critical indicates if it is a critical payload.
+     * @param payloadBody payload body in byte array.
+     * @param isInitiator indicates whether it is sent from IKE initiator or IKE responder.
+     * @throws IkeException for decoding error.
+     */
     IkeIdPayload(boolean critical, byte[] payloadBody, boolean isInitiator) throws IkeException {
         super((isInitiator ? PAYLOAD_TYPE_ID_INITIATOR : PAYLOAD_TYPE_ID_RESPONDER), critical);
-        // TODO: Decode and validate syntax of payloadBody.
+        // TODO: b/119791832 Add helper method for checking payload body length in superclass.
+        if (payloadBody.length <= ID_HEADER_LEN) {
+            throw new InvalidSyntaxException(getTypeString() + " is too short.");
+        }
+
+        ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
+        int idType = Byte.toUnsignedInt(inputBuffer.get());
+
+        // Skip reserved field
+        inputBuffer.get(new byte[ID_HEADER_RESERVED_LEN]);
+
+        byte[] idData = new byte[payloadBody.length - ID_HEADER_LEN];
+        inputBuffer.get(idData);
+
+        switch (idType) {
+            case IkeIdentification.ID_TYPE_IPV4_ADDR:
+                ikeId = new IkeIpv4AddrIdentification(idData);
+                return;
+            default:
+                throw new AuthenticationFailedException("Unsupported ID type.");
+        }
     }
+
+    // TODO: Add constructor for building outbound packet.
 
     /**
      * Encode Identification Payload to ByteBuffer.

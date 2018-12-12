@@ -358,7 +358,7 @@ public final class IkeSaPayload extends IkePayload {
             try {
                 validateKeyLength();
             } catch (InvalidSyntaxException e) {
-                throw new IllegalArgumentException(e.message);
+                throw new IllegalArgumentException(e);
             }
         }
 
