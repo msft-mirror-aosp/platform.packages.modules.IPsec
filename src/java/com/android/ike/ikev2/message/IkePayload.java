@@ -42,6 +42,7 @@ public abstract class IkePayload {
         PAYLOAD_TYPE_NO_NEXT,
         PAYLOAD_TYPE_SA,
         PAYLOAD_TYPE_KE,
+        PAYLOAD_TYPE_CERT,
         PAYLOAD_TYPE_NONCE,
         PAYLOAD_TYPE_NOTIFY,
         PAYLOAD_TYPE_VENDOR,
@@ -59,6 +60,8 @@ public abstract class IkePayload {
     public static final int PAYLOAD_TYPE_ID_INITIATOR = 35;
     /** Identification Payload for IKE SA Responder */
     public static final int PAYLOAD_TYPE_ID_RESPONDER = 36;
+    /** Certification Payload */
+    public static final int PAYLOAD_TYPE_CERT = 37;
     /** Nonce Payload */
     public static final int PAYLOAD_TYPE_NONCE = 40;
     /** Notify Payload */
