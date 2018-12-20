@@ -98,6 +98,7 @@ public final class IkeNotifyPayload extends IkePayload {
      */
     IkeNotifyPayload(boolean isCritical, byte[] payloadBody) throws IkeException {
         super(PAYLOAD_TYPE_NOTIFY, isCritical);
+
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
 
         protocolId = Byte.toUnsignedInt(inputBuffer.get());
