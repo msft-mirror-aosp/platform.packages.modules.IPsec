@@ -76,7 +76,7 @@ public final class IkeAuthPayloadTest {
         byte[] calculatedBytes = payload.signWithPrf(prfMac, skpBytes, idBytes);
 
         byte[] expectedBytes =
-                TestUtils.hexStringToByteArray(PSK_SIGNED_OECTETS_APPENDIX_HEX_STRING);
+                TestUtils.hexStringToByteArray(PSK_SIGNED_OCTETS_APPENDIX_HEX_STRING);
         assertArrayEquals(expectedBytes, calculatedBytes);
     }
 }

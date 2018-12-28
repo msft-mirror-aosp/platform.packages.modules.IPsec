@@ -18,6 +18,7 @@ package com.android.ike.ikev2.message;
 
 import android.annotation.IntDef;
 
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeException;
 
 import java.lang.annotation.Retention;
@@ -25,69 +26,57 @@ import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
 
 /**
- * IkeCertPayload represents a Certification Payload.
+ * IkeCertPayload is an abstract class that represents the common information for all Certificate
+ * Payload carrying different types of certifciate-related data and static methods related to
+ * certificate validation.
  *
- * <p>Certification Payload is only sent in IKE_AUTH exchange. When sending multiple certificates,
- * IKE library should put certificates in order starting with the target certificate and ending with
- * a certificate issued by the trust anchor. While when receiving an inbound packet, IKE library
- * should take first certificate as the target certificate but treat the rest unordered.
+ * <p>Certificate Payload is only sent in IKE_AUTH exchange.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.6">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2).
  */
-public final class IkeCertPayload extends IkePayload {
+public abstract class IkeCertPayload extends IkePayload {
+    // Length of certificate encoding type field in octets.
+    private static final int CERT_ENCODING_LEN = 1;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         CERTIFICATE_ENCODING_X509_CERT_SIGNATURE,
         CERTIFICATE_ENCODING_CRL,
         CERTIFICATE_ENCODING_X509_CERT_HASH_URL,
-        CERTIFICATE_ENCODING_X509_CERT_BUNDLE_HAS_URL
     })
     public @interface CertificateEncoding {}
 
     public static final int CERTIFICATE_ENCODING_X509_CERT_SIGNATURE = 4;
     public static final int CERTIFICATE_ENCODING_CRL = 7;
     public static final int CERTIFICATE_ENCODING_X509_CERT_HASH_URL = 12;
-    public static final int CERTIFICATE_ENCODING_X509_CERT_BUNDLE_HAS_URL = 13;
 
-    IkeCertPayload(boolean critical, byte[] payloadBody) throws IkeException {
+    @CertificateEncoding public final int certEncodingType;
+
+    protected IkeCertPayload(boolean critical, @CertificateEncoding int encodingType) {
         super(PAYLOAD_TYPE_CERT, critical);
-        // TODO: Decode and validate syntax of payloadBody.
+        certEncodingType = encodingType;
     }
 
-    /**
-     * Encode Certification Payload to ByteBuffer.
-     *
-     * @param nextPayload type of payload that follows this payload.
-     * @param byteBuffer destination ByteBuffer that stores encoded payload.
-     */
-    @Override
-    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
-    }
+    protected static IkeCertPayload getIkeCertPayload(boolean critical, byte[] payloadBody)
+            throws IkeException {
+        ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
 
-    /**
-     * Get entire payload length.
-     *
-     * @return entire payload length.
-     */
-    @Override
-    protected int getPayloadLength() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException(
-                "It is not supported to get payload length of " + getTypeString());
-    }
-
-    /**
-     * Return the payload type as a String.
-     *
-     * @return the payload type as a String.
-     */
-    @Override
-    public String getTypeString() {
-        return "Certification Payload";
+        int certEncodingType = Byte.toUnsignedInt(inputBuffer.get());
+        byte[] certData = new byte[payloadBody.length - CERT_ENCODING_LEN];
+        inputBuffer.get(certData);
+        switch (certEncodingType) {
+            case CERTIFICATE_ENCODING_X509_CERT_SIGNATURE:
+                return new IkeCertX509CertPayload(critical, certData);
+                // TODO: Support decoding CRL and "Hash and URL".
+            case CERTIFICATE_ENCODING_CRL:
+                throw new AuthenticationFailedException(
+                        "CERTIFICATE_ENCODING_CRL decoding is unsupported.");
+            case CERTIFICATE_ENCODING_X509_CERT_HASH_URL:
+                throw new AuthenticationFailedException(
+                        "CERTIFICATE_ENCODING_X509_CERT_HASH_URL decoding is unsupported");
+            default:
+                throw new AuthenticationFailedException("Unrecognized certificate encoding type.");
+        }
     }
 }
