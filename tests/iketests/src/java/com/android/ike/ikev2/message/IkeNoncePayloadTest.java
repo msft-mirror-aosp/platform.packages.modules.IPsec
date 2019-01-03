@@ -41,7 +41,7 @@ public final class IkeNoncePayloadTest {
         payload.encodeToByteBuffer(NEXT_PAYLOAD_TYPE, byteBuffer);
 
         byte[] expectedNoncePayload =
-        TestUtils.hexStringToByteArray(NONCE_PAYLOAD_RAW_HEX_STRING);
+                TestUtils.hexStringToByteArray(NONCE_PAYLOAD_RAW_HEX_STRING);
         assertArrayEquals(expectedNoncePayload, byteBuffer.array());
     }
 }

@@ -16,15 +16,26 @@
 
 package com.android.ike.ikev2.message;
 
+/** TestUtils provides utility methods for parsing Hex String */
 public final class TestUtils {
-    static byte[] hexStringToByteArray(String s) {
-        int len = s.length();
+    /**
+     * Converts the unsigned Hex String to a byte array.
+     *
+     * @param hexString hex representation of an unsigned value.
+     * @return the converted byte array.
+     * @throws IllegalArgumentException when length of Hex String is an odd number.
+     */
+    public static byte[] hexStringToByteArray(String hexString) throws IllegalArgumentException {
+        int len = hexString.length();
+        if (len % 2 != 0) {
+            throw new IllegalArgumentException("Invalid Hex String");
+        }
         byte[] data = new byte[len / 2];
         for (int i = 0; i < len; i += 2) {
             data[i / 2] =
                     (byte)
-                            ((Character.digit(s.charAt(i), 16) << 4)
-                                    + Character.digit(s.charAt(i + 1), 16));
+                            ((Character.digit(hexString.charAt(i), 16) << 4)
+                                    + Character.digit(hexString.charAt(i + 1), 16));
         }
         return data;
     }
