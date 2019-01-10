@@ -277,7 +277,8 @@ public final class IkeSaPayload extends IkePayload {
                     return new IntegrityTransform(id, attributeList);
                 case TRANSFORM_TYPE_DH:
                     return new DhGroupTransform(id, attributeList);
-                    // TODO: Add ESN
+                case TRANSFORM_TYPE_ESN:
+                    return new EsnTransform(id, attributeList);
                 default:
                     return new UnrecognizedTransform(type, id, attributeList);
             }
@@ -310,8 +311,6 @@ public final class IkeSaPayload extends IkePayload {
 
         // TODO: Add abstract getTransformIdString() to return specific algorithm/dhGroup name
     }
-
-    // TODO: Implement DhGroupTransform and EsnTransForm
 
     /**
      * EncryptionTransform represents an encryption algorithm. It may contain an Atrribute
@@ -585,6 +584,60 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         public String getTransformTypeString() {
             return "Diffie-Hellman Group";
+        }
+    }
+
+    /**
+     * EsnTransform represents ESN policy that indicates if IPsec SA uses tranditional 32-bit
+     * sequence numbers or extended(64-bit) sequence numbers.
+     *
+     * <p>Currently IKE library only supports negotiating IPsec SA that do not use extended sequence
+     * numbers. The Transform ID of EsnTransform in outbound packets is not user configurable.
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
+     *     Exchange Protocol Version 2 (IKEv2).
+     */
+    public static final class EsnTransform extends Transform {
+        @Retention(RetentionPolicy.SOURCE)
+        @IntDef({ESN_POLICY_NO_EXTENDED, ESN_POLICY_EXTENDED})
+        public @interface EsnPolicy {}
+
+        public static final int ESN_POLICY_NO_EXTENDED = 0;
+        public static final int ESN_POLICY_EXTENDED = 1;
+
+        /**
+         * Construct an instance of EsnTransform indicates using no-extended sequence numbers for
+         * building an outbound packet.
+         */
+        public EsnTransform() {
+            super(Transform.TRANSFORM_TYPE_ESN, ESN_POLICY_NO_EXTENDED);
+        }
+
+        /**
+         * Contruct an instance of EsnTransform for decoding an inbound packet.
+         *
+         * @param id the IKE standard Transform ID.
+         * @param attributeList the decoded list of Attribute.
+         * @throws InvalidSyntaxException for syntax error.
+         */
+        protected EsnTransform(int id, List<Attribute> attributeList)
+                throws InvalidSyntaxException {
+            super(Transform.TRANSFORM_TYPE_ESN, id, attributeList);
+        }
+
+        @Override
+        protected boolean isSupportedTransformId(int id) {
+            return (id == ESN_POLICY_NO_EXTENDED || id == ESN_POLICY_EXTENDED);
+        }
+
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            return !attributeList.isEmpty();
+        }
+
+        @Override
+        public String getTransformTypeString() {
+            return "Extended Sequence Numbers";
         }
     }
 
