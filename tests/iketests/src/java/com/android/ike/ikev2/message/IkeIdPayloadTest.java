@@ -22,11 +22,13 @@ import static org.junit.Assert.fail;
 
 import com.android.ike.ikev2.IkeIdentification;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
+import com.android.ike.ikev2.IkeIdentification.IkeIpv6AddrIdentification;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 
 import org.junit.Test;
 
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.nio.ByteBuffer;
 
 public final class IkeIdPayloadTest {
@@ -35,6 +37,12 @@ public final class IkeIdPayloadTest {
             "2700000c01000000c0000264";
     private static final String IPV4_ADDR_ID_PAYLOAD_RESPONDER_BODY_HEX_STRING = "01000000c0000264";
     private static final String IPV4_ADDR_STRING = "192.0.2.100";
+
+    private static final String IPV6_ADDR_ID_PAYLOAD_RESPONDER_HEX_STRING =
+            "27000018050000000000200100000db80000000000000001";
+    private static final String IPV6_ADDR_ID_PAYLOAD_RESPONDER_BODY_HEX_STRING =
+            "050000000000200100000db80000000000000001";
+    private static final String IPV6_ADDR_STRING = "0:2001:0:db8::1";
 
     private static final int ID_TYPE_OFFSET = 0;
 
@@ -49,6 +57,19 @@ public final class IkeIdPayloadTest {
         IkeIpv4AddrIdentification ikeId = (IkeIpv4AddrIdentification) payload.ikeId;
         Inet4Address expectedAddr = (Inet4Address) Inet4Address.getByName(IPV4_ADDR_STRING);
         assertEquals(expectedAddr, ikeId.ipv4Address);
+    }
+
+    @Test
+    public void testDecodeIpv6AddrIdPayload() throws Exception {
+        byte[] inputPacket =
+                TestUtils.hexStringToByteArray(IPV6_ADDR_ID_PAYLOAD_RESPONDER_BODY_HEX_STRING);
+        IkeIdPayload payload = new IkeIdPayload(false, inputPacket, false);
+
+        assertEquals(IkePayload.PAYLOAD_TYPE_ID_RESPONDER, payload.payloadType);
+        assertEquals(IkeIdentification.ID_TYPE_IPV6_ADDR, payload.ikeId.idType);
+        IkeIpv6AddrIdentification ikeId = (IkeIpv6AddrIdentification) payload.ikeId;
+        Inet6Address expectedAddr = (Inet6Address) Inet6Address.getByName(IPV6_ADDR_STRING);
+        assertEquals(expectedAddr, ikeId.ipv6Address);
     }
 
     @Test
@@ -74,6 +95,19 @@ public final class IkeIdPayloadTest {
 
         byte[] expectedBytes =
                 TestUtils.hexStringToByteArray(IPV4_ADDR_ID_PAYLOAD_RESPONDER_HEX_STRING);
+        assertArrayEquals(expectedBytes, inputBuffer.array());
+    }
+
+    @Test
+    public void testConstructAndEncodeIpv6AddrIdPayload() throws Exception {
+        Inet6Address ipv6Address = (Inet6Address) Inet6Address.getByName(IPV6_ADDR_STRING);
+        IkeIdPayload payload = new IkeIdPayload(false, new IkeIpv6AddrIdentification(ipv6Address));
+
+        ByteBuffer inputBuffer = ByteBuffer.allocate(payload.getPayloadLength());
+        payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_AUTH, inputBuffer);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(IPV6_ADDR_ID_PAYLOAD_RESPONDER_HEX_STRING);
         assertArrayEquals(expectedBytes, inputBuffer.array());
     }
 }
