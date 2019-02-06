@@ -15,10 +15,7 @@
  */
 package com.android.ike.ikev2.exceptions;
 
-import android.annotation.IntDef;
-
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
+import com.android.ike.ikev2.message.IkeNotifyPayload;
 
 /**
  * IkeException is an abstract class that represents the common information for all IKE protocol
@@ -30,24 +27,14 @@ import java.lang.annotation.RetentionPolicy;
  *     Protocol Version 2 (IKEv2).
  */
 public abstract class IkeException extends Exception {
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({UNSUPPORTED_CRITICAL_PAYLOAD, INVALID_MAJOR_VERSION, INVALID_SYNTAX})
-    public @interface ErrorType {}
-    /** Unsupported critical payload */
-    public static final int UNSUPPORTED_CRITICAL_PAYLOAD = 1;
-    /** Major version is larger than 2 */
-    public static final int INVALID_MAJOR_VERSION = 5;
-    /** There is field that out of range */
-    public static final int INVALID_SYNTAX = 7;
-
-    @ErrorType public final int errorCode;
+    @IkeNotifyPayload.NotifyType public final int errorCode;
 
     /**
      * Construct an instance of IkeException
      *
      * @param code the protocol error code
      */
-    public IkeException(@ErrorType int code) {
+    public IkeException(@IkeNotifyPayload.NotifyType int code) {
         super();
         errorCode = code;
     }

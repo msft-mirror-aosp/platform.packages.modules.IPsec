@@ -63,6 +63,25 @@ public abstract class IkePayload {
 
     // TODO: List all payload types.
 
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+        PROTOCOL_ID_RESERVED,
+        PROTOCOL_ID_IKE,
+        PROTOCOL_ID_AH,
+        PROTOCOL_ID_ESP,
+    })
+    public @interface ProtocolId {}
+
+    public static final int PROTOCOL_ID_RESERVED = 0;
+    public static final int PROTOCOL_ID_CURRENT_IKE_SA = PROTOCOL_ID_RESERVED;
+    public static final int PROTOCOL_ID_IKE = 1;
+    public static final int PROTOCOL_ID_AH = 2;
+    public static final int PROTOCOL_ID_ESP = 3;
+
+    public static final byte SPI_LEN_NOT_INCLUDED = 0;
+    public static final byte SPI_LEN_IPSEC = 4;
+    public static final byte SPI_LEN_IKE = 8;
+
     public final int payloadType;
     public final boolean isCritical;
 
