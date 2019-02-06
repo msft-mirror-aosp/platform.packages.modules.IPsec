@@ -78,6 +78,17 @@ public final class IkeMessageTest {
         TestIkeSupportedPayload(int payload, boolean critical) {
             super(payload, critical);
         }
+
+        @Override
+        byte[] encode(@PayloadType int nextPayload) {
+            throw new UnsupportedOperationException(
+                    "It is not supported to encode " + getTypeString());
+        }
+
+        @Override
+        public String getTypeString() {
+            return "Test Payload";
+        }
     }
 
     @Before

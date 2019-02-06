@@ -125,4 +125,26 @@ public final class IkeNotifyPayload extends IkePayload {
         notifyData = new byte[payloadBody.length - NOTIFY_HEADER_LEN];
         inputBuffer.get(notifyData);
     }
+    /**
+     * Encode Notify payload to byte array.
+     *
+     * @param nextPayload type of payload that follows this payload.
+     * @return encoded Notify payload
+     */
+    @Override
+    byte[] encode(@PayloadType int nextPayload) {
+        throw new UnsupportedOperationException(
+                "It is not supported to encode a " + getTypeString());
+        // TODO: Implement encoding Notify payload.
+    }
+
+    /**
+     * Return the payload type as a String.
+     *
+     * @return the payload type as a String.
+     */
+    @Override
+    public String getTypeString() {
+        return "Notify Payload";
+    }
 }
