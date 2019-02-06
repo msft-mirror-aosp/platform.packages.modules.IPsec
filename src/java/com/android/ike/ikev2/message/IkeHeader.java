@@ -36,6 +36,13 @@ import java.nio.ByteBuffer;
  *     Protocol Version 2 (IKEv2).
  */
 public final class IkeHeader {
+    private static final byte IKE_HEADER_VERSION_INFO = (byte) 0x20;
+
+    // Indicate whether this message is a response message
+    private static final byte IKE_HEADER_FLAG_IS_RESP_MSG = (byte) 0x20;
+    // Indicate whether this message is sent from the original IKE initiator
+    private static final byte IKE_HEADER_FLAG_FROM_IKE_INITIATOR = (byte) 0x08;
+
     public static final int IKE_HEADER_LENGTH = 28;
 
     @Retention(RetentionPolicy.SOURCE)
@@ -58,7 +65,7 @@ public final class IkeHeader {
     public final byte majorVersion;
     public final byte minorVersion;
     @ExchangeType public final int exchangeType;
-    public final boolean isResponse;
+    public final boolean isResponseMsg;
     public final boolean fromIkeInitiator;
     public final int messageId;
     public final int messageLength;
@@ -89,7 +96,7 @@ public final class IkeHeader {
         ikeResponderSpi = rSpi;
         nextPayloadType = nextPType;
         exchangeType = eType;
-        isResponse = isResp;
+        isResponseMsg = isResp;
         fromIkeInitiator = fromInit;
         messageId = msgId;
         messageLength = length;
@@ -123,7 +130,7 @@ public final class IkeHeader {
         exchangeType = Byte.toUnsignedInt(buffer.get());
 
         byte flagsByte = buffer.get();
-        isResponse = ((flagsByte & 0x20) != 0);
+        isResponseMsg = ((flagsByte & 0x20) != 0);
         fromIkeInitiator = ((flagsByte & 0x08) != 0);
 
         messageId = buffer.getInt();
@@ -147,5 +154,25 @@ public final class IkeHeader {
                 || exchangeType > EXCHANGE_TYPE_INFORMATIONAL) {
             throw new InvalidSyntaxException("Invalid IKE Exchange Type.");
         }
+    }
+
+    /** Encode IKE header to ByteBuffer */
+    public void encodeToByteBuffer(ByteBuffer byteBuffer) {
+        byteBuffer
+                .putLong(ikeInitiatorSpi)
+                .putLong(ikeResponderSpi)
+                .put((byte) nextPayloadType)
+                .put(IKE_HEADER_VERSION_INFO)
+                .put((byte) exchangeType);
+
+        byte flag = 0;
+        if (isResponseMsg) {
+            flag |= IKE_HEADER_FLAG_IS_RESP_MSG;
+        }
+        if (fromIkeInitiator) {
+            flag |= IKE_HEADER_FLAG_FROM_IKE_INITIATOR;
+        }
+
+        byteBuffer.put(flag).putInt(messageId).putInt(messageLength);
     }
 }
