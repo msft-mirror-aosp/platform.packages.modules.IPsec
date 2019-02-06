@@ -24,6 +24,7 @@ import android.util.ArraySet;
 import android.util.Pair;
 
 import com.android.ike.ikev2.SaProposal;
+import com.android.ike.ikev2.SaProposal.IntegrityAlgorithm;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.internal.annotations.VisibleForTesting;
@@ -44,7 +45,7 @@ import java.util.Set;
 public final class IkeSaPayload extends IkePayload {
     public final List<Proposal> proposalList;
     /**
-     * Construct an instance of IkeSaPayload in the context of IkePayloadFactory.
+     * Construct an instance of IkeSaPayload for decoding an inbound packet.
      *
      * @param critical indicates if this payload is critical. Ignored in supported payload as
      *     instructed by the RFC 7296.
@@ -220,7 +221,7 @@ public final class IkeSaPayload extends IkePayload {
         public final int id;
         public final boolean isSupported;
 
-        /** Construct an instance of Transform in the context of {@link SaProposal} */
+        /** Construct an instance of Transform for building an outbound packet. */
         protected Transform(int type, int id) {
             this.type = type;
             this.id = id;
@@ -231,7 +232,7 @@ public final class IkeSaPayload extends IkePayload {
             this.isSupported = true;
         }
 
-        /** Construct an instance of Transform in the context of {@link Transform} */
+        /** Construct an instance of Transform for decoding an inbound packet. */
         protected Transform(int type, int id, List<Attribute> attributeList) {
             this.type = type;
             this.id = id;
@@ -268,7 +269,9 @@ public final class IkeSaPayload extends IkePayload {
                     return new EncryptionTransform(id, attributeList);
                 case TRANSFORM_TYPE_PRF:
                     return new PrfTransform(id, attributeList);
-                    // TODO: Add Integrity algorithm, DhGroup and ESN
+                case TRANSFORM_TYPE_INTEG:
+                    return new IntegrityTransform(id, attributeList);
+                    // TODO: Add DhGroup and ESN
                 default:
                     return new UnrecognizedTransform(type, id, attributeList);
             }
@@ -286,18 +289,15 @@ public final class IkeSaPayload extends IkePayload {
             }
         }
 
+        // Check if there is Attribute with unrecognized type. Most Transforms do not have any
+        // supported attribute types. Return true by default, and override in Transforms that
+        // support Transform Attributes.
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            return true;
+        }
+
         // Check if this Transform ID is supported.
         protected abstract boolean isSupportedTransformId(int id);
-
-        // Check if there is Attribute with unrecognized type.
-        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
-            for (Attribute attr : attributeList) {
-                if (attr instanceof UnrecognizedAttribute) {
-                    return true;
-                }
-            }
-            return false;
-        }
 
         /**
          * Get Tranform Type as a String.
@@ -328,9 +328,19 @@ public final class IkeSaPayload extends IkePayload {
             return SaProposal.isSupportedEncryptionAlgorithm(id);
         }
 
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            for (Attribute attr : attributeList) {
+                if (attr instanceof UnrecognizedAttribute) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         /**
-         * Contruct an instance of EncryptionTransform in the context of {@link SaProposal} with
-         * fixed key length.
+         * Contruct an instance of EncryptionTransform with fixed key length for building an
+         * outbound packet.
          *
          * @param id the IKE standard Transform ID.
          */
@@ -339,8 +349,8 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         /**
-         * Contruct an instance of EncryptionTransform in the context of {@link SaProposal} with
-         * variable key length.
+         * Contruct an instance of EncryptionTransform with variable key length for building an
+         * outbound packet.
          *
          * @param id the IKE standard Transform ID.
          * @param keyLength the specified key length of this encryption algorithm.
@@ -357,8 +367,7 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         /**
-         * Contruct an instance of EncryptionTransform in the context of abstract class {@link
-         * Transform}.
+         * Contruct an instance of EncryptionTransform for decoding an inbound packet.
          *
          * @param id the IKE standard Transform ID.
          * @param attributeList the decoded list of Attribute.
@@ -440,8 +449,6 @@ public final class IkeSaPayload extends IkePayload {
     /**
      * PrfTransform represents an pseudorandom function.
      *
-     * <p>Currently it does not have any supported {@link Attribute}.
-     *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
      *     Exchange Protocol Version 2 (IKEv2).
      */
@@ -452,7 +459,7 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         /**
-         * Contruct an instance of PrfTransform in the context of {@link SaProposal}.
+         * Contruct an instance of PrfTransform for building an outbound packet.
          *
          * @param id the IKE standard Transform ID.
          */
@@ -461,7 +468,7 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         /**
-         * Contruct an instance of PrfTransform in the context of abstract class {@link Transform}.
+         * Contruct an instance of PrfTransform for decoding an inbound packet.
          *
          * @param id the IKE standard Transform ID.
          * @param attributeList the decoded list of Attribute.
@@ -475,6 +482,45 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         public String getTransformTypeString() {
             return "Pseudorandom Function";
+        }
+    }
+
+    /**
+     * IntegrityTransform represents an integrity algorithm.
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
+     *     Exchange Protocol Version 2 (IKEv2).
+     */
+    public static final class IntegrityTransform extends Transform {
+        @Override
+        protected boolean isSupportedTransformId(int id) {
+            return SaProposal.isSupportedIntegrityAlgorithm(id);
+        }
+
+        /**
+         * Contruct an instance of IntegrityTransform for building an outbound packet.
+         *
+         * @param id the IKE standard Transform ID.
+         */
+        public IntegrityTransform(@IntegrityAlgorithm int id) {
+            super(Transform.TRANSFORM_TYPE_INTEG, id);
+        }
+
+        /**
+         * Contruct an instance of IntegrityTransform for decoding an inbound packet.
+         *
+         * @param id the IKE standard Transform ID.
+         * @param attributeList the decoded list of Attribute.
+         * @throws InvalidSyntaxException for syntax error.
+         */
+        protected IntegrityTransform(int id, List<Attribute> attributeList)
+                throws InvalidSyntaxException {
+            super(Transform.TRANSFORM_TYPE_INTEG, id, attributeList);
+        }
+
+        @Override
+        public String getTransformTypeString() {
+            return "Integrity Algorithm";
         }
     }
 

@@ -33,6 +33,7 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeSaPayload.Attribute;
 import com.android.ike.ikev2.message.IkeSaPayload.AttributeDecoder;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.KeyLengthAttribute;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.Proposal;
@@ -73,6 +74,8 @@ public final class IkeSaPayloadTest {
                     + "00000804000012000000080400000e";
     private static final String ENCR_TRANSFORM_RAW_PACKET = "0300000c0100000c800e0080";
     private static final String PRF_TRANSFORM_RAW_PACKET = "0000000802000002";
+    private static final String INTEG_TRANSFORM_RAW_PACKET = "0300000803000002";
+
     private static final int TRANSFORM_TYPE_POSITION = 4;
     private static final int TRANSFORM_ID_POSITION = 7;
 
@@ -151,7 +154,7 @@ public final class IkeSaPayloadTest {
     }
 
     @Test
-    public void testConstructEncryptionTransformWithUnSupportedId() throws Exception {
+    public void testConstructEncryptionTransformWithUnsupportedId() throws Exception {
         try {
             new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES + 1);
             fail("Expected IllegalArgumentException for unsupported Transform ID");
@@ -184,9 +187,48 @@ public final class IkeSaPayloadTest {
     }
 
     @Test
-    public void testConstructPrfTransformWithUnSupportedId() throws Exception {
+    public void testConstructPrfTransformWithUnsupportedId() throws Exception {
         try {
             new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC + 1);
+            fail("Expected IllegalArgumentException for unsupported Transform ID");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodeIntegrityTransform() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INTEG_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(new LinkedList<Attribute>());
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+        assertEquals(Transform.TRANSFORM_TYPE_INTEG, transform.type);
+        assertEquals(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96, transform.id);
+        assertTrue(transform.isSupported);
+    }
+
+    @Test
+    public void testDecodeIntegrityTransformWithUnrecognizedAttribute() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INTEG_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(mAttributeListWithKeyLength128);
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+        assertEquals(Transform.TRANSFORM_TYPE_INTEG, transform.type);
+        assertEquals(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96, transform.id);
+        assertFalse(transform.isSupported);
+    }
+
+    @Test
+    public void testConstructIntegrityTransformWithUnsupportedId() throws Exception {
+        try {
+            new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96 + 1);
             fail("Expected IllegalArgumentException for unsupported Transform ID");
         } catch (IllegalArgumentException expected) {
         }
