@@ -40,7 +40,7 @@ public final class IkeNotifyPayloadTest {
 
     @Test
     public void testDecodeNotifyPayload() throws Exception {
-        byte[] inputPacket = MessageTestUtil.hexStringToByteArray(NOTIFY_PAYLOAD_BODY_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(NOTIFY_PAYLOAD_BODY_RAW_PACKET);
         IkeNotifyPayload payload = new IkeNotifyPayload(false, inputPacket);
         assertEquals(EXPECTED_PROTOCOL_ID, payload.protocolId);
         assertEquals(EXPECTED_SPI_SIZE, payload.spiSize);
@@ -51,7 +51,7 @@ public final class IkeNotifyPayloadTest {
 
     @Test
     public void testDecodeNotifyPayloadThrowException() throws Exception {
-        byte[] inputPacket = MessageTestUtil.hexStringToByteArray(NOTIFY_PAYLOAD_BODY_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(NOTIFY_PAYLOAD_BODY_RAW_PACKET);
         // Change Protocol ID to ESP
         inputPacket[POS_PROTOCOL_ID] = (byte) (IkePayload.PROTOCOL_ID_ESP & 0xFF);
         try {

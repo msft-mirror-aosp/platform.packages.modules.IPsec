@@ -76,7 +76,7 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testDecodeAttribute() throws Exception {
-        byte[] inputPacket = hexStringToByteArray(ATTRIBUTE_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ATTRIBUTE_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
         Pair<IkeSaPayload.Attribute, Integer> pair = IkeSaPayload.Attribute.readFrom(inputBuffer);
@@ -91,7 +91,7 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testDecodeTransform() throws Exception {
-        byte[] inputPacket = hexStringToByteArray(TRANSFORM_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
         IkeSaPayload.AttributeDecoder mockedDecoder = mock(IkeSaPayload.AttributeDecoder.class);
         List<IkeSaPayload.Attribute> attributeList = new LinkedList<>();
@@ -107,7 +107,7 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testDecodeSingleProposal() throws Exception {
-        byte[] inputPacket = hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
         IkeSaPayload.TransformDecoder mockedDecoder = mock(IkeSaPayload.TransformDecoder.class);
         when(mockedDecoder.decodeTransforms(anyInt(), any()))
@@ -125,7 +125,7 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testDecodeMultipleProposal() throws Exception {
-        byte[] inputPacket = hexStringToByteArray(TWO_PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(TWO_PROPOSAL_RAW_PACKET);
         IkeSaPayload.Proposal.sTransformDecoder =
                 new IkeSaPayload.TransformDecoder() {
                     @Override
@@ -151,17 +151,5 @@ public final class IkeSaPayloadTest {
             assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
             assertEquals(0, proposal.spiSize);
         }
-    }
-
-    private byte[] hexStringToByteArray(String s) {
-        int len = s.length();
-        byte[] data = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            data[i / 2] =
-                    (byte)
-                            ((Character.digit(s.charAt(i), 16) << 4)
-                                    + Character.digit(s.charAt(i + 1), 16));
-        }
-        return data;
     }
 }
