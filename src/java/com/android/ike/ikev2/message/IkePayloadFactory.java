@@ -24,6 +24,7 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -118,21 +119,21 @@ final class IkePayloadFactory {
      *
      * @param message the byte array contains the whole IKE message.
      * @param integrityMac the initialized Mac for integrity check.
-     * @param checksumLen the length of integrity checksum.
+     * @param expectedChecksumLen the expected length of integrity checksum.
      * @param decryptCipher the uninitialized Cipher for doing decryption.
      * @param dKey the decryption key.
-     * @param ivLen the length of Initialization Vector.
+     * @param expectedIvLen the expected length of Initialization Vector.
      * @return a pair including IkePayload and next payload type.
      * @throws IOException
      */
     protected static Pair<IkeSkPayload, Integer> getIkeSkPayload(
             byte[] message,
             Mac integrityMac,
-            int checksumLen,
+            int expectedChecksumLen,
             Cipher decryptCipher,
             SecretKey dKey,
-            int ivLen)
-            throws IkeException {
+            int expectedIvLen)
+            throws IkeException, GeneralSecurityException {
         ByteBuffer input =
                 ByteBuffer.wrap(
                         message,
@@ -162,7 +163,13 @@ final class IkePayloadFactory {
 
         IkeSkPayload payload =
                 new IkeSkPayload(
-                        isCritical, message, integrityMac, checksumLen, decryptCipher, dKey, ivLen);
+                        isCritical,
+                        message,
+                        integrityMac,
+                        expectedChecksumLen,
+                        decryptCipher,
+                        dKey,
+                        expectedIvLen);
         return new Pair(payload, nextPayloadType);
     }
 
