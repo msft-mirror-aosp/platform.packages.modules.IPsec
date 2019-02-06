@@ -21,10 +21,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 
+import org.junit.Before;
 import org.junit.Test;
 
 public final class IkeMessageTest {
@@ -63,7 +65,38 @@ public final class IkeMessageTest {
     private static final int EXCHANGE_TYPE_POSITION = 18;
     private static final int PAYLOAD_CRITICAL_BIT_POSITION = 1;
 
-    private static final int PAYLOAD_NUMBER = 0;
+    private static final int[] SUPPORTED_PAYLOAD_LIST = {
+        IkePayload.PAYLOAD_TYPE_SA,
+        IkePayload.PAYLOAD_TYPE_KE,
+        IkePayload.PAYLOAD_TYPE_NONCE,
+        IkePayload.PAYLOAD_TYPE_NOTIFY,
+        IkePayload.PAYLOAD_TYPE_NOTIFY,
+        IkePayload.PAYLOAD_TYPE_VENDOR
+    };
+
+    class TestIkeSupportedPayload extends IkePayload {
+        TestIkeSupportedPayload(int payload, boolean critical) {
+            super(payload, critical);
+        }
+    }
+
+    @Before
+    public void setUp() {
+        IkePayloadFactory.sDecoderInstance =
+                new IkePayloadFactory.IkePayloadDecoder() {
+
+                    @Override
+                    public IkePayload decodeIkePayload(
+                            int payloadType, boolean isCritical, byte[] payloadBody)
+                            throws IkeException {
+                        if (support(payloadType)) {
+                            return new TestIkeSupportedPayload(payloadType, isCritical);
+                        } else {
+                            return new IkeUnsupportedPayload(payloadType, isCritical);
+                        }
+                    }
+                };
+    }
 
     @Test
     public void testDecodeIkeHeader() throws Exception {
@@ -88,11 +121,27 @@ public final class IkeMessageTest {
     }
 
     @Test
-    public void testDecodeIkePayload() throws Exception {
+    public void testDecodeIkeMessage() throws Exception {
         byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         IkeHeader header = new IkeHeader(inputPacket);
         IkeMessage message = IkeMessage.decode(header, inputPacket);
-        assertEquals(PAYLOAD_NUMBER, message.ikePayloadList.size());
+        assertEquals(SUPPORTED_PAYLOAD_LIST.length, message.ikePayloadList.size());
+        for (int i = 0; i < SUPPORTED_PAYLOAD_LIST.length; i++) {
+            assertEquals(SUPPORTED_PAYLOAD_LIST[i], message.ikePayloadList.get(i).payloadType);
+        }
+    }
+
+    @Test
+    public void testDecodeMessageWithUnsupportedUncriticalPayload() throws Exception {
+        byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Set first payload unsupported uncritical
+        inputPacket[FIRST_PAYLOAD_TYPE_POSITION] = (byte) 0xff;
+        IkeHeader header = new IkeHeader(inputPacket);
+        IkeMessage message = IkeMessage.decode(header, inputPacket);
+        assertEquals(SUPPORTED_PAYLOAD_LIST.length - 1, message.ikePayloadList.size());
+        for (int i = 0; i < SUPPORTED_PAYLOAD_LIST.length - 1; i++) {
+            assertEquals(SUPPORTED_PAYLOAD_LIST[i + 1], message.ikePayloadList.get(i).payloadType);
+        }
     }
 
     @Test
@@ -154,5 +203,14 @@ public final class IkeMessageTest {
                                     + Character.digit(s.charAt(i + 1), 16));
         }
         return data;
+    }
+
+    private boolean support(int payloadType) {
+        return (payloadType == IkePayload.PAYLOAD_TYPE_SA
+                || payloadType == IkePayload.PAYLOAD_TYPE_KE
+                || payloadType == IkePayload.PAYLOAD_TYPE_NONCE
+                || payloadType == IkePayload.PAYLOAD_TYPE_NOTIFY
+                || payloadType == IkePayload.PAYLOAD_TYPE_VENDOR
+                || payloadType == IkePayload.PAYLOAD_TYPE_SK);
     }
 }

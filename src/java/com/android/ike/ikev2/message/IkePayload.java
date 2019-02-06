@@ -63,7 +63,7 @@ public abstract class IkePayload {
 
     // TODO: List all payload types.
 
-    @PayloadType public final int payloadType;
+    public final int payloadType;
     public final boolean isCritical;
 
     /**
@@ -71,11 +71,12 @@ public abstract class IkePayload {
      *
      * <p>It should be overrided by subclass of IkePayload
      *
-     * @param payload the payload type
+     * @param payload the payload type. All supported types will fall in {@link
+     *     IkePayload.PayloadType}
      * @param critical indicates if this payload is critical. Ignore it when payload type is
      *     supported.
      */
-    IkePayload(@PayloadType int payload, boolean critical) {
+    IkePayload(int payload, boolean critical) {
         payloadType = payload;
         isCritical = critical;
     }
