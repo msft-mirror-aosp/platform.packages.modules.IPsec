@@ -65,7 +65,7 @@ final class IkePayloadFactory {
                         case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
                             return new IkeIdPayload(isCritical, payloadBody, false);
                         case IkePayload.PAYLOAD_TYPE_CERT:
-                            return new IkeCertPayload(isCritical, payloadBody);
+                            return IkeCertPayload.getIkeCertPayload(isCritical, payloadBody);
                         case IkePayload.PAYLOAD_TYPE_AUTH:
                             return IkeAuthPayload.getIkeAuthPayload(isCritical, payloadBody);
                         case IkePayload.PAYLOAD_TYPE_NONCE:
