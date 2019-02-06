@@ -297,4 +297,27 @@ public final class IkeSaPayload extends IkePayload {
         // TODO: Add another contructor for encoding.
 
     }
+
+    /**
+     * Encode SA payload to byte array.
+     *
+     * @param nextPayload type of payload that follows this payload.
+     * @return encoded SA payload
+     */
+    @Override
+    byte[] encode(@PayloadType int nextPayload) {
+        throw new UnsupportedOperationException(
+                "It is not supported to encode a " + getTypeString());
+        // TODO: Implement encoding SA payload.
+    }
+
+    /**
+     * Return the payload type as a String.
+     *
+     * @return the payload type as a String.
+     */
+    @Override
+    public String getTypeString() {
+        return "SA Payload";
+    }
 }

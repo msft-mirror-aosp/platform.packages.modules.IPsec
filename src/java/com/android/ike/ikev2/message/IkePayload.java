@@ -99,4 +99,19 @@ public abstract class IkePayload {
         payloadType = payload;
         isCritical = critical;
     }
+
+    /**
+     * Encode payload to byte array.
+     *
+     * @param nextPayload type of payload that follows this payload.
+     * @return encoded payload
+     */
+    abstract byte[] encode(@PayloadType int nextPayload);
+
+    /**
+     * Return the payload type as a String.
+     *
+     * @return the payload type as a String.
+     */
+    public abstract String getTypeString();
 }
