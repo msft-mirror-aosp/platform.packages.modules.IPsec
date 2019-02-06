@@ -23,9 +23,9 @@ LOCAL_CERTIFICATE := platform
 
 LOCAL_MODULE_TAGS := tests
 
-LOCAL_JAVA_LIBRARIES := ike android.test.runner
+LOCAL_JAVA_LIBRARIES := android.test.runner
 
-LOCAL_STATIC_JAVA_LIBRARIES := \
+LOCAL_STATIC_JAVA_LIBRARIES := ike \
         android-support-test \
         mockito-target-minus-junit4
 
