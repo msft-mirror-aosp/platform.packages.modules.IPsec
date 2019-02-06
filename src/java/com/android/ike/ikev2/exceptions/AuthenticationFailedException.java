@@ -20,16 +20,28 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
 /**
  * This exception is thrown when IKE authentication fails.
  *
- * <p>There is no associated data.
+ * <p> Contains an exception message detailing the failure cause.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.21.2">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2).
  */
 public final class AuthenticationFailedException extends IkeException {
     /**
-     * Construct a instance of AuthenticationFailedException
+     * Construct a instance of AuthenticationFailedException.
+     *
+     * @param message the detail message.
      */
-    public AuthenticationFailedException() {
-        super(IkeNotifyPayload.NOTIFY_TYPE_AUTHENTICATION_FAILED);
+    public AuthenticationFailedException(String message) {
+        super(IkeNotifyPayload.NOTIFY_TYPE_AUTHENTICATION_FAILED, message);
     }
+
+    /**
+     * Construct a instance of AuthenticationFailedExcepion.
+     *
+     * @param cause the cause.
+     */
+    public AuthenticationFailedException(Throwable cause) {
+        super(IkeNotifyPayload.NOTIFY_TYPE_AUTHENTICATION_FAILED, cause);
+    }
+
 }

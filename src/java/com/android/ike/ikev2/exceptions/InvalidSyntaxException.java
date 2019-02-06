@@ -27,16 +27,12 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
  *     Protocol Version 2 (IKEv2).
  */
 public final class InvalidSyntaxException extends IkeException {
-
-    public final String message;
-
     /**
-     * Construct an instance of InvalidSyntaxException
+     * Construct an instance of InvalidSyntaxException.
      *
-     * @param msg the descrptive message
+     * @param message the descriptive message.
      */
-    public InvalidSyntaxException(String msg) {
+    public InvalidSyntaxException(String message) {
         super(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX);
-        message = msg;
     }
 }
