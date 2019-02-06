@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -30,9 +31,10 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 
 public final class IkeMessageTest {
-    private static final String IKE_SA_INIT_RAW_PACKET =
-            "8f54bf6d8b48e6e100000000000000002120220800000000"
-                    + "00000150220000300000002c010100040300000c0100000c"
+    private static final String IKE_SA_INIT_HEADER_RAW_PACKET =
+            "8f54bf6d8b48e6e10000000000000000212022080000000000000150";
+    private static final String IKE_SA_INIT_BODY_RAW_PACKET =
+            "220000300000002c010100040300000c0100000c"
                     + "800e00800300000803000002030000080400000200000008"
                     + "020000022800008800020000b4a2faf4bb54878ae21d6385"
                     + "12ece55d9236fc5046ab6cef82220f421f3ce6361faf3656"
@@ -45,6 +47,8 @@ public final class IkeMessageTest {
                     + "881eab2051d8663f421d10b02b00001c00004005d915368c"
                     + "a036004cb578ae3e3fb268509aeab1900000002069936922"
                     + "8741c6d4ca094c93e242c9de19e7b7c60000000500000500";
+    private static final String IKE_SA_INIT_RAW_PACKET =
+            IKE_SA_INIT_HEADER_RAW_PACKET + IKE_SA_INIT_BODY_RAW_PACKET;
 
     private static final int FIRST_PAYLOAD_TYPE_POSITION = 16;
     private static final int VERSION_POSITION = 17;
@@ -181,5 +185,16 @@ public final class IkeMessageTest {
                 || payloadType == IkePayload.PAYLOAD_TYPE_NOTIFY
                 || payloadType == IkePayload.PAYLOAD_TYPE_VENDOR
                 || payloadType == IkePayload.PAYLOAD_TYPE_SK);
+    }
+
+    @Test
+    public void testEncode() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        byte[] ikeBodyBytes = TestUtils.hexStringToByteArray(IKE_SA_INIT_BODY_RAW_PACKET);
+        IkeHeader header = new IkeHeader(inputPacket);
+        IkeMessage message = IkeMessage.decode(header, inputPacket);
+
+        byte[] encodedIkeMessage = message.encode(ikeBodyBytes);
+        assertArrayEquals(inputPacket, encodedIkeMessage);
     }
 }
