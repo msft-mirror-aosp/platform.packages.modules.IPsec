@@ -20,6 +20,10 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+
+import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import org.junit.Test;
 
@@ -59,6 +63,13 @@ public final class IkeHeaderTest {
     private static final int IKE_MSG_ID = 0;
     private static final int IKE_MSG_LENGTH = 336;
 
+    // Byte offsets of version field in IKE message header.
+    private static final int VERSION_OFFSET = 17;
+    // Byte offsets of exchange type in IKE message header.
+    private static final int EXCHANGE_TYPE_OFFSET = 18;
+    // Byte offsets of message length in IKE message header.
+    private static final int MESSAGE_LENGTH_OFFSET = 24;
+
     @Test
     public void testDecodeIkeHeader() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
@@ -79,6 +90,50 @@ public final class IkeHeaderTest {
         assertTrue(header.fromIkeInitiator);
         assertEquals(IKE_MSG_ID, header.messageId);
         assertEquals(IKE_MSG_LENGTH, header.messageLength);
+    }
+
+    @Test
+    public void testDecodeIkeHeaderWithInvalidMajorVersion() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Set major version 3.
+        inputPacket[VERSION_OFFSET] = (byte) 0x30;
+        // Set Exchange type 0
+        inputPacket[EXCHANGE_TYPE_OFFSET] = (byte) 0x00;
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage.decode(header, inputPacket);
+            fail(
+                    "Expected InvalidMajorVersionException: major version is 3"
+                            + "and exchange type is 0");
+        } catch (InvalidMajorVersionException expected) {
+            assertEquals(3, expected.receivedMajorVersion);
+        }
+    }
+
+    @Test
+    public void testDecodeIkeHeaderWithInvalidExchangeType() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Set Exchange type 0
+        inputPacket[EXCHANGE_TYPE_OFFSET] = (byte) 0x00;
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage.decode(header, inputPacket);
+            fail("Expected InvalidSyntaxException: exchange type is 0");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodeIkeHeaderWithInvalidPacketLength() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Set Exchange type 0
+        inputPacket[MESSAGE_LENGTH_OFFSET] = (byte) 0x01;
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage.decode(header, inputPacket);
+            fail("Expected InvalidSyntaxException: IKE message length.");
+        } catch (InvalidSyntaxException expected) {
+        }
     }
 
     @Test
