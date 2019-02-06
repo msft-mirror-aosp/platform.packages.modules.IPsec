@@ -50,7 +50,6 @@ public final class IkeKePayloadTest {
     @IkePayload.PayloadType
     private static final int NEXT_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_NONCE;
 
-    @IkeKePayload.DhGroup
     private static final int EXPECTED_DH_GROUP = IkePayload.DH_GROUP_1024_BIT_MODP;
 
     private static final int EXPECTED_KE_DATA_LEN = 128;
