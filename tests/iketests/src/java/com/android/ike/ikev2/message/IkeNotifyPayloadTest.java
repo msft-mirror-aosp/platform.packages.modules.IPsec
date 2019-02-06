@@ -30,7 +30,7 @@ public final class IkeNotifyPayloadTest {
     private static final String NOTIFY_PAYLOAD_GENERIC_HEADER = "2900001c";
     private static final String NOTIFY_PAYLOAD_BODY_RAW_PACKET =
             "00004004e54f73b7d83f6beb881eab2051d8663f421d10b0";
-    private static final int EXPECTED_PROTOCOL_ID = IkePayload.PROTOCOL_ID_RESERVED;
+    private static final int EXPECTED_PROTOCOL_ID = IkePayload.PROTOCOL_ID_UNSET;
     private static final int EXPECTED_SPI_SIZE = IkePayload.SPI_LEN_NOT_INCLUDED;
 
     @IkePayload.PayloadType
