@@ -17,6 +17,9 @@
 package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Mockito.mock;
@@ -24,8 +27,20 @@ import static org.mockito.Mockito.when;
 
 import android.util.Pair;
 
+import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.message.IkeSaPayload.Attribute;
+import com.android.ike.ikev2.message.IkeSaPayload.AttributeDecoder;
+import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.KeyLengthAttribute;
+import com.android.ike.ikev2.message.IkeSaPayload.Proposal;
+import com.android.ike.ikev2.message.IkeSaPayload.Transform;
+import com.android.ike.ikev2.message.IkeSaPayload.TransformDecoder;
+import com.android.ike.ikev2.message.IkeSaPayload.UnrecognizedAttribute;
+import com.android.ike.ikev2.message.IkeSaPayload.UnrecognizedTransform;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -36,6 +51,7 @@ public final class IkeSaPayloadTest {
     private static final String PROPOSAL_RAW_PACKET =
             "0000002c010100040300000c0100000c800e0080030000080300000203000008040"
                     + "000020000000802000002";
+
     private static final String TWO_PROPOSAL_RAW_PACKET =
             "020000dc010100190300000c0100000c800e00800300000c0100000c800e00c0030"
                     + "0000c0100000c800e01000300000801000003030000080300000c0300"
@@ -54,7 +70,10 @@ public final class IkeSaPayloadTest {
                     + "0300000804000015030000080400001c030000080400001d030000080"
                     + "400001e030000080400001f030000080400000f030000080400001003"
                     + "00000804000012000000080400000e";
-    private static final String TRANSFORM_RAW_PACKET = "0300000c0100000c800e0080";
+    private static final String ENCR_TRANSFORM_RAW_PACKET = "0300000c0100000c800e0080";
+    private static final int TRANSFORM_TYPE_POSITION = 4;
+    private static final int TRANSFORM_ID_POSITION = 7;
+
     private static final String ATTRIBUTE_RAW_PACKET = "800e0080";
 
     private static final int PROPOSAL_NUMBER = 1;
@@ -68,53 +87,161 @@ public final class IkeSaPayloadTest {
     // Constants for multiple proposals test
     private static final byte[] PROPOSAL_NUMBER_LIST = {1, 2};
 
-    private static final byte TRANSFORM_TYPE = 1;
-    private static final byte TRANSFORM_ID = 12;
+    private static final int KEY_LEN = 128;
 
-    private static final byte ATTRIBUTE_TYPE = 14;
-    private static final byte[] ATTRIBUTE_VALUE = {(byte) 0x00, (byte) 0x80};
+    private AttributeDecoder mMockedAttributeDecoder;
+    private KeyLengthAttribute mAttributeKeyLength128;
+    private List<Attribute> mAttributeListWithKeyLength128;
+
+    @Before
+    public void setUp() throws Exception {
+        mMockedAttributeDecoder = mock(AttributeDecoder.class);
+        mAttributeKeyLength128 = new KeyLengthAttribute(SaProposal.KEY_LEN_AES_128);
+        mAttributeListWithKeyLength128 = new LinkedList<>();
+        mAttributeListWithKeyLength128.add(mAttributeKeyLength128);
+    }
 
     @Test
     public void testDecodeAttribute() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(ATTRIBUTE_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        Pair<IkeSaPayload.Attribute, Integer> pair = IkeSaPayload.Attribute.readFrom(inputBuffer);
-        IkeSaPayload.Attribute attribute = pair.first;
+        Pair<Attribute, Integer> pair = Attribute.readFrom(inputBuffer);
+        Attribute attribute = pair.first;
 
-        assertEquals(ATTRIBUTE_TYPE, attribute.type);
-        assertEquals(ATTRIBUTE_VALUE.length, attribute.value.length);
-        for (int i = 0; i < ATTRIBUTE_VALUE.length; i++) {
-            assertEquals(ATTRIBUTE_VALUE[i], attribute.value[i]);
+        assertEquals(Attribute.ATTRIBUTE_TYPE_KEY_LENGTH, attribute.type);
+        assertEquals(KEY_LEN, ((KeyLengthAttribute) attribute).keyLength);
+    }
+
+    @Test
+    public void testDecodeEncryptionTransform() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(mAttributeListWithKeyLength128);
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+
+        assertEquals(Transform.TRANSFORM_TYPE_ENCR, transform.type);
+        assertEquals(SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, transform.id);
+        assertTrue(transform.isSupported);
+    }
+
+    @Test
+    public void testDecodeEncryptionTransformWithInvalidKeyLength() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        List<Attribute> attributeList = new LinkedList<>();
+        Attribute keyLengAttr = new KeyLengthAttribute(SaProposal.KEY_LEN_AES_128 + 1);
+        attributeList.add(keyLengAttr);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any())).thenReturn(attributeList);
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        try {
+            Transform.readFrom(inputBuffer);
+            fail("Expected InvalidSyntaxException for invalid key length.");
+        } catch (InvalidSyntaxException expected) {
         }
     }
 
     @Test
-    public void testDecodeTransform() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(TRANSFORM_RAW_PACKET);
+    public void testConstructEncryptionTransformWithUnSupportedId() throws Exception {
+        try {
+            new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES + 1);
+            fail("Expected IllegalArgumentException for unsupported Transform ID");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testConstructEncryptionTransformWithInvalidKeyLength() throws Exception {
+        try {
+            new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES, 129);
+            fail("Expected IllegalArgumentException for invalid key length.");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodeUnrecognizedTransform() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
+        inputPacket[TRANSFORM_TYPE_POSITION] = 6;
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
-        IkeSaPayload.AttributeDecoder mockedDecoder = mock(IkeSaPayload.AttributeDecoder.class);
-        List<IkeSaPayload.Attribute> attributeList = new LinkedList<>();
-        when(mockedDecoder.decodeAttributes(anyInt(), any())).thenReturn(attributeList);
-        IkeSaPayload.Transform.sAttributeDecoder = mockedDecoder;
 
-        IkeSaPayload.Transform transform = IkeSaPayload.Transform.readFrom(inputBuffer);
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(mAttributeListWithKeyLength128);
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
-        assertEquals(TRANSFORM_TYPE, transform.type);
-        assertEquals(TRANSFORM_ID, transform.id);
-        assertEquals(0, transform.attributeList.size());
+        Transform transform = Transform.readFrom(inputBuffer);
+
+        assertEquals(UnrecognizedTransform.class, transform.getClass());
+    }
+
+    @Test
+    public void testDecodeTransformWithRepeatedAttribute() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        List<Attribute> attributeList = new LinkedList<>();
+        attributeList.add(mAttributeKeyLength128);
+        attributeList.add(mAttributeKeyLength128);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any())).thenReturn(attributeList);
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        try {
+            Transform.readFrom(inputBuffer);
+            fail("Expected InvalidSyntaxException for repeated Attribute Type Key Length.");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodeTransformWithUnrecognizedTransformId() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
+        inputPacket[TRANSFORM_ID_POSITION] = 1;
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(mAttributeListWithKeyLength128);
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+
+        assertFalse(transform.isSupported);
+    }
+
+    @Test
+    public void testDecodeTransformWithUnrecogniedAttributeType() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        List<Attribute> attributeList = new LinkedList<>();
+        attributeList.add(mAttributeKeyLength128);
+        Attribute attributeUnrecognized = new UnrecognizedAttribute(1, new byte[0]);
+        attributeList.add(attributeUnrecognized);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any())).thenReturn(attributeList);
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+
+        assertFalse(transform.isSupported);
     }
 
     @Test
     public void testDecodeSingleProposal() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
-        IkeSaPayload.TransformDecoder mockedDecoder = mock(IkeSaPayload.TransformDecoder.class);
-        when(mockedDecoder.decodeTransforms(anyInt(), any()))
-                .thenReturn(new IkeSaPayload.Transform[0]);
-        IkeSaPayload.Proposal.sTransformDecoder = mockedDecoder;
+        TransformDecoder mockedDecoder = mock(TransformDecoder.class);
+        when(mockedDecoder.decodeTransforms(anyInt(), any())).thenReturn(new Transform[0]);
+        Proposal.sTransformDecoder = mockedDecoder;
 
-        IkeSaPayload.Proposal proposal = IkeSaPayload.Proposal.readFrom(inputBuffer);
+        Proposal proposal = Proposal.readFrom(inputBuffer);
 
         assertEquals(PROPOSAL_NUMBER, proposal.number);
         assertEquals(PROPOSAL_PROTOCOL_ID, proposal.protocolId);
@@ -126,11 +253,11 @@ public final class IkeSaPayloadTest {
     @Test
     public void testDecodeMultipleProposal() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(TWO_PROPOSAL_RAW_PACKET);
-        IkeSaPayload.Proposal.sTransformDecoder =
-                new IkeSaPayload.TransformDecoder() {
+        Proposal.sTransformDecoder =
+                new TransformDecoder() {
                     @Override
-                    public IkeSaPayload.Transform[] decodeTransforms(
-                            int count, ByteBuffer inputBuffer) throws IkeException {
+                    public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
+                            throws IkeException {
                         for (int i = 0; i < count; i++) {
                             // Read length field and move position
                             inputBuffer.getShort();
@@ -138,7 +265,7 @@ public final class IkeSaPayloadTest {
                             byte[] temp = new byte[length - 4];
                             inputBuffer.get(temp);
                         }
-                        return new IkeSaPayload.Transform[0];
+                        return new Transform[0];
                     }
                 };
 
@@ -146,7 +273,7 @@ public final class IkeSaPayloadTest {
 
         assertEquals(PROPOSAL_NUMBER_LIST.length, payload.proposalList.size());
         for (int i = 0; i < payload.proposalList.size(); i++) {
-            IkeSaPayload.Proposal proposal = payload.proposalList.get(i);
+            Proposal proposal = payload.proposalList.get(i);
             assertEquals(PROPOSAL_NUMBER_LIST[i], proposal.number);
             assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
             assertEquals(0, proposal.spiSize);
