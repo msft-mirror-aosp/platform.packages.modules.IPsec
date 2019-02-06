@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -26,33 +27,53 @@ import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import org.junit.Test;
 
 import java.net.Inet4Address;
+import java.nio.ByteBuffer;
 
 public final class IkeIdPayloadTest {
-    private static final String ID_PAYLOAD_RESPONDER_IP4_ADDR_HEX_STRING = "010000000a505050";
-    private static final String ID_PAYLOAD_INITIATOR_FQDN_HEX_STRING = "020000006576697461";
-    private static final String IP4_ADDR_STRING = "10.80.80.80";
+
+    private static final String IPV4_ADDR_ID_PAYLOAD_RESPONDER_HEX_STRING =
+            "2700000c01000000c0000264";
+    private static final String IPV4_ADDR_ID_PAYLOAD_RESPONDER_BODY_HEX_STRING = "01000000c0000264";
+    private static final String IPV4_ADDR_STRING = "192.0.2.100";
+
+    private static final int ID_TYPE_OFFSET = 0;
 
     @Test
-    public void testDecodeIp4AddrIdPayload() throws Exception {
+    public void testDecodeIpv4AddrIdPayload() throws Exception {
         byte[] inputPacket =
-                TestUtils.hexStringToByteArray(ID_PAYLOAD_RESPONDER_IP4_ADDR_HEX_STRING);
+                TestUtils.hexStringToByteArray(IPV4_ADDR_ID_PAYLOAD_RESPONDER_BODY_HEX_STRING);
         IkeIdPayload payload = new IkeIdPayload(false, inputPacket, false);
 
         assertEquals(IkePayload.PAYLOAD_TYPE_ID_RESPONDER, payload.payloadType);
         assertEquals(IkeIdentification.ID_TYPE_IPV4_ADDR, payload.ikeId.idType);
         IkeIpv4AddrIdentification ikeId = (IkeIpv4AddrIdentification) payload.ikeId;
-        Inet4Address expectedAddr = (Inet4Address) Inet4Address.getByName(IP4_ADDR_STRING);
+        Inet4Address expectedAddr = (Inet4Address) Inet4Address.getByName(IPV4_ADDR_STRING);
         assertEquals(expectedAddr, ikeId.ipv4Address);
     }
 
     @Test
     public void testDecodeUnsupportedIdType() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(ID_PAYLOAD_INITIATOR_FQDN_HEX_STRING);
+        byte[] inputPacket =
+                TestUtils.hexStringToByteArray(IPV4_ADDR_ID_PAYLOAD_RESPONDER_BODY_HEX_STRING);
+        inputPacket[ID_TYPE_OFFSET] = 0;
 
         try {
             new IkeIdPayload(false, inputPacket, true);
             fail("Expected AuthenticationFailedException: ID Type is unsupported.");
         } catch (AuthenticationFailedException expected) {
         }
+    }
+
+    @Test
+    public void testConstructAndEncodeIpv4AddrIdPayload() throws Exception {
+        Inet4Address ipv4Address = (Inet4Address) Inet4Address.getByName(IPV4_ADDR_STRING);
+        IkeIdPayload payload = new IkeIdPayload(false, new IkeIpv4AddrIdentification(ipv4Address));
+
+        ByteBuffer inputBuffer = ByteBuffer.allocate(payload.getPayloadLength());
+        payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_AUTH, inputBuffer);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(IPV4_ADDR_ID_PAYLOAD_RESPONDER_HEX_STRING);
+        assertArrayEquals(expectedBytes, inputBuffer.array());
     }
 }
