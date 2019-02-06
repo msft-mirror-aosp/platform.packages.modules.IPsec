@@ -54,25 +54,54 @@ public final class SaProposal {
 
     static {
         SUPPORTED_ENCRYPTION_ALGORITHM = new ArraySet<>();
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(SaProposal.ENCRYPTION_ALGORITHM_3DES);
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(SaProposal.ENCRYPTION_ALGORITHM_AES_CBC);
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8);
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12);
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16);
+        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_3DES);
+        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_AES_CBC);
+        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_AES_GCM_8);
+        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_AES_GCM_12);
+        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_AES_GCM_16);
     }
 
     public static final int KEY_LEN_AES_128 = 128;
     public static final int KEY_LEN_AES_192 = 192;
     public static final int KEY_LEN_AES_256 = 256;
 
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+        PSEUDORANDOM_FUNCTION_HMAC_SHA1,
+        PSEUDORANDOM_FUNCTION_AES128_XCBC
+    })
+
+    public @interface PseudorandomFunction {}
+
+    public static final int PSEUDORANDOM_FUNCTION_HMAC_SHA1 = 2;
+    public static final int PSEUDORANDOM_FUNCTION_AES128_XCBC = 4;
+
+    private static final Set<Integer> SUPPORTED_PSEUDORANDOM_FUNCTION;
+
+    static {
+        SUPPORTED_PSEUDORANDOM_FUNCTION = new ArraySet<>();
+        SUPPORTED_PSEUDORANDOM_FUNCTION.add(PSEUDORANDOM_FUNCTION_HMAC_SHA1);
+        SUPPORTED_PSEUDORANDOM_FUNCTION.add(PSEUDORANDOM_FUNCTION_AES128_XCBC);
+    }
+
     /**
      * Check if the provided algorithm is a supported encryption algorithm.
      *
-     * @param algorithm IKE standard encryption algorithm id
-     * @return if the provided algorithm is a supported encryption algorithm.
+     * @param algorithm IKE standard encryption algorithm id.
+     * @return true if the provided algorithm is a supported encryption algorithm.
      */
     public static boolean isSupportedEncryptionAlgorithm(@EncryptionAlgorithm int algorithm) {
         return SUPPORTED_ENCRYPTION_ALGORITHM.contains(algorithm);
+    }
+
+    /**
+     * Check if the provided algorithm is a supported pseudorandom function.
+     *
+     * @param algorithm IKE standard pseudorandom function id.
+     * @return true if the provided algorithm is a supported pseudorandom function.
+     */
+    public static boolean isSupportedPseudorandomFunction(@PseudorandomFunction int algorithm) {
+        return SUPPORTED_PSEUDORANDOM_FUNCTION.contains(algorithm);
     }
 
     // TODO: Implement constructing SaProposal with a Builder that supports adding

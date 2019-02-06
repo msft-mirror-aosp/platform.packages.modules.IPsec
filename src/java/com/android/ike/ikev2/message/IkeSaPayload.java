@@ -17,6 +17,7 @@
 package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.SaProposal.EncryptionAlgorithm;
+import static com.android.ike.ikev2.SaProposal.PseudorandomFunction;
 
 import android.annotation.IntDef;
 import android.util.ArraySet;
@@ -265,7 +266,9 @@ public final class IkeSaPayload extends IkePayload {
             switch (type) {
                 case TRANSFORM_TYPE_ENCR:
                     return new EncryptionTransform(id, attributeList);
-                    // TODO: Add Integrity algorithm, PRF, DhGroup and ESN
+                case TRANSFORM_TYPE_PRF:
+                    return new PrfTransform(id, attributeList);
+                    // TODO: Add Integrity algorithm, DhGroup and ESN
                 default:
                     return new UnrecognizedTransform(type, id, attributeList);
             }
@@ -431,6 +434,47 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         public String getTransformTypeString() {
             return "Encryption Algorithm";
+        }
+    }
+
+    /**
+     * PrfTransform represents an pseudorandom function.
+     *
+     * <p>Currently it does not have any supported {@link Attribute}.
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
+     *     Exchange Protocol Version 2 (IKEv2).
+     */
+    public static final class PrfTransform extends Transform {
+        @Override
+        protected boolean isSupportedTransformId(int id) {
+            return SaProposal.isSupportedPseudorandomFunction(id);
+        }
+
+        /**
+         * Contruct an instance of PrfTransform in the context of {@link SaProposal}.
+         *
+         * @param id the IKE standard Transform ID.
+         */
+        public PrfTransform(@PseudorandomFunction int id) {
+            super(Transform.TRANSFORM_TYPE_PRF, id);
+        }
+
+        /**
+         * Contruct an instance of PrfTransform in the context of abstract class {@link Transform}.
+         *
+         * @param id the IKE standard Transform ID.
+         * @param attributeList the decoded list of Attribute.
+         * @throws InvalidSyntaxException for syntax error.
+         */
+        protected PrfTransform(int id, List<Attribute> attributeList)
+                throws InvalidSyntaxException {
+            super(Transform.TRANSFORM_TYPE_PRF, id, attributeList);
+        }
+
+        @Override
+        public String getTransformTypeString() {
+            return "Pseudorandom Function";
         }
     }
 
