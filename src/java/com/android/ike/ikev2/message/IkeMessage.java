@@ -68,6 +68,8 @@ public final class IkeMessage {
     /**
      * Decrypt and decode encrypted IKE message body and create an instance of IkeMessage.
      *
+     * <p> This method catches all RuntimeException during decoding incoming IKE packet.
+     *
      * @param header the IKE header that is decoded but not validated.
      * @param inputPacket the byte array containing the whole IKE message.
      * @param integrityMac the initialized Message Authentication Code (MAC) for integrity check.
@@ -91,19 +93,26 @@ public final class IkeMessage {
 
         header.checkValidOrThrow(inputPacket.length);
 
-        Pair<IkeSkPayload, Integer> pair =
-                IkePayloadFactory.getIkeSkPayload(
-                        inputPacket, integrityMac, checksumLen, decryptCipher, dKey, ivLen);
-        IkeSkPayload skPayload = pair.first;
-        int firstPayloadType = pair.second;
+        try {
+            Pair<IkeSkPayload, Integer> pair =
+                    IkePayloadFactory.getIkeSkPayload(
+                            inputPacket, integrityMac, checksumLen, decryptCipher, dKey, ivLen);
+            IkeSkPayload skPayload = pair.first;
+            int firstPayloadType = pair.second;
 
-        List<IkePayload> supportedPayloadList =
-                decodePayloadList(firstPayloadType, skPayload.unencryptedPayloads);
-        return new IkeMessage(header, supportedPayloadList);
+            List<IkePayload> supportedPayloadList =
+                    decodePayloadList(firstPayloadType, skPayload.unencryptedPayloads);
+            return new IkeMessage(header, supportedPayloadList);
+        } catch (NegativeArraySizeException | BufferUnderflowException e) {
+            // Invalid length error when parsing payload bodies.
+            throw new InvalidSyntaxException("Malformed IKE Payload");
+        }
     }
 
     /**
      * Decode unencrypted IKE message body and create an instance of IkeMessage.
+     *
+     * <p> This method catches all RuntimeException during decoding incoming IKE packet.
      *
      * @param header the IKE header that is decoded but not validated.
      * @param inputPacket the byte array contains the whole IKE message.
@@ -117,9 +126,14 @@ public final class IkeMessage {
         byte[] unencryptedPayloads =
                 Arrays.copyOfRange(inputPacket, IkeHeader.IKE_HEADER_LENGTH, inputPacket.length);
 
-        List<IkePayload> supportedPayloadList =
-                decodePayloadList(header.nextPayloadType, unencryptedPayloads);
-        return new IkeMessage(header, supportedPayloadList);
+        try {
+            List<IkePayload> supportedPayloadList =
+                    decodePayloadList(header.nextPayloadType, unencryptedPayloads);
+            return new IkeMessage(header, supportedPayloadList);
+        } catch (NegativeArraySizeException | BufferUnderflowException e) {
+            // Invalid length error when parsing payload bodies.
+            throw new InvalidSyntaxException("Malformed IKE Payload");
+        }
     }
 
     private static List<IkePayload> decodePayloadList(
@@ -132,7 +146,6 @@ public final class IkeMessage {
         List<Integer> unsupportedCriticalPayloadList = new LinkedList<>();
 
         while (currentPayloadType != IkePayload.PAYLOAD_TYPE_NO_NEXT) {
-            try {
                 Pair<IkePayload, Integer> pair =
                         IkePayloadFactory.getIkePayload(currentPayloadType, inputBuffer);
                 IkePayload payload = pair.first;
@@ -145,13 +158,6 @@ public final class IkeMessage {
                 // Simply ignore unsupported uncritical payload.
 
                 currentPayloadType = pair.second;
-            } catch (NegativeArraySizeException | BufferUnderflowException e) {
-                // TODO: b/119791832. Add length check in each payload before getting data from
-                // ByteBuffer.
-
-                // Invalid length error when parsing payload bodies.
-                throw new InvalidSyntaxException("Malformed IKE Payload");
-            }
         }
 
         if (inputBuffer.remaining() > 0) {

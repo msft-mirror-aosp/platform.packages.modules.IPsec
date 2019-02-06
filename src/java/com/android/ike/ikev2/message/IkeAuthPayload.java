@@ -64,10 +64,9 @@ public abstract class IkeAuthPayload extends IkePayload {
 
     protected static IkeAuthPayload getIkeAuthPayload(boolean critical, byte[] payloadBody)
             throws IkeException {
-        // TODO: b/119791832. Validate that payloadBody is longer than AUTH_HEADER_LEN.
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
-        int authMethod = Byte.toUnsignedInt(inputBuffer.get());
 
+        int authMethod = Byte.toUnsignedInt(inputBuffer.get());
         // Skip reserved field
         byte[] reservedField = new byte[AUTH_RESERVED_FIELD_LEN];
         inputBuffer.get(reservedField);
@@ -75,7 +74,7 @@ public abstract class IkeAuthPayload extends IkePayload {
         byte[] authData = new byte[payloadBody.length - AUTH_HEADER_LEN];
         inputBuffer.get(authData);
         switch (authMethod) {
-            // TODO: Handle RSA and generic signature-based authentication.
+                // TODO: Handle RSA and generic signature-based authentication.
             case AUTH_METHOD_PRE_SHARED_KEY:
                 return new IkeAuthPskPayload(critical, authData);
             default:

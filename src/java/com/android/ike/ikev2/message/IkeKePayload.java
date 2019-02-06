@@ -77,7 +77,9 @@ public final class IkeKePayload extends IkePayload {
      */
     IkeKePayload(boolean critical, byte[] payloadBody) throws IkeException {
         super(PAYLOAD_TYPE_KE, critical);
+
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
+
         dhGroup = Short.toUnsignedInt(inputBuffer.getShort());
         // Skip reserved field
         inputBuffer.getShort();
