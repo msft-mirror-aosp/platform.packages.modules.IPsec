@@ -34,6 +34,7 @@ import com.android.ike.ikev2.message.IkeSaPayload.Attribute;
 import com.android.ike.ikev2.message.IkeSaPayload.AttributeDecoder;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.KeyLengthAttribute;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
@@ -77,9 +78,10 @@ public final class IkeSaPayloadTest {
     private static final String PRF_TRANSFORM_RAW_PACKET = "0000000802000002";
     private static final String INTEG_TRANSFORM_RAW_PACKET = "0300000803000002";
     private static final String DH_GROUP_TRANSFORM_RAW_PACKET = "0300000804000002";
+    private static final String ESN_TRANSFORM_RAW_PACKET = "0000000805000000";
 
-    private static final int TRANSFORM_TYPE_POSITION = 4;
-    private static final int TRANSFORM_ID_POSITION = 7;
+    private static final int TRANSFORM_TYPE_OFFSET = 4;
+    private static final int TRANSFORM_ID_OFFSET = 7;
 
     private static final String ATTRIBUTE_RAW_PACKET = "800e0080";
 
@@ -266,9 +268,57 @@ public final class IkeSaPayloadTest {
     }
 
     @Test
+    public void testDecodeEsnTransform() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ESN_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(new LinkedList<Attribute>());
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+        assertTrue(transform instanceof EsnTransform);
+        assertEquals(Transform.TRANSFORM_TYPE_ESN, transform.type);
+        assertEquals(EsnTransform.ESN_POLICY_NO_EXTENDED, transform.id);
+        assertTrue(transform.isSupported);
+    }
+
+    @Test
+    public void testDecodeEsnTransformWithUnsupportedId() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ESN_TRANSFORM_RAW_PACKET);
+        inputPacket[TRANSFORM_ID_OFFSET] = -1;
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(new LinkedList<Attribute>());
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+        assertTrue(transform instanceof EsnTransform);
+        assertEquals(Transform.TRANSFORM_TYPE_ESN, transform.type);
+        assertFalse(transform.isSupported);
+    }
+
+    @Test
+    public void testDecodeEsnTransformWithUnrecognizedAttribute() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ESN_TRANSFORM_RAW_PACKET);
+        ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
+
+        when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
+                .thenReturn(mAttributeListWithKeyLength128);
+        Transform.sAttributeDecoder = mMockedAttributeDecoder;
+
+        Transform transform = Transform.readFrom(inputBuffer);
+        assertTrue(transform instanceof EsnTransform);
+        assertEquals(Transform.TRANSFORM_TYPE_ESN, transform.type);
+        assertEquals(EsnTransform.ESN_POLICY_NO_EXTENDED, transform.id);
+        assertFalse(transform.isSupported);
+    }
+
+    @Test
     public void testDecodeUnrecognizedTransform() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
-        inputPacket[TRANSFORM_TYPE_POSITION] = 6;
+        inputPacket[TRANSFORM_TYPE_OFFSET] = 6;
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
         when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
@@ -302,7 +352,7 @@ public final class IkeSaPayloadTest {
     @Test
     public void testDecodeTransformWithUnrecognizedTransformId() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
-        inputPacket[TRANSFORM_ID_POSITION] = 1;
+        inputPacket[TRANSFORM_ID_OFFSET] = 1;
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
         when(mMockedAttributeDecoder.decodeAttributes(anyInt(), any()))
