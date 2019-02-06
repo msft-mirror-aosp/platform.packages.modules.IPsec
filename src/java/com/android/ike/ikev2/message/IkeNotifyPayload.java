@@ -60,6 +60,7 @@ public final class IkeNotifyPayload extends IkePayload {
     public static final int NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1;
     public static final int NOTIFY_TYPE_INVALID_MAJOR_VERSION = 5;
     public static final int NOTIFY_TYPE_INVALID_SYNTAX = 7;
+    public static final int NOTIFY_TYPE_AUTHENTICATION_FAILED = 24;
     public static final int NOTIFY_TYPE_INVALID_SELECTORS = 39;
     public static final int NOTIFY_TYPE_CHILD_SA_NOT_FOUND = 44;
 
