@@ -98,34 +98,17 @@ public final class IkeNotifyPayload extends IkePayload {
         spiSize = inputBuffer.get();
         notifyType = Short.toUnsignedInt(inputBuffer.getShort());
 
-        // Validate syntax of spiSize, protocolId and notifyType
+        // Validate syntax of spiSize, protocolId and notifyType.
+        // Reference: <https://tools.ietf.org/html/rfc7296#page-100>
         if (spiSize == SPI_LEN_IPSEC) {
-            // For Child SA concerned message
-            if (protocolId != PROTOCOL_ID_AH && protocolId != PROTOCOL_ID_ESP) {
-                throw new InvalidSyntaxException(
-                        "Expected Procotol ID AH(2) or ESP(3): Protocol ID is " + protocolId);
-            }
-
-            if (!VALID_NOTIFY_TYPES_FOR_CHILD_SA.contains(notifyType)) {
-                throw new InvalidSyntaxException(
-                        "Expected Child SA concerned Notify Type: Notify Type is " + notifyType);
-            }
-
+            // For message concerning existing Child SA
+            validateNotifyPayloadForExistingChildSa();
             spi = inputBuffer.getInt();
 
         } else if (spiSize == SPI_LEN_NOT_INCLUDED) {
-            // For IKE SA concerned message
-            if (protocolId != PROTOCOL_ID_CURRENT_IKE_SA) {
-                throw new InvalidSyntaxException(
-                        "Expected Procotol ID for current IKE(0): Protocol ID is " + protocolId);
-            }
-
-            if (notifyType == NOTIFY_TYPE_INVALID_SELECTORS
-                    || notifyType == NOTIFY_TYPE_CHILD_SA_NOT_FOUND) {
-                throw new InvalidSyntaxException(
-                        "Expected IKE SA concerned Notify Type: Notify Type is " + notifyType);
-            }
-            spi = 0;
+            // For message concerning IKE SA or for new Child SA that to be negotiated.
+            validateNotifyPayloadForIkeAndNewChild();
+            spi = SPI_NOT_INCLUDED;
 
         } else {
             throw new InvalidSyntaxException("Invalid SPI Size: " + spiSize);
@@ -133,6 +116,33 @@ public final class IkeNotifyPayload extends IkePayload {
 
         notifyData = new byte[payloadBody.length - NOTIFY_HEADER_LEN];
         inputBuffer.get(notifyData);
+    }
+
+    private void validateNotifyPayloadForExistingChildSa() throws InvalidSyntaxException {
+        if (protocolId != PROTOCOL_ID_AH && protocolId != PROTOCOL_ID_ESP) {
+            throw new InvalidSyntaxException(
+                    "Expected Procotol ID AH(2) or ESP(3): Protocol ID is " + protocolId);
+        }
+
+        if (!VALID_NOTIFY_TYPES_FOR_CHILD_SA.contains(notifyType)) {
+            throw new InvalidSyntaxException(
+                    "Expected Notify Type for existing Child SA: Notify Type is " + notifyType);
+        }
+    }
+
+    private void validateNotifyPayloadForIkeAndNewChild() throws InvalidSyntaxException {
+        if (protocolId != PROTOCOL_ID_UNSET) {
+            throw new InvalidSyntaxException(
+                    "Expected Procotol ID unset: Protocol ID is " + protocolId);
+        }
+
+        if (notifyType == NOTIFY_TYPE_INVALID_SELECTORS
+                || notifyType == NOTIFY_TYPE_CHILD_SA_NOT_FOUND) {
+            throw new InvalidSyntaxException(
+                    "Expected Notify Type concerning IKE SA or new Child SA under negotiation"
+                            + ": Notify Type is "
+                            + notifyType);
+        }
     }
 
     /**
@@ -159,6 +169,54 @@ public final class IkeNotifyPayload extends IkePayload {
     @Override
     protected int getPayloadLength() {
         return GENERIC_HEADER_LENGTH + NOTIFY_HEADER_LEN + spiSize + notifyData.length;
+    }
+
+    protected IkeNotifyPayload(
+            @ProtocolId int protocolId,
+            byte spiSize,
+            int spi,
+            @NotifyType int notifyType,
+            byte[] notifyData) {
+        super(PAYLOAD_TYPE_NOTIFY, false);
+        this.protocolId = protocolId;
+        this.spiSize = spiSize;
+        this.spi = spi;
+        this.notifyType = notifyType;
+        this.notifyData = notifyData;
+    }
+
+    /**
+     * Construct IkeNotifyPayload concerning either an IKE SA or Child SA that is going to be
+     * negotiated.
+     *
+     * @param notifyType the notify type concerning IKE SA
+     * @param notifytData status or error data transmitted. Values for this field are notify type
+     *     specific.
+     */
+    public IkeNotifyPayload(@NotifyType int notifyType, byte[] notifyData) {
+        this(PROTOCOL_ID_UNSET, SPI_LEN_NOT_INCLUDED, SPI_NOT_INCLUDED, notifyType, notifyData);
+        try {
+            validateNotifyPayloadForIkeAndNewChild();
+        } catch (InvalidSyntaxException e) {
+            throw new IllegalArgumentException(e.message);
+        }
+    }
+
+    /**
+     * Construct IkeNotifyPayload concerning existing Child SA
+     *
+     * @param notifyType the notify type concerning Child SA
+     * @param notifytData status or error data transmitted. Values for this field are notify type
+     *     specific.
+     */
+    public IkeNotifyPayload(
+            @ProtocolId int protocolId, int spi, @NotifyType int notifyType, byte[] notifyData) {
+        this(protocolId, SPI_LEN_IPSEC, spi, notifyType, notifyData);
+        try {
+            validateNotifyPayloadForExistingChildSa();
+        } catch (InvalidSyntaxException e) {
+            throw new IllegalArgumentException(e.message);
+        }
     }
 
     /**
