@@ -18,6 +18,12 @@ package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkePayload.PayloadType;
 
+import android.util.Pair;
+
+import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
+
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
@@ -51,16 +57,13 @@ public final class IkeMessage {
     /**
      * Decode unenrypted IKE message body and create an instance of IkeMessage.
      *
-     * <p>Throw an exception if the packet is malformed.
-     *
      * @param header the IKE header that is decoded but not validated
      * @param inputPacket the byte array contains the whole IKE message
+     * @throws IkeException if there is any error
      */
-    public static IkeMessage decode(IkeHeader header, byte[] inputPacket) {
+    public static IkeMessage decode(IkeHeader header, byte[] inputPacket) throws IkeException {
 
-        // TODO: Add a method to validate all ikeHeader fields and throw exceptions.
-
-        // TODO: Add a method to check if major version is larger than 2 and throw exceptions.
+        header.validate();
 
         ByteBuffer inputBuffer =
                 ByteBuffer.wrap(
@@ -68,23 +71,33 @@ public final class IkeMessage {
                         IkeHeader.IKE_HEADER_LENGTH,
                         inputPacket.length - IkeHeader.IKE_HEADER_LENGTH);
         @PayloadType int currentPayloadType = header.nextPayloadType;
-        List<IkePayload> payloadList = new LinkedList<>();
+        // For supported payload
+        List<IkePayload> supportedPayloadList = new LinkedList<>();
+        // For unsupported critical payload
+        List<Integer> unsupportedCriticalPayloadList = new LinkedList<>();
 
         while (currentPayloadType != IkePayload.PAYLOAD_TYPE_NO_NEXT) {
             try {
-                // TODO: Create IkePayload subclass using IkePayloadFactory.getPayload(). Current
-                // instantiation is only for test.
+                Pair<IkePayload, Integer> pair =
+                        IkePayloadFactory.getIkePayload(currentPayloadType, inputBuffer);
+                IkePayload payload = pair.first;
 
-                // TODO: Instantiaing IkePayload should throw an exception when payload type is not
-                // supported.
+                if (!(payload instanceof IkeUnsupportedPayload)) {
+                    supportedPayloadList.add(payload);
+                } else if (payload.isCritical) {
+                    unsupportedCriticalPayloadList.add(payload.payloadType);
+                }
+                // Simply ignore unsupported uncritical payload.
 
-                IkePayload payload = new IkePayload(currentPayloadType, inputBuffer);
-                payloadList.add(payload);
-                currentPayloadType = payload.nextPayloadType;
+                currentPayloadType = pair.second;
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
-                throw new IllegalArgumentException("Malformed message");
+                throw new InvalidSyntaxException("Malformed IKE Payload");
             }
         }
-        return new IkeMessage(header, payloadList);
+
+        if (unsupportedCriticalPayloadList.size() > 0) {
+            throw new UnsupportedCriticalPayloadException(unsupportedCriticalPayloadList);
+        }
+        return new IkeMessage(header, supportedPayloadList);
     }
 }
