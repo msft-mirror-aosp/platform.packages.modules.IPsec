@@ -54,7 +54,7 @@ public final class IkeHeaderTest {
     private static final byte IKE_MINOR_VERSION = 0;
 
     @IkeHeader.ExchangeType
-    private static final int IKE_EXCHANGE_TYPE = IkeHeader.EXCHANGE_TYPE_IKE_INIT_SA;
+    private static final int IKE_EXCHANGE_TYPE = IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT;
 
     private static final int IKE_MSG_ID = 0;
     private static final int IKE_MSG_LENGTH = 336;
