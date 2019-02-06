@@ -156,6 +156,8 @@ public final class IkeSaPayload extends IkePayload {
 
             Transform[] transformArray =
                     sTransformDecoder.decodeTransforms(transformCount, inputBuffer);
+            // TODO: Validate that sum of all Transforms' lengths plus Proposal header length equals
+            // to Proposal's length.
 
             return new Proposal(number, protocolId, spiSize, spi, transformArray);
         }
@@ -212,6 +214,7 @@ public final class IkeSaPayload extends IkePayload {
                             parsedLength += pair.second;
                             list.add(pair.first);
                         }
+                        // TODO: Validate that parsedLength equals to length.
                         return list;
                     }
                 };
@@ -583,8 +586,9 @@ public final class IkeSaPayload extends IkePayload {
         // Support only one Attribute type: Key Length. Should use Type/Value format.
         public static final int ATTRIBUTE_TYPE_KEY_LENGTH = 14;
 
-        private static final int LENGTH_FOR_TV = 4;
-        private static final int VALUE_SIZE_FOR_TV = 2;
+        private static final int TV_ATTRIBUTE_VALUE_LEN = 2;
+        private static final int TV_ATTRIBUTE_TOTAL_LEN = 4;
+        private static final int TVL_ATTRIBUTE_HEADER_LEN = TV_ATTRIBUTE_TOTAL_LEN;
 
         // Only Key Length type belongs to AttributeType
         public final int type;
@@ -603,15 +607,18 @@ public final class IkeSaPayload extends IkePayload {
             byte[] value = new byte[0];
             if ((formatAndType & 0x8000) == 0x8000) {
                 // Type/Value format
-                length = LENGTH_FOR_TV;
-                value = new byte[VALUE_SIZE_FOR_TV];
+                length = TV_ATTRIBUTE_TOTAL_LEN;
+                value = new byte[TV_ATTRIBUTE_VALUE_LEN];
             } else {
                 // Type/Length/Value format
                 if (type == ATTRIBUTE_TYPE_KEY_LENGTH) {
                     throw new InvalidSyntaxException("Wrong format in Transform Attribute");
                 }
+
                 length = Short.toUnsignedInt(inputBuffer.getShort());
-                value = new byte[length - LENGTH_FOR_TV];
+                int valueLen = length - TVL_ATTRIBUTE_HEADER_LEN;
+                // IkeMessage will catch exception if valueLen is negative.
+                value = new byte[valueLen];
             }
 
             inputBuffer.get(value);
