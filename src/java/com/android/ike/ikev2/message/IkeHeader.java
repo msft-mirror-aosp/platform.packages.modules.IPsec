@@ -138,7 +138,7 @@ public final class IkeHeader {
     }
 
     /** Validate syntax and major version. */
-    public void validate() throws IkeException {
+    public void checkValidOrThrow(int packetLength) throws IkeException {
         if (majorVersion > 2) {
             // Receive higher version of protocol. Stop parsing.
             throw new InvalidMajorVersionException(majorVersion);
@@ -153,6 +153,9 @@ public final class IkeHeader {
         if (exchangeType < EXCHANGE_TYPE_IKE_SA_INIT
                 || exchangeType > EXCHANGE_TYPE_INFORMATIONAL) {
             throw new InvalidSyntaxException("Invalid IKE Exchange Type.");
+        }
+        if (messageLength != packetLength) {
+            throw new InvalidSyntaxException("Invalid IKE Message Length.");
         }
     }
 
