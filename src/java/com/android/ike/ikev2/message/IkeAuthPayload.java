@@ -90,7 +90,7 @@ public abstract class IkeAuthPayload extends IkePayload {
     // Sign value with PRF when building outbound packet or verifying inbound packet. It is called
     // for calculating signature over ID payload for all types of authentication and also for
     // calculating signature over PSK for PSK authentication.
-    protected byte[] signWithPrf(Mac prfMac, byte[] prfKeyBytes, byte[] value)
+    protected static byte[] signWithPrf(Mac prfMac, byte[] prfKeyBytes, byte[] value)
             throws InvalidKeyException {
         SecretKeySpec prfKey = new SecretKeySpec(prfKeyBytes, prfMac.getAlgorithm());
         prfMac.init(prfKey);
@@ -100,6 +100,28 @@ public abstract class IkeAuthPayload extends IkePayload {
         // Calculate MAC.
         prfMac.update(valueBuffer);
         return prfMac.doFinal();
+    }
+
+    // When not using EAP, the peers are authenticated by having each sign a block of data named as
+    // SignedOctets. IKE initiator's SignedOctets are the concatenation of the IKE_INIT request
+    // message, the Nonce of IKE responder and the signed ID-Initiator payload body. Similarly, IKE
+    // responder's SignedOctets are the concatenation of the IKE_INIT response message, the Nonce of
+    // IKE initiator and the signed ID-Responder payload body.
+    protected static byte[] getSignedOctets(
+            byte[] ikeInitBytes,
+            byte[] nonce,
+            byte[] idPayloadBodyBytes,
+            Mac prfMac,
+            byte[] prfKeyBytes)
+            throws InvalidKeyException {
+        byte[] signedidPayloadBodyBytes = signWithPrf(prfMac, prfKeyBytes, idPayloadBodyBytes);
+
+        ByteBuffer buffer =
+                ByteBuffer.allocate(
+                        ikeInitBytes.length + nonce.length + signedidPayloadBodyBytes.length);
+        buffer.put(ikeInitBytes).put(nonce).put(signedidPayloadBodyBytes);
+
+        return buffer.array();
     }
 
     @Override
