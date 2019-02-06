@@ -49,6 +49,8 @@ final class IkePayloadFactory {
                             return new IkeNoncePayload(isCritical, payloadBody);
                         case IkePayload.PAYLOAD_TYPE_NOTIFY:
                             return new IkeNotifyPayload(isCritical, payloadBody);
+                        case IkePayload.PAYLOAD_TYPE_VENDOR:
+                            return new IkeVendorPayload(isCritical, payloadBody);
                         default:
                             return new IkeUnsupportedPayload(payloadType, isCritical);
                     }
