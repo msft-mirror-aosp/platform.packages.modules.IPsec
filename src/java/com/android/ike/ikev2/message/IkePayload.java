@@ -55,11 +55,15 @@ public abstract class IkePayload {
     public static final int PAYLOAD_TYPE_SA = 33;
     /** Key Exchange Payload */
     public static final int PAYLOAD_TYPE_KE = 34;
+    /** Identification Payload for IKE SA Initiator */
+    public static final int PAYLOAD_TYPE_ID_INITIATOR = 35;
+    /** Identification Payload for IKE SA Responder */
+    public static final int PAYLOAD_TYPE_ID_RESPONDER = 36;
     /** Nonce Payload */
     public static final int PAYLOAD_TYPE_NONCE = 40;
     /** Notify Payload */
     public static final int PAYLOAD_TYPE_NOTIFY = 41;
-    /** VENDOR Payload */
+    /** Vendor Payload */
     public static final int PAYLOAD_TYPE_VENDOR = 43;
     /** Encrypted and Authenticated Payload */
     public static final int PAYLOAD_TYPE_SK = 46;
