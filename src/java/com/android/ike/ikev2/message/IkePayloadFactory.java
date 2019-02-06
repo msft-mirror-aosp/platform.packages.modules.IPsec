@@ -43,6 +43,8 @@ final class IkePayloadFactory {
                             // TODO: Add cases for creating supported payloads.
                         case IkePayload.PAYLOAD_TYPE_SA:
                             return new IkeSaPayload(isCritical, payloadBody);
+                        case IkePayload.PAYLOAD_TYPE_KE:
+                            return new IkeKePayload(isCritical, payloadBody);
                         default:
                             return new IkeUnsupportedPayload(payloadType, isCritical);
                     }
