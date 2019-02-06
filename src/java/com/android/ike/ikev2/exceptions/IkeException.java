@@ -30,12 +30,34 @@ public abstract class IkeException extends Exception {
     @IkeNotifyPayload.NotifyType public final int errorCode;
 
     /**
-     * Construct an instance of IkeException
+     * Construct an instance of IkeException.
      *
-     * @param code the protocol error code
+     * @param code the protocol error code.
      */
     public IkeException(@IkeNotifyPayload.NotifyType int code) {
         super();
+        errorCode = code;
+    }
+
+    /**
+     * Construct an instance of IkeException with specified detail message.
+     *
+     * @param code the protocol error code.
+     * @param message the detail message.
+     */
+    public IkeException(@IkeNotifyPayload.NotifyType int code, String message) {
+        super(message);
+        errorCode = code;
+    }
+
+    /**
+     * Construct an instance of IkeException with specified cause.
+     *
+     * @param code the protocol error code.
+     * @param cause the cause.
+     */
+    public IkeException(@IkeNotifyPayload.NotifyType int code, Throwable cause) {
+        super(cause);
         errorCode = code;
     }
 }

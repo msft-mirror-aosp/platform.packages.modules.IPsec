@@ -44,6 +44,8 @@ public abstract class IkePayload {
         PAYLOAD_TYPE_KE,
         PAYLOAD_TYPE_CERT,
         PAYLOAD_TYPE_AUTH,
+        PAYLOAD_TYPE_ID_INITIATOR,
+        PAYLOAD_TYPE_ID_RESPONDER,
         PAYLOAD_TYPE_NONCE,
         PAYLOAD_TYPE_NOTIFY,
         PAYLOAD_TYPE_VENDOR,
