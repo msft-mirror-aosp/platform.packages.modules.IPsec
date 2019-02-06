@@ -106,7 +106,36 @@ public final class IkeMessage {
         return new IkeMessage(header, supportedPayloadList);
     }
 
-    static Provider getProvider() {
+    static Provider getSecurityProvider() {
         return SECURITY_PROVIDER;
+    }
+
+    /**
+     * Encode all payloads to a byte array.
+     *
+     * @return byte array contains all encoded payloads
+     */
+    public byte[] encodePayloads() {
+        if (ikePayloadList.isEmpty()) {
+            return new byte[0];
+        }
+
+        int payloadLengthSum = 0;
+        for (IkePayload payload : ikePayloadList) {
+            payloadLengthSum += payload.getPayloadLength();
+        }
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(payloadLengthSum);
+
+        for (int i = 0; i < ikePayloadList.size() - 1; i++) {
+            ikePayloadList
+                    .get(i)
+                    .encodeToByteBuffer(ikePayloadList.get(i + 1).payloadType, byteBuffer);
+        }
+        ikePayloadList
+                .get(ikePayloadList.size() - 1)
+                .encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_NO_NEXT, byteBuffer);
+
+        return byteBuffer.array();
     }
 }

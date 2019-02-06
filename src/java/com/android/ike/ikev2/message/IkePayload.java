@@ -20,6 +20,7 @@ import android.annotation.IntDef;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.nio.ByteBuffer;
 
 /**
  * IkePayload is an abstract class that represents the common information for all IKE payload types.
@@ -31,6 +32,8 @@ import java.lang.annotation.RetentionPolicy;
  *     Protocol Version 2 (IKEv2).
  */
 public abstract class IkePayload {
+    // Critical bit and following reserved 7 bits in payload generic header must all be zero
+    private static final byte PAYLOAD_HEADER_CRITICAL_BIT_UNSET = 0;
     /** Length of a generic IKE payload header */
     public static final int GENERIC_HEADER_LENGTH = 4;
 
@@ -108,12 +111,34 @@ public abstract class IkePayload {
     }
 
     /**
-     * Encode payload to byte array.
+     * Encode generic payload header to ByteBuffer.
      *
      * @param nextPayload type of payload that follows this payload.
-     * @return encoded payload
+     * @param payloadLength length of the entire payload
+     * @param byteBuffer destination ByteBuffer that stores encoded payload header
      */
-    abstract byte[] encode(@PayloadType int nextPayload);
+    protected void encodePayloadHeaderToByteBuffer(
+            @PayloadType int nextPayload, int payloadLength, ByteBuffer byteBuffer) {
+        byteBuffer
+                .put((byte) nextPayload)
+                .put(PAYLOAD_HEADER_CRITICAL_BIT_UNSET)
+                .putShort((short) payloadLength);
+    }
+
+    /**
+     * Encode payload to ByteBuffer.
+     *
+     * @param nextPayload type of payload that follows this payload.
+     * @param byteBuffer destination ByteBuffer that stores encoded payload.
+     */
+    protected abstract void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer);
+
+    /**
+     * Get entire payload length.
+     *
+     * @return entire payload length.
+     */
+    protected abstract int getPayloadLength();
 
     /**
      * Return the payload type as a String.

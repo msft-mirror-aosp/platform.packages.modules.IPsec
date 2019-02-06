@@ -19,6 +19,7 @@ package com.android.ike.ikev2.message;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
+import java.nio.ByteBuffer;
 import java.security.SecureRandom;
 
 /**
@@ -71,16 +72,27 @@ public final class IkeNoncePayload extends IkePayload {
     }
 
     /**
-     * Encode Nonce payload to byte array.
+     * Encode Nonce payload to ByteBuffer.
      *
      * @param nextPayload type of payload that follows this payload.
-     * @return encoded Nonce payload
+     * @param byteBuffer destination ByteBuffer that stores encoded payload.
      */
     @Override
-    byte[] encode(@PayloadType int nextPayload) {
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
-        // TODO: Implement encoding Nonce payload.
+    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
+        int payloadLength = GENERIC_HEADER_LENGTH + nonceData.length;
+
+        encodePayloadHeaderToByteBuffer(nextPayload, payloadLength, byteBuffer);
+        byteBuffer.put(nonceData);
+    }
+
+    /**
+     * Get entire payload length.
+     *
+     * @return entire payload length.
+     */
+    @Override
+    protected int getPayloadLength() {
+        return GENERIC_HEADER_LENGTH + nonceData.length;
     }
 
     /**

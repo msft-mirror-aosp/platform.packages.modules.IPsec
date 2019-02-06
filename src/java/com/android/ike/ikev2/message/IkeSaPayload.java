@@ -299,16 +299,28 @@ public final class IkeSaPayload extends IkePayload {
     }
 
     /**
-     * Encode SA payload to byte array.
+     * Encode SA payload to ByteBUffer.
      *
      * @param nextPayload type of payload that follows this payload.
-     * @return encoded SA payload
+     * @param byteBuffer destination ByteBuffer that stores encoded payload.
      */
     @Override
-    byte[] encode(@PayloadType int nextPayload) {
+    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
         throw new UnsupportedOperationException(
                 "It is not supported to encode a " + getTypeString());
         // TODO: Implement encoding SA payload.
+    }
+
+    /**
+     * Get entire payload length.
+     *
+     * @return entire payload length.
+     */
+    @Override
+    protected int getPayloadLength() {
+        throw new UnsupportedOperationException(
+                "It is not supported to get payload length of " + getTypeString());
+        // TODO: Implement this method for SA payload.
     }
 
     /**
