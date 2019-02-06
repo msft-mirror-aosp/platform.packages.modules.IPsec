@@ -29,6 +29,8 @@ import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+
 public final class IkeMessageTest {
     private static final String IKE_SA_INIT_RAW_PACKET =
             "8f54bf6d8b48e6e100000000000000002120220800000000"
@@ -80,9 +82,15 @@ public final class IkeMessageTest {
         }
 
         @Override
-        byte[] encode(@PayloadType int nextPayload) {
+        protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
             throw new UnsupportedOperationException(
                     "It is not supported to encode " + getTypeString());
+        }
+
+        @Override
+        protected int getPayloadLength() {
+            throw new UnsupportedOperationException(
+                    "It is not supported to get payload length of " + getTypeString());
         }
 
         @Override
