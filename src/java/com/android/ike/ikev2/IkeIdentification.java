@@ -85,6 +85,13 @@ public abstract class IkeIdentification {
      */
     public abstract boolean equals(IkeIdentification ikeId);
 
+    /**
+     * Return the encoded identification data in a byte array.
+     *
+     * @return the encoded identification data.
+     */
+    public abstract byte[] getEncodedIdData();
+
     // TODO: Add abstract method for encoding.
 
     /** IkeIpv4AddrIdentification represents ID information in IPv4 address ID type. */
@@ -108,15 +115,37 @@ public abstract class IkeIdentification {
         }
 
         /**
+         * Construct an instance of IkeIpv4AddrIdentification with user provided IPv4 address for
+         * building outbound packet.
+         *
+         * @param address user provided IPv4 address
+         */
+        public IkeIpv4AddrIdentification(Inet4Address address) {
+            super(ID_TYPE_IPV4_ADDR);
+            ipv4Address = address;
+        }
+
+        /**
          * Compare this IkeIpv4AddrIdentification against specified IkeIdentification.
          *
          * @param ikeId the IkeIdentification to compare against.
          * @return true if IkeIdentifications are the same; false otherwise.
          */
+        @Override
         public boolean equals(IkeIdentification ikeId) {
             if (!(ikeId instanceof IkeIpv4AddrIdentification)) return false;
 
             return ipv4Address.equals(((IkeIpv4AddrIdentification) ikeId).ipv4Address);
+        }
+
+        /**
+         * Return raw IP address in a byte array.
+         *
+         * @return the raw IP address in a byte array.
+         */
+        @Override
+        public byte[] getEncodedIdData() {
+            return ipv4Address.getAddress();
         }
     }
 }

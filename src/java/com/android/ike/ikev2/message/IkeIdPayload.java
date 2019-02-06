@@ -48,7 +48,8 @@ public final class IkeIdPayload extends IkePayload {
      *
      * @param critical indicates if it is a critical payload.
      * @param payloadBody payload body in byte array.
-     * @param isInitiator indicates whether it is sent from IKE initiator or IKE responder.
+     * @param isInitiator indicates whether this payload contains the ID of IKE initiator or IKE
+     *     responder.
      * @throws IkeException for decoding error.
      */
     IkeIdPayload(boolean critical, byte[] payloadBody, boolean isInitiator) throws IkeException {
@@ -76,7 +77,17 @@ public final class IkeIdPayload extends IkePayload {
         }
     }
 
-    // TODO: Add constructor for building outbound packet.
+    /**
+     * Construct IkeIdPayload for an outbound IKE packet.
+     *
+     * @param isInitiator indicates whether this payload contains the ID of IKE initiator or IKE
+     *     responder.
+     * @param ikeId the IkeIdentification.
+     */
+    public IkeIdPayload(boolean isInitiator, IkeIdentification ikeId) {
+        super((isInitiator ? PAYLOAD_TYPE_ID_INITIATOR : PAYLOAD_TYPE_ID_RESPONDER), false);
+        this.ikeId = ikeId;
+    }
 
     /**
      * Encode Identification Payload to ByteBuffer.
@@ -86,8 +97,11 @@ public final class IkeIdPayload extends IkePayload {
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+        byteBuffer
+                .put((byte) ikeId.idType)
+                .put(new byte[ID_HEADER_RESERVED_LEN])
+                .put(ikeId.getEncodedIdData());
     }
 
     /**
@@ -97,8 +111,7 @@ public final class IkeIdPayload extends IkePayload {
      */
     @Override
     protected int getPayloadLength() {
-        throw new UnsupportedOperationException(
-                "It is not supported to get payload length of " + getTypeString());
+        return GENERIC_HEADER_LENGTH + ID_HEADER_LEN + ikeId.getEncodedIdData().length;
     }
 
     /**
