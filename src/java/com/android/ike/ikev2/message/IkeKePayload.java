@@ -19,6 +19,7 @@ package com.android.ike.ikev2.message;
 import android.util.Pair;
 
 import com.android.ike.ikev2.IkeDhParams;
+import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.utils.BigIntegerUtils;
@@ -88,10 +89,10 @@ public final class IkeKePayload extends IkePayload {
         // Check if dataSize matches the DH group type
         boolean isValidSyntax = true;
         switch (dhGroup) {
-            case DH_GROUP_1024_BIT_MODP:
+            case SaProposal.DH_GROUP_1024_BIT_MODP:
                 isValidSyntax = DH_GROUP_1024_BIT_MODP_DATA_LEN == dataSize;
                 break;
-            case DH_GROUP_2048_BIT_MODP:
+            case SaProposal.DH_GROUP_2048_BIT_MODP:
                 isValidSyntax = DH_GROUP_2048_BIT_MODP_DATA_LEN == dataSize;
                 break;
             default:
@@ -116,7 +117,7 @@ public final class IkeKePayload extends IkePayload {
      * @see <a href="https://tools.ietf.org/html/rfc7296#page-76">RFC 7296, Internet Key Exchange
      *     Protocol Version 2 (IKEv2), Critical.
      */
-    private IkeKePayload(@DhGroup int dh, byte[] keData) {
+    private IkeKePayload(@SaProposal.DhGroup int dh, byte[] keData) {
         super(PAYLOAD_TYPE_KE, false);
         dhGroup = dh;
         keyExchangeData = keData;
@@ -154,19 +155,19 @@ public final class IkeKePayload extends IkePayload {
      * @return Pair of generated private key and an instance of IkeKePayload with key exchange data.
      * @throws GeneralSecurityException for security-related exception.
      */
-    public static Pair<DHPrivateKeySpec, IkeKePayload> getKePayload(@DhGroup int dh)
+    public static Pair<DHPrivateKeySpec, IkeKePayload> getKePayload(@SaProposal.DhGroup int dh)
             throws GeneralSecurityException {
         BigInteger baseGen = BigInteger.valueOf(IkeDhParams.BASE_GENERATOR_MODP);
         BigInteger prime = BigInteger.ZERO;
         int keySize = 0;
         switch (dh) {
-            case DH_GROUP_1024_BIT_MODP:
+            case SaProposal.DH_GROUP_1024_BIT_MODP:
                 prime =
                         BigIntegerUtils.unsignedHexStringToBigInteger(
                                 IkeDhParams.PRIME_1024_BIT_MODP);
                 keySize = DH_GROUP_1024_BIT_MODP_DATA_LEN;
                 break;
-            case DH_GROUP_2048_BIT_MODP:
+            case SaProposal.DH_GROUP_2048_BIT_MODP:
                 prime =
                         BigIntegerUtils.unsignedHexStringToBigInteger(
                                 IkeDhParams.PRIME_2048_BIT_MODP);
