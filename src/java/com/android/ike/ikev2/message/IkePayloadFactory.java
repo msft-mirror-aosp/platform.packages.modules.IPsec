@@ -45,6 +45,8 @@ final class IkePayloadFactory {
                             return new IkeSaPayload(isCritical, payloadBody);
                         case IkePayload.PAYLOAD_TYPE_KE:
                             return new IkeKePayload(isCritical, payloadBody);
+                        case IkePayload.PAYLOAD_TYPE_NONCE:
+                            return new IkeNoncePayload(isCritical, payloadBody);
                         default:
                             return new IkeUnsupportedPayload(payloadType, isCritical);
                     }
