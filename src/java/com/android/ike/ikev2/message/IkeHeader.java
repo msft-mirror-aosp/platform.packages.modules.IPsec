@@ -36,6 +36,7 @@ import java.nio.ByteBuffer;
  *     Protocol Version 2 (IKEv2).
  */
 public final class IkeHeader {
+    //TODO: b/122838549 Change IkeHeader to static inner class of IkeMessage.
     private static final byte IKE_HEADER_VERSION_INFO = (byte) 0x20;
 
     // Indicate whether this message is a response message
