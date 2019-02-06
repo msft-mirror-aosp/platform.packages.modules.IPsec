@@ -27,6 +27,7 @@ LOCAL_JAVA_LIBRARIES := android.test.runner
 
 LOCAL_STATIC_JAVA_LIBRARIES := ike \
         android-support-test \
+        frameworks-base-testutils \
         mockito-target-minus-junit4
 
 include $(BUILD_PACKAGE)
