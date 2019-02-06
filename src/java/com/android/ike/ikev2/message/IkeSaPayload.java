@@ -289,12 +289,8 @@ public final class IkeSaPayload extends IkePayload {
             }
         }
 
-        // Check if there is Attribute with unrecognized type. Most Transforms do not have any
-        // supported attribute types. Return true by default, and override in Transforms that
-        // support Transform Attributes.
-        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
-            return true;
-        }
+        // Check if there is Attribute with unrecognized type.
+        protected abstract boolean hasUnrecognizedAttribute(List<Attribute> attributeList);
 
         // Check if this Transform ID is supported.
         protected abstract boolean isSupportedTransformId(int id);
@@ -309,7 +305,7 @@ public final class IkeSaPayload extends IkePayload {
         // TODO: Add abstract getTransformIdString() to return specific algorithm/dhGroup name
     }
 
-    // TODO: Implement PrfTransform, IntegrityTransform, DhGroupTransform and EsnTransForm
+    // TODO: Implement DhGroupTransform and EsnTransForm
 
     /**
      * EncryptionTransform represents an encryption algorithm. It may contain an Atrribute
@@ -458,6 +454,11 @@ public final class IkeSaPayload extends IkePayload {
             return SaProposal.isSupportedPseudorandomFunction(id);
         }
 
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            return !attributeList.isEmpty();
+        }
+
         /**
          * Contruct an instance of PrfTransform for building an outbound packet.
          *
@@ -497,6 +498,11 @@ public final class IkeSaPayload extends IkePayload {
             return SaProposal.isSupportedIntegrityAlgorithm(id);
         }
 
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            return !attributeList.isEmpty();
+        }
+
         /**
          * Contruct an instance of IntegrityTransform for building an outbound packet.
          *
@@ -534,6 +540,11 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         protected boolean isSupportedTransformId(int id) {
             return false;
+        }
+
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            return !attributeList.isEmpty();
         }
 
         protected UnrecognizedTransform(int type, int id, List<Attribute> attributeList) {
