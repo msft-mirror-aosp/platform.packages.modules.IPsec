@@ -22,7 +22,6 @@ import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.internal.annotations.VisibleForTesting;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 
@@ -124,7 +123,8 @@ final class IkePayloadFactory {
      * @param dKey the decryption key.
      * @param expectedIvLen the expected length of Initialization Vector.
      * @return a pair including IkePayload and next payload type.
-     * @throws IOException
+     * @throws IkeException for decoding errors.
+     * @throws GeneralSecurityException if there is any error during integrity check or decryption.
      */
     protected static Pair<IkeSkPayload, Integer> getIkeSkPayload(
             byte[] message,

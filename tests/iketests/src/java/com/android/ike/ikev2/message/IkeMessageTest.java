@@ -198,13 +198,15 @@ public final class IkeMessageTest {
     }
 
     @Test
-    public void testEncode() throws Exception {
+    public void testAttachEncodedHeader() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         byte[] ikeBodyBytes = TestUtils.hexStringToByteArray(IKE_SA_INIT_BODY_RAW_PACKET);
         IkeHeader header = new IkeHeader(inputPacket);
         IkeMessage message = IkeMessage.decode(header, inputPacket);
 
-        byte[] encodedIkeMessage = message.encode(ikeBodyBytes);
+        byte[] encodedIkeMessage = message.attachEncodedHeader(ikeBodyBytes);
         assertArrayEquals(inputPacket, encodedIkeMessage);
     }
+
+    // TODO: Implement encodeToByteBuffer() of each payload and add test for encoding message
 }
