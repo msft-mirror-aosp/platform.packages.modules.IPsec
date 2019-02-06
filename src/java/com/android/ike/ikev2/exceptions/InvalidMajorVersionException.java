@@ -15,6 +15,8 @@
  */
 package com.android.ike.ikev2.exceptions;
 
+import com.android.ike.ikev2.message.IkeNotifyPayload;
+
 /**
  * This exception is thrown when major version is higher than 2.
  *
@@ -33,7 +35,7 @@ public final class InvalidMajorVersionException extends IkeException {
      * @param version the major version in received packet
      */
     public InvalidMajorVersionException(byte version) {
-        super(IkeException.INVALID_MAJOR_VERSION);
+        super(IkeNotifyPayload.NOTIFY_TYPE_INVALID_MAJOR_VERSION);
         receivedMajorVersion = version;
     }
 }

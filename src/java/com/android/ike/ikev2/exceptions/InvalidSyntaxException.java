@@ -15,6 +15,8 @@
  */
 package com.android.ike.ikev2.exceptions;
 
+import com.android.ike.ikev2.message.IkeNotifyPayload;
+
 /**
  * This exception is thrown if any IKE message field is invalid.
  *
@@ -34,7 +36,7 @@ public final class InvalidSyntaxException extends IkeException {
      * @param msg the descrptive message
      */
     public InvalidSyntaxException(String msg) {
-        super(IkeException.INVALID_SYNTAX);
+        super(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX);
         message = msg;
     }
 }

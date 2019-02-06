@@ -40,9 +40,6 @@ import java.util.List;
  */
 public final class IkeMessage {
 
-    public static final byte IPSEC_SPI_LEN = 4;
-    public static final byte IKE_SPI_LEN = 8;
-
     public final IkeHeader ikeHeader;
     public final List<IkePayload> ikePayloadList;
 
