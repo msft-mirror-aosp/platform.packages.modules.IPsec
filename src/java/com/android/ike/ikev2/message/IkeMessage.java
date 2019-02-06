@@ -25,9 +25,9 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import com.android.org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -79,7 +79,7 @@ public final class IkeMessage {
      * @param ivLen the length of Initialization Vector.
      * @return the IkeMessage instance.
      * @throws IkeException if there is any protocol error.
-     * @throws IOException if there is any error during integrity check or decryption.
+     * @throws GeneralSecurityException if there is any error during integrity check or decryption.
      */
     public static IkeMessage decode(
             IkeHeader header,
@@ -89,7 +89,7 @@ public final class IkeMessage {
             Cipher decryptCipher,
             SecretKey dKey,
             int ivLen)
-            throws IkeException, IOException {
+            throws IkeException, GeneralSecurityException {
 
         header.checkValidOrThrow(inputPacket.length);
 
