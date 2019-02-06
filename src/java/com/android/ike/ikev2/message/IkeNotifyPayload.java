@@ -24,7 +24,10 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Set;
 
 /**
@@ -66,6 +69,8 @@ public final class IkeNotifyPayload extends IkePayload {
     // TODO: List all supported notify types.
 
     private static final int NOTIFY_HEADER_LEN = 4;
+
+    private static final String NAT_DETECTION_DIGEST_ALGORITHM = "SHA-1";
 
     private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_CHILD_SA;
 
@@ -143,6 +148,40 @@ public final class IkeNotifyPayload extends IkePayload {
                             + ": Notify Type is "
                             + notifyType);
         }
+    }
+
+    /**
+     * Generate NAT DETECTION notification data.
+     *
+     * <p>This method calculates NAT DETECTION notification data which is a SHA-1 digest of the IKE
+     * initiator's SPI, IKE responder's SPI, IP address and port. Source address and port should be
+     * used for generating NAT_DETECTION_SOURCE_IP data. Destination address and port should be used
+     * for generating NAT_DETECTION_DESTINATION_IP data.
+     *
+     * @param initiatorIkeSpi the SPI of IKE initiator
+     * @param responderIkeSpi the SPI of IKE responder
+     * @param ipAddress the IP address
+     * @param port the port
+     * @return the generated NAT DETECTION notification data as a byte array.
+     * @throws NoSuchAlgorithmException when "SHA-1" is not supported by the security provider.
+     */
+    public static byte[] generateNatDetectionData(
+            long initiatorIkeSpi, long responderIkeSpi, InetAddress ipAddress, int port)
+            throws NoSuchAlgorithmException {
+        byte[] rawIpAddr = ipAddress.getAddress();
+
+        ByteBuffer byteBuffer =
+                ByteBuffer.allocate(2 * SPI_LEN_IKE + rawIpAddr.length + IP_PORT_LEN);
+        byteBuffer
+                .putLong(initiatorIkeSpi)
+                .putLong(responderIkeSpi)
+                .put(rawIpAddr)
+                .putShort((short) port);
+
+        MessageDigest natDetectionDataDigest =
+                MessageDigest.getInstance(
+                        NAT_DETECTION_DIGEST_ALGORITHM, IkeMessage.getSecurityProvider());
+        return natDetectionDataDigest.digest(byteBuffer.array());
     }
 
     /**
