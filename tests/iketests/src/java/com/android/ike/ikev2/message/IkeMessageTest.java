@@ -40,17 +40,35 @@ public final class IkeMessageTest {
                     + "8741c6d4ca094c93e242c9de19e7b7c60000000500000500";
     private static final String IKE_INITIATOR_SPI = "8f54bf6d8b48e6e1";
     private static final String IKE_RESPODNER_SPI = "0000000000000000";
-    private static final byte IKE_FIRST_PAYLOAD_TYPE = 33;
+
+    @IkePayload.PayloadType
+    private static final byte IKE_FIRST_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_SA;
+
     private static final byte IKE_MAJOR_VERSION = 2;
     private static final byte IKE_MINOR_VERSION = 0;
-    private static final byte IKE_EXCHANGE_TYPE = 34;
+
+    @IkeHeader.ExchangeType
+    private static final int IKE_EXCHANGE_TYPE = IkeHeader.EXCHANGE_TYPE_IKE_INIT_SA;
+
     private static final int IKE_MSG_ID = 0;
     private static final int IKE_MSG_LENGTH = 336;
+    private static final int[] PAYLOAD_LENGTH_LIST = {48, 136, 36, 28, 28, 32};
+    private static final byte[] PAYLOAD_TYPE_LIST = {
+        IkePayload.PAYLOAD_TYPE_SA,
+        IkePayload.PAYLOAD_TYPE_KE,
+        IkePayload.PAYLOAD_TYPE_NONCE,
+        IkePayload.PAYLOAD_TYPE_NOTIFY,
+        IkePayload.PAYLOAD_TYPE_NOTIFY,
+        IkePayload.PAYLOAD_TYPE_VENDOR
+    };
+    private static final int PAYLOAD_NUMBER = 6;
 
     @Test
     public void testDecodeIkeHeader() throws Exception {
         byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         IkeHeader header = new IkeHeader(inputPacket);
+
+        assertEquals(IKE_MSG_LENGTH, inputPacket.length);
 
         long initSpi = Long.parseUnsignedLong(IKE_INITIATOR_SPI, 16);
         assertEquals(initSpi, header.ikeInitiatorSpi);
@@ -65,6 +83,19 @@ public final class IkeMessageTest {
         assertTrue(header.fromIkeInitiator);
         assertEquals(IKE_MSG_ID, header.messageId);
         assertEquals(IKE_MSG_LENGTH, header.messageLength);
+    }
+
+    @Test
+    public void testDecodeIkePayload() throws Exception {
+        byte[] inputPacket = hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        IkeHeader header = new IkeHeader(inputPacket);
+        IkeMessage message = IkeMessage.decode(header, inputPacket);
+
+        for (int i = 0; i < PAYLOAD_NUMBER; i++) {
+            IkePayload payload = message.ikePayloadList.get(i);
+            assertEquals(PAYLOAD_TYPE_LIST[i], payload.currentPayloadType);
+            assertEquals(PAYLOAD_LENGTH_LIST[i], payload.payloadLength);
+        }
     }
 
     private byte[] hexStringToByteArray(String s) {

@@ -16,6 +16,12 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.message.IkePayload.PayloadType;
+
+import android.annotation.IntDef;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
 
 /**
@@ -26,12 +32,28 @@ import java.nio.ByteBuffer;
  *     Protocol Version 2 (IKEv2).
  */
 public final class IkeHeader {
+    public static final int IKE_HEADER_LENGTH = 28;
+
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+        EXCHANGE_TYPE_IKE_INIT_SA,
+        EXCHANGE_TYPE_IKE_AUTH,
+        EXCHANGE_TYPE_CREATE_CHILD_SA,
+        EXCHANGE_TYPE_INFORMATIONAL
+    })
+    public @interface ExchangeType {}
+
+    public static final int EXCHANGE_TYPE_IKE_INIT_SA = 34;
+    public static final int EXCHANGE_TYPE_IKE_AUTH = 35;
+    public static final int EXCHANGE_TYPE_CREATE_CHILD_SA = 36;
+    public static final int EXCHANGE_TYPE_INFORMATIONAL = 37;
+
     public final long ikeInitiatorSpi;
     public final long ikeResponderSpi;
-    public final byte nextPayloadType;
+    @PayloadType public final int nextPayloadType;
     public final byte majorVersion;
     public final byte minorVersion;
-    public final byte exchangeType;
+    @ExchangeType public final int exchangeType;
     public final boolean isResponse;
     public final boolean fromIkeInitiator;
     public final int messageId;
@@ -53,8 +75,8 @@ public final class IkeHeader {
     public IkeHeader(
             long iSpi,
             long rSpi,
-            byte nextPType,
-            byte eType,
+            @PayloadType int nextPType,
+            @ExchangeType int eType,
             boolean isResp,
             boolean fromInit,
             int msgId,
@@ -77,20 +99,24 @@ public final class IkeHeader {
     /**
      * Decode IKE header from a byte array and construct an IkeHeader instance.
      *
-     * @param packet the raw byte array of IKE header
+     * @param packet the raw byte array of the whole IKE message
      */
     public IkeHeader(byte[] packet) {
+        if (packet.length <= IKE_HEADER_LENGTH) {
+            throw new IllegalArgumentException("Malformed message");
+        }
+
         ByteBuffer buffer = ByteBuffer.wrap(packet);
 
         ikeInitiatorSpi = buffer.getLong();
         ikeResponderSpi = buffer.getLong();
-        nextPayloadType = buffer.get();
+        nextPayloadType = Byte.toUnsignedInt(buffer.get());
 
         byte versionByte = buffer.get();
-        majorVersion = (byte) (versionByte >> 4);
+        majorVersion = (byte) ((versionByte >> 4) & 0x0F);
         minorVersion = (byte) (versionByte & 0x0F);
 
-        exchangeType = buffer.get();
+        exchangeType = Byte.toUnsignedInt(buffer.get());
 
         byte flagsByte = buffer.get();
         isResponse = ((flagsByte & 0x20) != 0);
