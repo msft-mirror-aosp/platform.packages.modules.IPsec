@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
@@ -23,11 +24,17 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+
 public final class IkeNotifyPayloadTest {
+    private static final String NOTIFY_PAYLOAD_GENERIC_HEADER = "2900001c";
     private static final String NOTIFY_PAYLOAD_BODY_RAW_PACKET =
             "00004004e54f73b7d83f6beb881eab2051d8663f421d10b0";
     private static final int EXPECTED_PROTOCOL_ID = IkePayload.PROTOCOL_ID_RESERVED;
     private static final int EXPECTED_SPI_SIZE = IkePayload.SPI_LEN_NOT_INCLUDED;
+
+    @IkePayload.PayloadType
+    private static final int NEXT_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_NOTIFY;
 
     @IkeNotifyPayload.NotifyType
     private static final int EXPECTED_NOTIFY_TYPE =
@@ -58,5 +65,19 @@ public final class IkeNotifyPayloadTest {
             fail("Expected InvalidSyntaxException: Protocol ID should not be ESP");
         } catch (InvalidSyntaxException expected) {
         }
+    }
+
+    @Test
+    public void testEncodeNotifyPayload() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(NOTIFY_PAYLOAD_BODY_RAW_PACKET);
+        IkeNotifyPayload payload = new IkeNotifyPayload(false, inputPacket);
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(payload.getPayloadLength());
+        payload.encodeToByteBuffer(NEXT_PAYLOAD_TYPE, byteBuffer);
+
+        byte[] expectedNoncePayload =
+                TestUtils.hexStringToByteArray(
+                        NOTIFY_PAYLOAD_GENERIC_HEADER + NOTIFY_PAYLOAD_BODY_RAW_PACKET);
+        assertArrayEquals(expectedNoncePayload, byteBuffer.array());
     }
 }

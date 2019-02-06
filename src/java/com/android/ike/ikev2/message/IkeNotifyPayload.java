@@ -17,6 +17,7 @@
 package com.android.ike.ikev2.message;
 
 import android.annotation.IntDef;
+import android.util.ArraySet;
 
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -24,6 +25,7 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
+import java.util.Set;
 
 /**
  * IkeNotifyPayload represents a Notify Payload.
@@ -65,6 +67,15 @@ public final class IkeNotifyPayload extends IkePayload {
 
     private static final int NOTIFY_HEADER_LEN = 4;
 
+    private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_CHILD_SA;
+
+    static {
+        VALID_NOTIFY_TYPES_FOR_CHILD_SA = new ArraySet<>();
+        VALID_NOTIFY_TYPES_FOR_CHILD_SA.add(NOTIFY_TYPE_INVALID_SELECTORS);
+        VALID_NOTIFY_TYPES_FOR_CHILD_SA.add(NOTIFY_TYPE_CHILD_SA_NOT_FOUND);
+        VALID_NOTIFY_TYPES_FOR_CHILD_SA.add(NOTIFY_TYPE_REKEY_SA);
+    }
+
     public final int protocolId;
     public final byte spiSize;
     public final int notifyType;
@@ -95,8 +106,7 @@ public final class IkeNotifyPayload extends IkePayload {
                         "Expected Procotol ID AH(2) or ESP(3): Protocol ID is " + protocolId);
             }
 
-            if (notifyType != NOTIFY_TYPE_INVALID_SELECTORS
-                    && notifyType != NOTIFY_TYPE_CHILD_SA_NOT_FOUND) {
+            if (!VALID_NOTIFY_TYPES_FOR_CHILD_SA.contains(notifyType)) {
                 throw new InvalidSyntaxException(
                         "Expected Child SA concerned Notify Type: Notify Type is " + notifyType);
             }
@@ -111,8 +121,7 @@ public final class IkeNotifyPayload extends IkePayload {
             }
 
             if (notifyType == NOTIFY_TYPE_INVALID_SELECTORS
-                    || notifyType == NOTIFY_TYPE_CHILD_SA_NOT_FOUND
-                    || notifyType == NOTIFY_TYPE_REKEY_SA) {
+                    || notifyType == NOTIFY_TYPE_CHILD_SA_NOT_FOUND) {
                 throw new InvalidSyntaxException(
                         "Expected IKE SA concerned Notify Type: Notify Type is " + notifyType);
             }
@@ -134,9 +143,12 @@ public final class IkeNotifyPayload extends IkePayload {
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
-        // TODO: Implement encoding Notify payload.
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+        byteBuffer.put((byte) protocolId).put(spiSize).putShort((short) notifyType);
+        if (spiSize == SPI_LEN_IPSEC) {
+            byteBuffer.putInt(spi);
+        }
+        byteBuffer.put(notifyData);
     }
 
     /**
@@ -146,9 +158,7 @@ public final class IkeNotifyPayload extends IkePayload {
      */
     @Override
     protected int getPayloadLength() {
-        throw new UnsupportedOperationException(
-                "It is not supported to get payload length of " + getTypeString());
-        // TODO: Implement this method for Notify payload.
+        return GENERIC_HEADER_LENGTH + NOTIFY_HEADER_LEN + spiSize + notifyData.length;
     }
 
     /**

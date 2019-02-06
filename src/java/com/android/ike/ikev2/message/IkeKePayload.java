@@ -49,6 +49,7 @@ import javax.crypto.spec.DHPublicKeySpec;
  */
 public final class IkeKePayload extends IkePayload {
     private static final int KE_HEADER_LEN = 4;
+    private static final int KE_HEADER_RESERVED = 0;
 
     // Key exchange data length in octets
     private static final int DH_GROUP_1024_BIT_MODP_DATA_LEN = 128;
@@ -127,9 +128,11 @@ public final class IkeKePayload extends IkePayload {
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
-        // TODO: Implement encoding KE payload.
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+        byteBuffer
+                .putShort((short) dhGroup)
+                .putShort((short) KE_HEADER_RESERVED)
+                .put(keyExchangeData);
     }
 
     /**
@@ -139,9 +142,7 @@ public final class IkeKePayload extends IkePayload {
      */
     @Override
     protected int getPayloadLength() {
-        throw new UnsupportedOperationException(
-                "It is not supported to get payload length of " + getTypeString());
-        // TODO: Implement this method for KE payload.
+        return GENERIC_HEADER_LENGTH + KE_HEADER_LEN + keyExchangeData.length;
     }
 
     /**
