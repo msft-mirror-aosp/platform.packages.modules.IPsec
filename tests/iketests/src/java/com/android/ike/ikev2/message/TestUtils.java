@@ -16,7 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
-public final class MessageTestUtil {
+public final class TestUtils {
     static byte[] hexStringToByteArray(String s) {
         int len = s.length();
         byte[] data = new byte[len / 2];
