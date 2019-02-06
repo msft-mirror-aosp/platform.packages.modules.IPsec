@@ -101,13 +101,6 @@ public abstract class IkePayload {
     /** Length of port number in bytes */
     public static final int IP_PORT_LEN = 2;
 
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({DH_GROUP_1024_BIT_MODP, DH_GROUP_2048_BIT_MODP})
-    public @interface DhGroup {}
-
-    public static final int DH_GROUP_1024_BIT_MODP = 2;
-    public static final int DH_GROUP_2048_BIT_MODP = 14;
-
     public final int payloadType;
     public final boolean isCritical;
 
