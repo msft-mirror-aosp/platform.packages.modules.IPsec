@@ -23,6 +23,10 @@ import com.android.ike.ikev2.exceptions.IkeException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
+import java.security.InvalidKeyException;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * IkeAuthPayload is an abstract class that represents the common information for all Authentication
@@ -81,6 +85,21 @@ public abstract class IkeAuthPayload extends IkePayload {
                 // TODO: Throw AuthenticationFailedException
                 throw new UnsupportedOperationException("Unsupported authentication method");
         }
+    }
+
+    // Sign value with PRF when building outbound packet or verifying inbound packet. It is called
+    // for calculating signature over ID payload for all types of authentication and also for
+    // calculating signature over PSK for PSK authentication.
+    protected byte[] signWithPrf(Mac prfMac, byte[] prfKeyBytes, byte[] value)
+            throws InvalidKeyException {
+        SecretKeySpec prfKey = new SecretKeySpec(prfKeyBytes, prfMac.getAlgorithm());
+        prfMac.init(prfKey);
+
+        ByteBuffer valueBuffer = ByteBuffer.wrap(value);
+
+        // Calculate MAC.
+        prfMac.update(valueBuffer);
+        return prfMac.doFinal();
     }
 
     @Override
