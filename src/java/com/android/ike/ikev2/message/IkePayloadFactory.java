@@ -63,6 +63,8 @@ final class IkePayloadFactory {
                             return new IkeIdPayload(isCritical, payloadBody, true);
                         case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
                             return new IkeIdPayload(isCritical, payloadBody, false);
+                        case IkePayload.PAYLOAD_TYPE_CERT:
+                            return new IkeCertPayload(isCritical, payloadBody);
                         case IkePayload.PAYLOAD_TYPE_NONCE:
                             return new IkeNoncePayload(isCritical, payloadBody);
                         case IkePayload.PAYLOAD_TYPE_NOTIFY:
