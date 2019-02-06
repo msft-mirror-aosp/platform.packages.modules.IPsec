@@ -238,7 +238,7 @@ public final class IkeNotifyPayload extends IkePayload {
         try {
             validateNotifyPayloadForIkeAndNewChild();
         } catch (InvalidSyntaxException e) {
-            throw new IllegalArgumentException(e.message);
+            throw new IllegalArgumentException(e);
         }
     }
 
@@ -255,7 +255,7 @@ public final class IkeNotifyPayload extends IkePayload {
         try {
             validateNotifyPayloadForExistingChildSa();
         } catch (InvalidSyntaxException e) {
-            throw new IllegalArgumentException(e.message);
+            throw new IllegalArgumentException(e);
         }
     }
 
