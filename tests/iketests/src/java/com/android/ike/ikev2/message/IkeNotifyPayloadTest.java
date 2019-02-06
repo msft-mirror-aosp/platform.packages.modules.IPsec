@@ -33,7 +33,6 @@ public final class IkeNotifyPayloadTest {
     private static final int EXPECTED_NOTIFY_TYPE =
             IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 
-    private static final int EXPECTED_SPI = 0;
     private static final int EXPECTED_NOTIFY_DATA_LEN = 20;
 
     private static final int POS_PROTOCOL_ID = 0;

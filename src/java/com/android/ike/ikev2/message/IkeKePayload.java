@@ -120,16 +120,28 @@ public final class IkeKePayload extends IkePayload {
     }
 
     /**
-     * Encode KE payload to byte array.
+     * Encode KE payload to ByteBuffer.
      *
      * @param nextPayload type of payload that follows this payload.
-     * @return encoded KE payload
+     * @param byteBuffer destination ByteBuffer that stores encoded payload.
      */
     @Override
-    byte[] encode(@PayloadType int nextPayload) {
+    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
         throw new UnsupportedOperationException(
                 "It is not supported to encode a " + getTypeString());
         // TODO: Implement encoding KE payload.
+    }
+
+    /**
+     * Get entire payload length.
+     *
+     * @return entire payload length.
+     */
+    @Override
+    protected int getPayloadLength() {
+        throw new UnsupportedOperationException(
+                "It is not supported to get payload length of " + getTypeString());
+        // TODO: Implement this method for KE payload.
     }
 
     /**
@@ -164,7 +176,8 @@ public final class IkeKePayload extends IkePayload {
         DHParameterSpec dhParams = new DHParameterSpec(prime, baseGen);
 
         KeyPairGenerator dhKeyPairGen =
-                KeyPairGenerator.getInstance(KEY_EXCHANGE_ALGORITHM, IkeMessage.getProvider());
+                KeyPairGenerator.getInstance(
+                        KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
         // By default SecureRandom uses AndroidOpenSSL provided SHA1PRNG Algorithm, which takes
         // /dev/urandom as seed source.
         dhKeyPairGen.initialize(dhParams, new SecureRandom());
@@ -199,13 +212,13 @@ public final class IkeKePayload extends IkePayload {
         DHPublicKeySpec publicKeySpec =
                 new DHPublicKeySpec(publicKeyValue, primeValue, baseGenValue);
         KeyFactory dhKeyFactory =
-                KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM, IkeMessage.getProvider());
+                KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
         DHPublicKey publicKey = (DHPublicKey) dhKeyFactory.generatePublic(publicKeySpec);
         DHPrivateKey privateKey = (DHPrivateKey) dhKeyFactory.generatePrivate(privateKeySpec);
 
         // Calculate shared secret
         KeyAgreement dhKeyAgreement =
-                KeyAgreement.getInstance(KEY_EXCHANGE_ALGORITHM, IkeMessage.getProvider());
+                KeyAgreement.getInstance(KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
         dhKeyAgreement.init(privateKey);
         dhKeyAgreement.doPhase(publicKey, true/** Last phase */);
 
