@@ -59,8 +59,8 @@ public final class IkeSaPayloadTest {
 
     private static final int PROPOSAL_NUMBER = 1;
 
-    @IkeSaPayload.Proposal.ProtocolId
-    private static final int PROPOSAL_PROTOCOL_ID = IkeSaPayload.Proposal.PROTOCOL_ID_IKE;
+    @IkePayload.ProtocolId
+    private static final int PROPOSAL_PROTOCOL_ID = IkePayload.PROTOCOL_ID_IKE;
 
     private static final byte PROPOSAL_SPI_SIZE = 0;
     private static final byte PROPOSAL_SPI = 0;
@@ -148,7 +148,7 @@ public final class IkeSaPayloadTest {
         for (int i = 0; i < payload.proposalList.size(); i++) {
             IkeSaPayload.Proposal proposal = payload.proposalList.get(i);
             assertEquals(PROPOSAL_NUMBER_LIST[i], proposal.number);
-            assertEquals(IkeSaPayload.Proposal.PROTOCOL_ID_IKE, proposal.protocolId);
+            assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
             assertEquals(0, proposal.spiSize);
         }
     }

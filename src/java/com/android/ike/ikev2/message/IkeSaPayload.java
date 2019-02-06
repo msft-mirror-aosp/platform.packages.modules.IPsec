@@ -71,18 +71,6 @@ public final class IkeSaPayload extends IkePayload {
      *     <p>Ignore Proposal with unsupported Protocol ID when processing IkeSaPayload
      */
     public static final class Proposal {
-        @Retention(RetentionPolicy.SOURCE)
-        @IntDef({
-            PROTOCOL_ID_IKE,
-            PROTOCOL_ID_AH,
-            PROTOCOL_ID_ESP,
-        })
-        public @interface ProtocolId {}
-
-        public static final int PROTOCOL_ID_IKE = 1;
-        public static final int PROTOCOL_ID_AH = 2;
-        public static final int PROTOCOL_ID_ESP = 3;
-
         private static final byte LAST_PROPOSAL = 0;
         private static final byte NOT_LAST_PROPOSAL = 2;
 
@@ -142,10 +130,10 @@ public final class IkeSaPayload extends IkePayload {
                 case 0:
                     // No SPI field here.
                     break;
-                case IkeMessage.IPSEC_SPI_LEN:
+                case SPI_LEN_IPSEC:
                     spi = Integer.toUnsignedLong(inputBuffer.getInt());
                     break;
-                case IkeMessage.IKE_SPI_LEN:
+                case SPI_LEN_IKE:
                     spi = inputBuffer.getLong();
                     break;
                 default:
