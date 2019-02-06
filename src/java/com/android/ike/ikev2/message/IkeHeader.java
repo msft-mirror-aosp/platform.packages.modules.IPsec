@@ -47,14 +47,14 @@ public final class IkeHeader {
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
-        EXCHANGE_TYPE_IKE_INIT_SA,
+        EXCHANGE_TYPE_IKE_SA_INIT,
         EXCHANGE_TYPE_IKE_AUTH,
         EXCHANGE_TYPE_CREATE_CHILD_SA,
         EXCHANGE_TYPE_INFORMATIONAL
     })
     public @interface ExchangeType {}
 
-    public static final int EXCHANGE_TYPE_IKE_INIT_SA = 34;
+    public static final int EXCHANGE_TYPE_IKE_SA_INIT = 34;
     public static final int EXCHANGE_TYPE_IKE_AUTH = 35;
     public static final int EXCHANGE_TYPE_CREATE_CHILD_SA = 36;
     public static final int EXCHANGE_TYPE_INFORMATIONAL = 37;
@@ -150,7 +150,7 @@ public final class IkeHeader {
             // error.
             throw new InvalidSyntaxException("Major version is smaller than 2.");
         }
-        if (exchangeType < EXCHANGE_TYPE_IKE_INIT_SA
+        if (exchangeType < EXCHANGE_TYPE_IKE_SA_INIT
                 || exchangeType > EXCHANGE_TYPE_INFORMATIONAL) {
             throw new InvalidSyntaxException("Invalid IKE Exchange Type.");
         }
