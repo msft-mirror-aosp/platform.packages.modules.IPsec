@@ -21,7 +21,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
 import com.android.ike.ikev2.exceptions.IkeException;
-import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 
@@ -50,10 +49,14 @@ public final class IkeMessageTest {
     private static final String IKE_SA_INIT_RAW_PACKET =
             IKE_SA_INIT_HEADER_RAW_PACKET + IKE_SA_INIT_BODY_RAW_PACKET;
 
-    private static final int FIRST_PAYLOAD_TYPE_POSITION = 16;
-    private static final int VERSION_POSITION = 17;
-    private static final int EXCHANGE_TYPE_POSITION = 18;
-    private static final int PAYLOAD_CRITICAL_BIT_POSITION = 1;
+    // Byte offsets of first payload type in IKE message header.
+    private static final int FIRST_PAYLOAD_TYPE_OFFSET = 16;
+    // Byte offsets of first payload's critical bit in IKE message body.
+    private static final int PAYLOAD_CRITICAL_BIT_OFFSET = 1;
+    // Byte offsets of first payload length in IKE message body.
+    private static final int FIRST_PAYLOAD_LENGTH_OFFSET = 2;
+    // Byte offsets of last payload length in IKE message body.
+    private static final int LAST_PAYLOAD_LENGTH_OFFSET = 278;
 
     private static final int[] SUPPORTED_PAYLOAD_LIST = {
         IkePayload.PAYLOAD_TYPE_SA,
@@ -120,7 +123,7 @@ public final class IkeMessageTest {
     public void testDecodeMessageWithUnsupportedUncriticalPayload() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         // Set first payload unsupported uncritical
-        inputPacket[FIRST_PAYLOAD_TYPE_POSITION] = (byte) 0xff;
+        inputPacket[FIRST_PAYLOAD_TYPE_OFFSET] = (byte) 0xff;
         IkeHeader header = new IkeHeader(inputPacket);
         IkeMessage message = IkeMessage.decode(header, inputPacket);
         assertEquals(SUPPORTED_PAYLOAD_LIST.length - 1, message.ikePayloadList.size());
@@ -130,42 +133,11 @@ public final class IkeMessageTest {
     }
 
     @Test
-    public void testThrowInvalidMajorVersionException() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
-        // Set major version 3.
-        inputPacket[VERSION_POSITION] = (byte) 0x30;
-        // Set Exchange type 0
-        inputPacket[EXCHANGE_TYPE_POSITION] = (byte) 0x00;
-        IkeHeader header = new IkeHeader(inputPacket);
-        try {
-            IkeMessage.decode(header, inputPacket);
-            fail(
-                    "Expected InvalidMajorVersionException: major version is 3"
-                            + "and packet length is 0");
-        } catch (InvalidMajorVersionException expected) {
-            assertEquals(3, expected.receivedMajorVersion);
-        }
-    }
-
-    @Test
-    public void testThrowInvalidSyntaxException() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
-        // Set Exchange type 0
-        inputPacket[EXCHANGE_TYPE_POSITION] = (byte) 0x00;
-        IkeHeader header = new IkeHeader(inputPacket);
-        try {
-            IkeMessage.decode(header, inputPacket);
-            fail("Expected InvalidSyntaxException: packet length is 0");
-        } catch (InvalidSyntaxException expected) {
-        }
-    }
-
-    @Test
     public void testThrowUnsupportedCriticalPayloadException() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         // Set first payload unsupported critical
-        inputPacket[FIRST_PAYLOAD_TYPE_POSITION] = (byte) 0xff;
-        inputPacket[IkeHeader.IKE_HEADER_LENGTH + PAYLOAD_CRITICAL_BIT_POSITION] = (byte) 0x80;
+        inputPacket[FIRST_PAYLOAD_TYPE_OFFSET] = (byte) 0xff;
+        inputPacket[IkeHeader.IKE_HEADER_LENGTH + PAYLOAD_CRITICAL_BIT_OFFSET] = (byte) 0x80;
 
         IkeHeader header = new IkeHeader(inputPacket);
         try {
@@ -175,6 +147,44 @@ public final class IkeMessageTest {
                             + "payload is unsupported critical.");
         } catch (UnsupportedCriticalPayloadException expected) {
             assertEquals(1, expected.payloadTypeList.size());
+        }
+    }
+
+    @Test
+    public void testDecodeMessageWithTooShortPayloadLength() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Set first payload length to 0
+        inputPacket[IkeHeader.IKE_HEADER_LENGTH + FIRST_PAYLOAD_LENGTH_OFFSET] = (byte) 0;
+        inputPacket[IkeHeader.IKE_HEADER_LENGTH + FIRST_PAYLOAD_LENGTH_OFFSET + 1] = (byte) 0;
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage message = IkeMessage.decode(header, inputPacket);
+            fail("Expected InvalidSyntaxException: Payload length is too short.");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodeMessageWithTooLongPayloadLength() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        // Increase last payload length by one byte
+        inputPacket[IkeHeader.IKE_HEADER_LENGTH + LAST_PAYLOAD_LENGTH_OFFSET]++;
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage message = IkeMessage.decode(header, inputPacket);
+            fail("Expected InvalidSyntaxException: Payload length is too long.");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodeMessageWithExpectedBytesInTheEnd() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET + "0000");
+        IkeHeader header = new IkeHeader(inputPacket);
+        try {
+            IkeMessage message = IkeMessage.decode(header, inputPacket);
+            fail("Expected InvalidSyntaxException: Unexpected bytes in the end of packet.");
+        } catch (InvalidSyntaxException expected) {
         }
     }
 
