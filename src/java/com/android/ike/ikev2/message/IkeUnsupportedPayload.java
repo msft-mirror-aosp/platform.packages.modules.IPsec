@@ -31,7 +31,7 @@ final class IkeUnsupportedPayload extends IkePayload {
      * @param payload indicates the current payload type
      * @param critical indicates if it is a critical payload.
      */
-    IkeUnsupportedPayload(@PayloadType int payload, boolean critical) {
+    IkeUnsupportedPayload(int payload, boolean critical) {
         super(payload, critical);
     }
 }
