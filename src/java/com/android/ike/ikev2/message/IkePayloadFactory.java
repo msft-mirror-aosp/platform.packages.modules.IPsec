@@ -16,9 +16,10 @@
 
 package com.android.ike.ikev2.message;
 
-import static com.android.ike.ikev2.message.IkePayload.PayloadType;
-
 import android.util.Pair;
+
+import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 
@@ -29,15 +30,34 @@ import java.nio.ByteBuffer;
  *     Protocol Version 2 (IKEv2).
  */
 final class IkePayloadFactory {
+
+    /** Default instance used for constructing IkePayload */
+    @VisibleForTesting
+    static IkePayloadDecoder sDecoderInstance =
+            new IkePayloadDecoder() {
+                @Override
+                public IkePayload decodeIkePayload(
+                        int payloadType, boolean isCritical, byte[] payloadBody)
+                        throws IkeException {
+                    switch (payloadType) {
+                            // TODO: Add cases for creating supported payloads.
+                        default:
+                            return new IkeUnsupportedPayload(payloadType, isCritical);
+                    }
+                }
+            };
+
     /**
      * Construct an instance of IkePayload according to its payload type.
      *
-     * @param payloadType the current payload type
+     * @param payloadType the current payload type. All supported types will fall in {@link
+     *     IkePayload.PayloadType}
      * @param input the encoded IKE message body containing all payloads. Position of it will
      *     increment.
      */
-    static Pair<IkePayload, Integer> getIkePayload(@PayloadType int payloadType, ByteBuffer input) {
-        @PayloadType int nextPayloadType = (int) input.get();
+    static Pair<IkePayload, Integer> getIkePayload(int payloadType, ByteBuffer input)
+            throws IkeException {
+        int nextPayloadType = (int) input.get();
         // read critical bit
         boolean isCritical = ((input.get() & 0x80) == 0x80);
 
@@ -46,11 +66,14 @@ final class IkePayloadFactory {
         byte[] payloadBody = new byte[bodyLength];
         input.get(payloadBody);
 
-        switch (payloadType) {
-                // TODO: Add cases for creating supported payloads.
-            default:
-                return new Pair(
-                        new IkeUnsupportedPayload(payloadType, isCritical), nextPayloadType);
-        }
+        IkePayload payload =
+                sDecoderInstance.decodeIkePayload(payloadType, isCritical, payloadBody);
+        return new Pair(payload, nextPayloadType);
+    }
+
+    @VisibleForTesting
+    interface IkePayloadDecoder {
+        IkePayload decodeIkePayload(int payloadType, boolean isCritical, byte[] payloadBody)
+                throws IkeException;
     }
 }
