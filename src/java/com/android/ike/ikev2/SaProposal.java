@@ -84,6 +84,34 @@ public final class SaProposal {
         SUPPORTED_PSEUDORANDOM_FUNCTION.add(PSEUDORANDOM_FUNCTION_AES128_XCBC);
     }
 
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+        INTEGRITY_ALGORITHM_HMAC_SHA1_96,
+        INTEGRITY_ALGORITHM_AES_XCBC_96,
+        INTEGRITY_ALGORITHM_HMAC_SHA2_256_128,
+        INTEGRITY_ALGORITHM_HMAC_SHA2_384_192,
+        INTEGRITY_ALGORITHM_HMAC_SHA2_512_256
+    })
+
+    public @interface IntegrityAlgorithm {}
+
+    public static final int INTEGRITY_ALGORITHM_HMAC_SHA1_96 = 2;
+    public static final int INTEGRITY_ALGORITHM_AES_XCBC_96 = 5;
+    public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_256_128 = 12;
+    public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_384_192 = 13;
+    public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_512_256 = 14;
+
+    private static final Set<Integer> SUPPORTED_INTEGRITY_ALGORITHM;
+
+    static {
+        SUPPORTED_INTEGRITY_ALGORITHM = new ArraySet<>();
+        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA1_96);
+        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_AES_XCBC_96);
+        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_256_128);
+        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_384_192);
+        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
+    }
+
     /**
      * Check if the provided algorithm is a supported encryption algorithm.
      *
@@ -102,6 +130,16 @@ public final class SaProposal {
      */
     public static boolean isSupportedPseudorandomFunction(@PseudorandomFunction int algorithm) {
         return SUPPORTED_PSEUDORANDOM_FUNCTION.contains(algorithm);
+    }
+
+    /**
+     * Check if the provided algorithm is a supported integrity algorithm.
+     *
+     * @param algorithm IKE standard integrity algorithm id.
+     * @return true if the provided algorithm is a supported integrity algorithm.
+     */
+    public static boolean isSupportedIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
+        return SUPPORTED_INTEGRITY_ALGORITHM.contains(algorithm);
     }
 
     // TODO: Implement constructing SaProposal with a Builder that supports adding
