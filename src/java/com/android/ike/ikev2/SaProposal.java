@@ -66,11 +66,7 @@ public final class SaProposal {
     public static final int KEY_LEN_AES_256 = 256;
 
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-        PSEUDORANDOM_FUNCTION_HMAC_SHA1,
-        PSEUDORANDOM_FUNCTION_AES128_XCBC
-    })
-
+    @IntDef({PSEUDORANDOM_FUNCTION_HMAC_SHA1, PSEUDORANDOM_FUNCTION_AES128_XCBC})
     public @interface PseudorandomFunction {}
 
     public static final int PSEUDORANDOM_FUNCTION_HMAC_SHA1 = 2;
@@ -86,15 +82,16 @@ public final class SaProposal {
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
+        INTEGRITY_ALGORITHM_NONE,
         INTEGRITY_ALGORITHM_HMAC_SHA1_96,
         INTEGRITY_ALGORITHM_AES_XCBC_96,
         INTEGRITY_ALGORITHM_HMAC_SHA2_256_128,
         INTEGRITY_ALGORITHM_HMAC_SHA2_384_192,
         INTEGRITY_ALGORITHM_HMAC_SHA2_512_256
     })
-
     public @interface IntegrityAlgorithm {}
 
+    public static final int INTEGRITY_ALGORITHM_NONE = 0;
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA1_96 = 2;
     public static final int INTEGRITY_ALGORITHM_AES_XCBC_96 = 5;
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_256_128 = 12;
@@ -105,11 +102,29 @@ public final class SaProposal {
 
     static {
         SUPPORTED_INTEGRITY_ALGORITHM = new ArraySet<>();
+        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_NONE);
         SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA1_96);
         SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_AES_XCBC_96);
         SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_256_128);
         SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_384_192);
         SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
+    }
+
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({DH_GROUP_NONE, DH_GROUP_1024_BIT_MODP, DH_GROUP_2048_BIT_MODP})
+    public @interface DhGroup {}
+
+    public static final int DH_GROUP_NONE = 0;
+    public static final int DH_GROUP_1024_BIT_MODP = 2;
+    public static final int DH_GROUP_2048_BIT_MODP = 14;
+
+    private static final Set<Integer> SUPPORTED_DH_GROUP;
+
+    static {
+        SUPPORTED_DH_GROUP = new ArraySet<>();
+        SUPPORTED_DH_GROUP.add(DH_GROUP_NONE);
+        SUPPORTED_DH_GROUP.add(DH_GROUP_1024_BIT_MODP);
+        SUPPORTED_DH_GROUP.add(DH_GROUP_2048_BIT_MODP);
     }
 
     /**
@@ -142,6 +157,17 @@ public final class SaProposal {
         return SUPPORTED_INTEGRITY_ALGORITHM.contains(algorithm);
     }
 
+    /**
+     * Check if the provided group number is for a supported Diffie-Hellman Group.
+     *
+     * @param dhGroup IKE standard DH Group id.
+     * @return true if the provided number is for a supported Diffie-Hellman Group.
+     */
+    public static boolean isSupportedDhGroup(@DhGroup int dhGroup) {
+        return SUPPORTED_DH_GROUP.contains(dhGroup);
+    }
+
     // TODO: Implement constructing SaProposal with a Builder that supports adding
-    // encryption/integrity algorithms, prf, and DH Group.
+    // encryption/integrity algorithms, prf, and DH Group. And add explanation of usage of
+    // INTEGRITY_ALGORITHM_NONE and DH_GROUP_NONE.
 }

@@ -16,7 +16,9 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.SaProposal.DhGroup;
 import static com.android.ike.ikev2.SaProposal.EncryptionAlgorithm;
+import static com.android.ike.ikev2.SaProposal.IntegrityAlgorithm;
 import static com.android.ike.ikev2.SaProposal.PseudorandomFunction;
 
 import android.annotation.IntDef;
@@ -24,7 +26,6 @@ import android.util.ArraySet;
 import android.util.Pair;
 
 import com.android.ike.ikev2.SaProposal;
-import com.android.ike.ikev2.SaProposal.IntegrityAlgorithm;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.internal.annotations.VisibleForTesting;
@@ -274,7 +275,9 @@ public final class IkeSaPayload extends IkePayload {
                     return new PrfTransform(id, attributeList);
                 case TRANSFORM_TYPE_INTEG:
                     return new IntegrityTransform(id, attributeList);
-                    // TODO: Add DhGroup and ESN
+                case TRANSFORM_TYPE_DH:
+                    return new DhGroupTransform(id, attributeList);
+                    // TODO: Add ESN
                 default:
                     return new UnrecognizedTransform(type, id, attributeList);
             }
@@ -321,21 +324,6 @@ public final class IkeSaPayload extends IkePayload {
         private static final int KEY_LEN_UNASSIGNED = 0;
 
         public final int keyLength;
-
-        @Override
-        protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedEncryptionAlgorithm(id);
-        }
-
-        @Override
-        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
-            for (Attribute attr : attributeList) {
-                if (attr instanceof UnrecognizedAttribute) {
-                    return true;
-                }
-            }
-            return false;
-        }
 
         /**
          * Contruct an instance of EncryptionTransform with fixed key length for building an
@@ -386,6 +374,21 @@ public final class IkeSaPayload extends IkePayload {
                 }
                 validateKeyLength();
             }
+        }
+
+        @Override
+        protected boolean isSupportedTransformId(int id) {
+            return SaProposal.isSupportedEncryptionAlgorithm(id);
+        }
+
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            for (Attribute attr : attributeList) {
+                if (attr instanceof UnrecognizedAttribute) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         private KeyLengthAttribute getKeyLengthAttribute(List<Attribute> attributeList) {
@@ -452,16 +455,6 @@ public final class IkeSaPayload extends IkePayload {
      *     Exchange Protocol Version 2 (IKEv2).
      */
     public static final class PrfTransform extends Transform {
-        @Override
-        protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedPseudorandomFunction(id);
-        }
-
-        @Override
-        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
-            return !attributeList.isEmpty();
-        }
-
         /**
          * Contruct an instance of PrfTransform for building an outbound packet.
          *
@@ -484,6 +477,16 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @Override
+        protected boolean isSupportedTransformId(int id) {
+            return SaProposal.isSupportedPseudorandomFunction(id);
+        }
+
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            return !attributeList.isEmpty();
+        }
+
+        @Override
         public String getTransformTypeString() {
             return "Pseudorandom Function";
         }
@@ -492,20 +495,14 @@ public final class IkeSaPayload extends IkePayload {
     /**
      * IntegrityTransform represents an integrity algorithm.
      *
+     * <p>Proposing integrity algorithm for ESP SA is optional. Omitting the IntegrityTransform is
+     * equivalent to including it with a value of NONE. When multiple integrity algorithms are
+     * provided, choosing any of them are acceptable.
+     *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
      *     Exchange Protocol Version 2 (IKEv2).
      */
     public static final class IntegrityTransform extends Transform {
-        @Override
-        protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedIntegrityAlgorithm(id);
-        }
-
-        @Override
-        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
-            return !attributeList.isEmpty();
-        }
-
         /**
          * Contruct an instance of IntegrityTransform for building an outbound packet.
          *
@@ -528,8 +525,66 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @Override
+        protected boolean isSupportedTransformId(int id) {
+            return SaProposal.isSupportedIntegrityAlgorithm(id);
+        }
+
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            return !attributeList.isEmpty();
+        }
+
+        @Override
         public String getTransformTypeString() {
             return "Integrity Algorithm";
+        }
+    }
+
+    /**
+     * DhGroupTransform represents a Diffie-Hellman Group
+     *
+     * <p>Proposing DH group for non-first Child SA is optional. Omitting the DhGroupTransform is
+     * equivalent to including it with a value of NONE. When multiple DH groups are provided,
+     * choosing any of them are acceptable.
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
+     *     Exchange Protocol Version 2 (IKEv2).
+     */
+    public static final class DhGroupTransform extends Transform {
+        /**
+         * Contruct an instance of DhGroupTransform for building an outbound packet.
+         *
+         * @param id the IKE standard Transform ID.
+         */
+        public DhGroupTransform(@DhGroup int id) {
+            super(Transform.TRANSFORM_TYPE_DH, id);
+        }
+
+        /**
+         * Contruct an instance of DhGroupTransform for decoding an inbound packet.
+         *
+         * @param id the IKE standard Transform ID.
+         * @param attributeList the decoded list of Attribute.
+         * @throws InvalidSyntaxException for syntax error.
+         */
+        protected DhGroupTransform(int id, List<Attribute> attributeList)
+                throws InvalidSyntaxException {
+            super(Transform.TRANSFORM_TYPE_DH, id, attributeList);
+        }
+
+        @Override
+        protected boolean isSupportedTransformId(int id) {
+            return SaProposal.isSupportedDhGroup(id);
+        }
+
+        @Override
+        protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
+            return !attributeList.isEmpty();
+        }
+
+        @Override
+        public String getTransformTypeString() {
+            return "Diffie-Hellman Group";
         }
     }
 
@@ -539,6 +594,9 @@ public final class IkeSaPayload extends IkePayload {
      * <p>Proposals containing an UnrecognizedTransform should be ignored.
      */
     protected static final class UnrecognizedTransform extends Transform {
+        protected UnrecognizedTransform(int type, int id, List<Attribute> attributeList) {
+            super(type, id, attributeList);
+        }
 
         @Override
         protected boolean isSupportedTransformId(int id) {
@@ -548,10 +606,6 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
             return !attributeList.isEmpty();
-        }
-
-        protected UnrecognizedTransform(int type, int id, List<Attribute> attributeList) {
-            super(type, id, attributeList);
         }
 
         /**
