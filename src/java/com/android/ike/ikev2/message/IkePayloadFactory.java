@@ -41,6 +41,8 @@ final class IkePayloadFactory {
                         throws IkeException {
                     switch (payloadType) {
                             // TODO: Add cases for creating supported payloads.
+                        case IkePayload.PAYLOAD_TYPE_SA:
+                            return new IkeSaPayload(isCritical, payloadBody);
                         default:
                             return new IkeUnsupportedPayload(payloadType, isCritical);
                     }
