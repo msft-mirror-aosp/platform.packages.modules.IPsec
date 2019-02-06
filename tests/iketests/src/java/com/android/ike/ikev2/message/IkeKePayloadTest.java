@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -29,11 +30,13 @@ import com.android.ike.ikev2.utils.BigIntegerUtils;
 import org.junit.Test;
 
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import javax.crypto.spec.DHPrivateKeySpec;
 
 public final class IkeKePayloadTest {
+    private static final String KE_PAYLOAD_GENERIC_HEADER = "28000088";
     private static final String KE_PAYLOAD_RAW_PACKET =
             "00020000b4a2faf4bb54878ae21d638512ece55d9236fc50"
                     + "46ab6cef82220f421f3ce6361faf36564ecb6d28798a94aa"
@@ -43,6 +46,9 @@ public final class IkeKePayloadTest {
                     + "6bbeb08214c7071376079587";
 
     private static final boolean CRITICAL_BIT = false;
+
+    @IkePayload.PayloadType
+    private static final int NEXT_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_NONCE;
 
     @IkeKePayload.DhGroup
     private static final int EXPECTED_DH_GROUP = IkePayload.DH_GROUP_1024_BIT_MODP;
@@ -118,6 +124,19 @@ public final class IkeKePayloadTest {
     }
 
     @Test
+    public void testEncodeIkeKePayload() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(KE_PAYLOAD_RAW_PACKET);
+        IkeKePayload payload = new IkeKePayload(CRITICAL_BIT, inputPacket);
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(payload.getPayloadLength());
+        payload.encodeToByteBuffer(NEXT_PAYLOAD_TYPE, byteBuffer);
+
+        byte[] expectedKePayload =
+                TestUtils.hexStringToByteArray(KE_PAYLOAD_GENERIC_HEADER + KE_PAYLOAD_RAW_PACKET);
+        assertArrayEquals(expectedKePayload, byteBuffer.array());
+    }
+
+    @Test
     public void testGetIkeKePayload() throws Exception {
         Pair<DHPrivateKeySpec, IkeKePayload> pair =
                 IkeKePayload.getKePayload(IkePayload.DH_GROUP_1024_BIT_MODP);
@@ -149,8 +168,7 @@ public final class IkeKePayloadTest {
         BigInteger primeValue =
                 BigIntegerUtils.unsignedHexStringToBigInteger(PRIME_1024_BIT_MODP_160_SUBGROUP);
         BigInteger baseGenValue =
-                BigIntegerUtils.unsignedHexStringToBigInteger(
-                        GENERATOR_1024_BIT_MODP_160_SUBGROUP);
+                BigIntegerUtils.unsignedHexStringToBigInteger(GENERATOR_1024_BIT_MODP_160_SUBGROUP);
         BigInteger privateKeyValue =
                 BigIntegerUtils.unsignedHexStringToBigInteger(PRIVATE_KEY_LOCAL);
         byte[] remotePublicKey = TestUtils.hexStringToByteArray(PUBLIC_KEY_REMOTE);
