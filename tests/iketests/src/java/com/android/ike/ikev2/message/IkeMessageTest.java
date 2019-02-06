@@ -111,7 +111,7 @@ public final class IkeMessageTest {
 
     @Test
     public void testDecodeIkeHeader() throws Exception {
-        byte[] inputPacket = MessageTestUtil.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         IkeHeader header = new IkeHeader(inputPacket);
 
         assertEquals(IKE_MSG_LENGTH, inputPacket.length);
@@ -133,7 +133,7 @@ public final class IkeMessageTest {
 
     @Test
     public void testDecodeIkeMessage() throws Exception {
-        byte[] inputPacket = MessageTestUtil.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         IkeHeader header = new IkeHeader(inputPacket);
         IkeMessage message = IkeMessage.decode(header, inputPacket);
         assertEquals(SUPPORTED_PAYLOAD_LIST.length, message.ikePayloadList.size());
@@ -144,7 +144,7 @@ public final class IkeMessageTest {
 
     @Test
     public void testDecodeMessageWithUnsupportedUncriticalPayload() throws Exception {
-        byte[] inputPacket = MessageTestUtil.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         // Set first payload unsupported uncritical
         inputPacket[FIRST_PAYLOAD_TYPE_POSITION] = (byte) 0xff;
         IkeHeader header = new IkeHeader(inputPacket);
@@ -157,7 +157,7 @@ public final class IkeMessageTest {
 
     @Test
     public void testThrowInvalidMajorVersionException() throws Exception {
-        byte[] inputPacket = MessageTestUtil.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         // Set major version 3.
         inputPacket[VERSION_POSITION] = (byte) 0x30;
         // Set Exchange type 0
@@ -175,7 +175,7 @@ public final class IkeMessageTest {
 
     @Test
     public void testThrowInvalidSyntaxException() throws Exception {
-        byte[] inputPacket = MessageTestUtil.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         // Set Exchange type 0
         inputPacket[EXCHANGE_TYPE_POSITION] = (byte) 0x00;
         IkeHeader header = new IkeHeader(inputPacket);
@@ -188,7 +188,7 @@ public final class IkeMessageTest {
 
     @Test
     public void testThrowUnsupportedCriticalPayloadException() throws Exception {
-        byte[] inputPacket = MessageTestUtil.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         // Set first payload unsupported critical
         inputPacket[FIRST_PAYLOAD_TYPE_POSITION] = (byte) 0xff;
         inputPacket[IkeHeader.IKE_HEADER_LENGTH + PAYLOAD_CRITICAL_BIT_POSITION] = (byte) 0x80;
