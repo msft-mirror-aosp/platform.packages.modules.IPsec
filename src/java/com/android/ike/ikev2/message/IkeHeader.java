@@ -20,6 +20,10 @@ import static com.android.ike.ikev2.message.IkePayload.PayloadType;
 
 import android.annotation.IntDef;
 
+import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
@@ -101,9 +105,9 @@ public final class IkeHeader {
      *
      * @param packet the raw byte array of the whole IKE message
      */
-    public IkeHeader(byte[] packet) {
+    public IkeHeader(byte[] packet) throws IkeException {
         if (packet.length <= IKE_HEADER_LENGTH) {
-            throw new IllegalArgumentException("Malformed message");
+            throw new InvalidSyntaxException("IKE message is too short to contain a header");
         }
 
         ByteBuffer buffer = ByteBuffer.wrap(packet);
@@ -124,5 +128,24 @@ public final class IkeHeader {
 
         messageId = buffer.getInt();
         messageLength = buffer.getInt();
+    }
+
+    /** Validate syntax and major version. */
+    public void validate() throws IkeException {
+        if (majorVersion > 2) {
+            // Receive higher version of protocol. Stop parsing.
+            throw new InvalidMajorVersionException(majorVersion);
+        }
+        if (majorVersion < 2) {
+            // There is no specific instruction for dealing with this error case.
+            // Since IKE library only supports IKEv2 and not allowed to check if message
+            // sender supports higher version, it is proper to treat this error as an invalid syntax
+            // error.
+            throw new InvalidSyntaxException("Major version is smaller than 2.");
+        }
+        if (exchangeType < EXCHANGE_TYPE_IKE_INIT_SA
+                || exchangeType > EXCHANGE_TYPE_INFORMATIONAL) {
+            throw new InvalidSyntaxException("Invalid IKE Exchange Type.");
+        }
     }
 }

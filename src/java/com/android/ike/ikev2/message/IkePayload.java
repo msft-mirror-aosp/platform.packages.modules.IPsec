@@ -20,7 +20,6 @@ import android.annotation.IntDef;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.nio.ByteBuffer;
 
 /**
  * IkePayload is an abstract class that represents the common information for all IKE payload types.
@@ -31,9 +30,7 @@ import java.nio.ByteBuffer;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.2">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2).
  */
-
-// TODO: Make this class abstract.
-public class IkePayload {
+public abstract class IkePayload {
     /** Length of a generic IKE payload header */
     public static final int GENERIC_HEADER_LENGTH = 4;
 
@@ -66,32 +63,20 @@ public class IkePayload {
 
     // TODO: List all payload types.
 
-    @PayloadType public final int currentPayloadType;
-    @PayloadType public final int nextPayloadType;
-    public final int payloadLength;
+    @PayloadType public final int payloadType;
+    public final boolean isCritical;
 
     /**
-     * Construct a instance of IkePayload.
+     * Construct a instance of IkePayload in the context of a IkePayloadFactory.
      *
      * <p>It should be overrided by subclass of IkePayload
      *
-     * @param payloadType indicates the current payload type
-     * @param input the encoded IKE message body containing all payloads. Position of it will
-     *     increment.
-     *     <p>TODO: Need to change this constructor when IkePayloadfactory is ready.
+     * @param payload the payload type
+     * @param critical indicates if this payload is critical. Ignore it when payload type is
+     *     supported.
      */
-    public IkePayload(@PayloadType int payloadType, ByteBuffer input) {
-        currentPayloadType = payloadType;
-        nextPayloadType = (int) input.get();
-
-        // Skip RESERVED field
-        input.get();
-
-        payloadLength = Short.toUnsignedInt(input.getShort());
-        int bodyLength = payloadLength - IkePayload.GENERIC_HEADER_LENGTH;
-        byte[] payloadBody = new byte[bodyLength];
-        input.get(payloadBody);
-
-        // TODO: decode payload body.
+    IkePayload(@PayloadType int payload, boolean critical) {
+        payloadType = payload;
+        isCritical = critical;
     }
 }
