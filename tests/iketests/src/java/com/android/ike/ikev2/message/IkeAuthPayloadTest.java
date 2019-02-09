@@ -28,7 +28,7 @@ import javax.crypto.Mac;
 public final class IkeAuthPayloadTest {
     private static final String PSK_AUTH_PAYLOAD_HEX_STRING =
             "02000000df7c038aefaaa32d3f44b228b52a332744dfb2c1";
-    private static final String PSK_AUTH_PAYLOAD_SIGNATRUE_HEX_STRING =
+    private static final String PSK_AUTH_PAYLOAD_SIGNATURE_HEX_STRING =
             "df7c038aefaaa32d3f44b228b52a332744dfb2c1";
     private static final String PSK_ID_PAYLOAD_HEX_STRING = "010000000a50500d";
     private static final String PSK_SKP_HEX_STRING = "094787780EE466E2CB049FA327B43908BC57E485";
@@ -89,7 +89,7 @@ public final class IkeAuthPayloadTest {
         assertTrue(payload instanceof IkeAuthPskPayload);
 
         byte[] expectedSignature =
-                TestUtils.hexStringToByteArray(PSK_AUTH_PAYLOAD_SIGNATRUE_HEX_STRING);
+                TestUtils.hexStringToByteArray(PSK_AUTH_PAYLOAD_SIGNATURE_HEX_STRING);
         assertArrayEquals(expectedSignature, ((IkeAuthPskPayload) payload).signature);
     }
 

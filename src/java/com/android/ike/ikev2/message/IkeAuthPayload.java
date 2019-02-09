@@ -61,7 +61,7 @@ public abstract class IkeAuthPayload extends IkePayload {
 
     @AuthMethod public final int authMethod;
 
-    protected IkeAuthPayload(boolean critical, int authMethod) throws IkeException {
+    protected IkeAuthPayload(boolean critical, int authMethod) {
         super(PAYLOAD_TYPE_AUTH, critical);
         this.authMethod = authMethod;
     }
@@ -131,7 +131,23 @@ public abstract class IkeAuthPayload extends IkePayload {
     }
 
     @Override
+    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+        byteBuffer.put((byte) authMethod).put(new byte[AUTH_RESERVED_FIELD_LEN]);
+        encodeAuthDataToByteBuffer(byteBuffer);
+    }
+
+    @Override
+    protected int getPayloadLength() {
+        return GENERIC_HEADER_LENGTH + AUTH_HEADER_LEN + getAuthDataLength();
+    }
+
+    @Override
     public String getTypeString() {
         return "Authentication Payload";
     }
+
+    protected abstract void encodeAuthDataToByteBuffer(ByteBuffer byteBuffer);
+
+    protected abstract int getAuthDataLength();
 }
