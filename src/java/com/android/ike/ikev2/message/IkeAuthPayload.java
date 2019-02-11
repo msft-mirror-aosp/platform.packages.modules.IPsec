@@ -81,24 +81,30 @@ public abstract class IkeAuthPayload extends IkePayload {
                 // TODO: Handle RSA and generic signature-based authentication.
             case AUTH_METHOD_PRE_SHARED_KEY:
                 return new IkeAuthPskPayload(critical, authData);
+            case AUTH_METHOD_RSA_DIGITAL_SIGN:
+                return new IkeAuthDigitalSignPayload(
+                        critical, AUTH_METHOD_RSA_DIGITAL_SIGN, authData);
+            case AUTH_METHOD_GENERIC_DIGITAL_SIGN:
+                return new IkeAuthDigitalSignPayload(
+                        critical, AUTH_METHOD_GENERIC_DIGITAL_SIGN, authData);
             default:
                 // TODO: Throw AuthenticationFailedException
                 throw new UnsupportedOperationException("Unsupported authentication method");
         }
     }
 
-    // Sign value with PRF when building outbound packet or verifying inbound packet. It is called
+    // Sign data with PRF when building outbound packet or verifying inbound packet. It is called
     // for calculating signature over ID payload for all types of authentication and also for
     // calculating signature over PSK for PSK authentication.
-    protected static byte[] signWithPrf(Mac prfMac, byte[] prfKeyBytes, byte[] value)
+    protected static byte[] signWithPrf(Mac prfMac, byte[] prfKeyBytes, byte[] dataToSign)
             throws InvalidKeyException {
         SecretKeySpec prfKey = new SecretKeySpec(prfKeyBytes, prfMac.getAlgorithm());
         prfMac.init(prfKey);
 
-        ByteBuffer valueBuffer = ByteBuffer.wrap(value);
+        ByteBuffer dataBuffer = ByteBuffer.wrap(dataToSign);
 
         // Calculate MAC.
-        prfMac.update(valueBuffer);
+        prfMac.update(dataBuffer);
         return prfMac.doFinal();
     }
 

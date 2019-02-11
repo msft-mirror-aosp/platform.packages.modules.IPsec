@@ -47,4 +47,9 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
         throw new UnsupportedOperationException(
                 "It is not supported to get payload length of " + getTypeString());
     }
+
+    @Override
+    public String getTypeString() {
+        return "Authentication-PSK Payload";
+    }
 }
