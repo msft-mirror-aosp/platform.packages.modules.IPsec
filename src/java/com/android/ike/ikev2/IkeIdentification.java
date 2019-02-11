@@ -24,7 +24,9 @@ import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.UnknownHostException;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -78,21 +80,11 @@ public abstract class IkeIdentification {
     }
 
     /**
-     * Compare this IkeIdentification against specified IkeIdentification.
-     *
-     * @param ikeId the IkeIdentification to compare against.
-     * @return true if two IkeIdentifications are the same; false otherwise.
-     */
-    public abstract boolean equals(IkeIdentification ikeId);
-
-    /**
      * Return the encoded identification data in a byte array.
      *
      * @return the encoded identification data.
      */
     public abstract byte[] getEncodedIdData();
-
-    // TODO: Add abstract method for encoding.
 
     /** IkeIpv4AddrIdentification represents ID information in IPv4 address ID type. */
     public static class IkeIpv4AddrIdentification extends IkeIdentification {
@@ -109,8 +101,8 @@ public abstract class IkeIdentification {
             super(ID_TYPE_IPV4_ADDR);
             try {
                 ipv4Address = (Inet4Address) (Inet4Address.getByAddress(ipv4AddrBytes));
-            } catch (UnknownHostException e) {
-                throw new AuthenticationFailedException("IP4 address is of illegal length.");
+            } catch (ClassCastException | UnknownHostException e) {
+                throw new AuthenticationFailedException(e);
             }
         }
 
@@ -125,27 +117,80 @@ public abstract class IkeIdentification {
             ipv4Address = address;
         }
 
-        /**
-         * Compare this IkeIpv4AddrIdentification against specified IkeIdentification.
-         *
-         * @param ikeId the IkeIdentification to compare against.
-         * @return true if IkeIdentifications are the same; false otherwise.
-         */
         @Override
-        public boolean equals(IkeIdentification ikeId) {
-            if (!(ikeId instanceof IkeIpv4AddrIdentification)) return false;
+        public int hashCode() {
+            return Objects.hash(idType, ipv4Address);
+        }
 
-            return ipv4Address.equals(((IkeIpv4AddrIdentification) ikeId).ipv4Address);
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof IkeIpv4AddrIdentification)) return false;
+
+            return ipv4Address.equals(((IkeIpv4AddrIdentification) o).ipv4Address);
         }
 
         /**
-         * Return raw IP address in a byte array.
+         * Retrieve the byte-representation of the IPv4 address.
          *
-         * @return the raw IP address in a byte array.
+         * @return the byte-representation of the IPv4 address.
          */
         @Override
         public byte[] getEncodedIdData() {
             return ipv4Address.getAddress();
+        }
+    }
+
+    /** IkeIpv6AddrIdentification represents ID information in IPv6 address ID type. */
+    public static class IkeIpv6AddrIdentification extends IkeIdentification {
+        public final Inet6Address ipv6Address;
+
+        /**
+         * Construct an instance of IkeIpv6AddrIdentification from decoding an inbound packet.
+         *
+         * @param ipv6AddrBytes IPv6 address in byte array.
+         * @throws AuthenticationFailedException for decoding bytes error.
+         */
+        public IkeIpv6AddrIdentification(byte[] ipv6AddrBytes)
+                throws AuthenticationFailedException {
+            super(ID_TYPE_IPV6_ADDR);
+            try {
+                ipv6Address = (Inet6Address) (Inet6Address.getByAddress(ipv6AddrBytes));
+            } catch (ClassCastException | UnknownHostException e) {
+                throw new AuthenticationFailedException(e);
+            }
+        }
+
+        /**
+         * Construct an instance of IkeIpv6AddrIdentification with user provided IPv6 address for
+         * building outbound packet.
+         *
+         * @param address user provided IPv6 address
+         */
+        public IkeIpv6AddrIdentification(Inet6Address address) {
+            super(ID_TYPE_IPV6_ADDR);
+            ipv6Address = address;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(idType, ipv6Address);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof IkeIpv6AddrIdentification)) return false;
+
+            return ipv6Address.equals(((IkeIpv6AddrIdentification) o).ipv6Address);
+        }
+
+        /**
+         * Retrieve the byte-representation of the IPv6 address.
+         *
+         * @return the byte-representation of the IPv6 address.
+         */
+        @Override
+        public byte[] getEncodedIdData() {
+            return ipv6Address.getAddress();
         }
     }
 }
