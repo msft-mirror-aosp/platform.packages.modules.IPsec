@@ -21,12 +21,10 @@ import com.android.ike.ikev2.message.IkePayload.PayloadType;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-import java.util.Arrays;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
 
 /**
  * IkeSkPayload represents a Encrypted Payload.
@@ -41,10 +39,10 @@ import javax.crypto.spec.IvParameterSpec;
  */
 public final class IkeSkPayload extends IkePayload {
 
-    public final byte[] unencryptedPayloads;
+    private final IkeEncryptedPayloadBody mIkeEncryptedPayloadBody;
 
     /**
-     * Construct an instance of IkeSkPayload in the context of {@link IkePayloadFactory}.
+     * Construct an instance of IkeSkPayload from decrypting an incoming packet.
      *
      * @param critical indicates if it is a critical payload.
      * @param message the byte array contains the whole IKE message.
@@ -52,7 +50,6 @@ public final class IkeSkPayload extends IkePayload {
      * @param expectedChecksumLen the expected length of integrity checksum.
      * @param decryptCipher the uninitialized Cipher for doing decryption.
      * @param dKey the decryption key.
-     * @param expectedIvLen the expected length of Initialization Vector.
      */
     IkeSkPayload(
             boolean critical,
@@ -60,80 +57,36 @@ public final class IkeSkPayload extends IkePayload {
             Mac integrityMac,
             int expectedChecksumLen,
             Cipher decryptCipher,
-            SecretKey dKey,
-            int expectedIvLen)
+            SecretKey dKey)
             throws IkeException, GeneralSecurityException {
         super(PAYLOAD_TYPE_SK, critical);
 
-        ByteBuffer inputBuffer = ByteBuffer.wrap(message);
+        mIkeEncryptedPayloadBody =
+                new IkeEncryptedPayloadBody(
+                        message, integrityMac, expectedChecksumLen, decryptCipher, dKey);
+    }
 
-        // Skip IKE header and SK payload header
-        byte[] tempArray = new byte[IkeHeader.IKE_HEADER_LENGTH + GENERIC_HEADER_LENGTH];
-        inputBuffer.get(tempArray);
-
-        // Extract bytes for authentication and decryption.
-        byte[] iv = new byte[expectedIvLen];
-
-        int encryptedDataLen =
-                message.length
-                        - (IkeHeader.IKE_HEADER_LENGTH
-                                + GENERIC_HEADER_LENGTH
-                                + expectedIvLen
-                                + expectedChecksumLen);
-        // IkeMessage will catch exception if encryptedDataLen is negative.
-        byte[] encryptedData = new byte[encryptedDataLen];
-
-        byte[] integrityChecksum = new byte[expectedChecksumLen];
-        inputBuffer.get(iv).get(encryptedData).get(integrityChecksum);
-
-        // Authenticate and decrypt.
-        validateChecksumOrThrow(message, integrityMac, expectedChecksumLen, integrityChecksum);
-        unencryptedPayloads = decrypt(encryptedData, decryptCipher, dKey, iv);
+    /**
+     * Return unencrypted payload list
+     *
+     * @return unencrypted payload list in a byte array.
+     */
+    public byte[] getUnencryptedPayloads() {
+        return mIkeEncryptedPayloadBody.getUnencryptedData();
     }
 
     // TODO: Add another constructor for AEAD protected payload.
 
-    private void validateChecksumOrThrow(
-            byte[] message, Mac integrityMac, int expectedChecksumLen, byte[] integrityChecksum)
-            throws GeneralSecurityException {
-        ByteBuffer inputBuffer = ByteBuffer.wrap(message, 0, message.length - expectedChecksumLen);
-        integrityMac.update(inputBuffer);
-        byte[] calculatedChecksum =
-                Arrays.copyOfRange(integrityMac.doFinal(), 0, expectedChecksumLen);
-
-        if (!Arrays.equals(integrityChecksum, calculatedChecksum)) {
-            throw new GeneralSecurityException("Message authentication failed. ");
-        }
-    }
-
-    private byte[] decrypt(byte[] encryptedData, Cipher decryptCipher, SecretKey dKey, byte[] iv)
-            throws GeneralSecurityException {
-        IvParameterSpec ivParameterSpec = new IvParameterSpec(iv);
-        decryptCipher.init(Cipher.DECRYPT_MODE, dKey, ivParameterSpec);
-
-        ByteBuffer inputBuffer = ByteBuffer.wrap(encryptedData);
-        ByteBuffer outputBuffer = ByteBuffer.allocate(encryptedData.length);
-        decryptCipher.doFinal(inputBuffer, outputBuffer);
-
-        // Remove padding
-        outputBuffer.rewind();
-        int padLength = Byte.toUnsignedInt(outputBuffer.get(encryptedData.length - 1));
-        byte[] decryptedData = new byte[encryptedData.length - padLength - 1];
-
-        outputBuffer.get(decryptedData);
-        return decryptedData;
-    }
-
     /**
-     * Throw an Exception when trying to encode this payload.
+     * Encode this payload to a ByteBuffer.
      *
-     * @throws UnsupportedOperationException for this payload.
+     * @param nextPayload type of payload that follows this payload.
+     * @param byteBuffer destination ByteBuffer that stores encoded payload.
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        // TODO: Implement thie method
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+        byteBuffer.put(mIkeEncryptedPayloadBody.encode());
     }
 
     /**
@@ -143,9 +96,7 @@ public final class IkeSkPayload extends IkePayload {
      */
     @Override
     protected int getPayloadLength() {
-        // TODO: Implement thie method
-        throw new UnsupportedOperationException(
-                "It is not supported to get length of  a " + getTypeString());
+        return GENERIC_HEADER_LENGTH + mIkeEncryptedPayloadBody.getLength();
     }
 
     /**

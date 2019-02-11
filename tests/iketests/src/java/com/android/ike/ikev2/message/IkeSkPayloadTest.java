@@ -22,7 +22,9 @@ import static org.junit.Assert.fail;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -59,7 +61,6 @@ public final class IkeSkPayloadTest {
     private static final String ENCR_ALGO_AES_CBC = "AES/CBC/NoPadding";
     private static final String INTE_ALGO_HMAC_SHA1 = "HmacSHA1";
 
-    private static final int IV_LEN = 16;
     private static final int CHECKSUM_LEN = 12;
 
     private Cipher mAesCbcDecryptCipher;
@@ -90,12 +91,11 @@ public final class IkeSkPayloadTest {
                                 mHmacSha1IntegrityMac,
                                 CHECKSUM_LEN,
                                 mAesCbcDecryptCipher,
-                                mAesCbcDecryptKey,
-                                IV_LEN)
+                                mAesCbcDecryptKey)
                         .first;
         byte[] expectedPlaintext =
                 TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_DECRYPTED_BODY_HEX_STRING);
-        assertArrayEquals(expectedPlaintext, payload.unencryptedPayloads);
+        assertArrayEquals(expectedPlaintext, payload.getUnencryptedPayloads());
     }
 
     @Test
@@ -109,10 +109,28 @@ public final class IkeSkPayloadTest {
                     mHmacSha1IntegrityMac,
                     CHECKSUM_LEN,
                     mAesCbcDecryptCipher,
-                    mAesCbcDecryptKey,
-                    IV_LEN);
+                    mAesCbcDecryptKey);
             fail("Expected GeneralSecurityException: Invalid checksum.");
         } catch (GeneralSecurityException expected) {
         }
+    }
+
+    @Test
+    public void testEncode() throws Exception {
+        byte[] message = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_HEX_STRING);
+        byte[] payloadBytes =
+                Arrays.copyOfRange(message, IkeHeader.IKE_HEADER_LENGTH, message.length);
+        IkeSkPayload payload =
+                IkePayloadFactory.getIkeSkPayload(
+                                message,
+                                mHmacSha1IntegrityMac,
+                                CHECKSUM_LEN,
+                                mAesCbcDecryptCipher,
+                                mAesCbcDecryptKey)
+                        .first;
+        int payloadLength = payload.getPayloadLength();
+        ByteBuffer buffer = ByteBuffer.allocate(payloadLength);
+        payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_ID_INITIATOR, buffer);
+        assertArrayEquals(payloadBytes, buffer.array());
     }
 }
