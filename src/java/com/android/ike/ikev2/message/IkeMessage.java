@@ -347,6 +347,7 @@ public final class IkeMessage {
                 IkeHeader ikeHeader,
                 byte[] packet)
                 throws IkeException, GeneralSecurityException {
+            //TODO: Extract crypto params and call private decode method.
             return null;
         }
 
@@ -356,8 +357,7 @@ public final class IkeMessage {
                 Mac integrityMac,
                 int checksumLen,
                 Cipher decryptCipher,
-                SecretKey dKey,
-                int ivLen)
+                SecretKey dKey)
                 throws IkeException, GeneralSecurityException {
 
             header.checkValidOrThrow(inputPacket.length);
@@ -370,12 +370,12 @@ public final class IkeMessage {
             try {
                 Pair<IkeSkPayload, Integer> pair =
                         IkePayloadFactory.getIkeSkPayload(
-                                inputPacket, integrityMac, checksumLen, decryptCipher, dKey, ivLen);
+                                inputPacket, integrityMac, checksumLen, decryptCipher, dKey);
                 IkeSkPayload skPayload = pair.first;
                 int firstPayloadType = pair.second;
 
                 List<IkePayload> supportedPayloadList =
-                        decodePayloadList(firstPayloadType, skPayload.unencryptedPayloads);
+                        decodePayloadList(firstPayloadType, skPayload.getUnencryptedPayloads());
 
                 return new IkeMessage(header, supportedPayloadList);
             } catch (NegativeArraySizeException | BufferUnderflowException e) {

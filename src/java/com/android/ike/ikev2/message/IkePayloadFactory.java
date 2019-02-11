@@ -121,7 +121,6 @@ final class IkePayloadFactory {
      * @param expectedChecksumLen the expected length of integrity checksum.
      * @param decryptCipher the uninitialized Cipher for doing decryption.
      * @param dKey the decryption key.
-     * @param expectedIvLen the expected length of Initialization Vector.
      * @return a pair including IkePayload and next payload type.
      * @throws IkeException for decoding errors.
      * @throws GeneralSecurityException if there is any error during integrity check or decryption.
@@ -131,8 +130,7 @@ final class IkePayloadFactory {
             Mac integrityMac,
             int expectedChecksumLen,
             Cipher decryptCipher,
-            SecretKey dKey,
-            int expectedIvLen)
+            SecretKey dKey)
             throws IkeException, GeneralSecurityException {
         ByteBuffer input =
                 ByteBuffer.wrap(
@@ -168,8 +166,7 @@ final class IkePayloadFactory {
                         integrityMac,
                         expectedChecksumLen,
                         decryptCipher,
-                        dKey,
-                        expectedIvLen);
+                        dKey);
         return new Pair(payload, nextPayloadType);
     }
 
