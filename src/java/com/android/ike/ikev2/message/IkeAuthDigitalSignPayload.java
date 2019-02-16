@@ -138,14 +138,14 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
     // TODO: Add methods for generating and validating signature.
 
     @Override
-    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
+    protected void encodeAuthDataToByteBuffer(ByteBuffer byteBuffer) {
         // TODO: Implement it.
         throw new UnsupportedOperationException(
                 "It is not supported to encode a " + getTypeString());
     }
 
     @Override
-    protected int getPayloadLength() {
+    protected int getAuthDataLength() {
         // TODO: Implement it.
         throw new UnsupportedOperationException(
                 "It is not supported to get payload length of " + getTypeString());
