@@ -45,39 +45,49 @@ final class IkePayloadFactory {
         return (flagByte & PAYLOAD_HEADER_CRITICAL_BIT_SET) == PAYLOAD_HEADER_CRITICAL_BIT_SET;
     }
 
-    /** Default instance used for constructing IkePayload */
+    /** Default IIkePayloadDecoder instance used for constructing IkePayload */
+    static IIkePayloadDecoder sDecoderInstance = new IkePayloadDecoder();
+
+    /**
+     * IkePayloadDecoder implements IIkePayloadDecoder for constructing IkePayload from decoding
+     * received message.
+     *
+     * <p>Package private
+     */
     @VisibleForTesting
-    static IkePayloadDecoder sDecoderInstance =
-            new IkePayloadDecoder() {
-                @Override
-                public IkePayload decodeIkePayload(
-                        int payloadType, boolean isCritical, byte[] payloadBody)
-                        throws IkeException {
-                    switch (payloadType) {
-                            // TODO: Add cases for creating supported payloads.
-                        case IkePayload.PAYLOAD_TYPE_SA:
-                            return new IkeSaPayload(isCritical, payloadBody);
-                        case IkePayload.PAYLOAD_TYPE_KE:
-                            return new IkeKePayload(isCritical, payloadBody);
-                        case IkePayload.PAYLOAD_TYPE_ID_INITIATOR:
-                            return new IkeIdPayload(isCritical, payloadBody, true);
-                        case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
-                            return new IkeIdPayload(isCritical, payloadBody, false);
-                        case IkePayload.PAYLOAD_TYPE_CERT:
-                            return IkeCertPayload.getIkeCertPayload(isCritical, payloadBody);
-                        case IkePayload.PAYLOAD_TYPE_AUTH:
-                            return IkeAuthPayload.getIkeAuthPayload(isCritical, payloadBody);
-                        case IkePayload.PAYLOAD_TYPE_NONCE:
-                            return new IkeNoncePayload(isCritical, payloadBody);
-                        case IkePayload.PAYLOAD_TYPE_NOTIFY:
-                            return new IkeNotifyPayload(isCritical, payloadBody);
-                        case IkePayload.PAYLOAD_TYPE_VENDOR:
-                            return new IkeVendorPayload(isCritical, payloadBody);
-                        default:
-                            return new IkeUnsupportedPayload(payloadType, isCritical);
-                    }
-                }
-            };
+    static class IkePayloadDecoder implements IIkePayloadDecoder {
+        @Override
+        public IkePayload decodeIkePayload(int payloadType, boolean isCritical, byte[] payloadBody)
+                throws IkeException {
+            switch (payloadType) {
+                    // TODO: Add cases for creating supported payloads.
+                case IkePayload.PAYLOAD_TYPE_SA:
+                    return new IkeSaPayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_KE:
+                    return new IkeKePayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_ID_INITIATOR:
+                    return new IkeIdPayload(isCritical, payloadBody, true);
+                case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
+                    return new IkeIdPayload(isCritical, payloadBody, false);
+                case IkePayload.PAYLOAD_TYPE_CERT:
+                    return IkeCertPayload.getIkeCertPayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_AUTH:
+                    return IkeAuthPayload.getIkeAuthPayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_NONCE:
+                    return new IkeNoncePayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                    return new IkeNotifyPayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_VENDOR:
+                    return new IkeVendorPayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_TS_INITIATOR:
+                    return new IkeTsPayload(isCritical, payloadBody, true);
+                case IkePayload.PAYLOAD_TYPE_TS_RESPONDER:
+                    return new IkeTsPayload(isCritical, payloadBody, false);
+                default:
+                    return new IkeUnsupportedPayload(payloadType, isCritical);
+            }
+        }
+    }
 
     /**
      * Construct an instance of IkePayload according to its payload type.
@@ -170,8 +180,14 @@ final class IkePayloadFactory {
         return new Pair(payload, nextPayloadType);
     }
 
+    /**
+     * IIkePayloadDecoder provides a package private interface for constructing IkePayload from
+     * decoding received message.
+     *
+     * <p>IIkePayloadDecoder exists so that the interface is injectable for testing.
+     */
     @VisibleForTesting
-    interface IkePayloadDecoder {
+    interface IIkePayloadDecoder {
         IkePayload decodeIkePayload(int payloadType, boolean isCritical, byte[] payloadBody)
                 throws IkeException;
     }

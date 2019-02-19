@@ -37,6 +37,11 @@ public abstract class IkePayload {
     /** Length of a generic IKE payload header */
     public static final int GENERIC_HEADER_LENGTH = 4;
 
+    /**
+     * Payload types as defined by IANA:
+     *
+     * @see <a href="https://www.iana.org/assignments/ikev2-parameters/ikev2-parameters.xhtml">
+     */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         PAYLOAD_TYPE_NO_NEXT,
@@ -49,6 +54,8 @@ public abstract class IkePayload {
         PAYLOAD_TYPE_NONCE,
         PAYLOAD_TYPE_NOTIFY,
         PAYLOAD_TYPE_VENDOR,
+        PAYLOAD_TYPE_TS_INITIATOR,
+        PAYLOAD_TYPE_TS_RESPONDER,
         PAYLOAD_TYPE_SK
     })
     public @interface PayloadType {}
@@ -73,6 +80,10 @@ public abstract class IkePayload {
     public static final int PAYLOAD_TYPE_NOTIFY = 41;
     /** Vendor Payload */
     public static final int PAYLOAD_TYPE_VENDOR = 43;
+    /** Traffic Selector Payload of Child SA Initiator */
+    public static final int PAYLOAD_TYPE_TS_INITIATOR = 44;
+    /** Traffic Selector Payload of Child SA Responder */
+    public static final int PAYLOAD_TYPE_TS_RESPONDER = 45;
     /** Encrypted and Authenticated Payload */
     public static final int PAYLOAD_TYPE_SK = 46;
 
