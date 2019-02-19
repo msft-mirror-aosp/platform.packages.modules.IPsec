@@ -35,6 +35,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -376,6 +377,19 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @Override
+        public int hashCode() {
+            return Objects.hash(type, id, keyLength);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof EncryptionTransform)) return false;
+
+            EncryptionTransform other = (EncryptionTransform) o;
+            return (type == other.type && id == other.id && keyLength == other.keyLength);
+        }
+
+        @Override
         protected boolean isSupportedTransformId(int id) {
             return SaProposal.isSupportedEncryptionAlgorithm(id);
         }
@@ -476,6 +490,19 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @Override
+        public int hashCode() {
+            return Objects.hash(type, id);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof PrfTransform)) return false;
+
+            PrfTransform other = (PrfTransform) o;
+            return (type == other.type && id == other.id);
+        }
+
+        @Override
         protected boolean isSupportedTransformId(int id) {
             return SaProposal.isSupportedPseudorandomFunction(id);
         }
@@ -524,6 +551,19 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @Override
+        public int hashCode() {
+            return Objects.hash(type, id);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof IntegrityTransform)) return false;
+
+            IntegrityTransform other = (IntegrityTransform) o;
+            return (type == other.type && id == other.id);
+        }
+
+        @Override
         protected boolean isSupportedTransformId(int id) {
             return SaProposal.isSupportedIntegrityAlgorithm(id);
         }
@@ -569,6 +609,19 @@ public final class IkeSaPayload extends IkePayload {
         protected DhGroupTransform(int id, List<Attribute> attributeList)
                 throws InvalidSyntaxException {
             super(Transform.TRANSFORM_TYPE_DH, id, attributeList);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(type, id);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof DhGroupTransform)) return false;
+
+            DhGroupTransform other = (DhGroupTransform) o;
+            return (type == other.type && id == other.id);
         }
 
         @Override
@@ -623,6 +676,19 @@ public final class IkeSaPayload extends IkePayload {
         protected EsnTransform(int id, List<Attribute> attributeList)
                 throws InvalidSyntaxException {
             super(Transform.TRANSFORM_TYPE_ESN, id, attributeList);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(type, id);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof EsnTransform)) return false;
+
+            EsnTransform other = (EsnTransform) o;
+            return (type == other.type && id == other.id);
         }
 
         @Override
