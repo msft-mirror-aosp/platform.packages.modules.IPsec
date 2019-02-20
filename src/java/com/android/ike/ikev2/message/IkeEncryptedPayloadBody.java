@@ -36,9 +36,9 @@ import javax.crypto.spec.IvParameterSpec;
  * consists of an IkeEncryptedPayloadBody instance.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-105">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  * @see <a href="https://tools.ietf.org/html/rfc7383#page-6">RFC 7383, Internet Key Exchange
- *     Protocol Version 2 (IKEv2) Message Fragmentation
+ *     Protocol Version 2 (IKEv2) Message Fragmentation</a>
  */
 final class IkeEncryptedPayloadBody {
     // Length of pad length field.

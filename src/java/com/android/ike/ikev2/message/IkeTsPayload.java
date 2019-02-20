@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
  * and Child SA responder.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.13">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeTsPayload extends IkePayload {
     // Length of reserved field in octets.

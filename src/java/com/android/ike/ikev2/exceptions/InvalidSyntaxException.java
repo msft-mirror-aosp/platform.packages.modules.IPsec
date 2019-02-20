@@ -24,7 +24,7 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
  * an encrypted request and cryptographic checksum is valid. Fatal error.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class InvalidSyntaxException extends IkeException {
     /**
