@@ -25,7 +25,7 @@ import javax.crypto.Mac;
  * IkeAuthPskPayload represents an Authentication Payload using Pre-Shared Key to do authentication.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.8">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeAuthPskPayload extends IkeAuthPayload {
     // Hex of ASCII characters "Key Pad for IKEv2" for calculating PSK signature.

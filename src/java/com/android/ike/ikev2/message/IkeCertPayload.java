@@ -33,7 +33,7 @@ import java.nio.ByteBuffer;
  * <p>Certificate Payload is only sent in IKE_AUTH exchange.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.6">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public abstract class IkeCertPayload extends IkePayload {
     // Length of certificate encoding type field in octets.

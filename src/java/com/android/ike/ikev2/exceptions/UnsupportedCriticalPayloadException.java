@@ -26,7 +26,7 @@ import java.util.List;
  * payload type for each payload.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class UnsupportedCriticalPayloadException extends IkeException {
 

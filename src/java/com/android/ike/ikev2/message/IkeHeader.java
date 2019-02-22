@@ -33,7 +33,7 @@ import java.nio.ByteBuffer;
  * for encoding and decoding it.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.1">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeHeader {
     //TODO: b/122838549 Change IkeHeader to static inner class of IkeMessage.
