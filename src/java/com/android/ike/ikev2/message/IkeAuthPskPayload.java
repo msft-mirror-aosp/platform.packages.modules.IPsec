@@ -16,8 +16,11 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
+
 import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
+import java.util.Arrays;
 
 import javax.crypto.Mac;
 
@@ -60,8 +63,8 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
      * @param nonce nonce of IKE responder for calculating IKE initiator's SignedOctets.
      * @param idPayloadBodyBytes ID-Initiator payload body for calculating IKE initiator's
      *     SignedOctets.
-     * @param prfMac locally store PRF
-     * @param prfKeyBytes locally store PRF keys
+     * @param prfMac locally stored PRF
+     * @param prfKeyBytes locally stored PRF keys
      */
     public IkeAuthPskPayload(
             byte[] psk,
@@ -90,6 +93,39 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
             return signWithPrf(prfMac, signingKeyBytes, dataToSignBytes);
         } catch (InvalidKeyException e) {
             throw new IllegalArgumentException("Locally stored PRF key is invalid: ", e);
+        }
+    }
+
+    /**
+     * Verify received signature in inbound IKE packet.
+     *
+     * <p>Since IKE library is always a client, inbound IkeAuthPskPayload always signs IKE
+     * responder's SignedOctets, which is concatenation of the IKE_INIT response message, the Nonce
+     * of IKE initiator and the signed ID-Responder payload body.
+     *
+     * @param psk locally stored pre-shared key
+     * @param ikeInitBytes IKE_INIT response for calculating IKE responder's SignedOctets.
+     * @param nonce nonce of IKE initiator for calculating IKE responder's SignedOctets.
+     * @param idPayloadBodyBytes ID-Responder payload body for calculating IKE responder's
+     *     SignedOctets.
+     * @param prfMac locally stored PRF
+     * @param prfKeyBytes locally stored PRF keys
+     * @throws AuthenticationFailedException if received signature is not equal to calculated
+     *     signature.
+     */
+    public void verifyInboundSignature(
+            byte[] psk,
+            byte[] ikeInitBytes,
+            byte[] nonce,
+            byte[] idPayloadBodyBytes,
+            Mac prfMac,
+            byte[] prfKeyBytes)
+            throws AuthenticationFailedException {
+        byte[] calculatedSignature =
+                calculatePskSignature(
+                        psk, ikeInitBytes, nonce, idPayloadBodyBytes, prfMac, prfKeyBytes);
+        if (!Arrays.equals(signature, calculatedSignature)) {
+            throw new AuthenticationFailedException("Signature verification failed.");
         }
     }
 
