@@ -130,9 +130,17 @@ public abstract class SaRecord {
     /** ChildSaRecord represents an Child SA. */
     public static class ChildSaRecord extends SaRecord implements Comparable<ChildSaRecord> {
 
-        private ChildSaRecord(byte[] nonceInit, byte[] nonceResp) {
+        /** Locally generated SPI for receiving IPsec Packet. */
+        public final int inboundSpi;
+        /** Remotely generated SPI for sending IPsec Packet. */
+        public final int outboundSpi;
+
+        /** Package private */
+        ChildSaRecord(int inSpi, int outSpi, byte[] nonceInit, byte[] nonceResp) {
             super(nonceInit, nonceResp);
-            // TODO: Impement constructor. there will be more input parameters.
+            inboundSpi = inSpi;
+            outboundSpi = outSpi;
+            // TODO: Impement constructor. Will be more input parameters.
         }
 
         /** Package private */

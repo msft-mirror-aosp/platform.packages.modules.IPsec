@@ -19,6 +19,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.LongSparseArray;
 import android.util.Pair;
+import android.util.SparseArray;
 
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.exceptions.IkeException;
@@ -53,27 +54,14 @@ public class IkeSessionStateMachine extends StateMachine {
 
     private static final String TAG = "IkeSessionStateMachine";
 
-    /** Package private signals accessible for ChildSessionStateMachine and testing code. */
+    /** Package private signals accessible for testing code. */
     private static final int CMD_GENERAL_BASE = 0;
     /** Receive encoded IKE packet on IkeSessionStateMachine. */
     static final int CMD_RECEIVE_IKE_PACKET = CMD_GENERAL_BASE + 1;
-    /**
-     * Signal from IkeSessionStateMachine to ChildSessionStateMachine that carries decoded payloads
-     * from inbound IKE message.
-     */
-    static final int CMD_RECEIVE_CHILD_MESSAGE = CMD_GENERAL_BASE + 2;
-    /**
-     * Signal from ChildSessionStateMachine to IkeSessionStateMachine that carries payloads for
-     * building outbound IKE message.
-     */
-    static final int CMD_SEND_CHILD_MESSAGE = CMD_GENERAL_BASE + 3;
-    /**
-     * Signal from IkeSessionStateMachine to ChildSessionStateMachine that carries decoded payloads
-     * from IKE_INIT request and response.
-     */
-    static final int CMD_NEGOTIATE_FIRST_CHILD_SA = CMD_GENERAL_BASE + 4;
+    /** Receive locally built payloads from Child Session for building outbound IKE message. */
+    static final int CMD_RECEIVE_OUTBOUND_CHILD_PAYLOADS = CMD_GENERAL_BASE + 2;
     /** Receive encoded IKE packet with unrecognized IKE SPI on IkeSessionStateMachine. */
-    static final int CMD_RECEIVE_PACKET_INVALID_IKE_SPI = CMD_GENERAL_BASE + 5;
+    static final int CMD_RECEIVE_PACKET_INVALID_IKE_SPI = CMD_GENERAL_BASE + 3;
     // TODO: Add signal for retransmission.
 
     private static final int CMD_LOCAL_REQUEST_BASE = CMD_GENERAL_BASE + 100;
@@ -87,8 +75,15 @@ public class IkeSessionStateMachine extends StateMachine {
     // TODO: Add signals for other procedure types and notificaitons.
 
     private final IkeSessionOptions mIkeSessionOptions;
+    private final ChildSessionOptions mFirstChildSessionOptions;
     /** Map that stores all IkeSaRecords, keyed by remotely generated IKE SPI. */
     private final LongSparseArray<IkeSaRecord> mSpiToSaRecordMap;
+    /**
+     * Map that stores all ChildSessionStateMachines, keyed by remotely generated Child SPI for
+     * sending IPsec packet. Different SPIs may point to the same ChildSessionStateMachine if this
+     * Child Session is doing Rekey.
+     */
+    private final SparseArray<ChildSessionStateMachine> mSpiToChildSessionMap;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -122,12 +117,17 @@ public class IkeSessionStateMachine extends StateMachine {
     // TODO: Add InfoLocal and DeleteIkeLocal.
 
     /** Package private constructor */
-    IkeSessionStateMachine(String name, Looper looper, IkeSessionOptions sessionOptions) {
+    IkeSessionStateMachine(
+            String name,
+            Looper looper,
+            IkeSessionOptions ikeOptions,
+            ChildSessionOptions firstChildOptions) {
         super(name, looper);
-
-        mIkeSessionOptions = sessionOptions;
+        mIkeSessionOptions = ikeOptions;
+        mFirstChildSessionOptions = firstChildOptions;
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
         mSpiToSaRecordMap = new LongSparseArray<>(3);
+        mSpiToChildSessionMap = new SparseArray<>();
 
         addState(mInitial);
         addState(mClosed);
@@ -144,22 +144,6 @@ public class IkeSessionStateMachine extends StateMachine {
         addState(mRekeyIkeRemoteDelete);
 
         setInitialState(mInitial);
-    }
-
-    /**
-     * ReceivedIkePacket is a package private data container consists of decoded IkeHeader and
-     * encoded IKE packet in a byte array.
-     */
-    static class ReceivedIkePacket {
-        /** Decoded IKE header */
-        public final IkeHeader ikeHeader;
-        /** Entire encoded IKE message including IKE header */
-        public final byte[] ikePacketBytes;
-
-        ReceivedIkePacket(Pair<IkeHeader, byte[]> ikePacketPair) {
-            ikeHeader = ikePacketPair.first;
-            ikePacketBytes = ikePacketPair.second;
-        }
     }
 
     private IkeMessage buildIkeInitReq() {
@@ -227,6 +211,50 @@ public class IkeSessionStateMachine extends StateMachine {
 
     private void removeIkeSaRecord(IkeSaRecord record) {
         mSpiToSaRecordMap.remove(record.getRemoteSpi());
+    }
+
+    /**
+     * ReceivedIkePacket is a package private data container consists of decoded IkeHeader and
+     * encoded IKE packet in a byte array.
+     */
+    static class ReceivedIkePacket {
+        /** Decoded IKE header */
+        public final IkeHeader ikeHeader;
+        /** Entire encoded IKE message including IKE header */
+        public final byte[] ikePacketBytes;
+
+        ReceivedIkePacket(Pair<IkeHeader, byte[]> ikePacketPair) {
+            ikeHeader = ikePacketPair.first;
+            ikePacketBytes = ikePacketPair.second;
+        }
+    }
+
+    /**
+     * Interface for ChildSessionStateMachine to notify IkeSessionStateMachine.
+     *
+     * <p>Package private so as to be injectable for testing.
+     */
+    interface IChildSessionCallback {
+        /** Notify that new Child SA is created. */
+        void onCreateChildSa(int remoteSpi, ChildSessionStateMachine childSession);
+        /** Notify that the Child SA is deleted. */
+        void onDeleteChildSa(int remoteSpi);
+        // TODO: Add methods for handling errors and sending out locally built payloads.
+    }
+
+    /**
+     * Callback for ChildSessionStateMachine to notify IkeSessionStateMachine.
+     *
+     * <p>Package private for being passed to only ChildSessionStateMachine.
+     */
+    class ChildSessionCallback implements IChildSessionCallback {
+        public void onCreateChildSa(int remoteSpi, ChildSessionStateMachine childSession) {
+            mSpiToChildSessionMap.put(remoteSpi, childSession);
+        }
+
+        public void onDeleteChildSa(int remoteSpi) {
+            mSpiToChildSessionMap.remove(remoteSpi);
+        }
     }
 
     /** Initial state of IkeSessionStateMachine. */
@@ -482,13 +510,22 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
             switch (messageType) {
+                    // TODO: Handle EAP Authentication.
                 case IkeMessage.MESSAGE_TYPE_IKE_AUTH_RESP:
                     try {
                         validateIkeAuthResp(mRequestMsg, ikeMessage);
+
+                        ChildSessionStateMachine firstChild =
+                                ChildSessionStateMachineFactory.makeChildSessionStateMachine(
+                                        "ChildSessionStateMachine",
+                                        getHandler().getLooper(),
+                                        mFirstChildSessionOptions);
+                        // TODO: Replace null input params to payload lists in IKE_AUTH request and
+                        // IKE_AUTH response for negotiating Child SA.
+                        firstChild.handleFirstChildExchange(
+                                null, null, new ChildSessionCallback());
+
                         transitionTo(mIdle);
-                        // TODO: Handle EAP Authentication.
-                        // TODO: Pass payload list to ChildSessionStateMachine to negotiate first
-                        // Child SA.
                     } catch (IkeException e) {
                         // TODO: Handle processing errors.
                     }
