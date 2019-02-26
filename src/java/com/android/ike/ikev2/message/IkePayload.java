@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
  * logic.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.2">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public abstract class IkePayload {
     // Critical bit and following reserved 7 bits in payload generic header must all be zero

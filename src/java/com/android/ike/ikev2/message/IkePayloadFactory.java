@@ -33,7 +33,7 @@ import javax.crypto.SecretKey;
  * IkePayloadFactory is used for creating IkePayload according to is type.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 final class IkePayloadFactory {
 
