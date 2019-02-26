@@ -46,7 +46,7 @@ import javax.crypto.spec.DHPublicKeySpec;
  * exhchange. Upper layer should ignore IkeKePayload with unsupported DH group type.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-89">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeKePayload extends IkePayload {
     private static final int KE_HEADER_LEN = 4;

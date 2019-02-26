@@ -42,7 +42,7 @@ import java.util.Set;
  * IkeSaPayload represents a Security Association payload. It contains one or more {@link Proposal}.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeSaPayload extends IkePayload {
     public final List<Proposal> proposalList;
@@ -76,7 +76,7 @@ public final class IkeSaPayload extends IkePayload {
      * contains multiple {@link Transform}.
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.1">RFC 7296, Internet Key
-     *     Exchange Protocol Version 2 (IKEv2).
+     *     Exchange Protocol Version 2 (IKEv2)</a>
      *     <p>Proposals with an unrecognized Protocol ID, containing an unrecognized Transform Type
      *     or lacking a necessary Transform Type shall be ignored when processing a received SA
      *     Payload.
@@ -176,7 +176,7 @@ public final class IkeSaPayload extends IkePayload {
      * types. It may contain one or more {@link Attribute}.
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
-     *     Exchange Protocol Version 2 (IKEv2).
+     *     Exchange Protocol Version 2 (IKEv2)</a>
      *     <p>Transforms with unrecognized Transform ID or containing unrecognized Attribute Type
      *     shall be ignored when processing received SA payload.
      */
@@ -318,7 +318,7 @@ public final class IkeSaPayload extends IkePayload {
      * specifying the key length.
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
-     *     Exchange Protocol Version 2 (IKEv2).
+     *     Exchange Protocol Version 2 (IKEv2)</a>
      */
     public static final class EncryptionTransform extends Transform {
         private static final int KEY_LEN_UNASSIGNED = 0;
@@ -465,7 +465,7 @@ public final class IkeSaPayload extends IkePayload {
      * PrfTransform represents an pseudorandom function.
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
-     *     Exchange Protocol Version 2 (IKEv2).
+     *     Exchange Protocol Version 2 (IKEv2)</a>
      */
     public static final class PrfTransform extends Transform {
         /**
@@ -526,7 +526,7 @@ public final class IkeSaPayload extends IkePayload {
      * provided, choosing any of them are acceptable.
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
-     *     Exchange Protocol Version 2 (IKEv2).
+     *     Exchange Protocol Version 2 (IKEv2)</a>
      */
     public static final class IntegrityTransform extends Transform {
         /**
@@ -587,7 +587,7 @@ public final class IkeSaPayload extends IkePayload {
      * choosing any of them are acceptable.
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
-     *     Exchange Protocol Version 2 (IKEv2).
+     *     Exchange Protocol Version 2 (IKEv2)</a>
      */
     public static final class DhGroupTransform extends Transform {
         /**
@@ -648,7 +648,7 @@ public final class IkeSaPayload extends IkePayload {
      * numbers. The Transform ID of EsnTransform in outbound packets is not user configurable.
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
-     *     Exchange Protocol Version 2 (IKEv2).
+     *     Exchange Protocol Version 2 (IKEv2)</a>
      */
     public static final class EsnTransform extends Transform {
         @Retention(RetentionPolicy.SOURCE)
@@ -749,7 +749,7 @@ public final class IkeSaPayload extends IkePayload {
      * <p>Currently only Key Length type is supported
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.5">RFC 7296, Internet Key
-     *     Exchange Protocol Version 2 (IKEv2).
+     *     Exchange Protocol Version 2 (IKEv2)</a>
      */
     public abstract static class Attribute {
         @Retention(RetentionPolicy.SOURCE)

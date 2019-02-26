@@ -24,7 +24,7 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
  * version number 2.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class InvalidMajorVersionException extends IkeException {
     public final byte receivedMajorVersion;
