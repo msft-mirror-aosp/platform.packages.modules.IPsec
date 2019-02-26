@@ -16,15 +16,15 @@
 
 package com.android.ike.ikev2.message;
 
+import android.util.Pair;
+
+import com.android.ike.ikev2.exceptions.IkeException;
+
+import java.nio.ByteBuffer;
+
 /** TestUtils provides utility methods for parsing Hex String */
 public final class TestUtils {
-    /**
-     * Converts the unsigned Hex String to a byte array.
-     *
-     * @param hexString hex representation of an unsigned value.
-     * @return the converted byte array.
-     * @throws IllegalArgumentException when length of Hex String is an odd number.
-     */
+
     public static byte[] hexStringToByteArray(String hexString) throws IllegalArgumentException {
         int len = hexString.length();
         if (len % 2 != 0) {
@@ -38,5 +38,14 @@ public final class TestUtils {
                                     + Character.digit(hexString.charAt(i + 1), 16));
         }
         return data;
+    }
+
+    public static IkePayload hexStringToIkePayload(
+            @IkePayload.PayloadType int payloadType, String payloadHexString) throws IkeException {
+        byte[] payloadBytes = hexStringToByteArray(payloadHexString);
+        // Returned Pair consists of the IkePayload and the following IkePayload's type.
+        Pair<IkePayload, Integer> pair =
+                IkePayloadFactory.getIkePayload(payloadType, ByteBuffer.wrap(payloadBytes));
+        return pair.first;
     }
 }
