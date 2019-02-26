@@ -62,6 +62,8 @@ public final class IkeSaPayload extends IkePayload {
             Proposal proposal = Proposal.readFrom(inputBuffer);
             proposalList.add(proposal);
         }
+        // TODO: Verify that in a responding IKE message, there must be only one proposal in
+        // IkeSaPayload and there is must be only one transform for each necessary transform type.
     }
 
     @VisibleForTesting
