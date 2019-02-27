@@ -23,8 +23,8 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
  *
  * <p>Each types of IKE error should implement its own subclass
  *
- * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public abstract class IkeException extends Exception {
     @IkeNotifyPayload.NotifyType public final int errorCode;

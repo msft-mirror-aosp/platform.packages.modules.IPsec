@@ -36,7 +36,7 @@ import javax.crypto.spec.SecretKeySpec;
  * subclasses with its own logic for signing data, decoding auth data and verifying signature.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.8">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public abstract class IkeAuthPayload extends IkePayload {
     // Length of header of Authentication Payload in octets

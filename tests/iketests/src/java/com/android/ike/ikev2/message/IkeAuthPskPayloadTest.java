@@ -18,17 +18,22 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
+
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import javax.crypto.Mac;
-
 
 public final class IkeAuthPskPayloadTest {
     private static final String PSK_AUTH_PAYLOAD_HEX_STRING =
             "2100001c02000000df7c038aefaaa32d3f44b228b52a332744dfb2c1";
+    private static final String PSK_AUTH_PAYLOAD_BODY_HEX_STRING =
+            "02000000df7c038aefaaa32d3f44b228b52a332744dfb2c1";
     private static final String PSK_AUTH_PAYLOAD_SIGNATURE_HEX_STRING =
             "df7c038aefaaa32d3f44b228b52a332744dfb2c1";
 
@@ -59,24 +64,26 @@ public final class IkeAuthPskPayloadTest {
 
     private static final String PRF_HMAC_SHA1_ALGO_NAME = "HmacSHA1";
 
+    private static final byte[] PSK = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
+    private static final byte[] IKE_INIT_REQUEST =
+            TestUtils.hexStringToByteArray(PSK_IKE_INIT_REQUEST_HEX_STRING);
+    private static final byte[] NONCE = TestUtils.hexStringToByteArray(PSK_NONCE_RESP_HEX_STRING);
+    private static final byte[] ID_PAYLOAD_BODY =
+            TestUtils.hexStringToByteArray(PSK_ID_INITIATOR_PAYLOAD_HEX_STRING);
+    private static final byte[] PRF_KEY = TestUtils.hexStringToByteArray(PSK_SKP_HEX_STRING);
+    private static final byte[] SIGNATURE =
+            TestUtils.hexStringToByteArray(PSK_AUTH_PAYLOAD_SIGNATURE_HEX_STRING);
+
     @Test
     public void testBuildOutboundIkeAuthPskPayload() throws Exception {
-        byte[] psk = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
-        byte[] ikeInitBytes = TestUtils.hexStringToByteArray(PSK_IKE_INIT_REQUEST_HEX_STRING);
-        byte[] nonce = TestUtils.hexStringToByteArray(PSK_NONCE_RESP_HEX_STRING);
-        byte[] idPayloadBodyBytes =
-                TestUtils.hexStringToByteArray(PSK_ID_INITIATOR_PAYLOAD_HEX_STRING);
-        byte[] prfKeyBytes = TestUtils.hexStringToByteArray(PSK_SKP_HEX_STRING);
         Mac prfMac = Mac.getInstance(PRF_HMAC_SHA1_ALGO_NAME, IkeMessage.getSecurityProvider());
 
         IkeAuthPskPayload payload =
                 new IkeAuthPskPayload(
-                        psk, ikeInitBytes, nonce, idPayloadBodyBytes, prfMac, prfKeyBytes);
+                        PSK, IKE_INIT_REQUEST, NONCE, ID_PAYLOAD_BODY, prfMac, PRF_KEY);
 
         assertEquals(IkeAuthPayload.AUTH_METHOD_PRE_SHARED_KEY, payload.authMethod);
-        byte[] expectedSignature =
-                TestUtils.hexStringToByteArray(PSK_AUTH_PAYLOAD_SIGNATURE_HEX_STRING);
-        assertArrayEquals(expectedSignature, payload.signature);
+        assertArrayEquals(SIGNATURE, payload.signature);
 
         // Verify payload length
         int payloadLength = payload.getPayloadLength();
@@ -87,5 +94,43 @@ public final class IkeAuthPskPayloadTest {
         ByteBuffer byteBuffer = ByteBuffer.allocate(payloadLength);
         payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_SA, byteBuffer);
         assertArrayEquals(expectedPayload, byteBuffer.array());
+    }
+
+    private IkeAuthPskPayload buildPskPayload() throws Exception {
+        byte[] payloadBody = TestUtils.hexStringToByteArray(PSK_AUTH_PAYLOAD_BODY_HEX_STRING);
+        IkeAuthPskPayload pskPayload =
+                (IkeAuthPskPayload) IkeAuthPayload.getIkeAuthPayload(false, payloadBody);
+        return pskPayload;
+    }
+
+    @Test
+    public void testDecodeIkeAuthPskPayload() throws Exception {
+        IkeAuthPskPayload pskPayload = buildPskPayload();
+
+        assertArrayEquals(SIGNATURE, pskPayload.signature);
+    }
+
+    @Test
+    public void testVerifyReceivedSignature() throws Exception {
+        Mac prfMac = Mac.getInstance(PRF_HMAC_SHA1_ALGO_NAME, IkeMessage.getSecurityProvider());
+        IkeAuthPskPayload pskPayload = buildPskPayload();
+
+        pskPayload.verifyInboundSignature(
+                PSK, IKE_INIT_REQUEST, NONCE, ID_PAYLOAD_BODY, prfMac, PRF_KEY);
+    }
+
+    @Test
+    public void testVerifyReceivedSignatureFailure() throws Exception {
+        Mac prfMac = Mac.getInstance(PRF_HMAC_SHA1_ALGO_NAME, IkeMessage.getSecurityProvider());
+        IkeAuthPskPayload pskPayload = buildPskPayload();
+        byte[] nonce = Arrays.copyOf(NONCE, NONCE.length);
+        nonce[0]++;
+
+        try {
+            pskPayload.verifyInboundSignature(
+                    PSK, IKE_INIT_REQUEST, nonce, ID_PAYLOAD_BODY, prfMac, PRF_KEY);
+            fail("Expected signature verification to have failed due to mismatched signatures.");
+        } catch (AuthenticationFailedException expected) {
+        }
     }
 }

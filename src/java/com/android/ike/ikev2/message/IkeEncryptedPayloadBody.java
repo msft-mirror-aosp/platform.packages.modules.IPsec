@@ -17,9 +17,11 @@
 package com.android.ike.ikev2.message;
 
 import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
@@ -36,9 +38,9 @@ import javax.crypto.spec.IvParameterSpec;
  * consists of an IkeEncryptedPayloadBody instance.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-105">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  * @see <a href="https://tools.ietf.org/html/rfc7383#page-6">RFC 7383, Internet Key Exchange
- *     Protocol Version 2 (IKEv2) Message Fragmentation
+ *     Protocol Version 2 (IKEv2) Message Fragmentation</a>
  */
 final class IkeEncryptedPayloadBody {
     // Length of pad length field.
@@ -83,30 +85,113 @@ final class IkeEncryptedPayloadBody {
         inputBuffer.get(mIv).get(mEncryptedAndPaddedData).get(mIntegrityChecksum);
 
         // Authenticate and decrypt.
-        validateChecksumOrThrow(message, integrityMac, expectedChecksumLen, mIntegrityChecksum);
+        byte[] dataToAuthenticate =
+                Arrays.copyOfRange(message, 0, message.length - expectedChecksumLen);
+        validateChecksumOrThrow(dataToAuthenticate, integrityMac, mIntegrityChecksum);
         mUnencryptedData = decrypt(mEncryptedAndPaddedData, decryptCipher, dKey, mIv);
+    }
+
+    /**
+     * Package private constructor for constructing an instance of IkeEncryptedPayloadBody for
+     * building an outbound packet.
+     */
+    IkeEncryptedPayloadBody(
+            byte[] ikeAndPayloadHeader,
+            byte[] unencryptedPayloads,
+            Mac integrityMac,
+            int expectedChecksumLen,
+            Cipher encryptCipher,
+            SecretKey eKey) {
+        this(
+                ikeAndPayloadHeader,
+                unencryptedPayloads,
+                integrityMac,
+                expectedChecksumLen,
+                encryptCipher,
+                eKey,
+                encryptCipher.getIV(),
+                calculatePadding(unencryptedPayloads.length, encryptCipher.getBlockSize()));
+    }
+
+    /** Package private constructor only for testing. */
+    @VisibleForTesting
+    IkeEncryptedPayloadBody(
+            byte[] ikeAndPayloadHeader,
+            byte[] unencryptedPayloads,
+            Mac integrityMac,
+            int expectedChecksumLen,
+            Cipher encryptCipher,
+            SecretKey eKey,
+            byte[] iv,
+            byte[] padding) {
+        mUnencryptedData = unencryptedPayloads;
+
+        // Encrypt data
+        mIv = iv;
+        mEncryptedAndPaddedData = encrypt(unencryptedPayloads, encryptCipher, eKey, iv, padding);
+
+        // Calculate checksum
+        ByteBuffer inputBuffer =
+                ByteBuffer.allocate(
+                        ikeAndPayloadHeader.length + iv.length + mEncryptedAndPaddedData.length);
+        inputBuffer.put(ikeAndPayloadHeader).put(iv).put(mEncryptedAndPaddedData);
+        mIntegrityChecksum =
+                calculateChecksum(inputBuffer.array(), integrityMac, expectedChecksumLen);
     }
 
     // TODO: Add another constructor for AEAD protected payload.
 
     // TODO: Add constructors that initiate IkeEncryptedPayloadBody for an outbound packet
 
-    private static void validateChecksumOrThrow(
-            byte[] message, Mac integrityMac, int expectedChecksumLen, byte[] integrityChecksum)
-            throws GeneralSecurityException {
-        ByteBuffer inputBuffer = ByteBuffer.wrap(message, 0, message.length - expectedChecksumLen);
+    /** Package private for testing */
+    @VisibleForTesting
+    static byte[] calculateChecksum(
+            byte[] dataToAuthenticate, Mac integrityMac, int expectedChecksumLen) {
+        ByteBuffer inputBuffer = ByteBuffer.wrap(dataToAuthenticate);
         integrityMac.update(inputBuffer);
         byte[] calculatedChecksum =
                 Arrays.copyOfRange(integrityMac.doFinal(), 0, expectedChecksumLen);
+        return calculatedChecksum;
+    }
+
+    private static void validateChecksumOrThrow(
+            byte[] dataToAuthenticate, Mac integrityMac, byte[] integrityChecksum)
+            throws GeneralSecurityException {
+        // TODO: Make it package private and add test.
+        int checkSumLen = integrityChecksum.length;
+        byte[] calculatedChecksum =
+                calculateChecksum(dataToAuthenticate, integrityMac, checkSumLen);
 
         if (!Arrays.equals(integrityChecksum, calculatedChecksum)) {
             throw new GeneralSecurityException("Message authentication failed.");
         }
     }
 
+    /** Package private for testing */
+    @VisibleForTesting
+    static byte[] encrypt(
+            byte[] dataToEncrypt, Cipher encryptCipher, SecretKey eKey, byte[] iv, byte[] padding) {
+        int padLength = padding.length;
+        int paddedDataLength = dataToEncrypt.length + padLength + PAD_LEN_LEN;
+        ByteBuffer inputBuffer = ByteBuffer.allocate(paddedDataLength);
+        inputBuffer.put(dataToEncrypt).put(padding).put((byte) padLength);
+        inputBuffer.rewind();
+
+        try {
+            // Encrypt data.
+            ByteBuffer outputBuffer = ByteBuffer.allocate(paddedDataLength);
+            encryptCipher.init(Cipher.ENCRYPT_MODE, eKey, new IvParameterSpec(iv));
+            encryptCipher.doFinal(inputBuffer, outputBuffer);
+            return outputBuffer.array();
+        } catch (GeneralSecurityException e) {
+            throw new IllegalArgumentException("Fail to encrypt IKE message. ", e);
+        }
+    }
+
     private static byte[] decrypt(
             byte[] encryptedData, Cipher decryptCipher, SecretKey dKey, byte[] iv)
             throws GeneralSecurityException {
+        // TODO: Make it package private and add test.
         decryptCipher.init(Cipher.DECRYPT_MODE, dKey, new IvParameterSpec(iv));
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(encryptedData);
@@ -120,6 +205,20 @@ final class IkeEncryptedPayloadBody {
 
         outputBuffer.get(decryptedData);
         return decryptedData;
+    }
+
+    /** Package private for testing */
+    @VisibleForTesting
+    static byte[] calculatePadding(int dataToEncryptLength, int blockSize) {
+        // Sum of dataToEncryptLength, PAD_LEN_LEN and padLength should be aligned with block size.
+        int unpaddedLen = dataToEncryptLength + PAD_LEN_LEN;
+        int padLength = (unpaddedLen + blockSize - 1) / blockSize * blockSize - unpaddedLen;
+        byte[] padding = new byte[padLength];
+
+        // According to RFC 7296, "Padding MAY contain any value".
+        new SecureRandom().nextBytes(padding);
+
+        return padding;
     }
 
     /** Package private */

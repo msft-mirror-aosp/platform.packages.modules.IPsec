@@ -36,7 +36,7 @@ import java.util.Set;
  * <p>IkeIdentification can be user configured or be constructed from an inbound packet.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.5">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public abstract class IkeIdentification {
     // Set of supported ID types.

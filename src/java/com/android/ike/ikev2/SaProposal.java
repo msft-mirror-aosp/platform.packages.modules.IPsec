@@ -36,7 +36,7 @@ import java.util.Set;
  * <p>User must provide at least a valid SaProposal when they are creating a new IKE SA or Child SA.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class SaProposal {
 

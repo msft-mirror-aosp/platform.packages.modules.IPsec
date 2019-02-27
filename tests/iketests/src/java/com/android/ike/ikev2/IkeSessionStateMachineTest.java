@@ -29,6 +29,8 @@ import static org.mockito.Mockito.when;
 import android.os.test.TestLooper;
 import android.util.Pair;
 
+import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
+import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
 import com.android.ike.ikev2.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
@@ -53,6 +55,11 @@ public final class IkeSessionStateMachineTest {
     private IIkeMessageHelper mMockIkeMessageHelper;
     private ISaRecordHelper mMockSaRecordHelper;
     private IkeSessionOptions mMockIkeSessionOptions;
+
+    private ChildSessionStateMachine mMockChildSessionStateMachine;
+    private ChildSessionOptions mMockChildSessionOptions;
+    private IChildSessionFactoryHelper mMockChildSessionFactoryHelper;
+
     private IkeSaRecord mSpyCurrentIkeSaRecord;
     private IkeSaRecord mSpyLocalInitIkeSaRecord;
     private IkeSaRecord mSpyRemoteInitIkeSaRecord;
@@ -110,12 +117,18 @@ public final class IkeSessionStateMachineTest {
         mMockSaRecordHelper = mock(SaRecord.ISaRecordHelper.class);
         mMockIkeSessionOptions = mock(IkeSessionOptions.class);
 
+        mMockChildSessionStateMachine = mock(ChildSessionStateMachine.class);
+        mMockChildSessionOptions = mock(ChildSessionOptions.class);
+        mMockChildSessionFactoryHelper = mock(IChildSessionFactoryHelper.class);
+
         mSpyCurrentIkeSaRecord = spy(new IkeSaRecord(11, 12, true, null, null));
         mSpyLocalInitIkeSaRecord = spy(new IkeSaRecord(21, 22, true, null, null));
         mSpyRemoteInitIkeSaRecord = spy(new IkeSaRecord(31, 32, false, null, null));
 
         when(mMockIkeMessageHelper.encode(any())).thenReturn(new byte[0]);
         when(mMockIkeMessageHelper.encode(any(), any(), any())).thenReturn(new byte[0]);
+        when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(any(), any(), any()))
+                .thenReturn(mMockChildSessionStateMachine);
     }
 
     @Before
@@ -124,11 +137,16 @@ public final class IkeSessionStateMachineTest {
         mLooper = new TestLooper();
         mIkeSessionStateMachine =
                 new IkeSessionStateMachine(
-                        "IkeSessionStateMachine", mLooper.getLooper(), mMockIkeSessionOptions);
+                        "IkeSessionStateMachine",
+                        mLooper.getLooper(),
+                        mMockIkeSessionOptions,
+                        mMockChildSessionOptions);
         mIkeSessionStateMachine.setDbg(true);
         mIkeSessionStateMachine.start();
         IkeMessage.setIkeMessageHelper(mMockIkeMessageHelper);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
+        ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
+                mMockChildSessionFactoryHelper);
     }
 
     @After
@@ -137,6 +155,8 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.setDbg(false);
         IkeMessage.setIkeMessageHelper(new IkeMessageHelper());
         SaRecord.setSaRecordHelper(new SaRecordHelper());
+        ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
+                new ChildSessionFactoryHelper());
     }
 
     @Test
@@ -186,6 +206,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         verify(mMockIkeMessageHelper).decode(any(), any(), any(), any());
         verify(mMockIkeMessageHelper, times(2)).getMessageType(any());
+        verify(mMockChildSessionStateMachine).handleFirstChildExchange(any(), any(), any());
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }

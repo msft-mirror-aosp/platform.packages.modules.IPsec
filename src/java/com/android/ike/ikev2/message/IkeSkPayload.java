@@ -35,7 +35,7 @@ import javax.crypto.SecretKey;
  * <p>Critical bit must be ignored when doing decoding.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-105">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeSkPayload extends IkePayload {
 
