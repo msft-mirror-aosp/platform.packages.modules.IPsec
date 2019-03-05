@@ -18,6 +18,7 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -380,6 +381,32 @@ public final class IkeSaPayloadTest {
         Transform transform = Transform.readFrom(inputBuffer);
 
         assertFalse(transform.isSupported);
+    }
+
+    @Test
+    public void testTransformEquals() throws Exception {
+        EncryptionTransform mEncrAesGcm8Key128TransformLeft =
+                new EncryptionTransform(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_128);
+        EncryptionTransform mEncrAesGcm8Key128TransformRight =
+                new EncryptionTransform(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_128);
+
+        assertEquals(mEncrAesGcm8Key128TransformLeft, mEncrAesGcm8Key128TransformRight);
+
+        EncryptionTransform mEncrAesGcm8Key192TransformLeft =
+                new EncryptionTransform(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_192);
+
+        assertNotEquals(mEncrAesGcm8Key128TransformLeft, mEncrAesGcm8Key192TransformLeft);
+
+        IntegrityTransform mIntegHmacSha1TransformLeft =
+                new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96);
+        IntegrityTransform mIntegHmacSha1TransformRight =
+                new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96);
+
+        assertNotEquals(mEncrAesGcm8Key128TransformLeft, mIntegHmacSha1TransformLeft);
+        assertEquals(mIntegHmacSha1TransformLeft, mIntegHmacSha1TransformRight);
     }
 
     @Test
