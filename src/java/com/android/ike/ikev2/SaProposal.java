@@ -209,24 +209,89 @@ public final class SaProposal {
                         ERROR_TAG + "Encryption algorithm must be proposed.");
             }
 
-            return (EncryptionTransform[]) mProposedEncryptAlgos.toArray();
+            return mProposedEncryptAlgos.toArray(
+                    new EncryptionTransform[mProposedEncryptAlgos.size()]);
         }
 
         private PrfTransform[] buildPrfsOrThrow() {
-            // TODO: Validate that PRF must be proposed for IKE SA and PRF must not be
-            // proposed for Child SA.
-            throw new UnsupportedOperationException("Cannot validate user proposed algorithm.");
+            if (mIsIkeProposal == mProposedPrfs.isEmpty()) {
+                throw new IllegalArgumentException(
+                        ERROR_TAG + "Invalid PRF configuration for this SA Proposal.");
+            }
+
+            return mProposedPrfs.toArray(new PrfTransform[mProposedPrfs.size()]);
         }
 
-        private IntegrityTransform[] buildIntegAlgosOrThrow() {
-            // TODO: Validate proposed integrity algorithms according to existence of AEAD.
-            throw new UnsupportedOperationException("Cannot validate user proposed algorithm.");
+        private IntegrityTransform[] buildIntegAlgosForIkeOrThrow() {
+            // When building IKE SA Proposal with normal-mode ciphers, mProposedIntegrityAlgos must
+            // not be empty and must not have INTEGRITY_ALGORITHM_NONE. When building IKE SA
+            // Proposal with combined-mode ciphers, mProposedIntegrityAlgos must be either empty or
+            // only have INTEGRITY_ALGORITHM_NONE.
+            if (mProposedIntegrityAlgos.isEmpty() && !mHasAead) {
+                throw new IllegalArgumentException(
+                        ERROR_TAG
+                                + "Integrity algorithm "
+                                + "must be proposed with normal ciphers in IKE proposal.");
+            }
+
+            for (IntegrityTransform transform : mProposedIntegrityAlgos) {
+                if ((transform.id == INTEGRITY_ALGORITHM_NONE) != mHasAead) {
+                    throw new IllegalArgumentException(
+                            ERROR_TAG
+                                    + "Invalid integrity algorithm configuration"
+                                    + " for this SA Proposal");
+                }
+            }
+
+            return mProposedIntegrityAlgos.toArray(
+                    new IntegrityTransform[mProposedIntegrityAlgos.size()]);
         }
 
-        private DhGroupTransform[] buildDhGroupsOrThrow() {
-            // TODO: Validate proposed DH groups according to the usage of SaProposal (for
-            // IKE SA, for first Child SA or for addtional Child SA)
-            throw new UnsupportedOperationException("Cannot validate user proposed algorithm.");
+        private IntegrityTransform[] buildIntegAlgosForChildOrThrow() {
+            // When building Child SA Proposal with normal-mode ciphers, there is no contraint on
+            // integrity algorithm. When building Child SA Proposal with combined-mode ciphers,
+            // mProposedIntegrityAlgos must be either empty or only have INTEGRITY_ALGORITHM_NONE.
+            for (IntegrityTransform transform : mProposedIntegrityAlgos) {
+                if (transform.id != INTEGRITY_ALGORITHM_NONE && mHasAead) {
+                    throw new IllegalArgumentException(
+                            ERROR_TAG
+                                    + "Only INTEGRITY_ALGORITHM_NONE can be"
+                                    + " proposed with combined-mode ciphers in any proposal.");
+                }
+            }
+
+            return mProposedIntegrityAlgos.toArray(
+                    new IntegrityTransform[mProposedIntegrityAlgos.size()]);
+        }
+
+        private DhGroupTransform[] buildDhGroupsForIkeOrThrow() {
+            if (mProposedDhGroups.isEmpty()) {
+                throw new IllegalArgumentException(
+                        ERROR_TAG + "DH group must be proposed in IKE SA proposal.");
+            }
+
+            for (DhGroupTransform transform : mProposedDhGroups) {
+                if (transform.id == DH_GROUP_NONE) {
+                    throw new IllegalArgumentException(
+                            ERROR_TAG
+                                    + "None-value DH group must not"
+                                    + " be proposed in IKE SA proposal");
+                }
+            }
+
+            return mProposedDhGroups.toArray(new DhGroupTransform[mProposedDhGroups.size()]);
+        }
+
+        private DhGroupTransform[] buildDhGroupsForChildOrThrow() {
+            for (DhGroupTransform transform : mProposedDhGroups) {
+                if (transform.id != DH_GROUP_NONE && mIsFirstChild) {
+                    throw new IllegalArgumentException(
+                            ERROR_TAG
+                                    + "Only DH_GROUP_NONE can be"
+                                    + " proposed in first Child SA proposal.");
+                }
+            }
+            return mProposedDhGroups.toArray(new DhGroupTransform[mProposedDhGroups.size()]);
         }
 
         /** Returns a new Builder for a IKE SA Proposal. */
@@ -338,13 +403,17 @@ public final class SaProposal {
          *
          * @return SaProposal the validated SaProposal.
          * @throws IllegalArgumentException if SaProposal is invalid.
-         * */
+         */
         public SaProposal buildOrThrow() {
             EncryptionTransform[] encryptionTransforms = buildEncryptAlgosOrThrow();
             PrfTransform[] prfTransforms = buildPrfsOrThrow();
-            IntegrityTransform[] integrityTransforms = buildIntegAlgosOrThrow();
-            DhGroupTransform[] dhGroupTransforms = buildDhGroupsOrThrow();
+            IntegrityTransform[] integrityTransforms =
+                    mIsIkeProposal
+                            ? buildIntegAlgosForIkeOrThrow()
+                            : buildIntegAlgosForChildOrThrow();
 
+            DhGroupTransform[] dhGroupTransforms =
+                    mIsIkeProposal ? buildDhGroupsForIkeOrThrow() : buildDhGroupsForChildOrThrow();
             // IKE library only supports negotiating ESP Child SA.
             int protocol = mIsIkeProposal ? IkePayload.PROTOCOL_ID_IKE : IkePayload.PROTOCOL_ID_ESP;
 
