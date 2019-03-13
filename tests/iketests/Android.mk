@@ -27,7 +27,7 @@ LOCAL_MODULE_TAGS := tests
 LOCAL_JAVA_LIBRARIES := android.test.runner
 
 LOCAL_STATIC_JAVA_LIBRARIES := ike \
-        android-support-test \
+        androidx.test.rules \
         frameworks-base-testutils \
         mockito-target-minus-junit4
 
