@@ -57,12 +57,13 @@ final class IkePayloadFactory {
     @VisibleForTesting
     static class IkePayloadDecoder implements IIkePayloadDecoder {
         @Override
-        public IkePayload decodeIkePayload(int payloadType, boolean isCritical, byte[] payloadBody)
+        public IkePayload decodeIkePayload(
+                int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
                 throws IkeException {
             switch (payloadType) {
                     // TODO: Add cases for creating supported payloads.
                 case IkePayload.PAYLOAD_TYPE_SA:
-                    return new IkeSaPayload(isCritical, payloadBody);
+                    return new IkeSaPayload(isCritical, isResp, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_KE:
                     return new IkeKePayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_ID_INITIATOR:
@@ -98,8 +99,8 @@ final class IkePayloadFactory {
      *     increment.
      * @return a Pair including IkePayload and next payload type.
      */
-    protected static Pair<IkePayload, Integer> getIkePayload(int payloadType, ByteBuffer input)
-            throws IkeException {
+    protected static Pair<IkePayload, Integer> getIkePayload(
+            int payloadType, boolean isResp, ByteBuffer input) throws IkeException {
         int nextPayloadType = (int) input.get();
         // read critical bit
         boolean isCritical = isCriticalPayload(input.get());
@@ -119,7 +120,7 @@ final class IkePayloadFactory {
         input.get(payloadBody);
 
         IkePayload payload =
-                sDecoderInstance.decodeIkePayload(payloadType, isCritical, payloadBody);
+                sDecoderInstance.decodeIkePayload(payloadType, isCritical, isResp, payloadBody);
         return new Pair(payload, nextPayloadType);
     }
 
@@ -188,7 +189,8 @@ final class IkePayloadFactory {
      */
     @VisibleForTesting
     interface IIkePayloadDecoder {
-        IkePayload decodeIkePayload(int payloadType, boolean isCritical, byte[] payloadBody)
+        IkePayload decodeIkePayload(
+                int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
                 throws IkeException;
     }
 }
