@@ -19,6 +19,7 @@ package com.android.ike.ikev2.message;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -31,6 +32,7 @@ import android.util.Pair;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.message.IkeSaPayload.Attribute;
 import com.android.ike.ikev2.message.IkeSaPayload.AttributeDecoder;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
@@ -49,8 +51,10 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Random;
 
 public final class IkeSaPayloadTest {
     private static final String PROPOSAL_RAW_PACKET =
@@ -87,9 +91,12 @@ public final class IkeSaPayloadTest {
     private static final String ATTRIBUTE_RAW_PACKET = "800e0080";
 
     private static final int PROPOSAL_NUMBER = 1;
+    private static final int PROPOSAL_NUMBER_OFFSET = 4;
 
     @IkePayload.ProtocolId
     private static final int PROPOSAL_PROTOCOL_ID = IkePayload.PROTOCOL_ID_IKE;
+
+    private static final int PROTOCOL_ID_OFFSET = 5;
 
     private static final byte PROPOSAL_SPI_SIZE = 0;
     private static final byte PROPOSAL_SPI = 0;
@@ -97,11 +104,21 @@ public final class IkeSaPayloadTest {
     // Constants for multiple proposals test
     private static final byte[] PROPOSAL_NUMBER_LIST = {1, 2};
 
-    private static final int KEY_LEN = 128;
-
     private AttributeDecoder mMockedAttributeDecoder;
     private KeyLengthAttribute mAttributeKeyLength128;
     private List<Attribute> mAttributeListWithKeyLength128;
+
+    private EncryptionTransform mEncrAesCbc128Transform;
+    private EncryptionTransform mEncrAesGcm8Key128Transform;
+    private IntegrityTransform mIntegHmacSha1Transform;
+    private PrfTransform mPrfHmacSha1Transform;
+    private DhGroupTransform mDhGroup1024Transform;
+
+    private Transform[] mValidNegotiatedTransformSet;
+
+    private SaProposal mSaProposalOne;
+    private SaProposal mSaProposalTwo;
+    private SaProposal[] mTwoSaProposalsArray;
 
     @Before
     public void setUp() throws Exception {
@@ -109,7 +126,51 @@ public final class IkeSaPayloadTest {
         mAttributeKeyLength128 = new KeyLengthAttribute(SaProposal.KEY_LEN_AES_128);
         mAttributeListWithKeyLength128 = new LinkedList<>();
         mAttributeListWithKeyLength128.add(mAttributeKeyLength128);
+
+        mEncrAesCbc128Transform =
+                new EncryptionTransform(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128);
+        mEncrAesGcm8Key128Transform =
+                new EncryptionTransform(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_128);
+        mIntegHmacSha1Transform =
+                new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96);
+        mPrfHmacSha1Transform = new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1);
+        mDhGroup1024Transform = new DhGroupTransform(SaProposal.DH_GROUP_1024_BIT_MODP);
+
+        mValidNegotiatedTransformSet =
+                new Transform[] {
+                    mEncrAesCbc128Transform,
+                    mIntegHmacSha1Transform,
+                    mPrfHmacSha1Transform,
+                    mDhGroup1024Transform
+                };
+
+        mSaProposalOne =
+                SaProposal.Builder.newIkeSaProposalBuilder()
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
+                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
+                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
+                        .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
+                        .buildOrThrow();
+
+        mSaProposalTwo =
+                SaProposal.Builder.newIkeSaProposalBuilder()
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
+                                SaProposal.KEY_LEN_AES_128)
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12,
+                                SaProposal.KEY_LEN_AES_128)
+                        .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
+                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
+                        .addDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP)
+                        .buildOrThrow();
+        mTwoSaProposalsArray = new SaProposal[] {mSaProposalOne, mSaProposalTwo};
     }
+
+    // TODO: Add tearDown() to reset Proposal.sTransformDecoder and Transform.sAttributeDecoder.
 
     @Test
     public void testDecodeAttribute() throws Exception {
@@ -121,7 +182,7 @@ public final class IkeSaPayloadTest {
 
         assertTrue(attribute instanceof KeyLengthAttribute);
         assertEquals(Attribute.ATTRIBUTE_TYPE_KEY_LENGTH, attribute.type);
-        assertEquals(KEY_LEN, ((KeyLengthAttribute) attribute).keyLength);
+        assertEquals(SaProposal.KEY_LEN_AES_128, ((KeyLengthAttribute) attribute).keyLength);
     }
 
     @Test
@@ -385,37 +446,47 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testTransformEquals() throws Exception {
-        EncryptionTransform mEncrAesGcm8Key128TransformLeft =
-                new EncryptionTransform(
-                        SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_128);
-        EncryptionTransform mEncrAesGcm8Key128TransformRight =
+        EncryptionTransform mEncrAesGcm8Key128TransformOther =
                 new EncryptionTransform(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_128);
 
-        assertEquals(mEncrAesGcm8Key128TransformLeft, mEncrAesGcm8Key128TransformRight);
+        assertEquals(mEncrAesGcm8Key128Transform, mEncrAesGcm8Key128TransformOther);
 
-        EncryptionTransform mEncrAesGcm8Key192TransformLeft =
+        EncryptionTransform mEncrAesGcm8Key192Transform =
                 new EncryptionTransform(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_192);
 
-        assertNotEquals(mEncrAesGcm8Key128TransformLeft, mEncrAesGcm8Key192TransformLeft);
+        assertNotEquals(mEncrAesGcm8Key128Transform, mEncrAesGcm8Key192Transform);
 
-        IntegrityTransform mIntegHmacSha1TransformLeft =
-                new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96);
-        IntegrityTransform mIntegHmacSha1TransformRight =
+        IntegrityTransform mIntegHmacSha1TransformOther =
                 new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96);
 
-        assertNotEquals(mEncrAesGcm8Key128TransformLeft, mIntegHmacSha1TransformLeft);
-        assertEquals(mIntegHmacSha1TransformLeft, mIntegHmacSha1TransformRight);
+        assertNotEquals(mEncrAesGcm8Key128Transform, mIntegHmacSha1Transform);
+        assertEquals(mIntegHmacSha1Transform, mIntegHmacSha1TransformOther);
+    }
+
+    private TransformDecoder getDummyTransformDecoder(Transform[] decodedTransforms) {
+        return new TransformDecoder() {
+            @Override
+            public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
+                    throws IkeException {
+                for (int i = 0; i < count; i++) {
+                    // Read length field and move position
+                    inputBuffer.getShort();
+                    int length = Short.toUnsignedInt(inputBuffer.getShort());
+                    byte[] temp = new byte[length - 4];
+                    inputBuffer.get(temp);
+                }
+                return decodedTransforms;
+            }
+        };
     }
 
     @Test
     public void testDecodeSingleProposal() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
-        TransformDecoder mockedDecoder = mock(TransformDecoder.class);
-        when(mockedDecoder.decodeTransforms(anyInt(), any())).thenReturn(new Transform[0]);
-        Proposal.sTransformDecoder = mockedDecoder;
+        Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
 
         Proposal proposal = Proposal.readFrom(inputBuffer);
 
@@ -423,29 +494,16 @@ public final class IkeSaPayloadTest {
         assertEquals(PROPOSAL_PROTOCOL_ID, proposal.protocolId);
         assertEquals(PROPOSAL_SPI_SIZE, proposal.spiSize);
         assertEquals(PROPOSAL_SPI, proposal.spi);
-        assertEquals(0, proposal.transformArray.length);
+        assertFalse(proposal.hasUnrecognizedTransform);
+        assertNotNull(proposal.saProposal);
     }
 
     @Test
-    public void testDecodeMultipleProposal() throws Exception {
+    public void testDecodeSaRequestWithMultipleProposal() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(TWO_PROPOSAL_RAW_PACKET);
-        Proposal.sTransformDecoder =
-                new TransformDecoder() {
-                    @Override
-                    public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
-                            throws IkeException {
-                        for (int i = 0; i < count; i++) {
-                            // Read length field and move position
-                            inputBuffer.getShort();
-                            int length = Short.toUnsignedInt(inputBuffer.getShort());
-                            byte[] temp = new byte[length - 4];
-                            inputBuffer.get(temp);
-                        }
-                        return new Transform[0];
-                    }
-                };
+        Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
 
-        IkeSaPayload payload = new IkeSaPayload(false, inputPacket);
+        IkeSaPayload payload = new IkeSaPayload(false, false, inputPacket);
 
         assertEquals(PROPOSAL_NUMBER_LIST.length, payload.proposalList.size());
         for (int i = 0; i < payload.proposalList.size(); i++) {
@@ -453,6 +511,146 @@ public final class IkeSaPayloadTest {
             assertEquals(PROPOSAL_NUMBER_LIST[i], proposal.number);
             assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
             assertEquals(0, proposal.spiSize);
+        }
+    }
+
+    @Test
+    public void testDecodeSaResponseWithMultipleProposal() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(TWO_PROPOSAL_RAW_PACKET);
+        Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
+
+        try {
+            new IkeSaPayload(false, true, inputPacket);
+            fail("Expected to fail due to more than one proposal in response SA payload.");
+        } catch (InvalidSyntaxException expected) {
+
+        }
+    }
+
+    @Test
+    public void testBuildIkeSaResponsePayload() throws Exception {
+        final long ikeSpi = new Random().nextLong();
+        final SaProposal[] saProposals = new SaProposal[] {mSaProposalOne};
+        IkeSaPayload saPayload =
+                new IkeSaPayload(
+                        true, true, IkePayload.SPI_LEN_IKE, new long[] {ikeSpi}, saProposals);
+
+        assertTrue(saPayload.isSaResponse);
+        assertEquals(saProposals.length, saPayload.proposalList.size());
+
+        Proposal proposal = saPayload.proposalList.get(0);
+        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
+        assertEquals(IkePayload.SPI_LEN_IKE, proposal.spiSize);
+        assertEquals(ikeSpi, proposal.spi);
+        assertEquals(mSaProposalOne, proposal.saProposal);
+    }
+
+    @Test
+    public void testBuildInitialIkeSaRequestPayload() throws Exception {
+        IkeSaPayload saPayload = new IkeSaPayload(mTwoSaProposalsArray);
+
+        assertFalse(saPayload.isSaResponse);
+        assertEquals(PROPOSAL_NUMBER_LIST.length, saPayload.proposalList.size());
+
+        for (int i = 0; i < saPayload.proposalList.size(); i++) {
+            Proposal proposal = saPayload.proposalList.get(i);
+            assertEquals(PROPOSAL_NUMBER_LIST[i], proposal.number);
+            assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
+            assertEquals(IkePayload.SPI_LEN_NOT_INCLUDED, proposal.spiSize);
+            assertEquals(mTwoSaProposalsArray[i], proposal.saProposal);
+        }
+    }
+
+    private void buildAndVerifySaRespProposal(byte[] saResponseBytes, Transform[] decodedTransforms)
+            throws Exception {
+        // Build response SA payload from decoding bytes.
+        Proposal.sTransformDecoder = getDummyTransformDecoder(decodedTransforms);
+        IkeSaPayload respPayload = new IkeSaPayload(false, true, saResponseBytes);
+
+        // Build request SA payload from SaProposal.
+        IkeSaPayload reqPayload = new IkeSaPayload(mTwoSaProposalsArray);
+
+        SaProposal saProposal = respPayload.getVerifiedNegotiatedProposal(reqPayload);
+
+        assertEquals(respPayload.proposalList.get(0).saProposal, saProposal);
+    }
+
+    @Test
+    public void testGetVerifiedNegotiatedProposal() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+
+        buildAndVerifySaRespProposal(inputPacket, mValidNegotiatedTransformSet);
+    }
+
+    // Test throwing when negotiated proposal in SA response payload has unrecognized Transform.
+    @Test
+    public void testGetVerifiedNegotiatedProposalWithUnrecogTransform() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+
+        Transform[] negotiatedTransformSet =
+                Arrays.copyOfRange(
+                        mValidNegotiatedTransformSet, 0, mValidNegotiatedTransformSet.length);
+        negotiatedTransformSet[0] = new UnrecognizedTransform(-1, 1, new LinkedList<>());
+
+        try {
+            buildAndVerifySaRespProposal(inputPacket, negotiatedTransformSet);
+            fail("Expected to fail because negotiated proposal has unrecognized Transform.");
+        } catch (NoValidProposalChosenException expected) {
+        }
+    }
+
+    // Test throwing when negotiated proposal has invalid proposal number.
+    @Test
+    public void testGetVerifiedNegotiatedProposalWithInvalidNumber() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        inputPacket[PROPOSAL_NUMBER_OFFSET] = (byte) 10;
+
+        try {
+            buildAndVerifySaRespProposal(inputPacket, mValidNegotiatedTransformSet);
+            fail("Expected to fail due to invalid proposal number.");
+        } catch (NoValidProposalChosenException expected) {
+        }
+    }
+
+    // Test throwing when negotiated proposal has mismatched protocol ID.
+    @Test
+    public void testGetVerifiedNegotiatedProposalWithMisMatchedProtocol() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        inputPacket[PROTOCOL_ID_OFFSET] = IkePayload.PROTOCOL_ID_ESP;
+
+        try {
+            buildAndVerifySaRespProposal(inputPacket, mValidNegotiatedTransformSet);
+            fail("Expected to fail due to mismatched protocol ID.");
+        } catch (NoValidProposalChosenException expected) {
+        }
+    }
+
+    // Test throwing when negotiated proposal has Transform that was not proposed in request.
+    @Test
+    public void testGetVerifiedNegotiatedProposalWithMismatchedTransform() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+
+        Transform[] negotiatedTransformSet =
+                Arrays.copyOfRange(
+                        mValidNegotiatedTransformSet, 0, mValidNegotiatedTransformSet.length);
+        negotiatedTransformSet[0] = mEncrAesGcm8Key128Transform;
+
+        try {
+            buildAndVerifySaRespProposal(inputPacket, negotiatedTransformSet);
+            fail("Expected to fail due to mismatched Transform.");
+        } catch (NoValidProposalChosenException expected) {
+        }
+    }
+
+    // Test throwing when negotiated proposal is lack of a certain type Transform.
+    @Test
+    public void testGetVerifiedNegotiatedProposalWithoutTransform() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+
+        try {
+            buildAndVerifySaRespProposal(inputPacket, new Transform[0]);
+            fail("Expected to fail due to absence of Transform.");
+        } catch (NoValidProposalChosenException expected) {
         }
     }
 }

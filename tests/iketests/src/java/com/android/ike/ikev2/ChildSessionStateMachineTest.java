@@ -90,10 +90,10 @@ public final class ChildSessionStateMachineTest {
     private void setUpPayloadLists() throws IkeException {
         mAuthReqSaNegoPayloads.add(
                 TestUtils.hexStringToIkePayload(
-                        IkePayload.PAYLOAD_TYPE_SA, IKE_AUTH_REQ_SA_PAYLOAD));
+                        IkePayload.PAYLOAD_TYPE_SA, false, IKE_AUTH_REQ_SA_PAYLOAD));
         mAuthRespSaNegoPayloads.add(
                 TestUtils.hexStringToIkePayload(
-                        IkePayload.PAYLOAD_TYPE_SA, IKE_AUTH_RESP_SA_PAYLOAD));
+                        IkePayload.PAYLOAD_TYPE_SA, true, IKE_AUTH_RESP_SA_PAYLOAD));
         // TODO: Build and add Traffic Selector Payloads to two payload lists.
     }
 

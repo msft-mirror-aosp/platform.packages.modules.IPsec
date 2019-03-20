@@ -28,11 +28,13 @@ import android.util.Pair;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
@@ -45,15 +47,17 @@ import java.util.Set;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeSaPayload extends IkePayload {
+    public final boolean isSaResponse;
     public final List<Proposal> proposalList;
     /**
      * Construct an instance of IkeSaPayload for decoding an inbound packet.
      *
      * @param critical indicates if this payload is critical. Ignored in supported payload as
      *     instructed by the RFC 7296.
+     * @param isResp indicates if this payload is in a response message.
      * @param payloadBody the encoded payload body in byte array.
      */
-    IkeSaPayload(boolean critical, byte[] payloadBody) throws IkeException {
+    IkeSaPayload(boolean critical, boolean isResp, byte[] payloadBody) throws IkeException {
         super(IkePayload.PAYLOAD_TYPE_SA, critical);
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
@@ -62,8 +66,109 @@ public final class IkeSaPayload extends IkePayload {
             Proposal proposal = Proposal.readFrom(inputBuffer);
             proposalList.add(proposal);
         }
-        // TODO: Verify that in a responding IKE message, there must be only one proposal in
-        // IkeSaPayload and there is must be only one transform for each necessary transform type.
+
+        // An SA response must have exactly one SA proposal.
+        if (isResp && proposalList.size() != 1) {
+            throw new InvalidSyntaxException(
+                    "Expected only one negotiated proposal from SA response: "
+                            + "Multiple negotiated proposals found.");
+        }
+        isSaResponse = isResp;
+    }
+
+    /**
+     * Construct an instance of IkeSaPayload for building outbound packet.
+     *
+     * <p>The length of spis must be the same as saProposals.
+     *
+     * @param isResp indicates if this payload is in a response message.
+     * @param isIkeSa indicates if this payload is for IKE SA or Child SA
+     * @param spiSize the size of attached SPIs.
+     * @param spis the array of all attached SPIs.
+     * @param saProposals the array of all SA Proposals.
+     */
+    public IkeSaPayload(
+            boolean isResp, boolean isIkeSa, byte spiSize, long[] spis, SaProposal[] saProposals) {
+        super(IkePayload.PAYLOAD_TYPE_SA, false);
+
+        if (saProposals.length < 1
+                || isResp && (saProposals.length > 1)
+                || saProposals.length != spis.length) {
+            throw new IllegalArgumentException("Invalid SA payload.");
+        }
+
+        // TODO: Check that saProposals.length <= 255 in IkeSessionOptions and ChildSessionOptions
+        isSaResponse = isResp;
+
+        proposalList = new ArrayList<Proposal>(saProposals.length);
+        int protocolId = isIkeSa ? PROTOCOL_ID_IKE : PROTOCOL_ID_ESP;
+        for (int i = 0; i < saProposals.length; i++) {
+            // Proposal number must start from 1.
+            Proposal proposal =
+                    new Proposal(
+                            (byte) (i + 1) /*proposal number*/,
+                            protocolId,
+                            spiSize,
+                            spis[i],
+                            saProposals[i],
+                            false /*does not have unrecognized Transform*/);
+            proposalList.add(proposal);
+        }
+    }
+
+    /**
+     * Construct an instance of IkeSaPayload for building outbound IKE initial setup request.
+     *
+     * <p>According to RFC 7296, for an initial IKE SA negotiation, no SPI is included in SA
+     * Proposal. IKE library, as a client, only supports requesting this initial negotiation.
+     *
+     * @param saProposals the array of all SA Proposals.
+     */
+    public IkeSaPayload(SaProposal[] saProposals) {
+        this(
+                false /*is request*/,
+                true /*is IKE SA*/,
+                (byte) 0,
+                new long[saProposals.length],
+                saProposals);
+    }
+
+    /**
+     * Validate and return the negotiated SA proposal from the received SA payload.
+     *
+     * @param reqSaPayload SA payload from SA initiator to validate against.
+     * @return the validated negotiated SA proposal.
+     * @throws NoValidProposalChosenException if received SA proposal is invalid.
+     */
+    public SaProposal getVerifiedNegotiatedProposal(IkeSaPayload reqSaPayload)
+            throws NoValidProposalChosenException {
+        if (!isSaResponse) {
+            throw new UnsupportedOperationException(
+                    "Cannot get negotiated SA proposal from a request message.");
+        }
+
+        // If negotiated proposal has an unrecognized Transform, throw an exception.
+        Proposal respProposal = proposalList.get(0);
+        if (respProposal.hasUnrecognizedTransform) {
+            throw new NoValidProposalChosenException(
+                    "Negotiated proposal has unrecognized Transform.");
+        }
+
+        // In SA request payload, the first proposal MUST be 1, and subsequent proposals MUST be one
+        // more than the previous proposal. In SA response payload, the negotiated proposal number
+        // MUST match the selected proposal number in SA request Payload.
+        int negotiatedProposalNum = respProposal.number;
+        List<Proposal> reqProposalList = reqSaPayload.proposalList;
+        if (negotiatedProposalNum < 1 || negotiatedProposalNum > reqProposalList.size()) {
+            throw new NoValidProposalChosenException(
+                    "Negotiated proposal has invalid proposal number.");
+        }
+
+        Proposal reqProposal = reqProposalList.get(negotiatedProposalNum - 1);
+        if (!respProposal.isNegotiatedFrom(reqProposal)) {
+            throw new NoValidProposalChosenException("Invalid negotiated proposal.");
+        }
+        return respProposal.saProposal;
     }
 
     @VisibleForTesting
@@ -111,16 +216,26 @@ public final class IkeSaPayload extends IkePayload {
         public final byte spiSize;
         public final long spi;
 
-        public final Transform[] transformArray;
+        public final SaProposal saProposal;
+
+        public final boolean hasUnrecognizedTransform;
+
         // TODO: Validate this proposal
 
         @VisibleForTesting
-        Proposal(byte number, int protocolId, byte spiSize, long spi, Transform[] transformArray) {
+        Proposal(
+                byte number,
+                int protocolId,
+                byte spiSize,
+                long spi,
+                SaProposal saProposal,
+                boolean hasUnrecognizedTransform) {
             this.number = number;
             this.protocolId = protocolId;
             this.spiSize = spiSize;
             this.spi = spi;
-            this.transformArray = transformArray;
+            this.saProposal = saProposal;
+            this.hasUnrecognizedTransform = hasUnrecognizedTransform;
         }
 
         @VisibleForTesting
@@ -142,7 +257,7 @@ public final class IkeSaPayload extends IkePayload {
 
             // TODO: Add check: spiSize must be 0 in initial IKE SA negotiation
             // spiSize should be either 8 for IKE or 4 for IPsec.
-            long spi = 0;
+            long spi = SPI_NOT_INCLUDED;
             switch (spiSize) {
                 case 0:
                     // No SPI field here.
@@ -163,9 +278,58 @@ public final class IkeSaPayload extends IkePayload {
             // TODO: Validate that sum of all Transforms' lengths plus Proposal header length equals
             // to Proposal's length.
 
-            return new Proposal(number, protocolId, spiSize, spi, transformArray);
+            List<EncryptionTransform> encryptAlgoList = new LinkedList<>();
+            List<PrfTransform> prfList = new LinkedList<>();
+            List<IntegrityTransform> integAlgoList = new LinkedList<>();
+            List<DhGroupTransform> dhGroupList = new LinkedList<>();
+            List<EsnTransform> esnList = new LinkedList<>();
+
+            boolean hasUnrecognizedTransform = false;
+
+            for (Transform transform : transformArray) {
+                switch (transform.type) {
+                    case Transform.TRANSFORM_TYPE_ENCR:
+                        encryptAlgoList.add((EncryptionTransform) transform);
+                        break;
+                    case Transform.TRANSFORM_TYPE_PRF:
+                        prfList.add((PrfTransform) transform);
+                        break;
+                    case Transform.TRANSFORM_TYPE_INTEG:
+                        integAlgoList.add((IntegrityTransform) transform);
+                        break;
+                    case Transform.TRANSFORM_TYPE_DH:
+                        dhGroupList.add((DhGroupTransform) transform);
+                        break;
+                    case Transform.TRANSFORM_TYPE_ESN:
+                        esnList.add((EsnTransform) transform);
+                        break;
+                    default:
+                        hasUnrecognizedTransform = true;
+                }
+            }
+
+            SaProposal saProposal =
+                    new SaProposal(
+                            protocolId,
+                            encryptAlgoList.toArray(
+                                    new EncryptionTransform[encryptAlgoList.size()]),
+                            prfList.toArray(new PrfTransform[prfList.size()]),
+                            integAlgoList.toArray(new IntegrityTransform[integAlgoList.size()]),
+                            dhGroupList.toArray(new DhGroupTransform[dhGroupList.size()]),
+                            esnList.toArray(new EsnTransform[esnList.size()]));
+
+            return new Proposal(
+                    number, protocolId, spiSize, spi, saProposal, hasUnrecognizedTransform);
         }
         // TODO: Add another contructor for encoding.
+
+        /** Package private */
+        boolean isNegotiatedFrom(Proposal reqProposal) {
+            if (protocolId != reqProposal.protocolId || number != reqProposal.number) {
+                return false;
+            }
+            return saProposal.isNegotiatedFrom(reqProposal.saProposal);
+        }
     }
 
     @VisibleForTesting

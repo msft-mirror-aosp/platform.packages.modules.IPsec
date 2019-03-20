@@ -98,7 +98,7 @@ public final class IkeMessageTest {
 
                     @Override
                     public IkePayload decodeIkePayload(
-                            int payloadType, boolean isCritical, byte[] payloadBody)
+                            int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
                             throws IkeException {
                         if (support(payloadType)) {
                             return new TestIkeSupportedPayload(payloadType, isCritical);

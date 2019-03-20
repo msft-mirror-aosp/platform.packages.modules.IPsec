@@ -22,11 +22,14 @@ import android.util.ArraySet;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.Transform;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Arrays;
 import java.util.Set;
 
 /**
@@ -143,6 +146,8 @@ public final class SaProposal {
     final IntegrityTransform[] mIntegrityAlgorithms;
     /** Package private */
     final DhGroupTransform[] mDhGroups;
+    /** Package private */
+    final EsnTransform[] mEsns;
 
     private SaProposal(
             @IkePayload.ProtocolId int protocol,
@@ -155,11 +160,76 @@ public final class SaProposal {
         mPseudorandomFunctions = prfs;
         mIntegrityAlgorithms = integrityAlgos;
         mDhGroups = dhGroups;
+
+        if (protocol == IkePayload.PROTOCOL_ID_IKE) {
+            // Do not negotiate ESN for IKE SA proposal
+            mEsns = new EsnTransform[0];
+        } else {
+            // Do not support negotiating Child SAs using extended sequence numbers.
+            mEsns = new EsnTransform[] {new EsnTransform()};
+        }
+    }
+
+    /**
+     * Construct SaProposal from a decoded inbound IKE packet, only called by IkeSaPayload.
+     *
+     * @param protocol IP protocol ID
+     * @param encryptionAlgos encryption algorithms decoded from inbound IKE packet.
+     * @param prfs pseudorandom functions decoded from inbound IKE packet.
+     * @param integrityAlgos integrity algorithms decoded from inbound IKE packet.
+     * @param dhGroups Dh groups decoded from inbound IKE packet.
+     * @param esns ESN policies decoded from IKE packet.
+     */
+    public SaProposal(
+            @IkePayload.ProtocolId int protocol,
+            EncryptionTransform[] encryptionAlgos,
+            PrfTransform[] prfs,
+            IntegrityTransform[] integrityAlgos,
+            DhGroupTransform[] dhGroups,
+            EsnTransform[] esns) {
+        mProtocolId = protocol;
+        mEncryptionAlgorithms = encryptionAlgos;
+        mPseudorandomFunctions = prfs;
+        mIntegrityAlgorithms = integrityAlgos;
+        mDhGroups = dhGroups;
+        mEsns = esns;
+    }
+
+    /**
+     * Check if the current SaProposal from the SA responder is consistent with the selected
+     * reqProposal from the SA initiator.
+     *
+     * @param reqProposal selected SaProposal from SA initiator
+     * @return if current SaProposal from SA responder is consistent with the selected reqProposal
+     *     from SA initiator.
+     */
+    public boolean isNegotiatedFrom(SaProposal reqProposal) {
+        return isTransformSelectedFrom(mEncryptionAlgorithms, reqProposal.mEncryptionAlgorithms)
+                && isTransformSelectedFrom(
+                        mPseudorandomFunctions, reqProposal.mPseudorandomFunctions)
+                && isTransformSelectedFrom(mIntegrityAlgorithms, reqProposal.mIntegrityAlgorithms)
+                && isTransformSelectedFrom(mDhGroups, reqProposal.mDhGroups)
+                && isTransformSelectedFrom(mEsns, reqProposal.mEsns);
+    }
+
+    /** Package private */
+    static boolean isTransformSelectedFrom(Transform[] selected, Transform[] selectFrom) {
+        // If the selected proposal has multiple transforms with the same type, the responder MUST
+        // choose a single one.
+        if ((selected.length > 1) || (selected.length == 0) != (selectFrom.length == 0)) {
+            return false;
+        }
+
+        if (selected.length == 0) return true;
+
+        return Arrays.asList(selectFrom).contains(selected[0]);
     }
 
     /**
      * This class can be used to incrementally construct a SaProposal. SaProposal instances are
      * immutable once built.
+     *
+     * <p>TODO: Support users to add algorithms from most preferred to least preferred.
      */
     public static final class Builder {
         private static final String ERROR_TAG = "Invalid SA Proposal: ";
@@ -465,8 +535,4 @@ public final class SaProposal {
     public static boolean isSupportedDhGroup(@DhGroup int dhGroup) {
         return SUPPORTED_DH_GROUP.contains(dhGroup);
     }
-
-    // TODO: Implement constructing SaProposal with a Builder that supports adding
-    // encryption/integrity algorithms, prf, and DH Group. And add explanation of usage of
-    // INTEGRITY_ALGORITHM_NONE and DH_GROUP_NONE.
 }

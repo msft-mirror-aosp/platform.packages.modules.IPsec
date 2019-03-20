@@ -34,7 +34,8 @@ public final class IkeTsPayloadTest {
                 ByteBuffer.wrap(TestUtils.hexStringToByteArray(TS_INITIATOR_PAYLOAD_HEX_STRING));
 
         IkePayload payload =
-                IkePayloadFactory.getIkePayload(IkePayload.PAYLOAD_TYPE_TS_INITIATOR, inputBuffer)
+                IkePayloadFactory.getIkePayload(
+                                IkePayload.PAYLOAD_TYPE_TS_INITIATOR, false, inputBuffer)
                         .first;
         assertTrue(payload instanceof IkeTsPayload);
 
