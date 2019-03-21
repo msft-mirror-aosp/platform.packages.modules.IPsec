@@ -18,6 +18,7 @@ package com.android.ike.ikev2;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -27,12 +28,14 @@ import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.Transform;
 
 import org.junit.Test;
 
 public final class SaProposalTest {
     private final EncryptionTransform mEncryption3DesTransform;
     private final EncryptionTransform mEncryptionAesGcm8Transform;
+    private final EncryptionTransform mEncryptionAesGcm12Transform;
     private final IntegrityTransform mIntegrityHmacSha1Transform;
     private final IntegrityTransform mIntegrityNoneTransform;
     private final PrfTransform mPrfAes128XCbcTransform;
@@ -43,6 +46,9 @@ public final class SaProposalTest {
         mEncryptionAesGcm8Transform =
                 new EncryptionTransform(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_128);
+        mEncryptionAesGcm12Transform =
+                new EncryptionTransform(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12, SaProposal.KEY_LEN_AES_128);
         mIntegrityHmacSha1Transform =
                 new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96);
         mIntegrityNoneTransform = new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_NONE);
@@ -297,5 +303,44 @@ public final class SaProposalTest {
         } catch (IllegalArgumentException expected) {
 
         }
+    }
+
+    @Test
+    public void testIsTransformSelectedFrom() throws Exception {
+        assertTrue(SaProposal.isTransformSelectedFrom(new Transform[0], new Transform[0]));
+        assertTrue(
+                SaProposal.isTransformSelectedFrom(
+                        new Transform[] {mEncryptionAesGcm8Transform},
+                        new Transform[] {
+                            mEncryptionAesGcm8Transform, mEncryptionAesGcm12Transform
+                        }));
+        assertTrue(
+                SaProposal.isTransformSelectedFrom(
+                        new Transform[] {mIntegrityNoneTransform},
+                        new Transform[] {mIntegrityNoneTransform}));
+
+        // No transform selected.
+        assertFalse(
+                SaProposal.isTransformSelectedFrom(
+                        new Transform[0], new Transform[] {mEncryptionAesGcm8Transform}));
+
+        // Selected transform was not part of original proposal.
+        assertFalse(
+                SaProposal.isTransformSelectedFrom(
+                        new Transform[] {mPrfAes128XCbcTransform}, new Transform[0]));
+
+        // More than one transform returned.
+        assertFalse(
+                SaProposal.isTransformSelectedFrom(
+                        new Transform[] {mEncryptionAesGcm8Transform, mEncryptionAesGcm12Transform},
+                        new Transform[] {
+                            mEncryptionAesGcm8Transform, mEncryptionAesGcm12Transform
+                        }));
+
+        // Selected transform was not part of original proposal.
+        assertFalse(
+                SaProposal.isTransformSelectedFrom(
+                        new Transform[] {mIntegrityNoneTransform},
+                        new Transform[] {mIntegrityHmacSha1Transform}));
     }
 }

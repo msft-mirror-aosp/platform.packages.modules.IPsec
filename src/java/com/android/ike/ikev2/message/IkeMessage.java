@@ -142,7 +142,8 @@ public final class IkeMessage {
     }
 
     private static List<IkePayload> decodePayloadList(
-            @PayloadType int firstPayloadType, byte[] unencryptedPayloads) throws IkeException {
+            @PayloadType int firstPayloadType, boolean isResp, byte[] unencryptedPayloads)
+            throws IkeException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(unencryptedPayloads);
         int currentPayloadType = firstPayloadType;
         // For supported payload
@@ -152,7 +153,7 @@ public final class IkeMessage {
 
         while (currentPayloadType != IkePayload.PAYLOAD_TYPE_NO_NEXT) {
             Pair<IkePayload, Integer> pair =
-                    IkePayloadFactory.getIkePayload(currentPayloadType, inputBuffer);
+                    IkePayloadFactory.getIkePayload(currentPayloadType, isResp, inputBuffer);
             IkePayload payload = pair.first;
 
             if (!(payload instanceof IkeUnsupportedPayload)) {
@@ -332,7 +333,8 @@ public final class IkeMessage {
 
             try {
                 List<IkePayload> supportedPayloadList =
-                        decodePayloadList(header.nextPayloadType, unencryptedPayloads);
+                        decodePayloadList(
+                                header.nextPayloadType, header.isResponseMsg, unencryptedPayloads);
                 return new IkeMessage(header, supportedPayloadList);
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 // Invalid length error when parsing payload bodies.
@@ -347,7 +349,7 @@ public final class IkeMessage {
                 IkeHeader ikeHeader,
                 byte[] packet)
                 throws IkeException, GeneralSecurityException {
-            //TODO: Extract crypto params and call private decode method.
+            // TODO: Extract crypto params and call private decode method.
             return null;
         }
 
@@ -375,7 +377,10 @@ public final class IkeMessage {
                 int firstPayloadType = pair.second;
 
                 List<IkePayload> supportedPayloadList =
-                        decodePayloadList(firstPayloadType, skPayload.getUnencryptedPayloads());
+                        decodePayloadList(
+                                firstPayloadType,
+                                header.isResponseMsg,
+                                skPayload.getUnencryptedPayloads());
 
                 return new IkeMessage(header, supportedPayloadList);
             } catch (NegativeArraySizeException | BufferUnderflowException e) {

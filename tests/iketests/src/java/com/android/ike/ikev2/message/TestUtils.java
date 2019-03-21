@@ -41,11 +41,12 @@ public final class TestUtils {
     }
 
     public static IkePayload hexStringToIkePayload(
-            @IkePayload.PayloadType int payloadType, String payloadHexString) throws IkeException {
+            @IkePayload.PayloadType int payloadType, boolean isResp, String payloadHexString)
+            throws IkeException {
         byte[] payloadBytes = hexStringToByteArray(payloadHexString);
         // Returned Pair consists of the IkePayload and the following IkePayload's type.
         Pair<IkePayload, Integer> pair =
-                IkePayloadFactory.getIkePayload(payloadType, ByteBuffer.wrap(payloadBytes));
+                IkePayloadFactory.getIkePayload(payloadType, isResp, ByteBuffer.wrap(payloadBytes));
         return pair.first;
     }
 }
