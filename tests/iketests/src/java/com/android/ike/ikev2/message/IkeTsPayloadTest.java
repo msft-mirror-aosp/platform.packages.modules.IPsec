@@ -25,8 +25,8 @@ import java.nio.ByteBuffer;
 
 public final class IkeTsPayloadTest {
     private static final String TS_INITIATOR_PAYLOAD_HEX_STRING =
-            "2d00001801000000070000100000ffff00000000ffffffff";
-    private static final int NUMBER_OF_TS = 1;
+            "2d00002802000000070000100000ffff00000000ffffffff070000100000ffff00000001fffffffe";
+    private static final int NUMBER_OF_TS = 2;
 
     @Test
     public void testDecodeTsInitiatorPayload() throws Exception {

@@ -35,4 +35,13 @@ public final class InvalidSyntaxException extends IkeException {
     public InvalidSyntaxException(String message) {
         super(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX);
     }
+
+    /**
+     * Construct a instance of InvalidSyntaxException.
+     *
+     * @param cause the reason of exception.
+     */
+    public InvalidSyntaxException(Throwable cause) {
+        super(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX, cause);
+    }
 }
