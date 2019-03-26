@@ -153,7 +153,7 @@ public final class IkeSaPayloadTest {
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
-                        .buildOrThrow();
+                        .build();
 
         mSaProposalTwo =
                 SaProposal.Builder.newIkeSaProposalBuilder()
@@ -166,7 +166,7 @@ public final class IkeSaPayloadTest {
                         .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .addDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP)
-                        .buildOrThrow();
+                        .build();
         mTwoSaProposalsArray = new SaProposal[] {mSaProposalOne, mSaProposalTwo};
     }
 

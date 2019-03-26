@@ -16,9 +16,107 @@
 
 package com.android.ike.ikev2;
 
+import android.net.IpSecManager.UdpEncapsulationSocket;
+
+import com.android.ike.ikev2.message.IkePayload;
+
+import java.net.InetAddress;
+import java.util.LinkedList;
+import java.util.List;
+
 /**
- * IkeSessionOptions contains all configurations including cryptographic algorithm set of an IKE SA.
+ * IkeSessionOptions contains all user provided configurations for negotiating an IKE SA.
+ *
+ * <p>TODO: Make this doc more user-friendly.
  */
 public class IkeSessionOptions {
-    // TODO: Implement it.
+    private final InetAddress mServerAddress;
+    private final UdpEncapsulationSocket mUdpEncapSocket;
+    private final SaProposal[] mSaProposals;
+    private final boolean mIsIkeFragmentationSupported;
+
+    private IkeSessionOptions(
+            InetAddress serverAddress,
+            UdpEncapsulationSocket udpEncapsulationSocket,
+            SaProposal[] proposals,
+            boolean isIkeFragmentationSupported) {
+        mServerAddress = serverAddress;
+        mUdpEncapSocket = udpEncapsulationSocket;
+        mSaProposals = proposals;
+        mIsIkeFragmentationSupported = isIkeFragmentationSupported;
+    }
+
+    /** Package private */
+    InetAddress getServerAddress() {
+        return mServerAddress;
+    }
+    /** Package private */
+    UdpEncapsulationSocket getUdpEncapsulationSocket() {
+        return mUdpEncapSocket;
+    }
+    /** Package private */
+    SaProposal[] getSaProposals() {
+        return mSaProposals;
+    }
+    /** Package private */
+    boolean isIkeFragmentationSupported() {
+        return mIsIkeFragmentationSupported;
+    }
+
+    /** This class can be used to incrementally construct a IkeSessionOptions. */
+    public static final class Builder {
+        private final InetAddress mServerAddress;
+        private final UdpEncapsulationSocket mUdpEncapSocket;
+        private final List<SaProposal> mSaProposalList = new LinkedList<>();
+
+        private boolean mIsIkeFragmentationSupported = false;
+
+        /**
+         * Returns a new Builder for an IkeSessionOptions.
+         *
+         * @param serverAddress IP address of remote IKE server.
+         * @param udpEncapsulationSocket {@link IpSecManager.UdpEncapsulationSocket} for sending and
+         *     receiving IKE message.
+         * @return Builder for an IkeSessionOptions.
+         */
+        public Builder(InetAddress serverAddress, UdpEncapsulationSocket udpEncapsulationSocket) {
+            mServerAddress = serverAddress;
+            mUdpEncapSocket = udpEncapsulationSocket;
+        }
+
+        /**
+         * Adds an IKE SA proposal to IkeSessionOptions being built.
+         *
+         * @param proposal IKE SA proposal.
+         * @return Builder for an IkeSessionOptions.
+         * @throws IllegalArgumentException if input proposal is not IKE SA proposal.
+         */
+        public Builder addSaProposal(SaProposal proposal) {
+            if (proposal.mProtocolId != IkePayload.PROTOCOL_ID_IKE) {
+                throw new IllegalArgumentException(
+                        "Expected IKE SA Proposal but received Child SA proposal");
+            }
+            mSaProposalList.add(proposal);
+            return this;
+        }
+
+        /**
+         * Validates, builds and returns the IkeSessionOptions
+         *
+         * @return IkeSessionOptions the validated IkeSessionOptions
+         * @throws IllegalStateException if no IKE SA proposal is provided
+         */
+        public IkeSessionOptions build() {
+            if (mSaProposalList.isEmpty()) {
+                throw new IllegalArgumentException("IKE SA proposal not found");
+            }
+            return new IkeSessionOptions(
+                    mServerAddress,
+                    mUdpEncapSocket,
+                    mSaProposalList.toArray(new SaProposal[mSaProposalList.size()]),
+                    mIsIkeFragmentationSupported);
+        }
+
+        // TODO: add methods for supporting IKE fragmentation.
+    }
 }

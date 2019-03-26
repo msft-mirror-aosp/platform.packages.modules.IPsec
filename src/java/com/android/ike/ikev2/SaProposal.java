@@ -474,7 +474,7 @@ public final class SaProposal {
          * @return SaProposal the validated SaProposal.
          * @throws IllegalArgumentException if SaProposal is invalid.
          */
-        public SaProposal buildOrThrow() {
+        public SaProposal build() {
             EncryptionTransform[] encryptionTransforms = buildEncryptAlgosOrThrow();
             PrfTransform[] prfTransforms = buildPrfsOrThrow();
             IntegrityTransform[] integrityTransforms =
