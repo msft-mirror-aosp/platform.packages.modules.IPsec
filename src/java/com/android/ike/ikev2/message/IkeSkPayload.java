@@ -17,7 +17,6 @@
 package com.android.ike.ikev2.message;
 
 import com.android.ike.ikev2.exceptions.IkeException;
-import com.android.ike.ikev2.message.IkePayload.PayloadType;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -47,7 +46,7 @@ public final class IkeSkPayload extends IkePayload {
      * @param critical indicates if it is a critical payload.
      * @param message the byte array contains the whole IKE message.
      * @param integrityMac the initialized Mac for integrity check.
-     * @param expectedChecksumLen the expected length of integrity checksum.
+     * @param checksumLen the checksum length of negotiated integrity algorithm.
      * @param decryptCipher the uninitialized Cipher for doing decryption.
      * @param dKey the decryption key.
      */
@@ -55,7 +54,7 @@ public final class IkeSkPayload extends IkePayload {
             boolean critical,
             byte[] message,
             Mac integrityMac,
-            int expectedChecksumLen,
+            int checksumLen,
             Cipher decryptCipher,
             SecretKey dKey)
             throws IkeException, GeneralSecurityException {
@@ -63,7 +62,39 @@ public final class IkeSkPayload extends IkePayload {
 
         mIkeEncryptedPayloadBody =
                 new IkeEncryptedPayloadBody(
-                        message, integrityMac, expectedChecksumLen, decryptCipher, dKey);
+                        message, integrityMac, checksumLen, decryptCipher, dKey);
+    }
+
+    /**
+     * Construct an instance of IkeSkPayload for building outbound packet.
+     *
+     * @param ikeHeader the IKE header.
+     * @param firstPayloadType the type of first payload nested in SkPayload.
+     * @param unencryptedPayloads the encoded payload list to protect.
+     * @param integrityMac the initialized Mac for calculating integrity checksum
+     * @param checksumLen the checksum length of negotiated integrity algorithm.
+     * @param encryptCipher the uninitialized Cipher for doing encryption.
+     * @param eKey the encryption key.
+     */
+    IkeSkPayload(
+            IkeHeader ikeHeader,
+            @PayloadType int firstPayloadType,
+            byte[] unencryptedPayloads,
+            Mac integrityMac,
+            int checksumLen,
+            Cipher encryptCipher,
+            SecretKey eKey) {
+        super(PAYLOAD_TYPE_SK, false);
+
+        mIkeEncryptedPayloadBody =
+                new IkeEncryptedPayloadBody(
+                        ikeHeader,
+                        firstPayloadType,
+                        unencryptedPayloads,
+                        integrityMac,
+                        checksumLen,
+                        encryptCipher,
+                        eKey);
     }
 
     /**
