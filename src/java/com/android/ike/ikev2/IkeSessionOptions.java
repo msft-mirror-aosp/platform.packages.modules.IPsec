@@ -29,7 +29,7 @@ import java.util.List;
  *
  * <p>TODO: Make this doc more user-friendly.
  */
-public class IkeSessionOptions {
+public final class IkeSessionOptions {
     private final InetAddress mServerAddress;
     private final UdpEncapsulationSocket mUdpEncapSocket;
     private final SaProposal[] mSaProposals;
@@ -92,7 +92,7 @@ public class IkeSessionOptions {
          * @throws IllegalArgumentException if input proposal is not IKE SA proposal.
          */
         public Builder addSaProposal(SaProposal proposal) {
-            if (proposal.mProtocolId != IkePayload.PROTOCOL_ID_IKE) {
+            if (proposal.getProtocolId() != IkePayload.PROTOCOL_ID_IKE) {
                 throw new IllegalArgumentException(
                         "Expected IKE SA Proposal but received Child SA proposal");
             }
