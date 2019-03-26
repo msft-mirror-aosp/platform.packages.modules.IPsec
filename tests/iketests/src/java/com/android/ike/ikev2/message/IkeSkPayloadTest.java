@@ -17,13 +17,11 @@
 package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.fail;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
-import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
@@ -82,44 +80,11 @@ public final class IkeSkPayloadTest {
     }
 
     @Test
-    public void testAuthenticateAndDecryptMessage() throws Exception {
-        byte[] message = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_HEX_STRING);
-
-        IkeSkPayload payload =
-                IkePayloadFactory.getIkeSkPayload(
-                                message,
-                                mHmacSha1IntegrityMac,
-                                CHECKSUM_LEN,
-                                mAesCbcDecryptCipher,
-                                mAesCbcDecryptKey)
-                        .first;
-        byte[] expectedPlaintext =
-                TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_DECRYPTED_BODY_HEX_STRING);
-        assertArrayEquals(expectedPlaintext, payload.getUnencryptedPayloads());
-    }
-
-    @Test
-    public void testThrowExceptionForInvalidChecksum() throws Exception {
-        byte[] message = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_HEX_STRING);
-        // Change last bit of checksum.
-        message[message.length - 1]++;
-        try {
-            IkePayloadFactory.getIkeSkPayload(
-                    message,
-                    mHmacSha1IntegrityMac,
-                    CHECKSUM_LEN,
-                    mAesCbcDecryptCipher,
-                    mAesCbcDecryptKey);
-            fail("Expected GeneralSecurityException: Invalid checksum.");
-        } catch (GeneralSecurityException expected) {
-        }
-    }
-
-    @Test
     public void testEncode() throws Exception {
         byte[] message = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_HEX_STRING);
         byte[] payloadBytes =
                 Arrays.copyOfRange(message, IkeHeader.IKE_HEADER_LENGTH, message.length);
+
         IkeSkPayload payload =
                 IkePayloadFactory.getIkeSkPayload(
                                 message,
