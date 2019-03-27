@@ -137,7 +137,7 @@ public abstract class IkePayload {
      * @param payloadLength length of the entire payload
      * @param byteBuffer destination ByteBuffer that stores encoded payload header
      */
-    protected void encodePayloadHeaderToByteBuffer(
+    protected static void encodePayloadHeaderToByteBuffer(
             @PayloadType int nextPayload, int payloadLength, ByteBuffer byteBuffer) {
         byteBuffer
                 .put((byte) nextPayload)
