@@ -29,7 +29,9 @@ import com.android.ike.ikev2.message.IkeSaPayload.Transform;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -223,6 +225,32 @@ public final class SaProposal {
         if (selected.length == 0) return true;
 
         return Arrays.asList(selectFrom).contains(selected[0]);
+    }
+
+    /**
+     * Return all SA Transforms in this SaProposal to be encoded for building an outbound IKE
+     * message.
+     *
+     * <p>This method can be called by only IKE library.
+     *
+     * @return Array of Transforms to be encoded.
+     */
+    public Transform[] getAllTransforms() {
+        int encodedNumTransforms =
+                mEncryptionAlgorithms.length
+                        + mPseudorandomFunctions.length
+                        + mIntegrityAlgorithms.length
+                        + mDhGroups.length
+                        + mEsns.length;
+
+        List<Transform> transformList = new ArrayList<Transform>(encodedNumTransforms);
+        transformList.addAll(Arrays.asList(mEncryptionAlgorithms));
+        transformList.addAll(Arrays.asList(mPseudorandomFunctions));
+        transformList.addAll(Arrays.asList(mIntegrityAlgorithms));
+        transformList.addAll(Arrays.asList(mDhGroups));
+        transformList.addAll(Arrays.asList(mEsns));
+
+        return transformList.toArray(new Transform[encodedNumTransforms]);
     }
 
     /**
