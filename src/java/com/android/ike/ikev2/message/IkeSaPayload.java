@@ -192,6 +192,9 @@ public final class IkeSaPayload extends IkePayload {
         private static final byte LAST_PROPOSAL = 0;
         private static final byte NOT_LAST_PROPOSAL = 2;
 
+        private static final int PROPOSAL_RESERVED_FIELD_LEN = 1;
+        private static final int PROPOSAL_HEADER_LEN = 8;
+
         @VisibleForTesting
         static TransformDecoder sTransformDecoder =
                 new TransformDecoder() {
@@ -246,7 +249,7 @@ public final class IkeSaPayload extends IkePayload {
                         "Invalid value of Last Proposal Substructure: " + isLast);
             }
             // Skip RESERVED byte
-            inputBuffer.get();
+            inputBuffer.get(new byte[PROPOSAL_RESERVED_FIELD_LEN]);
 
             int length = Short.toUnsignedInt(inputBuffer.getShort());
             byte number = inputBuffer.get();
@@ -259,8 +262,8 @@ public final class IkeSaPayload extends IkePayload {
             // spiSize should be either 8 for IKE or 4 for IPsec.
             long spi = SPI_NOT_INCLUDED;
             switch (spiSize) {
-                case 0:
-                    // No SPI field here.
+                case SPI_LEN_NOT_INCLUDED:
+                    // No SPI attached for IKE initial exchange.
                     break;
                 case SPI_LEN_IPSEC:
                     spi = Integer.toUnsignedLong(inputBuffer.getInt());
@@ -330,6 +333,49 @@ public final class IkeSaPayload extends IkePayload {
             }
             return saProposal.isNegotiatedFrom(reqProposal.saProposal);
         }
+
+        protected void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
+            Transform[] allTransforms = saProposal.getAllTransforms();
+            byte isLastIndicator = isLast ? LAST_PROPOSAL : NOT_LAST_PROPOSAL;
+
+            byteBuffer
+                    .put(isLastIndicator)
+                    .put(new byte[PROPOSAL_RESERVED_FIELD_LEN])
+                    .putShort((short) getProposalLength())
+                    .put(number)
+                    .put((byte) protocolId)
+                    .put(spiSize)
+                    .put((byte) allTransforms.length);
+
+            switch (spiSize) {
+                case SPI_LEN_NOT_INCLUDED:
+                    // No SPI attached for IKE initial exchange.
+                    break;
+                case SPI_LEN_IPSEC:
+                    byteBuffer.putInt((int) spi);
+                    break;
+                case SPI_LEN_IKE:
+                    byteBuffer.putLong((long) spi);
+                    break;
+                default:
+                    throw new IllegalArgumentException(
+                            "Invalid value of spiSize in Proposal Substructure: " + spiSize);
+            }
+
+            // Encode all Transform.
+            for (int i = 0; i < allTransforms.length; i++) {
+                // The last transform has the isLast flag set to true.
+                allTransforms[i].encodeToByteBuffer(i == allTransforms.length - 1, byteBuffer);
+            }
+        }
+
+        protected int getProposalLength() {
+            int len = PROPOSAL_HEADER_LEN + spiSize;
+
+            Transform[] allTransforms = saProposal.getAllTransforms();
+            for (Transform t : allTransforms) len += t.getTransformLength();
+            return len;
+        }
     }
 
     @VisibleForTesting
@@ -366,7 +412,12 @@ public final class IkeSaPayload extends IkePayload {
 
         private static final byte LAST_TRANSFORM = 0;
         private static final byte NOT_LAST_TRANSFORM = 3;
-        private static final int TRANSFORM_HEADER_LEN = 8;
+
+        // Length of reserved field of a Transform.
+        private static final int TRANSFORM_RESERVED_FIELD_LEN = 1;
+
+        // Length of the Transform that with no Attribute.
+        protected static final int BASIC_TRANSFORM_LEN = 8;
 
         // TODO: Add constants for supported algorithms
 
@@ -376,7 +427,7 @@ public final class IkeSaPayload extends IkePayload {
                     public List<Attribute> decodeAttributes(int length, ByteBuffer inputBuffer)
                             throws IkeException {
                         List<Attribute> list = new LinkedList<>();
-                        int parsedLength = TRANSFORM_HEADER_LEN;
+                        int parsedLength = BASIC_TRANSFORM_LEN;
                         while (parsedLength < length) {
                             Pair<Attribute, Integer> pair = Attribute.readFrom(inputBuffer);
                             parsedLength += pair.second;
@@ -420,13 +471,13 @@ public final class IkeSaPayload extends IkePayload {
             }
 
             // Skip RESERVED byte
-            inputBuffer.get();
+            inputBuffer.get(new byte[TRANSFORM_RESERVED_FIELD_LEN]);
 
             int length = Short.toUnsignedInt(inputBuffer.getShort());
             int type = Byte.toUnsignedInt(inputBuffer.get());
 
             // Skip RESERVED byte
-            inputBuffer.get();
+            inputBuffer.get(new byte[TRANSFORM_RESERVED_FIELD_LEN]);
 
             int id = Short.toUnsignedInt(inputBuffer.getShort());
 
@@ -469,6 +520,23 @@ public final class IkeSaPayload extends IkePayload {
         // Check if this Transform ID is supported.
         protected abstract boolean isSupportedTransformId(int id);
 
+        // Encode Transform to a ByteBuffer.
+        protected abstract void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer);
+
+        // Get entire Transform length.
+        protected abstract int getTransformLength();
+
+        protected void encodeBasicTransformToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
+            byte isLastIndicator = isLast ? LAST_TRANSFORM : NOT_LAST_TRANSFORM;
+            byteBuffer
+                    .put(isLastIndicator)
+                    .put(new byte[TRANSFORM_RESERVED_FIELD_LEN])
+                    .putShort((short) getTransformLength())
+                    .put((byte) type)
+                    .put(new byte[TRANSFORM_RESERVED_FIELD_LEN])
+                    .putShort((short) id);
+        }
+
         /**
          * Get Tranform Type as a String.
          *
@@ -487,9 +555,12 @@ public final class IkeSaPayload extends IkePayload {
      *     Exchange Protocol Version 2 (IKEv2)</a>
      */
     public static final class EncryptionTransform extends Transform {
-        private static final int KEY_LEN_UNASSIGNED = 0;
+        private static final int KEY_LEN_UNSPECIFIED = 0;
 
-        public final int keyLength;
+        // When using encryption algorithm with variable-length keys, mSpecifiedKeyLength MUST be
+        // set and a KeyLengthAttribute MUST be attached. Otherwise, mSpecifiedKeyLength MUST NOT be
+        // set and KeyLengthAttribute MUST NOT be attached.
+        private final int mSpecifiedKeyLength;
 
         /**
          * Contruct an instance of EncryptionTransform with fixed key length for building an
@@ -498,7 +569,7 @@ public final class IkeSaPayload extends IkePayload {
          * @param id the IKE standard Transform ID.
          */
         public EncryptionTransform(@EncryptionAlgorithm int id) {
-            this(id, KEY_LEN_UNASSIGNED);
+            this(id, KEY_LEN_UNSPECIFIED);
         }
 
         /**
@@ -506,12 +577,12 @@ public final class IkeSaPayload extends IkePayload {
          * outbound packet.
          *
          * @param id the IKE standard Transform ID.
-         * @param keyLength the specified key length of this encryption algorithm.
+         * @param specifiedKeyLength the specified key length of this encryption algorithm.
          */
-        public EncryptionTransform(@EncryptionAlgorithm int id, int keyLength) {
+        public EncryptionTransform(@EncryptionAlgorithm int id, int specifiedKeyLength) {
             super(Transform.TRANSFORM_TYPE_ENCR, id);
 
-            this.keyLength = keyLength;
+            mSpecifiedKeyLength = specifiedKeyLength;
             try {
                 validateKeyLength();
             } catch (InvalidSyntaxException e) {
@@ -530,13 +601,13 @@ public final class IkeSaPayload extends IkePayload {
                 throws InvalidSyntaxException {
             super(Transform.TRANSFORM_TYPE_ENCR, id, attributeList);
             if (!isSupported) {
-                keyLength = KEY_LEN_UNASSIGNED;
+                mSpecifiedKeyLength = KEY_LEN_UNSPECIFIED;
             } else {
                 if (attributeList.size() == 0) {
-                    keyLength = KEY_LEN_UNASSIGNED;
+                    mSpecifiedKeyLength = KEY_LEN_UNSPECIFIED;
                 } else {
                     KeyLengthAttribute attr = getKeyLengthAttribute(attributeList);
-                    keyLength = attr.keyLength;
+                    mSpecifiedKeyLength = attr.keyLength;
                 }
                 validateKeyLength();
             }
@@ -544,7 +615,7 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         public int hashCode() {
-            return Objects.hash(type, id, keyLength);
+            return Objects.hash(type, id, mSpecifiedKeyLength);
         }
 
         @Override
@@ -552,7 +623,9 @@ public final class IkeSaPayload extends IkePayload {
             if (!(o instanceof EncryptionTransform)) return false;
 
             EncryptionTransform other = (EncryptionTransform) o;
-            return (type == other.type && id == other.id && keyLength == other.keyLength);
+            return (type == other.type
+                    && id == other.id
+                    && mSpecifiedKeyLength == other.mSpecifiedKeyLength);
         }
 
         @Override
@@ -582,7 +655,7 @@ public final class IkeSaPayload extends IkePayload {
         private void validateKeyLength() throws InvalidSyntaxException {
             switch (id) {
                 case SaProposal.ENCRYPTION_ALGORITHM_3DES:
-                    if (keyLength != KEY_LEN_UNASSIGNED) {
+                    if (mSpecifiedKeyLength != KEY_LEN_UNSPECIFIED) {
                         throw new InvalidSyntaxException(
                                 "Must not set Key Length value for this "
                                         + getTransformTypeString()
@@ -597,16 +670,16 @@ public final class IkeSaPayload extends IkePayload {
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
                     /* fall through */
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
-                    if (keyLength == KEY_LEN_UNASSIGNED) {
+                    if (mSpecifiedKeyLength == KEY_LEN_UNSPECIFIED) {
                         throw new InvalidSyntaxException(
                                 "Must set Key Length value for this "
                                         + getTransformTypeString()
                                         + " Algorithm ID: "
                                         + id);
                     }
-                    if (keyLength != SaProposal.KEY_LEN_AES_128
-                            && keyLength != SaProposal.KEY_LEN_AES_192
-                            && keyLength != SaProposal.KEY_LEN_AES_256) {
+                    if (mSpecifiedKeyLength != SaProposal.KEY_LEN_AES_128
+                            && mSpecifiedKeyLength != SaProposal.KEY_LEN_AES_192
+                            && mSpecifiedKeyLength != SaProposal.KEY_LEN_AES_256) {
                         throw new InvalidSyntaxException(
                                 "Invalid key length for this "
                                         + getTransformTypeString()
@@ -619,6 +692,26 @@ public final class IkeSaPayload extends IkePayload {
                     throw new IllegalArgumentException(
                             "Unrecognized Encryption Algorithm ID: " + id);
             }
+        }
+
+        @Override
+        protected void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
+            encodeBasicTransformToByteBuffer(isLast, byteBuffer);
+
+            if (mSpecifiedKeyLength != KEY_LEN_UNSPECIFIED) {
+                new KeyLengthAttribute(mSpecifiedKeyLength).encodeToByteBuffer(byteBuffer);
+            }
+        }
+
+        @Override
+        protected int getTransformLength() {
+            int len = BASIC_TRANSFORM_LEN;
+
+            if (mSpecifiedKeyLength != KEY_LEN_UNSPECIFIED) {
+                len += new KeyLengthAttribute(mSpecifiedKeyLength).getAttributeLength();
+            }
+
+            return len;
         }
 
         @Override
@@ -676,6 +769,16 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
             return !attributeList.isEmpty();
+        }
+
+        @Override
+        protected void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
+            encodeBasicTransformToByteBuffer(isLast, byteBuffer);
+        }
+
+        @Override
+        protected int getTransformLength() {
+            return BASIC_TRANSFORM_LEN;
         }
 
         @Override
@@ -740,6 +843,16 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @Override
+        protected void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
+            encodeBasicTransformToByteBuffer(isLast, byteBuffer);
+        }
+
+        @Override
+        protected int getTransformLength() {
+            return BASIC_TRANSFORM_LEN;
+        }
+
+        @Override
         public String getTransformTypeString() {
             return "Integrity Algorithm";
         }
@@ -798,6 +911,16 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         protected boolean hasUnrecognizedAttribute(List<Attribute> attributeList) {
             return !attributeList.isEmpty();
+        }
+
+        @Override
+        protected void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
+            encodeBasicTransformToByteBuffer(isLast, byteBuffer);
+        }
+
+        @Override
+        protected int getTransformLength() {
+            return BASIC_TRANSFORM_LEN;
         }
 
         @Override
@@ -868,6 +991,16 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @Override
+        protected void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
+            encodeBasicTransformToByteBuffer(isLast, byteBuffer);
+        }
+
+        @Override
+        protected int getTransformLength() {
+            return BASIC_TRANSFORM_LEN;
+        }
+
+        @Override
         public String getTransformTypeString() {
             return "Extended Sequence Numbers";
         }
@@ -893,6 +1026,19 @@ public final class IkeSaPayload extends IkePayload {
             return !attributeList.isEmpty();
         }
 
+        @Override
+        protected void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
+            throw new UnsupportedOperationException(
+                    "It is not supported to encode a Transform with" + getTransformTypeString());
+        }
+
+        @Override
+        protected int getTransformLength() {
+            throw new UnsupportedOperationException(
+                    "It is not supported to get length of a Transform with "
+                            + getTransformTypeString());
+        }
+
         /**
          * Return Tranform Type of Unrecognized Transform as a String.
          *
@@ -900,7 +1046,7 @@ public final class IkeSaPayload extends IkePayload {
          */
         @Override
         public String getTransformTypeString() {
-            return "Unrecognized Transform Type";
+            return "Unrecognized Transform Type.";
         }
     }
 
@@ -925,9 +1071,18 @@ public final class IkeSaPayload extends IkePayload {
         // Support only one Attribute type: Key Length. Should use Type/Value format.
         public static final int ATTRIBUTE_TYPE_KEY_LENGTH = 14;
 
-        private static final int TV_ATTRIBUTE_VALUE_LEN = 2;
-        private static final int TV_ATTRIBUTE_TOTAL_LEN = 4;
-        private static final int TVL_ATTRIBUTE_HEADER_LEN = TV_ATTRIBUTE_TOTAL_LEN;
+        // Mask to extract the left most AF bit to indicate Attribute Format.
+        private static final int ATTRIBUTE_FORMAT_MASK = 0x8000;
+        // Mask to extract 15 bits after the AF bit to indicate Attribute Type.
+        private static final int ATTRIBUTE_TYPE_MASK = 0x7fff;
+
+        // Package private mask to indicate that Type-Value (TV) Attribute Format is used.
+        static final int ATTRIBUTE_FORMAT_TV = ATTRIBUTE_FORMAT_MASK;
+
+        // Package private
+        static final int TV_ATTRIBUTE_VALUE_LEN = 2;
+        static final int TV_ATTRIBUTE_TOTAL_LEN = 4;
+        static final int TVL_ATTRIBUTE_HEADER_LEN = TV_ATTRIBUTE_TOTAL_LEN;
 
         // Only Key Length type belongs to AttributeType
         public final int type;
@@ -940,11 +1095,12 @@ public final class IkeSaPayload extends IkePayload {
         @VisibleForTesting
         static Pair<Attribute, Integer> readFrom(ByteBuffer inputBuffer) throws IkeException {
             short formatAndType = inputBuffer.getShort();
-            int type = formatAndType & 0x7fff;
+            int format = formatAndType & ATTRIBUTE_FORMAT_MASK;
+            int type = formatAndType & ATTRIBUTE_TYPE_MASK;
 
             int length = 0;
             byte[] value = new byte[0];
-            if ((formatAndType & 0x8000) == 0x8000) {
+            if (format == ATTRIBUTE_FORMAT_TV) {
                 // Type/Value format
                 length = TV_ATTRIBUTE_TOTAL_LEN;
                 value = new byte[TV_ATTRIBUTE_VALUE_LEN];
@@ -969,6 +1125,12 @@ public final class IkeSaPayload extends IkePayload {
                     return new Pair(new UnrecognizedAttribute(type, value), length);
             }
         }
+
+        // Encode Attribute to a ByteBuffer.
+        protected abstract void encodeToByteBuffer(ByteBuffer byteBuffer);
+
+        // Get entire Attribute length.
+        protected abstract int getAttributeLength();
     }
 
     /** KeyLengthAttribute represents a Key Length type Attribute */
@@ -983,6 +1145,18 @@ public final class IkeSaPayload extends IkePayload {
             super(ATTRIBUTE_TYPE_KEY_LENGTH);
             this.keyLength = keyLength;
         }
+
+        @Override
+        protected void encodeToByteBuffer(ByteBuffer byteBuffer) {
+            byteBuffer
+                    .putShort((short) (ATTRIBUTE_FORMAT_TV | ATTRIBUTE_TYPE_KEY_LENGTH))
+                    .putShort((short) keyLength);
+        }
+
+        @Override
+        protected int getAttributeLength() {
+            return TV_ATTRIBUTE_TOTAL_LEN;
+        }
     }
 
     /**
@@ -994,6 +1168,18 @@ public final class IkeSaPayload extends IkePayload {
         protected UnrecognizedAttribute(int type, byte[] value) {
             super(type);
         }
+
+        @Override
+        protected void encodeToByteBuffer(ByteBuffer byteBuffer) {
+            throw new UnsupportedOperationException(
+                    "It is not supported to encode an unrecognized Attribute.");
+        }
+
+        @Override
+        protected int getAttributeLength() {
+            throw new UnsupportedOperationException(
+                    "It is not supported to get length of an unrecognized Attribute.");
+        }
     }
 
     /**
@@ -1004,9 +1190,12 @@ public final class IkeSaPayload extends IkePayload {
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
-        // TODO: Implement encoding SA payload.
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+
+        for (int i = 0; i < proposalList.size(); i++) {
+            // The last proposal has the isLast flag set to true.
+            proposalList.get(i).encodeToByteBuffer(i == proposalList.size() - 1, byteBuffer);
+        }
     }
 
     /**
@@ -1016,9 +1205,11 @@ public final class IkeSaPayload extends IkePayload {
      */
     @Override
     protected int getPayloadLength() {
-        throw new UnsupportedOperationException(
-                "It is not supported to get payload length of " + getTypeString());
-        // TODO: Implement this method for SA payload.
+        int len = GENERIC_HEADER_LENGTH;
+
+        for (Proposal p : proposalList) len += p.getProposalLength();
+
+        return len;
     }
 
     /**
