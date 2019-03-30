@@ -48,6 +48,7 @@ public abstract class IkePayload {
         PAYLOAD_TYPE_SA,
         PAYLOAD_TYPE_KE,
         PAYLOAD_TYPE_CERT,
+        PAYLOAD_TYPE_CERT_REQUEST,
         PAYLOAD_TYPE_AUTH,
         PAYLOAD_TYPE_ID_INITIATOR,
         PAYLOAD_TYPE_ID_RESPONDER,
@@ -71,8 +72,10 @@ public abstract class IkePayload {
     public static final int PAYLOAD_TYPE_ID_INITIATOR = 35;
     /** Identification Payload for IKE SA Responder */
     public static final int PAYLOAD_TYPE_ID_RESPONDER = 36;
-    /** Certification Payload */
+    /** Certificate Payload */
     public static final int PAYLOAD_TYPE_CERT = 37;
+    /** Certificate Request Payload */
+    public static final int PAYLOAD_TYPE_CERT_REQUEST = 38;
     /** Authentication Payload */
     public static final int PAYLOAD_TYPE_AUTH = 39;
     /** Nonce Payload */
