@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -57,11 +58,14 @@ import java.util.List;
 import java.util.Random;
 
 public final class IkeSaPayloadTest {
-    private static final String PROPOSAL_RAW_PACKET =
+    private static final String OUTBOUND_SA_PAYLOAD_HEADER = "22000030";
+    private static final String OUTBOUND_PROPOSAL_RAW_PACKET =
+            "0000002C010100040300000C0100000C800E0080030000080200000203000008030"
+                    + "000020000000804000002";
+    private static final String INBOUND_PROPOSAL_RAW_PACKET =
             "0000002c010100040300000c0100000c800e0080030000080300000203000008040"
                     + "000020000000802000002";
-
-    private static final String TWO_PROPOSAL_RAW_PACKET =
+    private static final String INBOUND_TWO_PROPOSAL_RAW_PACKET =
             "020000dc010100190300000c0100000c800e00800300000c0100000c800e00c0030"
                     + "0000c0100000c800e01000300000801000003030000080300000c0300"
                     + "00080300000d030000080300000e03000008030000020300000803000"
@@ -91,15 +95,9 @@ public final class IkeSaPayloadTest {
     private static final String ATTRIBUTE_RAW_PACKET = "800e0080";
 
     private static final int PROPOSAL_NUMBER = 1;
+
     private static final int PROPOSAL_NUMBER_OFFSET = 4;
-
-    @IkePayload.ProtocolId
-    private static final int PROPOSAL_PROTOCOL_ID = IkePayload.PROTOCOL_ID_IKE;
-
     private static final int PROTOCOL_ID_OFFSET = 5;
-
-    private static final byte PROPOSAL_SPI_SIZE = 0;
-    private static final byte PROPOSAL_SPI = 0;
 
     // Constants for multiple proposals test
     private static final byte[] PROPOSAL_NUMBER_LIST = {1, 2};
@@ -186,6 +184,16 @@ public final class IkeSaPayloadTest {
     }
 
     @Test
+    public void testEncodeAttribute() throws Exception {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(mAttributeKeyLength128.getAttributeLength());
+        mAttributeKeyLength128.encodeToByteBuffer(byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(ATTRIBUTE_RAW_PACKET);
+
+        assertArrayEquals(expectedBytes, byteBuffer.array());
+    }
+
+    @Test
     public void testDecodeEncryptionTransform() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
@@ -221,6 +229,16 @@ public final class IkeSaPayloadTest {
     }
 
     @Test
+    public void testEncodeEncryptionTransform() throws Exception {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(mEncrAesCbc128Transform.getTransformLength());
+        mEncrAesCbc128Transform.encodeToByteBuffer(false, byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
+
+        assertArrayEquals(expectedBytes, byteBuffer.array());
+    }
+
+    @Test
     public void testConstructEncryptionTransformWithUnsupportedId() throws Exception {
         try {
             new EncryptionTransform(-1);
@@ -252,6 +270,16 @@ public final class IkeSaPayloadTest {
         assertEquals(Transform.TRANSFORM_TYPE_PRF, transform.type);
         assertEquals(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1, transform.id);
         assertTrue(transform.isSupported);
+    }
+
+    @Test
+    public void testEncodePrfTransform() throws Exception {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(mPrfHmacSha1Transform.getTransformLength());
+        mPrfHmacSha1Transform.encodeToByteBuffer(true, byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(PRF_TRANSFORM_RAW_PACKET);
+
+        assertArrayEquals(expectedBytes, byteBuffer.array());
     }
 
     @Test
@@ -296,6 +324,16 @@ public final class IkeSaPayloadTest {
     }
 
     @Test
+    public void testEncodeIntegrityTransform() throws Exception {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(mIntegHmacSha1Transform.getTransformLength());
+        mIntegHmacSha1Transform.encodeToByteBuffer(false, byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(INTEG_TRANSFORM_RAW_PACKET);
+
+        assertArrayEquals(expectedBytes, byteBuffer.array());
+    }
+
+    @Test
     public void testConstructIntegrityTransformWithUnsupportedId() throws Exception {
         try {
             new IntegrityTransform(-1);
@@ -318,6 +356,16 @@ public final class IkeSaPayloadTest {
         assertEquals(Transform.TRANSFORM_TYPE_DH, transform.type);
         assertEquals(SaProposal.DH_GROUP_1024_BIT_MODP, transform.id);
         assertTrue(transform.isSupported);
+    }
+
+    @Test
+    public void testEncodeDhGroupTransform() throws Exception {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(mDhGroup1024Transform.getTransformLength());
+        mDhGroup1024Transform.encodeToByteBuffer(false, byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(DH_GROUP_TRANSFORM_RAW_PACKET);
+
+        assertArrayEquals(expectedBytes, byteBuffer.array());
     }
 
     @Test
@@ -375,6 +423,17 @@ public final class IkeSaPayloadTest {
         assertEquals(Transform.TRANSFORM_TYPE_ESN, transform.type);
         assertEquals(EsnTransform.ESN_POLICY_NO_EXTENDED, transform.id);
         assertFalse(transform.isSupported);
+    }
+
+    @Test
+    public void testEncodeEsnTransform() throws Exception {
+        EsnTransform mEsnTransform = new EsnTransform();
+        ByteBuffer byteBuffer = ByteBuffer.allocate(mEsnTransform.getTransformLength());
+        mEsnTransform.encodeToByteBuffer(true, byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(ESN_TRANSFORM_RAW_PACKET);
+
+        assertArrayEquals(expectedBytes, byteBuffer.array());
     }
 
     @Test
@@ -484,23 +543,23 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testDecodeSingleProposal() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
         Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
 
         Proposal proposal = Proposal.readFrom(inputBuffer);
 
         assertEquals(PROPOSAL_NUMBER, proposal.number);
-        assertEquals(PROPOSAL_PROTOCOL_ID, proposal.protocolId);
-        assertEquals(PROPOSAL_SPI_SIZE, proposal.spiSize);
-        assertEquals(PROPOSAL_SPI, proposal.spi);
+        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
+        assertEquals(IkePayload.SPI_LEN_NOT_INCLUDED, proposal.spiSize);
+        assertEquals(IkePayload.SPI_NOT_INCLUDED, proposal.spi);
         assertFalse(proposal.hasUnrecognizedTransform);
         assertNotNull(proposal.saProposal);
     }
 
     @Test
     public void testDecodeSaRequestWithMultipleProposal() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(TWO_PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_TWO_PROPOSAL_RAW_PACKET);
         Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
 
         IkeSaPayload payload = new IkeSaPayload(false, false, inputPacket);
@@ -515,8 +574,26 @@ public final class IkeSaPayloadTest {
     }
 
     @Test
+    public void testEncodeProposal() throws Exception {
+        Proposal proposal =
+                new Proposal(
+                        (byte) PROPOSAL_NUMBER,
+                        IkePayload.PROTOCOL_ID_IKE,
+                        IkePayload.SPI_LEN_NOT_INCLUDED,
+                        IkePayload.SPI_NOT_INCLUDED,
+                        mSaProposalOne,
+                        false /*has no unrecognized Tramsform*/);
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(proposal.getProposalLength());
+        proposal.encodeToByteBuffer(true /*is the last*/, byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(OUTBOUND_PROPOSAL_RAW_PACKET);
+        assertArrayEquals(expectedBytes, byteBuffer.array());
+    }
+
+    @Test
     public void testDecodeSaResponseWithMultipleProposal() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(TWO_PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_TWO_PROPOSAL_RAW_PACKET);
         Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
 
         try {
@@ -561,6 +638,19 @@ public final class IkeSaPayloadTest {
         }
     }
 
+    @Test
+    public void testEncodeIkeSaPayload() throws Exception {
+        IkeSaPayload saPayload = new IkeSaPayload(new SaProposal[] {mSaProposalOne});
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(saPayload.getPayloadLength());
+        saPayload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_KE, byteBuffer);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(
+                        OUTBOUND_SA_PAYLOAD_HEADER + OUTBOUND_PROPOSAL_RAW_PACKET);
+        assertArrayEquals(expectedBytes, byteBuffer.array());
+    }
+
     private void buildAndVerifySaRespProposal(byte[] saResponseBytes, Transform[] decodedTransforms)
             throws Exception {
         // Build response SA payload from decoding bytes.
@@ -577,7 +667,7 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testGetVerifiedNegotiatedProposal() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
 
         buildAndVerifySaRespProposal(inputPacket, mValidNegotiatedTransformSet);
     }
@@ -585,7 +675,7 @@ public final class IkeSaPayloadTest {
     // Test throwing when negotiated proposal in SA response payload has unrecognized Transform.
     @Test
     public void testGetVerifiedNegotiatedProposalWithUnrecogTransform() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
 
         Transform[] negotiatedTransformSet =
                 Arrays.copyOfRange(
@@ -602,7 +692,7 @@ public final class IkeSaPayloadTest {
     // Test throwing when negotiated proposal has invalid proposal number.
     @Test
     public void testGetVerifiedNegotiatedProposalWithInvalidNumber() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
         inputPacket[PROPOSAL_NUMBER_OFFSET] = (byte) 10;
 
         try {
@@ -615,7 +705,7 @@ public final class IkeSaPayloadTest {
     // Test throwing when negotiated proposal has mismatched protocol ID.
     @Test
     public void testGetVerifiedNegotiatedProposalWithMisMatchedProtocol() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
         inputPacket[PROTOCOL_ID_OFFSET] = IkePayload.PROTOCOL_ID_ESP;
 
         try {
@@ -628,7 +718,7 @@ public final class IkeSaPayloadTest {
     // Test throwing when negotiated proposal has Transform that was not proposed in request.
     @Test
     public void testGetVerifiedNegotiatedProposalWithMismatchedTransform() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
 
         Transform[] negotiatedTransformSet =
                 Arrays.copyOfRange(
@@ -645,7 +735,7 @@ public final class IkeSaPayloadTest {
     // Test throwing when negotiated proposal is lack of a certain type Transform.
     @Test
     public void testGetVerifiedNegotiatedProposalWithoutTransform() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(PROPOSAL_RAW_PACKET);
+        byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
 
         try {
             buildAndVerifySaRespProposal(inputPacket, new Transform[0]);
