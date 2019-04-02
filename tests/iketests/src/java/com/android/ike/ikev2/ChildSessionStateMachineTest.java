@@ -63,12 +63,13 @@ public final class ChildSessionStateMachineTest {
 
     private ISaRecordHelper mMockSaRecordHelper;
     private IChildSessionCallback mMockChildSessionCallback;
-    private ChildSessionOptions mMockChildSessionOptions;
+    private ChildSessionOptions mChildSessionOptions;
 
     public ChildSessionStateMachineTest() {
         mMockSaRecordHelper = mock(SaRecord.ISaRecordHelper.class);
         mMockChildSessionCallback = mock(IChildSessionCallback.class);
-        mMockChildSessionOptions = mock(ChildSessionOptions.class);
+
+        mChildSessionOptions = new ChildSessionOptions();
     }
 
     @Before
@@ -77,7 +78,7 @@ public final class ChildSessionStateMachineTest {
         mLooper = new TestLooper();
         mChildSessionStateMachine =
                 new ChildSessionStateMachine(
-                        "ChildSessionStateMachine", mLooper.getLooper(), mMockChildSessionOptions);
+                        "ChildSessionStateMachine", mLooper.getLooper(), mChildSessionOptions);
         mChildSessionStateMachine.setDbg(true);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
 

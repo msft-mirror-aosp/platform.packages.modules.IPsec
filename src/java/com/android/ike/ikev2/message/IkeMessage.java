@@ -239,7 +239,7 @@ public final class IkeMessage {
     byte[] attachEncodedHeader(byte[] encodedIkeBody) {
         ByteBuffer outputBuffer =
                 ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + encodedIkeBody.length);
-        ikeHeader.encodeToByteBuffer(outputBuffer);
+        ikeHeader.encodeToByteBuffer(outputBuffer, encodedIkeBody.length);
         outputBuffer.put(encodedIkeBody);
         return outputBuffer.array();
     }
@@ -352,7 +352,7 @@ public final class IkeMessage {
 
             ByteBuffer outputBuffer =
                     ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + skPayload.getPayloadLength());
-            ikeHeader.encodeToByteBuffer(outputBuffer);
+            ikeHeader.encodeToByteBuffer(outputBuffer, skPayload.getPayloadLength());
             skPayload.encodeToByteBuffer(firstPayload, outputBuffer);
 
             return outputBuffer.array();
@@ -360,7 +360,7 @@ public final class IkeMessage {
 
         @Override
         public IkeMessage decode(IkeHeader header, byte[] inputPacket) throws IkeException {
-            header.checkValidOrThrow(inputPacket.length);
+            header.checkInboundValidOrThrow(inputPacket.length);
 
             byte[] unencryptedPayloads =
                     Arrays.copyOfRange(
@@ -397,7 +397,7 @@ public final class IkeMessage {
                 SecretKey dKey)
                 throws IkeException, GeneralSecurityException {
 
-            header.checkValidOrThrow(inputPacket.length);
+            header.checkInboundValidOrThrow(inputPacket.length);
 
             if (header.nextPayloadType != IkePayload.PAYLOAD_TYPE_SK) {
                 // TODO: b/123372339 Handle message containing unprotected payloads.

@@ -18,10 +18,9 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
-import android.util.Pair;
 
 import com.android.ike.ikev2.IkeDhParams;
 import com.android.ike.ikev2.SaProposal;
@@ -100,6 +99,7 @@ public final class IkeKePayloadTest {
 
         IkeKePayload payload = new IkeKePayload(CRITICAL_BIT, inputPacket);
 
+        assertFalse(payload.isOutbound);
         assertEquals(EXPECTED_DH_GROUP, payload.dhGroup);
 
         byte[] keyExchangeData = TestUtils.hexStringToByteArray(KEY_EXCHANGE_DATA_RAW_PACKET);
@@ -138,11 +138,11 @@ public final class IkeKePayloadTest {
 
     @Test
     public void testGetIkeKePayload() throws Exception {
-        Pair<DHPrivateKeySpec, IkeKePayload> pair =
-                IkeKePayload.getKePayload(SaProposal.DH_GROUP_1024_BIT_MODP);
+        IkeKePayload payload = new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP);
 
         // Test DHPrivateKeySpec
-        DHPrivateKeySpec privateKeySpec = pair.first;
+        assertTrue(payload.isOutbound);
+        DHPrivateKeySpec privateKeySpec = payload.localPrivateKey;
 
         BigInteger primeValue = privateKeySpec.getP();
         BigInteger expectedPrimeValue = new BigInteger(IkeDhParams.PRIME_1024_BIT_MODP, 16);
@@ -153,8 +153,6 @@ public final class IkeKePayloadTest {
         assertEquals(0, expectedGenValue.compareTo(genValue));
 
         // Test IkeKePayload
-        IkeKePayload payload = pair.second;
-
         assertEquals(EXPECTED_DH_GROUP, payload.dhGroup);
         assertEquals(EXPECTED_KE_DATA_LEN, payload.keyExchangeData.length);
     }
