@@ -18,7 +18,6 @@ package com.android.ike.ikev2;
 import android.os.Looper;
 import android.os.Message;
 import android.util.LongSparseArray;
-import android.util.Pair;
 import android.util.SparseArray;
 
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
@@ -214,6 +213,19 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /**
+     * Receive IKE packet from remote server.
+     *
+     * <p>This method is called synchronously from IkeSocket. It proxies the synchronous call as an
+     * asynchronous job to the IkeSessionStateMachine handler.
+     *
+     * @param ikeHeader the decoded IKE header.
+     * @param ikePacketBytes the byte array of the entire received IKE packet.
+     */
+    public void receiveIkePacket(IkeHeader ikeHeader, byte[] ikePacketBytes) {
+        sendMessage(CMD_RECEIVE_IKE_PACKET, new ReceivedIkePacket(ikeHeader, ikePacketBytes));
+    }
+
+    /**
      * ReceivedIkePacket is a package private data container consists of decoded IkeHeader and
      * encoded IKE packet in a byte array.
      */
@@ -223,9 +235,9 @@ public class IkeSessionStateMachine extends StateMachine {
         /** Entire encoded IKE message including IKE header */
         public final byte[] ikePacketBytes;
 
-        ReceivedIkePacket(Pair<IkeHeader, byte[]> ikePacketPair) {
-            ikeHeader = ikePacketPair.first;
-            ikePacketBytes = ikePacketPair.second;
+        ReceivedIkePacket(IkeHeader ikeHeader, byte[] ikePacketBytes) {
+            this.ikeHeader = ikeHeader;
+            this.ikePacketBytes = ikePacketBytes;
         }
     }
 

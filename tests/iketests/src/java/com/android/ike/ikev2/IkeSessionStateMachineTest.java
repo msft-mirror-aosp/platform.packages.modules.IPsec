@@ -27,7 +27,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.os.test.TestLooper;
-import android.util.Pair;
 
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
@@ -67,12 +66,12 @@ public final class IkeSessionStateMachineTest {
     private ReceivedIkePacket makeDummyUnencryptedReceivedIkePacket(int packetType)
             throws Exception {
         IkeMessage dummyIkeMessage = makeDummyIkeMessageForTest(0, 0, false, false);
-        Pair<IkeHeader, byte[]> dummyIkePacketPair =
-                new Pair<>(dummyIkeMessage.ikeHeader, new byte[0]);
-        when(mMockIkeMessageHelper.decode(dummyIkePacketPair.first, dummyIkePacketPair.second))
+        byte[] dummyIkePacketBytes = new byte[0];
+
+        when(mMockIkeMessageHelper.decode(dummyIkeMessage.ikeHeader, dummyIkePacketBytes))
                 .thenReturn(dummyIkeMessage);
         when(mMockIkeMessageHelper.getMessageType(dummyIkeMessage)).thenReturn(packetType);
-        return new ReceivedIkePacket(dummyIkePacketPair);
+        return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
 
     private ReceivedIkePacket makeDummyEncryptedReceivedIkePacket(
@@ -81,16 +80,16 @@ public final class IkeSessionStateMachineTest {
         IkeMessage dummyIkeMessage =
                 makeDummyIkeMessageForTest(
                         ikeSaRecord.initiatorSpi, ikeSaRecord.responderSpi, fromIkeInit, true);
-        Pair<IkeHeader, byte[]> dummyIkePacketPair =
-                new Pair<>(dummyIkeMessage.ikeHeader, new byte[0]);
+        byte[] dummyIkePacketBytes = new byte[0];
+
         when(mMockIkeMessageHelper.decode(
                         mMockIkeSessionOptions,
                         ikeSaRecord,
-                        dummyIkePacketPair.first,
-                        dummyIkePacketPair.second))
+                        dummyIkeMessage.ikeHeader,
+                        dummyIkePacketBytes))
                 .thenReturn(dummyIkeMessage);
         when(mMockIkeMessageHelper.getMessageType(dummyIkeMessage)).thenReturn(packetType);
-        return new ReceivedIkePacket(dummyIkePacketPair);
+        return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
 
     private IkeMessage makeDummyIkeMessageForTest(
