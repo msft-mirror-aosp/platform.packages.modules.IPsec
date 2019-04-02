@@ -234,7 +234,7 @@ public final class IkeSessionStateMachineTest {
         mUdpEncapSocket = ipSecManager.openUdpEncapsulationSocket();
 
         mIkeSessionOptions = buildIkeSessionOptions();
-        mChildSessionOptions = new ChildSessionOptions();
+        mChildSessionOptions = buildChildSessionOptions();
 
         mIkeEncryptionTransform =
                 new EncryptionTransform(
@@ -298,6 +298,17 @@ public final class IkeSessionStateMachineTest {
                         .setRemoteAuthPsk(psk)
                         .build();
         return sessionOptions;
+    }
+
+    private ChildSessionOptions buildChildSessionOptions() throws Exception {
+        SaProposal saProposal =
+                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
+                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
+                        .build();
+
+        return new ChildSessionOptions.Builder().addSaProposal(saProposal).build();
     }
 
     private ReceivedIkePacket makeIkeInitResponse() throws Exception {
