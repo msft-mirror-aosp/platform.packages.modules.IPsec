@@ -20,6 +20,6 @@ package com.android.ike.ikev2;
  * ChildSessionOptions contains user-provided Child SA proposals and negotiated Child SA
  * information.
  */
-public class ChildSessionOptions {
+public final class ChildSessionOptions {
     // TODO: Implement it.
 }

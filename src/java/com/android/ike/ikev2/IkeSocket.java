@@ -73,18 +73,20 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
     @VisibleForTesting static final int NON_ESP_MARKER_LEN = 4;
     @VisibleForTesting static final byte[] NON_ESP_MARKER = new byte[NON_ESP_MARKER_LEN];
 
-    // Package private map from UdpEncapsulationSocket to IkeSocket instances.
-    static Map<UdpEncapsulationSocket, IkeSocket> sFdToIkeSocketMap = new HashMap<>();
+    // Map from UdpEncapsulationSocket to IkeSocket instances.
+    private static Map<UdpEncapsulationSocket, IkeSocket> sFdToIkeSocketMap = new HashMap<>();
 
     private static IPacketReceiver sPacketReceiver = new PacketReceiver();
 
-    // Map from locally generated IKE SPI to IkeSessionStateMachine instances.
-    private final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession =
+    // Package private map from locally generated IKE SPI to IkeSessionStateMachine instances.
+    @VisibleForTesting
+    final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession =
             new LongSparseArray<>();
     // UdpEncapsulationSocket for sending and receving IKE packet.
     private final UdpEncapsulationSocket mUdpEncapSocket;
 
     /** Package private */
+    @VisibleForTesting
     int mRefCount;
 
     private IkeSocket(UdpEncapsulationSocket udpEncapSocket, Handler handler) {
