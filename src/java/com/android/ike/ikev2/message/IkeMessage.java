@@ -103,7 +103,15 @@ public final class IkeMessage {
         ikePayloadList = payloadList;
     }
 
-    static Provider getSecurityProvider() {
+    /**
+     * Get security provider for IKE library
+     *
+     * <p>Use BouncyCastleProvider as the default security provider.
+     *
+     * @return the security provider of IKE library.
+     */
+    public static Provider getSecurityProvider() {
+        // TODO: Move this getter out of IKE message package since not only this package uses it.
         return SECURITY_PROVIDER;
     }
 
