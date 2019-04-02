@@ -319,8 +319,35 @@ public final class IkeMessage {
                 IkeSessionOptions ikeSessionOptions,
                 IkeSaRecord ikeSaRecord,
                 IkeMessage ikeMessage) {
-            // TODO: Implement it.
+            // TODO: Extract crypto attributes and call encrypt()
             return null;
+        }
+
+        //TODO: Create and use a container class for crypto algorithms and keys.
+        private byte[] encryptAndEncode(
+                IkeHeader ikeHeader,
+                @PayloadType int firstPayload,
+                byte[] unencryptedPayloads,
+                Mac integrityMac,
+                int checksumLen,
+                Cipher encryptCipher,
+                SecretKey eKey) {
+            IkeSkPayload skPayload =
+                    new IkeSkPayload(
+                            ikeHeader,
+                            firstPayload,
+                            unencryptedPayloads,
+                            integrityMac,
+                            checksumLen,
+                            encryptCipher,
+                            eKey);
+
+            ByteBuffer outputBuffer =
+                    ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + skPayload.getPayloadLength());
+            ikeHeader.encodeToByteBuffer(outputBuffer);
+            skPayload.encodeToByteBuffer(firstPayload, outputBuffer);
+
+            return outputBuffer.array();
         }
 
         @Override

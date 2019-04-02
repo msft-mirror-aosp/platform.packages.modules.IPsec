@@ -17,9 +17,13 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 import org.junit.Before;
 import org.junit.Test;
+
+import java.security.GeneralSecurityException;
+import java.util.Arrays;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -65,9 +69,40 @@ public final class IkeEncryptedPayloadBodyTest {
     private SecretKey mAesCbcKey;
     private Mac mHmacSha1IntegrityMac;
 
+    private byte[] mDataToPadAndEncrypt;
+    private byte[] mDataToAuthenticate;
+    private byte[] mEncryptedPaddedData;
+    private byte[] mIkeMessage;
+
+    private byte[] mChecksum;
+    private byte[] mIv;
+    private byte[] mPadding;
+
     // TODO: Add tests for authenticating and decrypting received message.
     @Before
     public void setUp() throws Exception {
+        mDataToPadAndEncrypt =
+                TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_UNENCRYPTED_DATA);
+        String hexStringToAuthenticate =
+                IKE_AUTH_INIT_REQUEST_HEADER
+                        + IKE_AUTH_INIT_REQUEST_SK_HEADER
+                        + IKE_AUTH_INIT_REQUEST_IV
+                        + IKE_AUTH_INIT_REQUEST_ENCRYPT_PADDED_DATA;
+        mDataToAuthenticate = TestUtils.hexStringToByteArray(hexStringToAuthenticate);
+        mEncryptedPaddedData =
+                TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_ENCRYPT_PADDED_DATA);
+        mIkeMessage =
+                TestUtils.hexStringToByteArray(
+                        IKE_AUTH_INIT_REQUEST_HEADER
+                                + IKE_AUTH_INIT_REQUEST_SK_HEADER
+                                + IKE_AUTH_INIT_REQUEST_IV
+                                + IKE_AUTH_INIT_REQUEST_ENCRYPT_PADDED_DATA
+                                + IKE_AUTH_INIT_REQUEST_CHECKSUM);
+
+        mChecksum = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_CHECKSUM);
+        mIv = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_IV);
+        mPadding = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_PADDING);
+
         mAesCbcCipher = Cipher.getInstance(ENCR_ALGO_AES_CBC, IkeMessage.getSecurityProvider());
         byte[] encryptKeyBytes = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
         mAesCbcKey = new SecretKeySpec(encryptKeyBytes, ENCR_ALGO_AES_CBC);
@@ -81,20 +116,30 @@ public final class IkeEncryptedPayloadBodyTest {
 
     @Test
     public void testCalculateChecksum() throws Exception {
-        String hexStringToAuthenticate =
-                IKE_AUTH_INIT_REQUEST_HEADER
-                        + IKE_AUTH_INIT_REQUEST_SK_HEADER
-                        + IKE_AUTH_INIT_REQUEST_IV
-                        + IKE_AUTH_INIT_REQUEST_ENCRYPT_PADDED_DATA;
-        byte[] byteToAuthenticate = TestUtils.hexStringToByteArray(hexStringToAuthenticate);
-
-        byte[] expectedCheckSum = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_CHECKSUM);
-
         byte[] calculatedChecksum =
                 IkeEncryptedPayloadBody.calculateChecksum(
-                        byteToAuthenticate, mHmacSha1IntegrityMac, HMAC_SHA1_CHECKSUM_LEN);
+                        mDataToAuthenticate, mHmacSha1IntegrityMac, HMAC_SHA1_CHECKSUM_LEN);
 
-        assertArrayEquals(expectedCheckSum, calculatedChecksum);
+        assertArrayEquals(mChecksum, calculatedChecksum);
+    }
+
+    @Test
+    public void testValidateChecksum() throws Exception {
+        IkeEncryptedPayloadBody.validateChecksumOrThrow(
+                mDataToAuthenticate, mHmacSha1IntegrityMac, mChecksum);
+    }
+
+    @Test
+    public void testThrowForInvalidChecksum() throws Exception {
+        byte[] dataToAuthenticate = Arrays.copyOf(mDataToAuthenticate, mDataToAuthenticate.length);
+        dataToAuthenticate[0]++;
+
+        try {
+            IkeEncryptedPayloadBody.validateChecksumOrThrow(
+                    dataToAuthenticate, mHmacSha1IntegrityMac, mChecksum);
+            fail("Expected GeneralSecurityException due to mismatched checksum.");
+        } catch (GeneralSecurityException expected) {
+        }
     }
 
     @Test
@@ -132,40 +177,37 @@ public final class IkeEncryptedPayloadBodyTest {
 
     @Test
     public void testEncrypt() throws Exception {
-        byte[] dataToEncrypt =
-                TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_UNENCRYPTED_DATA);
-        byte[] iv = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_IV);
-        byte[] padding = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_PADDING);
-
         byte[] calculatedData =
                 IkeEncryptedPayloadBody.encrypt(
-                        dataToEncrypt, mAesCbcCipher, mAesCbcKey, iv, padding);
-        byte[] expectedData =
-                TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_ENCRYPT_PADDED_DATA);
+                        mDataToPadAndEncrypt, mAesCbcCipher, mAesCbcKey, mIv, mPadding);
 
-        assertArrayEquals(expectedData, calculatedData);
+        assertArrayEquals(mEncryptedPaddedData, calculatedData);
+    }
+
+    @Test
+    public void testDecrypt() throws Exception {
+        byte[] calculatedPlainText =
+                IkeEncryptedPayloadBody.decrypt(
+                        mEncryptedPaddedData, mAesCbcCipher, mAesCbcKey, mIv);
+
+        assertArrayEquals(mDataToPadAndEncrypt, calculatedPlainText);
     }
 
     @Test
     public void testBuildAndEncodeOutboundIkeEncryptedPayloadBody() throws Exception {
-        byte[] ikeAndPayloadHeader =
-                TestUtils.hexStringToByteArray(
-                        IKE_AUTH_INIT_REQUEST_HEADER + IKE_AUTH_INIT_REQUEST_SK_HEADER);
-        byte[] unencryptedPayloads =
-                TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_UNENCRYPTED_DATA);
-        byte[] iv = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_IV);
-        byte[] padding = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_PADDING);
+        IkeHeader ikeHeader = new IkeHeader(mIkeMessage);
 
         IkeEncryptedPayloadBody paylaodBody =
                 new IkeEncryptedPayloadBody(
-                        ikeAndPayloadHeader,
-                        unencryptedPayloads,
+                        ikeHeader,
+                        IkePayload.PAYLOAD_TYPE_ID_INITIATOR,
+                        mDataToPadAndEncrypt,
                         mHmacSha1IntegrityMac,
                         HMAC_SHA1_CHECKSUM_LEN,
                         mAesCbcCipher,
                         mAesCbcKey,
-                        iv,
-                        padding);
+                        mIv,
+                        mPadding);
 
         byte[] expectedEncodedData =
                 TestUtils.hexStringToByteArray(
@@ -173,5 +215,18 @@ public final class IkeEncryptedPayloadBodyTest {
                                 + IKE_AUTH_INIT_REQUEST_ENCRYPT_PADDED_DATA
                                 + IKE_AUTH_INIT_REQUEST_CHECKSUM);
         assertArrayEquals(expectedEncodedData, paylaodBody.encode());
+    }
+
+    @Test
+    public void testAuthenticateAndDecryptInboundIkeEncryptedPayloadBody() throws Exception {
+        IkeEncryptedPayloadBody paylaodBody =
+                new IkeEncryptedPayloadBody(
+                        mIkeMessage,
+                        mHmacSha1IntegrityMac,
+                        HMAC_SHA1_CHECKSUM_LEN,
+                        mAesCbcCipher,
+                        mAesCbcKey);
+
+        assertArrayEquals(mDataToPadAndEncrypt, paylaodBody.getUnencryptedData());
     }
 }
