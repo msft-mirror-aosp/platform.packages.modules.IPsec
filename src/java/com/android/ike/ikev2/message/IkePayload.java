@@ -53,6 +53,7 @@ public abstract class IkePayload {
         PAYLOAD_TYPE_ID_RESPONDER,
         PAYLOAD_TYPE_NONCE,
         PAYLOAD_TYPE_NOTIFY,
+        PAYLOAD_TYPE_DELETE,
         PAYLOAD_TYPE_VENDOR,
         PAYLOAD_TYPE_TS_INITIATOR,
         PAYLOAD_TYPE_TS_RESPONDER,
@@ -78,6 +79,8 @@ public abstract class IkePayload {
     public static final int PAYLOAD_TYPE_NONCE = 40;
     /** Notify Payload */
     public static final int PAYLOAD_TYPE_NOTIFY = 41;
+    /** Delete Payload */
+    public static final int PAYLOAD_TYPE_DELETE = 42;
     /** Vendor Payload */
     public static final int PAYLOAD_TYPE_VENDOR = 43;
     /** Traffic Selector Payload of Child SA Initiator */
