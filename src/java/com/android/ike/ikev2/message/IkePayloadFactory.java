@@ -78,6 +78,8 @@ final class IkePayloadFactory {
                     return new IkeNoncePayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_NOTIFY:
                     return new IkeNotifyPayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_DELETE:
+                    return new IkeDeletePayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_VENDOR:
                     return new IkeVendorPayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_TS_INITIATOR:
