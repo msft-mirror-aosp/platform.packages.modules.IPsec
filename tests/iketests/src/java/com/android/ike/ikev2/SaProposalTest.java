@@ -66,16 +66,17 @@ public final class SaProposalTest {
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
 
-        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.mProtocolId);
+        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.getProtocolId());
         assertArrayEquals(
                 new EncryptionTransform[] {mEncryption3DesTransform},
-                proposal.mEncryptionAlgorithms);
+                proposal.getEncryptionTransforms());
         assertArrayEquals(
                 new IntegrityTransform[] {mIntegrityHmacSha1Transform},
-                proposal.mIntegrityAlgorithms);
+                proposal.getIntegrityTransforms());
         assertArrayEquals(
-                new PrfTransform[] {mPrfAes128XCbcTransform}, proposal.mPseudorandomFunctions);
-        assertArrayEquals(new DhGroupTransform[] {mDhGroup1024Transform}, proposal.mDhGroups);
+                new PrfTransform[] {mPrfAes128XCbcTransform}, proposal.getPrfTransforms());
+        assertArrayEquals(
+                new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
     }
 
     @Test
@@ -89,14 +90,15 @@ public final class SaProposalTest {
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
 
-        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.mProtocolId);
+        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.getProtocolId());
         assertArrayEquals(
                 new EncryptionTransform[] {mEncryptionAesGcm8Transform},
-                proposal.mEncryptionAlgorithms);
+                proposal.getEncryptionTransforms());
         assertArrayEquals(
-                new PrfTransform[] {mPrfAes128XCbcTransform}, proposal.mPseudorandomFunctions);
-        assertArrayEquals(new DhGroupTransform[] {mDhGroup1024Transform}, proposal.mDhGroups);
-        assertTrue(proposal.mIntegrityAlgorithms.length == 0);
+                new PrfTransform[] {mPrfAes128XCbcTransform}, proposal.getPrfTransforms());
+        assertArrayEquals(
+                new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
+        assertTrue(proposal.getIntegrityTransforms().length == 0);
     }
 
     @Test
@@ -109,14 +111,15 @@ public final class SaProposalTest {
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
                         .build();
 
-        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.mProtocolId);
+        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.getProtocolId());
         assertArrayEquals(
                 new EncryptionTransform[] {mEncryptionAesGcm8Transform},
-                proposal.mEncryptionAlgorithms);
+                proposal.getEncryptionTransforms());
         assertArrayEquals(
-                new IntegrityTransform[] {mIntegrityNoneTransform}, proposal.mIntegrityAlgorithms);
-        assertTrue(proposal.mPseudorandomFunctions.length == 0);
-        assertTrue(proposal.mDhGroups.length == 0);
+                new IntegrityTransform[] {mIntegrityNoneTransform},
+                proposal.getIntegrityTransforms());
+        assertTrue(proposal.getPrfTransforms().length == 0);
+        assertTrue(proposal.getDhGroupTransforms().length == 0);
     }
 
     @Test
@@ -129,14 +132,16 @@ public final class SaProposalTest {
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
 
-        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.mProtocolId);
+        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.getProtocolId());
         assertArrayEquals(
                 new EncryptionTransform[] {mEncryption3DesTransform},
-                proposal.mEncryptionAlgorithms);
+                proposal.getEncryptionTransforms());
         assertArrayEquals(
-                new IntegrityTransform[] {mIntegrityNoneTransform}, proposal.mIntegrityAlgorithms);
-        assertArrayEquals(new DhGroupTransform[] {mDhGroup1024Transform}, proposal.mDhGroups);
-        assertTrue(proposal.mPseudorandomFunctions.length == 0);
+                new IntegrityTransform[] {mIntegrityNoneTransform},
+                proposal.getIntegrityTransforms());
+        assertArrayEquals(
+                new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
+        assertTrue(proposal.getPrfTransforms().length == 0);
     }
 
     @Test

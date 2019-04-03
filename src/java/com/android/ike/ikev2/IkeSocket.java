@@ -25,8 +25,11 @@ import android.net.util.PacketReader;
 import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
+import android.util.Log;
 import android.util.LongSparseArray;
 
+import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.message.IkeHeader;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
@@ -60,24 +63,30 @@ import java.util.Map;
  * thread, there will not be concurrent modification problems.
  */
 public final class IkeSocket extends PacketReader implements AutoCloseable {
+    private static final String TAG = "IkeSocket";
+
     // TODO: b/129358324 Consider supporting IKE exchange without UDP Encapsulation.
     // UDP-encapsulated IKE packets MUST be sent to 4500.
     @VisibleForTesting static final int IKE_SERVER_PORT = 4500;
+
     // A Non-ESP marker helps the recipient to distinguish IKE packets from ESP packets.
     @VisibleForTesting static final int NON_ESP_MARKER_LEN = 4;
+    @VisibleForTesting static final byte[] NON_ESP_MARKER = new byte[NON_ESP_MARKER_LEN];
 
-    // Package private map from UdpEncapsulationSocket to IkeSocket instances.
-    static Map<UdpEncapsulationSocket, IkeSocket> sFdToIkeSocketMap = new HashMap<>();
+    // Map from UdpEncapsulationSocket to IkeSocket instances.
+    private static Map<UdpEncapsulationSocket, IkeSocket> sFdToIkeSocketMap = new HashMap<>();
 
     private static IPacketReceiver sPacketReceiver = new PacketReceiver();
 
-    // Map from locally generated IKE SPI to IkeSessionStateMachine instances.
-    private final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession =
+    // Package private map from locally generated IKE SPI to IkeSessionStateMachine instances.
+    @VisibleForTesting
+    final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession =
             new LongSparseArray<>();
     // UdpEncapsulationSocket for sending and receving IKE packet.
     private final UdpEncapsulationSocket mUdpEncapSocket;
 
     /** Package private */
+    @VisibleForTesting
     int mRefCount;
 
     private IkeSocket(UdpEncapsulationSocket udpEncapSocket, Handler handler) {
@@ -138,10 +147,50 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
     }
 
     /** Package private */
+    @VisibleForTesting
     static final class PacketReceiver implements IPacketReceiver {
         public void handlePacket(
                 byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession) {
-            // TODO: Decode IKE header and demultiplex IKE packet
+            // TODO: b/129708574 Consider only logging the error some % of the time it happens, or
+            // only logging the error the first time it happens and then keep a count to prevent
+            // logspam.
+
+            ByteBuffer byteBuffer = ByteBuffer.wrap(recvbuf);
+
+            // Check the existence of the Non-ESP Marker. A received packet can be either an IKE
+            // packet starts with 4 zero-valued bytes Non-ESP Marker or an ESP packet starts with 4
+            // bytes ESP SPI. ESP SPI value can never be zero.
+            byte[] espMarker = new byte[NON_ESP_MARKER_LEN];
+            byteBuffer.get(espMarker);
+            if (!Arrays.equals(NON_ESP_MARKER, espMarker)) {
+                // Drop the received ESP packet.
+                Log.e(TAG, "Receive an ESP packet.");
+                return;
+            }
+
+            try {
+                // Re-direct IKE packet to IkeSessionStateMachine according to the locally generated
+                // IKE SPI.
+                byte[] ikePacketBytes = new byte[byteBuffer.remaining()];
+                byteBuffer.get(ikePacketBytes);
+                IkeHeader ikeHeader = new IkeHeader(ikePacketBytes);
+
+                long localGeneratedSpi =
+                        ikeHeader.fromIkeInitiator
+                                ? ikeHeader.ikeResponderSpi
+                                : ikeHeader.ikeInitiatorSpi;
+
+                IkeSessionStateMachine ikeStateMachine = spiToIkeSession.get(localGeneratedSpi);
+                if (ikeStateMachine == null) {
+                    Log.e(TAG, "Unrecognized IKE SPI.");
+                    // TODO: Handle invalid IKE SPI error
+                } else {
+                    ikeStateMachine.receiveIkePacket(ikeHeader, ikePacketBytes);
+                }
+            } catch (IkeException e) {
+                // Handle invalid IKE header
+                Log.e(TAG, "Can't parse malformed IKE packet header.");
+            }
         }
     }
 
@@ -171,7 +220,7 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
             ByteBuffer buffer = ByteBuffer.allocate(NON_ESP_MARKER_LEN + ikePacket.length);
 
             // Build outbound UDP Encapsulation packet body for sending IKE message.
-            buffer.put(new byte[NON_ESP_MARKER_LEN]).put(ikePacket);
+            buffer.put(NON_ESP_MARKER).put(ikePacket);
             buffer.rewind();
 
             // Use unconnected UDP socket because one {@UdpEncapsulationSocket} may be shared by
