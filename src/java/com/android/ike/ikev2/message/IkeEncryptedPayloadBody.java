@@ -139,7 +139,12 @@ final class IkeEncryptedPayloadBody {
         ByteBuffer authenticatedSectionBuffer = ByteBuffer.allocate(dataToAuthenticateLength);
 
         // Encode IKE header
-        ikeHeader.encodeToByteBuffer(authenticatedSectionBuffer);
+        int encryptedPayloadLength =
+                IkePayload.GENERIC_HEADER_LENGTH
+                        + iv.length
+                        + mEncryptedAndPaddedData.length
+                        + checksumLen;
+        ikeHeader.encodeToByteBuffer(authenticatedSectionBuffer, encryptedPayloadLength);
 
         // Encode payload header. The next payload type field indicates the first payload nested in
         // this SkPayload/SkfPayload.

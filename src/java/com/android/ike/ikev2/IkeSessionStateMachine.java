@@ -17,19 +17,30 @@ package com.android.ike.ikev2;
 
 import android.os.Looper;
 import android.os.Message;
+import android.system.ErrnoException;
 import android.util.LongSparseArray;
 import android.util.SparseArray;
 
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.message.IkeHeader;
+import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
+import com.android.ike.ikev2.message.IkePayload;
+import com.android.ike.ikev2.message.IkeSaPayload;
+import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
 import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Set;
 
 /**
  * IkeSessionStateMachine tracks states and manages exchanges of this IKE session.
@@ -73,6 +84,11 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_LOCAL_REQUEST_REKEY_CHILD = CMD_LOCAL_REQUEST_BASE + 7;
     // TODO: Add signals for other procedure types and notificaitons.
 
+    // Remember locally assigned IKE SPIs to avoid SPI collision.
+    private static final Set<Long> ASSIGNED_LOCAL_IKE_SPI_SET = new HashSet<>();
+    private static final int MAX_ASSIGN_IKE_SPI_ATTEMPTS = 100;
+    private static final SecureRandom IKE_SPI_RANDOM = new SecureRandom();
+
     private final IkeSessionOptions mIkeSessionOptions;
     private final ChildSessionOptions mFirstChildSessionOptions;
     /** Map that stores all IkeSaRecords, keyed by remotely generated IKE SPI. */
@@ -83,6 +99,12 @@ public class IkeSessionStateMachine extends StateMachine {
      * Child Session is doing Rekey.
      */
     private final SparseArray<ChildSessionStateMachine> mSpiToChildSessionMap;
+
+    /**
+     * Package private socket that sends and receives encoded IKE message. Initialized in Initial
+     * State.
+     */
+    @VisibleForTesting IkeSocket mIkeSocket;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -145,9 +167,55 @@ public class IkeSessionStateMachine extends StateMachine {
         setInitialState(mInitial);
     }
 
+    // Generate IKE SPI. Throw an exception if it failed and handle this exception in current State.
+    private static Long getIkeSpiOrThrow() {
+        for (int i = 0; i < MAX_ASSIGN_IKE_SPI_ATTEMPTS; i++) {
+            long spi = IKE_SPI_RANDOM.nextLong();
+            if (ASSIGNED_LOCAL_IKE_SPI_SET.add(spi)) return spi;
+        }
+        throw new IllegalStateException("Failed to generate IKE SPI.");
+    }
+
     private IkeMessage buildIkeInitReq() {
-        // TODO:Build packet according to mIkeSessionOptions.
-        return null;
+        // TODO: Handle IKE SPI assigning error in CreateIkeLocalIkeInit State.
+
+        List<IkePayload> payloadList = new LinkedList<>();
+
+        // Generate IKE SPI
+        long initSpi = getIkeSpiOrThrow();
+        long respSpi = 0;
+
+        // It is validated in IkeSessionOptions.Builder to ensure IkeSessionOptions has at least one
+        // SaProposal and all SaProposals are valid for IKE SA negotiation.
+        SaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
+
+        // Build SA Payload
+        IkeSaPayload saPayload = new IkeSaPayload(saProposals);
+        payloadList.add(saPayload);
+
+        // Build KE Payload using the first DH group number in the first SaProposal.
+        DhGroupTransform dhGroupTransform = saProposals[0].getDhGroupTransforms()[0];
+        IkeKePayload kePayload = new IkeKePayload(dhGroupTransform.id);
+        payloadList.add(kePayload);
+
+        // Build Nonce Payload
+        IkeNoncePayload noncePayload = new IkeNoncePayload();
+        payloadList.add(noncePayload);
+
+        // TODO: Add Notification Payloads according to user configurations.
+
+        // Build IKE header
+        IkeHeader ikeHeader =
+                new IkeHeader(
+                        initSpi,
+                        respSpi,
+                        IkePayload.PAYLOAD_TYPE_SA,
+                        IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                        false /*isResponseMsg*/,
+                        true /*fromIkeInitiator*/,
+                        0 /*messageId*/);
+
+        return new IkeMessage(ikeHeader, payloadList);
     }
 
     private IkeMessage buildIkeAuthReq() {
@@ -271,6 +339,15 @@ public class IkeSessionStateMachine extends StateMachine {
 
     /** Initial state of IkeSessionStateMachine. */
     class Initial extends State {
+        @Override
+        public void enter() {
+            try {
+                mIkeSocket = IkeSocket.getIkeSocket(mIkeSessionOptions.getUdpEncapsulationSocket());
+            } catch (ErrnoException e) {
+                // TODO: handle exception and close IkeSession.
+            }
+        }
+
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
@@ -429,6 +506,7 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             mRequestMsg = buildRequest();
             mRequestPacket = encodeRequest();
+            mIkeSocket.sendIkePacket(mRequestPacket, mIkeSessionOptions.getServerAddress());
             // TODO: Send out packet and start retransmission timer.
         }
 
@@ -444,12 +522,20 @@ public class IkeSessionStateMachine extends StateMachine {
         // CreateIkeLocalInit should override encodeRequest() to encode unencrypted packet
         protected byte[] encodeRequest() {
             // TODO: encrypt and encode mRequestMsg
-            return null;
-        };
+            return new byte[0];
+        }
     }
 
     /** CreateIkeLocalIkeInit represents state when IKE library initiates IKE_INIT exchange. */
     class CreateIkeLocalIkeInit extends LocalNewExchangeBase {
+
+        @Override
+        public void enter() {
+            super.enter();
+            mIkeSocket.registerIke(
+                    mRequestMsg.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
+        }
+
         @Override
         protected IkeMessage buildRequest() {
             return buildIkeInitReq();
@@ -457,8 +543,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         protected byte[] encodeRequest() {
-            // TODO: Encode an unencrypted IKE packet.
-            return null;
+            return mRequestMsg.encode();
         }
 
         @Override
@@ -534,8 +619,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                         mFirstChildSessionOptions);
                         // TODO: Replace null input params to payload lists in IKE_AUTH request and
                         // IKE_AUTH response for negotiating Child SA.
-                        firstChild.handleFirstChildExchange(
-                                null, null, new ChildSessionCallback());
+                        firstChild.handleFirstChildExchange(null, null, new ChildSessionCallback());
 
                         transitionTo(mIdle);
                     } catch (IkeException e) {

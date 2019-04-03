@@ -139,17 +139,17 @@ public final class SaProposal {
     }
 
     /** Package private */
-    @IkePayload.ProtocolId final int mProtocolId;
+    @IkePayload.ProtocolId private final int mProtocolId;
     /** Package private */
-    final EncryptionTransform[] mEncryptionAlgorithms;
+    private final EncryptionTransform[] mEncryptionAlgorithms;
     /** Package private */
-    final PrfTransform[] mPseudorandomFunctions;
+    private final PrfTransform[] mPseudorandomFunctions;
     /** Package private */
-    final IntegrityTransform[] mIntegrityAlgorithms;
+    private final IntegrityTransform[] mIntegrityAlgorithms;
     /** Package private */
-    final DhGroupTransform[] mDhGroups;
+    private final DhGroupTransform[] mDhGroups;
     /** Package private */
-    final EsnTransform[] mEsns;
+    private final EsnTransform[] mEsns;
 
     private SaProposal(
             @IkePayload.ProtocolId int protocol,
@@ -225,6 +225,37 @@ public final class SaProposal {
         if (selected.length == 0) return true;
 
         return Arrays.asList(selectFrom).contains(selected[0]);
+    }
+
+    /*Package private*/
+    @IkePayload.ProtocolId
+    int getProtocolId() {
+        return mProtocolId;
+    }
+
+    /*Package private*/
+    EncryptionTransform[] getEncryptionTransforms() {
+        return mEncryptionAlgorithms;
+    }
+
+    /*Package private*/
+    PrfTransform[] getPrfTransforms() {
+        return mPseudorandomFunctions;
+    }
+
+    /*Package private*/
+    IntegrityTransform[] getIntegrityTransforms() {
+        return mIntegrityAlgorithms;
+    }
+
+    /*Package private*/
+    DhGroupTransform[] getDhGroupTransforms() {
+        return mDhGroups;
+    }
+
+    /*Package private*/
+    EsnTransform[] getEsnTransforms() {
+        return mEsns;
     }
 
     /**
