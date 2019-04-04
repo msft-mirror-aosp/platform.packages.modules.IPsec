@@ -78,6 +78,8 @@ final class IkePayloadFactory {
                     return new IkeNoncePayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_NOTIFY:
                     return new IkeNotifyPayload(isCritical, payloadBody);
+                case IkePayload.PAYLOAD_TYPE_DELETE:
+                    return new IkeDeletePayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_VENDOR:
                     return new IkeVendorPayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_TS_INITIATOR:
@@ -129,7 +131,7 @@ final class IkePayloadFactory {
      *
      * @param message the byte array contains the whole IKE message.
      * @param integrityMac the initialized Mac for integrity check.
-     * @param expectedChecksumLen the expected length of integrity checksum.
+     * @param checksumLen the checksum length of negotiated integrity algorithm.
      * @param decryptCipher the uninitialized Cipher for doing decryption.
      * @param dKey the decryption key.
      * @return a pair including IkePayload and next payload type.
@@ -139,7 +141,7 @@ final class IkePayloadFactory {
     protected static Pair<IkeSkPayload, Integer> getIkeSkPayload(
             byte[] message,
             Mac integrityMac,
-            int expectedChecksumLen,
+            int checksumLen,
             Cipher decryptCipher,
             SecretKey dKey)
             throws IkeException, GeneralSecurityException {
@@ -175,7 +177,7 @@ final class IkePayloadFactory {
                         isCritical,
                         message,
                         integrityMac,
-                        expectedChecksumLen,
+                        checksumLen,
                         decryptCipher,
                         dKey);
         return new Pair(payload, nextPayloadType);

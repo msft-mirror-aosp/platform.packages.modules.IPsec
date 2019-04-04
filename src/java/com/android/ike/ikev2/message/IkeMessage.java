@@ -103,7 +103,15 @@ public final class IkeMessage {
         ikePayloadList = payloadList;
     }
 
-    static Provider getSecurityProvider() {
+    /**
+     * Get security provider for IKE library
+     *
+     * <p>Use BouncyCastleProvider as the default security provider.
+     *
+     * @return the security provider of IKE library.
+     */
+    public static Provider getSecurityProvider() {
+        // TODO: Move this getter out of IKE message package since not only this package uses it.
         return SECURITY_PROVIDER;
     }
 
@@ -231,7 +239,7 @@ public final class IkeMessage {
     byte[] attachEncodedHeader(byte[] encodedIkeBody) {
         ByteBuffer outputBuffer =
                 ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + encodedIkeBody.length);
-        ikeHeader.encodeToByteBuffer(outputBuffer);
+        ikeHeader.encodeToByteBuffer(outputBuffer, encodedIkeBody.length);
         outputBuffer.put(encodedIkeBody);
         return outputBuffer.array();
     }
@@ -319,13 +327,40 @@ public final class IkeMessage {
                 IkeSessionOptions ikeSessionOptions,
                 IkeSaRecord ikeSaRecord,
                 IkeMessage ikeMessage) {
-            // TODO: Implement it.
+            // TODO: Extract crypto attributes and call encrypt()
             return null;
+        }
+
+        //TODO: Create and use a container class for crypto algorithms and keys.
+        private byte[] encryptAndEncode(
+                IkeHeader ikeHeader,
+                @PayloadType int firstPayload,
+                byte[] unencryptedPayloads,
+                Mac integrityMac,
+                int checksumLen,
+                Cipher encryptCipher,
+                SecretKey eKey) {
+            IkeSkPayload skPayload =
+                    new IkeSkPayload(
+                            ikeHeader,
+                            firstPayload,
+                            unencryptedPayloads,
+                            integrityMac,
+                            checksumLen,
+                            encryptCipher,
+                            eKey);
+
+            ByteBuffer outputBuffer =
+                    ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + skPayload.getPayloadLength());
+            ikeHeader.encodeToByteBuffer(outputBuffer, skPayload.getPayloadLength());
+            skPayload.encodeToByteBuffer(firstPayload, outputBuffer);
+
+            return outputBuffer.array();
         }
 
         @Override
         public IkeMessage decode(IkeHeader header, byte[] inputPacket) throws IkeException {
-            header.checkValidOrThrow(inputPacket.length);
+            header.checkInboundValidOrThrow(inputPacket.length);
 
             byte[] unencryptedPayloads =
                     Arrays.copyOfRange(
@@ -362,7 +397,7 @@ public final class IkeMessage {
                 SecretKey dKey)
                 throws IkeException, GeneralSecurityException {
 
-            header.checkValidOrThrow(inputPacket.length);
+            header.checkInboundValidOrThrow(inputPacket.length);
 
             if (header.nextPayloadType != IkePayload.PAYLOAD_TYPE_SK) {
                 // TODO: b/123372339 Handle message containing unprotected payloads.

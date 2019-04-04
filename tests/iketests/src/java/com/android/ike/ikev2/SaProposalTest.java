@@ -64,18 +64,19 @@ public final class SaProposalTest {
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                        .buildOrThrow();
+                        .build();
 
-        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.mProtocolId);
+        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.getProtocolId());
         assertArrayEquals(
                 new EncryptionTransform[] {mEncryption3DesTransform},
-                proposal.mEncryptionAlgorithms);
+                proposal.getEncryptionTransforms());
         assertArrayEquals(
                 new IntegrityTransform[] {mIntegrityHmacSha1Transform},
-                proposal.mIntegrityAlgorithms);
+                proposal.getIntegrityTransforms());
         assertArrayEquals(
-                new PrfTransform[] {mPrfAes128XCbcTransform}, proposal.mPseudorandomFunctions);
-        assertArrayEquals(new DhGroupTransform[] {mDhGroup1024Transform}, proposal.mDhGroups);
+                new PrfTransform[] {mPrfAes128XCbcTransform}, proposal.getPrfTransforms());
+        assertArrayEquals(
+                new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
     }
 
     @Test
@@ -87,16 +88,17 @@ public final class SaProposalTest {
                                 SaProposal.KEY_LEN_AES_128)
                         .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                        .buildOrThrow();
+                        .build();
 
-        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.mProtocolId);
+        assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.getProtocolId());
         assertArrayEquals(
                 new EncryptionTransform[] {mEncryptionAesGcm8Transform},
-                proposal.mEncryptionAlgorithms);
+                proposal.getEncryptionTransforms());
         assertArrayEquals(
-                new PrfTransform[] {mPrfAes128XCbcTransform}, proposal.mPseudorandomFunctions);
-        assertArrayEquals(new DhGroupTransform[] {mDhGroup1024Transform}, proposal.mDhGroups);
-        assertTrue(proposal.mIntegrityAlgorithms.length == 0);
+                new PrfTransform[] {mPrfAes128XCbcTransform}, proposal.getPrfTransforms());
+        assertArrayEquals(
+                new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
+        assertTrue(proposal.getIntegrityTransforms().length == 0);
     }
 
     @Test
@@ -107,16 +109,17 @@ public final class SaProposalTest {
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
                                 SaProposal.KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
-                        .buildOrThrow();
+                        .build();
 
-        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.mProtocolId);
+        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.getProtocolId());
         assertArrayEquals(
                 new EncryptionTransform[] {mEncryptionAesGcm8Transform},
-                proposal.mEncryptionAlgorithms);
+                proposal.getEncryptionTransforms());
         assertArrayEquals(
-                new IntegrityTransform[] {mIntegrityNoneTransform}, proposal.mIntegrityAlgorithms);
-        assertTrue(proposal.mPseudorandomFunctions.length == 0);
-        assertTrue(proposal.mDhGroups.length == 0);
+                new IntegrityTransform[] {mIntegrityNoneTransform},
+                proposal.getIntegrityTransforms());
+        assertTrue(proposal.getPrfTransforms().length == 0);
+        assertTrue(proposal.getDhGroupTransforms().length == 0);
     }
 
     @Test
@@ -127,23 +130,25 @@ public final class SaProposalTest {
                 builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                        .buildOrThrow();
+                        .build();
 
-        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.mProtocolId);
+        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.getProtocolId());
         assertArrayEquals(
                 new EncryptionTransform[] {mEncryption3DesTransform},
-                proposal.mEncryptionAlgorithms);
+                proposal.getEncryptionTransforms());
         assertArrayEquals(
-                new IntegrityTransform[] {mIntegrityNoneTransform}, proposal.mIntegrityAlgorithms);
-        assertArrayEquals(new DhGroupTransform[] {mDhGroup1024Transform}, proposal.mDhGroups);
-        assertTrue(proposal.mPseudorandomFunctions.length == 0);
+                new IntegrityTransform[] {mIntegrityNoneTransform},
+                proposal.getIntegrityTransforms());
+        assertArrayEquals(
+                new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
+        assertTrue(proposal.getPrfTransforms().length == 0);
     }
 
     @Test
     public void testBuildEncryptAlgosWithNoAlgorithm() throws Exception {
         Builder builder = Builder.newIkeSaProposalBuilder();
         try {
-            builder.buildOrThrow();
+            builder.build();
             fail("Expected to fail when no encryption algorithm is proposed.");
         } catch (IllegalArgumentException expected) {
 
@@ -179,7 +184,7 @@ public final class SaProposalTest {
     public void testBuildIkeProposalWithoutPrf() throws Exception {
         Builder builder = Builder.newIkeSaProposalBuilder();
         try {
-            builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES).buildOrThrow();
+            builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES).build();
             fail("Expected to fail when PRF is not provided in IKE SA proposal.");
         } catch (IllegalArgumentException expected) {
 
@@ -192,7 +197,7 @@ public final class SaProposalTest {
         try {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
                     .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
-                    .buildOrThrow();
+                    .build();
 
             fail("Expected to fail when PRF is provided in Child SA proposal.");
         } catch (IllegalArgumentException expected) {
@@ -209,7 +214,7 @@ public final class SaProposalTest {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12)
                     .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
                     .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
-                    .buildOrThrow();
+                    .build();
 
             fail("Expected to fail when not-none integrity algorithm is proposed with AEAD");
         } catch (IllegalArgumentException expected) {
@@ -225,7 +230,7 @@ public final class SaProposalTest {
         try {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
                     .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
-                    .buildOrThrow();
+                    .build();
 
             fail(
                     "Expected to fail when"
@@ -245,7 +250,7 @@ public final class SaProposalTest {
                     .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
                     .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
                     .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
-                    .buildOrThrow();
+                    .build();
 
             fail(
                     "Expected to fail when none-value integrity algorithm is proposed"
@@ -262,7 +267,7 @@ public final class SaProposalTest {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
                     .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                     .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
-                    .buildOrThrow();
+                    .build();
 
             fail("Expected to fail when no DH Group is proposed in IKE SA proposal.");
         } catch (IllegalArgumentException expected) {
@@ -279,7 +284,7 @@ public final class SaProposalTest {
                     .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
                     .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                     .addDhGroup(SaProposal.DH_GROUP_NONE)
-                    .buildOrThrow();
+                    .build();
 
             fail("Expected to fail when none-value DH Group is proposed in IKE SA proposal.");
         } catch (IllegalArgumentException expected) {
@@ -295,7 +300,7 @@ public final class SaProposalTest {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
                     .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                     .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                    .buildOrThrow();
+                    .build();
 
             fail(
                     "Expected to fail when"
