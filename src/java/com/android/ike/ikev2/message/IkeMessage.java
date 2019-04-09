@@ -18,7 +18,6 @@ package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkePayload.PayloadType;
 
-import android.annotation.IntDef;
 import android.util.Pair;
 
 import com.android.ike.ikev2.IkeSessionOptions;
@@ -29,15 +28,15 @@ import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.org.bouncycastle.jce.provider.BouncyCastleProvider;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -53,42 +52,21 @@ import javax.crypto.SecretKey;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeMessage {
-
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-        MESSAGE_TYPE_IKE_INIT_RESP,
-        MESSAGE_TYPE_IKE_AUTH_RESP,
-        MESSAGE_TYPE_DELETE_IKE_REQ,
-        MESSAGE_TYPE_DELETE_IKE_RESP,
-        MESSAGE_TYPE_REKEY_IKE_REQ,
-        MESSAGE_TYPE_REKEY_IKE_RESP,
-        MESSAGE_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD,
-        MESSAGE_TYPE_INVALID_MAJOR_VERSION,
-        MESSAGE_TYPE_INVALID_SYNTAX
-    })
-    public @interface MessageType {}
-
-    // Message type for decoded IkeMessage.
-    public static final int PROCEDURE_TYPE_BASE = 0;
-
-    public static final int MESSAGE_TYPE_IKE_INIT_RESP = PROCEDURE_TYPE_BASE + 1;
-    public static final int MESSAGE_TYPE_IKE_AUTH_RESP = PROCEDURE_TYPE_BASE + 2;
-    public static final int MESSAGE_TYPE_DELETE_IKE_REQ = PROCEDURE_TYPE_BASE + 3;
-    public static final int MESSAGE_TYPE_DELETE_IKE_RESP = PROCEDURE_TYPE_BASE + 4;
-    public static final int MESSAGE_TYPE_REKEY_IKE_REQ = PROCEDURE_TYPE_BASE + 5;
-    public static final int MESSAGE_TYPE_REKEY_IKE_RESP = PROCEDURE_TYPE_BASE + 6;
-
-    public static final int NOTIFICATION_TYPE_BASE = PROCEDURE_TYPE_BASE + 100;
-    public static final int MESSAGE_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD =
-            NOTIFICATION_TYPE_BASE + IkeNotifyPayload.NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
-    public static final int MESSAGE_TYPE_INVALID_MAJOR_VERSION =
-            NOTIFICATION_TYPE_BASE + IkeNotifyPayload.NOTIFY_TYPE_INVALID_MAJOR_VERSION;
-    public static final int MESSAGE_TYPE_INVALID_SYNTAX =
-            NOTIFICATION_TYPE_BASE + IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX;
-
     private static IIkeMessageHelper sIkeMessageHelper = new IkeMessageHelper();
     // Currently use Bouncy Castle as crypto security provider
     static final Provider SECURITY_PROVIDER = new BouncyCastleProvider();
+
+    // Payload types in this set may be included multiple times within an IKE message. All other
+    // payload types can be included at most once.
+    private static final Set<Integer> REPEATABLE_PAYLOAD_TYPES = new HashSet<>();
+
+    static {
+        REPEATABLE_PAYLOAD_TYPES.add(IkePayload.PAYLOAD_TYPE_CERT);
+        REPEATABLE_PAYLOAD_TYPES.add(IkePayload.PAYLOAD_TYPE_CERT_REQUEST);
+        REPEATABLE_PAYLOAD_TYPES.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
+        REPEATABLE_PAYLOAD_TYPES.add(IkePayload.PAYLOAD_TYPE_DELETE);
+        REPEATABLE_PAYLOAD_TYPES.add(IkePayload.PAYLOAD_TYPE_VENDOR);
+    }
 
     public final IkeHeader ikeHeader;
     public final List<IkePayload> ikePayloadList;
@@ -159,12 +137,22 @@ public final class IkeMessage {
         // For unsupported critical payload
         List<Integer> unsupportedCriticalPayloadList = new LinkedList<>();
 
+        // For marking the existence of supported payloads in this message.
+        HashSet<Integer> supportedTypesFoundSet = new HashSet<>();
+
         while (currentPayloadType != IkePayload.PAYLOAD_TYPE_NO_NEXT) {
             Pair<IkePayload, Integer> pair =
                     IkePayloadFactory.getIkePayload(currentPayloadType, isResp, inputBuffer);
             IkePayload payload = pair.first;
 
             if (!(payload instanceof IkeUnsupportedPayload)) {
+                int type = payload.payloadType;
+                if (!supportedTypesFoundSet.add(type) && !REPEATABLE_PAYLOAD_TYPES.contains(type)) {
+                    throw new InvalidSyntaxException(
+                            "It is not allowed to have multiple payloads with payload type: "
+                                    + type);
+                }
+
                 supportedPayloadList.add(payload);
             } else if (payload.isCritical) {
                 unsupportedCriticalPayloadList.add(payload.payloadType);
@@ -182,6 +170,12 @@ public final class IkeMessage {
         if (unsupportedCriticalPayloadList.size() > 0) {
             throw new UnsupportedCriticalPayloadException(unsupportedCriticalPayloadList);
         }
+
+        // TODO: Verify that for all status notification payloads, only
+        // NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP and NOTIFY_TYPE_IPCOMP_SUPPORTED can be included
+        // multiple times in a request message. There is not a clear number restriction for
+        // error notification payloads.
+
         return supportedPayloadList;
     }
 
@@ -244,9 +238,64 @@ public final class IkeMessage {
         return outputBuffer.array();
     }
 
-    @MessageType
-    public int getMessageType() {
-        return sIkeMessageHelper.getMessageType(this);
+    /**
+     * Obtain all payloads with input payload type.
+     *
+     * <p>This method can be only applied to the payload types that can be included multiple times
+     * within an IKE message.
+     *
+     * @param payloadType the payloadType to look for.
+     * @param payloadClass the class of the desired payloads.
+     * @return a list of IkePayloads with the payloadType.
+     */
+    public <T extends IkePayload> List<T> getPayloadListForType(
+            @IkePayload.PayloadType int payloadType, Class<T> payloadClass) {
+        // STOPSHIP: b/130190639 Notify user the error and close IKE session.
+        if (!REPEATABLE_PAYLOAD_TYPES.contains(payloadType)) {
+            throw new IllegalArgumentException(
+                    "Received unexpected payloadType: "
+                            + payloadType
+                            + " that can be included at most once within an IKE message.");
+        }
+
+        return searchPayloadListForType(payloadType, payloadClass);
+    }
+
+    /**
+     * Obtain the payload with the input payload type.
+     *
+     * <p>This method can be only applied to the payload type that can be included at most once
+     * within an IKE message.
+     *
+     * @param payloadType the payloadType to look for.
+     * @param payloadClass the class of the desired payload.
+     * @return the IkePayload with the payloadType.
+     */
+    public <T extends IkePayload> T getPayloadForType(
+            @IkePayload.PayloadType int payloadType, Class<T> payloadClass) {
+        // STOPSHIP: b/130190639 Notify user the error and close IKE session.
+        if (REPEATABLE_PAYLOAD_TYPES.contains(payloadType)) {
+            throw new IllegalArgumentException(
+                    "Received unexpected payloadType: "
+                            + payloadType
+                            + " that may be included multiple times within an IKE message.");
+        }
+
+        List<T> payloadList = searchPayloadListForType(payloadType, payloadClass);
+        return payloadList.isEmpty() ? null : payloadList.get(0);
+    }
+
+    private <T extends IkePayload> List<T> searchPayloadListForType(
+            @IkePayload.PayloadType int payloadType, Class<T> payloadClass) {
+        List<T> payloadList = new LinkedList<>();
+
+        for (IkePayload payload : ikePayloadList) {
+            if (payloadType == payload.payloadType) {
+                payloadList.add(payloadClass.cast(payload));
+            }
+        }
+
+        return payloadList;
     }
 
     /**
@@ -256,15 +305,6 @@ public final class IkeMessage {
      */
     @VisibleForTesting
     public interface IIkeMessageHelper {
-        /**
-         * Check message type of decoded IKE message.
-         *
-         * @param ikeMessage IKE message to be checked.
-         * @return message type.
-         */
-        @MessageType
-        int getMessageType(IkeMessage ikeMessage);
-
         /**
          * Encode IKE message.
          *
@@ -331,7 +371,7 @@ public final class IkeMessage {
             return null;
         }
 
-        //TODO: Create and use a container class for crypto algorithms and keys.
+        // TODO: Create and use a container class for crypto algorithms and keys.
         private byte[] encryptAndEncode(
                 IkeHeader ikeHeader,
                 @PayloadType int firstPayload,
@@ -422,13 +462,6 @@ public final class IkeMessage {
                 // Invalid length error when parsing payload bodies.
                 throw new InvalidSyntaxException("Malformed IKE Payload");
             }
-        }
-
-        @Override
-        @MessageType
-        public int getMessageType(IkeMessage ikeMessage) {
-            // TODO: Implement it.
-            return 0;
         }
     }
 
