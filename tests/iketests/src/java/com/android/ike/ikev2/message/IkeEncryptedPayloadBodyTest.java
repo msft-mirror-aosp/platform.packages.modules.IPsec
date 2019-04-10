@@ -19,6 +19,10 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import com.android.ike.ikev2.SaProposal;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
+
 import org.junit.Before;
 import org.junit.Test;
 
@@ -26,7 +30,6 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
-import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -63,11 +66,12 @@ public final class IkeEncryptedPayloadBodyTest {
             "554fbf5a05b7f511e05a30ce23d874db9ef55e51";
 
     private static final String ENCR_ALGO_AES_CBC = "AES/CBC/NoPadding";
-    private static final String INTE_ALGO_HMAC_SHA1 = "HmacSHA1";
 
     private Cipher mAesCbcCipher;
     private SecretKey mAesCbcKey;
-    private Mac mHmacSha1IntegrityMac;
+
+    private IkeMacIntegrity mHmacSha1IntegrityMac;
+    private byte[] mHmacSha1IntegrityKey;
 
     private byte[] mDataToPadAndEncrypt;
     private byte[] mDataToAuthenticate;
@@ -108,25 +112,16 @@ public final class IkeEncryptedPayloadBodyTest {
         mAesCbcKey = new SecretKeySpec(encryptKeyBytes, ENCR_ALGO_AES_CBC);
 
         mHmacSha1IntegrityMac =
-                Mac.getInstance(INTE_ALGO_HMAC_SHA1, IkeMessage.getSecurityProvider());
-        byte[] integrityKeyBytes = TestUtils.hexStringToByteArray(INTE_KEY_FROM_INIT_TO_RESP);
-        SecretKeySpec integrityKey = new SecretKeySpec(integrityKeyBytes, INTE_ALGO_HMAC_SHA1);
-        mHmacSha1IntegrityMac.init(integrityKey);
-    }
-
-    @Test
-    public void testCalculateChecksum() throws Exception {
-        byte[] calculatedChecksum =
-                IkeEncryptedPayloadBody.calculateChecksum(
-                        mDataToAuthenticate, mHmacSha1IntegrityMac, HMAC_SHA1_CHECKSUM_LEN);
-
-        assertArrayEquals(mChecksum, calculatedChecksum);
+                IkeMacIntegrity.create(
+                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),
+                        IkeMessage.getSecurityProvider());
+        mHmacSha1IntegrityKey = TestUtils.hexStringToByteArray(INTE_KEY_FROM_INIT_TO_RESP);
     }
 
     @Test
     public void testValidateChecksum() throws Exception {
         IkeEncryptedPayloadBody.validateChecksumOrThrow(
-                mDataToAuthenticate, mHmacSha1IntegrityMac, mChecksum);
+                mDataToAuthenticate, mHmacSha1IntegrityMac, mHmacSha1IntegrityKey, mChecksum);
     }
 
     @Test
@@ -136,7 +131,7 @@ public final class IkeEncryptedPayloadBodyTest {
 
         try {
             IkeEncryptedPayloadBody.validateChecksumOrThrow(
-                    dataToAuthenticate, mHmacSha1IntegrityMac, mChecksum);
+                    dataToAuthenticate, mHmacSha1IntegrityMac, mHmacSha1IntegrityKey, mChecksum);
             fail("Expected GeneralSecurityException due to mismatched checksum.");
         } catch (GeneralSecurityException expected) {
         }
@@ -203,8 +198,8 @@ public final class IkeEncryptedPayloadBodyTest {
                         IkePayload.PAYLOAD_TYPE_ID_INITIATOR,
                         mDataToPadAndEncrypt,
                         mHmacSha1IntegrityMac,
-                        HMAC_SHA1_CHECKSUM_LEN,
                         mAesCbcCipher,
+                        mHmacSha1IntegrityKey,
                         mAesCbcKey,
                         mIv,
                         mPadding);
@@ -223,8 +218,8 @@ public final class IkeEncryptedPayloadBodyTest {
                 new IkeEncryptedPayloadBody(
                         mIkeMessage,
                         mHmacSha1IntegrityMac,
-                        HMAC_SHA1_CHECKSUM_LEN,
                         mAesCbcCipher,
+                        mHmacSha1IntegrityKey,
                         mAesCbcKey);
 
         assertArrayEquals(mDataToPadAndEncrypt, paylaodBody.getUnencryptedData());

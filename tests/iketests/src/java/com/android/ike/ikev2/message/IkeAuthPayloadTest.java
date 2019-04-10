@@ -22,7 +22,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.ikev2.SaProposal;
-import com.android.ike.ikev2.crypto.IkePrf;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 
 import org.junit.Before;
@@ -81,12 +81,12 @@ public final class IkeAuthPayloadTest {
 
     private static final int AUTH_METHOD_POSITION = 0;
 
-    private IkePrf mIkeHmacSha1Prf;
+    private IkeMacPrf mIkeHmacSha1Prf;
 
     @Before
     public void setUp() throws Exception {
         mIkeHmacSha1Prf =
-                new IkePrf(
+                IkeMacPrf.create(
                         new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
                         IkeMessage.getSecurityProvider());
     }
