@@ -17,15 +17,8 @@ package com.android.ike.ikev2;
 
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkePayload;
-import com.android.internal.annotations.VisibleForTesting;
 
-import java.nio.ByteBuffer;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.util.List;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 /**
  * SaRecord represents common information of an IKE SA and a Child SA.
@@ -205,72 +198,5 @@ public abstract class SaRecord {
          */
         ChildSaRecord makeChildSaRecord(
                 List<IkePayload> reqPayloads, List<IkePayload> respPayloads);
-    }
-
-    /** Generate SKEYSEED using negotiated PRF. */
-    @VisibleForTesting
-    static byte[] generateSKeySeed(
-            String prfAlgorithm, byte[] nonceInit, byte[] nonceResp, byte[] sharedDhKey) {
-        try {
-            ByteBuffer keyBuffer = ByteBuffer.allocate(nonceInit.length + nonceResp.length);
-            keyBuffer.put(nonceInit).put(nonceResp);
-            SecretKeySpec prfKeySpec = new SecretKeySpec(keyBuffer.array(), prfAlgorithm);
-
-            Mac prfMac = Mac.getInstance(prfAlgorithm, IkeMessage.getSecurityProvider());
-            prfMac.init(prfKeySpec);
-
-            ByteBuffer sharedKeyBuffer = ByteBuffer.wrap(sharedDhKey);
-            prfMac.update(sharedKeyBuffer);
-
-            return prfMac.doFinal();
-        } catch (InvalidKeyException | NoSuchAlgorithmException e) {
-            throw new IllegalArgumentException("Failed to generate SKEYSEED", e);
-        }
-    }
-
-    /**
-     * Derives key materials using negotiated PRF.
-     *
-     * <p>prf+(K, S) outputs a pseudorandom stream by using negotiated PRF iteratively. In this way
-     * it can generate long enough keying material containing all the keys for this IKE/Child SA.
-     *
-     * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.13">RFC 7296 nternet Key Exchange
-     *     Protocol Version 2 (IKEv2) 2.13. Generating Keying Material </a>
-     */
-    @VisibleForTesting
-    static byte[] generateKeyMat(
-            String prfAlgorithm, byte[] prfKey, byte[] dataToSign, int keyMaterialLen)
-            throws InvalidKeyException {
-        try {
-            SecretKeySpec prfKeySpec = new SecretKeySpec(prfKey, prfAlgorithm);
-            Mac prfMac = Mac.getInstance(prfAlgorithm, IkeMessage.getSecurityProvider());
-
-            ByteBuffer keyMatBuffer = ByteBuffer.allocate(keyMaterialLen);
-
-            byte[] previousMac = new byte[0];
-            final int padLen = 1;
-            byte padValue = 1;
-
-            while (keyMatBuffer.remaining() > 0) {
-                prfMac.init(prfKeySpec);
-
-                ByteBuffer dataToSignBuffer =
-                        ByteBuffer.allocate(previousMac.length + dataToSign.length + padLen);
-                dataToSignBuffer.put(previousMac).put(dataToSign).put(padValue);
-                dataToSignBuffer.rewind();
-
-                prfMac.update(dataToSignBuffer);
-
-                previousMac = prfMac.doFinal();
-                keyMatBuffer.put(
-                        previousMac, 0, Math.min(previousMac.length, keyMatBuffer.remaining()));
-
-                padValue++;
-            }
-
-            return keyMatBuffer.array();
-        } catch (InvalidKeyException | NoSuchAlgorithmException e) {
-            throw new IllegalArgumentException("Failed to generate keying material", e);
-        }
     }
 }

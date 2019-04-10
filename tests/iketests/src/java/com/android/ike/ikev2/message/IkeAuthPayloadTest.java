@@ -21,9 +21,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import org.junit.Test;
+import com.android.ike.ikev2.SaProposal;
+import com.android.ike.ikev2.crypto.IkePrf;
+import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 
-import javax.crypto.Mac;
+import org.junit.Before;
+import org.junit.Test;
 
 public final class IkeAuthPayloadTest {
     private static final String PSK_AUTH_PAYLOAD_HEX_STRING =
@@ -78,7 +81,15 @@ public final class IkeAuthPayloadTest {
 
     private static final int AUTH_METHOD_POSITION = 0;
 
-    private static final String PRF_HMAC_SHA1_ALGO_NAME = "HmacSHA1";
+    private IkePrf mIkeHmacSha1Prf;
+
+    @Before
+    public void setUp() throws Exception {
+        mIkeHmacSha1Prf =
+                new IkePrf(
+                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
+                        IkeMessage.getSecurityProvider());
+    }
 
     @Test
     public void testDecodeIkeAuthPayload() throws Exception {
@@ -106,20 +117,7 @@ public final class IkeAuthPayloadTest {
     }
 
     @Test
-    public void testSignWithPrf() throws Exception {
-        Mac prfMac = Mac.getInstance(PRF_HMAC_SHA1_ALGO_NAME, IkeMessage.getSecurityProvider());
-        byte[] skpBytes = TestUtils.hexStringToByteArray(PSK_SKP_HEX_STRING);
-        byte[] idBytes = TestUtils.hexStringToByteArray(PSK_ID_PAYLOAD_HEX_STRING);
-        byte[] calculatedBytes = IkeAuthPayload.signWithPrf(prfMac, skpBytes, idBytes);
-
-        byte[] expectedBytes =
-                TestUtils.hexStringToByteArray(PSK_SIGNED_OCTETS_APPENDIX_HEX_STRING);
-        assertArrayEquals(expectedBytes, calculatedBytes);
-    }
-
-    @Test
     public void testGetSignedOctets() throws Exception {
-        Mac prfMac = Mac.getInstance(PRF_HMAC_SHA1_ALGO_NAME, IkeMessage.getSecurityProvider());
         byte[] skpBytes = TestUtils.hexStringToByteArray(PSK_SKP_HEX_STRING);
         byte[] idBytes = TestUtils.hexStringToByteArray(PSK_ID_PAYLOAD_HEX_STRING);
         byte[] ikeInitRequest = TestUtils.hexStringToByteArray(PSK_IKE_INIT_REQUEST_HEX_STRING);
@@ -127,7 +125,7 @@ public final class IkeAuthPayloadTest {
 
         byte[] calculatedBytes =
                 IkeAuthPayload.getSignedOctets(
-                        ikeInitRequest, nonceResp, idBytes, prfMac, skpBytes);
+                        ikeInitRequest, nonceResp, idBytes, mIkeHmacSha1Prf, skpBytes);
         byte[] expectedBytes = TestUtils.hexStringToByteArray(PSK_INIT_SIGNED_OCTETS);
     }
 }
