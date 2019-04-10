@@ -15,14 +15,17 @@
  */
 package com.android.ike.ikev2;
 
+import android.annotation.IntDef;
 import android.os.Looper;
 import android.os.Message;
 import android.system.ErrnoException;
+import android.util.Log;
 import android.util.LongSparseArray;
 import android.util.SparseArray;
 
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
@@ -35,6 +38,8 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.HashSet;
@@ -63,6 +68,30 @@ import java.util.Set;
 public class IkeSessionStateMachine extends StateMachine {
 
     private static final String TAG = "IkeSessionStateMachine";
+
+    // Package private IKE exchange subtypes describe the specific function of a IKE
+    // request/response exchange. It helps IkeSessionStateMachine to do message validation according
+    // to the subtype specific rules.
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+        IKE_EXCHANGE_SUBTYPE_IKE_INIT,
+        IKE_EXCHANGE_SUBTYPE_IKE_AUTH,
+        IKE_EXCHANGE_SUBTYPE_DELETE_IKE,
+        IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+        IKE_EXCHANGE_SUBTYPE_REKEY_IKE,
+        IKE_EXCHANGE_SUBTYPE_REKEY_CHILD,
+        IKE_EXCHANGE_SUBTYPE_GENERIC_INFO
+    })
+    @interface IkeExchangeSubType {}
+
+    static final int IKE_EXCHANGE_SUBTYPE_IKE_INIT = 1;
+    static final int IKE_EXCHANGE_SUBTYPE_IKE_AUTH = 2;
+    static final int IKE_EXCHANGE_SUBTYPE_CREATE_CHILD = 3;
+    static final int IKE_EXCHANGE_SUBTYPE_DELETE_IKE = 4;
+    static final int IKE_EXCHANGE_SUBTYPE_DELETE_CHILD = 5;
+    static final int IKE_EXCHANGE_SUBTYPE_REKEY_IKE = 6;
+    static final int IKE_EXCHANGE_SUBTYPE_REKEY_CHILD = 7;
+    static final int IKE_EXCHANGE_SUBTYPE_GENERIC_INFO = 8;
 
     /** Package private signals accessible for testing code. */
     private static final int CMD_GENERAL_BASE = 0;
@@ -389,6 +418,77 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
+    /**
+     * Gets IKE exchange subtype of a inbound IKE request message.
+     *
+     * <p>Knowing IKE exchange subtype of a inbound IKE request message helps IkeSessionStateMachine
+     * to validate this request using the specific rule.
+     *
+     * <p>It is not allowed to obtain exchange subtype from a inbound response message for two
+     * reasons. Firstly, the exchange subtype of a response message is the same with its
+     * corresponding request message. Secondly, trying to get the exchange subtype from a response
+     * message will easily fail when the response message contains only error notification payloads.
+     *
+     * @param ikeMessage inbound request IKE message to check.
+     * @return IKE exchange subtype.
+     */
+    @IkeExchangeSubType
+    private static int getIkeExchangeSubType(IkeMessage ikeMessage) {
+        IkeHeader ikeHeader = ikeMessage.ikeHeader;
+        if (ikeHeader.isResponseMsg) {
+            // STOPSHIP: b/130190639 Notify user the error and close IKE session.
+            throw new UnsupportedOperationException(
+                    "Do not support getting IKE exchange subtype from a response message.");
+        }
+
+        switch (ikeHeader.exchangeType) {
+            case IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT:
+                return IKE_EXCHANGE_SUBTYPE_IKE_INIT;
+            case IkeHeader.EXCHANGE_TYPE_IKE_AUTH:
+                return IKE_EXCHANGE_SUBTYPE_IKE_AUTH;
+            case IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA:
+                List<IkeNotifyPayload> notifyPayloads =
+                        ikeMessage.getPayloadListForType(
+                                IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+
+                // It is checked during decoding that there is only one Rekey notification
+                // payload. For Rekey IKE notification, the protocolId is unset. For Rekey Child
+                // notification, the protocolId is set to ESP.
+                for (IkeNotifyPayload notifyPayload : notifyPayloads) {
+                    if (notifyPayload.notifyType == IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA) {
+                        return notifyPayload.protocolId == IkePayload.PROTOCOL_ID_UNSET
+                                ? IKE_EXCHANGE_SUBTYPE_REKEY_IKE
+                                : IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+                    }
+                }
+
+                // If no Rekey notification payload found, this request is for creating new
+                // Child SA.
+                return IKE_EXCHANGE_SUBTYPE_CREATE_CHILD;
+            case IkeHeader.EXCHANGE_TYPE_INFORMATIONAL:
+                List<IkeDeletePayload> deletePayloads =
+                        ikeMessage.getPayloadListForType(
+                                IkePayload.PAYLOAD_TYPE_DELETE, IkeDeletePayload.class);
+
+                // If no Delete payload was found, this request is a generic informational request.
+                if (deletePayloads.isEmpty()) return IKE_EXCHANGE_SUBTYPE_GENERIC_INFO;
+
+                // IKEv2 protocol does not clearly disallow to have both a Delete IKE payload and a
+                // Delete Child payload in one IKE message. In this case, IKE library will only
+                // respond to the Delete IKE payload.
+                for (IkeDeletePayload deletePayload : deletePayloads) {
+                    if (deletePayload.protocolId == IkePayload.PROTOCOL_ID_IKE) {
+                        return IKE_EXCHANGE_SUBTYPE_DELETE_IKE;
+                    }
+                }
+                return IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+            default:
+                // STOPSHIP: b/130190639 Notify user the error and close IKE session.
+                throw new IllegalArgumentException(
+                        "Unrecognized exchange type: " + ikeHeader.exchangeType);
+        }
+    }
+
     /** Base state defines common behaviours when receiving an IKE packet. */
     private abstract class BaseState extends State {
         @Override
@@ -408,14 +508,24 @@ public class IkeSessionStateMachine extends StateMachine {
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
             IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeHeader);
             try {
-                IkeMessage ikeMessage =
-                        IkeMessage.decode(
-                                mIkeSessionOptions, ikeSaRecord, ikeHeader, ikePacketBytes);
-                int messageType = ikeMessage.getMessageType();
-                // TODO: Handle fatal error notifications.
-                handleIkeMessage(ikeMessage, messageType, message);
-            } catch (IkeException e) {
+                if (ikeHeader.isResponseMsg) {
+                    // TODO: Verify message ID against outstanding request.
+                    IkeMessage ikeMessage =
+                            IkeMessage.decode(
+                                    mIkeSessionOptions, ikeSaRecord, ikeHeader, ikePacketBytes);
+                    handleResponseIkeMessage(ikeMessage);
+                } else {
+                    // TODO: Verify message ID.
+                    IkeMessage ikeMessage =
+                            IkeMessage.decode(
+                                    mIkeSessionOptions, ikeSaRecord, ikeHeader, ikePacketBytes);
+                    handleRequestIkeMessage(ikeMessage, getIkeExchangeSubType(ikeMessage), message);
+                }
 
+                // TODO: Handle fatal error notifications.
+            } catch (IkeException e) {
+                // TODO: Handle decoding exceptions. Reply with error notifications if received IKE
+                // message is an encrypted and authenticated request with a valid message ID.
             } catch (GeneralSecurityException e) {
                 // IKE library failed on intergity checksum validation or on message decryption.
                 // TODO: Handle decrypting exception
@@ -437,8 +547,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // and cryptogtaphic checksum were invalid.
                     return;
                 default:
-                    // Won't hit this case.
-                    throw new UnsupportedOperationException("Unknown error decoding IKE Message.");
+                    Log.wtf(TAG, "Unknown error decoding IKE Message.");
             }
         }
 
@@ -461,8 +570,10 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
-        protected abstract void handleIkeMessage(
-                IkeMessage ikeMessage, int messageType, Message message);
+        protected abstract void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message);
+
+        protected abstract void handleResponseIkeMessage(IkeMessage ikeMessage);
     }
 
     /**
@@ -470,9 +581,10 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     class Receiving extends BaseState {
         @Override
-        protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
-            switch (messageType) {
-                case IkeMessage.MESSAGE_TYPE_REKEY_IKE_REQ:
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_REKEY_IKE:
                     try {
                         validateIkeRekeyReq(ikeMessage);
                         // Reply
@@ -488,9 +600,14 @@ public class IkeSessionStateMachine extends StateMachine {
                         // TODO: Handle processing errors.
                     }
                     return;
-                    // TODO: Add more cases for supporting local request.
+                    // TODO: Add more cases for supporting other types of request.
                 default:
             }
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            // TODO: Extract payloads and re-direct to awaiting ChildSessionStateMachines.
         }
     }
 
@@ -562,31 +679,39 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
             try {
-                IkeMessage ikeMessage = IkeMessage.decode(ikeHeader, ikePacketBytes);
-                int messageType = ikeMessage.getMessageType();
+                if (ikeHeader.isResponseMsg) {
+                    // TODO: Verify message ID is zero.
+                    IkeMessage ikeMessage = IkeMessage.decode(ikeHeader, ikePacketBytes);
+                    handleResponseIkeMessage(ikeMessage);
+                } else {
+                    // TODO: Drop unexpected request.
+                }
                 // TODO: Handle fatal error notifications.
-                handleIkeMessage(ikeMessage, messageType, message);
             } catch (IkeException e) {
                 // TODO:Since IKE_INIT is not protected, log and ignore this message.
             }
         }
 
         @Override
-        protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
-            switch (messageType) {
-                case IkeMessage.MESSAGE_TYPE_IKE_INIT_RESP:
-                    try {
-                        validateIkeInitResp(mRequestMsg, ikeMessage);
-                        mCurrentIkeSaRecord =
-                                IkeSaRecord.makeFirstIkeSaRecord(mRequestMsg, ikeMessage);
-                        addIkeSaRecord(mCurrentIkeSaRecord);
-                        transitionTo(mCreateIkeLocalIkeAuth);
-                    } catch (IkeException e) {
-                        // TODO: Handle processing errors.
-                    }
-                    return;
-                default:
-                    // TODO: Handle unexpected message type.
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            Log.wtf(
+                    TAG,
+                    "State: "
+                            + getCurrentState().getName()
+                            + " received an unsupported request message with IKE exchange subtype: "
+                            + ikeExchangeSubType);
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            try {
+                validateIkeInitResp(mRequestMsg, ikeMessage);
+                mCurrentIkeSaRecord = IkeSaRecord.makeFirstIkeSaRecord(mRequestMsg, ikeMessage);
+                addIkeSaRecord(mCurrentIkeSaRecord);
+                transitionTo(mCreateIkeLocalIkeAuth);
+            } catch (IkeException e) {
+                // TODO: Handle processing errors.
             }
         }
 
@@ -605,30 +730,34 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
-            switch (messageType) {
-                    // TODO: Handle EAP Authentication.
-                case IkeMessage.MESSAGE_TYPE_IKE_AUTH_RESP:
-                    try {
-                        validateIkeAuthResp(mRequestMsg, ikeMessage);
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            Log.wtf(
+                    TAG,
+                    "State: "
+                            + getCurrentState().getName()
+                            + "received an unsupported request message with IKE exchange subtype: "
+                            + ikeExchangeSubType);
+        }
 
-                        ChildSessionStateMachine firstChild =
-                                ChildSessionStateMachineFactory.makeChildSessionStateMachine(
-                                        "ChildSessionStateMachine",
-                                        getHandler().getLooper(),
-                                        mFirstChildSessionOptions);
-                        // TODO: Replace null input params to payload lists in IKE_AUTH request and
-                        // IKE_AUTH response for negotiating Child SA.
-                        firstChild.handleFirstChildExchange(null, null, new ChildSessionCallback());
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            // TODO: Handle EAP request in IKE_AUTH response
+            try {
+                validateIkeAuthResp(mRequestMsg, ikeMessage);
 
-                        transitionTo(mIdle);
-                    } catch (IkeException e) {
-                        // TODO: Handle processing errors.
-                    }
-                    return;
-                default:
-                    // TODO: Add more cases for other packet types (e.g. for receiving and sending
-                    // EAP).
+                ChildSessionStateMachine firstChild =
+                        ChildSessionStateMachineFactory.makeChildSessionStateMachine(
+                                "ChildSessionStateMachine",
+                                getHandler().getLooper(),
+                                mFirstChildSessionOptions);
+                // TODO: Replace null input params to payload lists in IKE_AUTH request and
+                // IKE_AUTH response for negotiating Child SA.
+                firstChild.handleFirstChildExchange(null, null, new ChildSessionCallback());
+
+                transitionTo(mIdle);
+            } catch (IkeException e) {
+                // TODO: Handle processing errors.
             }
         }
     }
@@ -641,17 +770,10 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
-            switch (messageType) {
-                case IkeMessage.MESSAGE_TYPE_REKEY_IKE_RESP:
-                    try {
-                        handleRekeyResp(ikeMessage);
-                        transitionTo(mRekeyIkeLocalDelete);
-                    } catch (IkeException e) {
-                        // TODO: Handle processing errors.
-                    }
-                    return;
-                case IkeMessage.MESSAGE_TYPE_REKEY_IKE_REQ:
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_REKEY_IKE:
                     try {
                         validateIkeRekeyReq(ikeMessage);
                         // Reply
@@ -668,7 +790,17 @@ public class IkeSessionStateMachine extends StateMachine {
                     }
                     return;
                 default:
-                    // TODO: Add more cases for other packet types.
+                    // TODO: Add more cases for other types of request.
+            }
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            try {
+                handleRekeyResp(ikeMessage);
+                transitionTo(mRekeyIkeLocalDelete);
+            } catch (IkeException e) {
+                // TODO: Handle processing errors.
             }
         }
 
@@ -726,21 +858,24 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
-            switch (messageType) {
-                case IkeMessage.MESSAGE_TYPE_DELETE_IKE_REQ:
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     deferMessage(message);
                     return;
-                case IkeMessage.MESSAGE_TYPE_REKEY_IKE_RESP:
-                    try {
-                        super.handleRekeyResp(ikeMessage);
-                        transitionTo(mSimulRekeyIkeLocalDeleteRemoteDelete);
-                    } catch (IkeException e) {
-                        // TODO: Handle processing errors.
-                    }
-                    return;
                 default:
-                    // TODO: Add more cases for other packet types.
+                    // TODO: Add more cases for other types of request.
+            }
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            try {
+                handleRekeyResp(ikeMessage);
+                transitionTo(mSimulRekeyIkeLocalDeleteRemoteDelete);
+            } catch (IkeException e) {
+                // TODO: Handle processing errors.
             }
         }
     }
@@ -806,10 +941,11 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             IkeSaRecord ikeSaRecordForPacket = getIkeSaRecordForPacket(ikeMessage.ikeHeader);
-            switch (messageType) {
-                case IkeMessage.MESSAGE_TYPE_DELETE_IKE_REQ:
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     if (ikeSaRecordForPacket == mIkeSaRecordAwaitingRemoteDel) {
                         try {
                             validateIkeDeleteReq(ikeMessage);
@@ -827,23 +963,21 @@ public class IkeSessionStateMachine extends StateMachine {
                         // session.
                     }
                     return;
-                case IkeMessage.MESSAGE_TYPE_DELETE_IKE_RESP:
-                    if (ikeSaRecordForPacket == mIkeSaRecordAwaitingLocalDel) {
-                        try {
-                            validateIkeDeleteResp(ikeMessage);
-                            transitionTo(mSimulRekeyIkeRemoteDelete);
-                            removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
-                            // TODO: Close mIkeSaRecordAwaitingLocalDel
-                            // TODO: Stop retransmission timer
-                        } catch (IkeException e) {
-                            // TODO: Handle processing errors.
-                        }
-                    } else {
-                        // TODO: Close whole IKE session
-                    }
-                    return;
                 default:
-                    // TODO: Add more cases for other packet types.
+                    // TODO: Add more cases for other types of request.
+            }
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            try {
+                validateIkeDeleteResp(ikeMessage);
+                transitionTo(mSimulRekeyIkeRemoteDelete);
+                removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
+                // TODO: Close mIkeSaRecordAwaitingLocalDel
+                // TODO: Stop retransmission timer
+            } catch (IkeException e) {
+                // TODO: Handle processing errors.
             }
         }
 
@@ -860,20 +994,20 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     class SimulRekeyIkeLocalDelete extends RekeyIkeDeleteBase {
         @Override
-        protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
-            switch (messageType) {
-                case IkeMessage.MESSAGE_TYPE_DELETE_IKE_RESP:
-                    try {
-                        validateIkeDeleteResp(ikeMessage);
-                        removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
-                        // TODO: Close mIkeSaRecordAwaitingLocalDel.
-                        transitionTo(mIdle);
-                    } catch (IkeException e) {
-                        // TODO: Handle processing errors.
-                    }
-                    return;
-                default:
-                    // TODO: Add more cases for other packet types.
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            // TODO: Handle remote requests.
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            try {
+                validateIkeDeleteResp(ikeMessage);
+                removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
+                // TODO: Close mIkeSaRecordAwaitingLocalDel.
+                transitionTo(mIdle);
+            } catch (IkeException e) {
+                // TODO: Handle processing errors.
             }
         }
     }
@@ -883,11 +1017,11 @@ public class IkeSessionStateMachine extends StateMachine {
      * simultaneous rekeying.
      */
     class SimulRekeyIkeRemoteDelete extends RekeyIkeDeleteBase {
-        // TODO: Implement methods for processing Delete response
         @Override
-        protected void handleIkeMessage(IkeMessage ikeMessage, int messageType, Message message) {
-            switch (messageType) {
-                case IkeMessage.MESSAGE_TYPE_DELETE_IKE_REQ:
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     try {
                         validateIkeDeleteReq(ikeMessage);
                         IkeMessage respMsg = buildIkeDeleteResp(mIkeSaRecordAwaitingRemoteDel);
@@ -899,8 +1033,17 @@ public class IkeSessionStateMachine extends StateMachine {
                     }
                     return;
                 default:
-                    // TODO: Add more cases for other packet types.
+                    // TODO: Add more cases for other types of request.
             }
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            Log.wtf(
+                    TAG,
+                    "State: "
+                            + getCurrentState().getName()
+                            + "received an unsupported response message.");
         }
     }
 
