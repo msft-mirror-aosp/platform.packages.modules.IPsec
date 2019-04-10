@@ -14,15 +14,28 @@
  * limitations under the License.
  */
 
-package com.android.ike.ikev2;
+package com.android.ike.ikev2.crypto;
 
 import static org.junit.Assert.assertArrayEquals;
 
+import com.android.ike.ikev2.SaProposal;
+import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.TestUtils;
 
+import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
-public final class SaRecordTest {
+@RunWith(JUnit4.class)
+public final class IkePrfTest {
+
+    private static final String PRF_KEY_HEX_STRING = "094787780EE466E2CB049FA327B43908BC57E485";
+    private static final String DATA_TO_SIGN_HEX_STRING = "010000000a50500d";
+    private static final String CALCULATED_MAC_HEX_STRING =
+            "D83B20CC6A0932B2A7CEF26E4020ABAAB64F0C6A";
+
     private static final String IKE_INIT_SPI = "5F54BF6D8B48E6E1";
     private static final String IKE_RESP_SPI = "909232B3D1EDCB5C";
 
@@ -83,24 +96,42 @@ public final class SaRecordTest {
     private static final int FIRST_CHILD_AUTH_ALGO_KEY_LEN = 20;
     private static final int FIRST_CHILD_ENCR_ALGO_KEY_LEN = 16;
 
-    private static final String PRF_HMAC_SHA1_ALGO_NAME = "HmacSHA1";
+    private IkePrf mIkeHmacSha1Prf;
+
+    @Before
+    public void setUp() throws Exception {
+        mIkeHmacSha1Prf =
+                new IkePrf(
+                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
+                        IkeMessage.getSecurityProvider());
+    }
 
     @Test
-    public void testCalculateSKeySeed() throws Exception {
+    public void testsignBytes() throws Exception {
+        byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_KEY_HEX_STRING);
+        byte[] dataBytes = TestUtils.hexStringToByteArray(DATA_TO_SIGN_HEX_STRING);
+
+        byte[] calculatedBytes = mIkeHmacSha1Prf.signBytes(skpBytes, dataBytes);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(CALCULATED_MAC_HEX_STRING);
+        assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testGenerateSKeySeed() throws Exception {
         byte[] nonceInit = TestUtils.hexStringToByteArray(IKE_NONCE_INIT_HEX_STRING);
         byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
         byte[] sharedDhKey = TestUtils.hexStringToByteArray(IKE_SHARED_DH_KEY_HEX_STRING);
 
         byte[] calculatedSKeySeed =
-                SaRecord.generateSKeySeed(
-                        PRF_HMAC_SHA1_ALGO_NAME, nonceInit, nonceResp, sharedDhKey);
+                mIkeHmacSha1Prf.generateSKeySeed(nonceInit, nonceResp, sharedDhKey);
 
         byte[] expectedSKeySeed = TestUtils.hexStringToByteArray(IKE_SKEYSEED_HEX_STRING);
         assertArrayEquals(expectedSKeySeed, calculatedSKeySeed);
     }
 
     @Test
-    public void testSignWithPrfPlusForIke() throws Exception {
+    public void testGenerateKeyMatForIke() throws Exception {
         byte[] prfKey = TestUtils.hexStringToByteArray(IKE_SKEYSEED_HEX_STRING);
         byte[] prfData =
                 TestUtils.hexStringToByteArray(
@@ -114,23 +145,21 @@ public final class SaRecordTest {
                         + IKE_ENCR_ALGO_KEY_LEN * 2
                         + IKE_PRF_KEY_LEN * 2;
 
-        byte[] calculatedKeyMat =
-                SaRecord.generateKeyMat(PRF_HMAC_SHA1_ALGO_NAME, prfKey, prfData, keyMaterialLen);
+        byte[] calculatedKeyMat = mIkeHmacSha1Prf.generateKeyMat(prfKey, prfData, keyMaterialLen);
 
         byte[] expectedKeyMat = TestUtils.hexStringToByteArray(IKE_KEY_MAT);
         assertArrayEquals(expectedKeyMat, calculatedKeyMat);
     }
 
     @Test
-    public void testSignWithPrfPlusForFirstChild() throws Exception {
+    public void testGenerateKeyMatForFirstChild() throws Exception {
         byte[] prfKey = TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING);
         byte[] prfData =
                 TestUtils.hexStringToByteArray(
                         IKE_NONCE_INIT_HEX_STRING + IKE_NONCE_RESP_HEX_STRING);
         int keyMaterialLen = FIRST_CHILD_AUTH_ALGO_KEY_LEN * 2 + FIRST_CHILD_ENCR_ALGO_KEY_LEN * 2;
 
-        byte[] calculatedKeyMat =
-                SaRecord.generateKeyMat(PRF_HMAC_SHA1_ALGO_NAME, prfKey, prfData, keyMaterialLen);
+        byte[] calculatedKeyMat = mIkeHmacSha1Prf.generateKeyMat(prfKey, prfData, keyMaterialLen);
 
         byte[] expectedKeyMat = TestUtils.hexStringToByteArray(FIRST_CHILD_KEY_MAT);
         assertArrayEquals(expectedKeyMat, calculatedKeyMat);

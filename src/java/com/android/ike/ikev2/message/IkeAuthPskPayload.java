@@ -16,13 +16,11 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.crypto.IkePrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 
 import java.nio.ByteBuffer;
-import java.security.InvalidKeyException;
 import java.util.Arrays;
-
-import javax.crypto.Mac;
 
 /**
  * IkeAuthPskPayload represents an Authentication Payload using Pre-Shared Key to do authentication.
@@ -63,20 +61,20 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
      * @param nonce nonce of IKE responder for calculating IKE initiator's SignedOctets.
      * @param idPayloadBodyBytes ID-Initiator payload body for calculating IKE initiator's
      *     SignedOctets.
-     * @param prfMac locally stored PRF
-     * @param prfKeyBytes locally stored PRF keys
+     * @param ikePrf the negotiated PRF.
+     * @param prfKeyBytes the negotiated PRF key.
      */
     public IkeAuthPskPayload(
             byte[] psk,
             byte[] ikeInitBytes,
             byte[] nonce,
             byte[] idPayloadBodyBytes,
-            Mac prfMac,
+            IkePrf ikePrf,
             byte[] prfKeyBytes) {
         super(false, IkeAuthPayload.AUTH_METHOD_PRE_SHARED_KEY);
         signature =
                 calculatePskSignature(
-                        psk, ikeInitBytes, nonce, idPayloadBodyBytes, prfMac, prfKeyBytes);
+                        psk, ikeInitBytes, nonce, idPayloadBodyBytes, ikePrf, prfKeyBytes);
     }
 
     private static byte[] calculatePskSignature(
@@ -84,16 +82,13 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
             byte[] ikeInitBytes,
             byte[] nonce,
             byte[] idPayloadBodyBytes,
-            Mac prfMac,
+            IkePrf ikePrf,
             byte[] prfKeyBytes) {
-        try {
-            byte[] signingKeyBytes = signWithPrf(prfMac, psk, IKE_KEY_PAD_STRING_ASCII_HEX_BYTES);
-            byte[] dataToSignBytes =
-                    getSignedOctets(ikeInitBytes, nonce, idPayloadBodyBytes, prfMac, prfKeyBytes);
-            return signWithPrf(prfMac, signingKeyBytes, dataToSignBytes);
-        } catch (InvalidKeyException e) {
-            throw new IllegalArgumentException("Locally stored PRF key is invalid: ", e);
-        }
+        byte[] signingKeyBytes = ikePrf.signBytes(psk, IKE_KEY_PAD_STRING_ASCII_HEX_BYTES);
+        byte[] dataToSignBytes =
+                getSignedOctets(ikeInitBytes, nonce, idPayloadBodyBytes, ikePrf, prfKeyBytes);
+
+        return ikePrf.signBytes(signingKeyBytes, dataToSignBytes);
     }
 
     /**
@@ -108,8 +103,8 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
      * @param nonce nonce of IKE initiator for calculating IKE responder's SignedOctets.
      * @param idPayloadBodyBytes ID-Responder payload body for calculating IKE responder's
      *     SignedOctets.
-     * @param prfMac locally stored PRF
-     * @param prfKeyBytes locally stored PRF keys
+     * @param ikePrf the negotiated PRF.
+     * @param prfKeyBytes the negotiated PRF key.
      * @throws AuthenticationFailedException if received signature is not equal to calculated
      *     signature.
      */
@@ -118,12 +113,12 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
             byte[] ikeInitBytes,
             byte[] nonce,
             byte[] idPayloadBodyBytes,
-            Mac prfMac,
+            IkePrf ikePrf,
             byte[] prfKeyBytes)
             throws AuthenticationFailedException {
         byte[] calculatedSignature =
                 calculatePskSignature(
-                        psk, ikeInitBytes, nonce, idPayloadBodyBytes, prfMac, prfKeyBytes);
+                        psk, ikeInitBytes, nonce, idPayloadBodyBytes, ikePrf, prfKeyBytes);
         if (!Arrays.equals(signature, calculatedSignature)) {
             throw new AuthenticationFailedException("Signature verification failed.");
         }
