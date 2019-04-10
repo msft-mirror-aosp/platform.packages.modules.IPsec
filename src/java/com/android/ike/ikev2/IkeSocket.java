@@ -21,7 +21,6 @@ import static android.system.OsConstants.SOCK_DGRAM;
 import static android.system.OsConstants.SOCK_NONBLOCK;
 
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.util.PacketReader;
 import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -30,6 +29,7 @@ import android.util.LongSparseArray;
 
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.message.IkeHeader;
+import com.android.ike.ikev2.utils.PacketReader;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
@@ -80,14 +80,12 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
 
     // Package private map from locally generated IKE SPI to IkeSessionStateMachine instances.
     @VisibleForTesting
-    final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession =
-            new LongSparseArray<>();
+    final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession = new LongSparseArray<>();
     // UdpEncapsulationSocket for sending and receving IKE packet.
     private final UdpEncapsulationSocket mUdpEncapSocket;
 
     /** Package private */
-    @VisibleForTesting
-    int mRefCount;
+    @VisibleForTesting int mRefCount;
 
     private IkeSocket(UdpEncapsulationSocket udpEncapSocket, Handler handler) {
         super(handler);
