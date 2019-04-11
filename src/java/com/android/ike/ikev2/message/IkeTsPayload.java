@@ -33,11 +33,14 @@ import java.nio.ByteBuffer;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeTsPayload extends IkePayload {
+    // Length of Traffic Selector Payload header.
+    private static final int TS_HEADER_LEN = 4;
     // Length of reserved field in octets.
     private static final int TS_HEADER_RESERVED_LEN = 3;
 
     /** Number of Traffic Selectors */
     public final int numTs;
+    /** Array of Traffic Selectors */
     public final IkeTrafficSelector[] trafficSelectors;
 
     IkeTsPayload(boolean critical, byte[] payloadBody, boolean isInitiator) throws IkeException {
@@ -55,6 +58,19 @@ public final class IkeTsPayload extends IkePayload {
     }
 
     /**
+     * Construct an instance of IkeTsPayload for building an outbound IKE message.
+     *
+     * @param isInitiator indicates if this payload is for a Child SA initiator or responder.
+     * @param ikeTrafficSelectors the array of included traffic selectors.
+     */
+    public IkeTsPayload(boolean isInitiator, IkeTrafficSelector[] ikeTrafficSelectors) {
+        super((isInitiator ? PAYLOAD_TYPE_TS_INITIATOR : PAYLOAD_TYPE_TS_RESPONDER), false);
+
+        numTs = ikeTrafficSelectors.length;
+        trafficSelectors = ikeTrafficSelectors;
+    }
+
+    /**
      * Encode Traffic Selector Payload to ByteBuffer.
      *
      * @param nextPayload type of payload that follows this payload.
@@ -62,9 +78,12 @@ public final class IkeTsPayload extends IkePayload {
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
-        //TODO: Implement it.
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+
+        byteBuffer.put((byte) numTs).put(new byte[TS_HEADER_RESERVED_LEN]);
+        for (IkeTrafficSelector ts : trafficSelectors) {
+            ts.encodeToByteBuffer(byteBuffer);
+        }
     }
 
     /**
@@ -74,9 +93,12 @@ public final class IkeTsPayload extends IkePayload {
      */
     @Override
     protected int getPayloadLength() {
-        throw new UnsupportedOperationException(
-                "It is not supported to get payload length of " + getTypeString());
-        //TODO: Implement it.
+        int len = GENERIC_HEADER_LENGTH + TS_HEADER_LEN;
+        for (IkeTrafficSelector ts : trafficSelectors) {
+            len += ts.selectorLength;
+        }
+
+        return len;
     }
 
     /**
