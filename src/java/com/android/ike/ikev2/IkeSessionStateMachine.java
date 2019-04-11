@@ -25,6 +25,7 @@ import android.util.SparseArray;
 
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeKePayload;
@@ -134,6 +135,9 @@ public class IkeSessionStateMachine extends StateMachine {
      * State.
      */
     @VisibleForTesting IkeSocket mIkeSocket;
+
+    /** Package private SaProposal that represents the negotiated IKE SA proposal. */
+    @VisibleForTesting SaProposal mSaProposal;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -274,9 +278,71 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     private void validateIkeInitResp(IkeMessage reqMsg, IkeMessage respMsg) throws IkeException {
-        // TODO: Validate ikeMessage against IKE_INIT request and set confiugration negotiation
-        // results
-        // in mIkeSessionOptions(e.g.NAT detecting result).
+        int exchangeType = respMsg.ikeHeader.exchangeType;
+        if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
+            throw new InvalidSyntaxException(
+                    "Expected EXCHANGE_TYPE_IKE_SA_INIT but received: " + exchangeType);
+        }
+
+        IkeSaPayload respSaPayload = null;
+        IkeKePayload respKePayload = null;
+
+        boolean hasNoncePayload = false;
+
+        for (IkePayload payload : respMsg.ikePayloadList) {
+            switch (payload.payloadType) {
+                case IkePayload.PAYLOAD_TYPE_SA:
+                    respSaPayload = (IkeSaPayload) payload;
+                    break;
+                case IkePayload.PAYLOAD_TYPE_KE:
+                    respKePayload = (IkeKePayload) payload;
+                    break;
+                case IkePayload.PAYLOAD_TYPE_CERT_REQUEST:
+                    throw new UnsupportedOperationException(
+                            "Do not support handling Cert Request Payload.");
+                    // TODO: Handle it when using certificate based authentication. Otherwise,
+                    // ignore it.
+                case IkePayload.PAYLOAD_TYPE_NONCE:
+                    hasNoncePayload = true;
+                    break;
+                case IkePayload.PAYLOAD_TYPE_VENDOR:
+                    // Do not support any vendor defined protocol extensions. Ignore
+                    // all Vendor ID Payloads.
+                    break;
+                case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                    IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                    if (notifyPayload.isErrorNotify()) {
+                        // TODO: Throw IkeExceptions according to error types.
+                        throw new UnsupportedOperationException(
+                                "Do not support handle error notifications in response.");
+                    }
+
+                    // TODO: handle status notifications.
+
+                    break;
+                default:
+                    throw new InvalidSyntaxException(
+                            "Received unexpected payload in IKE INIT response. Payload type: "
+                                    + payload.payloadType);
+            }
+        }
+
+        if (respSaPayload == null || respKePayload == null || !hasNoncePayload) {
+            throw new InvalidSyntaxException("SA, KE or Nonce payload missing.");
+        }
+
+        IkeSaPayload reqSaPayload =
+                reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+        mSaProposal = respSaPayload.getVerifiedNegotiatedProposal(reqSaPayload);
+        // TODO: Build IkeMacPrf, IkeMacIntegrity and IkeCipher using mSaProposal
+        // and store them in state machine.
+
+        IkeKePayload reqKePayload =
+                reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+        if (reqKePayload.dhGroup != respKePayload.dhGroup
+                && respKePayload.dhGroup != mSaProposal.getDhGroupTransforms()[0].id) {
+            throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
+        }
     }
 
     private void validateIkeAuthResp(IkeMessage reqMsg, IkeMessage respMsg) throws IkeException {
