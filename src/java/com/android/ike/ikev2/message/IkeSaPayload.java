@@ -555,7 +555,7 @@ public final class IkeSaPayload extends IkePayload {
      *     Exchange Protocol Version 2 (IKEv2)</a>
      */
     public static final class EncryptionTransform extends Transform {
-        private static final int KEY_LEN_UNSPECIFIED = 0;
+        public static final int KEY_LEN_UNSPECIFIED = 0;
 
         // When using encryption algorithm with variable-length keys, mSpecifiedKeyLength MUST be
         // set and a KeyLengthAttribute MUST be attached. Otherwise, mSpecifiedKeyLength MUST NOT be
@@ -611,6 +611,15 @@ public final class IkeSaPayload extends IkePayload {
                 }
                 validateKeyLength();
             }
+        }
+
+        /**
+         * Get the specified key length.
+         *
+         * @return the specified key length.
+         */
+        public int getSpecifiedKeyLength() {
+            return mSpecifiedKeyLength;
         }
 
         @Override

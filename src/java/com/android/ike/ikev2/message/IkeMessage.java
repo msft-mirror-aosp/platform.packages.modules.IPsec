@@ -22,6 +22,7 @@ import android.util.Pair;
 
 import com.android.ike.ikev2.IkeSessionOptions;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
+import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -38,9 +39,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
-
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
 
 /**
  * IkeMessage represents an IKE message.
@@ -377,9 +375,9 @@ public final class IkeMessage {
                 @PayloadType int firstPayload,
                 byte[] unencryptedPayloads,
                 IkeMacIntegrity integrityMac,
-                Cipher encryptCipher,
+                IkeCipher encryptCipher,
                 byte[] integrityKey,
-                SecretKey eKey) {
+                byte[] encryptKey) {
             IkeSkPayload skPayload =
                     new IkeSkPayload(
                             ikeHeader,
@@ -388,7 +386,7 @@ public final class IkeMessage {
                             integrityMac,
                             encryptCipher,
                             integrityKey,
-                            eKey);
+                            encryptKey);
 
             ByteBuffer outputBuffer =
                     ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + skPayload.getPayloadLength());
@@ -432,9 +430,9 @@ public final class IkeMessage {
                 IkeHeader header,
                 byte[] inputPacket,
                 IkeMacIntegrity integrityMac,
-                Cipher decryptCipher,
+                IkeCipher decryptCipher,
                 byte[] integrityKey,
-                SecretKey dKey)
+                byte[] decryptKey)
                 throws IkeException, GeneralSecurityException {
 
             header.checkInboundValidOrThrow(inputPacket.length);
@@ -447,7 +445,7 @@ public final class IkeMessage {
             try {
                 Pair<IkeSkPayload, Integer> pair =
                         IkePayloadFactory.getIkeSkPayload(
-                                inputPacket, integrityMac, decryptCipher, integrityKey, dKey);
+                                inputPacket, integrityMac, decryptCipher, integrityKey, decryptKey);
                 IkeSkPayload skPayload = pair.first;
                 int firstPayloadType = pair.second;
 

@@ -16,14 +16,12 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeException;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
 
 /**
  * IkeSkPayload represents a Encrypted Payload.
@@ -46,23 +44,23 @@ public final class IkeSkPayload extends IkePayload {
      * @param critical indicates if it is a critical payload.
      * @param message the byte array contains the whole IKE message.
      * @param integrityMac the negotiated integrity algorithm.
-     * @param decryptCipher the uninitialized Cipher for doing decryption.
+     * @param decryptCipher the negotiated encryption algorithm.
      * @param integrityKey the negotiated integrity algorithm key.
-     * @param dKey the decryption key.
+     * @param decryptKey the negotiated decryption key.
      */
     IkeSkPayload(
             boolean critical,
             byte[] message,
             IkeMacIntegrity integrityMac,
-            Cipher decryptCipher,
+            IkeCipher decryptCipher,
             byte[] integrityKey,
-            SecretKey dKey)
+            byte[] decryptKey)
             throws IkeException, GeneralSecurityException {
         super(PAYLOAD_TYPE_SK, critical);
 
         mIkeEncryptedPayloadBody =
                 new IkeEncryptedPayloadBody(
-                        message, integrityMac, decryptCipher, integrityKey, dKey);
+                        message, integrityMac, decryptCipher, integrityKey, decryptKey);
     }
 
     /**
@@ -72,18 +70,18 @@ public final class IkeSkPayload extends IkePayload {
      * @param firstPayloadType the type of first payload nested in SkPayload.
      * @param unencryptedPayloads the encoded payload list to protect.
      * @param integrityMac the negotiated integrity algorithm.
-     * @param encryptCipher the uninitialized Cipher for doing encryption.
+     * @param encryptCipher the negotiated encryption algorithm.
      * @param integrityKey the negotiated integrity algorithm key.
-     * @param eKey the encryption key.
+     * @param encryptKey the negotiated encryption key.
      */
     IkeSkPayload(
             IkeHeader ikeHeader,
             @PayloadType int firstPayloadType,
             byte[] unencryptedPayloads,
             IkeMacIntegrity integrityMac,
-            Cipher encryptCipher,
+            IkeCipher encryptCipher,
             byte[] integrityKey,
-            SecretKey eKey) {
+            byte[] encryptKey) {
         super(PAYLOAD_TYPE_SK, false);
 
         mIkeEncryptedPayloadBody =
@@ -94,7 +92,7 @@ public final class IkeSkPayload extends IkePayload {
                         integrityMac,
                         encryptCipher,
                         integrityKey,
-                        eKey);
+                        encryptKey);
     }
 
     /**
