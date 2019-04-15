@@ -18,6 +18,10 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 
+import com.android.ike.ikev2.SaProposal;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
+
 import org.junit.Before;
 import org.junit.Test;
 
@@ -25,7 +29,6 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
-import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 
@@ -57,13 +60,14 @@ public final class IkeSkPayloadTest {
             "554fbf5a05b7f511e05a30ce23d874db9ef55e51";
 
     private static final String ENCR_ALGO_AES_CBC = "AES/CBC/NoPadding";
-    private static final String INTE_ALGO_HMAC_SHA1 = "HmacSHA1";
 
     private static final int CHECKSUM_LEN = 12;
 
     private Cipher mAesCbcDecryptCipher;
     private SecretKey mAesCbcDecryptKey;
-    private Mac mHmacSha1IntegrityMac;
+
+    private IkeMacIntegrity mHmacSha1IntegrityMac;
+    private byte[] mHmacSha1IntegrityKey;
 
     @Before
     public void setUp() throws Exception {
@@ -71,12 +75,11 @@ public final class IkeSkPayloadTest {
                 Cipher.getInstance(ENCR_ALGO_AES_CBC, IkeMessage.getSecurityProvider());
         byte[] decryptKeyBytes = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
         mAesCbcDecryptKey = new SecretKeySpec(decryptKeyBytes, ENCR_ALGO_AES_CBC);
-
         mHmacSha1IntegrityMac =
-                Mac.getInstance(INTE_ALGO_HMAC_SHA1, IkeMessage.getSecurityProvider());
-        byte[] integrityKeyBytes = TestUtils.hexStringToByteArray(INTE_KEY_FROM_INIT_TO_RESP);
-        SecretKeySpec integrityKey = new SecretKeySpec(integrityKeyBytes, INTE_ALGO_HMAC_SHA1);
-        mHmacSha1IntegrityMac.init(integrityKey);
+                IkeMacIntegrity.create(
+                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),
+                        IkeMessage.getSecurityProvider());
+        mHmacSha1IntegrityKey = TestUtils.hexStringToByteArray(INTE_KEY_FROM_INIT_TO_RESP);
     }
 
     @Test
@@ -89,8 +92,8 @@ public final class IkeSkPayloadTest {
                 IkePayloadFactory.getIkeSkPayload(
                                 message,
                                 mHmacSha1IntegrityMac,
-                                CHECKSUM_LEN,
                                 mAesCbcDecryptCipher,
+                                mHmacSha1IntegrityKey,
                                 mAesCbcDecryptKey)
                         .first;
         int payloadLength = payload.getPayloadLength();
