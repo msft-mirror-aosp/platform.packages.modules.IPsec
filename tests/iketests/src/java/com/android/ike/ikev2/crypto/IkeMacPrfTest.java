@@ -29,7 +29,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 @RunWith(JUnit4.class)
-public final class IkePrfTest {
+public final class IkeMacPrfTest {
 
     private static final String PRF_KEY_HEX_STRING = "094787780EE466E2CB049FA327B43908BC57E485";
     private static final String DATA_TO_SIGN_HEX_STRING = "010000000a50500d";
@@ -96,12 +96,12 @@ public final class IkePrfTest {
     private static final int FIRST_CHILD_AUTH_ALGO_KEY_LEN = 20;
     private static final int FIRST_CHILD_ENCR_ALGO_KEY_LEN = 16;
 
-    private IkePrf mIkeHmacSha1Prf;
+    private IkeMacPrf mIkeHmacSha1Prf;
 
     @Before
     public void setUp() throws Exception {
         mIkeHmacSha1Prf =
-                new IkePrf(
+                IkeMacPrf.create(
                         new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
                         IkeMessage.getSecurityProvider());
     }

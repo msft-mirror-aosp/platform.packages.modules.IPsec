@@ -16,7 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
-import com.android.ike.ikev2.crypto.IkePrf;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 
 import java.nio.ByteBuffer;
@@ -69,7 +69,7 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
             byte[] ikeInitBytes,
             byte[] nonce,
             byte[] idPayloadBodyBytes,
-            IkePrf ikePrf,
+            IkeMacPrf ikePrf,
             byte[] prfKeyBytes) {
         super(false, IkeAuthPayload.AUTH_METHOD_PRE_SHARED_KEY);
         signature =
@@ -82,7 +82,7 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
             byte[] ikeInitBytes,
             byte[] nonce,
             byte[] idPayloadBodyBytes,
-            IkePrf ikePrf,
+            IkeMacPrf ikePrf,
             byte[] prfKeyBytes) {
         byte[] signingKeyBytes = ikePrf.signBytes(psk, IKE_KEY_PAD_STRING_ASCII_HEX_BYTES);
         byte[] dataToSignBytes =
@@ -113,7 +113,7 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
             byte[] ikeInitBytes,
             byte[] nonce,
             byte[] idPayloadBodyBytes,
-            IkePrf ikePrf,
+            IkeMacPrf ikePrf,
             byte[] prfKeyBytes)
             throws AuthenticationFailedException {
         byte[] calculatedSignature =
