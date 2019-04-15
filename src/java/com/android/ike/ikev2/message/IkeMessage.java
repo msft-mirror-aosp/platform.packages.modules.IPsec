@@ -22,6 +22,7 @@ import android.util.Pair;
 
 import com.android.ike.ikev2.IkeSessionOptions;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
@@ -39,7 +40,6 @@ import java.util.List;
 import java.util.Set;
 
 import javax.crypto.Cipher;
-import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 
 /**
@@ -376,9 +376,9 @@ public final class IkeMessage {
                 IkeHeader ikeHeader,
                 @PayloadType int firstPayload,
                 byte[] unencryptedPayloads,
-                Mac integrityMac,
-                int checksumLen,
+                IkeMacIntegrity integrityMac,
                 Cipher encryptCipher,
+                byte[] integrityKey,
                 SecretKey eKey) {
             IkeSkPayload skPayload =
                     new IkeSkPayload(
@@ -386,8 +386,8 @@ public final class IkeMessage {
                             firstPayload,
                             unencryptedPayloads,
                             integrityMac,
-                            checksumLen,
                             encryptCipher,
+                            integrityKey,
                             eKey);
 
             ByteBuffer outputBuffer =
@@ -431,9 +431,9 @@ public final class IkeMessage {
         private IkeMessage decode(
                 IkeHeader header,
                 byte[] inputPacket,
-                Mac integrityMac,
-                int checksumLen,
+                IkeMacIntegrity integrityMac,
                 Cipher decryptCipher,
+                byte[] integrityKey,
                 SecretKey dKey)
                 throws IkeException, GeneralSecurityException {
 
@@ -447,7 +447,7 @@ public final class IkeMessage {
             try {
                 Pair<IkeSkPayload, Integer> pair =
                         IkePayloadFactory.getIkeSkPayload(
-                                inputPacket, integrityMac, checksumLen, decryptCipher, dKey);
+                                inputPacket, integrityMac, decryptCipher, integrityKey, dKey);
                 IkeSkPayload skPayload = pair.first;
                 int firstPayloadType = pair.second;
 

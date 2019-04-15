@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -25,7 +26,6 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
-import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.IvParameterSpec;
 
@@ -56,7 +56,11 @@ final class IkeEncryptedPayloadBody {
      * decrypting an incoming packet.
      */
     IkeEncryptedPayloadBody(
-            byte[] message, Mac integrityMac, int checksumLen, Cipher decryptCipher, SecretKey dKey)
+            byte[] message,
+            IkeMacIntegrity integrityMac,
+            Cipher decryptCipher,
+            byte[] integrityKey,
+            SecretKey dKey)
             throws IkeException, GeneralSecurityException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(message);
 
@@ -68,6 +72,7 @@ final class IkeEncryptedPayloadBody {
         int expectedIvLen = decryptCipher.getBlockSize();
         mIv = new byte[expectedIvLen];
 
+        int checksumLen = integrityMac.getChecksumLen();
         int encryptedDataLen =
                 message.length
                         - (IkeHeader.IKE_HEADER_LENGTH
@@ -82,7 +87,7 @@ final class IkeEncryptedPayloadBody {
 
         // Authenticate and decrypt.
         byte[] dataToAuthenticate = Arrays.copyOfRange(message, 0, message.length - checksumLen);
-        validateChecksumOrThrow(dataToAuthenticate, integrityMac, mIntegrityChecksum);
+        validateChecksumOrThrow(dataToAuthenticate, integrityMac, integrityKey, mIntegrityChecksum);
         mUnencryptedData = decrypt(mEncryptedAndPaddedData, decryptCipher, dKey, mIv);
     }
 
@@ -94,17 +99,17 @@ final class IkeEncryptedPayloadBody {
             IkeHeader ikeHeader,
             @IkePayload.PayloadType int firstPayloadType,
             byte[] unencryptedPayloads,
-            Mac integrityMac,
-            int checksumLen,
+            IkeMacIntegrity integrityMac,
             Cipher encryptCipher,
+            byte[] integrityKey,
             SecretKey eKey) {
         this(
                 ikeHeader,
                 firstPayloadType,
                 unencryptedPayloads,
                 integrityMac,
-                checksumLen,
                 encryptCipher,
+                integrityKey,
                 eKey,
                 encryptCipher.getIV(),
                 calculatePadding(unencryptedPayloads.length, encryptCipher.getBlockSize()));
@@ -116,9 +121,9 @@ final class IkeEncryptedPayloadBody {
             IkeHeader ikeHeader,
             @IkePayload.PayloadType int firstPayloadType,
             byte[] unencryptedPayloads,
-            Mac integrityMac,
-            int checksumLen,
+            IkeMacIntegrity integrityMac,
             Cipher encryptCipher,
+            byte[] integrityKey,
             SecretKey eKey,
             byte[] iv,
             byte[] padding) {
@@ -139,6 +144,7 @@ final class IkeEncryptedPayloadBody {
         ByteBuffer authenticatedSectionBuffer = ByteBuffer.allocate(dataToAuthenticateLength);
 
         // Encode IKE header
+        int checksumLen = integrityMac.getChecksumLen();
         int encryptedPayloadLength =
                 IkePayload.GENERIC_HEADER_LENGTH
                         + iv.length
@@ -161,31 +167,22 @@ final class IkeEncryptedPayloadBody {
 
         // Calculate checksum
         mIntegrityChecksum =
-                calculateChecksum(authenticatedSectionBuffer.array(), integrityMac, checksumLen);
+                integrityMac.generateChecksum(integrityKey, authenticatedSectionBuffer.array());
     }
 
     // TODO: Add another constructor for AEAD protected payload.
 
-    // TODO: Add constructors that initiate IkeEncryptedPayloadBody for an outbound packet
-
-    /** Package private for testing */
-    @VisibleForTesting
-    static byte[] calculateChecksum(byte[] dataToAuthenticate, Mac integrityMac, int checksumLen) {
-        ByteBuffer inputBuffer = ByteBuffer.wrap(dataToAuthenticate);
-        integrityMac.update(inputBuffer);
-        byte[] calculatedChecksum = Arrays.copyOfRange(integrityMac.doFinal(), 0, checksumLen);
-        return calculatedChecksum;
-    }
-
     /** Package private for testing */
     @VisibleForTesting
     static void validateChecksumOrThrow(
-            byte[] dataToAuthenticate, Mac integrityMac, byte[] integrityChecksum)
+            byte[] dataToAuthenticate,
+            IkeMacIntegrity integrityMac,
+            byte[] integrityKey,
+            byte[] integrityChecksum)
             throws GeneralSecurityException {
         // TODO: Make it package private and add test.
         int checkSumLen = integrityChecksum.length;
-        byte[] calculatedChecksum =
-                calculateChecksum(dataToAuthenticate, integrityMac, checkSumLen);
+        byte[] calculatedChecksum = integrityMac.generateChecksum(integrityKey, dataToAuthenticate);
 
         if (!Arrays.equals(integrityChecksum, calculatedChecksum)) {
             throw new GeneralSecurityException("Message authentication failed.");
