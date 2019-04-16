@@ -47,6 +47,11 @@ import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
 import com.android.ike.ikev2.message.IkePayload;
+import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.TestUtils;
 
 import org.junit.After;
@@ -84,6 +89,11 @@ public final class IkeSessionStateMachineTest {
 
     private IkeSessionOptions mIkeSessionOptions;
     private ChildSessionOptions mChildSessionOptions;
+
+    private EncryptionTransform mIkeEncryptionTransform;
+    private IntegrityTransform mIkeIntegrityTransform;
+    private PrfTransform mIkePrfTransform;
+    private DhGroupTransform mIkeDhGroupTransform;
 
     private IIkeMessageHelper mMockIkeMessageHelper;
     private ISaRecordHelper mMockSaRecordHelper;
@@ -221,6 +231,14 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionOptions = buildIkeSessionOptions();
         mChildSessionOptions = new ChildSessionOptions();
 
+        mIkeEncryptionTransform =
+                new EncryptionTransform(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128);
+        mIkeIntegrityTransform =
+                new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96);
+        mIkePrfTransform = new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1);
+        mIkeDhGroupTransform = new DhGroupTransform(SaProposal.DH_GROUP_1024_BIT_MODP);
+
         // Setup thread and looper
         mLooper = new TestLooper();
         mIkeSessionStateMachine =
@@ -272,6 +290,15 @@ public final class IkeSessionStateMachineTest {
         // TODO: Build real IKE INIT response when IKE INIT response validation is implemented.
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
+
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
+
+        payloadHexStringList.add(IKE_SA_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(NONCE_PAYLOAD_HEX_STRING);
+
         return makeDummyUnencryptedReceivedIkePacket(
                 IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
                 true /*isResp*/,
@@ -400,6 +427,18 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
+
+        SaProposal negotiatedProposal = mIkeSessionStateMachine.mSaProposal;
+        assertNotNull(negotiatedProposal);
+
+        assertEquals(
+                new EncryptionTransform[] {mIkeEncryptionTransform},
+                negotiatedProposal.getEncryptionTransforms());
+        assertEquals(
+                new IntegrityTransform[] {mIkeIntegrityTransform},
+                negotiatedProposal.getIntegrityTransforms());
+        assertEquals(new PrfTransform[] {mIkePrfTransform}, negotiatedProposal.getPrfTransforms());
+        assertEquals(new EsnTransform[0], negotiatedProposal.getEsnTransforms());
     }
 
     private void mockIkeSetup() throws Exception {
