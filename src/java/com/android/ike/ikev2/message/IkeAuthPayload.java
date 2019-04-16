@@ -18,7 +18,7 @@ package com.android.ike.ikev2.message;
 
 import android.annotation.IntDef;
 
-import com.android.ike.ikev2.crypto.IkePrf;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeException;
 
 import java.lang.annotation.Retention;
@@ -99,7 +99,7 @@ public abstract class IkeAuthPayload extends IkePayload {
             byte[] ikeInitBytes,
             byte[] nonce,
             byte[] idPayloadBodyBytes,
-            IkePrf ikePrf,
+            IkeMacPrf ikePrf,
             byte[] prfKeyBytes) {
         byte[] signedidPayloadBodyBytes = ikePrf.signBytes(prfKeyBytes, idPayloadBodyBytes);
 

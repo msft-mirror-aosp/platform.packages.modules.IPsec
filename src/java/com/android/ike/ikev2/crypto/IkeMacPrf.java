@@ -20,17 +20,13 @@ import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 
 import java.nio.ByteBuffer;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.spec.SecretKeySpec;
 
 /**
- * IkePrf represents a negotiated pseudorandom function.
+ * IkeMacPrf represents a negotiated pseudorandom function.
  *
  * <p>Pseudorandom function is usually used for IKE SA authentication and generating keying
  * materials.
@@ -42,92 +38,48 @@ import javax.crypto.spec.SecretKeySpec;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class IkePrf {
+public final class IkeMacPrf extends IkeMac {
     // STOPSHIP: b/130190639 Catch unchecked exceptions, notify users and close the IKE session.
 
-    @SaProposal.PseudorandomFunction private final int mAlgorithmId;
-    private final int mKeyLength;
-    private final String mAlgorithmName;
-
-    private final boolean mUseEncryptAlgo;
-    private final Mac mMac;
-    private final Cipher mCipher;
+    private IkeMacPrf(
+            @SaProposal.PseudorandomFunction int algorithmId,
+            int keyLength,
+            String algorithmName,
+            boolean isEncryptAlgo,
+            Provider provider) {
+        super(algorithmId, keyLength, algorithmName, isEncryptAlgo, provider);
+    }
 
     /**
-     * Construct an instance of IkePrf
+     * Construct an instance of IkeMacPrf
      *
      * @param prfTransform the valid negotiated PrfTransform.
      * @param provider the security provider.
      */
-    public IkePrf(PrfTransform prfTransform, Provider provider) {
-        mAlgorithmId = prfTransform.id;
+    public static IkeMacPrf create(PrfTransform prfTransform, Provider provider) {
+        int algorithmId = prfTransform.id;
 
-        switch (mAlgorithmId) {
+        int keyLength = 0;
+        String algorithmName = "";
+        boolean isEncryptAlgo = false;
+
+        switch (algorithmId) {
             case SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1:
-                mKeyLength = 20;
-                mAlgorithmName = "HmacSHA1";
-                mUseEncryptAlgo = false;
+                keyLength = 20;
+                algorithmName = "HmacSHA1";
                 break;
             case SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC:
-                mKeyLength = 16;
-                mUseEncryptAlgo = true;
+                keyLength = 16;
+                isEncryptAlgo = true;
 
                 // TODO:Set mAlgorithmName
                 throw new UnsupportedOperationException(
                         "Do not support PSEUDORANDOM_FUNCTION_AES128_XCBC.");
             default:
-                throw new IllegalArgumentException("Unrecognized PRF ID: " + mAlgorithmId);
+                throw new IllegalArgumentException("Unrecognized PRF ID: " + algorithmId);
         }
 
-        try {
-            if (mUseEncryptAlgo) {
-                mMac = null;
-                mCipher = Cipher.getInstance(mAlgorithmName, provider);
-            } else {
-                mMac = Mac.getInstance(mAlgorithmName, provider);
-                mCipher = null;
-            }
-        } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
-            throw new IllegalArgumentException("Failed to construct IkePrf: ", e);
-        }
-    }
-
-    /**
-     * Get key length of this pseudorandom function (in bytes).
-     *
-     * @return the key length (in bytes).
-     */
-    public int getKeyLength() {
-        return mKeyLength;
-    }
-
-    /**
-     * Signs the bytes to generate a Message Authentication Code (MAC).
-     *
-     * <p>It is usually called for doing IKE authentication or generating keying materials.
-     *
-     * @param keyBytes the key to sign data.
-     * @param dataToSign the data to be signed.
-     * @return the calculated MAC.
-     */
-    public byte[] signBytes(byte[] keyBytes, byte[] dataToSign) {
-        try {
-            SecretKeySpec secretKey = new SecretKeySpec(keyBytes, mAlgorithmName);
-
-            if (mUseEncryptAlgo) {
-                throw new UnsupportedOperationException(
-                        "Do not support PRF using encryption algorithm.");
-
-            } else {
-                ByteBuffer inputBuffer = ByteBuffer.wrap(dataToSign);
-                mMac.init(secretKey);
-                mMac.update(inputBuffer);
-
-                return mMac.doFinal();
-            }
-        } catch (InvalidKeyException | IllegalStateException e) {
-            throw new IllegalArgumentException("Failed to generate MAC: ", e);
-        }
+        return new IkeMacPrf(algorithmId, keyLength, algorithmName, isEncryptAlgo, provider);
     }
 
     /**
@@ -155,7 +107,8 @@ public final class IkePrf {
      *
      * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.13">RFC 7296 Internet Key
      *     Exchange Protocol Version 2 (IKEv2) 2.13. Generating Keying Material </a>
-     * @param keyBytes the key to sign data.
+     * @param keyBytes the key to sign data. SKEYSEED is used for generating KEYMAT for IKE SA. SK_d
+     *     is used for generating KEYMAT for Child SA.
      * @param dataToSign the data to be signed.
      * @param keyMaterialLen the length of keying materials.
      * @return the byte array of keying materials
@@ -181,5 +134,14 @@ public final class IkePrf {
         }
 
         return keyMatBuffer.array();
+    }
+
+    /**
+     * Returns algorithm type as a String.
+     *
+     * @return the algorithm type as a String.
+     */
+    public String getTypeString() {
+        return "Pseudorandom Function";
     }
 }
