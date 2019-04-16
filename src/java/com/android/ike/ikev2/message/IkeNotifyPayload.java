@@ -40,7 +40,7 @@ import java.util.Set;
  * outbound packet.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
- *     Version 2 (IKEv2).
+ *     Version 2 (IKEv2)</a>
  */
 public final class IkeNotifyPayload extends IkePayload {
 
@@ -49,6 +49,7 @@ public final class IkeNotifyPayload extends IkePayload {
         NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD,
         NOTIFY_TYPE_INVALID_MAJOR_VERSION,
         NOTIFY_TYPE_INVALID_SYNTAX,
+        NOTIFY_TYPE_NO_PROPOSAL_CHOSEN,
         NOTIFY_TYPE_INVALID_SELECTORS,
         NOTIFY_TYPE_CHILD_SA_NOT_FOUND,
         NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
@@ -60,6 +61,7 @@ public final class IkeNotifyPayload extends IkePayload {
     public static final int NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1;
     public static final int NOTIFY_TYPE_INVALID_MAJOR_VERSION = 5;
     public static final int NOTIFY_TYPE_INVALID_SYNTAX = 7;
+    public static final int NOTIFY_TYPE_NO_PROPOSAL_CHOSEN = 14;
     public static final int NOTIFY_TYPE_AUTHENTICATION_FAILED = 24;
     public static final int NOTIFY_TYPE_INVALID_SELECTORS = 39;
     public static final int NOTIFY_TYPE_CHILD_SA_NOT_FOUND = 44;

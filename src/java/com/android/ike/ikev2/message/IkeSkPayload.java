@@ -16,14 +16,13 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeException;
-import com.android.ike.ikev2.message.IkePayload.PayloadType;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 
 import javax.crypto.Cipher;
-import javax.crypto.Mac;
 import javax.crypto.SecretKey;
 
 /**
@@ -35,7 +34,7 @@ import javax.crypto.SecretKey;
  * <p>Critical bit must be ignored when doing decoding.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-105">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeSkPayload extends IkePayload {
 
@@ -46,24 +45,56 @@ public final class IkeSkPayload extends IkePayload {
      *
      * @param critical indicates if it is a critical payload.
      * @param message the byte array contains the whole IKE message.
-     * @param integrityMac the initialized Mac for integrity check.
-     * @param expectedChecksumLen the expected length of integrity checksum.
+     * @param integrityMac the negotiated integrity algorithm.
      * @param decryptCipher the uninitialized Cipher for doing decryption.
+     * @param integrityKey the negotiated integrity algorithm key.
      * @param dKey the decryption key.
      */
     IkeSkPayload(
             boolean critical,
             byte[] message,
-            Mac integrityMac,
-            int expectedChecksumLen,
+            IkeMacIntegrity integrityMac,
             Cipher decryptCipher,
+            byte[] integrityKey,
             SecretKey dKey)
             throws IkeException, GeneralSecurityException {
         super(PAYLOAD_TYPE_SK, critical);
 
         mIkeEncryptedPayloadBody =
                 new IkeEncryptedPayloadBody(
-                        message, integrityMac, expectedChecksumLen, decryptCipher, dKey);
+                        message, integrityMac, decryptCipher, integrityKey, dKey);
+    }
+
+    /**
+     * Construct an instance of IkeSkPayload for building outbound packet.
+     *
+     * @param ikeHeader the IKE header.
+     * @param firstPayloadType the type of first payload nested in SkPayload.
+     * @param unencryptedPayloads the encoded payload list to protect.
+     * @param integrityMac the negotiated integrity algorithm.
+     * @param encryptCipher the uninitialized Cipher for doing encryption.
+     * @param integrityKey the negotiated integrity algorithm key.
+     * @param eKey the encryption key.
+     */
+    IkeSkPayload(
+            IkeHeader ikeHeader,
+            @PayloadType int firstPayloadType,
+            byte[] unencryptedPayloads,
+            IkeMacIntegrity integrityMac,
+            Cipher encryptCipher,
+            byte[] integrityKey,
+            SecretKey eKey) {
+        super(PAYLOAD_TYPE_SK, false);
+
+        mIkeEncryptedPayloadBody =
+                new IkeEncryptedPayloadBody(
+                        ikeHeader,
+                        firstPayloadType,
+                        unencryptedPayloads,
+                        integrityMac,
+                        encryptCipher,
+                        integrityKey,
+                        eKey);
     }
 
     /**

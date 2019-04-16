@@ -62,6 +62,7 @@ public final class IkeHeaderTest {
 
     private static final int IKE_MSG_ID = 0;
     private static final int IKE_MSG_LENGTH = 336;
+    private static final int IKE_MSG_BODY_LENGTH = IKE_MSG_LENGTH - IkeHeader.IKE_HEADER_LENGTH;
 
     // Byte offsets of version field in IKE message header.
     private static final int VERSION_OFFSET = 17;
@@ -89,7 +90,7 @@ public final class IkeHeaderTest {
         assertFalse(header.isResponseMsg);
         assertTrue(header.fromIkeInitiator);
         assertEquals(IKE_MSG_ID, header.messageId);
-        assertEquals(IKE_MSG_LENGTH, header.messageLength);
+        assertEquals(IKE_MSG_LENGTH, header.getInboundMessageLength());
     }
 
     @Test
@@ -142,7 +143,7 @@ public final class IkeHeaderTest {
         IkeHeader header = new IkeHeader(inputPacket);
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH);
-        header.encodeToByteBuffer(byteBuffer);
+        header.encodeToByteBuffer(byteBuffer, IKE_MSG_BODY_LENGTH);
 
         byte[] expectedPacket = TestUtils.hexStringToByteArray(IKE_HEADER_HEX_STRING);
         assertArrayEquals(expectedPacket, byteBuffer.array());

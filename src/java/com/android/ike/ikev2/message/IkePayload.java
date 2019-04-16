@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
  * logic.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.2">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public abstract class IkePayload {
     // Critical bit and following reserved 7 bits in payload generic header must all be zero
@@ -37,18 +37,27 @@ public abstract class IkePayload {
     /** Length of a generic IKE payload header */
     public static final int GENERIC_HEADER_LENGTH = 4;
 
+    /**
+     * Payload types as defined by IANA:
+     *
+     * @see <a href="https://www.iana.org/assignments/ikev2-parameters/ikev2-parameters.xhtml">
+     */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         PAYLOAD_TYPE_NO_NEXT,
         PAYLOAD_TYPE_SA,
         PAYLOAD_TYPE_KE,
         PAYLOAD_TYPE_CERT,
+        PAYLOAD_TYPE_CERT_REQUEST,
         PAYLOAD_TYPE_AUTH,
         PAYLOAD_TYPE_ID_INITIATOR,
         PAYLOAD_TYPE_ID_RESPONDER,
         PAYLOAD_TYPE_NONCE,
         PAYLOAD_TYPE_NOTIFY,
+        PAYLOAD_TYPE_DELETE,
         PAYLOAD_TYPE_VENDOR,
+        PAYLOAD_TYPE_TS_INITIATOR,
+        PAYLOAD_TYPE_TS_RESPONDER,
         PAYLOAD_TYPE_SK
     })
     public @interface PayloadType {}
@@ -63,16 +72,24 @@ public abstract class IkePayload {
     public static final int PAYLOAD_TYPE_ID_INITIATOR = 35;
     /** Identification Payload for IKE SA Responder */
     public static final int PAYLOAD_TYPE_ID_RESPONDER = 36;
-    /** Certification Payload */
+    /** Certificate Payload */
     public static final int PAYLOAD_TYPE_CERT = 37;
+    /** Certificate Request Payload */
+    public static final int PAYLOAD_TYPE_CERT_REQUEST = 38;
     /** Authentication Payload */
     public static final int PAYLOAD_TYPE_AUTH = 39;
     /** Nonce Payload */
     public static final int PAYLOAD_TYPE_NONCE = 40;
     /** Notify Payload */
     public static final int PAYLOAD_TYPE_NOTIFY = 41;
+    /** Delete Payload */
+    public static final int PAYLOAD_TYPE_DELETE = 42;
     /** Vendor Payload */
     public static final int PAYLOAD_TYPE_VENDOR = 43;
+    /** Traffic Selector Payload of Child SA Initiator */
+    public static final int PAYLOAD_TYPE_TS_INITIATOR = 44;
+    /** Traffic Selector Payload of Child SA Responder */
+    public static final int PAYLOAD_TYPE_TS_RESPONDER = 45;
     /** Encrypted and Authenticated Payload */
     public static final int PAYLOAD_TYPE_SK = 46;
 
@@ -126,7 +143,7 @@ public abstract class IkePayload {
      * @param payloadLength length of the entire payload
      * @param byteBuffer destination ByteBuffer that stores encoded payload header
      */
-    protected void encodePayloadHeaderToByteBuffer(
+    protected static void encodePayloadHeaderToByteBuffer(
             @PayloadType int nextPayload, int payloadLength, ByteBuffer byteBuffer) {
         byteBuffer
                 .put((byte) nextPayload)

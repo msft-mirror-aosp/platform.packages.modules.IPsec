@@ -34,7 +34,7 @@ import java.security.cert.X509Certificate;
  * the rest unordered.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.6">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeCertX509CertPayload extends IkeCertPayload {
     public final X509Certificate certificate;

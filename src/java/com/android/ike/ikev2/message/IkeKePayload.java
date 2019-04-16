@@ -16,7 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
-import android.util.Pair;
+import android.annotation.Nullable;
 
 import com.android.ike.ikev2.IkeDhParams;
 import com.android.ike.ikev2.SaProposal;
@@ -27,9 +27,12 @@ import com.android.ike.ikev2.utils.BigIntegerUtils;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.security.InvalidAlgorithmParameterException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
+import java.security.NoSuchAlgorithmException;
+import java.security.ProviderException;
 import java.security.SecureRandom;
 
 import javax.crypto.KeyAgreement;
@@ -46,7 +49,7 @@ import javax.crypto.spec.DHPublicKeySpec;
  * exhchange. Upper layer should ignore IkeKePayload with unsupported DH group type.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-89">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeKePayload extends IkePayload {
     private static final int KE_HEADER_LEN = 4;
@@ -64,7 +67,21 @@ public final class IkeKePayload extends IkePayload {
     /** Supported dhGroup falls into {@link DhGroup} */
     public final int dhGroup;
 
+    /** Public DH key for the recipient to calculate shared key. */
     public final byte[] keyExchangeData;
+
+    /** Flag indicates if this is an outbound payload. */
+    public final boolean isOutbound;
+
+    /**
+     * localPrivateKey caches the locally generated private key when building an outbound KE
+     * payload. It will not be sent out. It is only used to calculate DH shared
+     * key when IKE library receives a public key from the remote server.
+     *
+     * <p>localPrivateKey of a inbound payload will be set to null. Caller MUST ensure its an
+     * outbound payload before using localPrivateKey.
+     */
+    @Nullable public final DHPrivateKeySpec localPrivateKey;
 
     /**
      * Construct an instance of IkeKePayload in the context of IkePayloadFactory
@@ -78,6 +95,9 @@ public final class IkeKePayload extends IkePayload {
      */
     IkeKePayload(boolean critical, byte[] payloadBody) throws IkeException {
         super(PAYLOAD_TYPE_KE, critical);
+
+        isOutbound = false;
+        localPrivateKey = null;
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
 
@@ -110,17 +130,67 @@ public final class IkeKePayload extends IkePayload {
     /**
      * Construct an instance of IkeKePayload for building an outbound packet.
      *
+     * <p>Generate a DH key pair. Cache the private key and and send out the public key as
+     * keyExchangeData.
+     *
      * <p>Critical bit in this payload must not be set as instructed in RFC 7296.
      *
      * @param dh DH group for this KE payload
-     * @param keData the Key Exchange data
      * @see <a href="https://tools.ietf.org/html/rfc7296#page-76">RFC 7296, Internet Key Exchange
      *     Protocol Version 2 (IKEv2), Critical.
      */
-    private IkeKePayload(@SaProposal.DhGroup int dh, byte[] keData) {
+    public IkeKePayload(@SaProposal.DhGroup int dh) {
         super(PAYLOAD_TYPE_KE, false);
+
         dhGroup = dh;
-        keyExchangeData = keData;
+        isOutbound = true;
+
+        BigInteger prime = BigInteger.ZERO;
+        int keySize = 0;
+        switch (dhGroup) {
+            case SaProposal.DH_GROUP_1024_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_1024_BIT_MODP);
+                keySize = DH_GROUP_1024_BIT_MODP_DATA_LEN;
+                break;
+            case SaProposal.DH_GROUP_2048_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_2048_BIT_MODP);
+                keySize = DH_GROUP_2048_BIT_MODP_DATA_LEN;
+                break;
+            default:
+                throw new IllegalArgumentException("DH group not supported: " + dh);
+        }
+
+        try {
+            BigInteger baseGen = BigInteger.valueOf(IkeDhParams.BASE_GENERATOR_MODP);
+            DHParameterSpec dhParams = new DHParameterSpec(prime, baseGen);
+
+            KeyPairGenerator dhKeyPairGen =
+                    KeyPairGenerator.getInstance(
+                            KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
+            // By default SecureRandom uses AndroidOpenSSL provided SHA1PRNG Algorithm, which takes
+            // /dev/urandom as seed source.
+            dhKeyPairGen.initialize(dhParams, new SecureRandom());
+
+            KeyPair keyPair = dhKeyPairGen.generateKeyPair();
+
+            DHPrivateKey privateKey = (DHPrivateKey) keyPair.getPrivate();
+            DHPrivateKeySpec dhPrivateKeyspec =
+                    new DHPrivateKeySpec(privateKey.getX(), prime, baseGen);
+            DHPublicKey publicKey = (DHPublicKey) keyPair.getPublic();
+
+            // Zero-pad the public key without the sign bit
+            keyExchangeData =
+                    BigIntegerUtils.bigIntegerToUnsignedByteArray(publicKey.getY(), keySize);
+            localPrivateKey = dhPrivateKeyspec;
+        } catch (NoSuchAlgorithmException e) {
+            throw new ProviderException("Failed to obtain " + KEY_EXCHANGE_ALGORITHM, e);
+        } catch (InvalidAlgorithmParameterException e) {
+            throw new IllegalArgumentException("Failed to initialize key generator", e);
+        }
     }
 
     /**
@@ -146,56 +216,6 @@ public final class IkeKePayload extends IkePayload {
     @Override
     protected int getPayloadLength() {
         return GENERIC_HEADER_LENGTH + KE_HEADER_LEN + keyExchangeData.length;
-    }
-
-    /**
-     * Construct an instance of IkeKePayload according to its {@link DhGroup}.
-     *
-     * @param dh the Dh-Group. It should be in {@link DhGroup}
-     * @return Pair of generated private key and an instance of IkeKePayload with key exchange data.
-     * @throws GeneralSecurityException for security-related exception.
-     */
-    public static Pair<DHPrivateKeySpec, IkeKePayload> getKePayload(@SaProposal.DhGroup int dh)
-            throws GeneralSecurityException {
-        BigInteger baseGen = BigInteger.valueOf(IkeDhParams.BASE_GENERATOR_MODP);
-        BigInteger prime = BigInteger.ZERO;
-        int keySize = 0;
-        switch (dh) {
-            case SaProposal.DH_GROUP_1024_BIT_MODP:
-                prime =
-                        BigIntegerUtils.unsignedHexStringToBigInteger(
-                                IkeDhParams.PRIME_1024_BIT_MODP);
-                keySize = DH_GROUP_1024_BIT_MODP_DATA_LEN;
-                break;
-            case SaProposal.DH_GROUP_2048_BIT_MODP:
-                prime =
-                        BigIntegerUtils.unsignedHexStringToBigInteger(
-                                IkeDhParams.PRIME_2048_BIT_MODP);
-                keySize = DH_GROUP_2048_BIT_MODP_DATA_LEN;
-                break;
-            default:
-                throw new IllegalArgumentException("DH group not supported: " + dh);
-        }
-
-        DHParameterSpec dhParams = new DHParameterSpec(prime, baseGen);
-
-        KeyPairGenerator dhKeyPairGen =
-                KeyPairGenerator.getInstance(
-                        KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
-        // By default SecureRandom uses AndroidOpenSSL provided SHA1PRNG Algorithm, which takes
-        // /dev/urandom as seed source.
-        dhKeyPairGen.initialize(dhParams, new SecureRandom());
-
-        KeyPair keyPair = dhKeyPairGen.generateKeyPair();
-
-        DHPrivateKey privateKey = (DHPrivateKey) keyPair.getPrivate();
-        DHPrivateKeySpec dhPrivateKeyspec = new DHPrivateKeySpec(privateKey.getX(), prime, baseGen);
-        DHPublicKey publicKey = (DHPublicKey) keyPair.getPublic();
-
-        // Zero-pad the public key without the sign bit
-        byte[] keData = BigIntegerUtils.bigIntegerToUnsignedByteArray(publicKey.getY(), keySize);
-
-        return new Pair(dhPrivateKeyspec, new IkeKePayload(dh, keData));
     }
 
     /**

@@ -18,6 +18,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.android.ike.tests">
 
+    <uses-permission android:name="android.permission.INTERNET"/>
+
     <application android:label="FrameworksIkeTests">
         <uses-library android:name="android.test.runner" />
     </application>
@@ -25,13 +27,13 @@
     <!--
         To run all tests:
             adb shell am instrument -w \
-            com.android.ike.tests/android.support.test.runner.AndroidJUnitRunner
+            com.android.ike.tests/androidx.test.runner.AndroidJUnitRunner
 
         To run a single class test:
             adb shell am instrument -e class com.android.ike.unit.FooUnitTest \
-            -w com.android.ike.tests/android.support.test.runner.AndroidJUnitRunner
+            -w com.android.ike.tests/androidx.test.runner.AndroidJUnitRunner
     -->
-    <instrumentation android:name="android.support.test.runner.AndroidJUnitRunner"
+    <instrumentation android:name="androidx.test.runner.AndroidJUnitRunner"
         android:targetPackage="com.android.ike.tests"
         android:label="Frameworks Ike Tests" />
 </manifest>

@@ -36,9 +36,9 @@ import java.util.Arrays;
  * extracted from authentication data.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.8">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  * @see <a href="https://tools.ietf.org/html/rfc7427">RFC 7427, Signature Authentication in the
- *     Internet Key Exchange Version 2 (IKEv2)
+ *     Internet Key Exchange Version 2 (IKEv2)</a>
  */
 public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
 
@@ -138,14 +138,14 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
     // TODO: Add methods for generating and validating signature.
 
     @Override
-    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
+    protected void encodeAuthDataToByteBuffer(ByteBuffer byteBuffer) {
         // TODO: Implement it.
         throw new UnsupportedOperationException(
                 "It is not supported to encode a " + getTypeString());
     }
 
     @Override
-    protected int getPayloadLength() {
+    protected int getAuthDataLength() {
         // TODO: Implement it.
         throw new UnsupportedOperationException(
                 "It is not supported to get payload length of " + getTypeString());

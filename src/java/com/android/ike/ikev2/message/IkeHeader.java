@@ -23,6 +23,7 @@ import android.annotation.IntDef;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -33,10 +34,10 @@ import java.nio.ByteBuffer;
  * for encoding and decoding it.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.1">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2).
+ *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeHeader {
-    //TODO: b/122838549 Change IkeHeader to static inner class of IkeMessage.
+    // TODO: b/122838549 Change IkeHeader to static inner class of IkeMessage.
     private static final byte IKE_HEADER_VERSION_INFO = (byte) 0x20;
 
     // Indicate whether this message is a response message
@@ -69,7 +70,14 @@ public final class IkeHeader {
     public final boolean isResponseMsg;
     public final boolean fromIkeInitiator;
     public final int messageId;
-    public final int messageLength;
+
+    // Cannot assign encoded message length value for an outbound IKE message before it's encoded.
+    private static final int ENCODED_MESSAGE_LEN_UNAVAILABLE = -1;
+
+    // mEncodedMessageLength is only set for an inbound IkeMessage. When building an outbound
+    // IkeMessage, message length is not set because message body length is unknown until it gets
+    // encrypted and encoded.
+    private final int mEncodedMessageLength;
 
     /**
      * Construct an instance of IkeHeader. It is only called in the process of building outbound
@@ -82,7 +90,6 @@ public final class IkeHeader {
      * @param isResp indicates if this message is a response or a request
      * @param fromInit indictaes if this message is sent from the IKE initiator or the IKE responder
      * @param msgId the message identifier
-     * @param length the length of the total message in octets
      */
     public IkeHeader(
             long iSpi,
@@ -91,8 +98,7 @@ public final class IkeHeader {
             @ExchangeType int eType,
             boolean isResp,
             boolean fromInit,
-            int msgId,
-            int length) {
+            int msgId) {
         ikeInitiatorSpi = iSpi;
         ikeResponderSpi = rSpi;
         nextPayloadType = nextPType;
@@ -100,7 +106,8 @@ public final class IkeHeader {
         isResponseMsg = isResp;
         fromIkeInitiator = fromInit;
         messageId = msgId;
-        messageLength = length;
+
+        mEncodedMessageLength = ENCODED_MESSAGE_LEN_UNAVAILABLE;
 
         // Major version of IKE protocol in use; it must be set to 2 when building an IKEv2 message.
         majorVersion = 2;
@@ -135,11 +142,21 @@ public final class IkeHeader {
         fromIkeInitiator = ((flagsByte & 0x08) != 0);
 
         messageId = buffer.getInt();
-        messageLength = buffer.getInt();
+        mEncodedMessageLength = buffer.getInt();
     }
 
-    /** Validate syntax and major version. */
-    public void checkValidOrThrow(int packetLength) throws IkeException {
+    /*Package private*/
+    @VisibleForTesting
+    int getInboundMessageLength() {
+        if (mEncodedMessageLength == ENCODED_MESSAGE_LEN_UNAVAILABLE) {
+            throw new UnsupportedOperationException(
+                    "It is not supported to get encoded message length from an outbound message.");
+        }
+        return mEncodedMessageLength;
+    }
+
+    /** Validate syntax and major version of inbound IKE header. */
+    public void checkInboundValidOrThrow(int packetLength) throws IkeException {
         if (majorVersion > 2) {
             // Receive higher version of protocol. Stop parsing.
             throw new InvalidMajorVersionException(majorVersion);
@@ -155,13 +172,13 @@ public final class IkeHeader {
                 || exchangeType > EXCHANGE_TYPE_INFORMATIONAL) {
             throw new InvalidSyntaxException("Invalid IKE Exchange Type.");
         }
-        if (messageLength != packetLength) {
+        if (mEncodedMessageLength != packetLength) {
             throw new InvalidSyntaxException("Invalid IKE Message Length.");
         }
     }
 
     /** Encode IKE header to ByteBuffer */
-    public void encodeToByteBuffer(ByteBuffer byteBuffer) {
+    public void encodeToByteBuffer(ByteBuffer byteBuffer, int encodedMessageBodyLen) {
         byteBuffer
                 .putLong(ikeInitiatorSpi)
                 .putLong(ikeResponderSpi)
@@ -177,6 +194,6 @@ public final class IkeHeader {
             flag |= IKE_HEADER_FLAG_FROM_IKE_INITIATOR;
         }
 
-        byteBuffer.put(flag).putInt(messageId).putInt(messageLength);
+        byteBuffer.put(flag).putInt(messageId).putInt(IKE_HEADER_LENGTH + encodedMessageBodyLen);
     }
 }

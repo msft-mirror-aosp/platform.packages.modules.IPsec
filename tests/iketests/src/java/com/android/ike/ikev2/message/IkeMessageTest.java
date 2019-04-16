@@ -24,6 +24,7 @@ import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -93,11 +94,11 @@ public final class IkeMessageTest {
     @Before
     public void setUp() {
         IkePayloadFactory.sDecoderInstance =
-                new IkePayloadFactory.IkePayloadDecoder() {
+                new IkePayloadFactory.IIkePayloadDecoder() {
 
                     @Override
                     public IkePayload decodeIkePayload(
-                            int payloadType, boolean isCritical, byte[] payloadBody)
+                            int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
                             throws IkeException {
                         if (support(payloadType)) {
                             return new TestIkeSupportedPayload(payloadType, isCritical);
@@ -106,6 +107,11 @@ public final class IkeMessageTest {
                         }
                     }
                 };
+    }
+
+    @After
+    public void tearDown() {
+        IkePayloadFactory.sDecoderInstance = new IkePayloadFactory.IkePayloadDecoder();
     }
 
     @Test
