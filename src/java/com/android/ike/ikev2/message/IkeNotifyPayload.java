@@ -36,6 +36,9 @@ import java.util.Set;
  * <p>As instructed by RFC 7296, for IKE SA concerned Notify Payload, Protocol ID and SPI Size must
  * be zero. Unrecognized notify message type must be ignored but should be logged.
  *
+ * <p>Notification types that smaller or equal than ERROR_NOTIFY_TYPE_MAX are error types. The rest
+ * of them are status types.
+ *
  * <p>Critical bit for this payload must be ignored in received packet and must not be set in
  * outbound packet.
  *
@@ -72,6 +75,7 @@ public final class IkeNotifyPayload extends IkePayload {
     // TODO: List all supported notify types.
 
     private static final int NOTIFY_HEADER_LEN = 4;
+    private static final int ERROR_NOTIFY_TYPE_MAX = 16383;
 
     private static final String NAT_DETECTION_DIGEST_ALGORITHM = "SHA-1";
 
@@ -260,6 +264,15 @@ public final class IkeNotifyPayload extends IkePayload {
         } catch (InvalidSyntaxException e) {
             throw new IllegalArgumentException(e);
         }
+    }
+
+    /**
+     * Indicates if this is an error notification payload.
+     *
+     * @return if this is an error notification payload.
+     */
+    public boolean isErrorNotify() {
+        return notifyType <= ERROR_NOTIFY_TYPE_MAX;
     }
 
     /**
