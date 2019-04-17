@@ -30,12 +30,8 @@ import javax.crypto.spec.SecretKeySpec;
  * IkeMac is an abstract class that represents common information for all negotiated algorithms that
  * generates Message Authentication Code (MAC), e.g. PRF and integrity algorithm.
  */
-abstract class IkeMac {
+abstract class IkeMac extends IkeCrypto {
     // STOPSHIP: b/130190639 Catch unchecked exceptions, notify users and close the IKE session.
-    private final int mAlgorithmId;
-    private final int mKeyLength;
-    private final String mAlgorithmName;
-
     private final boolean mIsEncryptAlgo;
     private final Mac mMac;
     private final Cipher mCipher;
@@ -46,31 +42,21 @@ abstract class IkeMac {
             String algorithmName,
             boolean isEncryptAlgo,
             Provider provider) {
-        mAlgorithmId = algorithmId;
-        mKeyLength = keyLength;
-        mAlgorithmName = algorithmName;
+        super(algorithmId, keyLength, algorithmName);
+
         mIsEncryptAlgo = isEncryptAlgo;
 
         try {
             if (mIsEncryptAlgo) {
                 mMac = null;
-                mCipher = Cipher.getInstance(mAlgorithmName, provider);
+                mCipher = Cipher.getInstance(getAlgorithmName(), provider);
             } else {
-                mMac = Mac.getInstance(mAlgorithmName, provider);
+                mMac = Mac.getInstance(getAlgorithmName(), provider);
                 mCipher = null;
             }
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
             throw new IllegalArgumentException("Failed to construct " + getTypeString(), e);
         }
-    }
-
-    /**
-     * Gets key length of this integrity algorithm (in bytes).
-     *
-     * @return the key length (in bytes).
-     */
-    public int getKeyLength() {
-        return mKeyLength;
     }
 
     /**
@@ -85,7 +71,7 @@ abstract class IkeMac {
      */
     public byte[] signBytes(byte[] keyBytes, byte[] dataToSign) {
         try {
-            SecretKeySpec secretKey = new SecretKeySpec(keyBytes, mAlgorithmName);
+            SecretKeySpec secretKey = new SecretKeySpec(keyBytes, getAlgorithmName());
 
             if (mIsEncryptAlgo) {
                 throw new UnsupportedOperationException(
@@ -101,11 +87,4 @@ abstract class IkeMac {
             throw new IllegalArgumentException("Failed to generate MAC: ", e);
         }
     }
-
-    /**
-     * Returns algorithm type as a String.
-     *
-     * @return the algorithm type as a String.
-     */
-    public abstract String getTypeString();
 }
