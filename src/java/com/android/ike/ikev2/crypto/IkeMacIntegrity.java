@@ -123,7 +123,6 @@ public final class IkeMacIntegrity extends IkeMac {
      * @return the integrity checksum.
      */
     public byte[] generateChecksum(byte[] keyBytes, byte[] dataToAuthenticate) {
-
         if (getKeyLength() != keyBytes.length) {
             throw new IllegalArgumentException(
                     "Expected key length: "
@@ -141,6 +140,7 @@ public final class IkeMacIntegrity extends IkeMac {
      *
      * @return the algorithm type as a String.
      */
+    @Override
     public String getTypeString() {
         return "Integrity Algorithm.";
     }
