@@ -238,7 +238,7 @@ public final class IkeSessionOptions {
          * Validates, builds and returns the IkeSessionOptions
          *
          * @return IkeSessionOptions the validated IkeSessionOptions
-         * @throws IllegalStateException if no IKE SA proposal is provided
+         * @throws IllegalArgumentException if no IKE SA proposal is provided
          */
         public IkeSessionOptions build() {
             if (mSaProposalList.isEmpty()) {
