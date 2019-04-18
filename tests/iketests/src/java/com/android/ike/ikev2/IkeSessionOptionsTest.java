@@ -27,6 +27,8 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 
 import androidx.test.InstrumentationRegistry;
 
+import com.android.ike.ikev2.message.TestUtils;
+
 import libcore.net.InetAddressUtils;
 
 import org.junit.After;
@@ -36,16 +38,36 @@ import org.junit.Test;
 import java.net.Inet4Address;
 
 public final class IkeSessionOptionsTest {
-    private static final Inet4Address IPV4_ADDRESS =
+    private static final String PSK_HEX_STRING = "6A756E69706572313233";
+    private static final byte[] PSK = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
+
+    private static final Inet4Address LOCAL_IPV4_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+    private static final Inet4Address REMOTE_IPV4_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
 
     private UdpEncapsulationSocket mUdpEncapSocket;
+    private SaProposal mIkeSaProposal;
+    private IkeIdentification mLocalIdentification;
+    private IkeIdentification mRemoteIdentification;
 
     @Before
     public void setUp() throws Exception {
         Context context = InstrumentationRegistry.getContext();
         IpSecManager ipSecManager = (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE);
         mUdpEncapSocket = ipSecManager.openUdpEncapsulationSocket();
+
+        mIkeSaProposal =
+                SaProposal.Builder.newIkeSaProposalBuilder()
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
+                                SaProposal.KEY_LEN_AES_128)
+                        .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
+                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
+                        .build();
+        mLocalIdentification = new IkeIdentification.IkeIpv4AddrIdentification(LOCAL_IPV4_ADDRESS);
+        mRemoteIdentification =
+                new IkeIdentification.IkeIpv4AddrIdentification(REMOTE_IPV4_ADDRESS);
     }
 
     @After
@@ -55,31 +77,66 @@ public final class IkeSessionOptionsTest {
 
     @Test
     public void testBuild() throws Exception {
-        SaProposal saProposal =
-                SaProposal.Builder.newIkeSaProposalBuilder()
-                        .addEncryptionAlgorithm(
-                                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
-                                SaProposal.KEY_LEN_AES_128)
-                        .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
-                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                        .build();
-
         IkeSessionOptions sessionOptions =
-                new IkeSessionOptions.Builder(IPV4_ADDRESS, mUdpEncapSocket)
-                        .addSaProposal(saProposal)
+                new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setLocalAuthPsk(PSK)
+                        .setRemoteAuthPsk(PSK)
                         .build();
 
-        assertEquals(IPV4_ADDRESS, sessionOptions.getServerAddress());
+        assertEquals(REMOTE_IPV4_ADDRESS, sessionOptions.getServerAddress());
         assertEquals(mUdpEncapSocket, sessionOptions.getUdpEncapsulationSocket());
-        assertArrayEquals(new SaProposal[] {saProposal}, sessionOptions.getSaProposals());
+        assertArrayEquals(new SaProposal[] {mIkeSaProposal}, sessionOptions.getSaProposals());
+
+        assertEquals(mLocalIdentification, sessionOptions.getLocalIdentification());
+        assertEquals(mRemoteIdentification, sessionOptions.getRemoteIdentification());
+
+        IkeSessionOptions.IkeAuthConfig localConfig = sessionOptions.getLocalAuthConfig();
+        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PSK, localConfig.mAuthMethod);
+        assertArrayEquals(PSK, localConfig.mPsk);
+
+        IkeSessionOptions.IkeAuthConfig remoteConfig = sessionOptions.getRemoteAuthConfig();
+        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PSK, remoteConfig.mAuthMethod);
+        assertArrayEquals(PSK, remoteConfig.mPsk);
+
         assertFalse(sessionOptions.isIkeFragmentationSupported());
     }
 
     @Test
     public void testBuildWithoutSaProposal() throws Exception {
         try {
-            new IkeSessionOptions.Builder(IPV4_ADDRESS, mUdpEncapSocket).build();
+            new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket).build();
             fail("Expected to fail due to absence of SA proposal.");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildWithoutLocalId() throws Exception {
+        try {
+            new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+                    .addSaProposal(mIkeSaProposal)
+                    .setRemoteIdentification(mRemoteIdentification)
+                    .setLocalAuthPsk(PSK)
+                    .setRemoteAuthPsk(PSK)
+                    .build();
+            fail("Expected to fail because local identification is not set.");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildWithoutSetLocalAuth() throws Exception {
+        try {
+            new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+                    .addSaProposal(mIkeSaProposal)
+                    .setLocalIdentification(mLocalIdentification)
+                    .setRemoteIdentification(mRemoteIdentification)
+                    .setRemoteAuthPsk(PSK)
+                    .build();
+            fail("Expected to fail because local authentiction method is not set.");
         } catch (IllegalArgumentException expected) {
         }
     }
@@ -93,8 +150,10 @@ public final class IkeSessionOptionsTest {
                                 SaProposal.KEY_LEN_AES_128)
                         .build();
         try {
-            new IkeSessionOptions.Builder(IPV4_ADDRESS, mUdpEncapSocket)
+            new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
                     .addSaProposal(saProposal)
+                    .setLocalAuthPsk(PSK)
+                    .setRemoteAuthPsk(PSK)
                     .build();
             fail("Expected to fail due to wrong type of SA proposal.");
         } catch (IllegalArgumentException expected) {
