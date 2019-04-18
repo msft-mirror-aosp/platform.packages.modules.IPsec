@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.internal.annotations.VisibleForTesting;
@@ -25,9 +26,7 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.IllegalBlockSizeException;
 
 /**
  * IkeEncryptedPayloadBody is a package private class that represents an IKE payload substructure
@@ -58,9 +57,9 @@ final class IkeEncryptedPayloadBody {
     IkeEncryptedPayloadBody(
             byte[] message,
             IkeMacIntegrity integrityMac,
-            Cipher decryptCipher,
+            IkeCipher decryptCipher,
             byte[] integrityKey,
-            SecretKey dKey)
+            byte[] decryptKey)
             throws IkeException, GeneralSecurityException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(message);
 
@@ -88,7 +87,7 @@ final class IkeEncryptedPayloadBody {
         // Authenticate and decrypt.
         byte[] dataToAuthenticate = Arrays.copyOfRange(message, 0, message.length - checksumLen);
         validateChecksumOrThrow(dataToAuthenticate, integrityMac, integrityKey, mIntegrityChecksum);
-        mUnencryptedData = decrypt(mEncryptedAndPaddedData, decryptCipher, dKey, mIv);
+        mUnencryptedData = decrypt(mEncryptedAndPaddedData, decryptCipher, decryptKey, mIv);
     }
 
     /**
@@ -100,9 +99,9 @@ final class IkeEncryptedPayloadBody {
             @IkePayload.PayloadType int firstPayloadType,
             byte[] unencryptedPayloads,
             IkeMacIntegrity integrityMac,
-            Cipher encryptCipher,
+            IkeCipher encryptCipher,
             byte[] integrityKey,
-            SecretKey eKey) {
+            byte[] encryptKey) {
         this(
                 ikeHeader,
                 firstPayloadType,
@@ -110,8 +109,8 @@ final class IkeEncryptedPayloadBody {
                 integrityMac,
                 encryptCipher,
                 integrityKey,
-                eKey,
-                encryptCipher.getIV(),
+                encryptKey,
+                encryptCipher.generateIv(),
                 calculatePadding(unencryptedPayloads.length, encryptCipher.getBlockSize()));
     }
 
@@ -122,16 +121,17 @@ final class IkeEncryptedPayloadBody {
             @IkePayload.PayloadType int firstPayloadType,
             byte[] unencryptedPayloads,
             IkeMacIntegrity integrityMac,
-            Cipher encryptCipher,
+            IkeCipher encryptCipher,
             byte[] integrityKey,
-            SecretKey eKey,
+            byte[] encryptKey,
             byte[] iv,
             byte[] padding) {
         mUnencryptedData = unencryptedPayloads;
 
         // Encrypt data
         mIv = iv;
-        mEncryptedAndPaddedData = encrypt(unencryptedPayloads, encryptCipher, eKey, iv, padding);
+        mEncryptedAndPaddedData =
+                encrypt(unencryptedPayloads, encryptCipher, encryptKey, iv, padding);
 
         // Build authenticated section using ByteBuffer. Authenticated section includes bytes from
         // beginning of IKE header to the pad length, which are concatenation of IKE header, current
@@ -192,42 +192,32 @@ final class IkeEncryptedPayloadBody {
     /** Package private for testing */
     @VisibleForTesting
     static byte[] encrypt(
-            byte[] dataToEncrypt, Cipher encryptCipher, SecretKey eKey, byte[] iv, byte[] padding) {
+            byte[] dataToEncrypt,
+            IkeCipher encryptCipher,
+            byte[] encryptKey,
+            byte[] iv,
+            byte[] padding) {
         int padLength = padding.length;
         int paddedDataLength = dataToEncrypt.length + padLength + PAD_LEN_LEN;
         ByteBuffer inputBuffer = ByteBuffer.allocate(paddedDataLength);
         inputBuffer.put(dataToEncrypt).put(padding).put((byte) padLength);
-        inputBuffer.rewind();
 
-        try {
-            // Encrypt data.
-            ByteBuffer outputBuffer = ByteBuffer.allocate(paddedDataLength);
-            encryptCipher.init(Cipher.ENCRYPT_MODE, eKey, new IvParameterSpec(iv));
-            encryptCipher.doFinal(inputBuffer, outputBuffer);
-            return outputBuffer.array();
-        } catch (GeneralSecurityException e) {
-            throw new IllegalArgumentException("Fail to encrypt IKE message. ", e);
-        }
+        // Encrypt data.
+        return encryptCipher.encrypt(inputBuffer.array(), encryptKey, iv);
     }
 
     /** Package private for testing */
     @VisibleForTesting
-    static byte[] decrypt(byte[] encryptedData, Cipher decryptCipher, SecretKey dKey, byte[] iv)
-            throws GeneralSecurityException {
-        // TODO: Make it package private and add test.
-        decryptCipher.init(Cipher.DECRYPT_MODE, dKey, new IvParameterSpec(iv));
+    static byte[] decrypt(
+            byte[] encryptedData, IkeCipher decryptCipher, byte[] decryptKey, byte[] iv)
+            throws IllegalBlockSizeException {
+        byte[] decryptedPaddedData = decryptCipher.decrypt(encryptedData, decryptKey, iv);
 
-        ByteBuffer inputBuffer = ByteBuffer.wrap(encryptedData);
-        ByteBuffer outputBuffer = ByteBuffer.allocate(encryptedData.length);
-        decryptCipher.doFinal(inputBuffer, outputBuffer);
+        // Remove padding. Pad length value is the last byte of the padded unencrypted data.
+        int padLength = Byte.toUnsignedInt(decryptedPaddedData[encryptedData.length - 1]);
+        int decryptedDataLen = encryptedData.length - padLength - PAD_LEN_LEN;
 
-        // Remove padding
-        outputBuffer.rewind();
-        int padLength = Byte.toUnsignedInt(outputBuffer.get(encryptedData.length - PAD_LEN_LEN));
-        byte[] decryptedData = new byte[encryptedData.length - padLength - PAD_LEN_LEN];
-
-        outputBuffer.get(decryptedData);
-        return decryptedData;
+        return Arrays.copyOfRange(decryptedPaddedData, 0, decryptedDataLen);
     }
 
     /** Package private for testing */
