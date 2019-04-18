@@ -51,10 +51,11 @@ public final class IkeMacPrf extends IkeMac {
     }
 
     /**
-     * Construct an instance of IkeMacPrf
+     * Construct an instance of IkeMacPrf.
      *
      * @param prfTransform the valid negotiated PrfTransform.
      * @param provider the security provider.
+     * @return an instance of IkeMacPrf.
      */
     public static IkeMacPrf create(PrfTransform prfTransform, Provider provider) {
         int algorithmId = prfTransform.id;
@@ -141,6 +142,7 @@ public final class IkeMacPrf extends IkeMac {
      *
      * @return the algorithm type as a String.
      */
+    @Override
     public String getTypeString() {
         return "Pseudorandom Function";
     }
