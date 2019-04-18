@@ -75,8 +75,8 @@ public final class IkeTrafficSelector {
     public static final int TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE = 7;
     public static final int TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE = 8;
 
-    private static final int PORT_NUMBER_MIN = 0;
-    private static final int PORT_NUMBER_MAX = 65535;
+    public static final int PORT_NUMBER_MIN = 0;
+    public static final int PORT_NUMBER_MAX = 65535;
 
     // TODO: Consider defining these constants in a central place in Connectivity.
     private static final int IPV4_ADDR_LEN = 4;

@@ -68,12 +68,12 @@ public final class ChildSessionStateMachineTest {
     public ChildSessionStateMachineTest() {
         mMockSaRecordHelper = mock(SaRecord.ISaRecordHelper.class);
         mMockChildSessionCallback = mock(IChildSessionCallback.class);
-
-        mChildSessionOptions = new ChildSessionOptions();
     }
 
     @Before
     public void setup() throws Exception {
+        mChildSessionOptions = buildChildSessionOptions();
+
         // Setup thread and looper
         mLooper = new TestLooper();
         mChildSessionStateMachine =
@@ -86,6 +86,17 @@ public final class ChildSessionStateMachineTest {
         setUpChildSaRecords();
 
         mChildSessionStateMachine.start();
+    }
+
+    private ChildSessionOptions buildChildSessionOptions() throws Exception {
+        SaProposal saProposal =
+                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
+                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
+                        .build();
+
+        return new ChildSessionOptions.Builder().addSaProposal(saProposal).build();
     }
 
     private void setUpPayloadLists() throws IkeException {
