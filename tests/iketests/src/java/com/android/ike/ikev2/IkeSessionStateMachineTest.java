@@ -38,6 +38,7 @@ import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
+import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
 import com.android.ike.ikev2.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
@@ -59,13 +60,15 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.util.LinkedList;
 import java.util.List;
 
 public final class IkeSessionStateMachineTest {
 
-    private static final String SERVER_ADDRESS = "192.0.2.100";
+    private static final String LOCAL_ADDRESS = "192.0.2.200";
+    private static final String REMOTE_ADDRESS = "192.0.2.100";
 
     private static final String IKE_SA_PAYLOAD_HEX_STRING =
             "220000300000002c010100040300000c0100000c800e00800300000803000002030"
@@ -81,6 +84,8 @@ public final class IkeSessionStateMachineTest {
             "29000024c39b7f368f4681b89fa9b7be6465abd7c5f68b6ed5d3b4c72cb4240eb5c46412";
     private static final String DELETE_IKE_PAYLOAD_HEX_STRING = "0000000801000000";
     private static final String NOTIFY_REKEY_IKE_PAYLOAD_HEX_STRING = "2100000800004009";
+
+    private static final String PSK_HEX_STRING = "6A756E69706572313233";
 
     private UdpEncapsulationSocket mUdpEncapSocket;
 
@@ -229,7 +234,7 @@ public final class IkeSessionStateMachineTest {
         mUdpEncapSocket = ipSecManager.openUdpEncapsulationSocket();
 
         mIkeSessionOptions = buildIkeSessionOptions();
-        mChildSessionOptions = new ChildSessionOptions();
+        mChildSessionOptions = buildChildSessionOptions();
 
         mIkeEncryptionTransform =
                 new EncryptionTransform(
@@ -278,12 +283,32 @@ public final class IkeSessionStateMachineTest {
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
 
-        InetAddress serveAddress = InetAddress.getByName(SERVER_ADDRESS);
+        InetAddress localAddress = InetAddress.getByName(LOCAL_ADDRESS);
+        InetAddress serveAddress = InetAddress.getByName(REMOTE_ADDRESS);
+        byte[] psk = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
+
         IkeSessionOptions sessionOptions =
                 new IkeSessionOptions.Builder(serveAddress, mUdpEncapSocket)
                         .addSaProposal(saProposal)
+                        .setLocalIdentification(
+                                new IkeIpv4AddrIdentification((Inet4Address) localAddress))
+                        .setRemoteIdentification(
+                                new IkeIpv4AddrIdentification((Inet4Address) serveAddress))
+                        .setLocalAuthPsk(psk)
+                        .setRemoteAuthPsk(psk)
                         .build();
         return sessionOptions;
+    }
+
+    private ChildSessionOptions buildChildSessionOptions() throws Exception {
+        SaProposal saProposal =
+                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
+                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
+                        .build();
+
+        return new ChildSessionOptions.Builder().addSaProposal(saProposal).build();
     }
 
     private ReceivedIkePacket makeIkeInitResponse() throws Exception {
