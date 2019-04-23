@@ -28,12 +28,14 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.ProviderException;
 import java.security.SecureRandom;
+import java.security.spec.InvalidKeySpecException;
 
 import javax.crypto.KeyAgreement;
 import javax.crypto.interfaces.DHPrivateKey;
@@ -75,8 +77,8 @@ public final class IkeKePayload extends IkePayload {
 
     /**
      * localPrivateKey caches the locally generated private key when building an outbound KE
-     * payload. It will not be sent out. It is only used to calculate DH shared
-     * key when IKE library receives a public key from the remote server.
+     * payload. It will not be sent out. It is only used to calculate DH shared key when IKE library
+     * receives a public key from the remote server.
      *
      * <p>localPrivateKey of a inbound payload will be set to null. Caller MUST ensure its an
      * outbound payload before using localPrivateKey.
@@ -223,29 +225,38 @@ public final class IkeKePayload extends IkePayload {
      *
      * @param privateKeySpec contains the local private key, DH prime and DH base generator.
      * @param remotePublicKey the public key from remote server.
-     * @throws GeneralSecurityException for security-related exception.
+     * @throws GeneralSecurityException if the remote public key is invalid.
      */
     public static byte[] getSharedKey(DHPrivateKeySpec privateKeySpec, byte[] remotePublicKey)
             throws GeneralSecurityException {
+        KeyAgreement dhKeyAgreement;
+        KeyFactory dhKeyFactory;
+        try {
+            // Apply local private key.
+            dhKeyAgreement =
+                    KeyAgreement.getInstance(
+                            KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
+            dhKeyFactory =
+                    KeyFactory.getInstance(
+                            KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
+            DHPrivateKey privateKey = (DHPrivateKey) dhKeyFactory.generatePrivate(privateKeySpec);
+            dhKeyAgreement.init(privateKey);
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException e) {
+            throw new IllegalArgumentException("Failed to generate DH private key", e);
+        }
+
+        // Build public key.
         BigInteger publicKeyValue = BigIntegerUtils.unsignedByteArrayToBigInteger(remotePublicKey);
         BigInteger primeValue = privateKeySpec.getP();
-        // TODO: Add recipient test of remotePublicKey, as instructed by RFC6989 section 2.1
-
         BigInteger baseGenValue = privateKeySpec.getG();
-
         DHPublicKeySpec publicKeySpec =
                 new DHPublicKeySpec(publicKeyValue, primeValue, baseGenValue);
-        KeyFactory dhKeyFactory =
-                KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
+
+        // Validate and apply public key. Validation includes range check as instructed by RFC6989
+        // section 2.1
         DHPublicKey publicKey = (DHPublicKey) dhKeyFactory.generatePublic(publicKeySpec);
-        DHPrivateKey privateKey = (DHPrivateKey) dhKeyFactory.generatePrivate(privateKeySpec);
 
-        // Calculate shared secret
-        KeyAgreement dhKeyAgreement =
-                KeyAgreement.getInstance(KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
-        dhKeyAgreement.init(privateKey);
-        dhKeyAgreement.doPhase(publicKey, true/** Last phase */);
-
+        dhKeyAgreement.doPhase(publicKey, true /* Last phase */);
         return dhKeyAgreement.generateSecret();
     }
 
