@@ -34,6 +34,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
@@ -572,7 +573,9 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeHeader);
             try {
                 if (ikeHeader.isResponseMsg) {
-                    // TODO: Verify message ID against outstanding request.
+                    if (ikeHeader.messageId != ikeSaRecord.getLocalRequestMessageId()) {
+                        throw new InvalidMessageIdException(ikeHeader.messageId);
+                    }
                     IkeMessage ikeMessage =
                             IkeMessage.decode(
                                     mIkeIntegrity,
@@ -580,9 +583,21 @@ public class IkeSessionStateMachine extends StateMachine {
                                     ikeSaRecord,
                                     ikeHeader,
                                     ikePacketBytes);
+                    ikeSaRecord.incrementLocalRequestMessageId();
+
                     handleResponseIkeMessage(ikeMessage);
                 } else {
-                    // TODO: Verify message ID.
+                    switch (ikeSaRecord.getRemoteRequestMessageId() - ikeHeader.messageId) {
+                        case 0:
+                            // Normal path.
+                            break;
+                        case 1:
+                            // TODO: Handle retransmitted request.
+                            throw new UnsupportedOperationException(
+                                    "Do not support handling retransmitted request.");
+                        default:
+                            throw new InvalidMessageIdException(ikeHeader.messageId);
+                    }
                     IkeMessage ikeMessage =
                             IkeMessage.decode(
                                     mIkeIntegrity,
@@ -590,6 +605,8 @@ public class IkeSessionStateMachine extends StateMachine {
                                     ikeSaRecord,
                                     ikeHeader,
                                     ikePacketBytes);
+                    ikeSaRecord.incrementRemoteRequestMessageId();
+
                     handleRequestIkeMessage(ikeMessage, getIkeExchangeSubType(ikeMessage), message);
                 }
 
@@ -597,6 +614,16 @@ public class IkeSessionStateMachine extends StateMachine {
             } catch (IkeException e) {
                 // TODO: Handle decoding exceptions. Reply with error notifications if received IKE
                 // message is an encrypted and authenticated request with a valid message ID.
+                switch (e.errorCode) {
+                    case IkeNotifyPayload.NOTIFY_TYPE_INVALID_MESSAGE_ID:
+                        // TODO: Ignore this message, keep current status and send error
+                        // notification in an INFORMATIONAL request(optional).
+                        throw new UnsupportedOperationException(
+                                "Do not support handling this protocol error:" + e.errorCode);
+                    default:
+                        throw new UnsupportedOperationException(
+                                "Do not support handling this protocol error:" + e.errorCode);
+                }
             } catch (GeneralSecurityException e) {
                 // IKE library failed on intergity checksum validation or on message decryption.
                 // TODO: Handle decrypting exception
@@ -759,10 +786,13 @@ public class IkeSessionStateMachine extends StateMachine {
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
             try {
                 if (ikeHeader.isResponseMsg) {
-                    // TODO: Verify message ID is zero.
+                    if (ikeHeader.messageId != 0) {
+                        throw new InvalidMessageIdException(ikeHeader.messageId);
+                    }
                     IkeMessage ikeMessage = IkeMessage.decode(ikeHeader, ikePacketBytes);
                     handleResponseIkeMessage(ikeMessage);
                     mIkeInitResponsePacket = ikePacketBytes;
+                    mCurrentIkeSaRecord.incrementLocalRequestMessageId();
                 } else {
                     // TODO: Drop unexpected request.
                 }
@@ -798,7 +828,6 @@ public class IkeSessionStateMachine extends StateMachine {
                                 mIkePrf,
                                 mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
                                 mIkeCipher.getKeyLength());
-                mCurrentIkeSaRecord.incrementMessageId();
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
 
@@ -1076,7 +1105,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
                             false /*isResponseMsg*/,
                             true /*fromIkeInitiator*/,
-                            mCurrentIkeSaRecord.getMessageId());
+                            mCurrentIkeSaRecord.getLocalRequestMessageId());
 
             return new IkeMessage(ikeHeader, payloadList);
         }
