@@ -22,6 +22,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -43,6 +44,7 @@ import com.android.ike.ikev2.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
@@ -87,6 +89,10 @@ public final class IkeSessionStateMachineTest {
 
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
 
+    private static final int KEY_LEN_IKE_INTE = 20;
+    private static final int KEY_LEN_IKE_ENCR = 16;
+    private static final int KEY_LEN_IKE_PRF = 20;
+
     private UdpEncapsulationSocket mUdpEncapSocket;
 
     private TestLooper mLooper;
@@ -112,6 +118,7 @@ public final class IkeSessionStateMachineTest {
 
     private ArgumentCaptor<IkeMessage> mIkeMessageCaptor =
             ArgumentCaptor.forClass(IkeMessage.class);
+    private ArgumentCaptor<IkeMacPrf> mIkePrfCaptor = ArgumentCaptor.forClass(IkeMacPrf.class);
 
     private ReceivedIkePacket makeDummyUnencryptedReceivedIkePacket(
             @IkeHeader.ExchangeType int eType,
@@ -217,14 +224,31 @@ public final class IkeSessionStateMachineTest {
         mMockChildSessionStateMachine = mock(ChildSessionStateMachine.class);
         mMockChildSessionFactoryHelper = mock(IChildSessionFactoryHelper.class);
 
-        mSpyCurrentIkeSaRecord = spy(new IkeSaRecord(11, 12, true, null, null));
-        mSpyLocalInitIkeSaRecord = spy(new IkeSaRecord(21, 22, true, null, null));
-        mSpyRemoteInitIkeSaRecord = spy(new IkeSaRecord(31, 32, false, null, null));
+        mSpyCurrentIkeSaRecord = spy(makeDummyIkeSaRecord(11, 12, true));
+        mSpyLocalInitIkeSaRecord = spy(makeDummyIkeSaRecord(21, 22, true));
+        mSpyRemoteInitIkeSaRecord = spy(makeDummyIkeSaRecord(31, 32, false));
 
         when(mMockIkeMessageHelper.encode(any())).thenReturn(new byte[0]);
         when(mMockIkeMessageHelper.encode(any(), any(), any())).thenReturn(new byte[0]);
         when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(any(), any(), any()))
                 .thenReturn(mMockChildSessionStateMachine);
+    }
+
+    private static IkeSaRecord makeDummyIkeSaRecord(
+            long initSpi, long respSpi, boolean isLocalInit) {
+        return new IkeSaRecord(
+                initSpi,
+                respSpi,
+                isLocalInit,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     @Before
@@ -419,7 +443,7 @@ public final class IkeSessionStateMachineTest {
         // Mock IKE_INIT response.
         ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
 
-        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any()))
+        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(mSpyCurrentIkeSaRecord);
 
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
@@ -453,6 +477,7 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
 
+        // Validate negotiated SA proposal.
         SaProposal negotiatedProposal = mIkeSessionStateMachine.mSaProposal;
         assertNotNull(negotiatedProposal);
 
@@ -464,13 +489,26 @@ public final class IkeSessionStateMachineTest {
                 negotiatedProposal.getIntegrityTransforms());
         assertEquals(new PrfTransform[] {mIkePrfTransform}, negotiatedProposal.getPrfTransforms());
         assertEquals(new EsnTransform[0], negotiatedProposal.getEsnTransforms());
+
+        // Validate current IkeSaRecord.
+        verify(mMockSaRecordHelper)
+                .makeFirstIkeSaRecord(
+                        any(IkeMessage.class),
+                        any(IkeMessage.class),
+                        mIkePrfCaptor.capture(),
+                        eq(KEY_LEN_IKE_INTE),
+                        eq(KEY_LEN_IKE_ENCR));
+
+        IkeMacPrf negotiatedPrf = mIkePrfCaptor.getValue();
+        assertEquals(KEY_LEN_IKE_PRF, negotiatedPrf.getKeyLength());
+        assertEquals(1, mSpyCurrentIkeSaRecord.getMessageId());
     }
 
     private void mockIkeSetup() throws Exception {
         if (Looper.myLooper() == null) Looper.myLooper().prepare();
         // Mock IKE_INIT response
         ReceivedIkePacket dummyIkeInitRespReceivedPacket = makeIkeInitResponse();
-        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any()))
+        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any(), anyInt(), anyInt()))
                 .thenReturn(mSpyCurrentIkeSaRecord);
 
         // Mock IKE_AUTH response

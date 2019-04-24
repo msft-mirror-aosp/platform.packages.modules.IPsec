@@ -24,6 +24,9 @@ import android.util.LongSparseArray;
 import android.util.SparseArray;
 
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
+import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeDeletePayload;
@@ -42,6 +45,7 @@ import com.android.internal.util.StateMachine;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.security.GeneralSecurityException;
+import java.security.Provider;
 import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -139,6 +143,10 @@ public class IkeSessionStateMachine extends StateMachine {
     /** Package private SaProposal that represents the negotiated IKE SA proposal. */
     @VisibleForTesting SaProposal mSaProposal;
 
+    private IkeCipher mIkeCipher;
+    private IkeMacIntegrity mIkeIntegrity;
+    private IkeMacPrf mIkePrf;
+
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
     /** Package */
@@ -209,54 +217,7 @@ public class IkeSessionStateMachine extends StateMachine {
         throw new IllegalStateException("Failed to generate IKE SPI.");
     }
 
-    private IkeMessage buildIkeInitReq() {
-        // TODO: Handle IKE SPI assigning error in CreateIkeLocalIkeInit State.
-
-        List<IkePayload> payloadList = new LinkedList<>();
-
-        // Generate IKE SPI
-        long initSpi = getIkeSpiOrThrow();
-        long respSpi = 0;
-
-        // It is validated in IkeSessionOptions.Builder to ensure IkeSessionOptions has at least one
-        // SaProposal and all SaProposals are valid for IKE SA negotiation.
-        SaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
-
-        // Build SA Payload
-        IkeSaPayload saPayload = new IkeSaPayload(saProposals);
-        payloadList.add(saPayload);
-
-        // Build KE Payload using the first DH group number in the first SaProposal.
-        DhGroupTransform dhGroupTransform = saProposals[0].getDhGroupTransforms()[0];
-        IkeKePayload kePayload = new IkeKePayload(dhGroupTransform.id);
-        payloadList.add(kePayload);
-
-        // Build Nonce Payload
-        IkeNoncePayload noncePayload = new IkeNoncePayload();
-        payloadList.add(noncePayload);
-
-        // TODO: Add Notification Payloads according to user configurations.
-
-        // Build IKE header
-        IkeHeader ikeHeader =
-                new IkeHeader(
-                        initSpi,
-                        respSpi,
-                        IkePayload.PAYLOAD_TYPE_SA,
-                        IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
-                        false /*isResponseMsg*/,
-                        true /*fromIkeInitiator*/,
-                        0 /*messageId*/);
-
-        return new IkeMessage(ikeHeader, payloadList);
-    }
-
-    private IkeMessage buildIkeAuthReq() {
-        // TODO: Build IKE_AUTH request according to mIkeSessionOptions and
-        // firstChildSessionOptions.
-        return null;
-    }
-
+    // TODO: b/131122444 Move these methods into States.
     private IkeMessage buildIkeDeleteReq(IkeSaRecord ikeSaRecord) {
         // TODO: Implement it.
         return null;
@@ -277,78 +238,6 @@ public class IkeSessionStateMachine extends StateMachine {
         return null;
     }
 
-    private void validateIkeInitResp(IkeMessage reqMsg, IkeMessage respMsg) throws IkeException {
-        int exchangeType = respMsg.ikeHeader.exchangeType;
-        if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
-            throw new InvalidSyntaxException(
-                    "Expected EXCHANGE_TYPE_IKE_SA_INIT but received: " + exchangeType);
-        }
-
-        IkeSaPayload respSaPayload = null;
-        IkeKePayload respKePayload = null;
-
-        boolean hasNoncePayload = false;
-
-        for (IkePayload payload : respMsg.ikePayloadList) {
-            switch (payload.payloadType) {
-                case IkePayload.PAYLOAD_TYPE_SA:
-                    respSaPayload = (IkeSaPayload) payload;
-                    break;
-                case IkePayload.PAYLOAD_TYPE_KE:
-                    respKePayload = (IkeKePayload) payload;
-                    break;
-                case IkePayload.PAYLOAD_TYPE_CERT_REQUEST:
-                    throw new UnsupportedOperationException(
-                            "Do not support handling Cert Request Payload.");
-                    // TODO: Handle it when using certificate based authentication. Otherwise,
-                    // ignore it.
-                case IkePayload.PAYLOAD_TYPE_NONCE:
-                    hasNoncePayload = true;
-                    break;
-                case IkePayload.PAYLOAD_TYPE_VENDOR:
-                    // Do not support any vendor defined protocol extensions. Ignore
-                    // all Vendor ID Payloads.
-                    break;
-                case IkePayload.PAYLOAD_TYPE_NOTIFY:
-                    IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
-                    if (notifyPayload.isErrorNotify()) {
-                        // TODO: Throw IkeExceptions according to error types.
-                        throw new UnsupportedOperationException(
-                                "Do not support handle error notifications in response.");
-                    }
-
-                    // TODO: handle status notifications.
-
-                    break;
-                default:
-                    throw new InvalidSyntaxException(
-                            "Received unexpected payload in IKE INIT response. Payload type: "
-                                    + payload.payloadType);
-            }
-        }
-
-        if (respSaPayload == null || respKePayload == null || !hasNoncePayload) {
-            throw new InvalidSyntaxException("SA, KE or Nonce payload missing.");
-        }
-
-        IkeSaPayload reqSaPayload =
-                reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
-        mSaProposal = respSaPayload.getVerifiedNegotiatedProposal(reqSaPayload);
-        // TODO: Build IkeMacPrf, IkeMacIntegrity and IkeCipher using mSaProposal
-        // and store them in state machine.
-
-        IkeKePayload reqKePayload =
-                reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
-        if (reqKePayload.dhGroup != respKePayload.dhGroup
-                && respKePayload.dhGroup != mSaProposal.getDhGroupTransforms()[0].id) {
-            throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
-        }
-    }
-
-    private void validateIkeAuthResp(IkeMessage reqMsg, IkeMessage respMsg) throws IkeException {
-        // TODO: Validate ikeMessage against IKE_AUTH request and mIkeSessionOptions.
-    }
-
     private void validateIkeDeleteReq(IkeMessage ikeMessage) throws IkeException {
         // TODO: Validate ikeMessage.
     }
@@ -358,7 +247,7 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     private void validateIkeRekeyReq(IkeMessage ikeMessage) throws IkeException {
-        // TODO: Validate it againsr mIkeSessionOptions.
+        // TODO: Validate it against mIkeSessionOptions.
     }
 
     private void validateIkeRekeyResp(IkeMessage reqMsg, IkeMessage respMsg) throws IkeException {
@@ -773,11 +662,142 @@ public class IkeSessionStateMachine extends StateMachine {
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
                 validateIkeInitResp(mRequestMsg, ikeMessage);
-                mCurrentIkeSaRecord = IkeSaRecord.makeFirstIkeSaRecord(mRequestMsg, ikeMessage);
+                mCurrentIkeSaRecord =
+                        IkeSaRecord.makeFirstIkeSaRecord(
+                                mRequestMsg,
+                                ikeMessage,
+                                mIkePrf,
+                                mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
+                                mIkeCipher.getKeyLength());
+                mCurrentIkeSaRecord.incrementMessageId();
                 addIkeSaRecord(mCurrentIkeSaRecord);
+
                 transitionTo(mCreateIkeLocalIkeAuth);
             } catch (IkeException e) {
                 // TODO: Handle processing errors.
+            } catch (GeneralSecurityException e) {
+                // TODO: Handle DH key exchange failure.
+            }
+        }
+
+        private IkeMessage buildIkeInitReq() {
+            // TODO: Handle IKE SPI assigning error in CreateIkeLocalIkeInit State.
+
+            List<IkePayload> payloadList = new LinkedList<>();
+
+            // Generate IKE SPI
+            long initSpi = getIkeSpiOrThrow();
+            long respSpi = 0;
+
+            // It is validated in IkeSessionOptions.Builder to ensure IkeSessionOptions has at least
+            // one SaProposal and all SaProposals are valid for IKE SA negotiation.
+            SaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
+
+            // Build SA Payload
+            IkeSaPayload saPayload = new IkeSaPayload(saProposals);
+            payloadList.add(saPayload);
+
+            // Build KE Payload using the first DH group number in the first SaProposal.
+            DhGroupTransform dhGroupTransform = saProposals[0].getDhGroupTransforms()[0];
+            IkeKePayload kePayload = new IkeKePayload(dhGroupTransform.id);
+            payloadList.add(kePayload);
+
+            // Build Nonce Payload
+            IkeNoncePayload noncePayload = new IkeNoncePayload();
+            payloadList.add(noncePayload);
+
+            // TODO: Add Notification Payloads according to user configurations.
+
+            // Build IKE header
+            IkeHeader ikeHeader =
+                    new IkeHeader(
+                            initSpi,
+                            respSpi,
+                            IkePayload.PAYLOAD_TYPE_SA,
+                            IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                            false /*isResponseMsg*/,
+                            true /*fromIkeInitiator*/,
+                            0 /*messageId*/);
+
+            return new IkeMessage(ikeHeader, payloadList);
+        }
+
+        private void validateIkeInitResp(IkeMessage reqMsg, IkeMessage respMsg)
+                throws IkeException {
+            int exchangeType = respMsg.ikeHeader.exchangeType;
+            if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
+                throw new InvalidSyntaxException(
+                        "Expected EXCHANGE_TYPE_IKE_SA_INIT but received: " + exchangeType);
+            }
+
+            IkeSaPayload respSaPayload = null;
+            IkeKePayload respKePayload = null;
+
+            boolean hasNoncePayload = false;
+
+            for (IkePayload payload : respMsg.ikePayloadList) {
+                switch (payload.payloadType) {
+                    case IkePayload.PAYLOAD_TYPE_SA:
+                        respSaPayload = (IkeSaPayload) payload;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_KE:
+                        respKePayload = (IkeKePayload) payload;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_CERT_REQUEST:
+                        throw new UnsupportedOperationException(
+                                "Do not support handling Cert Request Payload.");
+                        // TODO: Handle it when using certificate based authentication. Otherwise,
+                        // ignore it.
+                    case IkePayload.PAYLOAD_TYPE_NONCE:
+                        hasNoncePayload = true;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_VENDOR:
+                        // Do not support any vendor defined protocol extensions. Ignore
+                        // all Vendor ID Payloads.
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                        if (notifyPayload.isErrorNotify()) {
+                            // TODO: Throw IkeExceptions according to error types.
+                            throw new UnsupportedOperationException(
+                                    "Do not support handle error notifications in response.");
+                        }
+
+                        // TODO: handle status notifications.
+
+                        break;
+                    default:
+                        throw new InvalidSyntaxException(
+                                "Received unexpected payload in IKE INIT response. Payload type: "
+                                        + payload.payloadType);
+                }
+            }
+
+            if (respSaPayload == null || respKePayload == null || !hasNoncePayload) {
+                throw new InvalidSyntaxException("SA, KE or Nonce payload missing.");
+            }
+
+            IkeSaPayload reqSaPayload =
+                    reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+            mSaProposal = respSaPayload.getVerifiedNegotiatedProposal(reqSaPayload);
+
+            // Build IKE crypto tools using mSaProposal. It is ensured that mSaProposal is valid and
+            // has exactly one Transform for each Transform type. Only exception is when
+            // combined-mode cipher is used, there will be either no integrity algorithm or an
+            // INTEGRITY_ALGORITHM_NONE type algorithm.
+            Provider provider = IkeMessage.getSecurityProvider();
+            mIkeCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
+            if (!mIkeCipher.isAead()) {
+                mIkeIntegrity =
+                        IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
+            }
+            mIkePrf = IkeMacPrf.create(mSaProposal.getPrfTransforms()[0], provider);
+
+            IkeKePayload reqKePayload =
+                    reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+            if (reqKePayload.dhGroup != respKePayload.dhGroup
+                    && respKePayload.dhGroup != mSaProposal.getDhGroupTransforms()[0].id) {
+                throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
             }
         }
 
@@ -825,6 +845,17 @@ public class IkeSessionStateMachine extends StateMachine {
             } catch (IkeException e) {
                 // TODO: Handle processing errors.
             }
+        }
+
+        private IkeMessage buildIkeAuthReq() {
+            // TODO: Build IKE_AUTH request according to mIkeSessionOptions and
+            // firstChildSessionOptions.
+            return null;
+        }
+
+        private void validateIkeAuthResp(IkeMessage reqMsg, IkeMessage respMsg)
+                throws IkeException {
+            // TODO: Validate ikeMessage against IKE_AUTH request and mIkeSessionOptions.
         }
     }
 

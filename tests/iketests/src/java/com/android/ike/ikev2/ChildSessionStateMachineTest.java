@@ -121,7 +121,8 @@ public final class ChildSessionStateMachineTest {
         byte[] spiOutBytes = TestUtils.hexStringToByteArray(CURRENT_CHILD_SA_SPI_OUT);
         int spiOut = ByteBuffer.wrap(spiOutBytes).getInt();
 
-        return new ChildSaRecord(spiIn, spiOut, null, null);
+        return new ChildSaRecord(
+                spiIn, spiOut, true /*localInit*/, null, null, null, null, null, null);
     }
 
     @After
