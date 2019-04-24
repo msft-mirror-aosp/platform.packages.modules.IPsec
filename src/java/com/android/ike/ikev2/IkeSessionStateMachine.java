@@ -16,6 +16,8 @@
 package com.android.ike.ikev2;
 
 import android.annotation.IntDef;
+import android.net.IpSecManager;
+import android.net.IpSecManager.ResourceUnavailableException;
 import android.os.Looper;
 import android.os.Message;
 import android.system.ErrnoException;
@@ -24,14 +26,17 @@ import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
 
+import com.android.ike.ikev2.IkeSessionOptions.IkeAuthConfig;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
+import com.android.ike.ikev2.message.IkeIdPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -39,6 +44,7 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
+import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -132,6 +138,8 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     private final SparseArray<ChildSessionStateMachine> mSpiToChildSessionMap;
 
+    private final IpSecManager mIpSecManager;
+
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
      * State.
@@ -148,6 +156,11 @@ public class IkeSessionStateMachine extends StateMachine {
     private IkeCipher mIkeCipher;
     private IkeMacIntegrity mIkeIntegrity;
     private IkeMacPrf mIkePrf;
+
+    // FIXME: b/131265898 Pass these packets from CreateIkeLocalIkeInit to CreateIkeLocalIkeAuth
+    // when Android StateMachine can support that.
+    private byte[] mIkeInitRequestPacket;
+    private byte[] mIkeInitResponsePacket;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -184,6 +197,7 @@ public class IkeSessionStateMachine extends StateMachine {
     IkeSessionStateMachine(
             String name,
             Looper looper,
+            IpSecManager ipSecManager,
             IkeSessionOptions ikeOptions,
             ChildSessionOptions firstChildOptions) {
         super(name, looper);
@@ -192,6 +206,8 @@ public class IkeSessionStateMachine extends StateMachine {
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
         mSpiToSaRecordMap = new LongSparseArray<>(3);
         mSpiToChildSessionMap = new SparseArray<>();
+
+        mIpSecManager = ipSecManager;
 
         addState(mInitial);
         addState(mClosed);
@@ -399,6 +415,7 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void enter() {
             try {
+                mRemoteAddress = mIkeSessionOptions.getServerAddress();
                 mIkeSocket = IkeSocket.getIkeSocket(mIkeSessionOptions.getUdpEncapsulationSocket());
             } catch (ErrnoException e) {
                 // TODO: handle exception and close IkeSession.
@@ -674,8 +691,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
         // CreateIkeLocalInit should override encodeRequest() to encode unencrypted packet
         protected byte[] encodeRequest() {
-            // TODO: encrypt and encode mRequestMsg
-            return new byte[0];
+            return mRequestMsg.encryptAndEncode(mIkeIntegrity, mIkeCipher, mCurrentIkeSaRecord);
         }
     }
 
@@ -704,7 +720,8 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         protected byte[] encodeRequest() {
-            return mRequestMsg.encode();
+            mIkeInitRequestPacket = mRequestMsg.encode();
+            return mIkeInitRequestPacket;
         }
 
         @Override
@@ -727,6 +744,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // TODO: Verify message ID is zero.
                     IkeMessage ikeMessage = IkeMessage.decode(ikeHeader, ikePacketBytes);
                     handleResponseIkeMessage(ikeMessage);
+                    mIkeInitResponsePacket = ikePacketBytes;
                 } else {
                     // TODO: Drop unexpected request.
                 }
@@ -928,7 +946,13 @@ public class IkeSessionStateMachine extends StateMachine {
     class CreateIkeLocalIkeAuth extends LocalNewExchangeBase {
         @Override
         protected IkeMessage buildRequest() {
-            return buildIkeAuthReq();
+            try {
+                return buildIkeAuthReq();
+            } catch (ResourceUnavailableException e) {
+                // TODO:Handle IPsec SPI assigning failure.
+                throw new UnsupportedOperationException(
+                        "Do not support handling IPsec SPI assigning failure.");
+            }
         }
 
         @Override
@@ -963,10 +987,78 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
-        private IkeMessage buildIkeAuthReq() {
-            // TODO: Build IKE_AUTH request according to mIkeSessionOptions and
-            // firstChildSessionOptions.
-            return null;
+        private IkeMessage buildIkeAuthReq() throws ResourceUnavailableException {
+            List<IkePayload> payloadList = new LinkedList<>();
+
+            // Build Identification payloads
+            IkeIdPayload initIdPayload =
+                    new IkeIdPayload(
+                            true /*isInitiator*/, mIkeSessionOptions.getLocalIdentification());
+            IkeIdPayload respIdPayload =
+                    new IkeIdPayload(
+                            false /*isInitiator*/, mIkeSessionOptions.getRemoteIdentification());
+            payloadList.add(initIdPayload);
+            payloadList.add(respIdPayload);
+
+            // Build Authentication payload
+            IkeAuthConfig authConfig = mIkeSessionOptions.getLocalAuthConfig();
+            switch (authConfig.mAuthMethod) {
+                case IkeSessionOptions.IKE_AUTH_METHOD_PSK:
+                    IkeAuthPskPayload pskPayload =
+                            new IkeAuthPskPayload(
+                                    authConfig.mPsk,
+                                    mIkeInitRequestPacket,
+                                    mCurrentIkeSaRecord.nonceResponder,
+                                    initIdPayload.getEncodedPayloadBody(),
+                                    mIkePrf,
+                                    mCurrentIkeSaRecord.getSkPi());
+                    payloadList.add(pskPayload);
+                    break;
+                case IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
+                    // TODO: Support authentication based on public key signature.
+                    throw new UnsupportedOperationException(
+                            "Do not support public-key based authentication.");
+                case IkeSessionOptions.IKE_AUTH_METHOD_EAP:
+                    // TODO: Support EAP.
+                    throw new UnsupportedOperationException("Do not support EAP.");
+                default:
+                    throw new IllegalArgumentException(
+                            "Unrecognized authentication method: " + authConfig.mAuthMethod);
+            }
+
+            // Build SA Payload
+            IkeSaPayload childSaPayload =
+                    IkeSaPayload.createChildSaPayload(
+                            false /*isResp*/,
+                            mFirstChildSessionOptions.getSaProposals(),
+                            mIpSecManager,
+                            mRemoteAddress);
+            payloadList.add(childSaPayload);
+
+            // Build TS payloads
+            IkeTsPayload initTsPayload =
+                    new IkeTsPayload(
+                            true /*isInitiator*/,
+                            mFirstChildSessionOptions.getLocalTrafficSelectors());
+            IkeTsPayload respTsPayload =
+                    new IkeTsPayload(
+                            false /*isInitiator*/,
+                            mFirstChildSessionOptions.getRemoteTrafficSelectors());
+            payloadList.add(initTsPayload);
+            payloadList.add(respTsPayload);
+
+            // Build IKE header
+            IkeHeader ikeHeader =
+                    new IkeHeader(
+                            mCurrentIkeSaRecord.initiatorSpi,
+                            mCurrentIkeSaRecord.responderSpi,
+                            IkePayload.PAYLOAD_TYPE_SK,
+                            IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                            false /*isResponseMsg*/,
+                            true /*fromIkeInitiator*/,
+                            mCurrentIkeSaRecord.getMessageId());
+
+            return new IkeMessage(ikeHeader, payloadList);
         }
 
         private void validateIkeAuthResp(IkeMessage reqMsg, IkeMessage respMsg)
@@ -980,6 +1072,13 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public IkeMessage buildRequest() {
             return buildIkeRekeyReq();
+        }
+
+        @Override
+        protected byte[] encodeRequest() {
+            // TODO: Remove this overriding method to directly call the super method when
+            // buildIkeRekeyReq is implemented.
+            return new byte[0];
         }
 
         @Override
