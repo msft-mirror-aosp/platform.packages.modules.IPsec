@@ -169,10 +169,11 @@ public final class IkeSessionStateMachineTest {
 
         byte[] dummyIkePacketBytes = new byte[0];
         when(mMockIkeMessageHelper.decode(
-                        mIkeSessionOptions,
-                        ikeSaRecord,
-                        dummyIkeMessage.ikeHeader,
-                        dummyIkePacketBytes))
+                        any(),
+                        any(),
+                        eq(ikeSaRecord),
+                        eq(dummyIkeMessage.ikeHeader),
+                        eq(dummyIkePacketBytes)))
                 .thenReturn(dummyIkeMessage);
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
@@ -214,7 +215,12 @@ public final class IkeSessionStateMachineTest {
     private void verifyDecodeEncryptedMessage(IkeSaRecord record, ReceivedIkePacket rcvPacket)
             throws Exception {
         verify(mMockIkeMessageHelper)
-                .decode(mIkeSessionOptions, record, rcvPacket.ikeHeader, rcvPacket.ikePacketBytes);
+                .decode(
+                        any(),
+                        any(),
+                        eq(record),
+                        eq(rcvPacket.ikeHeader),
+                        eq(rcvPacket.ikePacketBytes));
     }
 
     public IkeSessionStateMachineTest() throws Exception {
@@ -229,7 +235,7 @@ public final class IkeSessionStateMachineTest {
         mSpyRemoteInitIkeSaRecord = spy(makeDummyIkeSaRecord(31, 32, false));
 
         when(mMockIkeMessageHelper.encode(any())).thenReturn(new byte[0]);
-        when(mMockIkeMessageHelper.encode(any(), any(), any())).thenReturn(new byte[0]);
+        when(mMockIkeMessageHelper.encode(any(), any(), any(), any())).thenReturn(new byte[0]);
         when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(any(), any(), any()))
                 .thenReturn(mMockChildSessionStateMachine);
     }
@@ -526,7 +532,7 @@ public final class IkeSessionStateMachineTest {
         mockIkeSetup();
 
         mLooper.dispatchAll();
-        verify(mMockIkeMessageHelper).decode(any(), any(), any(), any());
+        verify(mMockIkeMessageHelper).decode(any(), any(), any(), any(), any());
         verify(mMockChildSessionStateMachine).handleFirstChildExchange(any(), any(), any());
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
