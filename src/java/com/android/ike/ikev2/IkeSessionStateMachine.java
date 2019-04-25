@@ -467,13 +467,21 @@ public class IkeSessionStateMachine extends StateMachine {
                     // TODO: Verify message ID against outstanding request.
                     IkeMessage ikeMessage =
                             IkeMessage.decode(
-                                    mIkeSessionOptions, ikeSaRecord, ikeHeader, ikePacketBytes);
+                                    mIkeIntegrity,
+                                    mIkeCipher,
+                                    ikeSaRecord,
+                                    ikeHeader,
+                                    ikePacketBytes);
                     handleResponseIkeMessage(ikeMessage);
                 } else {
                     // TODO: Verify message ID.
                     IkeMessage ikeMessage =
                             IkeMessage.decode(
-                                    mIkeSessionOptions, ikeSaRecord, ikeHeader, ikePacketBytes);
+                                    mIkeIntegrity,
+                                    mIkeCipher,
+                                    ikeSaRecord,
+                                    ikeHeader,
+                                    ikePacketBytes);
                     handleRequestIkeMessage(ikeMessage, getIkeExchangeSubType(ikeMessage), message);
                 }
 
