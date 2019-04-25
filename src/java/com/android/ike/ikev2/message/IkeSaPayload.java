@@ -136,6 +136,17 @@ public final class IkeSaPayload extends IkePayload {
     /**
      * Validate and return the negotiated SA proposal from the received SA payload.
      *
+     * <p>All user provided SA proposals in the locally generated reqSaPayload have been validated
+     * during building and are unmodified. All Transform combinations in these SA proposals are
+     * valid for the current SA negotiation. It means an IKE SA request proposal MUST have
+     * Encryption algorithms, DH group configurations and PRFs. Integrity algorithms can only be
+     * omitted when AEAD is used. A Child SA request proposal MUST have Encryption algorithms and
+     * ESN configurations.
+     *
+     * <p>The response SA proposal is validated against one of the request SA proposals. It is
+     * guaranteed that for each Transform type that the request proposal has provided options, the
+     * response proposal has exact one Transform value.
+     *
      * @param reqSaPayload SA payload from SA initiator to validate against.
      * @return the validated negotiated SA proposal.
      * @throws NoValidProposalChosenException if received SA proposal is invalid.
