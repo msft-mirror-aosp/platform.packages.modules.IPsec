@@ -16,6 +16,8 @@
 
 package com.android.ike.ikev2.message;
 
+import android.annotation.Nullable;
+
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeException;
@@ -51,12 +53,14 @@ public final class IkeSkPayload extends IkePayload {
     IkeSkPayload(
             boolean critical,
             byte[] message,
-            IkeMacIntegrity integrityMac,
+            @Nullable IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             byte[] integrityKey,
             byte[] decryptKey)
             throws IkeException, GeneralSecurityException {
         super(PAYLOAD_TYPE_SK, critical);
+
+        // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
         mIkeEncryptedPayloadBody =
                 new IkeEncryptedPayloadBody(
@@ -78,11 +82,13 @@ public final class IkeSkPayload extends IkePayload {
             IkeHeader ikeHeader,
             @PayloadType int firstPayloadType,
             byte[] unencryptedPayloads,
-            IkeMacIntegrity integrityMac,
+            @Nullable IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
             byte[] integrityKey,
             byte[] encryptKey) {
         super(PAYLOAD_TYPE_SK, false);
+
+        // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
         mIkeEncryptedPayloadBody =
                 new IkeEncryptedPayloadBody(
@@ -103,8 +109,6 @@ public final class IkeSkPayload extends IkePayload {
     public byte[] getUnencryptedPayloads() {
         return mIkeEncryptedPayloadBody.getUnencryptedData();
     }
-
-    // TODO: Add another constructor for AEAD protected payload.
 
     /**
      * Encode this payload to a ByteBuffer.

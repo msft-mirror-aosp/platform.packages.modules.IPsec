@@ -18,9 +18,9 @@ package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkePayload.PayloadType;
 
+import android.annotation.Nullable;
 import android.util.Pair;
 
-import com.android.ike.ikev2.IkeSessionOptions;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
@@ -108,7 +108,8 @@ public final class IkeMessage {
     /**
      * Decrypt and decode encrypted IKE message body and create an instance of IkeMessage.
      *
-     * @param ikeSessionOptions IkeSessionOptions that contains cryptographic algorithm set.
+     * @param integrityMac the negotiated integrity algorithm.
+     * @param decryptCipher the negotiated encryption algorithm.
      * @param ikeSaRecord ikeSaRecord where this packet is sent on.
      * @param ikeHeader header of IKE packet.
      * @param packet IKE packet as a byte array.
@@ -117,12 +118,14 @@ public final class IkeMessage {
      * @throws GeneralSecurityException if there is any error during integrity check or decryption.
      */
     public static IkeMessage decode(
-            IkeSessionOptions ikeSessionOptions,
+            @Nullable IkeMacIntegrity integrityMac,
+            IkeCipher decryptCipher,
             IkeSaRecord ikeSaRecord,
             IkeHeader ikeHeader,
             byte[] packet)
             throws IkeException, GeneralSecurityException {
-        return sIkeMessageHelper.decode(ikeSessionOptions, ikeSaRecord, ikeHeader, packet);
+        return sIkeMessageHelper.decode(
+                integrityMac, decryptCipher, ikeSaRecord, ikeHeader, packet);
     }
 
     private static List<IkePayload> decodePayloadList(
@@ -189,12 +192,16 @@ public final class IkeMessage {
     /**
      * Encrypt and encode packet.
      *
-     * @param ikeSessionOptions IkeSessionOptions that contains cryptographic algorithm set.
-     * @param ikeSaRecord ikeSaRecord where this packet is sent on.
+     * @param integrityMac the negotiated integrity algorithm.
+     * @param encryptCipher the negotiated encryption algortihm.
+     * @param ikeSaRecord the ikeSaRecord where this packet is sent on.
      * @return encoded IKE message in byte array.
      */
-    public byte[] encode(IkeSessionOptions ikeSessionOptions, IkeSaRecord ikeSaRecord) {
-        return sIkeMessageHelper.encode(ikeSessionOptions, ikeSaRecord, this);
+    public byte[] encode(
+            @Nullable IkeMacIntegrity integrityMac,
+            IkeCipher encryptCipher,
+            IkeSaRecord ikeSaRecord) {
+        return sIkeMessageHelper.encode(integrityMac, encryptCipher, ikeSaRecord, this);
     }
 
     /**
@@ -314,13 +321,15 @@ public final class IkeMessage {
         /**
          * Encrypt and encode IKE message.
          *
-         * @param ikeSessionOptions ikeSessionOptions that contains cryptographic algorithm set.
-         * @param ikeSaRecord ikeSaRecord where this packet is sent on.
+         * @param integrityMac the negotiated integrity algorithm.
+         * @param encryptCipher the negotiated encryption algortihm.
+         * @param ikeSaRecord the ikeSaRecord where this packet is sent on.
          * @param ikeMessage message need to be encoded.
          * @return encoded IKE message in byte array.
          */
         byte[] encode(
-                IkeSessionOptions ikeSessionOptions,
+                @Nullable IkeMacIntegrity integrityMac,
+                IkeCipher encryptCipher,
                 IkeSaRecord ikeSaRecord,
                 IkeMessage ikeMessage);
 
@@ -337,7 +346,8 @@ public final class IkeMessage {
         /**
          * Decrypt and decode packet.
          *
-         * @param ikeSessionOptions ikeSessionOptions that contains cryptographic algorithm set.
+         * @param integrityMac the negotiated integrity algorithm.
+         * @param decryptCipher the negotiated encryption algorithm.
          * @param ikeSaRecord ikeSaRecord where this packet is sent on.
          * @param ikeHeader header of IKE packet.
          * @param packet IKE packet as a byte array.
@@ -345,7 +355,8 @@ public final class IkeMessage {
          * @throws IkeException for decoding errors.
          */
         IkeMessage decode(
-                IkeSessionOptions ikeSessionOptions,
+                @Nullable IkeMacIntegrity integrityMac,
+                IkeCipher decryptCipher,
                 IkeSaRecord ikeSaRecord,
                 IkeHeader ikeHeader,
                 byte[] packet)
@@ -362,19 +373,25 @@ public final class IkeMessage {
 
         @Override
         public byte[] encode(
-                IkeSessionOptions ikeSessionOptions,
+                @Nullable IkeMacIntegrity integrityMac,
+                IkeCipher encryptCipher,
                 IkeSaRecord ikeSaRecord,
                 IkeMessage ikeMessage) {
-            // TODO: Extract crypto attributes and call encrypt()
-            return null;
+            return encryptAndEncode(
+                    ikeMessage.ikeHeader,
+                    ikeMessage.ikePayloadList.get(0).payloadType,
+                    ikeMessage.encodePayloads(),
+                    integrityMac,
+                    encryptCipher,
+                    ikeSaRecord.getOutboundIntegrityKey(),
+                    ikeSaRecord.getOutboundEncryptionKey());
         }
 
-        // TODO: Create and use a container class for crypto algorithms and keys.
         private byte[] encryptAndEncode(
                 IkeHeader ikeHeader,
                 @PayloadType int firstPayload,
                 byte[] unencryptedPayloads,
-                IkeMacIntegrity integrityMac,
+                @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher encryptCipher,
                 byte[] integrityKey,
                 byte[] encryptKey) {
@@ -417,19 +434,25 @@ public final class IkeMessage {
 
         @Override
         public IkeMessage decode(
-                IkeSessionOptions ikeSessionOptions,
+                @Nullable IkeMacIntegrity integrityMac,
+                IkeCipher decryptCipher,
                 IkeSaRecord ikeSaRecord,
                 IkeHeader ikeHeader,
                 byte[] packet)
                 throws IkeException, GeneralSecurityException {
-            // TODO: Extract crypto params and call private decode method.
-            return null;
+            return decode(
+                    ikeHeader,
+                    packet,
+                    integrityMac,
+                    decryptCipher,
+                    ikeSaRecord.getInboundIntegrityKey(),
+                    ikeSaRecord.getInboundDecryptionKey());
         }
 
         private IkeMessage decode(
                 IkeHeader header,
                 byte[] inputPacket,
-                IkeMacIntegrity integrityMac,
+                @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher decryptCipher,
                 byte[] integrityKey,
                 byte[] decryptKey)
