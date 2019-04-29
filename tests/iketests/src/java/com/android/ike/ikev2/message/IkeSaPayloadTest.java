@@ -21,14 +21,22 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.content.Context;
+import android.net.IpSecManager;
+import android.net.IpSecSpiResponse;
 import android.util.Pair;
+
+import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeException;
@@ -36,9 +44,11 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.message.IkeSaPayload.Attribute;
 import com.android.ike.ikev2.message.IkeSaPayload.AttributeDecoder;
+import com.android.ike.ikev2.message.IkeSaPayload.ChildProposal;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.IkeProposal;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.KeyLengthAttribute;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
@@ -47,15 +57,18 @@ import com.android.ike.ikev2.message.IkeSaPayload.Transform;
 import com.android.ike.ikev2.message.IkeSaPayload.TransformDecoder;
 import com.android.ike.ikev2.message.IkeSaPayload.UnrecognizedAttribute;
 import com.android.ike.ikev2.message.IkeSaPayload.UnrecognizedTransform;
+import com.android.server.IpSecService;
+
+import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import java.net.Inet4Address;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Random;
 
 public final class IkeSaPayloadTest {
     private static final String OUTBOUND_SA_PAYLOAD_HEADER = "22000030";
@@ -83,6 +96,8 @@ public final class IkeSaPayloadTest {
                     + "0300000804000015030000080400001c030000080400001d030000080"
                     + "400001e030000080400001f030000080400000f030000080400001003"
                     + "00000804000012000000080400000e";
+    private static final String INBOUND_CHILD_PROPOSAL_RAW_PACKET =
+            "0000002801030403cae7019f0300000c0100000c800e00800300000803000002000" + "0000805000000";
     private static final String ENCR_TRANSFORM_RAW_PACKET = "0300000c0100000c800e0080";
     private static final String PRF_TRANSFORM_RAW_PACKET = "0000000802000002";
     private static final String INTEG_TRANSFORM_RAW_PACKET = "0300000803000002";
@@ -102,6 +117,19 @@ public final class IkeSaPayloadTest {
     // Constants for multiple proposals test
     private static final byte[] PROPOSAL_NUMBER_LIST = {1, 2};
 
+    private static final Inet4Address LOCAL_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("8.8.4.4"));
+    private static final Inet4Address REMOTE_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("8.8.8.8"));
+
+    private static final int DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_ONE = 0x1234;
+    private static final int DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_TWO = 0x1235;
+    private static final int DUMMY_CHILD_SPI_RESOURCE_ID_REMOTE = 0x2234;
+
+    private static final int CHILD_SPI_LOCAL_ONE = 0x2ad4c0a2;
+    private static final int CHILD_SPI_LOCAL_TWO = 0x2ad4c0a3;
+    private static final int CHILD_SPI_REMOTE = 0xcae70197;
+
     private AttributeDecoder mMockedAttributeDecoder;
     private KeyLengthAttribute mAttributeKeyLength128;
     private List<Attribute> mAttributeListWithKeyLength128;
@@ -114,9 +142,21 @@ public final class IkeSaPayloadTest {
 
     private Transform[] mValidNegotiatedTransformSet;
 
-    private SaProposal mSaProposalOne;
-    private SaProposal mSaProposalTwo;
-    private SaProposal[] mTwoSaProposalsArray;
+    private SaProposal mIkeSaProposalOne;
+    private SaProposal mIkeSaProposalTwo;
+    private SaProposal[] mTwoIkeSaProposalsArray;
+
+    private SaProposal mChildSaProposalOne;
+    private SaProposal mChildSaProposalTwo;
+    private SaProposal[] mTwoChildSaProposalsArray;
+
+    private Context mContext;
+    private IpSecService mMockIpSecService;
+    private IpSecManager mMockIpSecManager;
+
+    private IpSecSpiResponse mDummyIpSecSpiResponseLocalOne;
+    private IpSecSpiResponse mDummyIpSecSpiResponseLocalTwo;
+    private IpSecSpiResponse mDummyIpSecSpiResponseRemote;
 
     @Before
     public void setUp() throws Exception {
@@ -144,7 +184,7 @@ public final class IkeSaPayloadTest {
                     mDhGroup1024Transform
                 };
 
-        mSaProposalOne =
+        mIkeSaProposalOne =
                 SaProposal.Builder.newIkeSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
@@ -153,7 +193,7 @@ public final class IkeSaPayloadTest {
                         .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
                         .build();
 
-        mSaProposalTwo =
+        mIkeSaProposalTwo =
                 SaProposal.Builder.newIkeSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
@@ -165,7 +205,50 @@ public final class IkeSaPayloadTest {
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .addDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP)
                         .build();
-        mTwoSaProposalsArray = new SaProposal[] {mSaProposalOne, mSaProposalTwo};
+        mTwoIkeSaProposalsArray = new SaProposal[] {mIkeSaProposalOne, mIkeSaProposalTwo};
+
+        mChildSaProposalOne =
+                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
+                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
+                        .build();
+        mChildSaProposalTwo =
+                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
+                                SaProposal.KEY_LEN_AES_128)
+                        .build();
+        mTwoChildSaProposalsArray = new SaProposal[] {mChildSaProposalOne, mChildSaProposalTwo};
+
+        mMockIpSecService = mock(IpSecService.class);
+        mContext = InstrumentationRegistry.getContext();
+        mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
+
+        mDummyIpSecSpiResponseLocalOne =
+                new IpSecSpiResponse(
+                        IpSecManager.Status.OK,
+                        DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_ONE,
+                        CHILD_SPI_LOCAL_ONE);
+        mDummyIpSecSpiResponseLocalTwo =
+                new IpSecSpiResponse(
+                        IpSecManager.Status.OK,
+                        DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_TWO,
+                        CHILD_SPI_LOCAL_TWO);
+        mDummyIpSecSpiResponseRemote =
+                new IpSecSpiResponse(
+                        IpSecManager.Status.OK,
+                        DUMMY_CHILD_SPI_RESOURCE_ID_REMOTE,
+                        CHILD_SPI_REMOTE);
+
+        when(mMockIpSecService.allocateSecurityParameterIndex(
+                        eq(REMOTE_ADDRESS.getHostAddress()), anyInt(), anyObject()))
+                .thenReturn(mDummyIpSecSpiResponseLocalOne)
+                .thenReturn(mDummyIpSecSpiResponseLocalTwo);
+
+        when(mMockIpSecService.allocateSecurityParameterIndex(
+                        eq(LOCAL_ADDRESS.getHostAddress()), anyInt(), anyObject()))
+                .thenReturn(mDummyIpSecSpiResponseRemote);
     }
 
     // TODO: Add tearDown() to reset Proposal.sTransformDecoder and Transform.sAttributeDecoder.
@@ -575,14 +658,13 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testEncodeProposal() throws Exception {
-        Proposal proposal =
-                new Proposal(
+        // Construct Proposal for IKE INIT exchange.
+        IkeProposal proposal =
+                IkeProposal.createIkeProposal(
                         (byte) PROPOSAL_NUMBER,
-                        IkePayload.PROTOCOL_ID_IKE,
                         IkePayload.SPI_LEN_NOT_INCLUDED,
-                        IkePayload.SPI_NOT_INCLUDED,
-                        mSaProposalOne,
-                        false /*has no unrecognized Tramsform*/);
+                        mIkeSaProposalOne,
+                        LOCAL_ADDRESS);
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(proposal.getProposalLength());
         proposal.encodeToByteBuffer(true /*is the last*/, byteBuffer);
@@ -605,42 +687,69 @@ public final class IkeSaPayloadTest {
     }
 
     @Test
-    public void testBuildIkeSaResponsePayload() throws Exception {
-        final long ikeSpi = new Random().nextLong();
-        final SaProposal[] saProposals = new SaProposal[] {mSaProposalOne};
+    public void testBuildOutboundIkeRekeySaResponsePayload() throws Exception {
+        final SaProposal[] saProposals = new SaProposal[] {mIkeSaProposalOne};
         IkeSaPayload saPayload =
-                new IkeSaPayload(
-                        true, true, IkePayload.SPI_LEN_IKE, new long[] {ikeSpi}, saProposals);
+                IkeSaPayload.createRekeyIkeSaPayload(true /*isResp*/, saProposals, LOCAL_ADDRESS);
 
         assertTrue(saPayload.isSaResponse);
         assertEquals(saProposals.length, saPayload.proposalList.size());
 
-        Proposal proposal = saPayload.proposalList.get(0);
+        IkeProposal proposal = (IkeProposal) saPayload.proposalList.get(0);
         assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
         assertEquals(IkePayload.SPI_LEN_IKE, proposal.spiSize);
-        assertEquals(ikeSpi, proposal.spi);
-        assertEquals(mSaProposalOne, proposal.saProposal);
+        assertEquals(mIkeSaProposalOne, proposal.saProposal);
+
+        assertNotNull(proposal.getIkeSpiResource());
     }
 
     @Test
-    public void testBuildInitialIkeSaRequestPayload() throws Exception {
-        IkeSaPayload saPayload = new IkeSaPayload(mTwoSaProposalsArray);
+    public void testBuildOutboundInitialIkeSaRequestPayload() throws Exception {
+        IkeSaPayload saPayload = IkeSaPayload.createInitialIkeSaPayload(mTwoIkeSaProposalsArray);
 
         assertFalse(saPayload.isSaResponse);
         assertEquals(PROPOSAL_NUMBER_LIST.length, saPayload.proposalList.size());
 
         for (int i = 0; i < saPayload.proposalList.size(); i++) {
-            Proposal proposal = saPayload.proposalList.get(i);
+            IkeProposal proposal = (IkeProposal) saPayload.proposalList.get(i);
             assertEquals(PROPOSAL_NUMBER_LIST[i], proposal.number);
             assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
             assertEquals(IkePayload.SPI_LEN_NOT_INCLUDED, proposal.spiSize);
-            assertEquals(mTwoSaProposalsArray[i], proposal.saProposal);
+            assertEquals(mTwoIkeSaProposalsArray[i], proposal.saProposal);
+
+            // SA Payload for IKE INIT exchange does not include IKE SPIs.
+            assertNull(proposal.getIkeSpiResource());
+        }
+    }
+
+    @Test
+    public void testBuildOutboundChildSaRequest() throws Exception {
+        IkeSaPayload saPayload =
+                IkeSaPayload.createChildSaPayload(
+                        false /*isResp*/,
+                        mTwoChildSaProposalsArray,
+                        mMockIpSecManager,
+                        REMOTE_ADDRESS);
+
+        assertFalse(saPayload.isSaResponse);
+        assertEquals(PROPOSAL_NUMBER_LIST.length, saPayload.proposalList.size());
+
+        int[] expectedSpis = new int[] {CHILD_SPI_LOCAL_ONE, CHILD_SPI_LOCAL_TWO};
+        for (int i = 0; i < saPayload.proposalList.size(); i++) {
+            ChildProposal proposal = (ChildProposal) saPayload.proposalList.get(i);
+            assertEquals(PROPOSAL_NUMBER_LIST[i], proposal.number);
+            assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.protocolId);
+            assertEquals(IkePayload.SPI_LEN_IPSEC, proposal.spiSize);
+            assertEquals(mTwoChildSaProposalsArray[i], proposal.saProposal);
+
+            assertEquals(expectedSpis[i], proposal.getChildSpiResource().getSpi());
         }
     }
 
     @Test
     public void testEncodeIkeSaPayload() throws Exception {
-        IkeSaPayload saPayload = new IkeSaPayload(new SaProposal[] {mSaProposalOne});
+        IkeSaPayload saPayload =
+                IkeSaPayload.createInitialIkeSaPayload(new SaProposal[] {mIkeSaProposalOne});
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(saPayload.getPayloadLength());
         saPayload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_KE, byteBuffer);
@@ -651,25 +760,71 @@ public final class IkeSaPayloadTest {
         assertArrayEquals(expectedBytes, byteBuffer.array());
     }
 
-    private void buildAndVerifySaRespProposal(byte[] saResponseBytes, Transform[] decodedTransforms)
-            throws Exception {
+    private void buildAndVerifyIkeSaRespProposal(
+            byte[] saResponseBytes, Transform[] decodedTransforms) throws Exception {
         // Build response SA payload from decoding bytes.
         Proposal.sTransformDecoder = getDummyTransformDecoder(decodedTransforms);
         IkeSaPayload respPayload = new IkeSaPayload(false, true, saResponseBytes);
 
-        // Build request SA payload from SaProposal.
-        IkeSaPayload reqPayload = new IkeSaPayload(mTwoSaProposalsArray);
+        // Build request SA payload for IKE INIT exchange from SaProposal.
+        IkeSaPayload reqPayload = IkeSaPayload.createInitialIkeSaPayload(mTwoIkeSaProposalsArray);
 
-        SaProposal saProposal = respPayload.getVerifiedNegotiatedProposal(reqPayload);
+        Pair<IkeProposal, IkeProposal> negotiatedProposalPair =
+                respPayload.getVerifiedNegotiatedIkeProposalPair(reqPayload, REMOTE_ADDRESS);
+        IkeProposal reqProposal = negotiatedProposalPair.first;
+        IkeProposal respProposal = negotiatedProposalPair.second;
 
-        assertEquals(respPayload.proposalList.get(0).saProposal, saProposal);
+        assertEquals(respPayload.proposalList.get(0).saProposal, respProposal.saProposal);
+
+        // SA Payload for IKE INIT exchange does not include IKE SPIs.
+        assertNull(reqProposal.getIkeSpiResource());
+        assertNull(respProposal.getIkeSpiResource());
     }
 
     @Test
-    public void testGetVerifiedNegotiatedProposal() throws Exception {
+    public void testGetVerifiedNegotiatedIkeProposal() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
 
-        buildAndVerifySaRespProposal(inputPacket, mValidNegotiatedTransformSet);
+        buildAndVerifyIkeSaRespProposal(inputPacket, mValidNegotiatedTransformSet);
+    }
+
+    @Test
+    public void testGetVerifiedNegotiatedChildProposal() throws Exception {
+        // Build request
+        IkeSaPayload reqPayload =
+                IkeSaPayload.createChildSaPayload(
+                        false /*isResp*/,
+                        mTwoChildSaProposalsArray,
+                        mMockIpSecManager,
+                        REMOTE_ADDRESS);
+
+        // Build response
+        Proposal.sTransformDecoder =
+                getDummyTransformDecoder(mChildSaProposalOne.getAllTransforms());
+        IkeSaPayload respPayload =
+                new IkeSaPayload(
+                        false /*critical*/,
+                        true /*isResp*/,
+                        TestUtils.hexStringToByteArray(INBOUND_CHILD_PROPOSAL_RAW_PACKET));
+
+        // SA negotiation
+        Pair<ChildProposal, ChildProposal> negotiatedProposalPair =
+                respPayload.getVerifiedNegotiatedChildProposalPair(
+                        reqPayload, mMockIpSecManager, LOCAL_ADDRESS);
+        ChildProposal reqProposal = negotiatedProposalPair.first;
+        ChildProposal respProposal = negotiatedProposalPair.second;
+
+        // Verify results
+        assertEquals(respPayload.proposalList.get(0).saProposal, respProposal.saProposal);
+        assertEquals(CHILD_SPI_LOCAL_ONE, reqProposal.getChildSpiResource().getSpi());
+        assertEquals(CHILD_SPI_REMOTE, respProposal.getChildSpiResource().getSpi());
+
+        // Verify SPIs in unselected Proposals have been released.
+        for (Proposal proposal : reqPayload.proposalList) {
+            if (proposal != reqProposal) {
+                assertNull(((ChildProposal) proposal).getChildSpiResource());
+            }
+        }
     }
 
     // Test throwing when negotiated proposal in SA response payload has unrecognized Transform.
@@ -683,7 +838,7 @@ public final class IkeSaPayloadTest {
         negotiatedTransformSet[0] = new UnrecognizedTransform(-1, 1, new LinkedList<>());
 
         try {
-            buildAndVerifySaRespProposal(inputPacket, negotiatedTransformSet);
+            buildAndVerifyIkeSaRespProposal(inputPacket, negotiatedTransformSet);
             fail("Expected to fail because negotiated proposal has unrecognized Transform.");
         } catch (NoValidProposalChosenException expected) {
         }
@@ -696,7 +851,7 @@ public final class IkeSaPayloadTest {
         inputPacket[PROPOSAL_NUMBER_OFFSET] = (byte) 10;
 
         try {
-            buildAndVerifySaRespProposal(inputPacket, mValidNegotiatedTransformSet);
+            buildAndVerifyIkeSaRespProposal(inputPacket, mValidNegotiatedTransformSet);
             fail("Expected to fail due to invalid proposal number.");
         } catch (NoValidProposalChosenException expected) {
         }
@@ -709,7 +864,7 @@ public final class IkeSaPayloadTest {
         inputPacket[PROTOCOL_ID_OFFSET] = IkePayload.PROTOCOL_ID_ESP;
 
         try {
-            buildAndVerifySaRespProposal(inputPacket, mValidNegotiatedTransformSet);
+            buildAndVerifyIkeSaRespProposal(inputPacket, mValidNegotiatedTransformSet);
             fail("Expected to fail due to mismatched protocol ID.");
         } catch (NoValidProposalChosenException expected) {
         }
@@ -726,7 +881,7 @@ public final class IkeSaPayloadTest {
         negotiatedTransformSet[0] = mEncrAesGcm8Key128Transform;
 
         try {
-            buildAndVerifySaRespProposal(inputPacket, negotiatedTransformSet);
+            buildAndVerifyIkeSaRespProposal(inputPacket, negotiatedTransformSet);
             fail("Expected to fail due to mismatched Transform.");
         } catch (NoValidProposalChosenException expected) {
         }
@@ -738,7 +893,7 @@ public final class IkeSaPayloadTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
 
         try {
-            buildAndVerifySaRespProposal(inputPacket, new Transform[0]);
+            buildAndVerifyIkeSaRespProposal(inputPacket, new Transform[0]);
             fail("Expected to fail due to absence of Transform.");
         } catch (NoValidProposalChosenException expected) {
         }
