@@ -21,6 +21,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
@@ -40,6 +41,7 @@ import androidx.test.InstrumentationRegistry;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
+import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
@@ -62,6 +64,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.util.LinkedList;
@@ -93,6 +96,8 @@ public final class IkeSessionStateMachineTest {
     private static final int KEY_LEN_IKE_ENCR = 16;
     private static final int KEY_LEN_IKE_PRF = 20;
 
+    private static long sIkeInitResponseSpiBase = 1L;
+
     private UdpEncapsulationSocket mUdpEncapSocket;
 
     private TestLooper mLooper;
@@ -121,6 +126,8 @@ public final class IkeSessionStateMachineTest {
     private ArgumentCaptor<IkeMacPrf> mIkePrfCaptor = ArgumentCaptor.forClass(IkeMacPrf.class);
 
     private ReceivedIkePacket makeDummyUnencryptedReceivedIkePacket(
+            long initiatorSpi,
+            long responderSpi,
             @IkeHeader.ExchangeType int eType,
             boolean isResp,
             boolean fromIkeInit,
@@ -130,8 +137,8 @@ public final class IkeSessionStateMachineTest {
 
         IkeMessage dummyIkeMessage =
                 makeDummyIkeMessageForTest(
-                        0 /*initSpi*/,
-                        0 /*respSpi*/,
+                        initiatorSpi,
+                        responderSpi,
                         eType,
                         isResp,
                         fromIkeInit,
@@ -354,7 +361,13 @@ public final class IkeSessionStateMachineTest {
         payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NONCE_PAYLOAD_HEX_STRING);
 
+        // In each test assign different IKE responder SPI in IKE INIT response to avoid remote SPI
+        // collision during response validation.
+        // STOPSHIP: b/131617794 allow #mockIkeSetup to be independent in each test after we can
+        // support IkeSession cleanup.
         return makeDummyUnencryptedReceivedIkePacket(
+                1L /*initiatorSpi*/,
+                ++sIkeInitResponseSpiBase,
                 IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
                 true /*isResp*/,
                 false /*fromIkeInit*/,
@@ -441,6 +454,34 @@ public final class IkeSessionStateMachineTest {
             if (payload.payloadType == payloadType) return true;
         }
         return false;
+    }
+
+    @Test
+    public void testAllocateIkeSpi() throws Exception {
+        InetAddress localAddress = InetAddress.getByName(LOCAL_ADDRESS);
+
+        // Test randomness.
+        IkeSecurityParameterIndex ikeSpiOne =
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress);
+        IkeSecurityParameterIndex ikeSpiTwo =
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress);
+
+        assertNotEquals(ikeSpiOne.getSpi(), ikeSpiTwo.getSpi());
+        ikeSpiTwo.close();
+
+        // Test closing.
+        long spiValue = ikeSpiOne.getSpi();
+        try {
+            IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress, spiValue);
+            fail("Expected to fail because duplicate SPI was assigned to the same address.");
+        } catch (IOException expected) {
+
+        }
+
+        ikeSpiOne.close();
+        IkeSecurityParameterIndex ikeSpiThree =
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress, spiValue);
+        ikeSpiThree.close();
     }
 
     @Test
