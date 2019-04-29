@@ -19,7 +19,10 @@ package com.android.ike.ikev2.crypto;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+
+import android.net.IpSecAlgorithm;
 
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.message.IkeMessage;
@@ -131,6 +134,29 @@ public final class IkeCipherTest {
             mAesCbcCipher.decrypt(dataToDecrypt, mAesCbcKey, mIv);
             fail("Expected to fail when try to decrypt data with bad padding");
         } catch (IllegalBlockSizeException expected) {
+
+        }
+    }
+
+    @Test
+    public void testBuildIpSecAlgorithm() throws Exception {
+        IpSecAlgorithm ipsecAlgorithm = mAesCbcCipher.buildIpSecAlgorithmWithKey(mAesCbcKey);
+
+        IpSecAlgorithm expectedIpSecAlgorithm =
+                new IpSecAlgorithm(IpSecAlgorithm.CRYPT_AES_CBC, mAesCbcKey);
+
+        assertTrue(IpSecAlgorithm.equals(expectedIpSecAlgorithm, ipsecAlgorithm));
+    }
+
+    @Test
+    public void buildIpSecAlgorithmWithInvalidKey() throws Exception {
+        byte[] encryptKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP + "00");
+
+        try {
+            mAesCbcCipher.buildIpSecAlgorithmWithKey(encryptKey);
+
+            fail("Expected to fail due to encryption key with wrong length.");
+        } catch (IllegalArgumentException expected) {
 
         }
     }
