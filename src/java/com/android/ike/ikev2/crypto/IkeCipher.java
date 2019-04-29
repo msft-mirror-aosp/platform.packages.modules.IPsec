@@ -16,6 +16,8 @@
 
 package com.android.ike.ikev2.crypto;
 
+import android.net.IpSecAlgorithm;
+
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 
@@ -222,6 +224,42 @@ public final class IkeCipher extends IkeCrypto {
     public byte[] decrypt(byte[] encryptedData, byte[] keyBytes, byte[] ivBytes)
             throws IllegalBlockSizeException {
         return doCipherAction(encryptedData, keyBytes, ivBytes, Cipher.DECRYPT_MODE);
+    }
+
+    /**
+     * Build IpSecAlgorithm from this IkeCipher.
+     *
+     * <p>Build IpSecAlgorithm that represents the same encryption algorithm with this IkeCipher
+     * instance with provided encryption key.
+     *
+     * @param key the encryption key in byte array.
+     * @return the IpSecAlgorithm.
+     */
+    public IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key) {
+        if (key.length != getKeyLength()) {
+            throw new IllegalArgumentException(
+                    "Expected key with length of : "
+                            + getKeyLength()
+                            + " Received key with length of : "
+                            + key.length);
+        }
+
+        switch (getAlgorithmId()) {
+            case SaProposal.ENCRYPTION_ALGORITHM_3DES:
+                // TODO: Consider supporting 3DES in IpSecTransform.
+                throw new UnsupportedOperationException("Do not support 3Des encryption.");
+            case SaProposal.ENCRYPTION_ALGORITHM_AES_CBC:
+                return new IpSecAlgorithm(IpSecAlgorithm.CRYPT_AES_CBC, key);
+            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
+                // Fall through;
+            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
+                // Fall through;
+            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
+                return new IpSecAlgorithm(IpSecAlgorithm.AUTH_CRYPT_AES_GCM, key, mAuthTagLen * 8);
+            default:
+                throw new IllegalArgumentException(
+                        "Unrecognized Encryption Algorithm ID: " + getAlgorithmId());
+        }
     }
 
     // TODO: Support encryption and decryption of AEAD.
