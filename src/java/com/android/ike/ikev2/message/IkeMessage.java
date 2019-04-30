@@ -197,11 +197,11 @@ public final class IkeMessage {
      * @param ikeSaRecord the ikeSaRecord where this packet is sent on.
      * @return encoded IKE message in byte array.
      */
-    public byte[] encode(
+    public byte[] encryptAndEncode(
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
             IkeSaRecord ikeSaRecord) {
-        return sIkeMessageHelper.encode(integrityMac, encryptCipher, ikeSaRecord, this);
+        return sIkeMessageHelper.encryptAndEncode(integrityMac, encryptCipher, ikeSaRecord, this);
     }
 
     /**
@@ -327,7 +327,7 @@ public final class IkeMessage {
          * @param ikeMessage message need to be encoded.
          * @return encoded IKE message in byte array.
          */
-        byte[] encode(
+        byte[] encryptAndEncode(
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher encryptCipher,
                 IkeSaRecord ikeSaRecord,
@@ -372,7 +372,7 @@ public final class IkeMessage {
         }
 
         @Override
-        public byte[] encode(
+        public byte[] encryptAndEncode(
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher encryptCipher,
                 IkeSaRecord ikeSaRecord,
