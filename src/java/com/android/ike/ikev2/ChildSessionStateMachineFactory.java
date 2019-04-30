@@ -20,16 +20,23 @@ import android.os.Looper;
 
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.net.InetAddress;
+
 /** Package private factory for making ChildSessionStateMachine. */
-//TODO: Make it a inner Creator class of ChildSessionStateMachine
+// TODO: Make it a inner Creator class of ChildSessionStateMachine
 final class ChildSessionStateMachineFactory {
 
     private static IChildSessionFactoryHelper sChildSessionHelper = new ChildSessionFactoryHelper();
 
     /** Package private. */
     static ChildSessionStateMachine makeChildSessionStateMachine(
-            String name, Looper looper, ChildSessionOptions sessionOptions) {
-        return sChildSessionHelper.makeChildSessionStateMachine(name, looper, sessionOptions);
+            String name,
+            Looper looper,
+            ChildSessionOptions sessionOptions,
+            InetAddress localAddress,
+            InetAddress remoteAddress) {
+        return sChildSessionHelper.makeChildSessionStateMachine(
+                name, looper, sessionOptions, localAddress, remoteAddress);
     }
 
     @VisibleForTesting
@@ -45,7 +52,11 @@ final class ChildSessionStateMachineFactory {
      */
     interface IChildSessionFactoryHelper {
         ChildSessionStateMachine makeChildSessionStateMachine(
-                String name, Looper looper, ChildSessionOptions sessionOptions);
+                String name,
+                Looper looper,
+                ChildSessionOptions sessionOptions,
+                InetAddress localAddress,
+                InetAddress remoteAddress);
     }
 
     /**
@@ -55,9 +66,14 @@ final class ChildSessionStateMachineFactory {
      */
     static class ChildSessionFactoryHelper implements IChildSessionFactoryHelper {
         public ChildSessionStateMachine makeChildSessionStateMachine(
-                String name, Looper looper, ChildSessionOptions sessionOptions) {
+                String name,
+                Looper looper,
+                ChildSessionOptions sessionOptions,
+                InetAddress localAddress,
+                InetAddress remoteAddress) {
             ChildSessionStateMachine childSession =
-                    new ChildSessionStateMachine(name, looper, sessionOptions);
+                    new ChildSessionStateMachine(
+                            name, looper, sessionOptions, localAddress, remoteAddress);
             childSession.start();
             return childSession;
         }

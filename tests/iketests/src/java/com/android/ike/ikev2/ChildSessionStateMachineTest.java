@@ -34,15 +34,23 @@ import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.TestUtils;
 
+import libcore.net.InetAddressUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.net.Inet4Address;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
 
 public final class ChildSessionStateMachineTest {
+    private static final Inet4Address LOCAL_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+    private static final Inet4Address REMOTE_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+
     private static final String IKE_AUTH_REQ_SA_PAYLOAD =
             "2c00002c00000028010304032ad4c0a20300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
@@ -78,7 +86,11 @@ public final class ChildSessionStateMachineTest {
         mLooper = new TestLooper();
         mChildSessionStateMachine =
                 new ChildSessionStateMachine(
-                        "ChildSessionStateMachine", mLooper.getLooper(), mChildSessionOptions);
+                        "ChildSessionStateMachine",
+                        mLooper.getLooper(),
+                        mChildSessionOptions,
+                        LOCAL_ADDRESS,
+                        REMOTE_ADDRESS);
         mChildSessionStateMachine.setDbg(true);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
 
