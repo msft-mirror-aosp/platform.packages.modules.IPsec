@@ -24,8 +24,7 @@ import java.nio.ByteBuffer;
 
 /** TestUtils provides utility methods for parsing Hex String */
 public final class TestUtils {
-
-    public static byte[] hexStringToByteArray(String hexString) throws IllegalArgumentException {
+    public static byte[] hexStringToByteArray(String hexString) {
         int len = hexString.length();
         if (len % 2 != 0) {
             throw new IllegalArgumentException("Invalid Hex String");
@@ -38,6 +37,14 @@ public final class TestUtils {
                                     + Character.digit(hexString.charAt(i + 1), 16));
         }
         return data;
+    }
+
+    public static int hexStringToInt(String hexString) {
+        if (hexString.length() != 8) {
+            throw new IllegalArgumentException("Invalid hex string length for integer type");
+        }
+
+        return ByteBuffer.wrap(hexStringToByteArray(hexString)).getInt();
     }
 
     public static IkePayload hexStringToIkePayload(
