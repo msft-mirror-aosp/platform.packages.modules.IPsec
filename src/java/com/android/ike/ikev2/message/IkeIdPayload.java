@@ -104,6 +104,21 @@ public final class IkeIdPayload extends IkePayload {
     }
 
     /**
+     * Get encoded ID payload body for building or validating an Auth Payload.
+     *
+     * @return the byte array of encoded ID payload body.
+     */
+    public byte[] getEncodedPayloadBody() {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(getPayloadLength() - GENERIC_HEADER_LENGTH);
+
+        byteBuffer
+                .put((byte) ikeId.idType)
+                .put(new byte[ID_HEADER_RESERVED_LEN])
+                .put(ikeId.getEncodedIdData());
+        return byteBuffer.array();
+    }
+
+    /**
      * Encode Identification Payload to ByteBuffer.
      *
      * @param nextPayload type of payload that follows this payload.
@@ -112,10 +127,7 @@ public final class IkeIdPayload extends IkePayload {
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
         encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
-        byteBuffer
-                .put((byte) ikeId.idType)
-                .put(new byte[ID_HEADER_RESERVED_LEN])
-                .put(ikeId.getEncodedIdData());
+        byteBuffer.put(getEncodedPayloadBody());
     }
 
     /**
