@@ -88,7 +88,7 @@ public final class IkeSessionStateMachineTest {
     private static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("127.0.0.1"));
 
     private static final String IKE_SA_PAYLOAD_HEX_STRING =
             "220000300000002c010100040300000c0100000c800e00800300000803000002030"
