@@ -16,10 +16,6 @@
 
 package com.android.ike.ikev2;
 
-import static android.system.OsConstants.AF_INET;
-import static android.system.OsConstants.IPPROTO_UDP;
-import static android.system.OsConstants.SOCK_DGRAM;
-
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -30,7 +26,6 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
@@ -38,16 +33,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.IpSecSpiResponse;
-import android.net.IpSecUdpEncapResponse;
 import android.os.Looper;
 import android.os.test.TestLooper;
-import android.system.Os;
-
-import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
@@ -75,7 +64,6 @@ import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.ike.ikev2.message.TestUtils;
-import com.android.server.IpSecService;
 
 import libcore.net.InetAddressUtils;
 
@@ -127,8 +115,8 @@ public final class IkeSessionStateMachineTest {
 
     private static long sIkeInitResponseSpiBase = 1L;
 
-    private IpSecService mMockIpSecService;
-    private IpSecManager mMockIpSecManager;
+    private MockIpSecTestUtils mMockIpSecTestUtils;
+    private IpSecManager mIpSecManager;
     private UdpEncapsulationSocket mUdpEncapSocket;
 
     private TestLooper mLooper;
@@ -301,11 +289,9 @@ public final class IkeSessionStateMachineTest {
 
     @Before
     public void setUp() throws Exception {
-        setUpIpSecService();
-        Context context = InstrumentationRegistry.getContext();
-        mMockIpSecManager = new IpSecManager(context, mMockIpSecService);
-
-        mUdpEncapSocket = mMockIpSecManager.openUdpEncapsulationSocket();
+        mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
+        mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
+        mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
 
         mIkeSessionOptions = buildIkeSessionOptions();
         mChildSessionOptions = buildChildSessionOptions();
@@ -324,7 +310,7 @@ public final class IkeSessionStateMachineTest {
                 new IkeSessionStateMachine(
                         "IkeSessionStateMachine",
                         mLooper.getLooper(),
-                        mMockIpSecManager,
+                        mIpSecManager,
                         mIkeSessionOptions,
                         mChildSessionOptions);
         mIkeSessionStateMachine.setDbg(true);
@@ -357,26 +343,6 @@ public final class IkeSessionStateMachineTest {
         SaRecord.setSaRecordHelper(new SaRecordHelper());
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
                 new ChildSessionFactoryHelper());
-    }
-
-    private void setUpIpSecService() throws Exception {
-        mMockIpSecService = mock(IpSecService.class);
-
-        when(mMockIpSecService.allocateSecurityParameterIndex(
-                        eq(REMOTE_ADDRESS.getHostAddress()), anyInt(), anyObject()))
-                .thenReturn(
-                        new IpSecSpiResponse(
-                                IpSecManager.Status.OK,
-                                DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL,
-                                CHILD_SPI_LOCAL));
-
-        when(mMockIpSecService.openUdpEncapsulationSocket(anyInt(), anyObject()))
-                .thenReturn(
-                        new IpSecUdpEncapResponse(
-                                IpSecManager.Status.OK,
-                                DUMMY_UDP_ENCAP_RESOURCE_ID,
-                                UDP_ENCAP_PORT,
-                                Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)));
     }
 
     private IkeSessionOptions buildIkeSessionOptions() throws Exception {
