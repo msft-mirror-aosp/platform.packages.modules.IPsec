@@ -16,6 +16,11 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.message.IkePayload.PROTOCOL_ID_ESP;
+import static com.android.ike.ikev2.message.IkePayload.PROTOCOL_ID_IKE;
+import static com.android.ike.ikev2.message.IkePayload.SPI_LEN_IPSEC;
+import static com.android.ike.ikev2.message.IkePayload.SPI_LEN_NOT_INCLUDED;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -26,11 +31,16 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public final class IkeDeletePayloadTest {
     private static final String DELETE_IKE_PAYLOAD_HEX_STRING = "0000000801000000";
     private static final String DELETE_CHILD_PAYLOAD_HEX_STRING = "0000000c030400012ad4c0a2";
     private static final String CHILD_SPI = "2ad4c0a2";
+
+    private static final String DELETE_MULTIPLE_CHILD_PAYLOAD_HEX_STRING =
+            "0000001003040002abcdef0120fedcba";
+    private static final String[] MULTIPLE_CHILD_SPIS = new String[] {"abcdef01", "20fedcba"};
 
     private static final int NUM_CHILD_SPI = 1;
 
@@ -137,5 +147,117 @@ public final class IkeDeletePayloadTest {
         } catch (InvalidSyntaxException expected) {
 
         }
+    }
+
+    @Test
+    public void testOutboundConstructorForIke() throws Exception {
+        IkeDeletePayload deletePayload = new IkeDeletePayload();
+
+        assertEquals(PROTOCOL_ID_IKE, deletePayload.protocolId);
+        assertEquals(SPI_LEN_NOT_INCLUDED, deletePayload.spiSize);
+        assertEquals(0, deletePayload.numSpi);
+        assertEquals(0, deletePayload.spisToDelete.length);
+    }
+
+    @Test
+    public void testOutboundConstructorWithSingleChildSa() throws Exception {
+        int[] childSpis = new int[] {TestUtils.hexStringToInt(CHILD_SPI)};
+        IkeDeletePayload deletePayload = new IkeDeletePayload(childSpis);
+
+        assertEquals(PROTOCOL_ID_ESP, deletePayload.protocolId);
+        assertEquals(SPI_LEN_IPSEC, deletePayload.spiSize);
+        assertEquals(NUM_CHILD_SPI, deletePayload.numSpi);
+        assertArrayEquals(childSpis, deletePayload.spisToDelete);
+    }
+
+    @Test
+    public void testOutboundConstructorWithMultipleChildSas() throws Exception {
+        int[] childSpis = new int[] {0x1, 0x2, 0xfffffffd, 0xffffffff};
+        IkeDeletePayload deletePayload = new IkeDeletePayload(childSpis);
+
+        assertEquals(PROTOCOL_ID_ESP, deletePayload.protocolId);
+        assertEquals(SPI_LEN_IPSEC, deletePayload.spiSize);
+        assertEquals(childSpis.length, deletePayload.numSpi);
+        assertArrayEquals(childSpis, deletePayload.spisToDelete);
+    }
+
+    @Test
+    public void testOutboundConstructorWithNoChildSas() throws Exception {
+        try {
+            IkeDeletePayload deletePayload = new IkeDeletePayload(new int[] {});
+            fail("Expected exception for invalid SPI list");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testEncodeForIke() throws Exception {
+        IkeDeletePayload deletePayload = new IkeDeletePayload();
+        ByteBuffer bb = ByteBuffer.allocate(deletePayload.getPayloadLength());
+
+        deletePayload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_NO_NEXT, bb);
+
+        byte[] expectedPayloadBytes = TestUtils.hexStringToByteArray(DELETE_IKE_PAYLOAD_HEX_STRING);
+        assertArrayEquals(expectedPayloadBytes, bb.array());
+    }
+
+    @Test
+    public void testEncodeWithSingleChildSa() throws Exception {
+        int[] childSpis = new int[] {TestUtils.hexStringToInt(CHILD_SPI)};
+        IkeDeletePayload deletePayload = new IkeDeletePayload(childSpis);
+        ByteBuffer bb = ByteBuffer.allocate(deletePayload.getPayloadLength());
+
+        deletePayload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_NO_NEXT, bb);
+
+        byte[] expectedPayloadBytes =
+                TestUtils.hexStringToByteArray(DELETE_CHILD_PAYLOAD_HEX_STRING);
+        assertArrayEquals(expectedPayloadBytes, bb.array());
+    }
+
+    @Test
+    public void testEncodeWithMultipleChildSas() throws Exception {
+        int[] childSpis =
+                Arrays.stream(MULTIPLE_CHILD_SPIS)
+                        .mapToInt(val -> TestUtils.hexStringToInt(val))
+                        .toArray();
+        IkeDeletePayload deletePayload = new IkeDeletePayload(childSpis);
+        ByteBuffer bb = ByteBuffer.allocate(deletePayload.getPayloadLength());
+
+        deletePayload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_NO_NEXT, bb);
+
+        byte[] expectedPayloadBytes =
+                TestUtils.hexStringToByteArray(DELETE_MULTIPLE_CHILD_PAYLOAD_HEX_STRING);
+        assertArrayEquals(expectedPayloadBytes, bb.array());
+    }
+
+    @Test
+    public void testPayloadLengthForIke() throws Exception {
+        IkeDeletePayload deletePayload = new IkeDeletePayload();
+
+        byte[] expectedPayloadBytes = TestUtils.hexStringToByteArray(DELETE_IKE_PAYLOAD_HEX_STRING);
+        assertEquals(expectedPayloadBytes.length, deletePayload.getPayloadLength());
+    }
+
+    @Test
+    public void testPayloadLengthWithSingleChildSa() throws Exception {
+        int[] childSpis = new int[] {TestUtils.hexStringToInt(CHILD_SPI)};
+        IkeDeletePayload deletePayload = new IkeDeletePayload(childSpis);
+
+        byte[] expectedPayloadBytes =
+                TestUtils.hexStringToByteArray(DELETE_CHILD_PAYLOAD_HEX_STRING);
+        assertEquals(expectedPayloadBytes.length, deletePayload.getPayloadLength());
+    }
+
+    @Test
+    public void testPayloadLengthWithMultipleChildSas() throws Exception {
+        int[] childSpis =
+                Arrays.stream(MULTIPLE_CHILD_SPIS)
+                        .mapToInt(val -> TestUtils.hexStringToInt(val))
+                        .toArray();
+        IkeDeletePayload deletePayload = new IkeDeletePayload(childSpis);
+
+        byte[] expectedPayloadBytes =
+                TestUtils.hexStringToByteArray(DELETE_MULTIPLE_CHILD_PAYLOAD_HEX_STRING);
+        assertEquals(expectedPayloadBytes.length, deletePayload.getPayloadLength());
     }
 }
