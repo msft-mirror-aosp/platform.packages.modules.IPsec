@@ -16,13 +16,19 @@
 
 package com.android.ike.ikev2;
 
+import static android.system.OsConstants.AF_INET;
+import static android.system.OsConstants.IPPROTO_UDP;
+import static android.system.OsConstants.SOCK_DGRAM;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -32,36 +38,46 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.IpSecSpiResponse;
+import android.net.IpSecUdpEncapResponse;
 import android.os.Looper;
 import android.os.test.TestLooper;
+import android.system.Os;
 
 import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
+import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeHeader;
+import com.android.ike.ikev2.message.IkeIdPayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
 import com.android.ike.ikev2.message.IkePayload;
+import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
+import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.ike.ikev2.message.TestUtils;
+import com.android.server.IpSecService;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.util.LinkedList;
@@ -89,10 +105,23 @@ public final class IkeSessionStateMachineTest {
 
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
 
+    private static final int NONCE_DATA_LEN = 32;
+
     private static final int KEY_LEN_IKE_INTE = 20;
     private static final int KEY_LEN_IKE_ENCR = 16;
     private static final int KEY_LEN_IKE_PRF = 20;
+    private static final int KEY_LEN_IKE_SKD = KEY_LEN_IKE_PRF;
 
+    private static final int DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL = 0x1234;
+    private static final int CHILD_SPI_LOCAL = 0x2ad4c0a2;
+
+    private static final int DUMMY_UDP_ENCAP_RESOURCE_ID = 0x3234;
+    private static final int UDP_ENCAP_PORT = 34567;
+
+    private static long sIkeInitResponseSpiBase = 1L;
+
+    private IpSecService mMockIpSecService;
+    private IpSecManager mMockIpSecManager;
     private UdpEncapsulationSocket mUdpEncapSocket;
 
     private TestLooper mLooper;
@@ -121,6 +150,8 @@ public final class IkeSessionStateMachineTest {
     private ArgumentCaptor<IkeMacPrf> mIkePrfCaptor = ArgumentCaptor.forClass(IkeMacPrf.class);
 
     private ReceivedIkePacket makeDummyUnencryptedReceivedIkePacket(
+            long initiatorSpi,
+            long responderSpi,
             @IkeHeader.ExchangeType int eType,
             boolean isResp,
             boolean fromIkeInit,
@@ -130,8 +161,8 @@ public final class IkeSessionStateMachineTest {
 
         IkeMessage dummyIkeMessage =
                 makeDummyIkeMessageForTest(
-                        0 /*initSpi*/,
-                        0 /*respSpi*/,
+                        initiatorSpi,
+                        responderSpi,
                         eType,
                         isResp,
                         fromIkeInit,
@@ -235,7 +266,8 @@ public final class IkeSessionStateMachineTest {
         mSpyRemoteInitIkeSaRecord = spy(makeDummyIkeSaRecord(31, 32, false));
 
         when(mMockIkeMessageHelper.encode(any())).thenReturn(new byte[0]);
-        when(mMockIkeMessageHelper.encode(any(), any(), any(), any())).thenReturn(new byte[0]);
+        when(mMockIkeMessageHelper.encryptAndEncode(any(), any(), any(), any()))
+                .thenReturn(new byte[0]);
         when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(any(), any(), any()))
                 .thenReturn(mMockChildSessionStateMachine);
     }
@@ -246,22 +278,24 @@ public final class IkeSessionStateMachineTest {
                 initSpi,
                 respSpi,
                 isLocalInit,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null);
+                new byte[NONCE_DATA_LEN],
+                new byte[NONCE_DATA_LEN],
+                new byte[KEY_LEN_IKE_SKD],
+                new byte[KEY_LEN_IKE_INTE],
+                new byte[KEY_LEN_IKE_INTE],
+                new byte[KEY_LEN_IKE_ENCR],
+                new byte[KEY_LEN_IKE_ENCR],
+                new byte[KEY_LEN_IKE_PRF],
+                new byte[KEY_LEN_IKE_PRF]);
     }
 
     @Before
     public void setUp() throws Exception {
+        setUpIpSecService();
         Context context = InstrumentationRegistry.getContext();
-        IpSecManager ipSecManager = (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE);
-        mUdpEncapSocket = ipSecManager.openUdpEncapsulationSocket();
+        mMockIpSecManager = new IpSecManager(context, mMockIpSecService);
+
+        mUdpEncapSocket = mMockIpSecManager.openUdpEncapsulationSocket();
 
         mIkeSessionOptions = buildIkeSessionOptions();
         mChildSessionOptions = buildChildSessionOptions();
@@ -280,6 +314,7 @@ public final class IkeSessionStateMachineTest {
                 new IkeSessionStateMachine(
                         "IkeSessionStateMachine",
                         mLooper.getLooper(),
+                        mMockIpSecManager,
                         mIkeSessionOptions,
                         mChildSessionOptions);
         mIkeSessionStateMachine.setDbg(true);
@@ -301,6 +336,26 @@ public final class IkeSessionStateMachineTest {
         SaRecord.setSaRecordHelper(new SaRecordHelper());
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
                 new ChildSessionFactoryHelper());
+    }
+
+    private void setUpIpSecService() throws Exception {
+        mMockIpSecService = mock(IpSecService.class);
+
+        when(mMockIpSecService.allocateSecurityParameterIndex(
+                        eq(REMOTE_ADDRESS), anyInt(), anyObject()))
+                .thenReturn(
+                        new IpSecSpiResponse(
+                                IpSecManager.Status.OK,
+                                DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL,
+                                CHILD_SPI_LOCAL));
+
+        when(mMockIpSecService.openUdpEncapsulationSocket(anyInt(), anyObject()))
+                .thenReturn(
+                        new IpSecUdpEncapResponse(
+                                IpSecManager.Status.OK,
+                                DUMMY_UDP_ENCAP_RESOURCE_ID,
+                                UDP_ENCAP_PORT,
+                                Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)));
     }
 
     private IkeSessionOptions buildIkeSessionOptions() throws Exception {
@@ -354,7 +409,13 @@ public final class IkeSessionStateMachineTest {
         payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NONCE_PAYLOAD_HEX_STRING);
 
+        // In each test assign different IKE responder SPI in IKE INIT response to avoid remote SPI
+        // collision during response validation.
+        // STOPSHIP: b/131617794 allow #mockIkeSetup to be independent in each test after we can
+        // support IkeSession cleanup.
         return makeDummyUnencryptedReceivedIkePacket(
+                1L /*initiatorSpi*/,
+                ++sIkeInitResponseSpiBase,
                 IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
                 true /*isResp*/,
                 false /*fromIkeInit*/,
@@ -441,6 +502,34 @@ public final class IkeSessionStateMachineTest {
             if (payload.payloadType == payloadType) return true;
         }
         return false;
+    }
+
+    @Test
+    public void testAllocateIkeSpi() throws Exception {
+        InetAddress localAddress = InetAddress.getByName(LOCAL_ADDRESS);
+
+        // Test randomness.
+        IkeSecurityParameterIndex ikeSpiOne =
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress);
+        IkeSecurityParameterIndex ikeSpiTwo =
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress);
+
+        assertNotEquals(ikeSpiOne.getSpi(), ikeSpiTwo.getSpi());
+        ikeSpiTwo.close();
+
+        // Test duplicate SPIs.
+        long spiValue = ikeSpiOne.getSpi();
+        try {
+            IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress, spiValue);
+            fail("Expected to fail because duplicate SPI was assigned to the same address.");
+        } catch (IOException expected) {
+
+        }
+
+        ikeSpiOne.close();
+        IkeSecurityParameterIndex ikeSpiThree =
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress, spiValue);
+        ikeSpiThree.close();
     }
 
     @Test
@@ -532,6 +621,40 @@ public final class IkeSessionStateMachineTest {
         mockIkeSetup();
 
         mLooper.dispatchAll();
+
+        // Validate outbound IKE AUTH request
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+        IkeMessage ikeAuthReqMessage = mIkeMessageCaptor.getValue();
+
+        IkeHeader ikeHeader = ikeAuthReqMessage.ikeHeader;
+        assertEquals(IkeHeader.EXCHANGE_TYPE_IKE_AUTH, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertTrue(ikeHeader.fromIkeInitiator);
+
+        assertNotNull(
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_ID_INITIATOR, IkeIdPayload.class));
+        assertNotNull(
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_ID_RESPONDER, IkeIdPayload.class));
+        assertNotNull(
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthPskPayload.class));
+        assertNotNull(
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class));
+        assertNotNull(
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class));
+        assertNotNull(
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class));
+
         verify(mMockIkeMessageHelper).decode(any(), any(), any(), any(), any());
         verify(mMockChildSessionStateMachine).handleFirstChildExchange(any(), any(), any());
         assertTrue(

@@ -74,10 +74,7 @@ public final class IkeDeletePayloadTest {
         assertEquals(IkePayload.SPI_LEN_IPSEC, deletePayload.spiSize);
         assertEquals(NUM_CHILD_SPI, deletePayload.numSpi);
 
-        byte[] childSpiBytes = TestUtils.hexStringToByteArray(CHILD_SPI);
-        ByteBuffer buffer = ByteBuffer.wrap(childSpiBytes);
-        int expectedChildSpi = buffer.getInt();
-
+        int expectedChildSpi = TestUtils.hexStringToInt(CHILD_SPI);
         assertArrayEquals(new int[] {expectedChildSpi}, deletePayload.spisToDelete);
     }
 
