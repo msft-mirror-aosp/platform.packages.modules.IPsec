@@ -30,7 +30,7 @@ import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.TestUtils;
 
@@ -111,7 +111,7 @@ public final class ChildSessionStateMachineTest {
         return new ChildSessionOptions.Builder().addSaProposal(saProposal).build();
     }
 
-    private void setUpPayloadLists() throws IkeException {
+    private void setUpPayloadLists() throws IkeProtocolException {
         mAuthReqSaNegoPayloads.add(
                 TestUtils.hexStringToIkePayload(
                         IkePayload.PAYLOAD_TYPE_SA, false, IKE_AUTH_REQ_SA_PAYLOAD));

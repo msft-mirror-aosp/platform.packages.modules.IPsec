@@ -20,6 +20,8 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_DGRAM;
 
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -814,8 +816,7 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testBuildEncryptedInformationalMessage() throws Exception {
-        IkeNotifyPayload payload =
-                new IkeNotifyPayload(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX, new byte[0]);
+        IkeNotifyPayload payload = new IkeNotifyPayload(ERROR_TYPE_INVALID_SYNTAX, new byte[0]);
 
         boolean isResp = false;
         IkeMessage generated =
@@ -836,6 +837,6 @@ public final class IkeSessionStateMachineTest {
 
         IkeNotifyPayload generatedPayload = generatedPayloads.get(0);
         assertArrayEquals(new byte[0], generatedPayload.notifyData);
-        assertEquals(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX, generatedPayload.notifyType);
+        assertEquals(ERROR_TYPE_INVALID_SYNTAX, generatedPayload.notifyType);
     }
 }

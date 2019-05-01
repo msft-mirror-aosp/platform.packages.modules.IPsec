@@ -18,7 +18,7 @@ package com.android.ike.ikev2.message;
 
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
@@ -60,7 +60,7 @@ final class IkeEncryptedPayloadBody {
             IkeCipher decryptCipher,
             byte[] integrityKey,
             byte[] decryptKey)
-            throws IkeException, GeneralSecurityException {
+            throws IkeProtocolException, GeneralSecurityException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(message);
 
         // Skip IKE header and SK payload header

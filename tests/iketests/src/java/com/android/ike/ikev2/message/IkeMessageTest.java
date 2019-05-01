@@ -20,7 +20,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 
@@ -99,7 +99,7 @@ public final class IkeMessageTest {
                     @Override
                     public IkePayload decodeIkePayload(
                             int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
-                            throws IkeException {
+                            throws IkeProtocolException {
                         if (support(payloadType)) {
                             return new TestIkeSupportedPayload(payloadType, isCritical);
                         } else {

@@ -15,8 +15,6 @@
  */
 package com.android.ike.ikev2.exceptions;
 
-import com.android.ike.ikev2.message.IkeNotifyPayload;
-
 import java.util.List;
 
 /**
@@ -28,7 +26,7 @@ import java.util.List;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class UnsupportedCriticalPayloadException extends IkeException {
+public final class UnsupportedCriticalPayloadException extends IkeProtocolException {
 
     public final List<Integer> payloadTypeList;
 
@@ -38,7 +36,7 @@ public final class UnsupportedCriticalPayloadException extends IkeException {
      * @param payloadList the list of all unsupported critical payload types
      */
     public UnsupportedCriticalPayloadException(List<Integer> payloadList) {
-        super(IkeNotifyPayload.NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD);
+        super(ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD);
         payloadTypeList = payloadList;
     }
 }
