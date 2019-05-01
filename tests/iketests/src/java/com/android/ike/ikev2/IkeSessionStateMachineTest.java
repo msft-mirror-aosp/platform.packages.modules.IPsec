@@ -20,6 +20,7 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_DGRAM;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -58,9 +59,11 @@ import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeIdPayload;
+import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
+import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
@@ -763,5 +766,31 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
         assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyLocalInitIkeSaRecord);
+    }
+
+    @Test
+    public void testBuildEncryptedInformationalMessage() throws Exception {
+        IkeNotifyPayload payload =
+                new IkeNotifyPayload(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX, new byte[0]);
+
+        boolean isResp = true;
+        IkeMessage generated =
+                mIkeSessionStateMachine.buildEncryptedInformationalMessage(
+                        mSpyCurrentIkeSaRecord, new IkeInformationalPayload[] {payload}, isResp, 0);
+
+        assertEquals(mSpyCurrentIkeSaRecord.initiatorSpi, generated.ikeHeader.ikeInitiatorSpi);
+        assertEquals(mSpyCurrentIkeSaRecord.responderSpi, generated.ikeHeader.ikeResponderSpi);
+        assertEquals(mSpyCurrentIkeSaRecord.getMessageId(), generated.ikeHeader.messageId);
+        assertEquals(isResp, generated.ikeHeader.isResponseMsg);
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, generated.ikeHeader.nextPayloadType);
+
+        List<IkeNotifyPayload> generatedPayloads =
+                generated.getPayloadListForType(
+                        IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        assertEquals(1, generatedPayloads.size());
+
+        IkeNotifyPayload generatedPayload = generatedPayloads.get(0);
+        assertArrayEquals(new byte[0], generatedPayload.notifyData);
+        assertEquals(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX, generatedPayload.notifyType);
     }
 }

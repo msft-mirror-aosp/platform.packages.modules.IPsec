@@ -45,7 +45,7 @@ import java.util.Set;
  * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
  *     Version 2 (IKEv2)</a>
  */
-public final class IkeNotifyPayload extends IkePayload {
+public final class IkeNotifyPayload extends IkeInformationalPayload {
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
