@@ -21,6 +21,8 @@ import android.net.IpSecManager.ResourceUnavailableException;
 import android.os.Looper;
 import android.os.Message;
 import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
 import android.util.Log;
 import android.util.LongSparseArray;
 import android.util.Pair;
@@ -49,10 +51,14 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
+import java.io.FileDescriptor;
 import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.security.SecureRandom;
@@ -146,8 +152,9 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     @VisibleForTesting IkeSocket mIkeSocket;
 
-    // TODO: Add methods to get these two address value.
+    /** Local address assigned on device. Initialized in Initial State. */
     private InetAddress mLocalAddress;
+    /** Remote address configured by users. Initialized in Initial State. */
     private InetAddress mRemoteAddress;
 
     /** Package private SaProposal that represents the negotiated IKE SA proposal. */
@@ -416,8 +423,19 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             try {
                 mRemoteAddress = mIkeSessionOptions.getServerAddress();
+
+                boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
+                FileDescriptor sock =
+                        Os.socket(
+                                isIpv4 ? OsConstants.AF_INET : OsConstants.AF_INET6,
+                                OsConstants.SOCK_DGRAM,
+                                OsConstants.IPPROTO_UDP);
+                Os.connect(sock, mRemoteAddress, IkeSocket.IKE_SERVER_PORT);
+                mLocalAddress = ((InetSocketAddress) Os.getsockname(sock)).getAddress();
+                Os.close(sock);
+
                 mIkeSocket = IkeSocket.getIkeSocket(mIkeSessionOptions.getUdpEncapsulationSocket());
-            } catch (ErrnoException e) {
+            } catch (ErrnoException | SocketException e) {
                 // TODO: handle exception and close IkeSession.
             }
         }
@@ -676,7 +694,7 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             mRequestMsg = buildRequest();
             mRequestPacket = encodeRequest();
-            mIkeSocket.sendIkePacket(mRequestPacket, mIkeSessionOptions.getServerAddress());
+            mIkeSocket.sendIkePacket(mRequestPacket, mRemoteAddress);
             // TODO: Send out packet and start retransmission timer.
         }
 
@@ -976,7 +994,9 @@ public class IkeSessionStateMachine extends StateMachine {
                         ChildSessionStateMachineFactory.makeChildSessionStateMachine(
                                 "ChildSessionStateMachine",
                                 getHandler().getLooper(),
-                                mFirstChildSessionOptions);
+                                mFirstChildSessionOptions,
+                                mLocalAddress,
+                                mRemoteAddress);
                 // TODO: Replace null input params to payload lists in IKE_AUTH request and
                 // IKE_AUTH response for negotiating Child SA.
                 firstChild.handleFirstChildExchange(null, null, new ChildSessionCallback());

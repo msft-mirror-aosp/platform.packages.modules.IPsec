@@ -27,6 +27,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
+import java.net.InetAddress;
 import java.util.List;
 
 /**
@@ -54,6 +55,11 @@ public class ChildSessionStateMachine extends StateMachine {
 
     private final ChildSessionOptions mChildSessionOptions;
 
+    /** Local address assigned on device. */
+    private final InetAddress mLocalAddress;
+    /** Remote address configured by users. */
+    private final InetAddress mRemoteAddress;
+
     /** Package private */
     @VisibleForTesting ChildSaRecord mCurrentChildSaRecord;
 
@@ -62,10 +68,17 @@ public class ChildSessionStateMachine extends StateMachine {
     private final State mIdle = new Idle();
 
     /** Package private */
-    ChildSessionStateMachine(String name, Looper looper, ChildSessionOptions sessionOptions) {
+    ChildSessionStateMachine(
+            String name,
+            Looper looper,
+            ChildSessionOptions sessionOptions,
+            InetAddress localAddress,
+            InetAddress remoteAddress) {
         super(name, looper);
 
         mChildSessionOptions = sessionOptions;
+        mLocalAddress = localAddress;
+        mRemoteAddress = remoteAddress;
 
         addState(mInitial);
         addState(mClosed);

@@ -72,6 +72,8 @@ import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.ike.ikev2.message.TestUtils;
 import com.android.server.IpSecService;
 
+import libcore.net.InetAddressUtils;
+
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -79,14 +81,14 @@ import org.mockito.ArgumentCaptor;
 
 import java.io.IOException;
 import java.net.Inet4Address;
-import java.net.InetAddress;
 import java.util.LinkedList;
 import java.util.List;
 
 public final class IkeSessionStateMachineTest {
-
-    private static final String LOCAL_ADDRESS = "192.0.2.200";
-    private static final String REMOTE_ADDRESS = "192.0.2.100";
+    private static final Inet4Address LOCAL_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+    private static final Inet4Address REMOTE_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
 
     private static final String IKE_SA_PAYLOAD_HEX_STRING =
             "220000300000002c010100040300000c0100000c800e00800300000803000002030"
@@ -268,7 +270,8 @@ public final class IkeSessionStateMachineTest {
         when(mMockIkeMessageHelper.encode(any())).thenReturn(new byte[0]);
         when(mMockIkeMessageHelper.encryptAndEncode(any(), any(), any(), any()))
                 .thenReturn(new byte[0]);
-        when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(any(), any(), any()))
+        when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
+                        any(), any(), any(), any(), any()))
                 .thenReturn(mMockChildSessionStateMachine);
     }
 
@@ -342,7 +345,7 @@ public final class IkeSessionStateMachineTest {
         mMockIpSecService = mock(IpSecService.class);
 
         when(mMockIpSecService.allocateSecurityParameterIndex(
-                        eq(REMOTE_ADDRESS), anyInt(), anyObject()))
+                        eq(REMOTE_ADDRESS.getHostAddress()), anyInt(), anyObject()))
                 .thenReturn(
                         new IpSecSpiResponse(
                                 IpSecManager.Status.OK,
@@ -368,17 +371,15 @@ public final class IkeSessionStateMachineTest {
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
 
-        InetAddress localAddress = InetAddress.getByName(LOCAL_ADDRESS);
-        InetAddress serveAddress = InetAddress.getByName(REMOTE_ADDRESS);
         byte[] psk = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
         IkeSessionOptions sessionOptions =
-                new IkeSessionOptions.Builder(serveAddress, mUdpEncapSocket)
+                new IkeSessionOptions.Builder(REMOTE_ADDRESS, mUdpEncapSocket)
                         .addSaProposal(saProposal)
                         .setLocalIdentification(
-                                new IkeIpv4AddrIdentification((Inet4Address) localAddress))
+                                new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
                         .setRemoteIdentification(
-                                new IkeIpv4AddrIdentification((Inet4Address) serveAddress))
+                                new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
                         .setLocalAuthPsk(psk)
                         .setRemoteAuthPsk(psk)
                         .build();
@@ -506,13 +507,11 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testAllocateIkeSpi() throws Exception {
-        InetAddress localAddress = InetAddress.getByName(LOCAL_ADDRESS);
-
         // Test randomness.
         IkeSecurityParameterIndex ikeSpiOne =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress);
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(LOCAL_ADDRESS);
         IkeSecurityParameterIndex ikeSpiTwo =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress);
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(LOCAL_ADDRESS);
 
         assertNotEquals(ikeSpiOne.getSpi(), ikeSpiTwo.getSpi());
         ikeSpiTwo.close();
@@ -520,7 +519,7 @@ public final class IkeSessionStateMachineTest {
         // Test duplicate SPIs.
         long spiValue = ikeSpiOne.getSpi();
         try {
-            IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress, spiValue);
+            IkeSecurityParameterIndex.allocateSecurityParameterIndex(LOCAL_ADDRESS, spiValue);
             fail("Expected to fail because duplicate SPI was assigned to the same address.");
         } catch (IOException expected) {
 
@@ -528,7 +527,7 @@ public final class IkeSessionStateMachineTest {
 
         ikeSpiOne.close();
         IkeSecurityParameterIndex ikeSpiThree =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(localAddress, spiValue);
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(LOCAL_ADDRESS, spiValue);
         ikeSpiThree.close();
     }
 
