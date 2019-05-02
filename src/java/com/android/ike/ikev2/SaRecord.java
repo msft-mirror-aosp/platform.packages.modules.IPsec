@@ -248,9 +248,8 @@ public abstract class SaRecord {
         private final byte[] mSkPi;
         private final byte[] mSkPr;
 
-        private int mMessageId;
-
-        // TODO: Add Message ID and related methods
+        private int mLocalRequestMessageId;
+        private int mRemoteRequestMessageId;
 
         /** Package private */
         IkeSaRecord(
@@ -275,7 +274,8 @@ public abstract class SaRecord {
             mSkPi = skPi;
             mSkPr = skPr;
 
-            mMessageId = 0;
+            mLocalRequestMessageId = 0;
+            mRemoteRequestMessageId = 0;
         }
 
         /** Package private */
@@ -337,20 +337,48 @@ public abstract class SaRecord {
         }
 
         /**
-         * Get current message ID.
+         * Get current message ID for the local requesting window.
          *
-         * <p>Called for building an outbound packet or for validating the message ID of an inbound
-         * packet.
+         * <p>Called for building an outbound request or for validating the message ID of an inbound
+         * response.
          *
-         * @return the message ID.
+         * @return the local request message ID.
          */
-        public int getMessageId() {
-            return mMessageId;
+        public int getLocalRequestMessageId() {
+            return mLocalRequestMessageId;
         }
 
-        /** Increment the message ID by one. */
-        public void incrementMessageId() {
-            mMessageId++;
+        /**
+         * Get current message ID for the remote requesting window.
+         *
+         * <p>Called for validating the message ID of an inbound request. If the message ID of the
+         * inbound request is smaller than the current remote message ID by one, it means the
+         * message is a retransmitted request.
+         *
+         * @return the remote request message ID
+         */
+        public int getRemoteRequestMessageId() {
+            return mRemoteRequestMessageId;
+        }
+
+        /**
+         * Increment the local request message ID by one.
+         *
+         * <p>It should be called when IKE library has received an authenticated and protected
+         * response with the correct local request message ID.
+         */
+        public void incrementLocalRequestMessageId() {
+            mLocalRequestMessageId++;
+        }
+
+        /**
+         * Increment the remote request message ID by one.
+         *
+         * <p>It should be called when IKE library has received an authenticated and protected
+         * request with the correct remote request message ID.
+         */
+        public void incrementRemoteRequestMessageId() {
+            mRemoteRequestMessageId++;
         }
     }
 
