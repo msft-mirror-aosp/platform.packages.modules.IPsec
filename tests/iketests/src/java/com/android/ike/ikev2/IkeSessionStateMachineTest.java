@@ -809,14 +809,15 @@ public final class IkeSessionStateMachineTest {
         IkeNotifyPayload payload =
                 new IkeNotifyPayload(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX, new byte[0]);
 
-        boolean isResp = true;
+        boolean isResp = false;
         IkeMessage generated =
                 mIkeSessionStateMachine.buildEncryptedInformationalMessage(
                         mSpyCurrentIkeSaRecord, new IkeInformationalPayload[] {payload}, isResp, 0);
 
         assertEquals(mSpyCurrentIkeSaRecord.initiatorSpi, generated.ikeHeader.ikeInitiatorSpi);
         assertEquals(mSpyCurrentIkeSaRecord.responderSpi, generated.ikeHeader.ikeResponderSpi);
-        assertEquals(mSpyCurrentIkeSaRecord.getMessageId(), generated.ikeHeader.messageId);
+        assertEquals(mSpyCurrentIkeSaRecord.getLocalRequestMessageId(),
+                generated.ikeHeader.messageId);
         assertEquals(isResp, generated.ikeHeader.isResponseMsg);
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, generated.ikeHeader.nextPayloadType);
 
