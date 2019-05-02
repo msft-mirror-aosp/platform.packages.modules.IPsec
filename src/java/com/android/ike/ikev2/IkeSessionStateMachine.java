@@ -51,6 +51,8 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
+import dalvik.system.CloseGuard;
+
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -254,11 +256,12 @@ public class IkeSessionStateMachine extends StateMachine {
 
         private final InetAddress mSourceAddress;
         private final long mSpi;
-        // TODO: Add CloseGuard
+        private final CloseGuard mCloseGuard = CloseGuard.get();
 
         private IkeSecurityParameterIndex(InetAddress sourceAddress, long spi) {
             mSourceAddress = sourceAddress;
             mSpi = spi;
+            mCloseGuard.open("close");
         }
 
         /**
@@ -310,6 +313,16 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void close() {
             sAssignedIkeSpis.remove(new Pair<InetAddress, Long>(mSourceAddress, mSpi));
+            mCloseGuard.close();
+        }
+
+        /** Check that the IkeSecurityParameterIndex was closed properly. */
+        @Override
+        protected void finalize() throws Throwable {
+            if (mCloseGuard != null) {
+                mCloseGuard.warnIfOpen();
+            }
+            close();
         }
     }
 
