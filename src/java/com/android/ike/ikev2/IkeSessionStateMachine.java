@@ -369,6 +369,8 @@ public class IkeSessionStateMachine extends StateMachine {
     // TODO: Add methods for building and validating general Informational packet.
 
     private void addIkeSaRecord(IkeSaRecord record) {
+        // TODO: We register local SPI in IkeSocket. For consistency we should also use local IKE
+        // SPI here.
         mSpiToSaRecordMap.put(record.getRemoteSpi(), record);
     }
 
@@ -600,8 +602,8 @@ public class IkeSessionStateMachine extends StateMachine {
             int messageId) {
         IkeHeader header =
                 new IkeHeader(
-                        saRecord.initiatorSpi,
-                        saRecord.responderSpi,
+                        saRecord.getInitiatorSpi(),
+                        saRecord.getResponderSpi(),
                         IkePayload.PAYLOAD_TYPE_SK,
                         IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
                         isResponse /*isResponseMsg*/,
@@ -883,6 +885,8 @@ public class IkeSessionStateMachine extends StateMachine {
                         IkeSaRecord.makeFirstIkeSaRecord(
                                 mRequestMsg,
                                 ikeMessage,
+                                mLocalIkeSpiResource,
+                                mRemoteIkeSpiResource,
                                 mIkePrf,
                                 mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
                                 mIkeCipher.getKeyLength());
@@ -1157,8 +1161,8 @@ public class IkeSessionStateMachine extends StateMachine {
             // Build IKE header
             IkeHeader ikeHeader =
                     new IkeHeader(
-                            mCurrentIkeSaRecord.initiatorSpi,
-                            mCurrentIkeSaRecord.responderSpi,
+                            mCurrentIkeSaRecord.getInitiatorSpi(),
+                            mCurrentIkeSaRecord.getResponderSpi(),
                             IkePayload.PAYLOAD_TYPE_SK,
                             IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
                             false /*isResponseMsg*/,

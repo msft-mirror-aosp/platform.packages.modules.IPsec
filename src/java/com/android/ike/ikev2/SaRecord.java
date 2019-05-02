@@ -15,6 +15,7 @@
  */
 package com.android.ike.ikev2;
 
+import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
@@ -131,9 +132,7 @@ public abstract class SaRecord implements AutoCloseable {
         public IkeSaRecord makeFirstIkeSaRecord(
                 IkeMessage initRequest,
                 IkeMessage initResponse,
-                IkeMacPrf prf,
-                int integrityKeyLength,
-                int encryptionKeyLength)
+                IkeSaRecordConfig ikeSaRecordConfig)
                 throws GeneralSecurityException {
             // Extract nonces
             byte[] nonceInit =
@@ -147,18 +146,10 @@ public abstract class SaRecord implements AutoCloseable {
 
             // Get SKEYSEED
             byte[] sharedDhKey = getSharedKey(initRequest, initResponse);
-            byte[] sKeySeed = prf.generateSKeySeed(nonceInit, nonceResp, sharedDhKey);
+            byte[] sKeySeed =
+                    ikeSaRecordConfig.prf.generateSKeySeed(nonceInit, nonceResp, sharedDhKey);
 
-            return makeIkeSaRecord(
-                    prf,
-                    integrityKeyLength,
-                    encryptionKeyLength,
-                    sKeySeed,
-                    nonceInit,
-                    nonceResp,
-                    initResponse.ikeHeader.ikeInitiatorSpi,
-                    initResponse.ikeHeader.ikeResponderSpi,
-                    true /*isLocalInit*/);
+            return makeIkeSaRecord(sKeySeed, nonceInit, nonceResp, ikeSaRecordConfig);
         }
 
         @Override
@@ -187,20 +178,26 @@ public abstract class SaRecord implements AutoCloseable {
          */
         @VisibleForTesting
         IkeSaRecord makeIkeSaRecord(
-                IkeMacPrf prf,
-                int integrityKeyLength,
-                int encryptionKeyLength,
                 byte[] sKeySeed,
                 byte[] nonceInit,
                 byte[] nonceResp,
-                long initSpi,
-                long respSpi,
-                boolean isLocalInit) {
+                IkeSaRecordConfig ikeSaRecordConfig) {
             // Build data to sign for generating the keying material.
             ByteBuffer bufferToSign =
                     ByteBuffer.allocate(
                             nonceInit.length + nonceResp.length + 2 * IkePayload.SPI_LEN_IKE);
-            bufferToSign.put(nonceInit).put(nonceResp).putLong(initSpi).putLong(respSpi);
+
+            IkeSecurityParameterIndex initSpi = ikeSaRecordConfig.initSpi;
+            IkeSecurityParameterIndex respSpi = ikeSaRecordConfig.respSpi;
+            IkeMacPrf prf = ikeSaRecordConfig.prf;
+            int integrityKeyLength = ikeSaRecordConfig.integrityKeyLength;
+            int encryptionKeyLength = ikeSaRecordConfig.encryptionKeyLength;
+
+            bufferToSign
+                    .put(nonceInit)
+                    .put(nonceResp)
+                    .putLong(initSpi.getSpi())
+                    .putLong(respSpi.getSpi());
 
             // Get length of the keying material according to RFC 7296, 2.13 and 2.14. The length of
             // SK_D is always equal to the length of PRF key.
@@ -253,12 +250,10 @@ public abstract class SaRecord implements AutoCloseable {
 
     /** IkeSaRecord represents an IKE SA. */
     public static class IkeSaRecord extends SaRecord implements Comparable<IkeSaRecord> {
-        // TODO: Change long type SPIs to IkeSecurityParameterIndex pair.
-
         /** SPI of IKE SA initiator */
-        public final long initiatorSpi;
+        private final IkeSecurityParameterIndex mInitiatorSpiResource;
         /** SPI of IKE SA responder */
-        public final long responderSpi;
+        private final IkeSecurityParameterIndex mResponderSpiResource;
 
         private final byte[] mSkD;
         private final byte[] mSkPi;
@@ -269,8 +264,8 @@ public abstract class SaRecord implements AutoCloseable {
 
         /** Package private */
         IkeSaRecord(
-                long initSpi,
-                long respSpi,
+                IkeSecurityParameterIndex initSpi,
+                IkeSecurityParameterIndex respSpi,
                 boolean localInit,
                 byte[] nonceInit,
                 byte[] nonceResp,
@@ -283,8 +278,8 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] skPr) {
             super(localInit, nonceInit, nonceResp, skAi, skAr, skEi, skEr);
 
-            initiatorSpi = initSpi;
-            responderSpi = respSpi;
+            mInitiatorSpiResource = initSpi;
+            mResponderSpiResource = respSpi;
 
             mSkD = skD;
             mSkPi = skPi;
@@ -294,16 +289,29 @@ public abstract class SaRecord implements AutoCloseable {
             mRemoteRequestMessageId = 0;
         }
 
-        /** Package private */
+        /**
+         * Package private interface for IkeSessionStateMachien to construct an IkeSaRecord
+         * instance.
+         */
         static IkeSaRecord makeFirstIkeSaRecord(
                 IkeMessage initRequest,
                 IkeMessage initResponse,
+                IkeSecurityParameterIndex initSpi,
+                IkeSecurityParameterIndex respSpi,
                 IkeMacPrf prf,
                 int integrityKeyLength,
                 int encryptionKeyLength)
                 throws GeneralSecurityException {
             return sSaRecordHelper.makeFirstIkeSaRecord(
-                    initRequest, initResponse, prf, integrityKeyLength, encryptionKeyLength);
+                    initRequest,
+                    initResponse,
+                    new IkeSaRecordConfig(
+                            initSpi,
+                            respSpi,
+                            prf,
+                            integrityKeyLength,
+                            encryptionKeyLength,
+                            true /*isLocalInit*/));
         }
 
         /** Package private */
@@ -313,9 +321,25 @@ public abstract class SaRecord implements AutoCloseable {
         }
 
         /** Package private */
-        long getRemoteSpi() {
-            return isLocalInit ? responderSpi : initiatorSpi;
+        long getInitiatorSpi() {
+            return mInitiatorSpiResource.getSpi();
         }
+
+        /** Package private */
+        long getResponderSpi() {
+            return mResponderSpiResource.getSpi();
+        }
+
+        /** Package private */
+        long getLocalSpi() {
+            return isLocalInit ? mInitiatorSpiResource.getSpi() : mResponderSpiResource.getSpi();
+        }
+
+        /** Package private */
+        long getRemoteSpi() {
+            return isLocalInit ? mResponderSpiResource.getSpi() : mInitiatorSpiResource.getSpi();
+        }
+
         /** Package private */
         byte[] getSkD() {
             return mSkD;
@@ -400,13 +424,39 @@ public abstract class SaRecord implements AutoCloseable {
         /** Release IKE SPI resource. */
         @Override
         public void close() {
-            // TODO: Implement it to release IKE SPI resource.
+            mInitiatorSpiResource.close();
+            mResponderSpiResource.close();
+        }
+    }
+
+    /** Package private class that groups parameters to construct an IkeSaRecord instance. */
+    @VisibleForTesting
+    static class IkeSaRecordConfig {
+        public final IkeSecurityParameterIndex initSpi;
+        public final IkeSecurityParameterIndex respSpi;
+        public final IkeMacPrf prf;
+        public final int integrityKeyLength;
+        public final int encryptionKeyLength;
+        public final boolean isLocalInit;
+
+        IkeSaRecordConfig(
+                IkeSecurityParameterIndex initSpi,
+                IkeSecurityParameterIndex respSpi,
+                IkeMacPrf prf,
+                int integrityKeyLength,
+                int encryptionKeyLength,
+                boolean isLocalInit) {
+            this.initSpi = initSpi;
+            this.respSpi = respSpi;
+            this.prf = prf;
+            this.integrityKeyLength = integrityKeyLength;
+            this.encryptionKeyLength = encryptionKeyLength;
+            this.isLocalInit = isLocalInit;
         }
     }
 
     /** ChildSaRecord represents an Child SA. */
     public static class ChildSaRecord extends SaRecord implements Comparable<ChildSaRecord> {
-
         /** Locally generated SPI for receiving IPsec Packet. */
         public final int inboundSpi;
         /** Remotely generated SPI for sending IPsec Packet. */
@@ -467,18 +517,15 @@ public abstract class SaRecord implements AutoCloseable {
          *
          * @param initRequest IKE_INIT request.
          * @param initResponse IKE_INIT request.
-         * @param prf the negotiated PRF.
-         * @param integrityKeyLength the key length of the negotiated integrity algorithm.
-         * @param encryptionKeyLength the key length of the negotiated encryption algorithm.
+         * @param ikeSaRecordConfig that contains IKE SPI resources and negotiated algorithm
+         *     information for constructing an IkeSaRecord instance.
          * @return ikeSaRecord for initial IKE SA.
          * @throws GeneralSecurityException if the DH public key in the response is invalid.
          */
         IkeSaRecord makeFirstIkeSaRecord(
                 IkeMessage initRequest,
                 IkeMessage initResponse,
-                IkeMacPrf prf,
-                int integrityKeyLength,
-                int encryptionKeyLength)
+                IkeSaRecordConfig ikeSaRecordConfig)
                 throws GeneralSecurityException;
 
         /**
