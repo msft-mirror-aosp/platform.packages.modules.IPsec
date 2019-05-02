@@ -38,7 +38,7 @@ import javax.crypto.Mac;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class IkeMacPrf extends IkeMac {
+public class IkeMacPrf extends IkeMac {
     // STOPSHIP: b/130190639 Catch unchecked exceptions, notify users and close the IKE session.
 
     private IkeMacPrf(
