@@ -40,6 +40,7 @@ import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeIdPayload;
+import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -63,6 +64,7 @@ import java.net.SocketException;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -551,6 +553,49 @@ public class IkeSessionStateMachine extends StateMachine {
                 throw new IllegalArgumentException(
                         "Unrecognized exchange type: " + ikeHeader.exchangeType);
         }
+    }
+
+    // Sends the provided IkeMessage using the current IKE SA record
+    @VisibleForTesting
+    void sendEncryptedIkeMessage(IkeMessage msg) {
+        sendEncryptedIkeMessage(mCurrentIkeSaRecord, msg);
+    }
+
+    // Sends the provided IkeMessage using the provided IKE SA record
+    @VisibleForTesting
+    void sendEncryptedIkeMessage(IkeSaRecord ikeSaRecord, IkeMessage msg) {
+        byte[] bytes = msg.encryptAndEncode(mIkeIntegrity, mIkeCipher, ikeSaRecord);
+        mIkeSocket.sendIkePacket(bytes, mRemoteAddress);
+    }
+
+    // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the current IKE
+    // SA record.
+    @VisibleForTesting
+    IkeMessage buildEncryptedInformationalMessage(
+            IkeInformationalPayload[] payloads, boolean isResponse, int messageId) {
+        return buildEncryptedInformationalMessage(
+                mCurrentIkeSaRecord, payloads, isResponse, messageId);
+    }
+
+    // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the provided IKE
+    // SA record.
+    @VisibleForTesting
+    IkeMessage buildEncryptedInformationalMessage(
+            IkeSaRecord saRecord,
+            IkeInformationalPayload[] payloads,
+            boolean isResponse,
+            int messageId) {
+        IkeHeader header =
+                new IkeHeader(
+                        saRecord.initiatorSpi,
+                        saRecord.responderSpi,
+                        IkePayload.PAYLOAD_TYPE_SK,
+                        IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                        isResponse /*isResponseMsg*/,
+                        saRecord.isLocalInit /*fromIkeInitiator*/,
+                        messageId);
+
+        return new IkeMessage(header, Arrays.asList(payloads));
     }
 
     /** Base state defines common behaviours when receiving an IKE packet. */
