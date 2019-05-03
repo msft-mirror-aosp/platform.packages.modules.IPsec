@@ -54,8 +54,8 @@ import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
+import com.android.ike.ikev2.SaRecord.IkeSaRecordConfig;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
-import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeIdPayload;
@@ -155,7 +155,8 @@ public final class IkeSessionStateMachineTest {
 
     private ArgumentCaptor<IkeMessage> mIkeMessageCaptor =
             ArgumentCaptor.forClass(IkeMessage.class);
-    private ArgumentCaptor<IkeMacPrf> mIkePrfCaptor = ArgumentCaptor.forClass(IkeMacPrf.class);
+    private ArgumentCaptor<IkeSaRecordConfig> mIkeSaRecordConfigCaptor =
+            ArgumentCaptor.forClass(IkeSaRecordConfig.class);
 
     private ReceivedIkePacket makeDummyUnencryptedReceivedIkePacket(
             long initiatorSpi,
@@ -198,8 +199,8 @@ public final class IkeSessionStateMachineTest {
 
         IkeMessage dummyIkeMessage =
                 makeDummyIkeMessageForTest(
-                        ikeSaRecord.initiatorSpi,
-                        ikeSaRecord.responderSpi,
+                        ikeSaRecord.getInitiatorSpi(),
+                        ikeSaRecord.getResponderSpi(),
                         eType,
                         isResp,
                         fromIkeInit,
@@ -276,11 +277,14 @@ public final class IkeSessionStateMachineTest {
                 .thenReturn(mMockChildSessionStateMachine);
     }
 
-    private static IkeSaRecord makeDummyIkeSaRecord(
-            long initSpi, long respSpi, boolean isLocalInit) {
+    private static IkeSaRecord makeDummyIkeSaRecord(long initSpi, long respSpi, boolean isLocalInit)
+            throws IOException {
+        Inet4Address initAddress = isLocalInit ? LOCAL_ADDRESS : REMOTE_ADDRESS;
+        Inet4Address respAddress = isLocalInit ? REMOTE_ADDRESS : LOCAL_ADDRESS;
+
         return new IkeSaRecord(
-                initSpi,
-                respSpi,
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(initAddress, initSpi),
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(respAddress, respSpi),
                 isLocalInit,
                 new byte[NONCE_DATA_LEN],
                 new byte[NONCE_DATA_LEN],
@@ -342,6 +346,10 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.quit();
         mIkeSessionStateMachine.setDbg(false);
         mUdpEncapSocket.close();
+
+        mSpyCurrentIkeSaRecord.close();
+        mSpyLocalInitIkeSaRecord.close();
+        mSpyRemoteInitIkeSaRecord.close();
 
         IkeMessage.setIkeMessageHelper(new IkeMessageHelper());
         SaRecord.setSaRecordHelper(new SaRecordHelper());
@@ -554,7 +562,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCreateIkeLocalIkeInit() throws Exception {
         if (Looper.myLooper() == null) Looper.myLooper().prepare();
-        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any(), anyInt(), anyInt()))
+        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any()))
                 .thenReturn(mSpyCurrentIkeSaRecord);
 
         // Send IKE INIT request
@@ -610,18 +618,18 @@ public final class IkeSessionStateMachineTest {
                 .makeFirstIkeSaRecord(
                         any(IkeMessage.class),
                         any(IkeMessage.class),
-                        mIkePrfCaptor.capture(),
-                        eq(KEY_LEN_IKE_INTE),
-                        eq(KEY_LEN_IKE_ENCR));
+                        mIkeSaRecordConfigCaptor.capture());
 
-        IkeMacPrf negotiatedPrf = mIkePrfCaptor.getValue();
-        assertEquals(KEY_LEN_IKE_PRF, negotiatedPrf.getKeyLength());
+        IkeSaRecordConfig ikeSaRecordConfig = mIkeSaRecordConfigCaptor.getValue();
+        assertEquals(KEY_LEN_IKE_PRF, ikeSaRecordConfig.prf.getKeyLength());
+        assertEquals(KEY_LEN_IKE_INTE, ikeSaRecordConfig.integrityKeyLength);
+        assertEquals(KEY_LEN_IKE_ENCR, ikeSaRecordConfig.encryptionKeyLength);
     }
 
     private void mockIkeSetup() throws Exception {
         if (Looper.myLooper() == null) Looper.myLooper().prepare();
 
-        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any(), anyInt(), anyInt()))
+        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any()))
                 .thenReturn(mSpyCurrentIkeSaRecord);
 
         // Send IKE INIT request
@@ -814,10 +822,10 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.buildEncryptedInformationalMessage(
                         mSpyCurrentIkeSaRecord, new IkeInformationalPayload[] {payload}, isResp, 0);
 
-        assertEquals(mSpyCurrentIkeSaRecord.initiatorSpi, generated.ikeHeader.ikeInitiatorSpi);
-        assertEquals(mSpyCurrentIkeSaRecord.responderSpi, generated.ikeHeader.ikeResponderSpi);
-        assertEquals(mSpyCurrentIkeSaRecord.getLocalRequestMessageId(),
-                generated.ikeHeader.messageId);
+        assertEquals(mSpyCurrentIkeSaRecord.getInitiatorSpi(), generated.ikeHeader.ikeInitiatorSpi);
+        assertEquals(mSpyCurrentIkeSaRecord.getResponderSpi(), generated.ikeHeader.ikeResponderSpi);
+        assertEquals(
+                mSpyCurrentIkeSaRecord.getLocalRequestMessageId(), generated.ikeHeader.messageId);
         assertEquals(isResp, generated.ikeHeader.isResponseMsg);
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, generated.ikeHeader.nextPayloadType);
 
