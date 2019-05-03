@@ -22,6 +22,8 @@ import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.internal.annotations.VisibleForTesting;
 
+import dalvik.system.CloseGuard;
+
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.List;
@@ -34,7 +36,7 @@ import java.util.List;
  * We store cryptographic algorithms and unchanged SA configurations in IkeSessionOptions or
  * ChildSessionOptions and store changed information including keys, SPIs, and nonces in SaRecord.
  */
-public abstract class SaRecord {
+public abstract class SaRecord implements AutoCloseable {
 
     private static ISaRecordHelper sSaRecordHelper = new SaRecordHelper();
 
@@ -48,6 +50,8 @@ public abstract class SaRecord {
     private final byte[] mSkAr;
     private final byte[] mSkEi;
     private final byte[] mSkEr;
+
+    private final CloseGuard mCloseGuard = CloseGuard.get();
 
     /** Package private */
     SaRecord(
@@ -66,6 +70,8 @@ public abstract class SaRecord {
         mSkAr = skAr;
         mSkEi = skEi;
         mSkEr = skEr;
+
+        mCloseGuard.open("close");
     }
 
     /**
@@ -104,6 +110,15 @@ public abstract class SaRecord {
      */
     public byte[] getInboundDecryptionKey() {
         return isLocalInit ? mSkEr : mSkEi;
+    }
+
+    /** Check that the SaRecord was closed properly. */
+    @Override
+    protected void finalize() throws Throwable {
+        if (mCloseGuard != null) {
+            mCloseGuard.warnIfOpen();
+        }
+        close();
     }
 
     /**
@@ -238,6 +253,7 @@ public abstract class SaRecord {
 
     /** IkeSaRecord represents an IKE SA. */
     public static class IkeSaRecord extends SaRecord implements Comparable<IkeSaRecord> {
+        // TODO: Change long type SPIs to IkeSecurityParameterIndex pair.
 
         /** SPI of IKE SA initiator */
         public final long initiatorSpi;
@@ -380,6 +396,12 @@ public abstract class SaRecord {
         public void incrementRemoteRequestMessageId() {
             mRemoteRequestMessageId++;
         }
+
+        /** Release IKE SPI resource. */
+        @Override
+        public void close() {
+            // TODO: Implement it to release IKE SPI resource.
+        }
     }
 
     /** ChildSaRecord represents an Child SA. */
@@ -425,6 +447,12 @@ public abstract class SaRecord {
         public int compareTo(ChildSaRecord record) {
             // TODO: Implement it b/122924815
             return 1;
+        }
+
+        /** Release IpSecTransform pair. */
+        @Override
+        public void close() {
+            // TODO: Implement it to release IpSecTransform pair.
         }
     }
 
