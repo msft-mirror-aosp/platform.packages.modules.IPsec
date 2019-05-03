@@ -963,4 +963,38 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Closed);
     }
+
+    @Test
+    public void testDeleteIkeRemoteDelete() throws Exception {
+        setupIdleStateMachine();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDeleteIkeRequest(mSpyCurrentIkeSaRecord));
+
+        mLooper.dispatchAll();
+        verifyIncrementRemoteReqMsgId();
+
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+
+        // Verify outbound message
+        IkeMessage delMsg = mIkeMessageCaptor.getValue();
+
+        IkeHeader ikeHeader = delMsg.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertTrue(ikeHeader.isResponseMsg);
+        assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
+
+        assertTrue(delMsg.ikePayloadList.isEmpty());
+
+        // TODO: Verify callbacks
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Closed);
+    }
 }

@@ -815,6 +815,34 @@ public class IkeSessionStateMachine extends StateMachine {
                 throw new InvalidSyntaxException("Unexpected delete request for SA");
             }
         }
+
+        /**
+         * Helper method for responding to a session deletion request
+         *
+         * <p>Note that this method expects that the session is keyed on the current IKE SA session,
+         * and closing the IKE SA indicates that the remote wishes to end the session as a whole. As
+         * such, this should not be used in rekey cases where there is any ambiguity as to which IKE
+         * SA the session is reliant upon.
+         *
+         * <p>Note that this method will also move the state machine to the closed state.
+         *
+         * @param ikeMessage The received session deletion request
+         */
+        protected void handleDeleteSessionRequest(IkeMessage ikeMessage) {
+            try {
+                validateIkeDeleteReq(ikeMessage, mCurrentIkeSaRecord);
+                IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
+                sendEncryptedIkeMessage(mCurrentIkeSaRecord, resp);
+
+                // TODO: Close IKE SA
+                removeIkeSaRecord(mCurrentIkeSaRecord);
+
+                transitionTo(mClosed);
+            } catch (InvalidSyntaxException e) {
+                Log.wtf(TAG, "Got deletion of a non-Current IKE SA - rekey error?", e);
+                // TODO: Send the INVALID_SYNTAX error
+            }
+        }
     }
 
     /**
@@ -873,8 +901,11 @@ public class IkeSessionStateMachine extends StateMachine {
                         // TODO: Handle processing errors.
                     }
                     return;
-                    // TODO: Add more cases for supporting other types of request.
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
+                    handleDeleteSessionRequest(ikeMessage);
+                    return;
                 default:
+                    // TODO: Add more cases for supporting other types of request.
             }
         }
 
@@ -1818,19 +1849,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
-                    try {
-                        validateIkeDeleteReq(ikeMessage, mCurrentIkeSaRecord);
-                        IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
-                        sendEncryptedIkeMessage(mCurrentIkeSaRecord, resp);
-
-                        // TODO: Close IKE SA
-                        removeIkeSaRecord(mCurrentIkeSaRecord);
-
-                        transitionTo(mClosed);
-                    } catch (InvalidSyntaxException e) {
-                        Log.wtf(TAG, "Got deletion of a non-Current IKE SA - rekey error?", e);
-                        // TODO: Send the INVALID_SYNTAX error
-                    }
+                    handleDeleteSessionRequest(ikeMessage);
                     return;
                 default:
                     // TODO: Reply with TEMPORARY_FAILURE
