@@ -27,7 +27,7 @@ import android.system.Os;
 import android.util.Log;
 import android.util.LongSparseArray;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.utils.PacketReader;
 import com.android.internal.annotations.VisibleForTesting;
@@ -185,7 +185,7 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
                 } else {
                     ikeStateMachine.receiveIkePacket(ikeHeader, ikePacketBytes);
                 }
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // Handle invalid IKE header
                 Log.e(TAG, "Can't parse malformed IKE packet header.");
             }

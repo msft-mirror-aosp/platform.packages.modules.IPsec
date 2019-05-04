@@ -20,7 +20,7 @@ import android.annotation.Nullable;
 
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -57,7 +57,7 @@ public final class IkeSkPayload extends IkePayload {
             IkeCipher decryptCipher,
             byte[] integrityKey,
             byte[] decryptKey)
-            throws IkeException, GeneralSecurityException {
+            throws IkeProtocolException, GeneralSecurityException {
         super(PAYLOAD_TYPE_SK, critical);
 
         // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.

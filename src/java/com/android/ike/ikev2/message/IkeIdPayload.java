@@ -20,7 +20,7 @@ import com.android.ike.ikev2.IkeIdentification;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv6AddrIdentification;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkePayload.PayloadType;
 
@@ -51,9 +51,10 @@ public final class IkeIdPayload extends IkePayload {
      * @param payloadBody payload body in byte array.
      * @param isInitiator indicates whether this payload contains the ID of IKE initiator or IKE
      *     responder.
-     * @throws IkeException for decoding error.
+     * @throws IkeProtocolException for decoding error.
      */
-    IkeIdPayload(boolean critical, byte[] payloadBody, boolean isInitiator) throws IkeException {
+    IkeIdPayload(boolean critical, byte[] payloadBody, boolean isInitiator)
+            throws IkeProtocolException {
         super((isInitiator ? PAYLOAD_TYPE_ID_INITIATOR : PAYLOAD_TYPE_ID_RESPONDER), critical);
         // TODO: b/119791832 Add helper method for checking payload body length in superclass.
         if (payloadBody.length <= ID_HEADER_LEN) {

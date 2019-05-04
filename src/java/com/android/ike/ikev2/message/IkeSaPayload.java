@@ -31,7 +31,7 @@ import android.util.Pair;
 
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.SaProposal;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.internal.annotations.VisibleForTesting;
@@ -64,7 +64,7 @@ public final class IkeSaPayload extends IkePayload {
      * @param isResp indicates if this payload is in a response message.
      * @param payloadBody the encoded payload body in byte array.
      */
-    IkeSaPayload(boolean critical, boolean isResp, byte[] payloadBody) throws IkeException {
+    IkeSaPayload(boolean critical, boolean isResp, byte[] payloadBody) throws IkeProtocolException {
         super(IkePayload.PAYLOAD_TYPE_SA, critical);
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
@@ -304,7 +304,7 @@ public final class IkeSaPayload extends IkePayload {
 
     @VisibleForTesting
     interface TransformDecoder {
-        Transform[] decodeTransforms(int count, ByteBuffer inputBuffer) throws IkeException;
+        Transform[] decodeTransforms(int count, ByteBuffer inputBuffer) throws IkeProtocolException;
     }
 
     // TODO: Add another constructor for building outbound message.
@@ -333,7 +333,7 @@ public final class IkeSaPayload extends IkePayload {
                 new TransformDecoder() {
                     @Override
                     public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
-                            throws IkeException {
+                            throws IkeProtocolException {
                         Transform[] transformArray = new Transform[count];
                         for (int i = 0; i < count; i++) {
                             Transform transform = Transform.readFrom(inputBuffer);
@@ -373,7 +373,7 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @VisibleForTesting
-        static Proposal readFrom(ByteBuffer inputBuffer) throws IkeException {
+        static Proposal readFrom(ByteBuffer inputBuffer) throws IkeProtocolException {
             byte isLast = inputBuffer.get();
             if (isLast != LAST_PROPOSAL && isLast != NOT_LAST_PROPOSAL) {
                 throw new InvalidSyntaxException(
@@ -669,7 +669,8 @@ public final class IkeSaPayload extends IkePayload {
 
     @VisibleForTesting
     interface AttributeDecoder {
-        List<Attribute> decodeAttributes(int length, ByteBuffer inputBuffer) throws IkeException;
+        List<Attribute> decodeAttributes(int length, ByteBuffer inputBuffer)
+                throws IkeProtocolException;
     }
 
     /**
@@ -714,7 +715,7 @@ public final class IkeSaPayload extends IkePayload {
         static AttributeDecoder sAttributeDecoder =
                 new AttributeDecoder() {
                     public List<Attribute> decodeAttributes(int length, ByteBuffer inputBuffer)
-                            throws IkeException {
+                            throws IkeProtocolException {
                         List<Attribute> list = new LinkedList<>();
                         int parsedLength = BASIC_TRANSFORM_LEN;
                         while (parsedLength < length) {
@@ -752,7 +753,7 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @VisibleForTesting
-        static Transform readFrom(ByteBuffer inputBuffer) throws IkeException {
+        static Transform readFrom(ByteBuffer inputBuffer) throws IkeProtocolException {
             byte isLast = inputBuffer.get();
             if (isLast != LAST_TRANSFORM && isLast != NOT_LAST_TRANSFORM) {
                 throw new InvalidSyntaxException(
@@ -793,7 +794,7 @@ public final class IkeSaPayload extends IkePayload {
 
         // Throw InvalidSyntaxException if there are multiple Attributes of the same type
         private static void validateAttributeUniqueness(List<Attribute> attributeList)
-                throws IkeException {
+                throws IkeProtocolException {
             Set<Integer> foundTypes = new ArraySet<>();
             for (Attribute attr : attributeList) {
                 if (!foundTypes.add(attr.type)) {
@@ -1391,7 +1392,8 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         @VisibleForTesting
-        static Pair<Attribute, Integer> readFrom(ByteBuffer inputBuffer) throws IkeException {
+        static Pair<Attribute, Integer> readFrom(ByteBuffer inputBuffer)
+                throws IkeProtocolException {
             short formatAndType = inputBuffer.getShort();
             int format = formatAndType & ATTRIBUTE_FORMAT_MASK;
             int type = formatAndType & ATTRIBUTE_TYPE_MASK;

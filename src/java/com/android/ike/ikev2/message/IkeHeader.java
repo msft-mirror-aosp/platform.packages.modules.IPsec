@@ -20,7 +20,7 @@ import static com.android.ike.ikev2.message.IkePayload.PayloadType;
 
 import android.annotation.IntDef;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.internal.annotations.VisibleForTesting;
@@ -120,7 +120,7 @@ public final class IkeHeader {
      *
      * @param packet the raw byte array of the whole IKE message
      */
-    public IkeHeader(byte[] packet) throws IkeException {
+    public IkeHeader(byte[] packet) throws IkeProtocolException {
         if (packet.length <= IKE_HEADER_LENGTH) {
             throw new InvalidSyntaxException("IKE message is too short to contain a header");
         }
@@ -156,7 +156,7 @@ public final class IkeHeader {
     }
 
     /** Validate syntax and major version of inbound IKE header. */
-    public void checkInboundValidOrThrow(int packetLength) throws IkeException {
+    public void checkInboundValidOrThrow(int packetLength) throws IkeProtocolException {
         if (majorVersion > 2) {
             // Receive higher version of protocol. Stop parsing.
             throw new InvalidMajorVersionException(majorVersion);
