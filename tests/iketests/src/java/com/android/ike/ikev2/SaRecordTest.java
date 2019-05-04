@@ -20,29 +20,37 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
+import com.android.ike.ikev2.SaRecord.IkeSaRecordConfig;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.TestUtils;
+
+import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.nio.ByteBuffer;
+import java.net.Inet4Address;
 
 @RunWith(JUnit4.class)
 public final class SaRecordTest {
+    private static final Inet4Address LOCAL_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+    private static final Inet4Address REMOTE_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
 
     private static final String PRF_KEY_HEX_STRING = "094787780EE466E2CB049FA327B43908BC57E485";
     private static final String DATA_TO_SIGN_HEX_STRING = "010000000a50500d";
     private static final String CALCULATED_MAC_HEX_STRING =
             "D83B20CC6A0932B2A7CEF26E4020ABAAB64F0C6A";
 
-    private static final String IKE_INIT_SPI = "5F54BF6D8B48E6E1";
-    private static final String IKE_RESP_SPI = "909232B3D1EDCB5C";
+    private static final long IKE_INIT_SPI = 0x5F54BF6D8B48E6E1L;
+    private static final long IKE_RESP_SPI = 0x909232B3D1EDCB5CL;
 
     private static final String IKE_NONCE_INIT_HEX_STRING =
             "C39B7F368F4681B89FA9B7BE6465ABD7C5F68B6ED5D3B4C72CB4240EB5C46412";
@@ -102,8 +110,6 @@ public final class SaRecordTest {
     private static final int FIRST_CHILD_ENCR_ALGO_KEY_LEN = 16;
 
     private IkeMacPrf mIkeHmacSha1Prf;
-    private long mIkeInitSpi;
-    private long mIkeRespSpi;
 
     private SaRecord.SaRecordHelper mSaRecordHelper = new SaRecord.SaRecordHelper();
 
@@ -113,8 +119,6 @@ public final class SaRecordTest {
                 IkeMacPrf.create(
                         new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
                         IkeMessage.getSecurityProvider());
-        mIkeInitSpi = ByteBuffer.wrap(TestUtils.hexStringToByteArray(IKE_INIT_SPI)).getLong();
-        mIkeRespSpi = ByteBuffer.wrap(TestUtils.hexStringToByteArray(IKE_RESP_SPI)).getLong();
     }
 
     @Test
@@ -123,6 +127,21 @@ public final class SaRecordTest {
         byte[] nonceInit = TestUtils.hexStringToByteArray(IKE_NONCE_INIT_HEX_STRING);
         byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
 
+        IkeSecurityParameterIndex ikeInitSpi =
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(
+                        LOCAL_ADDRESS, IKE_INIT_SPI);
+        IkeSecurityParameterIndex ikeRespSpi =
+                IkeSecurityParameterIndex.allocateSecurityParameterIndex(
+                        REMOTE_ADDRESS, IKE_RESP_SPI);
+        IkeSaRecordConfig ikeSaRecordConfig =
+                new IkeSaRecordConfig(
+                        ikeInitSpi,
+                        ikeRespSpi,
+                        mIkeHmacSha1Prf,
+                        IKE_AUTH_ALGO_KEY_LEN,
+                        IKE_ENCR_ALGO_KEY_LEN,
+                        true /*isLocalInit*/);
+
         int keyMaterialLen =
                 IKE_SK_D_KEY_LEN
                         + IKE_AUTH_ALGO_KEY_LEN * 2
@@ -130,20 +149,11 @@ public final class SaRecordTest {
                         + IKE_PRF_KEY_LEN * 2;
 
         IkeSaRecord ikeSaRecord =
-                mSaRecordHelper.makeIkeSaRecord(
-                        mIkeHmacSha1Prf,
-                        IKE_AUTH_ALGO_KEY_LEN,
-                        IKE_ENCR_ALGO_KEY_LEN,
-                        sKeySeed,
-                        nonceInit,
-                        nonceResp,
-                        mIkeInitSpi,
-                        mIkeRespSpi,
-                        true);
+                mSaRecordHelper.makeIkeSaRecord(sKeySeed, nonceInit, nonceResp, ikeSaRecordConfig);
 
         assertTrue(ikeSaRecord.isLocalInit);
-        assertEquals(mIkeInitSpi, ikeSaRecord.initiatorSpi);
-        assertEquals(mIkeRespSpi, ikeSaRecord.responderSpi);
+        assertEquals(IKE_INIT_SPI, ikeSaRecord.getInitiatorSpi());
+        assertEquals(IKE_RESP_SPI, ikeSaRecord.getResponderSpi());
         assertArrayEquals(
                 TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING), ikeSaRecord.getSkD());
         assertArrayEquals(
@@ -162,5 +172,7 @@ public final class SaRecordTest {
                 TestUtils.hexStringToByteArray(IKE_SK_PRF_INIT_HEX_STRING), ikeSaRecord.getSkPi());
         assertArrayEquals(
                 TestUtils.hexStringToByteArray(IKE_SK_PRF_RESP_HEX_STRING), ikeSaRecord.getSkPr());
+
+        ikeSaRecord.close();
     }
 }
