@@ -24,7 +24,7 @@ import android.util.Pair;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import com.android.internal.annotations.VisibleForTesting;
@@ -99,9 +99,10 @@ public final class IkeMessage {
      * @param header the IKE header that is decoded but not validated.
      * @param inputPacket the byte array contains the whole IKE message.
      * @return the IkeMessage instance.
-     * @throws IkeException if there is any protocol error.
+     * @throws IkeProtocolException if there is any protocol error.
      */
-    public static IkeMessage decode(IkeHeader header, byte[] inputPacket) throws IkeException {
+    public static IkeMessage decode(IkeHeader header, byte[] inputPacket)
+            throws IkeProtocolException {
         return sIkeMessageHelper.decode(header, inputPacket);
     }
 
@@ -114,7 +115,7 @@ public final class IkeMessage {
      * @param ikeHeader header of IKE packet.
      * @param packet IKE packet as a byte array.
      * @return decoded IKE message.
-     * @throws IkeException for decoding errors.
+     * @throws IkeProtocolException for decoding errors.
      * @throws GeneralSecurityException if there is any error during integrity check or decryption.
      */
     public static IkeMessage decode(
@@ -123,14 +124,14 @@ public final class IkeMessage {
             IkeSaRecord ikeSaRecord,
             IkeHeader ikeHeader,
             byte[] packet)
-            throws IkeException, GeneralSecurityException {
+            throws IkeProtocolException, GeneralSecurityException {
         return sIkeMessageHelper.decode(
                 integrityMac, decryptCipher, ikeSaRecord, ikeHeader, packet);
     }
 
     private static List<IkePayload> decodePayloadList(
             @PayloadType int firstPayloadType, boolean isResp, byte[] unencryptedPayloads)
-            throws IkeException {
+            throws IkeProtocolException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(unencryptedPayloads);
         int currentPayloadType = firstPayloadType;
         // For supported payload
@@ -339,9 +340,9 @@ public final class IkeMessage {
          * @param ikeHeader header of IKE packet.
          * @param packet IKE packet as a byte array.
          * @return decoded IKE message.
-         * @throws IkeException for decoding errors.
+         * @throws IkeProtocolException for decoding errors.
          */
-        IkeMessage decode(IkeHeader ikeHeader, byte[] packet) throws IkeException;
+        IkeMessage decode(IkeHeader ikeHeader, byte[] packet) throws IkeProtocolException;
 
         /**
          * Decrypt and decode packet.
@@ -352,7 +353,7 @@ public final class IkeMessage {
          * @param ikeHeader header of IKE packet.
          * @param packet IKE packet as a byte array.
          * @return decoded IKE message.
-         * @throws IkeException for decoding errors.
+         * @throws IkeProtocolException for decoding errors.
          */
         IkeMessage decode(
                 @Nullable IkeMacIntegrity integrityMac,
@@ -360,7 +361,7 @@ public final class IkeMessage {
                 IkeSaRecord ikeSaRecord,
                 IkeHeader ikeHeader,
                 byte[] packet)
-                throws IkeException, GeneralSecurityException;
+                throws IkeProtocolException, GeneralSecurityException;
     }
 
     /** IkeMessageHelper provides methods for decoding, encoding and processing IKE packet. */
@@ -414,7 +415,7 @@ public final class IkeMessage {
         }
 
         @Override
-        public IkeMessage decode(IkeHeader header, byte[] inputPacket) throws IkeException {
+        public IkeMessage decode(IkeHeader header, byte[] inputPacket) throws IkeProtocolException {
             header.checkInboundValidOrThrow(inputPacket.length);
 
             byte[] unencryptedPayloads =
@@ -439,7 +440,7 @@ public final class IkeMessage {
                 IkeSaRecord ikeSaRecord,
                 IkeHeader ikeHeader,
                 byte[] packet)
-                throws IkeException, GeneralSecurityException {
+                throws IkeProtocolException, GeneralSecurityException {
             return decode(
                     ikeHeader,
                     packet,
@@ -456,7 +457,7 @@ public final class IkeMessage {
                 IkeCipher decryptCipher,
                 byte[] integrityKey,
                 byte[] decryptKey)
-                throws IkeException, GeneralSecurityException {
+                throws IkeProtocolException, GeneralSecurityException {
 
             header.checkInboundValidOrThrow(inputPacket.length);
 

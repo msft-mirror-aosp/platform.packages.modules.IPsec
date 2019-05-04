@@ -15,8 +15,6 @@
  */
 package com.android.ike.ikev2.exceptions;
 
-import com.android.ike.ikev2.message.IkeNotifyPayload;
-
 /**
  * This exception is thrown when IKE authentication fails.
  *
@@ -25,14 +23,14 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.21.2">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class AuthenticationFailedException extends IkeException {
+public final class AuthenticationFailedException extends IkeProtocolException {
     /**
      * Construct a instance of AuthenticationFailedException.
      *
      * @param message the detail message.
      */
     public AuthenticationFailedException(String message) {
-        super(IkeNotifyPayload.NOTIFY_TYPE_AUTHENTICATION_FAILED, message);
+        super(ERROR_TYPE_AUTHENTICATION_FAILED, message);
     }
 
     /**
@@ -41,6 +39,6 @@ public final class AuthenticationFailedException extends IkeException {
      * @param cause the cause.
      */
     public AuthenticationFailedException(Throwable cause) {
-        super(IkeNotifyPayload.NOTIFY_TYPE_AUTHENTICATION_FAILED, cause);
+        super(ERROR_TYPE_AUTHENTICATION_FAILED, cause);
     }
 }

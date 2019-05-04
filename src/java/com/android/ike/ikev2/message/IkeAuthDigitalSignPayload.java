@@ -19,7 +19,7 @@ package com.android.ike.ikev2.message;
 import android.annotation.StringDef;
 
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeAuthPayload.AuthMethod;
 
 import java.lang.annotation.Retention;
@@ -94,7 +94,8 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
     public final byte[] signature;
 
     protected IkeAuthDigitalSignPayload(
-            boolean critical, @AuthMethod int authMethod, byte[] authData) throws IkeException {
+            boolean critical, @AuthMethod int authMethod, byte[] authData)
+            throws IkeProtocolException {
         super(critical, authMethod);
         switch (authMethod) {
             case AUTH_METHOD_RSA_DIGITAL_SIGN:

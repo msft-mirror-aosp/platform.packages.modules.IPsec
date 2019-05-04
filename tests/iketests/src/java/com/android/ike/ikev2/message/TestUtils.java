@@ -18,7 +18,7 @@ package com.android.ike.ikev2.message;
 
 import android.util.Pair;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.nio.ByteBuffer;
 
@@ -49,7 +49,7 @@ public final class TestUtils {
 
     public static IkePayload hexStringToIkePayload(
             @IkePayload.PayloadType int payloadType, boolean isResp, String payloadHexString)
-            throws IkeException {
+            throws IkeProtocolException {
         byte[] payloadBytes = hexStringToByteArray(payloadHexString);
         // Returned Pair consists of the IkePayload and the following IkePayload's type.
         Pair<IkePayload, Integer> pair =

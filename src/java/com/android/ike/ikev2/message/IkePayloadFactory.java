@@ -20,7 +20,7 @@ import android.util.Pair;
 
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -57,7 +57,7 @@ final class IkePayloadFactory {
         @Override
         public IkePayload decodeIkePayload(
                 int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
-                throws IkeException {
+                throws IkeProtocolException {
             switch (payloadType) {
                     // TODO: Add cases for creating supported payloads.
                 case IkePayload.PAYLOAD_TYPE_SA:
@@ -100,7 +100,7 @@ final class IkePayloadFactory {
      * @return a Pair including IkePayload and next payload type.
      */
     protected static Pair<IkePayload, Integer> getIkePayload(
-            int payloadType, boolean isResp, ByteBuffer input) throws IkeException {
+            int payloadType, boolean isResp, ByteBuffer input) throws IkeProtocolException {
         int nextPayloadType = (int) input.get();
         // read critical bit
         boolean isCritical = isCriticalPayload(input.get());
@@ -133,7 +133,7 @@ final class IkePayloadFactory {
      * @param integrityKey the negotiated integrity algorithm key.
      * @param decryptKey the negotiated decryption key.
      * @return a pair including IkePayload and next payload type.
-     * @throws IkeException for decoding errors.
+     * @throws IkeProtocolException for decoding errors.
      * @throws GeneralSecurityException if there is any error during integrity check or decryption.
      */
     protected static Pair<IkeSkPayload, Integer> getIkeSkPayload(
@@ -142,7 +142,7 @@ final class IkePayloadFactory {
             IkeCipher decryptCipher,
             byte[] integrityKey,
             byte[] decryptKey)
-            throws IkeException, GeneralSecurityException {
+            throws IkeProtocolException, GeneralSecurityException {
         ByteBuffer input =
                 ByteBuffer.wrap(
                         message,
@@ -186,6 +186,6 @@ final class IkePayloadFactory {
     interface IIkePayloadDecoder {
         IkePayload decodeIkePayload(
                 int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
-                throws IkeException;
+                throws IkeProtocolException;
     }
 }
