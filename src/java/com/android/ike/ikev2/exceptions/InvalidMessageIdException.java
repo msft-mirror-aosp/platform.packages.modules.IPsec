@@ -15,8 +15,6 @@
  */
 package com.android.ike.ikev2.exceptions;
 
-import com.android.ike.ikev2.message.IkeNotifyPayload;
-
 /**
  * This exception is thrown when the message ID is out of window size.
  *
@@ -26,7 +24,7 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class InvalidMessageIdException extends IkeException {
+public final class InvalidMessageIdException extends IkeProtocolException {
     public final int invalidMessageId;
 
     /**
@@ -35,7 +33,7 @@ public final class InvalidMessageIdException extends IkeException {
      * @param messageId the invalid Message ID.
      */
     public InvalidMessageIdException(int messageId) {
-        super(IkeNotifyPayload.NOTIFY_TYPE_INVALID_MESSAGE_ID);
+        super(ERROR_TYPE_INVALID_MESSAGE_ID);
         invalidMessageId = messageId;
     }
 }

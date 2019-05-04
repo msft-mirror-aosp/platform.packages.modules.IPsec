@@ -20,7 +20,7 @@ import android.annotation.Nullable;
 
 import com.android.ike.ikev2.IkeDhParams;
 import com.android.ike.ikev2.SaProposal;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.utils.BigIntegerUtils;
 
@@ -91,11 +91,11 @@ public final class IkeKePayload extends IkePayload {
      * @param critical indicates if this payload is critical. Ignored in supported payload as
      *     instructed by the RFC 7296.
      * @param payloadBody payload body in byte array
-     * @throws IkeException if there is any error
+     * @throws IkeProtocolException if there is any error
      * @see <a href="https://tools.ietf.org/html/rfc7296#page-76">RFC 7296, Internet Key Exchange
      *     Protocol Version 2 (IKEv2), Critical.
      */
-    IkeKePayload(boolean critical, byte[] payloadBody) throws IkeException {
+    IkeKePayload(boolean critical, byte[] payloadBody) throws IkeProtocolException {
         super(PAYLOAD_TYPE_KE, critical);
 
         isOutbound = false;

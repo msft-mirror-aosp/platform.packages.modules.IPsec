@@ -15,6 +15,11 @@
  */
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MESSAGE_ID;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+
 import android.annotation.IntDef;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -33,7 +38,7 @@ import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
@@ -350,19 +355,20 @@ public class IkeSessionStateMachine extends StateMachine {
         return null;
     }
 
-    private void validateIkeDeleteReq(IkeMessage ikeMessage) throws IkeException {
+    private void validateIkeDeleteReq(IkeMessage ikeMessage) throws IkeProtocolException {
         // TODO: Validate ikeMessage.
     }
 
-    private void validateIkeDeleteResp(IkeMessage ikeMessage) throws IkeException {
+    private void validateIkeDeleteResp(IkeMessage ikeMessage) throws IkeProtocolException {
         // TODO: Validate ikeMessage.
     }
 
-    private void validateIkeRekeyReq(IkeMessage ikeMessage) throws IkeException {
+    private void validateIkeRekeyReq(IkeMessage ikeMessage) throws IkeProtocolException {
         // TODO: Validate it against mIkeSessionOptions.
     }
 
-    private void validateIkeRekeyResp(IkeMessage reqMsg, IkeMessage respMsg) throws IkeException {
+    private void validateIkeRekeyResp(IkeMessage reqMsg, IkeMessage respMsg)
+            throws IkeProtocolException {
         // TODO: Validate ikeMessage against Rekey request.
     }
 
@@ -671,11 +677,11 @@ public class IkeSessionStateMachine extends StateMachine {
                 }
 
                 // TODO: Handle fatal error notifications.
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // TODO: Handle decoding exceptions. Reply with error notifications if received IKE
                 // message is an encrypted and authenticated request with a valid message ID.
                 switch (e.errorCode) {
-                    case IkeNotifyPayload.NOTIFY_TYPE_INVALID_MESSAGE_ID:
+                    case ERROR_TYPE_INVALID_MESSAGE_ID:
                         // TODO: Ignore this message, keep current status and send error
                         // notification in an INFORMATIONAL request(optional).
                         throw new UnsupportedOperationException(
@@ -692,15 +698,15 @@ public class IkeSessionStateMachine extends StateMachine {
 
         // Default handler for decode errors in encrypted request.
         protected void handleDecodingErrorInEncryptedRequest(
-                IkeException exception, IkeSaRecord ikeSaRecord) {
+                IkeProtocolException exception, IkeSaRecord ikeSaRecord) {
             switch (exception.errorCode) {
-                case IkeNotifyPayload.NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD:
+                case ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD:
                     // TODO: Send encrypted error notification.
                     return;
-                case IkeNotifyPayload.NOTIFY_TYPE_INVALID_MAJOR_VERSION:
+                case ERROR_TYPE_INVALID_MAJOR_VERSION:
                     // TODO: Send unencrypted error notification.
                     return;
-                case IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX:
+                case ERROR_TYPE_INVALID_SYNTAX:
                     // TODO: Send encrypted error notification and close IKE session if Message ID
                     // and cryptogtaphic checksum were invalid.
                     return;
@@ -713,7 +719,7 @@ public class IkeSessionStateMachine extends StateMachine {
         // NOTE: The DeleteIkeLocal state MUST override this state to avoid the possibility of an
         // infinite loop.
         protected void handleDecodingErrorInEncryptedResponse(
-                IkeException exception, IkeSaRecord ikeSaRecord) {
+                IkeProtocolException exception, IkeSaRecord ikeSaRecord) {
             // All errors in parsing or processing reponse packets should cause the IKE library to
             // initiate a Delete IKE Exchange.
 
@@ -754,7 +760,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                         mCurrentIkeSaRecord, ikeMessage, responseIkeMessage);
                         addIkeSaRecord(mRemoteInitNewIkeSaRecord);
                         transitionTo(mRekeyIkeRemoteDelete);
-                    } catch (IkeException e) {
+                    } catch (IkeProtocolException e) {
                         // TODO: Handle processing errors.
                     }
                     return;
@@ -857,7 +863,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // TODO: Drop unexpected request.
                 }
                 // TODO: Handle fatal error notifications.
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // TODO:Since IKE_INIT is not protected, log and ignore this message.
             }
         }
@@ -894,7 +900,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 ikeInitSuccess = true;
 
                 transitionTo(mCreateIkeLocalIkeAuth);
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
             } catch (GeneralSecurityException e) {
                 // TODO: Handle DH key exchange failure.
@@ -958,7 +964,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         private void validateIkeInitResp(IkeMessage reqMsg, IkeMessage respMsg)
-                throws IkeException, IOException {
+                throws IkeProtocolException, IOException {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
                     IkeSecurityParameterIndex.allocateSecurityParameterIndex(
@@ -1093,7 +1099,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 firstChild.handleFirstChildExchange(null, null, new ChildSessionCallback());
 
                 transitionTo(mIdle);
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
             }
         }
@@ -1173,7 +1179,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         private void validateIkeAuthResp(IkeMessage reqMsg, IkeMessage respMsg)
-                throws IkeException {
+                throws IkeProtocolException {
             // TODO: Validate ikeMessage against IKE_AUTH request and mIkeSessionOptions.
         }
     }
@@ -1208,7 +1214,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         // TODO: Encode and send responseIkeMessage.
 
                         transitionTo(mSimulRekeyIkeLocalCreate);
-                    } catch (IkeException e) {
+                    } catch (IkeProtocolException e) {
                         // TODO: Handle processing errors.
                     }
                     return;
@@ -1222,13 +1228,13 @@ public class IkeSessionStateMachine extends StateMachine {
             try {
                 handleRekeyResp(ikeMessage);
                 transitionTo(mRekeyIkeLocalDelete);
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
             }
         }
 
         // Is also called by SimulRekeyIkeLocalCreate to handle incoming rekey response.
-        protected void handleRekeyResp(IkeMessage ikeMessage) throws IkeException {
+        protected void handleRekeyResp(IkeMessage ikeMessage) throws IkeProtocolException {
             validateIkeRekeyResp(mRequestMsg, ikeMessage);
             mLocalInitNewIkeSaRecord =
                     IkeSaRecord.makeNewIkeSaRecord(mCurrentIkeSaRecord, mRequestMsg, ikeMessage);
@@ -1297,7 +1303,7 @@ public class IkeSessionStateMachine extends StateMachine {
             try {
                 handleRekeyResp(ikeMessage);
                 transitionTo(mSimulRekeyIkeLocalDeleteRemoteDelete);
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
             }
         }
@@ -1378,7 +1384,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             // mIkeSaRecordAwaitingRemoteDel.
                             // TODO: Stop timer awating delete request.
                             transitionTo(mSimulRekeyIkeLocalDelete);
-                        } catch (IkeException e) {
+                        } catch (IkeProtocolException e) {
                             // TODO: Handle processing errors.
                         }
                     } else {
@@ -1399,7 +1405,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
                 // TODO: Close mIkeSaRecordAwaitingLocalDel
                 // TODO: Stop retransmission timer
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
             }
         }
@@ -1429,7 +1435,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
                 // TODO: Close mIkeSaRecordAwaitingLocalDel.
                 transitionTo(mIdle);
-            } catch (IkeException e) {
+            } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
             }
         }
@@ -1451,7 +1457,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         // TODO: Encode and send response and close mIkeSaRecordAwaitingRemoteDel
                         removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
                         transitionTo(mIdle);
-                    } catch (IkeException e) {
+                    } catch (IkeProtocolException e) {
                         // TODO: Handle processing errors.
                     }
                     return;

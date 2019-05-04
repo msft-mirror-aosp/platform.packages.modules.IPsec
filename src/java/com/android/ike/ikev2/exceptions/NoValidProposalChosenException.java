@@ -15,8 +15,6 @@
  */
 package com.android.ike.ikev2.exceptions;
 
-import com.android.ike.ikev2.message.IkeNotifyPayload;
-
 /**
  * This exception is thrown if either none of SA proposals from SA initiator is acceptable or the
  * negotiated SA proposal from SA responder is invalid.
@@ -27,13 +25,13 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.7">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class NoValidProposalChosenException extends IkeException {
+public final class NoValidProposalChosenException extends IkeProtocolException {
     /**
      * Construct an instance of NoValidProposalChosenException.
      *
      * @param message the descriptive message.
      */
     public NoValidProposalChosenException(String message) {
-        super(IkeNotifyPayload.NOTIFY_TYPE_NO_PROPOSAL_CHOSEN, message);
+        super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, message);
     }
 }

@@ -17,7 +17,7 @@
 package com.android.ike.ikev2.message;
 
 import com.android.ike.ikev2.IkeTrafficSelector;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.nio.ByteBuffer;
 
@@ -43,7 +43,8 @@ public final class IkeTsPayload extends IkePayload {
     /** Array of Traffic Selectors */
     public final IkeTrafficSelector[] trafficSelectors;
 
-    IkeTsPayload(boolean critical, byte[] payloadBody, boolean isInitiator) throws IkeException {
+    IkeTsPayload(boolean critical, byte[] payloadBody, boolean isInitiator)
+            throws IkeProtocolException {
         super((isInitiator ? PAYLOAD_TYPE_TS_INITIATOR : PAYLOAD_TYPE_TS_RESPONDER), critical);
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);

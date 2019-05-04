@@ -20,7 +20,7 @@ import android.os.Message;
 
 import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.internal.annotations.VisibleForTesting;
@@ -88,7 +88,8 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     private void validateCreateChildResp(
-            List<IkePayload> reqPayloads, List<IkePayload> respPayloads) throws IkeException {
+            List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
+            throws IkeProtocolException {
         // TODO: Validate SA reponse against request and set negotiated SA in mChildSessionOptions.
         return;
     }
@@ -180,7 +181,7 @@ public class ChildSessionStateMachine extends StateMachine {
                                 ChildSaRecord.makeChildSaRecord(reqPayloads, respPayloads);
                         // TODO: Add mCurrentChildSaRecord in mSpiToSaRecordMap.
                         transitionTo(mIdle);
-                    } catch (IkeException e) {
+                    } catch (IkeProtocolException e) {
                         // TODO: Unregister remotely generated SPI and handle Child SA negotiation
                         // failure.
                     }

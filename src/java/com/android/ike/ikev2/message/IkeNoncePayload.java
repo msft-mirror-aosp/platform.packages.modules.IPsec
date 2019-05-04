@@ -16,7 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.nio.ByteBuffer;
@@ -52,7 +52,7 @@ public final class IkeNoncePayload extends IkePayload {
      * @param critical indicates if it is a critical payload.
      * @param payloadBody the nonce data
      */
-    IkeNoncePayload(boolean critical, byte[] payloadBody) throws IkeException {
+    IkeNoncePayload(boolean critical, byte[] payloadBody) throws IkeProtocolException {
         super(PAYLOAD_TYPE_NONCE, critical);
         if (payloadBody.length < MIN_NONCE_LEN || payloadBody.length > MAX_NONCE_LEN) {
             throw new InvalidSyntaxException(

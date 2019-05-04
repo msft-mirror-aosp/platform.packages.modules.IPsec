@@ -15,8 +15,6 @@
  */
 package com.android.ike.ikev2.exceptions;
 
-import com.android.ike.ikev2.message.IkeNotifyPayload;
-
 /**
  * This exception is thrown if any IKE message field is invalid.
  *
@@ -26,14 +24,14 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class InvalidSyntaxException extends IkeException {
+public final class InvalidSyntaxException extends IkeProtocolException {
     /**
      * Construct an instance of InvalidSyntaxException.
      *
      * @param message the descriptive message.
      */
     public InvalidSyntaxException(String message) {
-        super(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX);
+        super(ERROR_TYPE_INVALID_SYNTAX, message);
     }
 
     /**
@@ -42,6 +40,6 @@ public final class InvalidSyntaxException extends IkeException {
      * @param cause the reason of exception.
      */
     public InvalidSyntaxException(Throwable cause) {
-        super(IkeNotifyPayload.NOTIFY_TYPE_INVALID_SYNTAX, cause);
+        super(ERROR_TYPE_INVALID_SYNTAX, cause);
     }
 }
