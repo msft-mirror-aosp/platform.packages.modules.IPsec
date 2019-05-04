@@ -19,7 +19,7 @@ package com.android.ike.ikev2.message;
 import android.annotation.IntDef;
 
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -59,7 +59,7 @@ public abstract class IkeCertPayload extends IkePayload {
     }
 
     protected static IkeCertPayload getIkeCertPayload(boolean critical, byte[] payloadBody)
-            throws IkeException {
+            throws IkeProtocolException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
 
         int certEncodingType = Byte.toUnsignedInt(inputBuffer.get());

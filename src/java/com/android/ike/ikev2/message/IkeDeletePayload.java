@@ -16,7 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.nio.ByteBuffer;
@@ -68,9 +68,9 @@ public final class IkeDeletePayload extends IkeInformationalPayload {
      * @param critical indicates if this payload is critical. Ignored in supported payload as
      *     instructed by the RFC 7296.
      * @param payloadBody payload body in byte array
-     * @throws IkeException if there is any error
+     * @throws IkeProtocolException if there is any error
      */
-    IkeDeletePayload(boolean critical, byte[] payloadBody) throws IkeException {
+    IkeDeletePayload(boolean critical, byte[] payloadBody) throws IkeProtocolException {
         super(PAYLOAD_TYPE_DELETE, critical);
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);

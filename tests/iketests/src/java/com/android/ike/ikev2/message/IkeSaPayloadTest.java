@@ -39,7 +39,7 @@ import android.util.Pair;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.ikev2.SaProposal;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.message.IkeSaPayload.Attribute;
@@ -611,7 +611,7 @@ public final class IkeSaPayloadTest {
         return new TransformDecoder() {
             @Override
             public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
-                    throws IkeException {
+                    throws IkeProtocolException {
                 for (int i = 0; i < count; i++) {
                     // Read length field and move position
                     inputBuffer.getShort();

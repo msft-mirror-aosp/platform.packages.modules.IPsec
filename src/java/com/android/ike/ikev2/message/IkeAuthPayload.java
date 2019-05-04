@@ -19,7 +19,7 @@ package com.android.ike.ikev2.message;
 import android.annotation.IntDef;
 
 import com.android.ike.ikev2.crypto.IkeMacPrf;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -64,7 +64,7 @@ public abstract class IkeAuthPayload extends IkePayload {
     }
 
     protected static IkeAuthPayload getIkeAuthPayload(boolean critical, byte[] payloadBody)
-            throws IkeException {
+            throws IkeProtocolException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
 
         int authMethod = Byte.toUnsignedInt(inputBuffer.get());
