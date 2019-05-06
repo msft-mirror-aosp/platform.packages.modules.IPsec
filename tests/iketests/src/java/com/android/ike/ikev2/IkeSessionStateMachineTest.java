@@ -334,6 +334,8 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.setDbg(true);
         mIkeSessionStateMachine.start();
 
+        mLooper.dispatchAll();
+
         IkeMessage.setIkeMessageHelper(mMockIkeMessageHelper);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
@@ -638,7 +640,8 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.mCurrentIkeSaRecord = mSpyCurrentIkeSaRecord;
         mIkeSessionStateMachine.addIkeSaRecord(mSpyCurrentIkeSaRecord);
 
-        mIkeSessionStateMachine.transitionTo(mIkeSessionStateMachine.mIdle);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_FORCE_IDLE);
+        mLooper.dispatchAll();
     }
 
     private void mockIkeSetup() throws Exception {
@@ -856,9 +859,10 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testDeleteIkeLocalDeleteRequest() throws Exception {
         setupIdleStateMachine();
-        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE);
 
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE);
         mLooper.dispatchAll();
+
         verify(mMockIkeMessageHelper)
                 .encryptAndEncode(
                         anyObject(),
@@ -890,8 +894,8 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testDeleteIkeLocalDeleteResponse() throws Exception {
         setupIdleStateMachine();
-        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE);
 
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE);
         mLooper.dispatchAll();
 
         ReceivedIkePacket received = makeDeleteIkeResponse(mSpyCurrentIkeSaRecord);
