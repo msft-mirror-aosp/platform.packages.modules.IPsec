@@ -780,6 +780,48 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /**
+     * Retransmitter represents a RAII class to send the initial request, and retransmit as needed.
+     *
+     * <p>The Retransmitter class will automatically start transmission upon creation.
+     */
+    @VisibleForTesting
+    class Retransmitter {
+        private final IkeMessage mRetransmitMsg;
+        private final IkeSaRecord mIkeSaRecord;
+
+        @VisibleForTesting
+        Retransmitter(IkeMessage msg) {
+            this(mCurrentIkeSaRecord, msg);
+        }
+
+        @VisibleForTesting
+        Retransmitter(IkeSaRecord ikeSaRecord, IkeMessage msg) {
+            mIkeSaRecord = ikeSaRecord;
+            mRetransmitMsg = msg;
+
+            sendAndStartRetransmission();
+        }
+
+        private void sendAndStartRetransmission() {
+            if (mRetransmitMsg == null) {
+                return;
+            }
+
+            send(mRetransmitMsg);
+        }
+
+        protected void send(IkeMessage msg) {
+            sendEncryptedIkeMessage(mIkeSaRecord, mRetransmitMsg);
+        }
+
+        public void stopRetransmitting() {}
+
+        public IkeMessage getMessage() {
+            return mRetransmitMsg;
+        }
+    }
+
+    /**
      * Receiving represents a state when idle IkeSessionStateMachine receives an incoming packet.
      */
     class Receiving extends BaseState {
@@ -1093,6 +1135,18 @@ public class IkeSessionStateMachine extends StateMachine {
         public void exit() {
             super.exit();
             // TODO: Store IKE_INIT request and response in mIkeSessionOptions for IKE_AUTH
+        }
+
+        private class UnencryptedRetransmitter extends Retransmitter {
+            UnencryptedRetransmitter(IkeMessage msg) {
+                super(null /* SaRecord */, msg);
+            }
+
+            @Override
+            protected void send(IkeMessage msg) {
+                // Sends unencrypted
+                mIkeSocket.sendIkePacket(msg.encode(), mRemoteAddress);
+            }
         }
     }
 
