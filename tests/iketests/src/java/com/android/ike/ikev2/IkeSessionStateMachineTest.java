@@ -58,7 +58,11 @@ import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.SaRecord.IkeSaRecordConfig;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
+import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
+import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeIdPayload;
 import com.android.ike.ikev2.message.IkeInformationalPayload;
@@ -467,15 +471,12 @@ public final class IkeSessionStateMachineTest {
     }
 
     private ReceivedIkePacket makeDeleteIkeResponse(IkeSaRecord ikeSaRecord) throws Exception {
-        // TODO: Build real Delete IKE response when Delete IKE response validation is implemented.
-        List<Integer> payloadTypeList = new LinkedList<>();
-        List<String> payloadHexStringList = new LinkedList<>();
         return makeDummyEncryptedReceivedIkePacket(
                 ikeSaRecord,
                 IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
                 true /*isResp*/,
-                payloadTypeList,
-                payloadHexStringList);
+                new LinkedList<>(),
+                new LinkedList<>());
     }
 
     private ReceivedIkePacket makeRekeyIkeRequest() throws Exception {
@@ -626,6 +627,18 @@ public final class IkeSessionStateMachineTest {
         assertEquals(KEY_LEN_IKE_PRF, ikeSaRecordConfig.prf.getKeyLength());
         assertEquals(KEY_LEN_IKE_INTE, ikeSaRecordConfig.integrityKeyLength);
         assertEquals(KEY_LEN_IKE_ENCR, ikeSaRecordConfig.encryptionKeyLength);
+    }
+
+    /** Initializes the mIkeSessionStateMachine in the IDLE state. */
+    private void setupIdleStateMachine() throws Exception {
+        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+        mIkeSessionStateMachine.mIkeCipher = mock(IkeCipher.class);
+        mIkeSessionStateMachine.mIkeIntegrity = mock(IkeMacIntegrity.class);
+        mIkeSessionStateMachine.mIkePrf = mock(IkeMacPrf.class);
+        mIkeSessionStateMachine.mCurrentIkeSaRecord = mSpyCurrentIkeSaRecord;
+        mIkeSessionStateMachine.addIkeSaRecord(mSpyCurrentIkeSaRecord);
+
+        mIkeSessionStateMachine.transitionTo(mIkeSessionStateMachine.mIdle);
     }
 
     private void mockIkeSetup() throws Exception {
@@ -838,5 +851,58 @@ public final class IkeSessionStateMachineTest {
         IkeNotifyPayload generatedPayload = generatedPayloads.get(0);
         assertArrayEquals(new byte[0], generatedPayload.notifyData);
         assertEquals(ERROR_TYPE_INVALID_SYNTAX, generatedPayload.notifyType);
+    }
+
+    @Test
+    public void testDeleteIkeLocalDeleteRequest() throws Exception {
+        setupIdleStateMachine();
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE);
+
+        mLooper.dispatchAll();
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+
+        // Verify outbound message
+        IkeMessage delMsg = mIkeMessageCaptor.getValue();
+
+        IkeHeader ikeHeader = delMsg.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertTrue(ikeHeader.fromIkeInitiator);
+
+        List<IkeDeletePayload> deletePayloadList =
+                delMsg.getPayloadListForType(
+                        IkePayload.PAYLOAD_TYPE_DELETE, IkeDeletePayload.class);
+        assertEquals(1, deletePayloadList.size());
+
+        IkeDeletePayload deletePayload = deletePayloadList.get(0);
+        assertEquals(IkePayload.PROTOCOL_ID_IKE, deletePayload.protocolId);
+        assertEquals(0, deletePayload.numSpi);
+        assertEquals(0, deletePayload.spiSize);
+        assertArrayEquals(new int[0], deletePayload.spisToDelete);
+    }
+
+    @Test
+    public void testDeleteIkeLocalDeleteResponse() throws Exception {
+        setupIdleStateMachine();
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE);
+
+        mLooper.dispatchAll();
+
+        ReceivedIkePacket received = makeDeleteIkeResponse(mSpyCurrentIkeSaRecord);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, received);
+        mLooper.dispatchAll();
+        verifyIncrementLocaReqMsgId();
+
+        // TODO: Verify callbacks
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Closed);
     }
 }
