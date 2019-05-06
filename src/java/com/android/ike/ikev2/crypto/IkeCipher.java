@@ -45,7 +45,7 @@ import javax.crypto.spec.SecretKeySpec;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class IkeCipher extends IkeCrypto {
+public class IkeCipher extends IkeCrypto {
     // Authentication tag is only used in an AEAD.
     private static final int AUTH_TAG_LEN_UNUSED = 0;
 
