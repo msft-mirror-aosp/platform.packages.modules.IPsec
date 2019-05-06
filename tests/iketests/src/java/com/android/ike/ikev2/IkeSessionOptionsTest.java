@@ -27,7 +27,7 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.ike.ikev2.message.TestUtils;
+import com.android.ike.TestUtils;
 
 import libcore.net.InetAddressUtils;
 
