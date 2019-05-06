@@ -31,13 +31,11 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecSpiResponse;
 import android.util.Pair;
 
-import androidx.test.InstrumentationRegistry;
-
+import com.android.ike.ikev2.MockIpSecTestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -150,9 +148,9 @@ public final class IkeSaPayloadTest {
     private SaProposal mChildSaProposalTwo;
     private SaProposal[] mTwoChildSaProposalsArray;
 
-    private Context mContext;
+    private MockIpSecTestUtils mMockIpSecTestUtils;
     private IpSecService mMockIpSecService;
-    private IpSecManager mMockIpSecManager;
+    private IpSecManager mIpSecManager;
 
     private IpSecSpiResponse mDummyIpSecSpiResponseLocalOne;
     private IpSecSpiResponse mDummyIpSecSpiResponseLocalTwo;
@@ -221,34 +219,18 @@ public final class IkeSaPayloadTest {
                         .build();
         mTwoChildSaProposalsArray = new SaProposal[] {mChildSaProposalOne, mChildSaProposalTwo};
 
-        mMockIpSecService = mock(IpSecService.class);
-        mContext = InstrumentationRegistry.getContext();
-        mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
+        mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
+        mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
 
-        mDummyIpSecSpiResponseLocalOne =
-                new IpSecSpiResponse(
-                        IpSecManager.Status.OK,
-                        DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_ONE,
-                        CHILD_SPI_LOCAL_ONE);
-        mDummyIpSecSpiResponseLocalTwo =
-                new IpSecSpiResponse(
-                        IpSecManager.Status.OK,
-                        DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_TWO,
-                        CHILD_SPI_LOCAL_TWO);
-        mDummyIpSecSpiResponseRemote =
-                new IpSecSpiResponse(
-                        IpSecManager.Status.OK,
-                        DUMMY_CHILD_SPI_RESOURCE_ID_REMOTE,
-                        CHILD_SPI_REMOTE);
+        IpSecService mMockIpSecService = mMockIpSecTestUtils.getIpSecService();
+        when(mMockIpSecService.allocateSecurityParameterIndex(
+                        eq(LOCAL_ADDRESS.getHostAddress()), anyInt(), anyObject()))
+                .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(CHILD_SPI_LOCAL_ONE))
+                .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(CHILD_SPI_LOCAL_TWO));
 
         when(mMockIpSecService.allocateSecurityParameterIndex(
                         eq(REMOTE_ADDRESS.getHostAddress()), anyInt(), anyObject()))
-                .thenReturn(mDummyIpSecSpiResponseLocalOne)
-                .thenReturn(mDummyIpSecSpiResponseLocalTwo);
-
-        when(mMockIpSecService.allocateSecurityParameterIndex(
-                        eq(LOCAL_ADDRESS.getHostAddress()), anyInt(), anyObject()))
-                .thenReturn(mDummyIpSecSpiResponseRemote);
+                .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(CHILD_SPI_REMOTE));
     }
 
     // TODO: Add tearDown() to reset Proposal.sTransformDecoder and Transform.sAttributeDecoder.
@@ -726,10 +708,7 @@ public final class IkeSaPayloadTest {
     public void testBuildOutboundChildSaRequest() throws Exception {
         IkeSaPayload saPayload =
                 IkeSaPayload.createChildSaPayload(
-                        false /*isResp*/,
-                        mTwoChildSaProposalsArray,
-                        mMockIpSecManager,
-                        REMOTE_ADDRESS);
+                        false /*isResp*/, mTwoChildSaProposalsArray, mIpSecManager, LOCAL_ADDRESS);
 
         assertFalse(saPayload.isSaResponse);
         assertEquals(PROPOSAL_NUMBER_LIST.length, saPayload.proposalList.size());
@@ -793,10 +772,7 @@ public final class IkeSaPayloadTest {
         // Build request
         IkeSaPayload reqPayload =
                 IkeSaPayload.createChildSaPayload(
-                        false /*isResp*/,
-                        mTwoChildSaProposalsArray,
-                        mMockIpSecManager,
-                        REMOTE_ADDRESS);
+                        false /*isResp*/, mTwoChildSaProposalsArray, mIpSecManager, LOCAL_ADDRESS);
 
         // Build response
         Proposal.sTransformDecoder =
@@ -810,7 +786,7 @@ public final class IkeSaPayloadTest {
         // SA negotiation
         Pair<ChildProposal, ChildProposal> negotiatedProposalPair =
                 respPayload.getVerifiedNegotiatedChildProposalPair(
-                        reqPayload, mMockIpSecManager, LOCAL_ADDRESS);
+                        reqPayload, mIpSecManager, REMOTE_ADDRESS);
         ChildProposal reqProposal = negotiatedProposalPair.first;
         ChildProposal respProposal = negotiatedProposalPair.second;
 
