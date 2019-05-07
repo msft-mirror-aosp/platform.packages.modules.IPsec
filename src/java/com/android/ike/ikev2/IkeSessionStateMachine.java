@@ -170,9 +170,9 @@ public class IkeSessionStateMachine extends StateMachine {
     /** Package private SaProposal that represents the negotiated IKE SA proposal. */
     @VisibleForTesting SaProposal mSaProposal;
 
-    private IkeCipher mIkeCipher;
-    private IkeMacIntegrity mIkeIntegrity;
-    private IkeMacPrf mIkePrf;
+    @VisibleForTesting IkeCipher mIkeCipher;
+    @VisibleForTesting IkeMacIntegrity mIkeIntegrity;
+    @VisibleForTesting IkeMacPrf mIkePrf;
 
     // FIXME: b/131265898 Pass these packets from CreateIkeLocalIkeInit to CreateIkeLocalIkeAuth
     // when Android StateMachine can support that.
@@ -196,7 +196,7 @@ public class IkeSessionStateMachine extends StateMachine {
     // States
     private final State mInitial = new Initial();
     private final State mClosed = new Closed();
-    private final State mIdle = new Idle();
+    @VisibleForTesting final State mIdle = new Idle();
     private final State mReceiving = new Receiving();
     private final State mCreateIkeLocalIkeInit = new CreateIkeLocalIkeInit();
     private final State mCreateIkeLocalIkeAuth = new CreateIkeLocalIkeAuth();
@@ -208,7 +208,8 @@ public class IkeSessionStateMachine extends StateMachine {
     private final State mSimulRekeyIkeRemoteDelete = new SimulRekeyIkeRemoteDelete();
     private final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
     private final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
-    // TODO: Add InfoLocal and DeleteIkeLocal.
+    private final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
+    // TODO: Add InfoLocal.
 
     /** Package private constructor */
     IkeSessionStateMachine(
@@ -239,6 +240,7 @@ public class IkeSessionStateMachine extends StateMachine {
         addState(mSimulRekeyIkeRemoteDelete, mSimulRekeyIkeLocalDeleteRemoteDelete);
         addState(mRekeyIkeLocalDelete);
         addState(mRekeyIkeRemoteDelete);
+        addState(mDeleteIkeLocalDelete);
 
         setInitialState(mInitial);
     }
@@ -334,17 +336,55 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    // TODO: b/131122444 Move these methods into States.
+    private IkeSaRecord getIkeSaRecordForPacket(IkeHeader ikeHeader) {
+        if (ikeHeader.fromIkeInitiator) {
+            return mSpiToSaRecordMap.get(ikeHeader.ikeInitiatorSpi);
+        } else {
+            return mSpiToSaRecordMap.get(ikeHeader.ikeResponderSpi);
+        }
+    }
+
+    /** Builds a IKE Delete Request for the given IKE SA. */
     private IkeMessage buildIkeDeleteReq(IkeSaRecord ikeSaRecord) {
-        // TODO: Implement it.
-        return null;
+        IkeInformationalPayload[] payloads = new IkeInformationalPayload[] {new IkeDeletePayload()};
+        return buildEncryptedInformationalMessage(
+                ikeSaRecord, payloads, false /* isResp */, ikeSaRecord.getLocalRequestMessageId());
     }
 
-    private IkeMessage buildIkeDeleteResp(IkeSaRecord ikeSaRecord) {
-        // TODO: Implement it.
-        return null;
+    /** Builds a IKE Delete Response for the given IKE SA and request. */
+    private IkeMessage buildIkeDeleteResp(IkeMessage req, IkeSaRecord ikeSaRecord) {
+        IkeInformationalPayload[] payloads = new IkeInformationalPayload[] {};
+        return buildEncryptedInformationalMessage(
+                ikeSaRecord, payloads, true /* isResp */, req.ikeHeader.messageId);
     }
 
+    /**
+     * Validates that the delete request is acceptable.
+     *
+     * <p>The request message must be guaranteed by previous checks to be of SUBTYPE_DELETE_IKE, and
+     * therefore contains an IkeDeletePayload. This is checked in getIkeExchangeSubType.
+     */
+    private void validateIkeDeleteReq(IkeMessage req, IkeSaRecord expectedRecord)
+            throws InvalidSyntaxException {
+        if (expectedRecord != getIkeSaRecordForPacket(req.ikeHeader)) {
+            throw new InvalidSyntaxException("Unexpected delete request for SA");
+        }
+    }
+
+    private void validateIkeDeleteResp(IkeMessage resp) throws InvalidSyntaxException {
+        if (resp.ikeHeader.exchangeType != IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
+            throw new InvalidSyntaxException(
+                    "Invalid exchange type; expected INFORMATIONAL, but got: "
+                            + resp.ikeHeader.exchangeType);
+        }
+
+        if (!resp.ikePayloadList.isEmpty()) {
+            throw new InvalidSyntaxException(
+                    "Unexpected payloads - IKE Delete response should be empty.");
+        }
+    }
+
+    // TODO: b/131122444 Move these methods into States.
     private IkeMessage buildIkeRekeyReq() {
         // TODO: Implement it.
         return null;
@@ -353,14 +393,6 @@ public class IkeSessionStateMachine extends StateMachine {
     private IkeMessage buildIkeRekeyResp(IkeMessage reqMsg) {
         // TODO: Implement it.
         return null;
-    }
-
-    private void validateIkeDeleteReq(IkeMessage ikeMessage) throws IkeProtocolException {
-        // TODO: Validate ikeMessage.
-    }
-
-    private void validateIkeDeleteResp(IkeMessage ikeMessage) throws IkeProtocolException {
-        // TODO: Validate ikeMessage.
     }
 
     private void validateIkeRekeyReq(IkeMessage ikeMessage) throws IkeProtocolException {
@@ -374,13 +406,15 @@ public class IkeSessionStateMachine extends StateMachine {
 
     // TODO: Add methods for building and validating general Informational packet.
 
-    private void addIkeSaRecord(IkeSaRecord record) {
+    @VisibleForTesting
+    void addIkeSaRecord(IkeSaRecord record) {
         // TODO: We register local SPI in IkeSocket. For consistency we should also use local IKE
         // SPI here.
         mSpiToSaRecordMap.put(record.getRemoteSpi(), record);
     }
 
-    private void removeIkeSaRecord(IkeSaRecord record) {
+    @VisibleForTesting
+    void removeIkeSaRecord(IkeSaRecord record) {
         mSpiToSaRecordMap.remove(record.getRemoteSpi());
     }
 
@@ -481,7 +515,12 @@ public class IkeSessionStateMachine extends StateMachine {
      * actions can be performed on it.
      */
     class Closed extends State {
-        // TODO:Implement it.
+        @Override
+        public void enter() {
+            // TODO: Notify all child sessions that they have been force-closed
+            // TODO: Notify user that IKE Session is closed.
+            // TODO: Cleanup all state
+        }
     }
 
     /**
@@ -497,6 +536,9 @@ public class IkeSessionStateMachine extends StateMachine {
                     return HANDLED;
                 case CMD_LOCAL_REQUEST_REKEY_IKE:
                     transitionTo(mRekeyIkeLocalCreate);
+                    return HANDLED;
+                case CMD_LOCAL_REQUEST_DELETE_IKE:
+                    transitionTo(mDeleteIkeLocalDelete);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -724,14 +766,6 @@ public class IkeSessionStateMachine extends StateMachine {
             // initiate a Delete IKE Exchange.
 
             // TODO: Initiate Delete IKE Exchange
-        }
-
-        protected IkeSaRecord getIkeSaRecordForPacket(IkeHeader ikeHeader) {
-            if (ikeHeader.fromIkeInitiator) {
-                return mSpiToSaRecordMap.get(ikeHeader.ikeInitiatorSpi);
-            } else {
-                return mSpiToSaRecordMap.get(ikeHeader.ikeResponderSpi);
-            }
         }
 
         protected abstract void handleRequestIkeMessage(
@@ -1364,7 +1398,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 mIkeSaRecordAwaitingLocalDel = mLocalInitNewIkeSaRecord;
                 mIkeSaRecordAwaitingRemoteDel = mCurrentIkeSaRecord;
             }
-            IkeMessage ikeMessage = buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel);
+            IkeMessage reqMessage = buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel);
             // TODO: Encode and send out delete request and start retransmission timer.
             // TODO: Set timer awaiting for delete request.
         }
@@ -1375,38 +1409,38 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeSaRecord ikeSaRecordForPacket = getIkeSaRecordForPacket(ikeMessage.ikeHeader);
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
-                    if (ikeSaRecordForPacket == mIkeSaRecordAwaitingRemoteDel) {
-                        try {
-                            validateIkeDeleteReq(ikeMessage);
-                            IkeMessage respMsg = buildIkeDeleteResp(mIkeSaRecordAwaitingRemoteDel);
-                            removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
-                            // TODO: Encode and send response and close
-                            // mIkeSaRecordAwaitingRemoteDel.
-                            // TODO: Stop timer awating delete request.
-                            transitionTo(mSimulRekeyIkeLocalDelete);
-                        } catch (IkeProtocolException e) {
-                            // TODO: Handle processing errors.
-                        }
-                    } else {
-                        // TODO: The other side deletes wrong IKE SA and we should close whole IKE
-                        // session.
+                    try {
+                        validateIkeDeleteReq(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
+                        IkeMessage respMsg =
+                                buildIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
+                        removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
+                        // TODO: Encode and send response and close
+                        // mIkeSaRecordAwaitingRemoteDel.
+                        // TODO: Stop timer awating delete request.
+                        transitionTo(mSimulRekeyIkeLocalDelete);
+                    } catch (InvalidSyntaxException e) {
+                        Log.d(TAG, "Validation failed for delete request", e);
+                        // TODO: Shutdown - fatal error
                     }
                     return;
                 default:
-                    // TODO: Add more cases for other types of request.
+                    // TODO: Reply with TEMPORARY_FAILURE
             }
         }
 
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
+                // TODO: Validate that this was received on mIkeSaRecordAwaitingLocalDel
                 validateIkeDeleteResp(ikeMessage);
+
                 transitionTo(mSimulRekeyIkeRemoteDelete);
                 removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
                 // TODO: Close mIkeSaRecordAwaitingLocalDel
                 // TODO: Stop retransmission timer
-            } catch (IkeProtocolException e) {
-                // TODO: Handle processing errors.
+            } catch (InvalidSyntaxException e) {
+                Log.d(TAG, "Validation failed for delete response", e);
+                // TODO: Shutdown - fatal error
             }
         }
 
@@ -1431,12 +1465,15 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
+                // TODO: Validate that this was received on mIkeSaRecordAwaitingLocalDel
                 validateIkeDeleteResp(ikeMessage);
+
                 removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
                 // TODO: Close mIkeSaRecordAwaitingLocalDel.
                 transitionTo(mIdle);
-            } catch (IkeProtocolException e) {
-                // TODO: Handle processing errors.
+            } catch (InvalidSyntaxException e) {
+                Log.d(TAG, "Validation failed for delete response", e);
+                // TODO: Shutdown
             }
         }
     }
@@ -1452,17 +1489,19 @@ public class IkeSessionStateMachine extends StateMachine {
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     try {
-                        validateIkeDeleteReq(ikeMessage);
-                        IkeMessage respMsg = buildIkeDeleteResp(mIkeSaRecordAwaitingRemoteDel);
+                        validateIkeDeleteReq(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
+                        IkeMessage respMsg =
+                                buildIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
                         // TODO: Encode and send response and close mIkeSaRecordAwaitingRemoteDel
                         removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
                         transitionTo(mIdle);
-                    } catch (IkeProtocolException e) {
-                        // TODO: Handle processing errors.
+                    } catch (InvalidSyntaxException e) {
+                        // TODO: The other side deleted the wrong IKE SA and we should close the
+                        // whole IKE session.
                     }
                     return;
                 default:
-                    // TODO: Add more cases for other types of request.
+                    // TODO: Reply with TEMPORARY_FAILURE
             }
         }
 
@@ -1519,6 +1558,51 @@ public class IkeSessionStateMachine extends StateMachine {
         public void exit() {
             finishRekey();
             // TODO: Stop timer awaiting delete request.
+        }
+    }
+
+    /** DeleteIkeLocalDelete initiates a deletion request of the current IKE Session. */
+    class DeleteIkeLocalDelete extends LocalNewExchangeBase {
+        @Override
+        protected IkeMessage buildRequest() {
+            return buildIkeDeleteReq(mCurrentIkeSaRecord);
+        }
+
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
+                    try {
+                        validateIkeDeleteReq(ikeMessage, mCurrentIkeSaRecord);
+                        IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
+                        sendEncryptedIkeMessage(mCurrentIkeSaRecord, resp);
+
+                        // TODO: Close IKE SA
+                        removeIkeSaRecord(mCurrentIkeSaRecord);
+
+                        transitionTo(mClosed);
+                    } catch (InvalidSyntaxException e) {
+                        Log.wtf(TAG, "Got deletion of a non-Current IKE SA - rekey error?", e);
+                        // TODO: Send the INVALID_SYNTAX error
+                    }
+                    return;
+                default:
+                    // TODO: Reply with TEMPORARY_FAILURE
+            }
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            try {
+                validateIkeDeleteResp(ikeMessage);
+            } catch (InvalidSyntaxException e) {
+                Log.d(TAG, "Invalid syntax on IKE Delete response. Shutting down anyways", e);
+            }
+
+            // TODO: Close IKE SA
+            removeIkeSaRecord(mCurrentIkeSaRecord);
+            transitionTo(mClosed);
         }
     }
 }

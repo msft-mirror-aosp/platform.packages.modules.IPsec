@@ -36,7 +36,7 @@ import javax.crypto.Mac;
  * <p>@see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
  * Exchange Protocol Version 2 (IKEv2)</a>
  */
-public final class IkeMacIntegrity extends IkeMac {
+public class IkeMacIntegrity extends IkeMac {
     // STOPSHIP: b/130190639 Catch unchecked exceptions, notify users and close the IKE session.
     private final int mChecksumLength;
 
