@@ -131,6 +131,8 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_RECEIVE_OUTBOUND_CHILD_PAYLOADS = CMD_GENERAL_BASE + 2;
     /** Receive encoded IKE packet with unrecognized IKE SPI on IkeSessionStateMachine. */
     static final int CMD_RECEIVE_PACKET_INVALID_IKE_SPI = CMD_GENERAL_BASE + 3;
+    /** Force state machine to IDLE state for testing purposes. */
+    static final int CMD_FORCE_IDLE = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
 
     private static final int CMD_LOCAL_REQUEST_BASE = CMD_GENERAL_BASE + 100;
@@ -503,6 +505,9 @@ public class IkeSessionStateMachine extends StateMachine {
             switch (message.what) {
                 case CMD_LOCAL_REQUEST_CREATE_IKE:
                     transitionTo(mCreateIkeLocalIkeInit);
+                    return HANDLED;
+                case CMD_FORCE_IDLE:
+                    transitionTo(mIdle);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
