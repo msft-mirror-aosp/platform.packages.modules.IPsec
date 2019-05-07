@@ -18,9 +18,12 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.TestUtils;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import org.junit.Test;
@@ -90,6 +93,49 @@ public final class IkeNotifyPayloadTest {
         byte[] expectedBytes =
                 TestUtils.hexStringToByteArray(NAT_DETECTION_SOURCE_IP_DATA_HEX_STRING);
         assertArrayEquals(expectedBytes, netDetectionData);
+    }
+
+    @Test
+    public void testBuildIkeErrorNotifyWithData() throws Exception {
+        int payloadType = 1;
+        IkeNotifyPayload notifyPayload =
+                new IkeNotifyPayload(
+                        IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD,
+                        new byte[] {(byte) payloadType});
+
+        assertArrayEquals(new byte[] {(byte) payloadType}, notifyPayload.notifyData);
+        assertTrue(notifyPayload.isErrorNotify());
+        assertFalse(notifyPayload.isNewChildSaNotify());
+    }
+
+    @Test
+    public void testBuildIkeErrorNotifyWithoutData() throws Exception {
+        IkeNotifyPayload notifyPayload =
+                new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX);
+
+        assertArrayEquals(new byte[0], notifyPayload.notifyData);
+        assertTrue(notifyPayload.isErrorNotify());
+        assertFalse(notifyPayload.isNewChildSaNotify());
+    }
+
+    @Test
+    public void testBuildChildConfigNotify() throws Exception {
+        IkeNotifyPayload notifyPayload =
+                new IkeNotifyPayload(IkeNotifyPayload.NOTIFY_TYPE_USE_TRANSPORT_MODE);
+
+        assertArrayEquals(new byte[0], notifyPayload.notifyData);
+        assertFalse(notifyPayload.isErrorNotify());
+        assertTrue(notifyPayload.isNewChildSaNotify());
+    }
+
+    @Test
+    public void testBuildChildErrorNotify() throws Exception {
+        IkeNotifyPayload notifyPayload =
+                new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE);
+
+        assertArrayEquals(new byte[0], notifyPayload.notifyData);
+        assertTrue(notifyPayload.isErrorNotify());
+        assertTrue(notifyPayload.isNewChildSaNotify());
     }
 
     @Test
