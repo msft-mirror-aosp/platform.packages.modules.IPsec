@@ -35,6 +35,7 @@ import android.net.IpSecManager;
 import android.net.IpSecSpiResponse;
 import android.util.Pair;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.MockIpSecTestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;

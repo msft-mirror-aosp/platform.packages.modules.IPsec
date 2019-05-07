@@ -39,9 +39,9 @@ import android.util.LongSparseArray;
 
 import androidx.test.InstrumentationRegistry;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.IkeSocket.PacketReceiver;
 import com.android.ike.ikev2.message.IkeHeader;
-import com.android.ike.ikev2.message.TestUtils;
 
 import org.junit.After;
 import org.junit.Before;

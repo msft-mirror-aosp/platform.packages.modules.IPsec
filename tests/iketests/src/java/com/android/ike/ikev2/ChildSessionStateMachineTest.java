@@ -26,13 +26,14 @@ import static org.mockito.Mockito.when;
 
 import android.os.test.TestLooper;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkePayload;
-import com.android.ike.ikev2.message.TestUtils;
+import com.android.ike.ikev2.message.IkeTestUtils;
 
 import libcore.net.InetAddressUtils;
 
@@ -113,10 +114,10 @@ public final class ChildSessionStateMachineTest {
 
     private void setUpPayloadLists() throws IkeProtocolException {
         mAuthReqSaNegoPayloads.add(
-                TestUtils.hexStringToIkePayload(
+                IkeTestUtils.hexStringToIkePayload(
                         IkePayload.PAYLOAD_TYPE_SA, false, IKE_AUTH_REQ_SA_PAYLOAD));
         mAuthRespSaNegoPayloads.add(
-                TestUtils.hexStringToIkePayload(
+                IkeTestUtils.hexStringToIkePayload(
                         IkePayload.PAYLOAD_TYPE_SA, true, IKE_AUTH_RESP_SA_PAYLOAD));
         // TODO: Build and add Traffic Selector Payloads to two payload lists.
     }
