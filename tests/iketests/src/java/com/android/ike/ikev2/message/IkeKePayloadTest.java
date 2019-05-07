@@ -22,6 +22,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.IkeDhParams;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
