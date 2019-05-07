@@ -20,13 +20,13 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.SaRecord.IkeSaRecordConfig;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
-import com.android.ike.ikev2.message.TestUtils;
 
 import libcore.net.InetAddressUtils;
 

@@ -18,10 +18,10 @@ package com.android.ike.ikev2.crypto;
 
 import static org.junit.Assert.assertArrayEquals;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
-import com.android.ike.ikev2.message.TestUtils;
 
 import org.junit.Before;
 import org.junit.Test;
