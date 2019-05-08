@@ -19,6 +19,8 @@ package com.android.ike.ikev2.message;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.android.ike.TestUtils;
+
 import org.junit.Test;
 
 public final class IkeAuthDigitalSignPayloadTest {

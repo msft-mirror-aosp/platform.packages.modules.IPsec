@@ -18,6 +18,7 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;

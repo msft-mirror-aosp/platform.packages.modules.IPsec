@@ -38,6 +38,7 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 import android.os.test.TestLooper;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
@@ -66,8 +67,8 @@ import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
+import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
-import com.android.ike.ikev2.message.TestUtils;
 
 import libcore.net.InetAddressUtils;
 
@@ -238,7 +239,7 @@ public final class IkeSessionStateMachineTest {
         List<IkePayload> payloadList = new LinkedList<>();
         for (int i = 0; i < payloadTypeList.size(); i++) {
             payloadList.add(
-                    TestUtils.hexStringToIkePayload(
+                    IkeTestUtils.hexStringToIkePayload(
                             payloadTypeList.get(i), isResp, payloadHexStringList.get(i)));
         }
 
