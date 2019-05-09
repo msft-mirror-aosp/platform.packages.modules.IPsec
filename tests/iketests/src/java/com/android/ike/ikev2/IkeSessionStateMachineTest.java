@@ -33,6 +33,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
@@ -121,6 +122,7 @@ public final class IkeSessionStateMachineTest {
     private static long sIkeInitResponseSpiBase = 1L;
 
     private MockIpSecTestUtils mMockIpSecTestUtils;
+    private Context mContext;
     private IpSecManager mIpSecManager;
     private UdpEncapsulationSocket mUdpEncapSocket;
 
@@ -268,7 +270,7 @@ public final class IkeSessionStateMachineTest {
         when(mMockIkeMessageHelper.encryptAndEncode(any(), any(), any(), any()))
                 .thenReturn(new byte[0]);
         when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
-                        any(), any(), any(), any(), any()))
+                        any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(mMockChildSessionStateMachine);
     }
 
@@ -296,6 +298,7 @@ public final class IkeSessionStateMachineTest {
     public void setUp() throws Exception {
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
+        mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
 
         mIkeSessionOptions = buildIkeSessionOptions();
@@ -315,6 +318,7 @@ public final class IkeSessionStateMachineTest {
                 new IkeSessionStateMachine(
                         "IkeSessionStateMachine",
                         mLooper.getLooper(),
+                        mContext,
                         mIpSecManager,
                         mIkeSessionOptions,
                         mChildSessionOptions);

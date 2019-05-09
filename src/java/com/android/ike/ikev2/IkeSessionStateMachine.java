@@ -21,6 +21,7 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_I
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
 import android.annotation.IntDef;
+import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.os.Looper;
@@ -156,6 +157,7 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     private final SparseArray<ChildSessionStateMachine> mSpiToChildSessionMap;
 
+    private final Context mContext;
     private final IpSecManager mIpSecManager;
 
     /**
@@ -217,6 +219,7 @@ public class IkeSessionStateMachine extends StateMachine {
     IkeSessionStateMachine(
             String name,
             Looper looper,
+            Context context,
             IpSecManager ipSecManager,
             IkeSessionOptions ikeOptions,
             ChildSessionOptions firstChildOptions) {
@@ -227,6 +230,7 @@ public class IkeSessionStateMachine extends StateMachine {
         mSpiToSaRecordMap = new LongSparseArray<>(3);
         mSpiToChildSessionMap = new SparseArray<>();
 
+        mContext = context;
         mIpSecManager = ipSecManager;
 
         addState(mInitial);
@@ -1130,9 +1134,12 @@ public class IkeSessionStateMachine extends StateMachine {
                         ChildSessionStateMachineFactory.makeChildSessionStateMachine(
                                 "ChildSessionStateMachine",
                                 getHandler().getLooper(),
+                                mContext,
                                 mFirstChildSessionOptions,
                                 mLocalAddress,
-                                mRemoteAddress);
+                                mRemoteAddress,
+                                mIkePrf,
+                                mCurrentIkeSaRecord.getSkD());
                 // TODO: Replace null input params to payload lists in IKE_AUTH request and
                 // IKE_AUTH response for negotiating Child SA.
                 firstChild.handleFirstChildExchange(null, null, new ChildSessionCallback());
