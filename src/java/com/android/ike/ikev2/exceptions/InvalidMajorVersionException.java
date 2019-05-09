@@ -33,7 +33,7 @@ public final class InvalidMajorVersionException extends IkeProtocolException {
      * @param version the major version in received packet
      */
     public InvalidMajorVersionException(byte version) {
-        super(ERROR_TYPE_INVALID_MAJOR_VERSION);
+        super(ERROR_TYPE_INVALID_MAJOR_VERSION, Byte.toUnsignedInt(version));
         receivedMajorVersion = version;
     }
 }
