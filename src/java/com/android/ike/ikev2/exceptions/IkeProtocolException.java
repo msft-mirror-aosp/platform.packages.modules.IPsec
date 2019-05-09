@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,12 +24,10 @@ import java.lang.annotation.RetentionPolicy;
  * IkeProtocolException is an abstract class that represents the common information for all IKE
  * protocol errors.
  *
- * <p>Each types of IKE error should implement its own subclass
- *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public abstract class IkeProtocolException extends Exception {
+public abstract class IkeProtocolException extends IkeException {
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD,
@@ -68,37 +66,72 @@ public abstract class IkeProtocolException extends Exception {
     public static final int ERROR_TYPE_TEMPORARY_FAILURE = 43;
     public static final int ERROR_TYPE_CHILD_SA_NOT_FOUND = 44;
 
-    @ErrorType public final int errorCode;
+    public static final int ERROR_DATA_NOT_INCLUDED = Integer.MIN_VALUE;
 
-    /**
-     * Construct an instance of IkeProtocolException.
-     *
-     * @param code the protocol error code.
-     */
-    public IkeProtocolException(@ErrorType int code) {
+    @ErrorType private final int mErrorType;
+    private final boolean mHasErrorData;
+    private final int mErrorData;
+
+    // TODO: Add a flag to indicate if this error is in an inbound message.
+
+    protected IkeProtocolException(@ErrorType int code) {
         super();
-        errorCode = code;
+        mErrorType = code;
+        mHasErrorData = false;
+        mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
-    /**
-     * Construct an instance of IkeProtocolException with specified detail message.
-     *
-     * @param code the protocol error code.
-     * @param message the detail message.
-     */
-    public IkeProtocolException(@ErrorType int code, String message) {
+    protected IkeProtocolException(@ErrorType int code, int errorData) {
+        super();
+        mErrorType = code;
+        mHasErrorData = true;
+        mErrorData = errorData;
+    }
+
+    protected IkeProtocolException(@ErrorType int code, String message) {
         super(message);
-        errorCode = code;
+        mErrorType = code;
+        mHasErrorData = false;
+        mErrorData = ERROR_DATA_NOT_INCLUDED;
+    }
+
+    protected IkeProtocolException(@ErrorType int code, Throwable cause) {
+        super(cause);
+        mErrorType = code;
+        mHasErrorData = false;
+        mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
     /**
-     * Construct an instance of IkeProtocolException with specified cause.
+     * Returns the IKE standard protocol error type of this {@link IkeProtocolException} instance.
      *
-     * @param code the protocol error code.
-     * @param cause the cause.
+     * @return the IKE standard protocol error type.
      */
-    public IkeProtocolException(@ErrorType int code, Throwable cause) {
-        super(cause);
-        errorCode = code;
+    @ErrorType
+    public int getErrorType() {
+        return mErrorType;
+    }
+
+    /**
+     * Returns if an error data is included in this {@link IkeProtocolException} instance.
+     *
+     * @return true if an error data is included in this {@link IkeProtocolException} instance,
+     *     false otherwise.
+     */
+    public boolean hasErrorData() {
+        return mHasErrorData;
+    }
+
+    /**
+     * Returns the included error data of this {@link IkeProtocolException} instance.
+     *
+     * <p>Note that only few error types will go with an error data. This data has different meaning
+     * with different error types. Users should first check if an error data is included before they
+     * call this method.
+     *
+     * @return the included error data.
+     */
+    public int getErrorData() {
+        return mErrorData;
     }
 }
