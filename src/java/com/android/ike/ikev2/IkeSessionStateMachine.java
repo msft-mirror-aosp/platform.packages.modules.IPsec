@@ -727,15 +727,15 @@ public class IkeSessionStateMachine extends StateMachine {
             } catch (IkeProtocolException e) {
                 // TODO: Handle decoding exceptions. Reply with error notifications if received IKE
                 // message is an encrypted and authenticated request with a valid message ID.
-                switch (e.errorCode) {
+                switch (e.getErrorType()) {
                     case ERROR_TYPE_INVALID_MESSAGE_ID:
                         // TODO: Ignore this message, keep current status and send error
                         // notification in an INFORMATIONAL request(optional).
                         throw new UnsupportedOperationException(
-                                "Do not support handling this protocol error:" + e.errorCode);
+                                "Do not support handling this protocol error:" + e.getErrorType());
                     default:
                         throw new UnsupportedOperationException(
-                                "Do not support handling this protocol error:" + e.errorCode);
+                                "Do not support handling this protocol error:" + e.getErrorType());
                 }
             } catch (GeneralSecurityException e) {
                 // IKE library failed on intergity checksum validation or on message decryption.
@@ -746,7 +746,7 @@ public class IkeSessionStateMachine extends StateMachine {
         // Default handler for decode errors in encrypted request.
         protected void handleDecodingErrorInEncryptedRequest(
                 IkeProtocolException exception, IkeSaRecord ikeSaRecord) {
-            switch (exception.errorCode) {
+            switch (exception.getErrorType()) {
                 case ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD:
                     // TODO: Send encrypted error notification.
                     return;
