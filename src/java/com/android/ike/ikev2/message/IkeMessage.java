@@ -264,7 +264,8 @@ public final class IkeMessage {
                             + " that can be included at most once within an IKE message.");
         }
 
-        return searchPayloadListForType(payloadType, payloadClass);
+        return IkePayload.getPayloadListForTypeInProvidedList(
+                payloadType, payloadClass, ikePayloadList);
     }
 
     /**
@@ -287,21 +288,8 @@ public final class IkeMessage {
                             + " that may be included multiple times within an IKE message.");
         }
 
-        List<T> payloadList = searchPayloadListForType(payloadType, payloadClass);
-        return payloadList.isEmpty() ? null : payloadList.get(0);
-    }
-
-    private <T extends IkePayload> List<T> searchPayloadListForType(
-            @IkePayload.PayloadType int payloadType, Class<T> payloadClass) {
-        List<T> payloadList = new LinkedList<>();
-
-        for (IkePayload payload : ikePayloadList) {
-            if (payloadType == payload.payloadType) {
-                payloadList.add(payloadClass.cast(payload));
-            }
-        }
-
-        return payloadList;
+        return IkePayload.getPayloadForTypeInProvidedList(
+                payloadType, payloadClass, ikePayloadList);
     }
 
     /**
