@@ -16,8 +16,11 @@
 
 package com.android.ike.ikev2;
 
+import android.content.Context;
+import android.net.IpSecManager;
 import android.os.Looper;
 
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.net.InetAddress;
@@ -32,11 +35,14 @@ final class ChildSessionStateMachineFactory {
     static ChildSessionStateMachine makeChildSessionStateMachine(
             String name,
             Looper looper,
+            Context context,
             ChildSessionOptions sessionOptions,
             InetAddress localAddress,
-            InetAddress remoteAddress) {
+            InetAddress remoteAddress,
+            IkeMacPrf prf,
+            byte[] skD) {
         return sChildSessionHelper.makeChildSessionStateMachine(
-                name, looper, sessionOptions, localAddress, remoteAddress);
+                name, looper, context, sessionOptions, localAddress, remoteAddress, prf, skD);
     }
 
     @VisibleForTesting
@@ -54,9 +60,12 @@ final class ChildSessionStateMachineFactory {
         ChildSessionStateMachine makeChildSessionStateMachine(
                 String name,
                 Looper looper,
+                Context context,
                 ChildSessionOptions sessionOptions,
                 InetAddress localAddress,
-                InetAddress remoteAddress);
+                InetAddress remoteAddress,
+                IkeMacPrf prf,
+                byte[] skD);
     }
 
     /**
@@ -68,12 +77,23 @@ final class ChildSessionStateMachineFactory {
         public ChildSessionStateMachine makeChildSessionStateMachine(
                 String name,
                 Looper looper,
+                Context context,
                 ChildSessionOptions sessionOptions,
                 InetAddress localAddress,
-                InetAddress remoteAddress) {
+                InetAddress remoteAddress,
+                IkeMacPrf prf,
+                byte[] skD) {
             ChildSessionStateMachine childSession =
                     new ChildSessionStateMachine(
-                            name, looper, sessionOptions, localAddress, remoteAddress);
+                            name,
+                            looper,
+                            context,
+                            (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
+                            sessionOptions,
+                            localAddress,
+                            remoteAddress,
+                            prf,
+                            skD);
             childSession.start();
             return childSession;
         }
