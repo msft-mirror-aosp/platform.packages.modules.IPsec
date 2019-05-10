@@ -39,10 +39,13 @@ import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
+import com.android.ike.ikev2.message.IkeCertPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeIdPayload;
@@ -180,8 +183,8 @@ public class IkeSessionStateMachine extends StateMachine {
 
     // FIXME: b/131265898 Pass these packets from CreateIkeLocalIkeInit to CreateIkeLocalIkeAuth
     // when Android StateMachine can support that.
-    private byte[] mIkeInitRequestPacket;
-    private byte[] mIkeInitResponsePacket;
+    @VisibleForTesting byte[] mIkeInitRequestPacket;
+    @VisibleForTesting byte[] mIkeInitResponsePacket;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -1154,8 +1157,23 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    /** CreateIkeLocalIkeAuth represents state when IKE library initiates IKE_AUTH exchange. */
+    /**
+     * CreateIkeLocalIkeAuth represents state when IKE library initiates IKE_AUTH exchange.
+     *
+     * <p>If using EAP, CreateIkeLocalIkeAuth will transition to CreateIkeLocalIkeAuthInEap state
+     * after validating the IKE AUTH response.
+     */
     class CreateIkeLocalIkeAuth extends LocalNewExchangeBase {
+        private boolean mUseEap;
+
+        @Override
+        public void enter() {
+            super.enter();
+            mUseEap =
+                    (IkeSessionOptions.IKE_AUTH_METHOD_EAP
+                            == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
+        }
+
         @Override
         protected IkeMessage buildRequest() {
             try {
@@ -1180,27 +1198,43 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
-            // TODO: Handle EAP request in IKE_AUTH response
             try {
-                validateIkeAuthResp(mRequestMsg, ikeMessage);
+                int exchangeType = ikeMessage.ikeHeader.exchangeType;
+                if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_AUTH) {
+                    throw new InvalidSyntaxException(
+                            "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
+                }
 
-                ChildSessionStateMachine firstChild =
-                        ChildSessionStateMachineFactory.makeChildSessionStateMachine(
-                                "ChildSessionStateMachine",
-                                getHandler().getLooper(),
-                                mContext,
-                                mFirstChildSessionOptions,
-                                mLocalAddress,
-                                mRemoteAddress,
-                                mIkePrf,
-                                mCurrentIkeSaRecord.getSkD());
-                // TODO: Replace null input params to payload lists in IKE_AUTH request and
-                // IKE_AUTH response for negotiating Child SA.
-                firstChild.handleFirstChildExchange(null, null, new ChildSessionCallback());
+                if (mUseEap) {
+                    // TODO: Implement #validateIkeAuthRespWithEapPayload() to validate Auth payload
+                    // and extract EAP payload in the inbound message.
+                    throw new UnsupportedOperationException("Do not support EAP.");
+                } else {
+                    validateIkeAuthRespWithChildPayloads(ikeMessage);
 
-                transitionTo(mIdle);
+                    ChildSessionStateMachine firstChild =
+                            ChildSessionStateMachineFactory.makeChildSessionStateMachine(
+                                    "ChildSessionStateMachine",
+                                    getHandler().getLooper(),
+                                    mContext,
+                                    mFirstChildSessionOptions,
+                                    mLocalAddress,
+                                    mRemoteAddress,
+                                    mIkePrf,
+                                    mCurrentIkeSaRecord.getSkD());
+
+                    List<IkePayload> childReqList = extractChildPayloadsFromMessage(mRequestMsg);
+                    List<IkePayload> childRespList = extractChildPayloadsFromMessage(ikeMessage);
+                    // FIXME: Negotiating first Child SA requires the nonce pair from IKE INIT
+                    // exchange.
+                    firstChild.handleFirstChildExchange(
+                            childReqList, childRespList, new ChildSessionCallback());
+
+                    transitionTo(mIdle);
+                }
             } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
+                throw new UnsupportedOperationException("Do not support handling error.", e);
             }
         }
 
@@ -1278,11 +1312,146 @@ public class IkeSessionStateMachine extends StateMachine {
             return new IkeMessage(ikeHeader, payloadList);
         }
 
-        private void validateIkeAuthResp(IkeMessage reqMsg, IkeMessage respMsg)
+        private void validateIkeAuthRespWithChildPayloads(IkeMessage respMsg)
                 throws IkeProtocolException {
-            // TODO: Validate ikeMessage against IKE_AUTH request and mIkeSessionOptions.
+            // Extract and validate existence of payloads for first Child SA setup.
+            List<IkePayload> childSaRespPayloads = extractChildPayloadsFromMessage(respMsg);
+
+            List<IkePayload> nonChildPayloads = new LinkedList<>();
+            nonChildPayloads.addAll(respMsg.ikePayloadList);
+            nonChildPayloads.removeAll(childSaRespPayloads);
+
+            validateIkeAuthResp(nonChildPayloads);
+        }
+
+        private void validateIkeAuthResp(List<IkePayload> payloadList) throws IkeProtocolException {
+            // Validate IKE Authentication
+            IkeIdPayload respIdPayload = null;
+            IkeAuthPayload authPayload = null;
+            List<IkeCertPayload> certPayloads = new LinkedList<>();
+
+            for (IkePayload payload : payloadList) {
+                switch (payload.payloadType) {
+                    case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
+                        respIdPayload = (IkeIdPayload) payload;
+                        if (!mIkeSessionOptions
+                                .getRemoteIdentification()
+                                .equals(respIdPayload.ikeId)) {
+                            throw new AuthenticationFailedException(
+                                    "Unrecognized Responder Identification.");
+                        }
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_AUTH:
+                        authPayload = (IkeAuthPayload) payload;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_CERT:
+                        certPayloads.add((IkeCertPayload) payload);
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                        if (notifyPayload.isErrorNotify()) {
+                            // TODO: Throw IkeExceptions according to error types.
+                            throw new UnsupportedOperationException(
+                                    "Do not support handle error notifications in IKE AUTH"
+                                            + " response.");
+                        } else {
+                            // TODO: handle status notifications.
+                            throw new UnsupportedOperationException(
+                                    "Do not support handle status notifications in IKE AUTH"
+                                            + " response.");
+                        }
+
+                    default:
+                        throw new InvalidSyntaxException(
+                                "Received unexpected payload in IKE AUTH response. Payload"
+                                        + " type: "
+                                        + payload);
+                }
+            }
+
+            // Verify existence of payloads
+            if (respIdPayload == null || authPayload == null) {
+                throw new AuthenticationFailedException("ID-Responder or Auth payload is missing.");
+            }
+
+            // Autheticate the remote peer.
+            authenticate(authPayload, respIdPayload, certPayloads);
+        }
+
+        private List<IkePayload> extractChildPayloadsFromMessage(IkeMessage ikeMessage)
+                throws InvalidSyntaxException {
+            IkeSaPayload saPayload =
+                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+            IkeTsPayload tsInitPayload =
+                    ikeMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class);
+            IkeTsPayload tsRespPayload =
+                    ikeMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class);
+
+            List<IkeNotifyPayload> notifyPayloads =
+                    ikeMessage.getPayloadListForType(
+                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+
+            boolean hasErrorNotify = false;
+            List<IkePayload> list = new LinkedList<>();
+            for (IkeNotifyPayload payload : notifyPayloads) {
+                if (payload.isNewChildSaNotify()) {
+                    list.add(payload);
+                    if (payload.isErrorNotify()) {
+                        hasErrorNotify = true;
+                    }
+                }
+            }
+
+            // If there is no error notification, SA, TS-initiator and TS-responder MUST all be
+            // included in this message.
+            if (!hasErrorNotify
+                    && (saPayload == null || tsInitPayload == null || tsRespPayload == null)) {
+                throw new InvalidSyntaxException(
+                        "SA, TS-Initiator or TS-Responder payload is missing.");
+            }
+
+            list.add(saPayload);
+            list.add(tsInitPayload);
+            list.add(tsRespPayload);
+            return list;
+        }
+
+        private void authenticate(
+                IkeAuthPayload authPayload,
+                IkeIdPayload respIdPayload,
+                List<IkeCertPayload> certPayloads)
+                throws AuthenticationFailedException {
+            switch (mIkeSessionOptions.getRemoteAuthConfig().mAuthMethod) {
+                case IkeSessionOptions.IKE_AUTH_METHOD_PSK:
+                    if (authPayload.authMethod != IkeAuthPayload.AUTH_METHOD_PRE_SHARED_KEY) {
+                        throw new AuthenticationFailedException(
+                                "Expected the remote server to use PSK-based authentication but"
+                                        + " they used: "
+                                        + authPayload.authMethod);
+                    }
+                    IkeAuthPskPayload pskPayload = (IkeAuthPskPayload) authPayload;
+                    pskPayload.verifyInboundSignature(
+                            mIkeSessionOptions.getRemoteAuthConfig().mPsk,
+                            mIkeInitResponsePacket,
+                            mCurrentIkeSaRecord.nonceInitiator,
+                            respIdPayload.getEncodedPayloadBody(),
+                            mIkePrf,
+                            mCurrentIkeSaRecord.getSkPr());
+                    break;
+                case IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
+                    // TODO: Support PUB_KEY_SIGNATURE
+                    throw new UnsupportedOperationException(
+                            "Do not support public-key based authentication.");
+                default:
+                    throw new IllegalArgumentException(
+                            "Unrecognized auth method: " + authPayload.authMethod);
+            }
         }
     }
+
+    // TODO: Add CreateIkeLocalIkeAuthInEap and CreateIkeLocalIkeAuthPostEap states.
 
     /** RekeyIkeLocalCreate represents state when IKE library initiates Rekey IKE exchange. */
     class RekeyIkeLocalCreate extends LocalNewExchangeBase {
