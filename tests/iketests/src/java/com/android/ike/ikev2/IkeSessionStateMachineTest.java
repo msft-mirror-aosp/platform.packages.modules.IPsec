@@ -828,6 +828,25 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testRetransmitterImmediatelySendsRequest() throws Exception {
+        setupIdleStateMachine();
+
+        IkeSocket mockIkeSocket = mock(IkeSocket.class);
+        mIkeSessionStateMachine.mIkeSocket = mockIkeSocket;
+
+        IkeMessage mockIkeMessage = mock(IkeMessage.class);
+
+        // Use something unique as a sentinel value
+        byte[] dummyBytes = "testRetransmitterSendsRequest".getBytes();
+        when(mockIkeMessage.encryptAndEncode(any(), any(), eq(mSpyCurrentIkeSaRecord)))
+                .thenReturn(dummyBytes);
+
+        IkeSessionStateMachine.Retransmitter retransmitter =
+                mIkeSessionStateMachine.new Retransmitter(mockIkeMessage);
+        verify(mockIkeSocket).sendIkePacket(eq(dummyBytes), eq(REMOTE_ADDRESS));
+    }
+
+    @Test
     public void testDeleteIkeLocalDeleteRequest() throws Exception {
         setupIdleStateMachine();
 
