@@ -48,6 +48,7 @@ import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeCertPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
+import com.android.ike.ikev2.message.IkeHeader.ExchangeType;
 import com.android.ike.ikev2.message.IkeIdPayload;
 import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
@@ -596,8 +597,8 @@ public class IkeSessionStateMachine extends StateMachine {
         mIkeSocket.sendIkePacket(bytes, mRemoteAddress);
     }
 
-    // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the current IKE
-    // SA record.
+    // Builds an Encrypted IKE Informational Message for the given IkeInformationalPayload using the
+    // current IKE SA record.
     @VisibleForTesting
     IkeMessage buildEncryptedInformationalMessage(
             IkeInformationalPayload[] payloads, boolean isResponse, int messageId) {
@@ -605,12 +606,25 @@ public class IkeSessionStateMachine extends StateMachine {
                 mCurrentIkeSaRecord, payloads, isResponse, messageId);
     }
 
-    // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the provided IKE
-    // SA record.
+    // Builds an Encrypted IKE Informational Message for the given IkeInformationalPayload using the
+    // provided IKE SA record.
     @VisibleForTesting
     IkeMessage buildEncryptedInformationalMessage(
             IkeSaRecord saRecord,
             IkeInformationalPayload[] payloads,
+            boolean isResponse,
+            int messageId) {
+        return buildEncryptedNotificationMessage(
+            saRecord, payloads, IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, isResponse, messageId);
+    }
+
+    // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the provided IKE
+    // SA record and exchange type.
+    @VisibleForTesting
+    IkeMessage buildEncryptedNotificationMessage(
+            IkeSaRecord saRecord,
+            IkeInformationalPayload[] payloads,
+            @ExchangeType int exchangeType,
             boolean isResponse,
             int messageId) {
         IkeHeader header =
@@ -618,7 +632,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         saRecord.getInitiatorSpi(),
                         saRecord.getResponderSpi(),
                         IkePayload.PAYLOAD_TYPE_SK,
-                        IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                        exchangeType,
                         isResponse /*isResponseMsg*/,
                         saRecord.isLocalInit /*fromIkeInitiator*/,
                         messageId);
@@ -1852,7 +1866,17 @@ public class IkeSessionStateMachine extends StateMachine {
                     handleDeleteSessionRequest(ikeMessage);
                     return;
                 default:
-                    // TODO: Reply with TEMPORARY_FAILURE
+                    IkeInformationalPayload error =
+                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
+                    IkeMessage msg =
+                            buildEncryptedNotificationMessage(
+                                    mCurrentIkeSaRecord,
+                                    new IkeInformationalPayload[] {error},
+                                    ikeMessage.ikeHeader.exchangeType,
+                                    true,
+                                    ikeMessage.ikeHeader.messageId);
+
+                    sendEncryptedIkeMessage(msg);
             }
         }
 

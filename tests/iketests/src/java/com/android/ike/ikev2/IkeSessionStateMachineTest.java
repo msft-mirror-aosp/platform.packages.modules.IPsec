@@ -29,6 +29,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -53,6 +54,7 @@ import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
@@ -962,6 +964,52 @@ public final class IkeSessionStateMachineTest {
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Closed);
+    }
+
+    @Test
+    public void testDeleteIkeLocalDeleteReceivedNonDeleteRequest() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE);
+        mLooper.dispatchAll();
+
+        // Verify delete sent out.
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(), anyObject(), eq(mSpyCurrentIkeSaRecord), anyObject());
+        reset(mMockIkeMessageHelper); // Discard value.
+        when(mMockIkeMessageHelper.encryptAndEncode(any(), any(), any(), any()))
+                .thenReturn(new byte[0]);
+
+        ReceivedIkePacket received = makeRekeyIkeRequest();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, received);
+
+        mLooper.dispatchAll();
+        verifyIncrementRemoteReqMsgId();
+
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+
+        // Verify outbound response
+        IkeMessage resp = mIkeMessageCaptor.getValue();
+
+        IkeHeader ikeHeader = resp.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, ikeHeader.exchangeType);
+        assertTrue(ikeHeader.isResponseMsg);
+        assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
+
+        List<IkeNotifyPayload> notificationPayloadList =
+                resp.getPayloadListForType(IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        assertEquals(1, notificationPayloadList.size());
+
+        IkeNotifyPayload notifyPayload = notificationPayloadList.get(0);
+        assertEquals(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE, notifyPayload.notifyType);
     }
 
     @Test
