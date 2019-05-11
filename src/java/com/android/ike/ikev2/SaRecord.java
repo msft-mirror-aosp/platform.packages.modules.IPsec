@@ -15,7 +15,13 @@
  */
 package com.android.ike.ikev2;
 
+import android.annotation.Nullable;
+import android.content.Context;
+import android.net.IpSecManager.SecurityParameterIndex;
+
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
+import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
@@ -25,6 +31,7 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import dalvik.system.CloseGuard;
 
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.List;
@@ -237,9 +244,134 @@ public abstract class SaRecord implements AutoCloseable {
 
         @Override
         public ChildSaRecord makeChildSaRecord(
-                List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
-            // TODO: Calculate keys and build IpSecTransform.
-            return null;
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                ChildSaRecordConfig childSaRecordConfig)
+                throws GeneralSecurityException {
+            // Extract nonces. Encoding/Decoding of payload list guarantees that there is only one
+            // nonce payload in the reqPayloads and respPayloads lists
+            byte[] nonceInit =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                                    IkePayload.PAYLOAD_TYPE_NONCE,
+                                    IkeNoncePayload.class,
+                                    reqPayloads)
+                            .nonceData;
+            byte[] nonceResp =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                                    IkePayload.PAYLOAD_TYPE_NONCE,
+                                    IkeNoncePayload.class,
+                                    respPayloads)
+                            .nonceData;
+
+            // Check if KE Payload exists and get DH shared key. Encoding/Decoding of payload list
+            // guarantees that there is either no KE payload in the reqPayloads and respPayloads
+            // lists, or only one KE payload in each list.
+            byte[] sharedDhKey = new byte[0];
+            IkeKePayload keInitPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloads);
+            if (keInitPayload != null) {
+                IkeKePayload keRespPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, respPayloads);
+                sharedDhKey =
+                        IkeKePayload.getSharedKey(
+                                keInitPayload.localPrivateKey, keRespPayload.keyExchangeData);
+            }
+
+            return makeChildSaRecord(sharedDhKey, nonceInit, nonceResp, childSaRecordConfig);
+        }
+        /**
+         * Package private method for calculating keys, build IpSecTransforms and construct
+         * ChildSaRecord.
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.17">RFC 7296, Internet Key
+         *     Exchange Protocol Version 2 (IKEv2), Generating Keying Material for Child SAs</a>
+         */
+        @VisibleForTesting
+        ChildSaRecord makeChildSaRecord(
+                byte[] sharedKey,
+                byte[] nonceInit,
+                byte[] nonceResp,
+                ChildSaRecordConfig childSaRecordConfig) {
+            // Build data to sign for generating the keying material.
+            ByteBuffer bufferToSign =
+                    ByteBuffer.allocate(sharedKey.length + nonceInit.length + nonceResp.length);
+            bufferToSign.put(sharedKey).put(nonceInit).put(nonceResp);
+
+            // Get length of the keying material according to RFC 7296, 2.17.
+            int encryptionKeyLength = childSaRecordConfig.encryptionAlgo.getKeyLength();
+            int integrityKeyLength =
+                    childSaRecordConfig.hasIntegrityAlgo
+                            ? childSaRecordConfig.integrityAlgo.getKeyLength()
+                            : 0;
+            int keyMaterialLen = 2 * encryptionKeyLength + 2 * integrityKeyLength;
+            byte[] keyMat =
+                    childSaRecordConfig.ikePrf.generateKeyMat(
+                            childSaRecordConfig.skD, bufferToSign.array(), keyMaterialLen);
+
+            // Extract keys according to the order that keys carrying data from initiator to
+            // responder are taken before keys for the other direction and encryption keys are taken
+            // before integrity keys.
+            byte[] skEi = new byte[encryptionKeyLength];
+            byte[] skAi = new byte[integrityKeyLength];
+            byte[] skEr = new byte[encryptionKeyLength];
+            byte[] skAr = new byte[integrityKeyLength];
+
+            ByteBuffer keyMatBuffer = ByteBuffer.wrap(keyMat);
+            keyMatBuffer.get(skEi).get(skAi).get(skEr).get(skAr);
+
+            // TODO: Build IpSecTransform and add it to ChildSaRecord
+            boolean localInit = childSaRecordConfig.isLocalInit;
+            int initSpi = childSaRecordConfig.initSpi.getSpi();
+            int respSpi = childSaRecordConfig.respSpi.getSpi();
+            int inSpi = localInit ? initSpi : respSpi;
+            int outSpi = localInit ? respSpi : initSpi;
+            return new ChildSaRecord(
+                    inSpi, outSpi, localInit, nonceInit, nonceResp, skAi, skAr, skEi, skEr);
+        }
+    }
+
+    /** Package private class to group parameters for building a ChildSaRecord. */
+    @VisibleForTesting
+    static final class ChildSaRecordConfig {
+        public final Context context;
+        public final SecurityParameterIndex initSpi;
+        public final SecurityParameterIndex respSpi;
+        public final InetAddress initAddress;
+        public final InetAddress respAddress;
+        public final IkeMacPrf ikePrf;
+        @Nullable public final IkeMacIntegrity integrityAlgo;
+        public final IkeCipher encryptionAlgo;
+        public final byte[] skD;
+        public final boolean isTransport;
+        public final boolean isLocalInit;
+        public final boolean hasIntegrityAlgo;
+
+        ChildSaRecordConfig(
+                Context context,
+                SecurityParameterIndex initSpi,
+                SecurityParameterIndex respSpi,
+                InetAddress localAddress,
+                InetAddress remoteAddress,
+                IkeMacPrf ikePrf,
+                @Nullable IkeMacIntegrity integrityAlgo,
+                IkeCipher encryptionAlgo,
+                byte[] skD,
+                boolean isTransport,
+                boolean isLocalInit) {
+            this.context = context;
+            this.initSpi = initSpi;
+            this.respSpi = respSpi;
+            this.initAddress = isLocalInit ? localAddress : remoteAddress;
+            this.respAddress = isLocalInit ? remoteAddress : localAddress;
+            this.ikePrf = ikePrf;
+            this.integrityAlgo = integrityAlgo;
+            this.encryptionAlgo = encryptionAlgo;
+            this.skD = skD;
+            this.isTransport = isTransport;
+            this.isLocalInit = isLocalInit;
+            hasIntegrityAlgo = (integrityAlgo != null);
         }
     }
 
@@ -480,10 +612,40 @@ public abstract class SaRecord implements AutoCloseable {
             // TODO: Impement constructor. Will be more input parameters.
         }
 
-        /** Package private */
+        /**
+         * Package private interface for ChildSessionStateMachine to construct a ChildSaRecord
+         * instance.
+         */
         static ChildSaRecord makeChildSaRecord(
-                List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
-            return sSaRecordHelper.makeChildSaRecord(reqPayloads, respPayloads);
+                Context context,
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                SecurityParameterIndex initSpi,
+                SecurityParameterIndex respSpi,
+                InetAddress localAddress,
+                InetAddress remoteAddress,
+                IkeMacPrf prf,
+                @Nullable IkeMacIntegrity integrityAlgo,
+                IkeCipher encryptionAlgo,
+                byte[] skD,
+                boolean isTransport,
+                boolean isLocalInit)
+                throws GeneralSecurityException {
+            return sSaRecordHelper.makeChildSaRecord(
+                    reqPayloads,
+                    respPayloads,
+                    new ChildSaRecordConfig(
+                            context,
+                            initSpi,
+                            respSpi,
+                            localAddress,
+                            remoteAddress,
+                            prf,
+                            integrityAlgo,
+                            encryptionAlgo,
+                            skD,
+                            isTransport,
+                            isLocalInit));
         }
 
         /**
@@ -544,9 +706,13 @@ public abstract class SaRecord implements AutoCloseable {
          *
          * @param reqPayloads payload list in request.
          * @param respPayloads payload list in response.
+         * @param childSaRecordConfig the grouped parameters for constructing ChildSaRecord.
          * @return new Child SA.
          */
         ChildSaRecord makeChildSaRecord(
-                List<IkePayload> reqPayloads, List<IkePayload> respPayloads);
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                ChildSaRecordConfig childSaRecordConfig)
+                throws GeneralSecurityException;
     }
 }

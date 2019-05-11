@@ -24,16 +24,24 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.content.Context;
+import android.net.IpSecManager;
 import android.os.test.TestLooper;
+
+import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkePayload;
+import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeTestUtils;
+import com.android.server.IpSecService;
 
 import libcore.net.InetAddressUtils;
 
@@ -62,6 +70,16 @@ public final class ChildSessionStateMachineTest {
     private static final String CURRENT_CHILD_SA_SPI_IN = "2ad4c0a2";
     private static final String CURRENT_CHILD_SA_SPI_OUT = "cae7019f";
 
+    private static final String IKE_SK_D_HEX_STRING = "C86B56EFCF684DCC2877578AEF3137167FE0EBF6";
+
+    private static final int KEY_LEN_IKE_SKD = 20;
+
+    private IkeMacPrf mIkePrf;
+
+    private Context mContext;
+    private IpSecService mMockIpSecService;
+    private IpSecManager mMockIpSecManager;
+
     private TestLooper mLooper;
     private ChildSessionStateMachine mChildSessionStateMachine;
 
@@ -81,6 +99,15 @@ public final class ChildSessionStateMachineTest {
 
     @Before
     public void setup() throws Exception {
+        mIkePrf =
+                IkeMacPrf.create(
+                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
+                        IkeMessage.getSecurityProvider());
+
+        mContext = InstrumentationRegistry.getContext();
+        mMockIpSecService = mock(IpSecService.class);
+        mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
+
         mChildSessionOptions = buildChildSessionOptions();
 
         // Setup thread and looper
@@ -89,9 +116,13 @@ public final class ChildSessionStateMachineTest {
                 new ChildSessionStateMachine(
                         "ChildSessionStateMachine",
                         mLooper.getLooper(),
+                        mContext,
+                        mMockIpSecManager,
                         mChildSessionOptions,
                         LOCAL_ADDRESS,
-                        REMOTE_ADDRESS);
+                        REMOTE_ADDRESS,
+                        mIkePrf,
+                        TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING));
         mChildSessionStateMachine.setDbg(true);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
 
@@ -148,7 +179,7 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testCreateFirstChild() throws Exception {
-        when(mMockSaRecordHelper.makeChildSaRecord(any(), any()))
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
                 .thenReturn(mSpyCurrentChildSaRecord);
         mChildSessionStateMachine.handleFirstChildExchange(
                 mAuthReqSaNegoPayloads, mAuthRespSaNegoPayloads, mMockChildSessionCallback);
