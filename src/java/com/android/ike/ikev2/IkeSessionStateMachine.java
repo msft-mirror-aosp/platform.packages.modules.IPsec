@@ -345,57 +345,10 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    private IkeSaRecord getIkeSaRecordForPacket(IkeHeader ikeHeader) {
-        if (ikeHeader.fromIkeInitiator) {
-            return mSpiToSaRecordMap.get(ikeHeader.ikeInitiatorSpi);
-        } else {
-            return mSpiToSaRecordMap.get(ikeHeader.ikeResponderSpi);
-        }
-    }
-
-    /** Builds a IKE Delete Request for the given IKE SA. */
-    private IkeMessage buildIkeDeleteReq(IkeSaRecord ikeSaRecord) {
-        IkeInformationalPayload[] payloads = new IkeInformationalPayload[] {new IkeDeletePayload()};
-        return buildEncryptedInformationalMessage(
-                ikeSaRecord, payloads, false /* isResp */, ikeSaRecord.getLocalRequestMessageId());
-    }
-
-    /** Builds a IKE Delete Response for the given IKE SA and request. */
-    private IkeMessage buildIkeDeleteResp(IkeMessage req, IkeSaRecord ikeSaRecord) {
-        IkeInformationalPayload[] payloads = new IkeInformationalPayload[] {};
-        return buildEncryptedInformationalMessage(
-                ikeSaRecord, payloads, true /* isResp */, req.ikeHeader.messageId);
-    }
-
-    /**
-     * Validates that the delete request is acceptable.
-     *
-     * <p>The request message must be guaranteed by previous checks to be of SUBTYPE_DELETE_IKE, and
-     * therefore contains an IkeDeletePayload. This is checked in getIkeExchangeSubType.
-     */
-    private void validateIkeDeleteReq(IkeMessage req, IkeSaRecord expectedRecord)
-            throws InvalidSyntaxException {
-        if (expectedRecord != getIkeSaRecordForPacket(req.ikeHeader)) {
-            throw new InvalidSyntaxException("Unexpected delete request for SA");
-        }
-    }
-
-    private void validateIkeDeleteResp(IkeMessage resp) throws InvalidSyntaxException {
-        if (resp.ikeHeader.exchangeType != IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
-            throw new InvalidSyntaxException(
-                    "Invalid exchange type; expected INFORMATIONAL, but got: "
-                            + resp.ikeHeader.exchangeType);
-        }
-
-        if (!resp.ikePayloadList.isEmpty()) {
-            throw new InvalidSyntaxException(
-                    "Unexpected payloads - IKE Delete response should be empty.");
-        }
-    }
-
     // TODO: b/131122444 Move these methods into States.
     private IkeMessage buildIkeRekeyReq() {
         // TODO: Implement it.
+        // TODO: Pass Rekey message to retransmitter in RekeyIkeLocalCreate
         return null;
     }
 
@@ -686,6 +639,14 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
+        protected IkeSaRecord getIkeSaRecordForPacket(IkeHeader ikeHeader) {
+            if (ikeHeader.fromIkeInitiator) {
+                return mSpiToSaRecordMap.get(ikeHeader.ikeInitiatorSpi);
+            } else {
+                return mSpiToSaRecordMap.get(ikeHeader.ikeResponderSpi);
+            }
+        }
+
         protected void handleReceivedIkePacket(Message message) {
             ReceivedIkePacket receivedIkePacket = (ReceivedIkePacket) message.obj;
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
@@ -829,9 +790,69 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /**
+     * DeleteResponderBase represents all states after IKE_INIT and IKE_AUTH.
+     *
+     * <p>All post-init states share common functionality of being able to respond to IKE_DELETE
+     * requests.
+     */
+    private abstract class DeleteResponderBase extends BaseState {
+        /** Builds a IKE Delete Response for the given IKE SA and request. */
+        protected IkeMessage buildIkeDeleteResp(IkeMessage req, IkeSaRecord ikeSaRecord) {
+            IkeInformationalPayload[] payloads = new IkeInformationalPayload[] {};
+            return buildEncryptedInformationalMessage(
+                    ikeSaRecord, payloads, true /* isResp */, req.ikeHeader.messageId);
+        }
+
+        /**
+         * Validates that the delete request is acceptable.
+         *
+         * <p>The request message must be guaranteed by previous checks to be of SUBTYPE_DELETE_IKE,
+         * and therefore contains an IkeDeletePayload. This is checked in getIkeExchangeSubType.
+         */
+        protected void validateIkeDeleteReq(IkeMessage req, IkeSaRecord expectedRecord)
+                throws InvalidSyntaxException {
+            if (expectedRecord != getIkeSaRecordForPacket(req.ikeHeader)) {
+                throw new InvalidSyntaxException("Unexpected delete request for SA");
+            }
+        }
+    }
+
+    /**
+     * DeleteBase abstracts deletion handling for all states initiating a delete exchange
+     *
+     * <p>All subclasses of this state share common functionality that a deletion request is sent,
+     * and the response is received.
+     */
+    private abstract class DeleteBase extends DeleteResponderBase {
+        /** Builds a IKE Delete Request for the given IKE SA. */
+        protected IkeMessage buildIkeDeleteReq(IkeSaRecord ikeSaRecord) {
+            IkeInformationalPayload[] payloads =
+                    new IkeInformationalPayload[] {new IkeDeletePayload()};
+            return buildEncryptedInformationalMessage(
+                    ikeSaRecord,
+                    payloads,
+                    false /* isResp */,
+                    ikeSaRecord.getLocalRequestMessageId());
+        }
+
+        protected void validateIkeDeleteResp(IkeMessage resp) throws InvalidSyntaxException {
+            if (resp.ikeHeader.exchangeType != IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
+                throw new InvalidSyntaxException(
+                        "Invalid exchange type; expected INFORMATIONAL, but got: "
+                                + resp.ikeHeader.exchangeType);
+            }
+
+            if (!resp.ikePayloadList.isEmpty()) {
+                throw new InvalidSyntaxException(
+                        "Unexpected payloads - IKE Delete response should be empty.");
+            }
+        }
+    }
+
+    /**
      * Receiving represents a state when idle IkeSessionStateMachine receives an incoming packet.
      */
-    class Receiving extends BaseState {
+    class Receiving extends DeleteResponderBase {
         @Override
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
@@ -863,51 +884,21 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    /**
-     * LocalNewExchangeBase represents the common behaviours when IKE library initiates a new
-     * exchange.
-     */
-    private abstract class LocalNewExchangeBase extends BaseState {
-        protected IkeMessage mRequestMsg;
-        protected byte[] mRequestPacket;
-
-        @Override
-        public void enter() {
-            mRequestMsg = buildRequest();
-            mRequestPacket = encodeRequest();
-            mIkeSocket.sendIkePacket(mRequestPacket, mRemoteAddress);
-            // TODO: Send out packet and start retransmission timer.
-        }
-
-        @Override
-        public void exit() {
-            // TODO: Stop retransmission
-            mRequestMsg = null;
-            mRequestPacket = null;
-        }
-
-        protected abstract IkeMessage buildRequest();
-
-        // CreateIkeLocalInit should override encodeRequest() to encode unencrypted packet
-        protected byte[] encodeRequest() {
-            return mRequestMsg.encryptAndEncode(mIkeIntegrity, mIkeCipher, mCurrentIkeSaRecord);
-        }
-    }
-
     /** CreateIkeLocalIkeInit represents state when IKE library initiates IKE_INIT exchange. */
-    class CreateIkeLocalIkeInit extends LocalNewExchangeBase {
+    class CreateIkeLocalIkeInit extends BaseState {
         private IkeSecurityParameterIndex mLocalIkeSpiResource;
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
+        private Retransmitter mRetransmitter;
 
         @Override
         public void enter() {
-            super.enter();
-            mIkeSocket.registerIke(
-                    mRequestMsg.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
+            IkeMessage request = buildRequest();
+            mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
+            mIkeInitRequestPacket = request.encode();
+            mRetransmitter = new UnencryptedRetransmitter(request);
         }
 
-        @Override
-        protected IkeMessage buildRequest() {
+        private IkeMessage buildRequest() {
             try {
                 return buildIkeInitReq();
             } catch (IOException e) {
@@ -915,12 +906,6 @@ public class IkeSessionStateMachine extends StateMachine {
                 throw new UnsupportedOperationException(
                         "Do not support handling SPI assigning failure.");
             }
-        }
-
-        @Override
-        protected byte[] encodeRequest() {
-            mIkeInitRequestPacket = mRequestMsg.encode();
-            return mIkeInitRequestPacket;
         }
 
         @Override
@@ -971,13 +956,13 @@ public class IkeSessionStateMachine extends StateMachine {
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             boolean ikeInitSuccess = false;
             try {
-                validateIkeInitResp(mRequestMsg, ikeMessage);
+                validateIkeInitResp(mRetransmitter.getMessage(), ikeMessage);
 
                 // TODO: Pass mLocalIkeSpiResource and mRemoteIkeSpiResource to
                 // makeFirstIkeSaRecord()
                 mCurrentIkeSaRecord =
                         IkeSaRecord.makeFirstIkeSaRecord(
-                                mRequestMsg,
+                                mRetransmitter.getMessage(),
                                 ikeMessage,
                                 mLocalIkeSpiResource,
                                 mRemoteIkeSpiResource,
@@ -1141,6 +1126,7 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void exit() {
             super.exit();
+            mRetransmitter.stopRetransmitting();
             // TODO: Store IKE_INIT request and response in mIkeSessionOptions for IKE_AUTH
         }
 
@@ -1163,19 +1149,20 @@ public class IkeSessionStateMachine extends StateMachine {
      * <p>If using EAP, CreateIkeLocalIkeAuth will transition to CreateIkeLocalIkeAuthInEap state
      * after validating the IKE AUTH response.
      */
-    class CreateIkeLocalIkeAuth extends LocalNewExchangeBase {
+    class CreateIkeLocalIkeAuth extends BaseState {
+        private Retransmitter mRetransmitter;
         private boolean mUseEap;
 
         @Override
         public void enter() {
             super.enter();
+            mRetransmitter = new Retransmitter(buildRequest());
             mUseEap =
                     (IkeSessionOptions.IKE_AUTH_METHOD_EAP
                             == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
         }
 
-        @Override
-        protected IkeMessage buildRequest() {
+        private IkeMessage buildRequest() {
             try {
                 return buildIkeAuthReq();
             } catch (ResourceUnavailableException e) {
@@ -1223,7 +1210,8 @@ public class IkeSessionStateMachine extends StateMachine {
                                     mIkePrf,
                                     mCurrentIkeSaRecord.getSkD());
 
-                    List<IkePayload> childReqList = extractChildPayloadsFromMessage(mRequestMsg);
+                    List<IkePayload> childReqList = extractChildPayloadsFromMessage(
+                            mRetransmitter.getMessage());
                     List<IkePayload> childRespList = extractChildPayloadsFromMessage(ikeMessage);
                     // FIXME: Negotiating first Child SA requires the nonce pair from IKE INIT
                     // exchange.
@@ -1449,22 +1437,23 @@ public class IkeSessionStateMachine extends StateMachine {
                             "Unrecognized auth method: " + authPayload.authMethod);
             }
         }
+
+        @Override
+        public void exit() {
+            mRetransmitter.stopRetransmitting();
+        }
     }
 
     // TODO: Add CreateIkeLocalIkeAuthInEap and CreateIkeLocalIkeAuthPostEap states.
 
     /** RekeyIkeLocalCreate represents state when IKE library initiates Rekey IKE exchange. */
-    class RekeyIkeLocalCreate extends LocalNewExchangeBase {
-        @Override
-        public IkeMessage buildRequest() {
-            return buildIkeRekeyReq();
-        }
+    class RekeyIkeLocalCreate extends DeleteResponderBase {
+        protected Retransmitter mRetransmitter;
 
         @Override
-        protected byte[] encodeRequest() {
-            // TODO: Remove this overriding method to directly call the super method when
-            // buildIkeRekeyReq is implemented.
-            return new byte[0];
+        public void enter() {
+            // TODO: Give mRetransmitter an actual request once buildIkeRekeyReq is implemented
+            mRetransmitter = new Retransmitter(null);
         }
 
         @Override
@@ -1482,6 +1471,8 @@ public class IkeSessionStateMachine extends StateMachine {
                         addIkeSaRecord(mRemoteInitNewIkeSaRecord);
                         // TODO: Encode and send responseIkeMessage.
 
+                        // Continue retransmitting.
+                        // TODO: pass mRetransmitter to next state.
                         transitionTo(mSimulRekeyIkeLocalCreate);
                     } catch (IkeProtocolException e) {
                         // TODO: Handle processing errors.
@@ -1497,6 +1488,9 @@ public class IkeSessionStateMachine extends StateMachine {
             try {
                 handleRekeyResp(ikeMessage);
                 transitionTo(mRekeyIkeLocalDelete);
+
+                // Stop retransmissions
+                mRetransmitter.stopRetransmitting();
             } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
             }
@@ -1504,9 +1498,10 @@ public class IkeSessionStateMachine extends StateMachine {
 
         // Is also called by SimulRekeyIkeLocalCreate to handle incoming rekey response.
         protected void handleRekeyResp(IkeMessage ikeMessage) throws IkeProtocolException {
-            validateIkeRekeyResp(mRequestMsg, ikeMessage);
+            validateIkeRekeyResp(mRetransmitter.getMessage(), ikeMessage);
             mLocalInitNewIkeSaRecord =
-                    IkeSaRecord.makeNewIkeSaRecord(mCurrentIkeSaRecord, mRequestMsg, ikeMessage);
+                    IkeSaRecord.makeNewIkeSaRecord(
+                            mCurrentIkeSaRecord, mRetransmitter.getMessage(), ikeMessage);
             addIkeSaRecord(mLocalInitNewIkeSaRecord);
             // TODO: Stop retransmission
         }
@@ -1523,10 +1518,11 @@ public class IkeSessionStateMachine extends StateMachine {
     class SimulRekeyIkeLocalCreate extends RekeyIkeLocalCreate {
         @Override
         public void enter() {
+            super.mRetransmitter = new Retransmitter(null);
+            // TODO: Populate super.mRetransmitter from state initialization data
             // Do not send request.
         }
 
-        @Override
         public IkeMessage buildRequest() {
             throw new UnsupportedOperationException(
                     "Do not support sending request in " + getCurrentState().getName());
@@ -1579,7 +1575,7 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /** RekeyIkeDeleteBase represents common behaviours of deleting stage during rekeying IKE SA. */
-    private abstract class RekeyIkeDeleteBase extends BaseState {
+    private abstract class RekeyIkeDeleteBase extends DeleteBase {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
@@ -1619,6 +1615,8 @@ public class IkeSessionStateMachine extends StateMachine {
      * rekeying when IKE library is waiting for both a Delete request and a Delete response.
      */
     class SimulRekeyIkeLocalDeleteRemoteDelete extends RekeyIkeDeleteBase {
+        private Retransmitter mRetransmitter;
+
         @Override
         public void enter() {
             // Detemine surviving IKE SA. According to RFC 7296: "The new IKE SA containing the
@@ -1633,8 +1631,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 mIkeSaRecordAwaitingLocalDel = mLocalInitNewIkeSaRecord;
                 mIkeSaRecordAwaitingRemoteDel = mCurrentIkeSaRecord;
             }
-            IkeMessage reqMessage = buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel);
-            // TODO: Encode and send out delete request and start retransmission timer.
+            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
             // TODO: Set timer awaiting for delete request.
         }
 
@@ -1672,17 +1669,19 @@ public class IkeSessionStateMachine extends StateMachine {
                 transitionTo(mSimulRekeyIkeRemoteDelete);
                 removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
                 // TODO: Close mIkeSaRecordAwaitingLocalDel
-                // TODO: Stop retransmission timer
+                mRetransmitter.stopRetransmitting();
             } catch (InvalidSyntaxException e) {
                 Log.d(TAG, "Validation failed for delete response", e);
                 // TODO: Shutdown - fatal error
             }
         }
 
+
         @Override
         public void exit() {
             finishRekey();
-            // TODO: Stop retransmission timer and awaiting delete request timer.
+            mRetransmitter.stopRetransmitting();
+            // TODO: Stop awaiting delete request timer.
         }
     }
 
@@ -1691,6 +1690,14 @@ public class IkeSessionStateMachine extends StateMachine {
      * response during simultaneous rekeying.
      */
     class SimulRekeyIkeLocalDelete extends RekeyIkeDeleteBase {
+        private Retransmitter mRetransmitter;
+
+        @Override
+        public void enter() {
+            mRetransmitter = new Retransmitter(null);
+            // TODO: Populate mRetransmitter from state initialization data.
+        }
+
         @Override
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
@@ -1759,18 +1766,19 @@ public class IkeSessionStateMachine extends StateMachine {
      * the deleting stage for IKE rekeying.
      */
     class RekeyIkeLocalDelete extends SimulRekeyIkeLocalDelete {
+        private Retransmitter mRetransmitter;
+
         @Override
         public void enter() {
             mIkeSaRecordSurviving = mLocalInitNewIkeSaRecord;
             mIkeSaRecordAwaitingLocalDel = mCurrentIkeSaRecord;
-            IkeMessage ikeMessage = buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel);
-            // TODO: Encode ikeMessage, send out packet and start retransmission timer.
+            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
         }
 
         @Override
         public void exit() {
             finishRekey();
-            // TODO: Stop retransmission.
+            mRetransmitter.stopRetransmitting();
         }
     }
 
@@ -1797,10 +1805,12 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /** DeleteIkeLocalDelete initiates a deletion request of the current IKE Session. */
-    class DeleteIkeLocalDelete extends LocalNewExchangeBase {
+    class DeleteIkeLocalDelete extends DeleteBase {
+        private Retransmitter mRetransmitter;
+
         @Override
-        protected IkeMessage buildRequest() {
-            return buildIkeDeleteReq(mCurrentIkeSaRecord);
+        public void enter() {
+            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mCurrentIkeSaRecord));
         }
 
         @Override
@@ -1838,6 +1848,11 @@ public class IkeSessionStateMachine extends StateMachine {
             // TODO: Close IKE SA
             removeIkeSaRecord(mCurrentIkeSaRecord);
             transitionTo(mClosed);
+        }
+
+        @Override
+        public void exit() {
+            mRetransmitter.stopRetransmitting();
         }
     }
 }

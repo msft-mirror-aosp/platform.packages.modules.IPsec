@@ -30,6 +30,7 @@ import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -594,7 +595,7 @@ public final class IkeSessionStateMachineTest {
         verifyIncrementLocaReqMsgId();
 
         // Validate outbound IKE INIT request
-        verify(mMockIkeMessageHelper).encode(mIkeMessageCaptor.capture());
+        verify(mMockIkeMessageHelper, times(2)).encode(mIkeMessageCaptor.capture());
         IkeMessage ikeInitReqMessage = mIkeMessageCaptor.getValue();
 
         IkeHeader ikeHeader = ikeInitReqMessage.ikeHeader;
