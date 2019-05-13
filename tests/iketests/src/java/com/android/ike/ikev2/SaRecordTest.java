@@ -19,19 +19,27 @@ package com.android.ike.ikev2;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.content.Context;
 import android.net.IpSecManager;
+import android.net.IpSecManager.SecurityParameterIndex;
+import android.net.IpSecTransform;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ChildSaRecordConfig;
+import com.android.ike.ikev2.SaRecord.IIpSecTransformHelper;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.SaRecord.IkeSaRecordConfig;
+import com.android.ike.ikev2.SaRecord.IpSecTransformHelper;
+import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
@@ -129,7 +137,7 @@ public final class SaRecordTest {
     private IkeMacIntegrity mHmacSha1IntegrityMac;
     private IkeCipher mAesCbcCipher;
 
-    private SaRecord.SaRecordHelper mSaRecordHelper = new SaRecord.SaRecordHelper();
+    private SaRecordHelper mSaRecordHelper = new SaRecordHelper();
 
     @Before
     public void setUp() throws Exception {
@@ -149,8 +157,9 @@ public final class SaRecordTest {
                         IkeMessage.getSecurityProvider());
     }
 
+    // Test generating keying material for making IKE SA.
     @Test
-    public void testGenerateKeyMatForIke() throws Exception {
+    public void testMakeIkeSaRecord() throws Exception {
         byte[] sKeySeed = TestUtils.hexStringToByteArray(IKE_SKEYSEED_HEX_STRING);
         byte[] nonceInit = TestUtils.hexStringToByteArray(IKE_NONCE_INIT_HEX_STRING);
         byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
@@ -204,8 +213,9 @@ public final class SaRecordTest {
         ikeSaRecord.close();
     }
 
+    // Test generating keying material and building IpSecTransform for making Child SA.
     @Test
-    public void testGenerateKeyMatForFirstChild() throws Exception {
+    public void testMakeChildSaRecord() throws Exception {
         byte[] sharedKey = new byte[0];
         byte[] nonceInit = TestUtils.hexStringToByteArray(IKE_NONCE_INIT_HEX_STRING);
         byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
@@ -213,6 +223,7 @@ public final class SaRecordTest {
         MockIpSecTestUtils mockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         IpSecManager ipSecManager = mockIpSecTestUtils.getIpSecManager();
         IpSecService mockIpSecService = mockIpSecTestUtils.getIpSecService();
+        Context context = mockIpSecTestUtils.getContext();
 
         when(mockIpSecService.allocateSecurityParameterIndex(
                         eq(LOCAL_ADDRESS.getHostAddress()), anyInt(), anyObject()))
@@ -221,11 +232,50 @@ public final class SaRecordTest {
                         eq(REMOTE_ADDRESS.getHostAddress()), anyInt(), anyObject()))
                 .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(FIRST_CHILD_RESP_SPI));
 
+        SecurityParameterIndex initIkeSpi =
+                ipSecManager.allocateSecurityParameterIndex(LOCAL_ADDRESS);
+        SecurityParameterIndex respIkeSpi =
+                ipSecManager.allocateSecurityParameterIndex(REMOTE_ADDRESS);
+
+        byte[] initAuthKey = TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_INIT_HEX_STRING);
+        byte[] repsAuthKey = TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_RESP_HEX_STRING);
+        byte[] initEncryptKey = TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_INIT_HEX_STRING);
+        byte[] respEncryptKey = TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_RESP_HEX_STRING);
+
+        IIpSecTransformHelper mockIpSecHelper;
+        mockIpSecHelper = mock(IIpSecTransformHelper.class);
+        SaRecord.setIpSecTransformHelper(mockIpSecHelper);
+
+        IpSecTransform mockInitTransform = mock(IpSecTransform.class);
+        IpSecTransform mockRespTransform = mock(IpSecTransform.class);
+
+        when(mockIpSecHelper.makeIpSecTransform(
+                        eq(context),
+                        eq(LOCAL_ADDRESS),
+                        eq(initIkeSpi),
+                        eq(mHmacSha1IntegrityMac),
+                        eq(mAesCbcCipher),
+                        aryEq(initAuthKey),
+                        aryEq(initEncryptKey),
+                        eq(false)))
+                .thenReturn(mockInitTransform);
+
+        when(mockIpSecHelper.makeIpSecTransform(
+                        eq(context),
+                        eq(REMOTE_ADDRESS),
+                        eq(respIkeSpi),
+                        eq(mHmacSha1IntegrityMac),
+                        eq(mAesCbcCipher),
+                        aryEq(repsAuthKey),
+                        aryEq(respEncryptKey),
+                        eq(false)))
+                .thenReturn(mockRespTransform);
+
         ChildSaRecordConfig childSaRecordConfig =
                 new ChildSaRecordConfig(
                         mockIpSecTestUtils.getContext(),
-                        ipSecManager.allocateSecurityParameterIndex(LOCAL_ADDRESS),
-                        ipSecManager.allocateSecurityParameterIndex(REMOTE_ADDRESS),
+                        initIkeSpi,
+                        respIkeSpi,
                         LOCAL_ADDRESS,
                         REMOTE_ADDRESS,
                         mIkeHmacSha1Prf,
@@ -240,8 +290,11 @@ public final class SaRecordTest {
                         sharedKey, nonceInit, nonceResp, childSaRecordConfig);
 
         assertTrue(childSaRecord.isLocalInit);
-        assertEquals(FIRST_CHILD_INIT_SPI, childSaRecord.inboundSpi);
-        assertEquals(FIRST_CHILD_RESP_SPI, childSaRecord.outboundSpi);
+        assertEquals(FIRST_CHILD_INIT_SPI, childSaRecord.getLocalSpi());
+        assertEquals(FIRST_CHILD_RESP_SPI, childSaRecord.getRemoteSpi());
+        assertEquals(mockInitTransform, childSaRecord.getInboundIpSecTransform());
+        assertEquals(mockRespTransform, childSaRecord.getOutboundIpSecTransform());
+
         assertArrayEquals(
                 TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_INIT_HEX_STRING),
                 childSaRecord.getOutboundIntegrityKey());
@@ -256,5 +309,6 @@ public final class SaRecordTest {
                 childSaRecord.getInboundDecryptionKey());
 
         childSaRecord.close();
+        SaRecord.setIpSecTransformHelper(new IpSecTransformHelper());
     }
 }
