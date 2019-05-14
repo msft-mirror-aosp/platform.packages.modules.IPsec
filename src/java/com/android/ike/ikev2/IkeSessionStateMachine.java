@@ -414,7 +414,7 @@ public class IkeSessionStateMachine extends StateMachine {
      *
      * <p>Package private so as to be injectable for testing.
      */
-    interface IChildSessionCallback {
+    interface IChildSessionSmCallback {
         /** Notify that new Child SA is created. */
         void onCreateChildSa(int remoteSpi, ChildSessionStateMachine childSession);
         /** Notify that the Child SA is deleted. */
@@ -427,7 +427,7 @@ public class IkeSessionStateMachine extends StateMachine {
      *
      * <p>Package private for being passed to only ChildSessionStateMachine.
      */
-    class ChildSessionCallback implements IChildSessionCallback {
+    class ChildSessionSmCallback implements IChildSessionSmCallback {
         public void onCreateChildSa(int remoteSpi, ChildSessionStateMachine childSession) {
             mSpiToChildSessionMap.put(remoteSpi, childSession);
         }
@@ -1216,7 +1216,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // FIXME: Negotiating first Child SA requires the nonce pair from IKE INIT
                     // exchange.
                     firstChild.handleFirstChildExchange(
-                            childReqList, childRespList, new ChildSessionCallback());
+                            childReqList, childRespList, new ChildSessionSmCallback());
 
                     transitionTo(mIdle);
                 }
