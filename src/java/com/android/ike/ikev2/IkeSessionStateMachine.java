@@ -48,6 +48,7 @@ import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeCertPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeHeader;
+import com.android.ike.ikev2.message.IkeHeader.ExchangeType;
 import com.android.ike.ikev2.message.IkeIdPayload;
 import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
@@ -596,8 +597,8 @@ public class IkeSessionStateMachine extends StateMachine {
         mIkeSocket.sendIkePacket(bytes, mRemoteAddress);
     }
 
-    // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the current IKE
-    // SA record.
+    // Builds an Encrypted IKE Informational Message for the given IkeInformationalPayload using the
+    // current IKE SA record.
     @VisibleForTesting
     IkeMessage buildEncryptedInformationalMessage(
             IkeInformationalPayload[] payloads, boolean isResponse, int messageId) {
@@ -605,12 +606,25 @@ public class IkeSessionStateMachine extends StateMachine {
                 mCurrentIkeSaRecord, payloads, isResponse, messageId);
     }
 
-    // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the provided IKE
-    // SA record.
+    // Builds an Encrypted IKE Informational Message for the given IkeInformationalPayload using the
+    // provided IKE SA record.
     @VisibleForTesting
     IkeMessage buildEncryptedInformationalMessage(
             IkeSaRecord saRecord,
             IkeInformationalPayload[] payloads,
+            boolean isResponse,
+            int messageId) {
+        return buildEncryptedNotificationMessage(
+            saRecord, payloads, IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, isResponse, messageId);
+    }
+
+    // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the provided IKE
+    // SA record and exchange type.
+    @VisibleForTesting
+    IkeMessage buildEncryptedNotificationMessage(
+            IkeSaRecord saRecord,
+            IkeInformationalPayload[] payloads,
+            @ExchangeType int exchangeType,
             boolean isResponse,
             int messageId) {
         IkeHeader header =
@@ -618,7 +632,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         saRecord.getInitiatorSpi(),
                         saRecord.getResponderSpi(),
                         IkePayload.PAYLOAD_TYPE_SK,
-                        IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                        exchangeType,
                         isResponse /*isResponseMsg*/,
                         saRecord.isLocalInit /*fromIkeInitiator*/,
                         messageId);
@@ -815,6 +829,34 @@ public class IkeSessionStateMachine extends StateMachine {
                 throw new InvalidSyntaxException("Unexpected delete request for SA");
             }
         }
+
+        /**
+         * Helper method for responding to a session deletion request
+         *
+         * <p>Note that this method expects that the session is keyed on the current IKE SA session,
+         * and closing the IKE SA indicates that the remote wishes to end the session as a whole. As
+         * such, this should not be used in rekey cases where there is any ambiguity as to which IKE
+         * SA the session is reliant upon.
+         *
+         * <p>Note that this method will also move the state machine to the closed state.
+         *
+         * @param ikeMessage The received session deletion request
+         */
+        protected void handleDeleteSessionRequest(IkeMessage ikeMessage) {
+            try {
+                validateIkeDeleteReq(ikeMessage, mCurrentIkeSaRecord);
+                IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
+                sendEncryptedIkeMessage(mCurrentIkeSaRecord, resp);
+
+                // TODO: Close IKE SA
+                removeIkeSaRecord(mCurrentIkeSaRecord);
+
+                transitionTo(mClosed);
+            } catch (InvalidSyntaxException e) {
+                Log.wtf(TAG, "Got deletion of a non-Current IKE SA - rekey error?", e);
+                // TODO: Send the INVALID_SYNTAX error
+            }
+        }
     }
 
     /**
@@ -873,8 +915,11 @@ public class IkeSessionStateMachine extends StateMachine {
                         // TODO: Handle processing errors.
                     }
                     return;
-                    // TODO: Add more cases for supporting other types of request.
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
+                    handleDeleteSessionRequest(ikeMessage);
+                    return;
                 default:
+                    // TODO: Add more cases for supporting other types of request.
             }
         }
 
@@ -1818,22 +1863,20 @@ public class IkeSessionStateMachine extends StateMachine {
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
-                    try {
-                        validateIkeDeleteReq(ikeMessage, mCurrentIkeSaRecord);
-                        IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
-                        sendEncryptedIkeMessage(mCurrentIkeSaRecord, resp);
-
-                        // TODO: Close IKE SA
-                        removeIkeSaRecord(mCurrentIkeSaRecord);
-
-                        transitionTo(mClosed);
-                    } catch (InvalidSyntaxException e) {
-                        Log.wtf(TAG, "Got deletion of a non-Current IKE SA - rekey error?", e);
-                        // TODO: Send the INVALID_SYNTAX error
-                    }
+                    handleDeleteSessionRequest(ikeMessage);
                     return;
                 default:
-                    // TODO: Reply with TEMPORARY_FAILURE
+                    IkeInformationalPayload error =
+                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
+                    IkeMessage msg =
+                            buildEncryptedNotificationMessage(
+                                    mCurrentIkeSaRecord,
+                                    new IkeInformationalPayload[] {error},
+                                    ikeMessage.ikeHeader.exchangeType,
+                                    true,
+                                    ikeMessage.ikeHeader.messageId);
+
+                    sendEncryptedIkeMessage(msg);
             }
         }
 
