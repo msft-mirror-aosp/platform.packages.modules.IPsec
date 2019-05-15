@@ -31,7 +31,7 @@ import android.os.test.TestLooper;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.TestUtils;
-import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionCallback;
+import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
@@ -89,12 +89,12 @@ public final class ChildSessionStateMachineTest {
     private ChildSaRecord mSpyCurrentChildSaRecord;
 
     private ISaRecordHelper mMockSaRecordHelper;
-    private IChildSessionCallback mMockChildSessionCallback;
+    private IChildSessionSmCallback mMockChildSessionSmCallback;
     private ChildSessionOptions mChildSessionOptions;
 
     public ChildSessionStateMachineTest() {
         mMockSaRecordHelper = mock(SaRecord.ISaRecordHelper.class);
-        mMockChildSessionCallback = mock(IChildSessionCallback.class);
+        mMockChildSessionSmCallback = mock(IChildSessionSmCallback.class);
     }
 
     @Before
@@ -182,10 +182,10 @@ public final class ChildSessionStateMachineTest {
         when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
                 .thenReturn(mSpyCurrentChildSaRecord);
         mChildSessionStateMachine.handleFirstChildExchange(
-                mAuthReqSaNegoPayloads, mAuthRespSaNegoPayloads, mMockChildSessionCallback);
+                mAuthReqSaNegoPayloads, mAuthRespSaNegoPayloads, mMockChildSessionSmCallback);
 
         mLooper.dispatchAll();
-        verify(mMockChildSessionCallback)
+        verify(mMockChildSessionSmCallback)
                 .onCreateChildSa(
                         mSpyCurrentChildSaRecord.getRemoteSpi(), mChildSessionStateMachine);
         assertTrue(
