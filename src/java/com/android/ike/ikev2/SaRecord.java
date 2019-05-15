@@ -17,7 +17,11 @@ package com.android.ike.ikev2;
 
 import android.annotation.Nullable;
 import android.content.Context;
+import android.net.IpSecManager;
+import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
+import android.net.IpSecManager.SpiUnavailableException;
+import android.net.IpSecTransform;
 
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -31,6 +35,7 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import dalvik.system.CloseGuard;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -45,8 +50,8 @@ import java.util.List;
  * ChildSessionOptions and store changed information including keys, SPIs, and nonces in SaRecord.
  */
 public abstract class SaRecord implements AutoCloseable {
-
     private static ISaRecordHelper sSaRecordHelper = new SaRecordHelper();
+    private static IIpSecTransformHelper sIpSecTransformHelper = new IpSecTransformHelper();
 
     /** Flag indicates if this SA is locally initiated */
     public final boolean isLocalInit;
@@ -127,6 +132,18 @@ public abstract class SaRecord implements AutoCloseable {
             mCloseGuard.warnIfOpen();
         }
         close();
+    }
+
+    /** Package private */
+    @VisibleForTesting
+    static void setSaRecordHelper(ISaRecordHelper helper) {
+        sSaRecordHelper = helper;
+    }
+
+    /** Package private */
+    @VisibleForTesting
+    static void setIpSecTransformHelper(IIpSecTransformHelper helper) {
+        sIpSecTransformHelper = helper;
     }
 
     /**
@@ -247,7 +264,8 @@ public abstract class SaRecord implements AutoCloseable {
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
                 ChildSaRecordConfig childSaRecordConfig)
-                throws GeneralSecurityException {
+                throws GeneralSecurityException, ResourceUnavailableException,
+                        SpiUnavailableException, IOException {
             // Extract nonces. Encoding/Decoding of payload list guarantees that there is only one
             // nonce payload in the reqPayloads and respPayloads lists
             byte[] nonceInit =
@@ -293,7 +311,8 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] sharedKey,
                 byte[] nonceInit,
                 byte[] nonceResp,
-                ChildSaRecordConfig childSaRecordConfig) {
+                ChildSaRecordConfig childSaRecordConfig)
+                throws ResourceUnavailableException, SpiUnavailableException, IOException {
             // Build data to sign for generating the keying material.
             ByteBuffer bufferToSign =
                     ByteBuffer.allocate(sharedKey.length + nonceInit.length + nonceResp.length);
@@ -321,14 +340,96 @@ public abstract class SaRecord implements AutoCloseable {
             ByteBuffer keyMatBuffer = ByteBuffer.wrap(keyMat);
             keyMatBuffer.get(skEi).get(skAi).get(skEr).get(skAr);
 
-            // TODO: Build IpSecTransform and add it to ChildSaRecord
-            boolean localInit = childSaRecordConfig.isLocalInit;
-            int initSpi = childSaRecordConfig.initSpi.getSpi();
-            int respSpi = childSaRecordConfig.respSpi.getSpi();
-            int inSpi = localInit ? initSpi : respSpi;
-            int outSpi = localInit ? respSpi : initSpi;
-            return new ChildSaRecord(
-                    inSpi, outSpi, localInit, nonceInit, nonceResp, skAi, skAr, skEi, skEr);
+            IpSecTransform initTransform = null;
+            IpSecTransform respTransform = null;
+            try {
+                // Build IpSecTransform
+                initTransform =
+                        sIpSecTransformHelper.makeIpSecTransform(
+                                childSaRecordConfig.context,
+                                childSaRecordConfig.initAddress,
+                                childSaRecordConfig.initSpi,
+                                childSaRecordConfig.integrityAlgo,
+                                childSaRecordConfig.encryptionAlgo,
+                                skAi,
+                                skEi,
+                                childSaRecordConfig.isTransport);
+                respTransform =
+                        sIpSecTransformHelper.makeIpSecTransform(
+                                childSaRecordConfig.context,
+                                childSaRecordConfig.respAddress,
+                                childSaRecordConfig.respSpi,
+                                childSaRecordConfig.integrityAlgo,
+                                childSaRecordConfig.encryptionAlgo,
+                                skAr,
+                                skEr,
+                                childSaRecordConfig.isTransport);
+
+                int initSpi = childSaRecordConfig.initSpi.getSpi();
+                int respSpi = childSaRecordConfig.respSpi.getSpi();
+
+                boolean isLocalInit = childSaRecordConfig.isLocalInit;
+                int inSpi = isLocalInit ? initSpi : respSpi;
+                int outSpi = isLocalInit ? respSpi : initSpi;
+                IpSecTransform inTransform = isLocalInit ? initTransform : respTransform;
+                IpSecTransform outTransform = isLocalInit ? respTransform : initTransform;
+
+                return new ChildSaRecord(
+                        inSpi,
+                        outSpi,
+                        isLocalInit,
+                        nonceInit,
+                        nonceResp,
+                        skAi,
+                        skAr,
+                        skEi,
+                        skEr,
+                        inTransform,
+                        outTransform);
+
+            } catch (Exception e) {
+                if (initTransform != null) initTransform.close();
+                if (respTransform != null) initTransform.close();
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * IpSecTransformHelper implements the IIpSecTransformHelper interface for constructing {@link
+     * IpSecTransform}}.
+     *
+     * <p>Package private
+     */
+    static class IpSecTransformHelper implements IIpSecTransformHelper {
+        @Override
+        public IpSecTransform makeIpSecTransform(
+                Context context,
+                InetAddress sourceAddress,
+                IpSecManager.SecurityParameterIndex spi,
+                @Nullable IkeMacIntegrity integrityAlgo,
+                IkeCipher encryptionAlgo,
+                byte[] integrityKey,
+                byte[] encryptionKey,
+                boolean isTransport)
+                throws ResourceUnavailableException, SpiUnavailableException, IOException {
+            IpSecTransform.Builder builder = new IpSecTransform.Builder(context);
+
+            if (encryptionAlgo.isAead()) {
+                builder.setAuthenticatedEncryption(
+                        encryptionAlgo.buildIpSecAlgorithmWithKey(encryptionKey));
+            } else {
+                builder.setEncryption(encryptionAlgo.buildIpSecAlgorithmWithKey(encryptionKey));
+                builder.setAuthentication(integrityAlgo.buildIpSecAlgorithmWithKey(integrityKey));
+            }
+
+            // TODO: Support UDP Encap if NAT is detected.
+
+            if (isTransport) {
+                return builder.buildTransportModeTransform(sourceAddress, spi);
+            } else {
+                return builder.buildTunnelModeTransform(sourceAddress, spi);
+            }
         }
     }
 
@@ -373,11 +474,6 @@ public abstract class SaRecord implements AutoCloseable {
             this.isLocalInit = isLocalInit;
             hasIntegrityAlgo = (integrityAlgo != null);
         }
-    }
-
-    /** Package private */
-    static void setSaRecordHelper(ISaRecordHelper helper) {
-        sSaRecordHelper = helper;
     }
 
     /** IkeSaRecord represents an IKE SA. */
@@ -590,9 +686,14 @@ public abstract class SaRecord implements AutoCloseable {
     /** ChildSaRecord represents an Child SA. */
     public static class ChildSaRecord extends SaRecord implements Comparable<ChildSaRecord> {
         /** Locally generated SPI for receiving IPsec Packet. */
-        public final int inboundSpi;
+        private final int mInboundSpi;
         /** Remotely generated SPI for sending IPsec Packet. */
-        public final int outboundSpi;
+        private final int mOutboundSpi;
+
+        /** IPsec Transform applied to traffic towards the host. */
+        private final IpSecTransform mInboundTransform;
+        /** IPsec Transform applied to traffic from the host. */
+        private final IpSecTransform mOutboundTransform;
 
         /** Package private */
         ChildSaRecord(
@@ -604,12 +705,15 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] skAi,
                 byte[] skAr,
                 byte[] skEi,
-                byte[] skEr) {
+                byte[] skEr,
+                IpSecTransform inTransform,
+                IpSecTransform outTransform) {
             super(localInit, nonceInit, nonceResp, skAi, skAr, skEi, skEr);
 
-            inboundSpi = inSpi;
-            outboundSpi = outSpi;
-            // TODO: Impement constructor. Will be more input parameters.
+            mInboundSpi = inSpi;
+            mOutboundSpi = outSpi;
+            mInboundTransform = inTransform;
+            mOutboundTransform = outTransform;
         }
 
         /**
@@ -630,7 +734,8 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] skD,
                 boolean isTransport,
                 boolean isLocalInit)
-                throws GeneralSecurityException {
+                throws GeneralSecurityException, ResourceUnavailableException,
+                        SpiUnavailableException, IOException {
             return sSaRecordHelper.makeChildSaRecord(
                     reqPayloads,
                     respPayloads,
@@ -646,6 +751,26 @@ public abstract class SaRecord implements AutoCloseable {
                             skD,
                             isTransport,
                             isLocalInit));
+        }
+
+        /** Package private */
+        int getLocalSpi() {
+            return mInboundSpi;
+        }
+
+        /** Package private */
+        int getRemoteSpi() {
+            return mOutboundSpi;
+        }
+
+        /** Package private */
+        IpSecTransform getInboundIpSecTransform() {
+            return mInboundTransform;
+        }
+
+        /** Package private */
+        IpSecTransform getOutboundIpSecTransform() {
+            return mOutboundTransform;
         }
 
         /**
@@ -664,7 +789,8 @@ public abstract class SaRecord implements AutoCloseable {
         /** Release IpSecTransform pair. */
         @Override
         public void close() {
-            // TODO: Implement it to release IpSecTransform pair.
+            mInboundTransform.close();
+            mOutboundTransform.close();
         }
     }
 
@@ -713,6 +839,48 @@ public abstract class SaRecord implements AutoCloseable {
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
                 ChildSaRecordConfig childSaRecordConfig)
-                throws GeneralSecurityException;
+                throws GeneralSecurityException, ResourceUnavailableException,
+                        SpiUnavailableException, IOException;
+    }
+
+    /**
+     * IIpSecTransformHelper provides a package private interface to construct {@link
+     * IpSecTransform}
+     *
+     * <p>IIpSecTransformHelper exists so that the interface is injectable for testing.
+     */
+    @VisibleForTesting
+    interface IIpSecTransformHelper {
+        /**
+         * Construct an instance of {@link IpSecTransform}
+         *
+         * @param context current context
+         * @param sourceAddress the source {@code InetAddress} of traffic on sockets of interfaces
+         *     that will use this transform
+         * @param spi a unique {@link IpSecManager.SecurityParameterIndex} to identify transformed
+         *     traffic
+         * @param integrityAlgo specifying the authentication algorithm to be applied.
+         * @param encryptionAlgo specifying the encryption algorithm or authenticated encryption
+         *     algorithm to be applied.
+         * @param integrityKey the negotiated authentication key to be applied.
+         * @param encryptionKey the negotiated encryption key to be applied.
+         * @param isTransport the flag indicates if a transport or a tunnel mode transform will be
+         *     built.
+         * @return an instance of {@link IpSecTransform}
+         * @throws ResourceUnavailableException indicating that too many transforms are active
+         * @throws SpiUnavailableException indicating the rare case where an SPI collides with an
+         *     existing transform
+         * @throws IOException indicating other errors
+         */
+        IpSecTransform makeIpSecTransform(
+                Context context,
+                InetAddress sourceAddress,
+                IpSecManager.SecurityParameterIndex spi,
+                @Nullable IkeMacIntegrity integrityAlgo,
+                IkeCipher encryptionAlgo,
+                byte[] integrityKey,
+                byte[] encryptionKey,
+                boolean isTransport)
+                throws ResourceUnavailableException, SpiUnavailableException, IOException;
     }
 }

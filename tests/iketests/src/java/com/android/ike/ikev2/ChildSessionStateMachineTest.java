@@ -166,7 +166,7 @@ public final class ChildSessionStateMachineTest {
         int spiOut = ByteBuffer.wrap(spiOutBytes).getInt();
 
         return new ChildSaRecord(
-                spiIn, spiOut, true /*localInit*/, null, null, null, null, null, null);
+                spiIn, spiOut, true /*localInit*/, null, null, null, null, null, null, null, null);
     }
 
     @After
@@ -186,7 +186,8 @@ public final class ChildSessionStateMachineTest {
 
         mLooper.dispatchAll();
         verify(mMockChildSessionCallback)
-                .onCreateChildSa(mSpyCurrentChildSaRecord.outboundSpi, mChildSessionStateMachine);
+                .onCreateChildSa(
+                        mSpyCurrentChildSaRecord.getRemoteSpi(), mChildSessionStateMachine);
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);

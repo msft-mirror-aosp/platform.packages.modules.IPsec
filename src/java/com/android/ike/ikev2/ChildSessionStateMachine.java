@@ -17,7 +17,9 @@ package com.android.ike.ikev2;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
+import android.net.IpSecManager.SpiUnavailableException;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
@@ -34,6 +36,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
+import java.io.IOException;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.util.List;
@@ -236,6 +239,11 @@ public class ChildSessionStateMachine extends StateMachine {
                         // failure.
                     } catch (GeneralSecurityException e) {
                         // TODO: Handle DH shared key calculation failure.
+                    } catch (ResourceUnavailableException
+                            | SpiUnavailableException
+                            | IOException e) {
+                        // TODO:Fire the ChildCallback.onError() callback and initiate deletion
+                        // exchange on this Child SA.
                     } finally {
                         if (!childSetUpSuccess && childSpiPair != null) {
                             childSpiPair.first.close();
