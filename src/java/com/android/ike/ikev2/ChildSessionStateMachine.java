@@ -30,6 +30,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
@@ -263,15 +264,41 @@ public class ChildSessionStateMachine extends StateMachine {
         private Pair<SecurityParameterIndex, SecurityParameterIndex> validateCreateChildResp(
                 List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
                 throws IkeProtocolException, ResourceUnavailableException, SpiUnavailableException {
+            // TODO: If the response is unacceptable, extract the corresponding Child SPI in SA
+            // request and initiate Delete Child SA exchange. If the response includes an error
+            // notification, clean up this StateMachine.
+
             List<IkeNotifyPayload> notifyPayloads =
                     IkePayload.getPayloadListForTypeInProvidedList(
                             IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, respPayloads);
 
+            boolean hasTransportNotify = false;
             for (IkeNotifyPayload notify : notifyPayloads) {
-                // TODO: Throw IkeProtocolException if encountering error notifications.
-                // TODO: Handle status notifications that provide additional Child SA
-                // configruations.
+                switch (notify.notifyType) {
+                    case IkeNotifyPayload.NOTIFY_TYPE_ADDITIONAL_TS_POSSIBLE:
+                        // TODO: Store it as part of negotiation results that can be retrieved by
+                        // users.
+                        break;
+                    case IkeNotifyPayload.NOTIFY_TYPE_IPCOMP_SUPPORTED:
+                        // Ignore
+                        break;
+                    case IkeNotifyPayload.NOTIFY_TYPE_USE_TRANSPORT_MODE:
+                        hasTransportNotify = true;
+                        break;
+                    case IkeNotifyPayload.NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED:
+                        // Ignore
+                        break;
+                    default:
+                        throw new UnsupportedOperationException(
+                                "Do not support handling error notifications");
+                        // TODO: Throw IkeProtocolException if encountering error notifications.
 
+                }
+            }
+
+            if (mChildSessionOptions.isTransportMode() != hasTransportNotify) {
+                throw new NoValidProposalChosenException(
+                        "Failed the negotiation on Child SA mode (conflicting modes chosen).");
             }
 
             // TODO: Validate TS in the response is the subset of TS in the request.
