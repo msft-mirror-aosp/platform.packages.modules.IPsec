@@ -63,6 +63,7 @@ import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
+import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
@@ -675,8 +676,19 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyIkeInitRespReceivedPacket);
         mLooper.dispatchAll();
         verifyIncrementLocaReqMsgId();
-        mIkeSessionStateMachine.mIkeInitResponsePacket =
-                TestUtils.hexStringToByteArray(IKE_INIT_RESP_HEX_STRING);
+
+        IkeMessage mockIkeInitResp = mock(IkeMessage.class);
+        mIkeSessionStateMachine.mIkeInitResponseMessage = mockIkeInitResp;
+        when(mockIkeInitResp.encode())
+                .thenReturn(TestUtils.hexStringToByteArray(IKE_INIT_RESP_HEX_STRING));
+        when(mockIkeInitResp.getPayloadForType(
+                        eq(IkePayload.PAYLOAD_TYPE_NONCE), eq(IkeNoncePayload.class)))
+                .thenReturn(
+                        (IkeNoncePayload)
+                                IkeTestUtils.hexStringToIkePayload(
+                                        IkePayload.PAYLOAD_TYPE_NONCE,
+                                        true /*isResp*/,
+                                        NONCE_RESP_PAYLOAD_HEX_STRING));
 
         // Receive IKE AUTH response
         ReceivedIkePacket dummyIkeAuthRespReceivedPacket = makeIkeAuthResponse();
@@ -741,10 +753,12 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isIkePayloadExist(childReqList, IkePayload.PAYLOAD_TYPE_SA));
         assertTrue(isIkePayloadExist(childReqList, IkePayload.PAYLOAD_TYPE_TS_INITIATOR));
         assertTrue(isIkePayloadExist(childReqList, IkePayload.PAYLOAD_TYPE_TS_RESPONDER));
+        assertTrue(isIkePayloadExist(childReqList, IkePayload.PAYLOAD_TYPE_NONCE));
 
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_SA));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_INITIATOR));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_RESPONDER));
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_NONCE));
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
