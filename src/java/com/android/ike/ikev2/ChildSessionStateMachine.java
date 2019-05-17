@@ -24,7 +24,7 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
 
-import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionCallback;
+import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
@@ -134,7 +134,7 @@ public class ChildSessionStateMachine extends StateMachine {
     public void handleFirstChildExchange(
             List<IkePayload> reqPayloads,
             List<IkePayload> respPayloads,
-            IChildSessionCallback callback) {
+            IChildSessionSmCallback callback) {
         registerProvisionalChildSession(respPayloads, callback);
 
         sendMessage(
@@ -152,14 +152,14 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
-     * Register provisioning ChildSessionStateMachine in IChildSessionCallback
+     * Register provisioning ChildSessionStateMachine in IChildSessionSmCallback
      *
      * <p>This method is for avoiding CHILD_SA_NOT_FOUND error in IkeSessionStateMachine when remote
      * peer sends request for delete/rekey this Child SA before ChildSessionStateMachine sends
      * FirstChildNegotiationData to itself.
      */
     private void registerProvisionalChildSession(
-            List<IkePayload> respPayloads, IChildSessionCallback callback) {
+            List<IkePayload> respPayloads, IChildSessionSmCallback callback) {
         // When decoding responding IkeSaPayload in IkeSessionStateMachine, it is validated that
         // IkeSaPayload has exactly one IkeSaPayload.Proposal.
         IkeSaPayload saPayload = null;
@@ -187,12 +187,12 @@ public class ChildSessionStateMachine extends StateMachine {
     private static class FirstChildNegotiationData {
         public final List<IkePayload> requestPayloads;
         public final List<IkePayload> responsePayloads;
-        public final IChildSessionCallback childCallback;
+        public final IChildSessionSmCallback childCallback;
 
         FirstChildNegotiationData(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
-                IChildSessionCallback callback) {
+                IChildSessionSmCallback callback) {
             requestPayloads = reqPayloads;
             responsePayloads = respPayloads;
             childCallback = callback;
