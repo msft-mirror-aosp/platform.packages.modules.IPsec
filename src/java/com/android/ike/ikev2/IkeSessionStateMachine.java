@@ -184,8 +184,8 @@ public class IkeSessionStateMachine extends StateMachine {
 
     // FIXME: b/131265898 Pass these packets from CreateIkeLocalIkeInit to CreateIkeLocalIkeAuth
     // when Android StateMachine can support that.
-    @VisibleForTesting byte[] mIkeInitRequestPacket;
-    @VisibleForTesting byte[] mIkeInitResponsePacket;
+    @VisibleForTesting IkeMessage mIkeInitRequestMessage;
+    @VisibleForTesting IkeMessage mIkeInitResponseMessage;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -939,7 +939,7 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             IkeMessage request = buildRequest();
             mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
-            mIkeInitRequestPacket = request.encode();
+            mIkeInitRequestMessage = request;
             mRetransmitter = new UnencryptedRetransmitter(request);
         }
 
@@ -975,7 +975,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     }
                     IkeMessage ikeMessage = IkeMessage.decode(ikeHeader, ikePacketBytes);
                     handleResponseIkeMessage(ikeMessage);
-                    mIkeInitResponsePacket = ikePacketBytes;
+                    mIkeInitResponseMessage = ikeMessage;
                     mCurrentIkeSaRecord.incrementLocalRequestMessageId();
                 } else {
                     // TODO: Drop unexpected request.
@@ -1255,11 +1255,16 @@ public class IkeSessionStateMachine extends StateMachine {
                                     mIkePrf,
                                     mCurrentIkeSaRecord.getSkD());
 
-                    List<IkePayload> childReqList = extractChildPayloadsFromMessage(
-                            mRetransmitter.getMessage());
+                    List<IkePayload> childReqList =
+                            extractChildPayloadsFromMessage(mRetransmitter.getMessage());
                     List<IkePayload> childRespList = extractChildPayloadsFromMessage(ikeMessage);
-                    // FIXME: Negotiating first Child SA requires the nonce pair from IKE INIT
-                    // exchange.
+                    childReqList.add(
+                            mIkeInitRequestMessage.getPayloadForType(
+                                    IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class));
+                    childRespList.add(
+                            mIkeInitResponseMessage.getPayloadForType(
+                                    IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class));
+
                     firstChild.handleFirstChildExchange(
                             childReqList, childRespList, new ChildSessionSmCallback());
 
@@ -1291,7 +1296,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     IkeAuthPskPayload pskPayload =
                             new IkeAuthPskPayload(
                                     authConfig.mPsk,
-                                    mIkeInitRequestPacket,
+                                    mIkeInitRequestMessage.encode(),
                                     mCurrentIkeSaRecord.nonceResponder,
                                     initIdPayload.getEncodedPayloadBody(),
                                     mIkePrf,
@@ -1467,7 +1472,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     IkeAuthPskPayload pskPayload = (IkeAuthPskPayload) authPayload;
                     pskPayload.verifyInboundSignature(
                             mIkeSessionOptions.getRemoteAuthConfig().mPsk,
-                            mIkeInitResponsePacket,
+                            mIkeInitResponseMessage.encode(),
                             mCurrentIkeSaRecord.nonceInitiator,
                             respIdPayload.getEncodedPayloadBody(),
                             mIkePrf,
@@ -1720,7 +1725,6 @@ public class IkeSessionStateMachine extends StateMachine {
                 // TODO: Shutdown - fatal error
             }
         }
-
 
         @Override
         public void exit() {
