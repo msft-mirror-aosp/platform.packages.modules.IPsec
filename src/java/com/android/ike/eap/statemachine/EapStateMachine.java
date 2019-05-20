@@ -18,6 +18,7 @@ package com.android.ike.eap.statemachine;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
@@ -56,7 +57,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             try {
                 super.decode(packet);
             } catch (UnsupportedEapTypeException ex) {
-                // unsupported type, so return Nak
+                EapMessage nak = EapMessage.getNak(ex.eapIdentifier);
+                return EapResponse.getEapResponse(nak);
             } catch (EapSilentException ex) {
                 return new EapError(ex);
             }
@@ -70,7 +72,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             try {
                 super.decode(packet);
             } catch (UnsupportedEapTypeException ex) {
-                // unsupported type, so return Nak
+                EapMessage nak = EapMessage.getNak(ex.eapIdentifier);
+                return EapResponse.getEapResponse(nak);
             } catch (EapSilentException ex) {
                 return new EapError(ex);
             }
@@ -84,7 +87,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             try {
                 super.decode(packet);
             } catch (UnsupportedEapTypeException ex) {
-                // unsupported type, so return Nak
+                EapMessage nak = EapMessage.getNak(ex.eapIdentifier);
+                return EapResponse.getEapResponse(nak);
             } catch (EapSilentException ex) {
                 return new EapError(ex);
             }
