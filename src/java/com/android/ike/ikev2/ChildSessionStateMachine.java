@@ -30,8 +30,11 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
+import com.android.ike.ikev2.message.IkeSaPayload.ChildProposal;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -39,6 +42,7 @@ import com.android.internal.util.StateMachine;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
+import java.security.Provider;
 import java.util.List;
 
 /**
@@ -258,11 +262,59 @@ public class ChildSessionStateMachine extends StateMachine {
 
         private Pair<SecurityParameterIndex, SecurityParameterIndex> validateCreateChildResp(
                 List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
-                throws IkeProtocolException {
-            // TODO: Validate SA reponse against request and set negotiated SA in
-            // mChildSessionOptions. Return non-null SPI pair only when validation succeeds,
-            // otherwise release all allocated SPIs.
-            return new Pair<SecurityParameterIndex, SecurityParameterIndex>(null, null);
+                throws IkeProtocolException, ResourceUnavailableException, SpiUnavailableException {
+            List<IkeNotifyPayload> notifyPayloads =
+                    IkePayload.getPayloadListForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, respPayloads);
+
+            for (IkeNotifyPayload notify : notifyPayloads) {
+                // TODO: Throw IkeProtocolException if encountering error notifications.
+                // TODO: Handle status notifications that provide additional Child SA
+                // configruations.
+
+            }
+
+            // TODO: Validate TS in the response is the subset of TS in the request.
+
+            IkeSaPayload reqSaPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
+            IkeSaPayload respSaPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, respPayloads);
+
+            // This method either throws exception or returns non-null pair that contains two valid
+            // {@link ChildProposal} both with a {@link SecurityParameterIndex} allocated inside.
+            Pair<ChildProposal, ChildProposal> childProposalPair =
+                    respSaPayload.getVerifiedNegotiatedChildProposalPair(
+                            reqSaPayload, mIpSecManager, mRemoteAddress);
+            mSaProposal = childProposalPair.second.saProposal;
+
+            try {
+                // Build crypto tools using mSaProposal. It is ensured by {@link
+                // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that mSaProposal is valid.
+                // mSaProposal has exactly one encryption algorithm. When the encryption algorithm
+                // is combined-mode, it either does not have integrity algorithm or only has one
+                // NONE value integrity algorithm. Otherwise, it has at most one integrity
+                // algorithm.
+                Provider provider = IkeMessage.getSecurityProvider();
+                mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
+                if (mSaProposal.getIntegrityTransforms().length != 0
+                        && mSaProposal.getIntegrityTransforms()[0].id
+                                != SaProposal.INTEGRITY_ALGORITHM_NONE) {
+                    mChildIntegrity =
+                            IkeMacIntegrity.create(
+                                    mSaProposal.getIntegrityTransforms()[0], provider);
+                }
+
+                return new Pair<SecurityParameterIndex, SecurityParameterIndex>(
+                        childProposalPair.first.getChildSpiResource(),
+                        childProposalPair.second.getChildSpiResource());
+            } catch (Exception e) {
+                childProposalPair.first.getChildSpiResource().close();
+                childProposalPair.second.getChildSpiResource().close();
+                throw e;
+            }
         }
     }
 
