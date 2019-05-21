@@ -1,0 +1,144 @@
+/*
+ * Copyright (C) 2019 The Android Open Source Project
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.android.ike.eap.message;
+
+import android.annotation.IntDef;
+import android.annotation.NonNull;
+
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * EapData represents the data-bytes of an EAP-Packet.
+ *
+ * <p>EapData objects will always have a Type-value and the Type-Data bytes that follow.
+ *
+ * EapData objects should be parsed from the Type and Type-Data sections of an EAP Packet, as shown
+ * below:
+ *
+ * +-----------------+-----------------+----------------------------------+
+ * |   Code (1B)     | Identifier (1B) |           Length (2B)            |
+ * +-----------------+-----------------+----------------------------------+
+ * |    Type (1B)    |  Type-Data ...
+ * +-----------------+-----
+ *
+ * @see <a href="https://tools.ietf.org/html/rfc3748#section-4">RFC 3748, Extensible Authentication
+ * Protocol (EAP)</a>
+ */
+public class EapData {
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            EAP_IDENTITY,
+            EAP_NOTIFICATION,
+            EAP_NAK,
+            EAP_MD5_CHALLENGE,
+            EAP_TYPE_AKA,
+            EAP_TYPE_AKA_PRIME,
+            EAP_TYPE_SIM
+    })
+    public @interface EapType {}
+
+    // EAP Type values defined by IANA
+    // https://www.iana.org/assignments/eap-numbers/eap-numbers.xhtml
+    public static final int EAP_IDENTITY = 1;
+    public static final int EAP_NOTIFICATION = 2;
+    public static final int EAP_NAK = 3;
+    public static final int EAP_MD5_CHALLENGE = 4;
+    public static final int EAP_TYPE_SIM = 18;
+    public static final int EAP_TYPE_AKA = 23;
+    public static final int EAP_TYPE_AKA_PRIME = 50;
+
+    private static final Set<Integer> VALID_TYPES = new HashSet<>();
+    static {
+        VALID_TYPES.add(EAP_IDENTITY);
+        VALID_TYPES.add(EAP_NOTIFICATION);
+        VALID_TYPES.add(EAP_NAK);
+        VALID_TYPES.add(EAP_MD5_CHALLENGE);
+        VALID_TYPES.add(EAP_TYPE_AKA);
+        VALID_TYPES.add(EAP_TYPE_AKA_PRIME);
+        VALID_TYPES.add(EAP_TYPE_SIM);
+    }
+
+    @EapType public final int eapType;
+    public final byte[] eapTypeData;
+
+    /**
+     * Constructs a new EapData instance.
+     *
+     * @param eapType the {@link EapType} for this EapData instance
+     * @param eapTypeData the Type-Data for this EapData instance
+     */
+    public EapData(@EapType int eapType, @NonNull byte[] eapTypeData) {
+        this.eapType = eapType;
+        this.eapTypeData = eapTypeData;
+
+        validate();
+    }
+
+    /**
+     * Gets the length of this EapData object.
+     *
+     * @return int for the number of bytes this EapData object represents
+     */
+    public int getLength() {
+        // length of byte-array + 1 (for 1B type field)
+        return eapTypeData.length + 1;
+    }
+
+    /**
+     * Returns whether this instance is equal to the given Object o.
+     *
+     * @param o the Object to be tested for equality
+     * @return true iff this instance is equal to the given o
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        EapData eapData = (EapData) o;
+        return eapType == eapData.eapType
+                && Arrays.equals(eapTypeData, eapData.eapTypeData);
+    }
+
+    /**
+     * Returns the hashCode value for this instance.
+     *
+     * @return the hashCode value for this instance
+     */
+    @Override
+    public int hashCode() {
+        return Objects.hash(eapType, Arrays.hashCode(eapTypeData));
+    }
+
+    private void validate() {
+        if (this.eapTypeData == null) {
+            throw new IllegalArgumentException("EapTypeData byte[] must be non-null");
+        }
+
+        if (!VALID_TYPES.contains(this.eapType)) {
+            throw new IllegalArgumentException("eapType must be be a valid @EapType value");
+        }
+    }
+}
