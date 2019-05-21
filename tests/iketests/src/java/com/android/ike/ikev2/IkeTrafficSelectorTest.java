@@ -18,6 +18,9 @@ package com.android.ike.ikev2;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.TestUtils;
@@ -56,6 +59,26 @@ public final class IkeTrafficSelectorTest {
     private static final int TS_TYPE_OFFSET = 0;
     private static final int PROTOCOL_ID_OFFSET = 1;
     private static final int TS_LENGTH_OFFSET = 2;
+
+    private IkeTrafficSelector mTsOne;
+    private IkeTrafficSelector mTsTwo;
+
+    public IkeTrafficSelectorTest() {
+        mTsOne =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_ONE_START_PORT,
+                        TS_ONE_END_PORT,
+                        TS_ONE_START_ADDRESS,
+                        TS_ONE_END_ADDRESS);
+        mTsTwo =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_TWO_START_PORT,
+                        TS_TWO_END_PORT,
+                        TS_TWO_START_ADDRESS,
+                        TS_TWO_END_ADDRESS);
+    }
 
     @Test
     public void testDecodeIkeTrafficSelectors() throws Exception {
@@ -106,6 +129,36 @@ public final class IkeTrafficSelectorTest {
 
         byte[] expectedBytes = TestUtils.hexStringToByteArray(TS_IPV4_ONE_HEX_STRING);
         assertArrayEquals(expectedBytes, byteBuffer.array());
+    }
+
+    @Test
+    public void testEquals() throws Exception {
+        IkeTrafficSelector tsOneOther =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_ONE_START_PORT,
+                        TS_ONE_END_PORT,
+                        TS_ONE_START_ADDRESS,
+                        TS_ONE_END_ADDRESS);
+
+        assertEquals(mTsOne, tsOneOther);
+        assertNotEquals(mTsOne, mTsTwo);
+    }
+
+    @Test
+    public void testContains() throws Exception {
+        IkeTrafficSelector tsOneSubset =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_ONE_START_PORT + 1,
+                        TS_ONE_END_PORT,
+                        TS_ONE_START_ADDRESS,
+                        TS_ONE_END_ADDRESS);
+        assertTrue(mTsOne.contains(tsOneSubset));
+        assertFalse(tsOneSubset.contains(mTsOne));
+
+        assertTrue(mTsOne.contains(mTsOne));
+        assertFalse(mTsOne.contains(mTsTwo));
     }
 
     @Test
