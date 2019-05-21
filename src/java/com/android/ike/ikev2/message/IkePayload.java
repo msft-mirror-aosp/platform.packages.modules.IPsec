@@ -21,6 +21,8 @@ import android.annotation.IntDef;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
+import java.util.List;
 
 /**
  * IkePayload is an abstract class that represents the common information for all IKE payload types.
@@ -48,6 +50,7 @@ public abstract class IkePayload {
         PAYLOAD_TYPE_SA,
         PAYLOAD_TYPE_KE,
         PAYLOAD_TYPE_CERT,
+        PAYLOAD_TYPE_CERT_REQUEST,
         PAYLOAD_TYPE_AUTH,
         PAYLOAD_TYPE_ID_INITIATOR,
         PAYLOAD_TYPE_ID_RESPONDER,
@@ -71,8 +74,10 @@ public abstract class IkePayload {
     public static final int PAYLOAD_TYPE_ID_INITIATOR = 35;
     /** Identification Payload for IKE SA Responder */
     public static final int PAYLOAD_TYPE_ID_RESPONDER = 36;
-    /** Certification Payload */
+    /** Certificate Payload */
     public static final int PAYLOAD_TYPE_CERT = 37;
+    /** Certificate Request Payload */
+    public static final int PAYLOAD_TYPE_CERT_REQUEST = 38;
     /** Authentication Payload */
     public static final int PAYLOAD_TYPE_AUTH = 39;
     /** Nonce Payload */
@@ -131,6 +136,56 @@ public abstract class IkePayload {
     IkePayload(int payload, boolean critical) {
         payloadType = payload;
         isCritical = critical;
+    }
+
+    /**
+     * A helper method to quickly obtain payloads with the input payload type in the provided
+     * payload list.
+     *
+     * <p>This method will not check if this payload type can be repeatable in an IKE message
+     * because it does not know the context of the provided payload list. Caller should call this
+     * method if they are expecting more than one payloads in the list.
+     *
+     * @param payloadType the payloadType to look for.
+     * @param payloadClass the class of the desired payload.
+     * @param searchList the payload list to do the search.
+     * @return a list of IkePayloads with the payloadType.
+     */
+    public static <T extends IkePayload> List<T> getPayloadListForTypeInProvidedList(
+            @IkePayload.PayloadType int payloadType,
+            Class<T> payloadClass,
+            List<IkePayload> searchList) {
+        List<T> payloadList = new LinkedList<>();
+
+        for (IkePayload payload : searchList) {
+            if (payloadType == payload.payloadType) {
+                payloadList.add(payloadClass.cast(payload));
+            }
+        }
+
+        return payloadList;
+    }
+
+    /**
+     * A helper method to quickly obtain the payload with the input payload type in the provided
+     * payload list.
+     *
+     * <p>This method will not check if this payload type can be repeatable in an IKE message
+     * because it does not know the context of the provided payload list. Caller should call this
+     * method if they are expecting no more than one payloads in the list.
+     *
+     * @param payloadType the payloadType to look for.
+     * @param payloadClass the class of the desired payload.
+     * @param searchList the payload list to do the search.
+     * @return the IkePayload with the payloadType.
+     */
+    public static <T extends IkePayload> T getPayloadForTypeInProvidedList(
+            @IkePayload.PayloadType int payloadType,
+            Class<T> payloadClass,
+            List<IkePayload> searchList) {
+        List<T> payloadList =
+                getPayloadListForTypeInProvidedList(payloadType, payloadClass, searchList);
+        return payloadList.isEmpty() ? null : payloadList.get(0);
     }
 
     /**

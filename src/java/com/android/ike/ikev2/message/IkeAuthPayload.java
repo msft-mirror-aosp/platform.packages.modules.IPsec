@@ -18,15 +18,12 @@ package com.android.ike.ikev2.message;
 
 import android.annotation.IntDef;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
-import java.security.InvalidKeyException;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 /**
  * IkeAuthPayload is an abstract class that represents the common information for all Authentication
@@ -67,7 +64,7 @@ public abstract class IkeAuthPayload extends IkePayload {
     }
 
     protected static IkeAuthPayload getIkeAuthPayload(boolean critical, byte[] payloadBody)
-            throws IkeException {
+            throws IkeProtocolException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
 
         int authMethod = Byte.toUnsignedInt(inputBuffer.get());
@@ -93,21 +90,6 @@ public abstract class IkeAuthPayload extends IkePayload {
         }
     }
 
-    // Sign data with PRF when building outbound packet or verifying inbound packet. It is called
-    // for calculating signature over ID payload for all types of authentication and also for
-    // calculating signature over PSK for PSK authentication.
-    protected static byte[] signWithPrf(Mac prfMac, byte[] prfKeyBytes, byte[] dataToSign)
-            throws InvalidKeyException {
-        SecretKeySpec prfKey = new SecretKeySpec(prfKeyBytes, prfMac.getAlgorithm());
-        prfMac.init(prfKey);
-
-        ByteBuffer dataBuffer = ByteBuffer.wrap(dataToSign);
-
-        // Calculate MAC.
-        prfMac.update(dataBuffer);
-        return prfMac.doFinal();
-    }
-
     // When not using EAP, the peers are authenticated by having each sign a block of data named as
     // SignedOctets. IKE initiator's SignedOctets are the concatenation of the IKE_INIT request
     // message, the Nonce of IKE responder and the signed ID-Initiator payload body. Similarly, IKE
@@ -117,10 +99,9 @@ public abstract class IkeAuthPayload extends IkePayload {
             byte[] ikeInitBytes,
             byte[] nonce,
             byte[] idPayloadBodyBytes,
-            Mac prfMac,
-            byte[] prfKeyBytes)
-            throws InvalidKeyException {
-        byte[] signedidPayloadBodyBytes = signWithPrf(prfMac, prfKeyBytes, idPayloadBodyBytes);
+            IkeMacPrf ikePrf,
+            byte[] prfKeyBytes) {
+        byte[] signedidPayloadBodyBytes = ikePrf.signBytes(prfKeyBytes, idPayloadBodyBytes);
 
         ByteBuffer buffer =
                 ByteBuffer.allocate(

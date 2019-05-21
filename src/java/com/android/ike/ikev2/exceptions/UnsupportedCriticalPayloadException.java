@@ -15,30 +15,31 @@
  */
 package com.android.ike.ikev2.exceptions;
 
-import com.android.ike.ikev2.message.IkeNotifyPayload;
-
 import java.util.List;
 
 /**
  * This exception is thrown when payload type is not supported and critical bit is set
  *
- * <p>Include UNSUPPORTED_CRITICAL_PAYLOAD Notify payload in a response message containing the
- * payload type for each payload.
+ * <p>Include UNSUPPORTED_CRITICAL_PAYLOAD Notify payloads in a response message. Each payload
+ * contains only one payload type.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class UnsupportedCriticalPayloadException extends IkeException {
+public final class UnsupportedCriticalPayloadException extends IkeProtocolException {
 
     public final List<Integer> payloadTypeList;
 
     /**
-     * Construct an instance of UnsupportedCriticalPayloadException
+     * Construct an instance of UnsupportedCriticalPayloadException.
      *
-     * @param payloadList the list of all unsupported critical payload types
+     * <p>To keep IkeProtocolException simpler, we only pass the first payload type to the
+     * superclass which can be retrieved by users.
+     *
+     * @param payloadList the list of all unsupported critical payload types.
      */
     public UnsupportedCriticalPayloadException(List<Integer> payloadList) {
-        super(IkeNotifyPayload.NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD);
+        super(ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD, payloadList.get(0));
         payloadTypeList = payloadList;
     }
 }

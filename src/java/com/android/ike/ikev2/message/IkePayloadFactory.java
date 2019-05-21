@@ -18,16 +18,14 @@ package com.android.ike.ikev2.message;
 
 import android.util.Pair;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-
-import javax.crypto.Cipher;
-import javax.crypto.Mac;
-import javax.crypto.SecretKey;
 
 /**
  * IkePayloadFactory is used for creating IkePayload according to is type.
@@ -59,7 +57,7 @@ final class IkePayloadFactory {
         @Override
         public IkePayload decodeIkePayload(
                 int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
-                throws IkeException {
+                throws IkeProtocolException {
             switch (payloadType) {
                     // TODO: Add cases for creating supported payloads.
                 case IkePayload.PAYLOAD_TYPE_SA:
@@ -102,7 +100,7 @@ final class IkePayloadFactory {
      * @return a Pair including IkePayload and next payload type.
      */
     protected static Pair<IkePayload, Integer> getIkePayload(
-            int payloadType, boolean isResp, ByteBuffer input) throws IkeException {
+            int payloadType, boolean isResp, ByteBuffer input) throws IkeProtocolException {
         int nextPayloadType = (int) input.get();
         // read critical bit
         boolean isCritical = isCriticalPayload(input.get());
@@ -130,21 +128,21 @@ final class IkePayloadFactory {
      * Construct an instance of IkeSkPayload by decrypting the received message.
      *
      * @param message the byte array contains the whole IKE message.
-     * @param integrityMac the initialized Mac for integrity check.
-     * @param checksumLen the checksum length of negotiated integrity algorithm.
-     * @param decryptCipher the uninitialized Cipher for doing decryption.
-     * @param dKey the decryption key.
+     * @param integrityMac the negotiated integrity algorithm.
+     * @param decryptCipher the negotiated encryption algorithm.
+     * @param integrityKey the negotiated integrity algorithm key.
+     * @param decryptKey the negotiated decryption key.
      * @return a pair including IkePayload and next payload type.
-     * @throws IkeException for decoding errors.
+     * @throws IkeProtocolException for decoding errors.
      * @throws GeneralSecurityException if there is any error during integrity check or decryption.
      */
     protected static Pair<IkeSkPayload, Integer> getIkeSkPayload(
             byte[] message,
-            Mac integrityMac,
-            int checksumLen,
-            Cipher decryptCipher,
-            SecretKey dKey)
-            throws IkeException, GeneralSecurityException {
+            IkeMacIntegrity integrityMac,
+            IkeCipher decryptCipher,
+            byte[] integrityKey,
+            byte[] decryptKey)
+            throws IkeProtocolException, GeneralSecurityException {
         ByteBuffer input =
                 ByteBuffer.wrap(
                         message,
@@ -174,12 +172,7 @@ final class IkePayloadFactory {
 
         IkeSkPayload payload =
                 new IkeSkPayload(
-                        isCritical,
-                        message,
-                        integrityMac,
-                        checksumLen,
-                        decryptCipher,
-                        dKey);
+                        isCritical, message, integrityMac, decryptCipher, integrityKey, decryptKey);
         return new Pair(payload, nextPayloadType);
     }
 
@@ -193,6 +186,6 @@ final class IkePayloadFactory {
     interface IIkePayloadDecoder {
         IkePayload decodeIkePayload(
                 int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
-                throws IkeException;
+                throws IkeProtocolException;
     }
 }

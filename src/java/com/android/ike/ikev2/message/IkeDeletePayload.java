@@ -16,7 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.nio.ByteBuffer;
@@ -29,10 +29,30 @@ import java.nio.ByteBuffer;
  * packets. Since IKE library only supports negotiating Child SA using ESP, only the protocol ID of
  * 3 (ESP) is used for deleting Child SA.
  *
+ * The possible request/response pairs for deletion are as follows:
+ * - IKE SA deletion:
+ *     Incoming: INFORMATIONAL(DELETE(PROTO_IKE))
+ *     Outgoing: INFORMATIONAL()
+ *
+ * - ESP SA deletion:
+ *     Incoming: INFORMATIONAL(DELETE(PROTO_ESP, SPI_A_OUT))
+ *     Outgoing: INFORMATIONAL(DELETE(PROTO_ESP, SPI_A_IN))
+ *
+ * - ESP SA simultaneous deletion:
+ *     Outgoing: INFORMATIONAL(DELETE(PROTO_ESP, SPI_A_IN))
+ *     Incoming: INFORMATIONAL(DELETE(PROTO_ESP, SPI_A_OUT))
+ *     Outgoing: INFORMATIONAL() // Notice DELETE payload omitted
+ *
+ * - ESP SA simultaneous multi-deletion:
+ *     Outgoing: INFORMATIONAL(DELETE(PROTO_ESP, SPI_A_IN))
+ *     Incoming: INFORMATIONAL(DELETE(PROTO_ESP, SPI_A_OUT, SPI_B_OUT))
+ *     Outgoing: INFORMATIONAL(DELETE(PROTO_ESP, SPI_B_IN)) // Notice SPI_A_OUT omitted
+ *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.11">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class IkeDeletePayload extends IkePayload {
+public final class IkeDeletePayload extends IkeInformationalPayload {
+    private static final int DELETE_HEADER_LEN = 4;
 
     @ProtocolId public final int protocolId;
     public final byte spiSize;
@@ -48,9 +68,9 @@ public final class IkeDeletePayload extends IkePayload {
      * @param critical indicates if this payload is critical. Ignored in supported payload as
      *     instructed by the RFC 7296.
      * @param payloadBody payload body in byte array
-     * @throws IkeException if there is any error
+     * @throws IkeProtocolException if there is any error
      */
-    IkeDeletePayload(boolean critical, byte[] payloadBody) throws IkeException {
+    IkeDeletePayload(boolean critical, byte[] payloadBody) throws IkeProtocolException {
         super(PAYLOAD_TYPE_DELETE, critical);
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
@@ -86,7 +106,37 @@ public final class IkeDeletePayload extends IkePayload {
         }
     }
 
-    // TODO: Add a constructor for building outbound IKE message.
+    /**
+     * Constructor for an outbound IKE SA deletion payload.
+     *
+     * <p>This constructor takes no SPI, as IKE SAs are deleted by sending a delete payload within
+     * the negotiated session. As such, the SPIs are shared state that does not need to be sent.
+     */
+    public IkeDeletePayload() {
+        super(PAYLOAD_TYPE_DELETE, false);
+        protocolId = PROTOCOL_ID_IKE;
+        spiSize = SPI_LEN_NOT_INCLUDED;
+        numSpi = 0;
+        spisToDelete = new int[0];
+    }
+
+    /**
+     * Constructor for an outbound Child SA deletion payload.
+     *
+     * @param spis array of SPIs of Child SAs to delete. Must contain at least one SPI.
+     */
+    public IkeDeletePayload(int[] spis) {
+        super(PAYLOAD_TYPE_DELETE, false);
+
+        if (spis == null || spis.length < 1) {
+            throw new IllegalArgumentException("No SPIs provided");
+        }
+
+        protocolId = PROTOCOL_ID_ESP;
+        spiSize = SPI_LEN_IPSEC;
+        numSpi = spis.length;
+        spisToDelete = spis;
+    }
 
     /**
      * Encode Delete Payload to ByteBuffer.
@@ -96,8 +146,12 @@ public final class IkeDeletePayload extends IkePayload {
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        throw new UnsupportedOperationException("Operation not supported.");
-        // TODO: Implement it.
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+        byteBuffer.put((byte) protocolId).put(spiSize).putShort((short) numSpi);
+
+        for (int toDelete : spisToDelete) {
+            byteBuffer.putInt(toDelete);
+        }
     }
 
     /**
@@ -107,8 +161,7 @@ public final class IkeDeletePayload extends IkePayload {
      */
     @Override
     protected int getPayloadLength() {
-        throw new UnsupportedOperationException("Operation not supported.");
-        // TODO: Implement it.
+        return GENERIC_HEADER_LENGTH + DELETE_HEADER_LEN + spisToDelete.length * spiSize;
     }
 
     /**

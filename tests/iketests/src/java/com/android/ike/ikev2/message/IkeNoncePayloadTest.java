@@ -18,6 +18,8 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 
+import com.android.ike.TestUtils;
+
 import org.junit.Test;
 
 import java.nio.ByteBuffer;

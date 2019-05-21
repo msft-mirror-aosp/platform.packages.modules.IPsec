@@ -16,17 +16,20 @@
 
 package com.android.ike.ikev2;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
-import com.android.ike.ikev2.message.TestUtils;
 
 import libcore.net.InetAddressUtils;
 
 import org.junit.Test;
 
 import java.net.Inet4Address;
+import java.net.Inet6Address;
+import java.nio.ByteBuffer;
 
 public final class IkeTrafficSelectorTest {
     private static final String TS_IPV4_ONE_HEX_STRING = "070000100010fff0c0000264c0000365";
@@ -86,6 +89,23 @@ public final class IkeTrafficSelectorTest {
         assertEquals(TS_TWO_END_PORT, tsTwo.endPort);
         assertEquals(TS_TWO_START_ADDRESS, tsTwo.startingAddress);
         assertEquals(TS_TWO_END_ADDRESS, tsTwo.endingAddress);
+    }
+
+    @Test
+    public void testBuildAndEncodeIkeTrafficSelector() throws Exception {
+        IkeTrafficSelector ts =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_ONE_START_PORT,
+                        TS_ONE_END_PORT,
+                        TS_ONE_START_ADDRESS,
+                        TS_ONE_END_ADDRESS);
+
+        ByteBuffer byteBuffer = ByteBuffer.allocate(ts.selectorLength);
+        ts.encodeToByteBuffer(byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(TS_IPV4_ONE_HEX_STRING);
+        assertArrayEquals(expectedBytes, byteBuffer.array());
     }
 
     @Test
@@ -169,6 +189,71 @@ public final class IkeTrafficSelectorTest {
             fail("Expected to fail when starting address is larger than ending address.");
         } catch (InvalidSyntaxException expected) {
 
+        }
+    }
+
+    @Test
+    public void testBuildIkeTrafficSelectorWithInvalidTsType() throws Exception {
+        try {
+            IkeTrafficSelector ts =
+                    new IkeTrafficSelector(
+                            0,
+                            TS_ONE_START_PORT,
+                            TS_ONE_END_PORT,
+                            TS_ONE_START_ADDRESS,
+                            TS_ONE_END_ADDRESS);
+            fail("Expected to fail due to unrecognized Traffic Selector type.");
+        } catch (IllegalArgumentException expected) {
+
+        }
+    }
+
+    @Test
+    public void testBuildIkeTrafficSelectorWithInvalidPortRange() throws Exception {
+        try {
+            IkeTrafficSelector ts =
+                    new IkeTrafficSelector(
+                            IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                            TS_ONE_END_PORT,
+                            TS_ONE_START_PORT,
+                            TS_ONE_START_ADDRESS,
+                            TS_ONE_END_ADDRESS);
+            fail("Expected to fail due to invalid port range.");
+        } catch (IllegalArgumentException expected) {
+
+        }
+    }
+
+    @Test
+    public void testBuildIkeTrafficSelectorWithMismatchedAddressType() throws Exception {
+        Inet6Address inet6Address =
+                (Inet6Address) (InetAddressUtils.parseNumericAddress("0:2001:0:db8::1"));
+        try {
+            IkeTrafficSelector ts =
+                    new IkeTrafficSelector(
+                            IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                            TS_ONE_START_PORT,
+                            TS_ONE_END_PORT,
+                            inet6Address,
+                            TS_ONE_END_ADDRESS);
+            fail("Expected to fail due to mismatched address format.");
+        } catch (IllegalArgumentException expected) {
+
+        }
+    }
+
+    @Test
+    public void testBuildIkeTrafficSelectorWithInvalidAddressRange() throws Exception {
+        try {
+            IkeTrafficSelector ts =
+                    new IkeTrafficSelector(
+                            IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                            TS_ONE_START_PORT,
+                            TS_ONE_END_PORT,
+                            TS_ONE_END_ADDRESS,
+                            TS_ONE_START_ADDRESS);
+            fail("Expected to fail due to invalid address range.");
+        } catch (IllegalArgumentException e) {
         }
     }
 }

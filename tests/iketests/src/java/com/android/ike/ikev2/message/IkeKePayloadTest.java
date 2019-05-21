@@ -22,15 +22,18 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.IkeDhParams;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.utils.BigIntegerUtils;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 import javax.crypto.spec.DHPrivateKeySpec;
@@ -92,6 +95,19 @@ public final class IkeKePayloadTest {
                     + "5BD83A19FB0B5E96BF8FA4D09E345525167ECD9155416F46"
                     + "F408ED31B63C6E6D";
     private static final String KEY_EXCHANGE_ALGORITHM = "DH";
+
+    private DHPrivateKeySpec mPrivateKeySpec;
+
+    @Before
+    public void setUp() throws Exception {
+        BigInteger primeValue =
+                BigIntegerUtils.unsignedHexStringToBigInteger(PRIME_1024_BIT_MODP_160_SUBGROUP);
+        BigInteger baseGenValue =
+                BigIntegerUtils.unsignedHexStringToBigInteger(GENERATOR_1024_BIT_MODP_160_SUBGROUP);
+        BigInteger privateKeyValue =
+                BigIntegerUtils.unsignedHexStringToBigInteger(PRIVATE_KEY_LOCAL);
+        mPrivateKeySpec = new DHPrivateKeySpec(privateKeyValue, primeValue, baseGenValue);
+    }
 
     @Test
     public void testDecodeIkeKePayload() throws Exception {
@@ -163,19 +179,21 @@ public final class IkeKePayloadTest {
     // recipient test in real Key Exchange process. But it is suitable for testing.
     @Test
     public void testGetSharedkey() throws Exception {
-        BigInteger primeValue =
-                BigIntegerUtils.unsignedHexStringToBigInteger(PRIME_1024_BIT_MODP_160_SUBGROUP);
-        BigInteger baseGenValue =
-                BigIntegerUtils.unsignedHexStringToBigInteger(GENERATOR_1024_BIT_MODP_160_SUBGROUP);
-        BigInteger privateKeyValue =
-                BigIntegerUtils.unsignedHexStringToBigInteger(PRIVATE_KEY_LOCAL);
         byte[] remotePublicKey = TestUtils.hexStringToByteArray(PUBLIC_KEY_REMOTE);
-
-        DHPrivateKeySpec privateKeySpec =
-                new DHPrivateKeySpec(privateKeyValue, primeValue, baseGenValue);
-        byte[] sharedKeyBytes = IkeKePayload.getSharedKey(privateKeySpec, remotePublicKey);
+        byte[] sharedKeyBytes = IkeKePayload.getSharedKey(mPrivateKeySpec, remotePublicKey);
 
         byte[] expectedSharedKeyBytes = TestUtils.hexStringToByteArray(EXPECTED_SHARED_KEY);
         assertTrue(Arrays.equals(expectedSharedKeyBytes, sharedKeyBytes));
+    }
+
+    @Test
+    public void testGetSharedkeyWithInvalidRemoteKey() throws Exception {
+        byte[] remotePublicKey = TestUtils.hexStringToByteArray(PRIME_1024_BIT_MODP_160_SUBGROUP);
+
+        try {
+            byte[] sharedKeyBytes = IkeKePayload.getSharedKey(mPrivateKeySpec, remotePublicKey);
+            fail("Expected to fail because of invalid remote public key.");
+        } catch (GeneralSecurityException expected) {
+        }
     }
 }

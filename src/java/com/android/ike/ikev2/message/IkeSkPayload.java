@@ -16,14 +16,14 @@
 
 package com.android.ike.ikev2.message;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import android.annotation.Nullable;
+
+import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-
-import javax.crypto.Cipher;
-import javax.crypto.Mac;
-import javax.crypto.SecretKey;
 
 /**
  * IkeSkPayload represents a Encrypted Payload.
@@ -45,24 +45,26 @@ public final class IkeSkPayload extends IkePayload {
      *
      * @param critical indicates if it is a critical payload.
      * @param message the byte array contains the whole IKE message.
-     * @param integrityMac the initialized Mac for integrity check.
-     * @param checksumLen the checksum length of negotiated integrity algorithm.
-     * @param decryptCipher the uninitialized Cipher for doing decryption.
-     * @param dKey the decryption key.
+     * @param integrityMac the negotiated integrity algorithm.
+     * @param decryptCipher the negotiated encryption algorithm.
+     * @param integrityKey the negotiated integrity algorithm key.
+     * @param decryptKey the negotiated decryption key.
      */
     IkeSkPayload(
             boolean critical,
             byte[] message,
-            Mac integrityMac,
-            int checksumLen,
-            Cipher decryptCipher,
-            SecretKey dKey)
-            throws IkeException, GeneralSecurityException {
+            @Nullable IkeMacIntegrity integrityMac,
+            IkeCipher decryptCipher,
+            byte[] integrityKey,
+            byte[] decryptKey)
+            throws IkeProtocolException, GeneralSecurityException {
         super(PAYLOAD_TYPE_SK, critical);
+
+        // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
         mIkeEncryptedPayloadBody =
                 new IkeEncryptedPayloadBody(
-                        message, integrityMac, checksumLen, decryptCipher, dKey);
+                        message, integrityMac, decryptCipher, integrityKey, decryptKey);
     }
 
     /**
@@ -71,20 +73,22 @@ public final class IkeSkPayload extends IkePayload {
      * @param ikeHeader the IKE header.
      * @param firstPayloadType the type of first payload nested in SkPayload.
      * @param unencryptedPayloads the encoded payload list to protect.
-     * @param integrityMac the initialized Mac for calculating integrity checksum
-     * @param checksumLen the checksum length of negotiated integrity algorithm.
-     * @param encryptCipher the uninitialized Cipher for doing encryption.
-     * @param eKey the encryption key.
+     * @param integrityMac the negotiated integrity algorithm.
+     * @param encryptCipher the negotiated encryption algorithm.
+     * @param integrityKey the negotiated integrity algorithm key.
+     * @param encryptKey the negotiated encryption key.
      */
     IkeSkPayload(
             IkeHeader ikeHeader,
             @PayloadType int firstPayloadType,
             byte[] unencryptedPayloads,
-            Mac integrityMac,
-            int checksumLen,
-            Cipher encryptCipher,
-            SecretKey eKey) {
+            @Nullable IkeMacIntegrity integrityMac,
+            IkeCipher encryptCipher,
+            byte[] integrityKey,
+            byte[] encryptKey) {
         super(PAYLOAD_TYPE_SK, false);
+
+        // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
         mIkeEncryptedPayloadBody =
                 new IkeEncryptedPayloadBody(
@@ -92,9 +96,9 @@ public final class IkeSkPayload extends IkePayload {
                         firstPayloadType,
                         unencryptedPayloads,
                         integrityMac,
-                        checksumLen,
                         encryptCipher,
-                        eKey);
+                        integrityKey,
+                        encryptKey);
     }
 
     /**
@@ -105,8 +109,6 @@ public final class IkeSkPayload extends IkePayload {
     public byte[] getUnencryptedPayloads() {
         return mIkeEncryptedPayloadBody.getUnencryptedData();
     }
-
-    // TODO: Add another constructor for AEAD protected payload.
 
     /**
      * Encode this payload to a ByteBuffer.

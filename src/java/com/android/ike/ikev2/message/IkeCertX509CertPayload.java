@@ -17,7 +17,7 @@
 package com.android.ike.ikev2.message;
 
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
@@ -39,7 +39,8 @@ import java.security.cert.X509Certificate;
 public final class IkeCertX509CertPayload extends IkeCertPayload {
     public final X509Certificate certificate;
 
-    protected IkeCertX509CertPayload(boolean critical, byte[] certData) throws IkeException {
+    protected IkeCertX509CertPayload(boolean critical, byte[] certData)
+            throws IkeProtocolException {
         super(critical, CERTIFICATE_ENCODING_X509_CERT_SIGNATURE);
         try {
             CertificateFactory factory =
