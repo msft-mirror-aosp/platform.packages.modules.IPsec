@@ -19,8 +19,11 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
+import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 
 import org.junit.Before;
@@ -28,10 +31,6 @@ import org.junit.Test;
 
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
-
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 
 public final class IkeEncryptedPayloadBodyTest {
 
@@ -67,8 +66,8 @@ public final class IkeEncryptedPayloadBodyTest {
 
     private static final String ENCR_ALGO_AES_CBC = "AES/CBC/NoPadding";
 
-    private Cipher mAesCbcCipher;
-    private SecretKey mAesCbcKey;
+    private IkeCipher mAesCbcCipher;
+    private byte[] mAesCbcKey;
 
     private IkeMacIntegrity mHmacSha1IntegrityMac;
     private byte[] mHmacSha1IntegrityKey;
@@ -107,9 +106,13 @@ public final class IkeEncryptedPayloadBodyTest {
         mIv = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_IV);
         mPadding = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_PADDING);
 
-        mAesCbcCipher = Cipher.getInstance(ENCR_ALGO_AES_CBC, IkeMessage.getSecurityProvider());
-        byte[] encryptKeyBytes = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
-        mAesCbcKey = new SecretKeySpec(encryptKeyBytes, ENCR_ALGO_AES_CBC);
+        mAesCbcCipher =
+                IkeCipher.create(
+                        new EncryptionTransform(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
+                                SaProposal.KEY_LEN_AES_128),
+                        IkeMessage.getSecurityProvider());
+        mAesCbcKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
 
         mHmacSha1IntegrityMac =
                 IkeMacIntegrity.create(

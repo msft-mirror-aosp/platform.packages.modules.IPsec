@@ -27,6 +27,13 @@ android_test {
         "ike",
         "androidx.test.rules",
         "frameworks-base-testutils",
-        "mockito-target-minus-junit4",
+        "mockito-target-inline-minus-junit4",
+        "services.core",
+    ],
+
+    jni_libs: [
+        "libdexmakerjvmtiagent",
+        "libstaticjvmtiagent",
+        "libmultiplejvmtiagentsinterferenceagent",
     ],
 }

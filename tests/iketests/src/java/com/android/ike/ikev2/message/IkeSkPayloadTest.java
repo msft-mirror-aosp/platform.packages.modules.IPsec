@@ -18,8 +18,11 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
+import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 
 import org.junit.Before;
@@ -27,10 +30,6 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-
-import javax.crypto.Cipher;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
 
 public final class IkeSkPayloadTest {
 
@@ -63,8 +62,8 @@ public final class IkeSkPayloadTest {
 
     private static final int CHECKSUM_LEN = 12;
 
-    private Cipher mAesCbcDecryptCipher;
-    private SecretKey mAesCbcDecryptKey;
+    private IkeCipher mAesCbcDecryptCipher;
+    private byte[] mAesCbcDecryptKey;
 
     private IkeMacIntegrity mHmacSha1IntegrityMac;
     private byte[] mHmacSha1IntegrityKey;
@@ -72,9 +71,12 @@ public final class IkeSkPayloadTest {
     @Before
     public void setUp() throws Exception {
         mAesCbcDecryptCipher =
-                Cipher.getInstance(ENCR_ALGO_AES_CBC, IkeMessage.getSecurityProvider());
-        byte[] decryptKeyBytes = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
-        mAesCbcDecryptKey = new SecretKeySpec(decryptKeyBytes, ENCR_ALGO_AES_CBC);
+                IkeCipher.create(
+                        new EncryptionTransform(
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
+                                SaProposal.KEY_LEN_AES_128),
+                        IkeMessage.getSecurityProvider());
+        mAesCbcDecryptKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
         mHmacSha1IntegrityMac =
                 IkeMacIntegrity.create(
                         new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),

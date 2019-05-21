@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2018 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,49 +15,33 @@
  */
 package com.android.ike.ikev2.exceptions;
 
-import com.android.ike.ikev2.message.IkeNotifyPayload;
-
 /**
- * IkeException is an abstract class that represents the common information for all IKE protocol
- * errors.
- *
- * <p>Each types of IKE error should implement its own subclass
- *
- * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2)</a>
+ * IkeException is a generic IKE library exception class that provides type safety for all the
+ * IKE-library-related exception classes that extend from it.
  */
 public abstract class IkeException extends Exception {
-    @IkeNotifyPayload.NotifyType public final int errorCode;
-
-    /**
-     * Construct an instance of IkeException.
-     *
-     * @param code the protocol error code.
-     */
-    public IkeException(@IkeNotifyPayload.NotifyType int code) {
+    protected IkeException() {
         super();
-        errorCode = code;
     }
 
-    /**
-     * Construct an instance of IkeException with specified detail message.
-     *
-     * @param code the protocol error code.
-     * @param message the detail message.
-     */
-    public IkeException(@IkeNotifyPayload.NotifyType int code, String message) {
+    protected IkeException(String message) {
         super(message);
-        errorCode = code;
+    }
+
+    protected IkeException(Throwable cause) {
+        super(cause);
+    }
+
+    protected IkeException(String message, Throwable cause) {
+        super(message, cause);
     }
 
     /**
-     * Construct an instance of IkeException with specified cause.
+     * Returns if this exception is caused by an IKE protocol error.
      *
-     * @param code the protocol error code.
-     * @param cause the cause.
+     * @return true if this exception is caused by an IKE protocol error, false otherwise.
      */
-    public IkeException(@IkeNotifyPayload.NotifyType int code, Throwable cause) {
-        super(cause);
-        errorCode = code;
+    public boolean isProtocolException() {
+        return this instanceof IkeProtocolException;
     }
 }

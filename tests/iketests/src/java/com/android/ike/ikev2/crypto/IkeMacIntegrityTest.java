@@ -18,12 +18,15 @@ package com.android.ike.ikev2.crypto;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import android.net.IpSecAlgorithm;
+
+import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
-import com.android.ike.ikev2.message.TestUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -94,6 +97,30 @@ public final class IkeMacIntegrityTest {
             byte[] calculatedChecksum =
                     mHmacSha1IntegrityMac.generateChecksum(integrityKey, mDataToAuthenticate);
             fail("Expected to fail due to invalid authentication key.");
+        } catch (IllegalArgumentException expected) {
+
+        }
+    }
+
+    @Test
+    public void testBuildIpSecAlgorithm() throws Exception {
+        IpSecAlgorithm ipsecAlgorithm =
+                mHmacSha1IntegrityMac.buildIpSecAlgorithmWithKey(mHmacSha1IntegrityKey);
+
+        IpSecAlgorithm expectedIpSecAlgorithm =
+                new IpSecAlgorithm(IpSecAlgorithm.AUTH_HMAC_SHA1, mHmacSha1IntegrityKey, 96);
+
+        assertTrue(IpSecAlgorithm.equals(expectedIpSecAlgorithm, ipsecAlgorithm));
+    }
+
+    @Test
+    public void buildIpSecAlgorithmWithInvalidKey() throws Exception {
+        byte[] encryptKey = TestUtils.hexStringToByteArray(INTEGRITY_KEY_HEX_STRING + "00");
+
+        try {
+            mHmacSha1IntegrityMac.buildIpSecAlgorithmWithKey(encryptKey);
+
+            fail("Expected to fail due to integrity key with wrong length.");
         } catch (IllegalArgumentException expected) {
 
         }

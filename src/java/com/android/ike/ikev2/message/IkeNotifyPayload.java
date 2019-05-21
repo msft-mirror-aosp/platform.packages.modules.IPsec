@@ -16,10 +16,13 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SELECTORS;
+
 import android.annotation.IntDef;
 import android.util.ArraySet;
 
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.lang.annotation.Retention;
@@ -36,52 +39,97 @@ import java.util.Set;
  * <p>As instructed by RFC 7296, for IKE SA concerned Notify Payload, Protocol ID and SPI Size must
  * be zero. Unrecognized notify message type must be ignored but should be logged.
  *
+ * <p>Notification types that smaller or equal than ERROR_NOTIFY_TYPE_MAX are error types. The rest
+ * of them are status types.
+ *
  * <p>Critical bit for this payload must be ignored in received packet and must not be set in
  * outbound packet.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
  *     Version 2 (IKEv2)</a>
  */
-public final class IkeNotifyPayload extends IkePayload {
-
+public final class IkeNotifyPayload extends IkeInformationalPayload {
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
-        NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD,
-        NOTIFY_TYPE_INVALID_MAJOR_VERSION,
-        NOTIFY_TYPE_INVALID_SYNTAX,
-        NOTIFY_TYPE_NO_PROPOSAL_CHOSEN,
-        NOTIFY_TYPE_INVALID_SELECTORS,
-        NOTIFY_TYPE_CHILD_SA_NOT_FOUND,
+        NOTIFY_TYPE_ADDITIONAL_TS_POSSIBLE,
+        NOTIFY_TYPE_IPCOMP_SUPPORTED,
         NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
         NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
-        NOTIFY_TYPE_REKEY_SA
+        NOTIFY_TYPE_USE_TRANSPORT_MODE,
+        NOTIFY_TYPE_REKEY_SA,
+        NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED
     })
     public @interface NotifyType {}
 
-    public static final int NOTIFY_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1;
-    public static final int NOTIFY_TYPE_INVALID_MAJOR_VERSION = 5;
-    public static final int NOTIFY_TYPE_INVALID_SYNTAX = 7;
-    public static final int NOTIFY_TYPE_NO_PROPOSAL_CHOSEN = 14;
-    public static final int NOTIFY_TYPE_AUTHENTICATION_FAILED = 24;
-    public static final int NOTIFY_TYPE_INVALID_SELECTORS = 39;
-    public static final int NOTIFY_TYPE_CHILD_SA_NOT_FOUND = 44;
-
+    /**
+     * Indicates that the responder has narrowed the proposed Traffic Selectors but other Traffic
+     * Selectors would also have been acceptable. Only allowed in the response for negotiating a
+     * Child SA.
+     */
+    public static final int NOTIFY_TYPE_ADDITIONAL_TS_POSSIBLE = 16386;
+    /**
+     * Indicates a willingness by its sender to use IPComp on this Child SA. Only allowed in the
+     * request/response for negotiating a Child SA.
+     */
+    public static final int NOTIFY_TYPE_IPCOMP_SUPPORTED = 16387;
+    /**
+     * Used for detecting if the IKE initiator is behind a NAT. Only allowed in the request/response
+     * of IKE_SA_INIT exchange.
+     */
     public static final int NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP = 16388;
+    /**
+     * Used for detecting if the IKE responder is behind a NAT. Only allowed in the request/response
+     * of IKE_SA_INIT exchange.
+     */
     public static final int NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP = 16389;
+    /**
+     * Indicates a willingness by its sender to use transport mode rather than tunnel mode on this
+     * Child SA. Only allowed in the request/response for negotiating a Child SA.
+     */
+    public static final int NOTIFY_TYPE_USE_TRANSPORT_MODE = 16391;
+    /**
+     * Used for rekeying a Child SA or an IKE SA. Only allowed in the request/response of
+     * CREATE_CHILD_SA exchange.
+     */
     public static final int NOTIFY_TYPE_REKEY_SA = 16393;
+    /**
+     * Indicates that the sender will not accept packets that contain TFC padding over the Child SA
+     * being negotiated. Only allowed in the request/response for negotiating a Child SA.
+     */
+    public static final int NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED = 16394;
     // TODO: List all supported notify types.
 
     private static final int NOTIFY_HEADER_LEN = 4;
+    private static final int ERROR_NOTIFY_TYPE_MAX = 16383;
 
     private static final String NAT_DETECTION_DIGEST_ALGORITHM = "SHA-1";
 
-    private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_CHILD_SA;
+    private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA;
+    private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA;
 
     static {
-        VALID_NOTIFY_TYPES_FOR_CHILD_SA = new ArraySet<>();
-        VALID_NOTIFY_TYPES_FOR_CHILD_SA.add(NOTIFY_TYPE_INVALID_SELECTORS);
-        VALID_NOTIFY_TYPES_FOR_CHILD_SA.add(NOTIFY_TYPE_CHILD_SA_NOT_FOUND);
-        VALID_NOTIFY_TYPES_FOR_CHILD_SA.add(NOTIFY_TYPE_REKEY_SA);
+        VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA = new ArraySet<>();
+        VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA.add(ERROR_TYPE_INVALID_SELECTORS);
+        VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA.add(ERROR_TYPE_CHILD_SA_NOT_FOUND);
+        VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA.add(NOTIFY_TYPE_REKEY_SA);
+    }
+
+    static {
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA = new ArraySet<>();
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(
+                IkeProtocolException.ERROR_TYPE_SINGLE_PAIR_REQUIRED);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(
+                IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(IkeProtocolException.ERROR_TYPE_FAILED_CP_REQUIRED);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE);
+
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(NOTIFY_TYPE_ADDITIONAL_TS_POSSIBLE);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(NOTIFY_TYPE_IPCOMP_SUPPORTED);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(NOTIFY_TYPE_USE_TRANSPORT_MODE);
+        VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED);
     }
 
     public final int protocolId;
@@ -96,9 +144,9 @@ public final class IkeNotifyPayload extends IkePayload {
      * @param critical indicates if this payload is critical. Ignored in supported payload as
      *     instructed by the RFC 7296.
      * @param payloadBody payload body in byte array
-     * @throws IkeException if there is any error
+     * @throws IkeProtocolException if there is any error
      */
-    IkeNotifyPayload(boolean isCritical, byte[] payloadBody) throws IkeException {
+    IkeNotifyPayload(boolean isCritical, byte[] payloadBody) throws IkeProtocolException {
         super(PAYLOAD_TYPE_NOTIFY, isCritical);
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
@@ -133,7 +181,7 @@ public final class IkeNotifyPayload extends IkePayload {
                     "Expected Procotol ID AH(2) or ESP(3): Protocol ID is " + protocolId);
         }
 
-        if (!VALID_NOTIFY_TYPES_FOR_CHILD_SA.contains(notifyType)) {
+        if (!VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA.contains(notifyType)) {
             throw new InvalidSyntaxException(
                     "Expected Notify Type for existing Child SA: Notify Type is " + notifyType);
         }
@@ -145,8 +193,8 @@ public final class IkeNotifyPayload extends IkePayload {
                     "Expected Procotol ID unset: Protocol ID is " + protocolId);
         }
 
-        if (notifyType == NOTIFY_TYPE_INVALID_SELECTORS
-                || notifyType == NOTIFY_TYPE_CHILD_SA_NOT_FOUND) {
+        if (notifyType == ERROR_TYPE_INVALID_SELECTORS
+                || notifyType == ERROR_TYPE_CHILD_SA_NOT_FOUND) {
             throw new InvalidSyntaxException(
                     "Expected Notify Type concerning IKE SA or new Child SA under negotiation"
                             + ": Notify Type is "
@@ -215,11 +263,7 @@ public final class IkeNotifyPayload extends IkePayload {
     }
 
     protected IkeNotifyPayload(
-            @ProtocolId int protocolId,
-            byte spiSize,
-            int spi,
-            @NotifyType int notifyType,
-            byte[] notifyData) {
+            @ProtocolId int protocolId, byte spiSize, int spi, int notifyType, byte[] notifyData) {
         super(PAYLOAD_TYPE_NOTIFY, false);
         this.protocolId = protocolId;
         this.spiSize = spiSize;
@@ -229,20 +273,30 @@ public final class IkeNotifyPayload extends IkePayload {
     }
 
     /**
-     * Construct IkeNotifyPayload concerning either an IKE SA or Child SA that is going to be
-     * negotiated.
+     * Construct IkeNotifyPayload concerning either an IKE SA, or Child SA that is going to be
+     * negotiated with associated notification data.
      *
      * @param notifyType the notify type concerning IKE SA
      * @param notifytData status or error data transmitted. Values for this field are notify type
      *     specific.
      */
-    public IkeNotifyPayload(@NotifyType int notifyType, byte[] notifyData) {
+    public IkeNotifyPayload(int notifyType, byte[] notifyData) {
         this(PROTOCOL_ID_UNSET, SPI_LEN_NOT_INCLUDED, SPI_NOT_INCLUDED, notifyType, notifyData);
         try {
             validateNotifyPayloadForIkeAndNewChild();
         } catch (InvalidSyntaxException e) {
             throw new IllegalArgumentException(e);
         }
+    }
+
+    /**
+     * Construct IkeNotifyPayload concerning either an IKE SA, or Child SA that is going to be
+     * negotiated without additional notification data.
+     *
+     * @param notifyType the notify type concerning IKE SA
+     */
+    public IkeNotifyPayload(int notifyType) {
+        this(notifyType, new byte[0]);
     }
 
     /**
@@ -253,13 +307,34 @@ public final class IkeNotifyPayload extends IkePayload {
      *     specific.
      */
     public IkeNotifyPayload(
-            @ProtocolId int protocolId, int spi, @NotifyType int notifyType, byte[] notifyData) {
+            @ProtocolId int protocolId, int spi, int notifyType, byte[] notifyData) {
         this(protocolId, SPI_LEN_IPSEC, spi, notifyType, notifyData);
         try {
             validateNotifyPayloadForExistingChildSa();
         } catch (InvalidSyntaxException e) {
             throw new IllegalArgumentException(e);
         }
+    }
+
+    /**
+     * Indicates if this is an error notification payload.
+     *
+     * @return if this is an error notification payload.
+     */
+    public boolean isErrorNotify() {
+        return notifyType <= ERROR_NOTIFY_TYPE_MAX;
+    }
+
+    /**
+     * Indicates if this is an notification for a new Child SA negotiation.
+     *
+     * <p>This notification may provide additional configuration information for negotiating a new
+     * Child SA or is an error notification of the Child SA negotiation failure.
+     *
+     * @return if this is an notification for a new Child SA negotiation.
+     */
+    public boolean isNewChildSaNotify() {
+        return VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.contains(notifyType);
     }
 
     /**

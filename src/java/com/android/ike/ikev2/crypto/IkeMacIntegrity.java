@@ -16,6 +16,8 @@
 
 package com.android.ike.ikev2.crypto;
 
+import android.net.IpSecAlgorithm;
+
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 
@@ -34,7 +36,7 @@ import javax.crypto.Mac;
  * <p>@see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key
  * Exchange Protocol Version 2 (IKEv2)</a>
  */
-public final class IkeMacIntegrity extends IkeMac {
+public class IkeMacIntegrity extends IkeMac {
     // STOPSHIP: b/130190639 Catch unchecked exceptions, notify users and close the IKE session.
     private final int mChecksumLength;
 
@@ -79,7 +81,7 @@ public final class IkeMacIntegrity extends IkeMac {
 
                 // TODO:Set mAlgorithmName
                 throw new UnsupportedOperationException(
-                        "Do not support PSEUDORANDOM_FUNCTION_AES128_XCBC.");
+                        "Do not support INTEGRITY_ALGORITHM_AES_XCBC_96.");
             case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128:
                 keyLength = 32;
                 algorithmName = "HmacSHA256";
@@ -123,7 +125,6 @@ public final class IkeMacIntegrity extends IkeMac {
      * @return the integrity checksum.
      */
     public byte[] generateChecksum(byte[] keyBytes, byte[] dataToAuthenticate) {
-
         if (getKeyLength() != keyBytes.length) {
             throw new IllegalArgumentException(
                     "Expected key length: "
@@ -137,10 +138,51 @@ public final class IkeMacIntegrity extends IkeMac {
     }
 
     /**
+     * Build IpSecAlgorithm from this IkeMacIntegrity.
+     *
+     * <p>Build IpSecAlgorithm that represents the same integrity algorithm with this
+     * IkeMacIntegrity instance with provided integrity key.
+     *
+     * @param key the integrity key in byte array.
+     * @return the IpSecAlgorithm.
+     */
+    public IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key) {
+        if (key.length != getKeyLength()) {
+            throw new IllegalArgumentException(
+                    "Expected key with length of : "
+                            + getKeyLength()
+                            + " Received key with length of : "
+                            + key.length);
+        }
+
+        switch (getAlgorithmId()) {
+            case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96:
+                return new IpSecAlgorithm(IpSecAlgorithm.AUTH_HMAC_SHA1, key, mChecksumLength * 8);
+            case SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96:
+                // TODO:Consider supporting AES128_XCBC in IpSecTransform.
+                throw new IllegalArgumentException(
+                        "Do not support IpSecAlgorithm with AES128_XCBC.");
+            case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128:
+                return new IpSecAlgorithm(
+                        IpSecAlgorithm.AUTH_HMAC_SHA256, key, mChecksumLength * 8);
+            case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_384_192:
+                return new IpSecAlgorithm(
+                        IpSecAlgorithm.AUTH_HMAC_SHA384, key, mChecksumLength * 8);
+            case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_512_256:
+                return new IpSecAlgorithm(
+                        IpSecAlgorithm.AUTH_HMAC_SHA512, key, mChecksumLength * 8);
+            default:
+                throw new IllegalArgumentException(
+                        "Unrecognized Integrity Algorithm ID: " + getAlgorithmId());
+        }
+    }
+
+    /**
      * Returns algorithm type as a String.
      *
      * @return the algorithm type as a String.
      */
+    @Override
     public String getTypeString() {
         return "Integrity Algorithm.";
     }

@@ -15,18 +15,34 @@
  */
 package com.android.ike.ikev2;
 
+import android.content.Context;
+import android.net.IpSecManager;
+import android.net.IpSecManager.ResourceUnavailableException;
+import android.net.IpSecManager.SecurityParameterIndex;
+import android.net.IpSecManager.SpiUnavailableException;
 import android.os.Looper;
 import android.os.Message;
+import android.util.Pair;
 
-import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionCallback;
+import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
-import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
+import com.android.ike.ikev2.message.IkeSaPayload.ChildProposal;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
+import java.io.IOException;
+import java.net.InetAddress;
+import java.security.GeneralSecurityException;
+import java.security.Provider;
 import java.util.List;
 
 /**
@@ -52,7 +68,26 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Receive request for negotiating first Child SA. */
     private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = 1;
 
+    private final Context mContext;
+    private final IpSecManager mIpSecManager;
+
     private final ChildSessionOptions mChildSessionOptions;
+
+    /** Local address assigned on device. */
+    private final InetAddress mLocalAddress;
+    /** Remote address configured by users. */
+    private final InetAddress mRemoteAddress;
+
+    private final IkeMacPrf mIkePrf;
+
+    /** Package private SaProposal that represents the negotiated Child SA proposal. */
+    @VisibleForTesting SaProposal mSaProposal;
+
+    private IkeCipher mChildCipher;
+    private IkeMacIntegrity mChildIntegrity;
+
+    /** SK_d is renewed when IKE SA is rekeyed. */
+    private byte[] mSkD;
 
     /** Package private */
     @VisibleForTesting ChildSaRecord mCurrentChildSaRecord;
@@ -62,22 +97,32 @@ public class ChildSessionStateMachine extends StateMachine {
     private final State mIdle = new Idle();
 
     /** Package private */
-    ChildSessionStateMachine(String name, Looper looper, ChildSessionOptions sessionOptions) {
+    ChildSessionStateMachine(
+            String name,
+            Looper looper,
+            Context context,
+            IpSecManager ipSecManager,
+            ChildSessionOptions sessionOptions,
+            InetAddress localAddress,
+            InetAddress remoteAddress,
+            IkeMacPrf ikePrf,
+            byte[] skD) {
         super(name, looper);
 
+        mContext = context;
+        mIpSecManager = ipSecManager;
+
         mChildSessionOptions = sessionOptions;
+        mLocalAddress = localAddress;
+        mRemoteAddress = remoteAddress;
+        mIkePrf = ikePrf;
+        mSkD = skD;
 
         addState(mInitial);
         addState(mClosed);
         addState(mIdle);
 
         setInitialState(mInitial);
-    }
-
-    private void validateCreateChildResp(
-            List<IkePayload> reqPayloads, List<IkePayload> respPayloads) throws IkeException {
-        // TODO: Validate SA reponse against request and set negotiated SA in mChildSessionOptions.
-        return;
     }
 
     /**
@@ -93,7 +138,7 @@ public class ChildSessionStateMachine extends StateMachine {
     public void handleFirstChildExchange(
             List<IkePayload> reqPayloads,
             List<IkePayload> respPayloads,
-            IChildSessionCallback callback) {
+            IChildSessionSmCallback callback) {
         registerProvisionalChildSession(respPayloads, callback);
 
         sendMessage(
@@ -102,14 +147,23 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
-     * Register provisioning ChildSessionStateMachine in IChildSessionCallback
+     * Update SK_d with provided value when IKE SA is rekeyed.
+     *
+     * @param skD the new skD in byte array.
+     */
+    public void setSkD(byte[] skD) {
+        mSkD = skD;
+    }
+
+    /**
+     * Register provisioning ChildSessionStateMachine in IChildSessionSmCallback
      *
      * <p>This method is for avoiding CHILD_SA_NOT_FOUND error in IkeSessionStateMachine when remote
      * peer sends request for delete/rekey this Child SA before ChildSessionStateMachine sends
      * FirstChildNegotiationData to itself.
      */
     private void registerProvisionalChildSession(
-            List<IkePayload> respPayloads, IChildSessionCallback callback) {
+            List<IkePayload> respPayloads, IChildSessionSmCallback callback) {
         // When decoding responding IkeSaPayload in IkeSessionStateMachine, it is validated that
         // IkeSaPayload has exactly one IkeSaPayload.Proposal.
         IkeSaPayload saPayload = null;
@@ -137,12 +191,12 @@ public class ChildSessionStateMachine extends StateMachine {
     private static class FirstChildNegotiationData {
         public final List<IkePayload> requestPayloads;
         public final List<IkePayload> responsePayloads;
-        public final IChildSessionCallback childCallback;
+        public final IChildSessionSmCallback childCallback;
 
         FirstChildNegotiationData(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
-                IChildSessionCallback callback) {
+                IChildSessionSmCallback callback) {
             requestPayloads = reqPayloads;
             responsePayloads = respPayloads;
             childCallback = callback;
@@ -156,24 +210,110 @@ public class ChildSessionStateMachine extends StateMachine {
             switch (message.what) {
                     // TODO: Handle local request for creating Child SA.
                 case CMD_HANDLE_FIRST_CHILD_EXCHANGE:
+                    boolean childSetUpSuccess = false;
+                    Pair<SecurityParameterIndex, SecurityParameterIndex> childSpiPair = null;
+
                     FirstChildNegotiationData childNegotiationData =
                             (FirstChildNegotiationData) message.obj;
                     try {
                         List<IkePayload> reqPayloads = childNegotiationData.requestPayloads;
                         List<IkePayload> respPayloads = childNegotiationData.responsePayloads;
-                        validateCreateChildResp(reqPayloads, respPayloads);
+                        childSpiPair = validateCreateChildResp(reqPayloads, respPayloads);
 
                         mCurrentChildSaRecord =
-                                ChildSaRecord.makeChildSaRecord(reqPayloads, respPayloads);
+                                ChildSaRecord.makeChildSaRecord(
+                                        mContext,
+                                        reqPayloads,
+                                        respPayloads,
+                                        childSpiPair.first,
+                                        childSpiPair.second,
+                                        mLocalAddress,
+                                        mRemoteAddress,
+                                        mIkePrf,
+                                        mChildIntegrity,
+                                        mChildCipher,
+                                        mSkD,
+                                        mChildSessionOptions.isTransportMode(),
+                                        true /*isLocalInit*/);
                         // TODO: Add mCurrentChildSaRecord in mSpiToSaRecordMap.
+                        childSetUpSuccess = true;
                         transitionTo(mIdle);
-                    } catch (IkeException e) {
+                    } catch (IkeProtocolException e) {
                         // TODO: Unregister remotely generated SPI and handle Child SA negotiation
                         // failure.
+                    } catch (GeneralSecurityException e) {
+                        // TODO: Handle DH shared key calculation failure.
+                    } catch (ResourceUnavailableException
+                            | SpiUnavailableException
+                            | IOException e) {
+                        // TODO:Fire the ChildCallback.onError() callback and initiate deletion
+                        // exchange on this Child SA.
+                    } finally {
+                        if (!childSetUpSuccess && childSpiPair != null) {
+                            childSpiPair.first.close();
+                            childSpiPair.second.close();
+                        }
                     }
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
+            }
+        }
+
+        private Pair<SecurityParameterIndex, SecurityParameterIndex> validateCreateChildResp(
+                List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
+                throws IkeProtocolException, ResourceUnavailableException, SpiUnavailableException {
+            List<IkeNotifyPayload> notifyPayloads =
+                    IkePayload.getPayloadListForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, respPayloads);
+
+            for (IkeNotifyPayload notify : notifyPayloads) {
+                // TODO: Throw IkeProtocolException if encountering error notifications.
+                // TODO: Handle status notifications that provide additional Child SA
+                // configruations.
+
+            }
+
+            // TODO: Validate TS in the response is the subset of TS in the request.
+
+            IkeSaPayload reqSaPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
+            IkeSaPayload respSaPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, respPayloads);
+
+            // This method either throws exception or returns non-null pair that contains two valid
+            // {@link ChildProposal} both with a {@link SecurityParameterIndex} allocated inside.
+            Pair<ChildProposal, ChildProposal> childProposalPair =
+                    respSaPayload.getVerifiedNegotiatedChildProposalPair(
+                            reqSaPayload, mIpSecManager, mRemoteAddress);
+            mSaProposal = childProposalPair.second.saProposal;
+
+            try {
+                // Build crypto tools using mSaProposal. It is ensured by {@link
+                // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that mSaProposal is valid.
+                // mSaProposal has exactly one encryption algorithm. When the encryption algorithm
+                // is combined-mode, it either does not have integrity algorithm or only has one
+                // NONE value integrity algorithm. Otherwise, it has at most one integrity
+                // algorithm.
+                Provider provider = IkeMessage.getSecurityProvider();
+                mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
+                if (mSaProposal.getIntegrityTransforms().length != 0
+                        && mSaProposal.getIntegrityTransforms()[0].id
+                                != SaProposal.INTEGRITY_ALGORITHM_NONE) {
+                    mChildIntegrity =
+                            IkeMacIntegrity.create(
+                                    mSaProposal.getIntegrityTransforms()[0], provider);
+                }
+
+                return new Pair<SecurityParameterIndex, SecurityParameterIndex>(
+                        childProposalPair.first.getChildSpiResource(),
+                        childProposalPair.second.getChildSpiResource());
+            } catch (Exception e) {
+                childProposalPair.first.getChildSpiResource().close();
+                childProposalPair.second.getChildSpiResource().close();
+                throw e;
             }
         }
     }
