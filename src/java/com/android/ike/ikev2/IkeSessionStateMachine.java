@@ -76,6 +76,7 @@ import java.net.SocketException;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -137,7 +138,7 @@ public class IkeSessionStateMachine extends StateMachine {
     /** Receive encoded IKE packet with unrecognized IKE SPI on IkeSessionStateMachine. */
     static final int CMD_RECEIVE_PACKET_INVALID_IKE_SPI = CMD_GENERAL_BASE + 3;
     /** Force state machine to IDLE state for testing purposes. */
-    static final int CMD_FORCE_IDLE = CMD_GENERAL_BASE + 99;
+    static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
 
     private static final int CMD_LOCAL_REQUEST_BASE = CMD_GENERAL_BASE + 100;
@@ -214,7 +215,7 @@ public class IkeSessionStateMachine extends StateMachine {
             new SimulRekeyIkeLocalDeleteRemoteDelete();
     private final State mSimulRekeyIkeLocalDelete = new SimulRekeyIkeLocalDelete();
     private final State mSimulRekeyIkeRemoteDelete = new SimulRekeyIkeRemoteDelete();
-    private final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
+    @VisibleForTesting final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
     private final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
     private final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
     // TODO: Add InfoLocal.
@@ -347,11 +348,6 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     // TODO: b/131122444 Move these methods into States.
-    private IkeMessage buildIkeRekeyReq() {
-        // TODO: Implement it.
-        // TODO: Pass Rekey message to retransmitter in RekeyIkeLocalCreate
-        return null;
-    }
 
     private IkeMessage buildIkeRekeyResp(IkeMessage reqMsg) {
         // TODO: Implement it.
@@ -467,8 +463,8 @@ public class IkeSessionStateMachine extends StateMachine {
                 case CMD_LOCAL_REQUEST_CREATE_IKE:
                     transitionTo(mCreateIkeLocalIkeInit);
                     return HANDLED;
-                case CMD_FORCE_IDLE:
-                    transitionTo(mIdle);
+                case CMD_FORCE_TRANSITION:
+                    transitionTo((State) message.obj);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -505,6 +501,9 @@ public class IkeSessionStateMachine extends StateMachine {
                     return HANDLED;
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     transitionTo(mDeleteIkeLocalDelete);
+                    return HANDLED;
+                case CMD_FORCE_TRANSITION: // Testing command
+                    transitionTo((State) message.obj);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1040,8 +1039,6 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         private IkeMessage buildIkeInitReq() throws IOException {
-            List<IkePayload> payloadList = new LinkedList<>();
-
             // Generate IKE SPI
             mLocalIkeSpiResource =
                     IkeSecurityParameterIndex.allocateSecurityParameterIndex(mLocalAddress);
@@ -1051,19 +1048,8 @@ public class IkeSessionStateMachine extends StateMachine {
             // It is validated in IkeSessionOptions.Builder to ensure IkeSessionOptions has at least
             // one SaProposal and all SaProposals are valid for IKE SA negotiation.
             SaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
-
-            // Build SA Payload
-            IkeSaPayload saPayload = IkeSaPayload.createInitialIkeSaPayload(saProposals);
-            payloadList.add(saPayload);
-
-            // Build KE Payload using the first DH group number in the first SaProposal.
-            DhGroupTransform dhGroupTransform = saProposals[0].getDhGroupTransforms()[0];
-            IkeKePayload kePayload = new IkeKePayload(dhGroupTransform.id);
-            payloadList.add(kePayload);
-
-            // Build Nonce Payload
-            IkeNoncePayload noncePayload = new IkeNoncePayload();
-            payloadList.add(noncePayload);
+            List<IkePayload> payloadList =
+                    CreateIkeSaHelper.getIkeInitSaRequestPayloads(saProposals);
 
             // TODO: Add Notification Payloads according to user configurations.
 
@@ -1503,7 +1489,44 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void enter() {
             // TODO: Give mRetransmitter an actual request once buildIkeRekeyReq is implemented
-            mRetransmitter = new Retransmitter(null);
+            try {
+                mRetransmitter = new Retransmitter(buildIkeRekeyReq());
+            } catch (IOException e) {
+                // TODO: Schedule next rekey for RETRY_TIMEOUT
+
+                // Attempt to recover by retrying (until hard lifetime).
+                transitionTo(mIdle);
+            }
+        }
+
+        /**
+         * Builds a IKE Rekey request, reusing the current proposal
+         *
+         * <p>As per RFC 7296, rekey messages are of format: { HDR { SK { SA, Ni, KEi } } }
+         *
+         * <p>This method currently reuses agreed upon proposal.
+         */
+        private IkeMessage buildIkeRekeyReq() throws IOException {
+            // TODO: Evaluate if we need to support different proposals for rekeys
+            SaProposal[] saProposals = new SaProposal[] {mSaProposal};
+
+            // No need to allocate SPIs; they will be allocated as part of the
+            // getRekeyIkeSaRequestPayloads
+            List<IkePayload> payloadList =
+                    CreateIkeSaHelper.getRekeyIkeSaRequestPayloads(saProposals, mLocalAddress);
+
+            // Build IKE header
+            IkeHeader ikeHeader =
+                    new IkeHeader(
+                            mCurrentIkeSaRecord.getInitiatorSpi(),
+                            mCurrentIkeSaRecord.getResponderSpi(),
+                            IkePayload.PAYLOAD_TYPE_SK,
+                            IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                            false /*isResponseMsg*/,
+                            mCurrentIkeSaRecord.isLocalInit,
+                            mCurrentIkeSaRecord.getLocalRequestMessageId());
+
+            return new IkeMessage(ikeHeader, payloadList);
         }
 
         @Override
@@ -1900,6 +1923,53 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void exit() {
             mRetransmitter.stopRetransmitting();
+        }
+    }
+
+    /**
+     * Helper class to generate IKE SA creation payloads, in both request and response directions.
+     */
+    private static class CreateIkeSaHelper {
+        public static List<IkePayload> getIkeInitSaRequestPayloads(SaProposal[] saProposals)
+                throws IOException {
+            return getCreateIkeSaRequestPayloads(true, saProposals, null);
+        }
+
+        public static List<IkePayload> getRekeyIkeSaRequestPayloads(
+                SaProposal[] saProposals, InetAddress localAddr) throws IOException {
+            if (localAddr == null) {
+                throw new IllegalArgumentException("Local address was null for rekey");
+            }
+
+            return getCreateIkeSaRequestPayloads(false, saProposals, localAddr);
+        }
+
+        /**
+         * Builds the initial or rekey IKE creation payloads.
+         *
+         * <p>Will return a non-empty list of IkePayloads, the first of which WILL be the SA payload
+         */
+        private static List<IkePayload> getCreateIkeSaRequestPayloads(
+                boolean isInit, SaProposal[] saProposals, InetAddress localAddr)
+                throws IOException {
+            if (saProposals.length == 0) {
+                throw new IllegalArgumentException("Invalid SA proposal list - was empty");
+            }
+
+            List<IkePayload> payloadList = new ArrayList<>(3);
+
+            payloadList.add(
+                    isInit
+                            ? IkeSaPayload.createInitialIkeSaPayload(saProposals)
+                            : IkeSaPayload.createRekeyIkeSaPayload(false, saProposals, localAddr));
+
+            payloadList.add(new IkeNoncePayload());
+
+            // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
+            DhGroupTransform dhGroupTransform = saProposals[0].getDhGroupTransforms()[0];
+            payloadList.add(new IkeKePayload(dhGroupTransform.id));
+
+            return payloadList;
         }
     }
 }
