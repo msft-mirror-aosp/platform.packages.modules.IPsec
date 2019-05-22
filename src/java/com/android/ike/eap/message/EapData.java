@@ -21,6 +21,7 @@ import android.annotation.NonNull;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Objects;
@@ -140,6 +141,16 @@ public class EapData {
     @Override
     public int hashCode() {
         return Objects.hash(eapType, Arrays.hashCode(eapTypeData));
+    }
+
+    /**
+     * Puts the byte-encoding for this EapData instance into the given ByteBuffer.
+     *
+     * @param b the ByteBuffer to write this EapData instance to
+     */
+    public void encodeToByteBuffer(ByteBuffer b) {
+        b.put((byte) eapType);
+        b.put(eapTypeData);
     }
 
     /**
