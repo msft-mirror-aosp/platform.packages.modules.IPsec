@@ -17,15 +17,23 @@
 package com.android.ike.eap.message;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
-import static com.android.ike.TestUtils.hexStringToInt;
-import static com.android.ike.eap.message.EapData.EAP_NAK;
-import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
-import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
-import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.ike.eap.message.EapData.NAK_DATA;
+import static com.android.ike.eap.message.EapData.NOTIFICATION_DATA;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_TYPE_DATA;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.INCOMPLETE_HEADER_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.INVALID_CODE_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.LONG_SUCCESS_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_MISSING_TYPE_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_UNSUPPORTED_TYPE_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_PACKET;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -37,83 +45,36 @@ import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
 import org.junit.Test;
 
 public class EapMessageTest {
-    // TODO(b/133327025): cleanup packet definitions to be all inline definitions
-    private static final String REQUEST_CODE = "01";
-    private static final String SUCCESS_CODE = "03";
-    private static final String IDENTIFIER = "10";
-    private static final String REQUEST_LENGTH = "000A";
-    private static final String SUCCESS_LENGTH = "0004";
-
-    private static final String INVALID_CODE = "F0";
-    private static final String INVALID_LENGTH = "0005";
-    private static final String UNSUPPORTED_EAP_TYPE = "FF";
-
-    private static final String SUCCESS_PACKET = SUCCESS_CODE + IDENTIFIER + SUCCESS_LENGTH;
-    private static final String INVALID_CODE_PACKET = INVALID_CODE + IDENTIFIER + SUCCESS_LENGTH;
-    private static final String SHORT_HEADER = SUCCESS_CODE + IDENTIFIER;
-    private static final String SHORT_PACKET = SUCCESS_CODE + IDENTIFIER + INVALID_LENGTH;
-    private static final String SUCCESS_PACKET_TOO_LONG =
-            SUCCESS_CODE + IDENTIFIER + INVALID_LENGTH + "00";
-
-    private static final String MISSING_TYPE_LENGTH = "0004";
-    private static final String AKA_TYPE = "17"; // 0x17 = 23
-    private static final String AKA_IDENTITY_SUBTYPE = "05";
-    private static final String AKA_AT_PERMANENT_ID_REQ_ATTRIBUTE = "0C010000";
-
-    private static final String REQUEST_PACKET =
-            REQUEST_CODE
-            + IDENTIFIER
-            + REQUEST_LENGTH
-            + AKA_TYPE
-            + AKA_IDENTITY_SUBTYPE
-            + AKA_AT_PERMANENT_ID_REQ_ATTRIBUTE;
-    private static final String MISSING_TYPE_PACKET =
-            REQUEST_CODE
-            + IDENTIFIER
-            + MISSING_TYPE_LENGTH;
-    private static final String REQUEST_PACKET_UNSUPPORTED_TYPE =
-            REQUEST_CODE
-            + IDENTIFIER
-            + INVALID_LENGTH
-            + UNSUPPORTED_EAP_TYPE;
-
-    private static final byte[] EXPECTED_AUTH_TYPES = {
-            (byte) EAP_TYPE_AKA,
-            (byte) EAP_TYPE_AKA_PRIME,
-            (byte) EAP_TYPE_SIM};
-    private static final byte[] EXPECTED_NOTIFICATION_DATA = new byte[0];
-
     @Test
     public void testDecode() throws Exception {
-        EapMessage result = EapMessage.decode(hexStringToByteArray(SUCCESS_PACKET));
-
-        assertEquals(hexStringToInt(SUCCESS_CODE), result.eapCode);
-        assertEquals(hexStringToInt(IDENTIFIER), result.eapIdentifier);
-        assertEquals(hexStringToInt(SUCCESS_LENGTH), result.eapLength);
+        EapMessage result = EapMessage.decode(EAP_SUCCESS_PACKET);
+        assertEquals(EAP_CODE_SUCCESS, result.eapCode);
+        assertEquals(ID_INT, result.eapIdentifier);
+        assertEquals(EAP_SUCCESS_PACKET.length, result.eapLength);
         assertNull(result.eapData);
 
-        EapData expectedEapData = new EapData(EapData.EAP_TYPE_AKA,
-                hexStringToByteArray(AKA_IDENTITY_SUBTYPE + AKA_AT_PERMANENT_ID_REQ_ATTRIBUTE));
-        result = EapMessage.decode(hexStringToByteArray(REQUEST_PACKET));
-        assertEquals(hexStringToInt(REQUEST_CODE), result.eapCode);
-        assertEquals(hexStringToInt(IDENTIFIER), result.eapIdentifier);
-        assertEquals(hexStringToInt(REQUEST_LENGTH), result.eapLength);
+        EapData expectedEapData = new EapData(EAP_TYPE_AKA,
+                hexStringToByteArray(EAP_REQUEST_TYPE_DATA));
+        result = EapMessage.decode(EAP_REQUEST_PACKET);
+        assertEquals(EAP_CODE_REQUEST, result.eapCode);
+        assertEquals(ID_INT, result.eapIdentifier);
+        assertEquals(EAP_REQUEST_PACKET.length, result.eapLength);
         assertEquals(expectedEapData, result.eapData);
     }
 
     @Test
     public void testDecodeInvalidCode() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(INVALID_CODE_PACKET));
+            EapMessage.decode(INVALID_CODE_PACKET);
             fail("Expected InvalidEapCodeException");
         } catch (InvalidEapCodeException expected) {
         }
     }
 
     @Test
-    public void testDecodeShortHeader() throws Exception {
+    public void testDecodeIncompleteHeader() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(SHORT_HEADER));
+            EapMessage.decode(INCOMPLETE_HEADER_PACKET);
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
@@ -122,7 +83,7 @@ public class EapMessageTest {
     @Test
     public void testDecodeShortPacket() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(SHORT_PACKET));
+            EapMessage.decode(SHORT_PACKET);
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
@@ -131,7 +92,7 @@ public class EapMessageTest {
     @Test
     public void testDecodeSuccessIncorrectLength() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(SUCCESS_PACKET_TOO_LONG));
+            EapMessage.decode(LONG_SUCCESS_PACKET);
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
@@ -140,7 +101,7 @@ public class EapMessageTest {
     @Test
     public void testDecodeMissingTypeData() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(MISSING_TYPE_PACKET));
+            EapMessage.decode(REQUEST_MISSING_TYPE_PACKET);
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
@@ -149,42 +110,37 @@ public class EapMessageTest {
     @Test
     public void testDecodeUnsupportedEapType() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(REQUEST_PACKET_UNSUPPORTED_TYPE));
+            EapMessage.decode(REQUEST_UNSUPPORTED_TYPE_PACKET);
             fail("Expected UnsupportedEapDataTypeException");
         } catch (UnsupportedEapTypeException expected) {
-            assertEquals(hexStringToInt(IDENTIFIER), expected.eapIdentifier);
+            assertEquals(ID_INT, expected.eapIdentifier);
         }
     }
 
     @Test
     public void testEncode() throws Exception {
         // TODO(b/133248540): fully test EapMessage#encode functionality
-        byte[] expectedPacket = hexStringToByteArray(SUCCESS_PACKET);
-        EapMessage eapMessage = EapMessage.decode(expectedPacket);
+        EapMessage eapMessage = EapMessage.decode(EAP_SUCCESS_PACKET);
 
         byte[] actualPacket = eapMessage.encode();
-        assertEquals(expectedPacket.length, actualPacket.length);
+        assertEquals(EAP_SUCCESS_PACKET.length, actualPacket.length);
     }
 
     @Test
     public void testGetNak() {
-        int identifier = hexStringToInt(IDENTIFIER);
-        EapMessage nak = EapMessage.getNak(identifier);
+        EapMessage nak = EapMessage.getNak(ID_INT);
 
         assertEquals(EAP_CODE_RESPONSE, nak.eapCode);
-        assertEquals(hexStringToInt(IDENTIFIER), nak.eapIdentifier);
-        assertEquals(EAP_NAK, nak.eapData.eapType);
-        assertArrayEquals(EXPECTED_AUTH_TYPES, nak.eapData.eapTypeData);
+        assertEquals(ID_INT, nak.eapIdentifier);
+        assertEquals(NAK_DATA, nak.eapData);
     }
 
     @Test
     public void testGetNotificationResponse() {
-        int identifier = hexStringToInt(IDENTIFIER);
-        EapMessage notificationResponse = EapMessage.getNotificationResponse(identifier);
+        EapMessage notificationResponse = EapMessage.getNotificationResponse(ID_INT);
 
         assertEquals(EAP_CODE_RESPONSE, notificationResponse.eapCode);
-        assertEquals(hexStringToInt(IDENTIFIER), notificationResponse.eapIdentifier);
-        assertEquals(EAP_NOTIFICATION, notificationResponse.eapData.eapType);
-        assertArrayEquals(EXPECTED_NOTIFICATION_DATA, notificationResponse.eapData.eapTypeData);
+        assertEquals(ID_INT, notificationResponse.eapIdentifier);
+        assertEquals(NOTIFICATION_DATA, notificationResponse.eapData);
     }
 }
