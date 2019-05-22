@@ -124,6 +124,16 @@ public class EapMessage {
         return new EapMessage(eapCode, eapIdentifier, eapLength, eapData);
     }
 
+    /**
+     * Converts this EapMessage instance to its byte-encoded representation.
+     *
+     * @return byte[] representing the byte-encoded EapMessage
+     */
+    public byte[] encode() {
+        // TODO(b/133248540): implement and utilize EapMessage#encode functionality
+        return new byte[eapLength];
+    }
+
     private void validate() throws EapSilentException {
         if (eapCode != EAP_CODE_REQUEST
                 && eapCode != EAP_CODE_RESPONSE
