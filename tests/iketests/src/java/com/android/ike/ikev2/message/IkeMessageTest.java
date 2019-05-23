@@ -18,18 +18,34 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.android.ike.TestUtils;
+import com.android.ike.ikev2.SaRecord.IkeSaRecord;
+import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
+import java.util.Arrays;
+
+import javax.crypto.IllegalBlockSizeException;
 
 public final class IkeMessageTest {
     private static final String IKE_SA_INIT_HEADER_RAW_PACKET =
@@ -60,7 +76,46 @@ public final class IkeMessageTest {
     // Byte offsets of last payload length in IKE message body.
     private static final int LAST_PAYLOAD_LENGTH_OFFSET = 278;
 
-    private static final int[] SUPPORTED_PAYLOAD_LIST = {
+    private static final String IKE_AUTH_HEADER_HEX_STRING =
+            "5f54bf6d8b48e6e1909232b3d1edcb5c2e20230800000001000000ec";
+    private static final String IKE_AUTH_BODY_HEX_STRING =
+            "230000d0b9132b7bb9f658dfdc648e5017a6322a030c316c"
+                    + "e55f365760d46426ce5cfc78bd1ed9abff63eb9594c1bd58"
+                    + "46de333ecd3ea2b705d18293b130395300ba92a351041345"
+                    + "0a10525cea51b2753b4e92b081fd78d995659a98f742278f"
+                    + "f9b8fd3e21554865c15c79a5134d66b2744966089e416c60"
+                    + "a274e44a9a3f084eb02f3bdce1e7de9de8d9a62773ab563b"
+                    + "9a69ba1db03c752acb6136452b8a86c41addb4210d68c423"
+                    + "efed80e26edca5fa3fe5d0a5ca9375ce332c474b93fb1fa3"
+                    + "59eb4e81ae6e0f22abdad69ba8007d50";
+
+    private static final String IKE_AUTH_EXPECTED_CHECKSUM_HEX_STRING = "ae6e0f22abdad69ba8007d50";
+    private static final String IKE_AUTH_HEX_STRING =
+            IKE_AUTH_HEADER_HEX_STRING + IKE_AUTH_BODY_HEX_STRING;
+
+    private static final String IKE_AUTH_UNENCRYPTED_PADDED_DATA_HEX_STRING =
+            "2400000c010000000a50500d2700000c010000000a505050"
+                    + "2100001c02000000df7c038aefaaa32d3f44b228b52a3327"
+                    + "44dfb2c12c00002c00000028010304032ad4c0a20300000c"
+                    + "0100000c800e008003000008030000020000000805000000"
+                    + "2d00001801000000070000100000ffff00000000ffffffff"
+                    + "2900001801000000070000100000ffff00000000ffffffff"
+                    + "29000008000040000000000c000040010000000100000000"
+                    + "000000000000000b";
+
+    private static final int IKE_AUTH_EXPECTED_MESSAGE_ID = 1;
+    private static final int IKE_AUTH_CIPHER_BLOCK_SIZE = 16;
+    private static final int IKE_AUTH_PAYLOAD_SIZE = 8;
+
+    private byte[] mIkeAuthPacket;
+    private byte[] mUnencryptedPaddedData;
+    private IkeHeader mIkeAuthHeader;
+
+    private IkeMacIntegrity mMockIntegrity;
+    private IkeCipher mMockCipher;
+    private IkeSaRecord mMockIkeSaRecord;
+
+    private static final int[] EXPECTED_IKE_INIT_PAYLOAD_LIST = {
         IkePayload.PAYLOAD_TYPE_SA,
         IkePayload.PAYLOAD_TYPE_KE,
         IkePayload.PAYLOAD_TYPE_NONCE,
@@ -93,7 +148,7 @@ public final class IkeMessageTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         IkePayloadFactory.sDecoderInstance =
                 new IkePayloadFactory.IIkePayloadDecoder() {
 
@@ -108,6 +163,25 @@ public final class IkeMessageTest {
                         }
                     }
                 };
+
+        mIkeAuthPacket = TestUtils.hexStringToByteArray(IKE_AUTH_HEX_STRING);
+        mUnencryptedPaddedData =
+                TestUtils.hexStringToByteArray(IKE_AUTH_UNENCRYPTED_PADDED_DATA_HEX_STRING);
+        mIkeAuthHeader = new IkeHeader(mIkeAuthPacket);
+
+        mMockIntegrity = mock(IkeMacIntegrity.class);
+        byte[] expectedChecksum =
+                TestUtils.hexStringToByteArray(IKE_AUTH_EXPECTED_CHECKSUM_HEX_STRING);
+        when(mMockIntegrity.generateChecksum(any(), any())).thenReturn(expectedChecksum);
+        when(mMockIntegrity.getChecksumLen()).thenReturn(expectedChecksum.length);
+
+        mMockCipher = mock(IkeCipher.class);
+        when(mMockCipher.getBlockSize()).thenReturn(IKE_AUTH_CIPHER_BLOCK_SIZE);
+        when(mMockCipher.decrypt(any(), any(), any())).thenReturn(mUnencryptedPaddedData);
+
+        mMockIkeSaRecord = mock(IkeSaRecord.class);
+        when(mMockIkeSaRecord.getInboundDecryptionKey()).thenReturn(new byte[0]);
+        when(mMockIkeSaRecord.getInboundIntegrityKey()).thenReturn(new byte[0]);
     }
 
     @After
@@ -120,9 +194,10 @@ public final class IkeMessageTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         IkeHeader header = new IkeHeader(inputPacket);
         IkeMessage message = IkeMessage.decode(header, inputPacket);
-        assertEquals(SUPPORTED_PAYLOAD_LIST.length, message.ikePayloadList.size());
-        for (int i = 0; i < SUPPORTED_PAYLOAD_LIST.length; i++) {
-            assertEquals(SUPPORTED_PAYLOAD_LIST[i], message.ikePayloadList.get(i).payloadType);
+        assertEquals(EXPECTED_IKE_INIT_PAYLOAD_LIST.length, message.ikePayloadList.size());
+        for (int i = 0; i < EXPECTED_IKE_INIT_PAYLOAD_LIST.length; i++) {
+            assertEquals(
+                    EXPECTED_IKE_INIT_PAYLOAD_LIST[i], message.ikePayloadList.get(i).payloadType);
         }
     }
 
@@ -133,9 +208,11 @@ public final class IkeMessageTest {
         inputPacket[FIRST_PAYLOAD_TYPE_OFFSET] = (byte) 0xff;
         IkeHeader header = new IkeHeader(inputPacket);
         IkeMessage message = IkeMessage.decode(header, inputPacket);
-        assertEquals(SUPPORTED_PAYLOAD_LIST.length - 1, message.ikePayloadList.size());
-        for (int i = 0; i < SUPPORTED_PAYLOAD_LIST.length - 1; i++) {
-            assertEquals(SUPPORTED_PAYLOAD_LIST[i + 1], message.ikePayloadList.get(i).payloadType);
+        assertEquals(EXPECTED_IKE_INIT_PAYLOAD_LIST.length - 1, message.ikePayloadList.size());
+        for (int i = 0; i < EXPECTED_IKE_INIT_PAYLOAD_LIST.length - 1; i++) {
+            assertEquals(
+                    EXPECTED_IKE_INIT_PAYLOAD_LIST[i + 1],
+                    message.ikePayloadList.get(i).payloadType);
         }
     }
 
@@ -185,7 +262,7 @@ public final class IkeMessageTest {
     }
 
     @Test
-    public void testDecodeMessageWithExpectedBytesInTheEnd() throws Exception {
+    public void testDecodeMessageWithUnexpectedBytesInTheEnd() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET + "0000");
         IkeHeader header = new IkeHeader(inputPacket);
         try {
@@ -195,13 +272,109 @@ public final class IkeMessageTest {
         }
     }
 
+    @Test
+    public void testDecodeEncryptedMessage() throws Exception {
+        DecodeResult decodeResult =
+                IkeMessage.decode(
+                        IKE_AUTH_EXPECTED_MESSAGE_ID,
+                        mMockIntegrity,
+                        mMockCipher,
+                        mMockIkeSaRecord,
+                        mIkeAuthHeader,
+                        mIkeAuthPacket);
+        assertEquals(IkeMessage.DECODE_STATUS_OK, decodeResult.status);
+        assertNotNull(decodeResult.ikeMessage);
+        assertNull(decodeResult.ikeException);
+
+        assertEquals(IKE_AUTH_PAYLOAD_SIZE, decodeResult.ikeMessage.ikePayloadList.size());
+    }
+
+    @Test
+    public void testDecodeEncryptedMessageWithWrongId() throws Exception {
+        DecodeResult decodeResult =
+                IkeMessage.decode(
+                        2,
+                        mMockIntegrity,
+                        mMockCipher,
+                        mMockIkeSaRecord,
+                        mIkeAuthHeader,
+                        mIkeAuthPacket);
+        assertEquals(IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, decodeResult.status);
+        assertNull(decodeResult.ikeMessage);
+        assertNotNull(decodeResult.ikeException);
+
+        assertTrue(decodeResult.ikeException instanceof InvalidMessageIdException);
+    }
+
+    @Test
+    public void testDecodeEncryptedMessageWithWrongChecksum() throws Exception {
+        when(mMockIntegrity.generateChecksum(any(), any())).thenReturn(new byte[0]);
+
+        DecodeResult decodeResult =
+                IkeMessage.decode(
+                        IKE_AUTH_EXPECTED_MESSAGE_ID,
+                        mMockIntegrity,
+                        mMockCipher,
+                        mMockIkeSaRecord,
+                        mIkeAuthHeader,
+                        mIkeAuthPacket);
+        assertEquals(IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, decodeResult.status);
+        assertNull(decodeResult.ikeMessage);
+        assertNotNull(decodeResult.ikeException);
+
+        assertTrue(
+                ((IkeInternalException) decodeResult.ikeException).getCause()
+                        instanceof GeneralSecurityException);
+    }
+
+    @Test
+    public void testDecryptFail() throws Exception {
+        when(mMockCipher.decrypt(any(), any(), any())).thenThrow(IllegalBlockSizeException.class);
+
+        DecodeResult decodeResult =
+                IkeMessage.decode(
+                        IKE_AUTH_EXPECTED_MESSAGE_ID,
+                        mMockIntegrity,
+                        mMockCipher,
+                        mMockIkeSaRecord,
+                        mIkeAuthHeader,
+                        mIkeAuthPacket);
+        assertEquals(IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, decodeResult.status);
+        assertNull(decodeResult.ikeMessage);
+        assertNotNull(decodeResult.ikeException);
+
+        assertTrue(
+                ((IkeInternalException) decodeResult.ikeException).getCause()
+                        instanceof IllegalBlockSizeException);
+    }
+
+    @Test
+    public void testParsingErrorInEncryptedMessage() throws Exception {
+        // Set first payload length to 0
+        byte[] decryptedData =
+                Arrays.copyOfRange(mUnencryptedPaddedData, 0, mUnencryptedPaddedData.length);
+        decryptedData[FIRST_PAYLOAD_LENGTH_OFFSET] = (byte) 0;
+        decryptedData[FIRST_PAYLOAD_LENGTH_OFFSET + 1] = (byte) 0;
+        when(mMockCipher.decrypt(any(), any(), any())).thenReturn(decryptedData);
+
+        DecodeResult decodeResult =
+                IkeMessage.decode(
+                        IKE_AUTH_EXPECTED_MESSAGE_ID,
+                        mMockIntegrity,
+                        mMockCipher,
+                        mMockIkeSaRecord,
+                        mIkeAuthHeader,
+                        mIkeAuthPacket);
+        assertEquals(IkeMessage.DECODE_STATUS_PROTECTED_ERROR_MESSAGE, decodeResult.status);
+        assertNull(decodeResult.ikeMessage);
+        assertNotNull(decodeResult.ikeException);
+
+        assertTrue(decodeResult.ikeException instanceof InvalidSyntaxException);
+    }
+
     private boolean support(int payloadType) {
-        return (payloadType == IkePayload.PAYLOAD_TYPE_SA
-                || payloadType == IkePayload.PAYLOAD_TYPE_KE
-                || payloadType == IkePayload.PAYLOAD_TYPE_NONCE
-                || payloadType == IkePayload.PAYLOAD_TYPE_NOTIFY
-                || payloadType == IkePayload.PAYLOAD_TYPE_VENDOR
-                || payloadType == IkePayload.PAYLOAD_TYPE_SK);
+        // Supports all payload typs from 33 to 46
+        return (payloadType >= 33 && payloadType <= 46);
     }
 
     @Test

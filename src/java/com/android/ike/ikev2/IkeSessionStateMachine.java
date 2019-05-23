@@ -16,9 +16,11 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
-import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MESSAGE_ID;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR_MESSAGE;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
 
 import android.annotation.IntDef;
 import android.content.Context;
@@ -53,6 +55,7 @@ import com.android.ike.ikev2.message.IkeIdPayload;
 import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
 import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
@@ -619,7 +622,7 @@ public class IkeSessionStateMachine extends StateMachine {
             boolean isResponse,
             int messageId) {
         return buildEncryptedNotificationMessage(
-            saRecord, payloads, IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, isResponse, messageId);
+                saRecord, payloads, IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, isResponse, messageId);
     }
 
     // Builds an Encrypted IKE Message for the given IkeInformationalPayload using the provided IKE
@@ -670,63 +673,68 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
             IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeHeader);
-            try {
-                if (ikeHeader.isResponseMsg) {
-                    if (ikeHeader.messageId != ikeSaRecord.getLocalRequestMessageId()) {
-                        throw new InvalidMessageIdException(ikeHeader.messageId);
-                    }
-                    IkeMessage ikeMessage =
-                            IkeMessage.decode(
-                                    mIkeIntegrity,
-                                    mIkeCipher,
-                                    ikeSaRecord,
-                                    ikeHeader,
-                                    ikePacketBytes);
-                    ikeSaRecord.incrementLocalRequestMessageId();
-
-                    handleResponseIkeMessage(ikeMessage);
-                } else {
-                    switch (ikeSaRecord.getRemoteRequestMessageId() - ikeHeader.messageId) {
-                        case 0:
-                            // Normal path.
-                            break;
-                        case 1:
-                            // TODO: Handle retransmitted request.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handling retransmitted request.");
-                        default:
-                            throw new InvalidMessageIdException(ikeHeader.messageId);
-                    }
-                    IkeMessage ikeMessage =
-                            IkeMessage.decode(
-                                    mIkeIntegrity,
-                                    mIkeCipher,
-                                    ikeSaRecord,
-                                    ikeHeader,
-                                    ikePacketBytes);
-                    ikeSaRecord.incrementRemoteRequestMessageId();
-
-                    handleRequestIkeMessage(ikeMessage, getIkeExchangeSubType(ikeMessage), message);
-                }
-
-                // TODO: Handle fatal error notifications.
-            } catch (IkeProtocolException e) {
-                // TODO: Handle decoding exceptions. Reply with error notifications if received IKE
-                // message is an encrypted and authenticated request with a valid message ID.
-                switch (e.getErrorType()) {
-                    case ERROR_TYPE_INVALID_MESSAGE_ID:
-                        // TODO: Ignore this message, keep current status and send error
-                        // notification in an INFORMATIONAL request(optional).
-                        throw new UnsupportedOperationException(
-                                "Do not support handling this protocol error:" + e.getErrorType());
+            if (ikeHeader.isResponseMsg) {
+                DecodeResult decodeResult =
+                        IkeMessage.decode(
+                                ikeSaRecord.getLocalRequestMessageId(),
+                                mIkeIntegrity,
+                                mIkeCipher,
+                                ikeSaRecord,
+                                ikeHeader,
+                                ikePacketBytes);
+                switch (decodeResult.status) {
+                    case DECODE_STATUS_OK:
+                        ikeSaRecord.incrementLocalRequestMessageId();
+                        handleResponseIkeMessage(decodeResult.ikeMessage);
+                        break;
+                    case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
+                        ikeSaRecord.incrementLocalRequestMessageId();
+                        // TODO: Send Delete request on all IKE SAs and close IKE Session.
+                        throw new UnsupportedOperationException("Cannot handle this error.");
+                    case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
+                        // TODO: Log and ignore this message
+                        throw new UnsupportedOperationException("Cannot handle this error.");
                     default:
-                        throw new UnsupportedOperationException(
-                                "Do not support handling this protocol error:" + e.getErrorType());
+                        throw new IllegalArgumentException("Unrecognized decoding status.");
                 }
-            } catch (GeneralSecurityException e) {
-                // IKE library failed on intergity checksum validation or on message decryption.
-                // TODO: Handle decrypting exception
+
+            } else {
+                int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
+                if (expectedMsgId - ikeHeader.messageId == 1) {
+                    // TODO: Handle retransmitted request.
+                    throw new UnsupportedOperationException(
+                            "Do not support handling retransmitted request.");
+                } else {
+                    DecodeResult decodeResult =
+                            IkeMessage.decode(
+                                    expectedMsgId,
+                                    mIkeIntegrity,
+                                    mIkeCipher,
+                                    ikeSaRecord,
+                                    ikeHeader,
+                                    ikePacketBytes);
+                    switch (decodeResult.status) {
+                        case DECODE_STATUS_OK:
+                            ikeSaRecord.incrementRemoteRequestMessageId();
+                            IkeMessage ikeMessage = decodeResult.ikeMessage;
+                            handleRequestIkeMessage(
+                                    ikeMessage, getIkeExchangeSubType(ikeMessage), message);
+                            break;
+                        case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
+                            ikeSaRecord.incrementRemoteRequestMessageId();
+                            // TODO: Send back error notification. Close IKE Session if this is
+                            // INVALID_SYNTAX error.
+                            break;
+                        case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
+                            // TODO: Log and ignore this message.
+                            break;
+                        default:
+                            throw new IllegalArgumentException("Unrecognized decoding status.");
+                    }
+                }
             }
+
+            // TODO: Handle fatal error notifications.
         }
 
         // Default handler for decode errors in encrypted request.
