@@ -124,4 +124,14 @@ public class EapMessageTest {
         } catch (EapInvalidPacketLengthException expected) {
         }
     }
+
+    @Test
+    public void testEncode() throws Exception {
+        // TODO(b/133248540): fully test EapMessage#encode functionality
+        byte[] expectedPacket = hexStringToByteArray(SUCCESS_PACKET);
+        EapMessage eapMessage = EapMessage.decode(expectedPacket);
+
+        byte[] actualPacket = eapMessage.encode();
+        assertEquals(expectedPacket.length, actualPacket.length);
+    }
 }
