@@ -23,6 +23,8 @@ import com.android.ike.ikev2.exceptions.IkeException;
 
 /** Callback interface for receiving state changes of a Child Session. */
 public interface IChildSessionCallback {
+    // TODO: Rename methods to match IkeSession.
+
     /** Called when Child Session setup succeeds. */
     void onCreated();
 

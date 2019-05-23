@@ -221,13 +221,13 @@ public class IkeSessionStateMachine extends StateMachine {
 
     /** Package private constructor */
     IkeSessionStateMachine(
-            String name,
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
             IkeSessionOptions ikeOptions,
             ChildSessionOptions firstChildOptions) {
-        super(name, looper);
+        super(TAG, looper);
+
         mIkeSessionOptions = ikeOptions;
         mFirstChildSessionOptions = firstChildOptions;
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
@@ -253,7 +253,11 @@ public class IkeSessionStateMachine extends StateMachine {
         addState(mDeleteIkeLocalDelete);
 
         setInitialState(mInitial);
+
+        // TODO: Start the StateMachine.
     }
+
+    // TODO: Add interfaces to initiate IKE exchanges.
 
     /**
      * This class represents a reserved IKE SPI.
