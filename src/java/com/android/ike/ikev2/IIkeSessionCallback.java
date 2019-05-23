@@ -20,6 +20,8 @@ import com.android.ike.ikev2.exceptions.IkeException;
 
 /** Callback interface for receiving state changes of an IKE Session. */
 public interface IIkeSessionCallback {
+    // TODO: Rename methods to match IkeSession.
+
     /** Called when negotiation and authentication for this new IKE session succeeds. */
     void onCreated();
 
