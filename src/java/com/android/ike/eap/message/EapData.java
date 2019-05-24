@@ -66,15 +66,15 @@ public class EapData {
     public static final int EAP_TYPE_AKA = 23;
     public static final int EAP_TYPE_AKA_PRIME = 50;
 
-    private static final Set<Integer> VALID_TYPES = new HashSet<>();
+    private static final Set<Integer> SUPPORTED_TYPES = new HashSet<>();
     static {
-        VALID_TYPES.add(EAP_IDENTITY);
-        VALID_TYPES.add(EAP_NOTIFICATION);
-        VALID_TYPES.add(EAP_NAK);
-        VALID_TYPES.add(EAP_MD5_CHALLENGE);
-        VALID_TYPES.add(EAP_TYPE_AKA);
-        VALID_TYPES.add(EAP_TYPE_AKA_PRIME);
-        VALID_TYPES.add(EAP_TYPE_SIM);
+        SUPPORTED_TYPES.add(EAP_IDENTITY);
+        SUPPORTED_TYPES.add(EAP_NOTIFICATION);
+        SUPPORTED_TYPES.add(EAP_NAK);
+        SUPPORTED_TYPES.add(EAP_MD5_CHALLENGE);
+        SUPPORTED_TYPES.add(EAP_TYPE_AKA);
+        SUPPORTED_TYPES.add(EAP_TYPE_AKA_PRIME);
+        SUPPORTED_TYPES.add(EAP_TYPE_SIM);
     }
 
     @EapType public final int eapType;
@@ -85,6 +85,8 @@ public class EapData {
      *
      * @param eapType the {@link EapType} for this EapData instance
      * @param eapTypeData the Type-Data for this EapData instance
+     * @throws IllegalArgumentException if eapTypeData is null or if
+     *         {@link EapData#isSupportedEapType} is false for the given eapType
      */
     public EapData(@EapType int eapType, @NonNull byte[] eapTypeData) {
         this.eapType = eapType;
@@ -114,7 +116,7 @@ public class EapData {
         if (this == o) {
             return true;
         }
-        if (o == null || getClass() != o.getClass()) {
+        if (o == null || !(o instanceof EapData)) {
             return false;
         }
         EapData eapData = (EapData) o;
@@ -132,12 +134,21 @@ public class EapData {
         return Objects.hash(eapType, Arrays.hashCode(eapTypeData));
     }
 
+    /**
+     * Returns whether the given eapType is a supported {@link EapType} value.
+     *
+     * @param eapType the value to be checked
+     * @return true iff the given eapType is a supported EAP Type
+     */
+    public static boolean isSupportedEapType(int eapType) {
+        return SUPPORTED_TYPES.contains(eapType);
+    }
+
     private void validate() {
         if (this.eapTypeData == null) {
             throw new IllegalArgumentException("EapTypeData byte[] must be non-null");
         }
-
-        if (!VALID_TYPES.contains(this.eapType)) {
+        if (!isSupportedEapType(this.eapType)) {
             throw new IllegalArgumentException("eapType must be be a valid @EapType value");
         }
     }
