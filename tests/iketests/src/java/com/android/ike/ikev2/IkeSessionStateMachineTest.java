@@ -350,7 +350,6 @@ public final class IkeSessionStateMachineTest {
         mLooper = new TestLooper();
         mIkeSessionStateMachine =
                 new IkeSessionStateMachine(
-                        "IkeSessionStateMachine",
                         mLooper.getLooper(),
                         mContext,
                         mIpSecManager,
