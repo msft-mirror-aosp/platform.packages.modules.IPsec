@@ -18,6 +18,7 @@ package com.android.ike.ikev2.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.android.ike.TestUtils;
@@ -50,6 +51,26 @@ public final class IkeTsPayloadTest {
     private static final Inet4Address TS_TWO_END_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.4.102"));
 
+    private IkeTrafficSelector mTsOne;
+    private IkeTrafficSelector mTsTwo;
+
+    public IkeTsPayloadTest() {
+        mTsOne =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_ONE_START_PORT,
+                        TS_ONE_END_PORT,
+                        TS_ONE_START_ADDRESS,
+                        TS_ONE_END_ADDRESS);
+        mTsTwo =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_TWO_START_PORT,
+                        TS_TWO_END_PORT,
+                        TS_TWO_START_ADDRESS,
+                        TS_TWO_END_ADDRESS);
+    }
+
     @Test
     public void testDecodeTsInitiatorPayload() throws Exception {
         ByteBuffer inputBuffer =
@@ -68,29 +89,54 @@ public final class IkeTsPayloadTest {
 
     @Test
     public void testBuildAndEncodeTsPayload() throws Exception {
-        IkeTrafficSelector tsOne =
-                new IkeTrafficSelector(
-                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
-                        TS_ONE_START_PORT,
-                        TS_ONE_END_PORT,
-                        TS_ONE_START_ADDRESS,
-                        TS_ONE_END_ADDRESS);
-
-        IkeTrafficSelector tsTwo =
-                new IkeTrafficSelector(
-                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
-                        TS_TWO_START_PORT,
-                        TS_TWO_END_PORT,
-                        TS_TWO_START_ADDRESS,
-                        TS_TWO_END_ADDRESS);
-
         IkeTsPayload tsPayload =
-                new IkeTsPayload(true /*isInitiator*/, new IkeTrafficSelector[] {tsOne, tsTwo});
+                new IkeTsPayload(true /*isInitiator*/, new IkeTrafficSelector[] {mTsOne, mTsTwo});
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(tsPayload.getPayloadLength());
         tsPayload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_TS_RESPONDER, byteBuffer);
 
         byte[] expectedBytes = TestUtils.hexStringToByteArray(TS_INITIATOR_PAYLOAD_HEX_STRING);
         assertArrayEquals(expectedBytes, byteBuffer.array());
+    }
+
+    @Test
+    public void testContains() throws Exception {
+        IkeTrafficSelector tsOneNarrowPortRange =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_ONE_START_PORT + 1,
+                        TS_ONE_END_PORT,
+                        TS_ONE_START_ADDRESS,
+                        TS_ONE_END_ADDRESS);
+
+        IkeTrafficSelector tsOneNarrowAddressRange =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                        TS_ONE_START_PORT,
+                        TS_ONE_END_PORT,
+                        (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200")),
+                        TS_ONE_END_ADDRESS);
+
+        IkeTsPayload tsPayload =
+                new IkeTsPayload(true /*isInitiator*/, new IkeTrafficSelector[] {mTsOne, mTsTwo});
+
+        IkeTsPayload tsNarrowPortRangePayload =
+                new IkeTsPayload(
+                        true /*isInitiator*/,
+                        new IkeTrafficSelector[] {tsOneNarrowPortRange, mTsTwo});
+
+        IkeTsPayload tsNarrowAddressRangePayload =
+                new IkeTsPayload(
+                        true /*isInitiator*/,
+                        new IkeTrafficSelector[] {tsOneNarrowAddressRange, mTsTwo});
+
+        assertTrue(tsPayload.contains(tsPayload));
+        assertTrue(tsPayload.contains(tsNarrowPortRangePayload));
+        assertTrue(tsPayload.contains(tsNarrowAddressRangePayload));
+
+        assertFalse(tsNarrowPortRangePayload.contains(tsPayload));
+        assertFalse(tsNarrowAddressRangePayload.contains(tsPayload));
+        assertFalse(tsNarrowAddressRangePayload.contains(tsNarrowPortRangePayload));
+        assertFalse(tsNarrowPortRangePayload.contains(tsNarrowAddressRangePayload));
     }
 }
