@@ -21,14 +21,13 @@ import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
 public class EapDataTest {
     private static final byte[] EAP_TYPE_DATA = new byte[] {0x00, 0x00, 0x00};
-    private static final int INVALID_EAP_TYPE = -1;
+    private static final int UNSUPPORTED_EAP_TYPE = -1;
 
     @Test
     public void testEapDataConstructor() {
@@ -45,10 +44,10 @@ public class EapDataTest {
     }
 
     @Test
-    public void testEapDataConstructorInvalidEapType() {
+    public void testEapDataConstructorUnsupportedType() {
         try {
-            new EapData(INVALID_EAP_TYPE, EAP_TYPE_DATA);
-            fail("IllegalArgumentException expected for invalid eapType");
+            new EapData(UNSUPPORTED_EAP_TYPE, EAP_TYPE_DATA);
+            fail("Expected IllegalArgumentException");
         } catch (IllegalArgumentException expected) {
         }
     }
@@ -60,17 +59,17 @@ public class EapDataTest {
     }
 
     @Test
-    public void testEquals() {
+    public void testEquals() throws Exception {
         EapData eapData = new EapData(EAP_TYPE_AKA, EAP_TYPE_DATA);
         EapData eapDataCopy = new EapData(EAP_TYPE_AKA, EAP_TYPE_DATA);
-        assertTrue(eapData.equals(eapDataCopy));
+        assertEquals(eapData, eapDataCopy);
 
         EapData eapDataDifferent = new EapData(EAP_TYPE_AKA_PRIME, EAP_TYPE_DATA);
         assertNotEquals(eapData, eapDataDifferent);
     }
 
     @Test
-    public void testHashCode() {
+    public void testHashCode() throws Exception {
         EapData eapData = new EapData(EAP_TYPE_AKA, EAP_TYPE_DATA);
         EapData eapDataCopy = new EapData(EAP_TYPE_AKA, EAP_TYPE_DATA);
         assertNotEquals(0, eapData.hashCode());
