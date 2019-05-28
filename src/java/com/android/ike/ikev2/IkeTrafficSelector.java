@@ -25,10 +25,12 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 /**
  * IkeTrafficSelector represents a Traffic Selector of a Child SA.
@@ -147,16 +149,13 @@ public final class IkeTrafficSelector {
                 throw new IllegalArgumentException("Unrecognized Traffic Selector type.");
         }
 
-        if (!isInetAddressRangeValid(startingAddress, endingAddress)) {
+        if (compareInetAddressTo(startingAddress, endingAddress) > 0) {
             throw new IllegalArgumentException("Received invalid address range.");
         }
 
         if (!isPortRangeValid(startPort, endPort)) {
             throw new IllegalArgumentException(
-                    "Invalid port range. startPort: "
-                            + startPort
-                            + " endPort: "
-                            + endPort);
+                    "Invalid port range. startPort: " + startPort + " endPort: " + endPort);
         }
 
         this.startPort = startPort;
@@ -164,8 +163,6 @@ public final class IkeTrafficSelector {
         this.startingAddress = startingAddress;
         this.endingAddress = endingAddress;
     }
-
-    // TODO: Add a constructor for users to construct IkeTrafficSelector.
 
     /**
      * Decode IkeTrafficSelectors from inbound Traffic Selector Payload.
@@ -248,7 +245,7 @@ public final class IkeTrafficSelector {
             Inet4Address endAddress = (Inet4Address) (Inet4Address.getByAddress(endAddressBytes));
 
             // Validate address range.
-            if (!isInetAddressRangeValid(startAddress, endAddress)) {
+            if (compareInetAddressTo(startAddress, endAddress) > 0) {
                 throw new InvalidSyntaxException("Received invalid IPv4 address range.");
             }
 
@@ -276,28 +273,87 @@ public final class IkeTrafficSelector {
                 && startPort <= endPort);
     }
 
-    // Validate address range. Caller must ensure two address are same types.
-    // TODO: Consider moving it to the platform code in the future.
-    private static boolean isInetAddressRangeValid(
-            InetAddress startAddress, InetAddress endAddress) {
-        byte[] startAddrBytes = startAddress.getAddress();
-        byte[] endAddrBytes = endAddress.getAddress();
+    // Compare two InetAddresses. Return -1 if the first input is smaller; 1 if the second input is
+    // smaller; 0 if two addresses are equal.
+    // TODO: Consider moving it to the platform code in the future./
+    private static int compareInetAddressTo(InetAddress leftAddress, InetAddress rightAddress) {
+        byte[] leftAddrBytes = leftAddress.getAddress();
+        byte[] rightAddrBytes = rightAddress.getAddress();
 
-        if (startAddrBytes.length != endAddrBytes.length) {
+        if (leftAddrBytes.length != rightAddrBytes.length) {
             throw new IllegalArgumentException("Two addresses are different types.");
         }
 
-        for (int i = 0; i < startAddrBytes.length; i++) {
-            int unsignedByteStart = Byte.toUnsignedInt(startAddrBytes[i]);
-            int unsignedByteEnd = Byte.toUnsignedInt(endAddrBytes[i]);
+        for (int i = 0; i < leftAddrBytes.length; i++) {
+            int unsignedByteLeft = Byte.toUnsignedInt(leftAddrBytes[i]);
+            int unsignedByteRight = Byte.toUnsignedInt(rightAddrBytes[i]);
 
-            if (unsignedByteStart < unsignedByteEnd) {
-                return true;
-            } else if (unsignedByteStart > unsignedByteEnd) {
-                return false;
+            if (unsignedByteLeft < unsignedByteRight) {
+                return -1;
+            } else if (unsignedByteLeft > unsignedByteRight) {
+                return 1;
             }
         }
-        return true;
+        return 0;
+    }
+
+    /**
+     * Check if the input IkeTrafficSelector is a subset of this instance.
+     *
+     * @param ts the provided IkeTrafficSelector to check.
+     * @return true if the input IkeTrafficSelector is a subset of this instance, otherwise false.
+     */
+    public boolean contains(IkeTrafficSelector ts) {
+        if (tsType == ts.tsType
+                && ipProtocolId == ts.ipProtocolId
+                && startPort <= ts.startPort
+                && endPort >= ts.endPort
+                && compareInetAddressTo(startingAddress, ts.startingAddress) <= 0
+                && compareInetAddressTo(endingAddress, ts.endingAddress) >= 0) {
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                tsType,
+                ipProtocolId,
+                selectorLength,
+                startPort,
+                endPort,
+                startingAddress,
+                endingAddress);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof IkeTrafficSelector)) return false;
+
+        IkeTrafficSelector other = (IkeTrafficSelector) o;
+
+        if (tsType != other.tsType
+                || ipProtocolId != other.ipProtocolId
+                || startPort != other.startPort
+                || endPort != other.endPort) {
+            return false;
+        }
+
+        switch (tsType) {
+            case TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE:
+                return (((Inet4Address) startingAddress)
+                                .equals((Inet4Address) other.startingAddress)
+                        && ((Inet4Address) endingAddress)
+                                .equals((Inet4Address) other.endingAddress));
+            case TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE:
+                return (((Inet6Address) startingAddress)
+                                .equals((Inet6Address) other.startingAddress)
+                        && ((Inet6Address) endingAddress)
+                                .equals((Inet6Address) other.endingAddress));
+            default:
+                throw new UnsupportedOperationException("Unrecognized TS type");
+        }
     }
 
     /**

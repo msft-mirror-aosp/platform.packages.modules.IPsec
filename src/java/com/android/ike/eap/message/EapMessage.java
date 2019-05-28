@@ -23,6 +23,7 @@ import android.annotation.Nullable;
 import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.InvalidEapCodeException;
+import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -111,6 +112,11 @@ public class EapMessage {
 
             if (eapCode == EAP_CODE_REQUEST || eapCode == EAP_CODE_RESPONSE) {
                 int eapType = Byte.toUnsignedInt(buffer.get());
+                if (!EapData.isSupportedEapType(eapType)) {
+                    throw new UnsupportedEapTypeException(eapIdentifier,
+                            "Unsupported eapType=" + eapType);
+                }
+
                 byte[] eapDataBytes = new byte[buffer.remaining()];
                 buffer.get(eapDataBytes);
                 eapData = new EapData(eapType, eapDataBytes);
@@ -122,6 +128,16 @@ public class EapMessage {
         }
 
         return new EapMessage(eapCode, eapIdentifier, eapLength, eapData);
+    }
+
+    /**
+     * Converts this EapMessage instance to its byte-encoded representation.
+     *
+     * @return byte[] representing the byte-encoded EapMessage
+     */
+    public byte[] encode() {
+        // TODO(b/133248540): implement and utilize EapMessage#encode functionality
+        return new byte[eapLength];
     }
 
     private void validate() throws EapSilentException {

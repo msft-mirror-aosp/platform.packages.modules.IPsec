@@ -25,10 +25,12 @@ import static org.junit.Assert.fail;
 
 import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.InvalidEapCodeException;
+import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
 
 import org.junit.Test;
 
 public class EapMessageTest {
+    // TODO(b/133327025): cleanup packet definitions to be all inline definitions
     private static final String REQUEST_CODE = "01";
     private static final String SUCCESS_CODE = "03";
     private static final String IDENTIFIER = "10";
@@ -37,6 +39,7 @@ public class EapMessageTest {
 
     private static final String INVALID_CODE = "F0";
     private static final String INVALID_LENGTH = "0005";
+    private static final String UNSUPPORTED_EAP_TYPE = "FF";
 
     private static final String SUCCESS_PACKET = SUCCESS_CODE + IDENTIFIER + SUCCESS_LENGTH;
     private static final String INVALID_CODE_PACKET = INVALID_CODE + IDENTIFIER + SUCCESS_LENGTH;
@@ -61,6 +64,11 @@ public class EapMessageTest {
             REQUEST_CODE
             + IDENTIFIER
             + MISSING_TYPE_LENGTH;
+    private static final String REQUEST_PACKET_UNSUPPORTED_TYPE =
+            REQUEST_CODE
+            + IDENTIFIER
+            + INVALID_LENGTH
+            + UNSUPPORTED_EAP_TYPE;
 
     @Test
     public void testDecode() throws Exception {
@@ -123,5 +131,25 @@ public class EapMessageTest {
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
+    }
+
+    @Test
+    public void testDecodeUnsupportedEapType() throws Exception {
+        try {
+            EapMessage.decode(hexStringToByteArray(REQUEST_PACKET_UNSUPPORTED_TYPE));
+            fail("Expected UnsupportedEapDataTypeException");
+        } catch (UnsupportedEapTypeException expected) {
+            assertEquals(hexStringToInt(IDENTIFIER), expected.eapIdentifier);
+        }
+    }
+
+    @Test
+    public void testEncode() throws Exception {
+        // TODO(b/133248540): fully test EapMessage#encode functionality
+        byte[] expectedPacket = hexStringToByteArray(SUCCESS_PACKET);
+        EapMessage eapMessage = EapMessage.decode(expectedPacket);
+
+        byte[] actualPacket = eapMessage.encode();
+        assertEquals(expectedPacket.length, actualPacket.length);
     }
 }
