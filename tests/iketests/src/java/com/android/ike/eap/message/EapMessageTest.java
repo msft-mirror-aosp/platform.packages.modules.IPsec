@@ -25,6 +25,7 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_TYPE_DATA;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.INCOMPLETE_HEADER_PACKET;
@@ -34,6 +35,7 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_MISS
 import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_UNSUPPORTED_TYPE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_PACKET;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -119,11 +121,30 @@ public class EapMessageTest {
 
     @Test
     public void testEncode() throws Exception {
-        // TODO(b/133248540): fully test EapMessage#encode functionality
-        EapMessage eapMessage = EapMessage.decode(EAP_SUCCESS_PACKET);
-
+        EapMessage eapMessage = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
         byte[] actualPacket = eapMessage.encode();
-        assertEquals(EAP_SUCCESS_PACKET.length, actualPacket.length);
+        assertArrayEquals(EAP_SUCCESS_PACKET, actualPacket);
+
+        eapMessage = new EapMessage(EAP_CODE_RESPONSE, ID_INT, NAK_DATA);
+        actualPacket = eapMessage.encode();
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, actualPacket);
+    }
+
+    @Test
+    public void testEncodeDecode() throws Exception {
+        EapMessage eapMessage = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
+        EapMessage result = EapMessage.decode(eapMessage.encode());
+
+        assertEquals(eapMessage.eapCode, result.eapCode);
+        assertEquals(eapMessage.eapIdentifier, result.eapIdentifier);
+        assertEquals(eapMessage.eapLength, result.eapLength);
+        assertEquals(eapMessage.eapData, result.eapData);
+    }
+
+    @Test
+    public void testDecodeEncode() throws Exception {
+        byte[] result = EapMessage.decode(EAP_REQUEST_PACKET).encode();
+        assertArrayEquals(EAP_REQUEST_PACKET, result);
     }
 
     @Test
