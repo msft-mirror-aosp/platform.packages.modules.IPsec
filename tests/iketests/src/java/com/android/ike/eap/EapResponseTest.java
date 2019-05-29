@@ -19,7 +19,7 @@ package com.android.ike.eap;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -43,12 +43,11 @@ public class EapResponseTest {
 
     @Test
     public void testGetEapResponse() {
-        // TODO(b/133248540): fully test EapMessage#encode functionality
         EapResult eapResult = EapResponse.getEapResponse(mEapResponse);
         assertTrue(eapResult instanceof EapResponse);
 
         EapResponse eapResponse = (EapResponse) eapResult;
-        assertEquals(EAP_RESPONSE_NAK_PACKET.length, eapResponse.packet.length);
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);
     }
 
     @Test
