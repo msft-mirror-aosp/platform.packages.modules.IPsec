@@ -18,7 +18,14 @@ package com.android.ike.eap.message;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.TestUtils.hexStringToInt;
+import static com.android.ike.eap.message.EapData.EAP_NAK;
+import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
@@ -69,6 +76,12 @@ public class EapMessageTest {
             + IDENTIFIER
             + INVALID_LENGTH
             + UNSUPPORTED_EAP_TYPE;
+
+    private static final byte[] EXPECTED_AUTH_TYPES = {
+            (byte) EAP_TYPE_AKA,
+            (byte) EAP_TYPE_AKA_PRIME,
+            (byte) EAP_TYPE_SIM};
+    private static final byte[] EXPECTED_NOTIFICATION_DATA = new byte[0];
 
     @Test
     public void testDecode() throws Exception {
@@ -151,5 +164,27 @@ public class EapMessageTest {
 
         byte[] actualPacket = eapMessage.encode();
         assertEquals(expectedPacket.length, actualPacket.length);
+    }
+
+    @Test
+    public void testGetNak() {
+        int identifier = hexStringToInt(IDENTIFIER);
+        EapMessage nak = EapMessage.getNak(identifier);
+
+        assertEquals(EAP_CODE_RESPONSE, nak.eapCode);
+        assertEquals(hexStringToInt(IDENTIFIER), nak.eapIdentifier);
+        assertEquals(EAP_NAK, nak.eapData.eapType);
+        assertArrayEquals(EXPECTED_AUTH_TYPES, nak.eapData.eapTypeData);
+    }
+
+    @Test
+    public void testGetNotificationResponse() {
+        int identifier = hexStringToInt(IDENTIFIER);
+        EapMessage notificationResponse = EapMessage.getNotificationResponse(identifier);
+
+        assertEquals(EAP_CODE_RESPONSE, notificationResponse.eapCode);
+        assertEquals(hexStringToInt(IDENTIFIER), notificationResponse.eapIdentifier);
+        assertEquals(EAP_NOTIFICATION, notificationResponse.eapData.eapType);
+        assertArrayEquals(EXPECTED_NOTIFICATION_DATA, notificationResponse.eapData.eapTypeData);
     }
 }

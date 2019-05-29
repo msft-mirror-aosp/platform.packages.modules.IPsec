@@ -16,9 +16,13 @@
 
 package com.android.ike.eap.message;
 
+import static com.android.ike.eap.message.EapData.NAK_DATA;
+import static com.android.ike.eap.message.EapData.NOTIFICATION_DATA;
+
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.util.Log;
 
 import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.EapSilentException;
@@ -61,6 +65,8 @@ import java.nio.ByteBuffer;
  * Protocol (EAP)</a>
  */
 public class EapMessage {
+    private static final String TAG = EapMessage.class.getSimpleName();
+
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
             EAP_CODE_REQUEST,
@@ -82,11 +88,11 @@ public class EapMessage {
     public final int eapLength;
     public final EapData eapData;
 
-    private EapMessage(@EapCode int eapCode, int eapIdentifier, int eapLength,
-            @Nullable EapData eapData) throws EapSilentException {
+    private EapMessage(@EapCode int eapCode, int eapIdentifier, @Nullable EapData eapData)
+            throws EapSilentException {
         this.eapCode = eapCode;
         this.eapIdentifier = eapIdentifier;
-        this.eapLength = eapLength;
+        this.eapLength = EAP_HEADER_LENGTH + ((eapData == null) ? 0 : eapData.getLength());
         this.eapData = eapData;
 
         validate();
@@ -127,7 +133,12 @@ public class EapMessage {
             throw new EapInvalidPacketLengthException("Packet is missing required values", ex);
         }
 
-        return new EapMessage(eapCode, eapIdentifier, eapLength, eapData);
+        int eapDataLength = (eapData == null) ? 0 : eapData.getLength();
+        if (eapLength > EAP_HEADER_LENGTH + eapDataLength) {
+            throw new EapInvalidPacketLengthException("Packet is shorter than specified length");
+        }
+
+        return new EapMessage(eapCode, eapIdentifier, eapData);
     }
 
     /**
@@ -140,17 +151,46 @@ public class EapMessage {
         return new byte[eapLength];
     }
 
+    /**
+     * Creates and returns an EAP-Response/Notification message with the given EAP Identifier.
+     *
+     * @param eapIdentifier the identifier for the message being responded too
+     * @return an EAP-Response/Notification message with an identifier matching the given identifier
+     */
+    public static EapMessage getNotificationResponse(int eapIdentifier) {
+        try {
+            return new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NOTIFICATION_DATA);
+        } catch (EapSilentException ex) {
+            // this should never happen - the only variable value is the identifier
+            Log.wtf(TAG, "Failed to create Notification Response for message with identifier="
+                    + eapIdentifier);
+            return null;
+        }
+    }
+
+    /**
+     * Creates and returns an EAP-Response/Nak message with the given EAP Identifier.
+     *
+     * @param eapIdentifier the identifier for the message being responded too
+     * @return an EAP-Response/Nak message with an identifier matching the given identifier
+     */
+    public static EapMessage getNak(int eapIdentifier) {
+        try {
+            return new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NAK_DATA);
+        } catch (EapSilentException ex) {
+            // this should never happen - the only variable value is the identifier
+            Log.wtf(TAG,  "Failed to create Nak for message with identifier="
+                    + eapIdentifier);
+            return null;
+        }
+    }
+
     private void validate() throws EapSilentException {
         if (eapCode != EAP_CODE_REQUEST
                 && eapCode != EAP_CODE_RESPONSE
                 && eapCode != EAP_CODE_SUCCESS
                 && eapCode != EAP_CODE_FAILURE) {
             throw new InvalidEapCodeException(eapCode);
-        }
-
-        int eapDataLength = (eapData == null) ? 0 : eapData.getLength();
-        if (eapLength > EAP_HEADER_LENGTH + eapDataLength) {
-            throw new EapInvalidPacketLengthException("Packet is shorter than specified length");
         }
 
         if ((eapCode == EAP_CODE_SUCCESS || eapCode == EAP_CODE_FAILURE)
