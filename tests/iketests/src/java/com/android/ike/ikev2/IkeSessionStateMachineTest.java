@@ -17,6 +17,7 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -26,6 +27,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
@@ -61,6 +63,7 @@ import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeIdPayload;
 import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -244,12 +247,13 @@ public final class IkeSessionStateMachineTest {
 
         byte[] dummyIkePacketBytes = new byte[0];
         when(mMockIkeMessageHelper.decode(
+                        anyInt(),
                         any(),
                         any(),
                         eq(ikeSaRecord),
                         eq(dummyIkeMessage.ikeHeader),
                         eq(dummyIkePacketBytes)))
-                .thenReturn(dummyIkeMessage);
+                .thenReturn(new DecodeResult(DECODE_STATUS_OK, dummyIkeMessage, null));
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
@@ -286,6 +290,7 @@ public final class IkeSessionStateMachineTest {
             throws Exception {
         verify(mMockIkeMessageHelper)
                 .decode(
+                        anyInt(),
                         any(),
                         any(),
                         eq(record),
@@ -737,7 +742,7 @@ public final class IkeSessionStateMachineTest {
                         IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class));
 
         // Validate inbound IKE AUTH response
-        verify(mMockIkeMessageHelper).decode(any(), any(), any(), any(), any());
+        verify(mMockIkeMessageHelper).decode(anyInt(), any(), any(), any(), any(), any());
 
         ArgumentCaptor<List<IkePayload>> mReqPayloadListCaptor =
                 ArgumentCaptor.forClass(List.class);
