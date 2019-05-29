@@ -216,8 +216,8 @@ public final class IkeSessionStateMachineTest {
                         payloadHexStringList);
 
         byte[] dummyIkePacketBytes = new byte[0];
-        when(mMockIkeMessageHelper.decode(dummyIkeMessage.ikeHeader, dummyIkePacketBytes))
-                .thenReturn(dummyIkeMessage);
+        when(mMockIkeMessageHelper.decode(0, dummyIkeMessage.ikeHeader, dummyIkePacketBytes))
+                .thenReturn(new DecodeResult(DECODE_STATUS_OK, dummyIkeMessage, null));
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
@@ -625,7 +625,7 @@ public final class IkeSessionStateMachineTest {
                 -1 /*not found*/, ikeSocket.mSpiToIkeSession.indexOfValue(mIkeSessionStateMachine));
 
         verify(mMockIkeMessageHelper)
-                .decode(dummyReceivedIkePacket.ikeHeader, dummyReceivedIkePacket.ikePacketBytes);
+                .decode(0, dummyReceivedIkePacket.ikeHeader, dummyReceivedIkePacket.ikePacketBytes);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
