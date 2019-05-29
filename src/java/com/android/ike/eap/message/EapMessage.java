@@ -28,6 +28,7 @@ import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.InvalidEapCodeException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -88,7 +89,8 @@ public class EapMessage {
     public final int eapLength;
     public final EapData eapData;
 
-    private EapMessage(@EapCode int eapCode, int eapIdentifier, @Nullable EapData eapData)
+    @VisibleForTesting
+    EapMessage(@EapCode int eapCode, int eapIdentifier, @Nullable EapData eapData)
             throws EapSilentException {
         this.eapCode = eapCode;
         this.eapIdentifier = eapIdentifier;
@@ -147,8 +149,16 @@ public class EapMessage {
      * @return byte[] representing the byte-encoded EapMessage
      */
     public byte[] encode() {
-        // TODO(b/133248540): implement and utilize EapMessage#encode functionality
-        return new byte[eapLength];
+        ByteBuffer byteBuffer = ByteBuffer.allocate(eapLength);
+        byteBuffer.put((byte) eapCode);
+        byteBuffer.put((byte) eapIdentifier);
+        byteBuffer.putShort((short) eapLength);
+
+        if (eapData != null) {
+            eapData.encodeToByteBuffer(byteBuffer);
+        }
+
+        return byteBuffer.array();
     }
 
     /**
