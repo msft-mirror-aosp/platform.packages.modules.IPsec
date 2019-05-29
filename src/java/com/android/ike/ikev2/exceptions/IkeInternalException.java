@@ -19,7 +19,7 @@ package com.android.ike.ikev2.exceptions;
  * IkeInternalException represents all IKE-library-related exceptions that are not IKE protocol
  * error.
  */
-public final class IkeInternalException extends Exception {
+public final class IkeInternalException extends IkeException {
     /**
      * Constructs a new exception with the specified cause.
      *
