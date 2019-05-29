@@ -37,6 +37,8 @@ public class EapTestMessageDefinitions {
     // Body of EapData is the list of supported methods
     public static final byte[] EAP_RESPONSE_NAK_PACKET =
             hexStringToByteArray("02" + ID + "000803173212");
+    public static final byte[] EAP_RESPONSE_NOTIFICATION_PACKET =
+            hexStringToByteArray("02" + ID + "000502");
 
     public static final byte[] REQUEST_UNSUPPORTED_TYPE_PACKET =
             hexStringToByteArray("01" + ID + "0005FF");
@@ -46,4 +48,5 @@ public class EapTestMessageDefinitions {
     public static final byte[] SHORT_PACKET = hexStringToByteArray("01" + ID + "0005");
     public static final byte[] INCOMPLETE_HEADER_PACKET = hexStringToByteArray("03" + ID);
     public static final byte[] INVALID_CODE_PACKET = hexStringToByteArray("F0" + ID + "0004");
+    public static final byte[] REQUEST_EAP_TYPE_NAK = hexStringToByteArray("01" + ID + "000503");
 }
