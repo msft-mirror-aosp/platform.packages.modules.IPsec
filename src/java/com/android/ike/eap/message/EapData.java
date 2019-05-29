@@ -80,6 +80,14 @@ public class EapData {
     @EapType public final int eapType;
     public final byte[] eapTypeData;
 
+    private static final byte[] VALID_AUTH_TYPES = {
+            (byte) EAP_TYPE_AKA,
+            (byte) EAP_TYPE_AKA_PRIME,
+            (byte) EAP_TYPE_SIM
+    };
+    public static final EapData NAK_DATA = new EapData(EAP_NAK, VALID_AUTH_TYPES);
+    public static final EapData NOTIFICATION_DATA = new EapData(EAP_NOTIFICATION, new byte[0]);
+
     /**
      * Constructs a new EapData instance.
      *
