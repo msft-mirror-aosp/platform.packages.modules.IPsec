@@ -33,7 +33,10 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_REQUEST_PACKET =
             hexStringToByteArray("01" + ID + "000A17" + EAP_REQUEST_TYPE_DATA);
     public static final byte[] EAP_SUCCESS_PACKET = hexStringToByteArray("03" + ID + "0004");
-    public static final byte[] EAP_RESPONSE_NAK_PACKET = hexStringToByteArray("02" + ID + "000502");
+
+    // Body of EapData is the list of supported methods
+    public static final byte[] EAP_RESPONSE_NAK_PACKET =
+            hexStringToByteArray("02" + ID + "000803173212");
 
     public static final byte[] REQUEST_UNSUPPORTED_TYPE_PACKET =
             hexStringToByteArray("01" + ID + "0005FF");
