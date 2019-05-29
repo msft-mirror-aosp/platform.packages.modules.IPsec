@@ -16,23 +16,15 @@
 
 package com.android.ike.eap.statemachine;
 
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.LONG_SUCCESS_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_UNSUPPORTED_TYPE_PACKET;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
-import com.android.ike.eap.EapResult.EapResponse;
-import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.statemachine.EapStateMachine.CreatedState;
 import com.android.ike.eap.statemachine.EapStateMachine.FailureState;
-import com.android.ike.eap.statemachine.EapStateMachine.IdentityState;
-import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
 import com.android.ike.eap.statemachine.EapStateMachine.SuccessState;
 
 import org.junit.Test;
@@ -63,46 +55,5 @@ public class EapStateMachineTest {
 
         EapError eapError = (EapError) result;
         assertTrue(eapError.cause instanceof EapInvalidRequestException);
-    }
-
-    @Test
-    public void testProcessUnsupportedEapDataType() {
-        CreatedState createdState = new EapStateMachine().new CreatedState();
-        assertNakResponse(createdState.process(REQUEST_UNSUPPORTED_TYPE_PACKET));
-
-        IdentityState identityState = new EapStateMachine().new IdentityState();
-        assertNakResponse(identityState.process(REQUEST_UNSUPPORTED_TYPE_PACKET));
-
-        MethodState methodState = new EapStateMachine().new MethodState();
-        assertNakResponse(methodState.process(REQUEST_UNSUPPORTED_TYPE_PACKET));
-    }
-
-    private void assertNakResponse(EapResult result) {
-        assertTrue(result instanceof EapResponse);
-        EapResponse eapResponse = (EapResponse) result;
-
-        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);
-    }
-
-    @Test
-    public void testProcessDecodeFailure() {
-        CreatedState createdState = new EapStateMachine().new CreatedState();
-        assertEapError(createdState.process(LONG_SUCCESS_PACKET),
-                EapInvalidPacketLengthException.class);
-
-        IdentityState identityState = new EapStateMachine().new IdentityState();
-        assertEapError(identityState.process(LONG_SUCCESS_PACKET),
-                EapInvalidPacketLengthException.class);
-
-        MethodState methodState = new EapStateMachine().new MethodState();
-        assertEapError(methodState.process(LONG_SUCCESS_PACKET),
-                EapInvalidPacketLengthException.class);
-    }
-
-    private void assertEapError(EapResult result, Class<? extends Exception> expectedCause) {
-        assertTrue(result instanceof EapError);
-
-        EapError eapError = (EapError) result;
-        assertTrue(expectedCause.isInstance(eapError.cause));
     }
 }
