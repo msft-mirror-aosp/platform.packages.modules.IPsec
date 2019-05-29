@@ -19,14 +19,23 @@ package com.android.ike.eap.message;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+
 public class EapDataTest {
-    private static final byte[] EAP_TYPE_DATA = new byte[] {0x00, 0x00, 0x00};
+    private static final byte[] EXPECTED_EAP_DATA_BYTES = new byte[] {
+            EAP_TYPE_AKA,
+            (byte) 1,
+            (byte) 2,
+            (byte) 3
+    };
+    private static final byte[] EAP_TYPE_DATA = new byte[] {(byte) 1, (byte) 2, (byte) 3};
     private static final int UNSUPPORTED_EAP_TYPE = -1;
 
     @Test
@@ -74,5 +83,14 @@ public class EapDataTest {
         EapData eapDataCopy = new EapData(EAP_TYPE_AKA, EAP_TYPE_DATA);
         assertNotEquals(0, eapData.hashCode());
         assertEquals(eapData.hashCode(), eapDataCopy.hashCode());
+    }
+
+    @Test
+    public void testEncodeToByteBuffer() {
+        EapData eapData = new EapData(EAP_TYPE_AKA, EAP_TYPE_DATA);
+
+        ByteBuffer b = ByteBuffer.allocate(eapData.getLength());
+        eapData.encodeToByteBuffer(b);
+        assertArrayEquals(EXPECTED_EAP_DATA_BYTES, b.array());
     }
 }

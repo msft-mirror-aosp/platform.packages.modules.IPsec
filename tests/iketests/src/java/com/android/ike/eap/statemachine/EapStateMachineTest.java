@@ -16,13 +16,12 @@
 
 package com.android.ike.eap.statemachine;
 
-import static com.android.ike.eap.message.EapData.NAK_DATA;
-import static com.android.ike.eap.message.EapMessage.EAP_HEADER_LENGTH;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.LONG_SUCCESS_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_UNSUPPORTED_TYPE_PACKET;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.EapResult;
@@ -82,8 +81,7 @@ public class EapStateMachineTest {
         assertTrue(result instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) result;
 
-        int expectedLength = EAP_HEADER_LENGTH + NAK_DATA.getLength();
-        assertEquals(expectedLength, eapResponse.packet.length);
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);
     }
 
     @Test
