@@ -23,7 +23,7 @@ import static com.android.ike.eap.message.EapData.NOTIFICATION_DATA;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_TYPE_DATA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
@@ -57,10 +57,10 @@ public class EapMessageTest {
 
         EapData expectedEapData = new EapData(EAP_TYPE_AKA,
                 hexStringToByteArray(EAP_REQUEST_TYPE_DATA));
-        result = EapMessage.decode(EAP_REQUEST_PACKET);
+        result = EapMessage.decode(EAP_REQUEST_AKA_IDENTITY_PACKET);
         assertEquals(EAP_CODE_REQUEST, result.eapCode);
         assertEquals(ID_INT, result.eapIdentifier);
-        assertEquals(EAP_REQUEST_PACKET.length, result.eapLength);
+        assertEquals(EAP_REQUEST_AKA_IDENTITY_PACKET.length, result.eapLength);
         assertEquals(expectedEapData, result.eapData);
     }
 
@@ -143,8 +143,8 @@ public class EapMessageTest {
 
     @Test
     public void testDecodeEncode() throws Exception {
-        byte[] result = EapMessage.decode(EAP_REQUEST_PACKET).encode();
-        assertArrayEquals(EAP_REQUEST_PACKET, result);
+        byte[] result = EapMessage.decode(EAP_REQUEST_AKA_IDENTITY_PACKET).encode();
+        assertArrayEquals(EAP_REQUEST_AKA_IDENTITY_PACKET, result);
     }
 
     @Test
