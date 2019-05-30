@@ -39,6 +39,8 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("02" + ID + "000803173212");
     public static final byte[] EAP_RESPONSE_NOTIFICATION_PACKET =
             hexStringToByteArray("02" + ID + "000502");
+    public static final byte[] EAP_REQUEST_MD5_CHALLENGE =
+            hexStringToByteArray("01" + ID + "000504");
 
     public static final byte[] REQUEST_UNSUPPORTED_TYPE_PACKET =
             hexStringToByteArray("01" + ID + "0005FF");
