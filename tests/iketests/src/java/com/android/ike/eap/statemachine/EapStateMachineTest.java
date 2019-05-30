@@ -16,7 +16,7 @@
 
 package com.android.ike.eap.statemachine;
 
-import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 
 import static org.junit.Assert.assertTrue;
 
@@ -30,8 +30,6 @@ import com.android.ike.eap.statemachine.EapStateMachine.SuccessState;
 import org.junit.Test;
 
 public class EapStateMachineTest {
-    private static final String EAP_SUCCESS_STRING = "03100004";
-    private static final byte[] EAP_SUCCESS_PACKET = hexStringToByteArray(EAP_SUCCESS_STRING);
 
     @Test
     public void testEapStateMachineStartState() {

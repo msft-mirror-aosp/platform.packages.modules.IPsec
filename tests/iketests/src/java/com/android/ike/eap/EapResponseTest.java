@@ -16,9 +16,10 @@
 
 package com.android.ike.eap;
 
-import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -31,30 +32,22 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class EapResponseTest {
-    private static final String EAP_RESPONSE_STRING = "0210000502";
-    private static final byte[] EAP_RESPONSE_PACKET = hexStringToByteArray(EAP_RESPONSE_STRING);
-
-    private static final String EAP_NOTIFICATION_STRING = "0110000602AA";
-    private static final byte[] EAP_NOTIFICATION_PACKET =
-            hexStringToByteArray(EAP_NOTIFICATION_STRING);
-
     private EapMessage mEapResponse;
-    private EapMessage mEapNotification;
+    private EapMessage mEapSuccess;
 
     @Before
     public void setUp() throws Exception {
-        mEapResponse = EapMessage.decode(EAP_RESPONSE_PACKET);
-        mEapNotification = EapMessage.decode(EAP_NOTIFICATION_PACKET);
+        mEapResponse = EapMessage.decode(EAP_RESPONSE_NAK_PACKET);
+        mEapSuccess = EapMessage.decode(EAP_SUCCESS_PACKET);
     }
 
     @Test
     public void testGetEapResponse() {
-        // TODO(b/133248540): fully test EapMessage#encode functionality
         EapResult eapResult = EapResponse.getEapResponse(mEapResponse);
         assertTrue(eapResult instanceof EapResponse);
 
         EapResponse eapResponse = (EapResponse) eapResult;
-        assertEquals(EAP_RESPONSE_PACKET.length, eapResponse.packet.length);
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);
     }
 
     @Test
@@ -67,8 +60,8 @@ public class EapResponseTest {
     }
 
     @Test
-    public void testGetEapResponseRequestMessage() {
-        EapResult eapResult = EapResponse.getEapResponse(mEapNotification);
+    public void testGetEapResponseNonRequestMessage() {
+        EapResult eapResult = EapResponse.getEapResponse(mEapSuccess);
         assertTrue(eapResult instanceof EapError);
 
         EapError eapError = (EapError) eapResult;

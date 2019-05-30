@@ -21,6 +21,7 @@ import android.annotation.NonNull;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Objects;
@@ -80,6 +81,14 @@ public class EapData {
     @EapType public final int eapType;
     public final byte[] eapTypeData;
 
+    private static final byte[] VALID_AUTH_TYPES = {
+            (byte) EAP_TYPE_AKA,
+            (byte) EAP_TYPE_AKA_PRIME,
+            (byte) EAP_TYPE_SIM
+    };
+    public static final EapData NAK_DATA = new EapData(EAP_NAK, VALID_AUTH_TYPES);
+    public static final EapData NOTIFICATION_DATA = new EapData(EAP_NOTIFICATION, new byte[0]);
+
     /**
      * Constructs a new EapData instance.
      *
@@ -132,6 +141,16 @@ public class EapData {
     @Override
     public int hashCode() {
         return Objects.hash(eapType, Arrays.hashCode(eapTypeData));
+    }
+
+    /**
+     * Puts the byte-encoding for this EapData instance into the given ByteBuffer.
+     *
+     * @param b the ByteBuffer to write this EapData instance to
+     */
+    public void encodeToByteBuffer(ByteBuffer b) {
+        b.put((byte) eapType);
+        b.put(eapTypeData);
     }
 
     /**
