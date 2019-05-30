@@ -557,6 +557,7 @@ public final class IkeSaPayload extends IkePayload {
         static IkeProposal createIkeProposal(
                 byte number, byte spiSize, SaProposal saProposal, InetAddress localAddress)
                 throws IOException {
+            // IKE_INIT uses SPI_LEN_NOT_INCLUDED, while rekeys use SPI_LEN_IKE
             IkeSecurityParameterIndex spiResource =
                     (spiSize == SPI_LEN_NOT_INCLUDED
                             ? null
