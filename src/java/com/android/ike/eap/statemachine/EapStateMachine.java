@@ -31,6 +31,7 @@ import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
+import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.utils.SimpleStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
@@ -142,6 +143,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     }
 
     protected class IdentityState extends EapState {
+        private final String mTAG = IdentityState.class.getSimpleName();
+
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
@@ -150,6 +153,20 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             EapMessage message = decodeResult.eapMessage;
             // TODO(b/133140131): implement logic for state
             return null;
+        }
+
+        @VisibleForTesting
+        EapResult getIdentityResponse(int eapIdentifier, byte[] identity) {
+            try {
+                EapData identityData = new EapData(EAP_IDENTITY, identity);
+                return EapResponse.getEapResponse(
+                        new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, identityData));
+            } catch (EapSilentException ex) {
+                // this should never happen - only identifier and identity bytes are variable
+                Log.wtf(mTAG,  "Failed to create Identity response for message with identifier="
+                        + eapIdentifier);
+                return new EapError(ex);
+            }
         }
     }
 
