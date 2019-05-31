@@ -43,7 +43,7 @@ import org.junit.Test;
  * EapStateTest
  */
 public class EapStateTest {
-    private EapState mEapState;
+    protected EapState mEapState;
 
     @Before
     public void setUp() {
