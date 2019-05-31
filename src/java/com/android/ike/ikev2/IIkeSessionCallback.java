@@ -20,18 +20,16 @@ import com.android.ike.ikev2.exceptions.IkeException;
 
 /** Callback interface for receiving state changes of an IKE Session. */
 public interface IIkeSessionCallback {
-    // TODO: Rename methods to match IkeSession.
-
-    /** Called when negotiation and authentication for this new IKE session succeeds. */
-    void onCreated();
+    /** Called when negotiation and authentication for this new IKE Session succeeds. */
+    void onOpened();
 
     /**
-     * Called when either side has decided to delete this Session and the deletion exchange
+     * Called when either side has decided to close this Session and the deletion exchange
      * finishes.
      *
      * <p>This method will not be fired if this deletion is caused by a fatal error.
      */
-    void onDeleted();
+    void onClosed();
 
     /**
      * Called if IKE Session negotiation fails or IKE Session is deleted because of a fatal error.
