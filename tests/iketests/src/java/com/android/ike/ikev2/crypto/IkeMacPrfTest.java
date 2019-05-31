@@ -17,6 +17,7 @@
 package com.android.ike.ikev2.crypto;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertFalse;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
@@ -27,6 +28,8 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
+
+import java.util.Arrays;
 
 @RunWith(JUnit4.class)
 public final class IkeMacPrfTest {
@@ -128,6 +131,22 @@ public final class IkeMacPrfTest {
 
         byte[] expectedSKeySeed = TestUtils.hexStringToByteArray(IKE_SKEYSEED_HEX_STRING);
         assertArrayEquals(expectedSKeySeed, calculatedSKeySeed);
+    }
+
+    @Test
+    public void testGenerateRekeyedSKeySeed() throws Exception {
+        byte[] nonceInit = TestUtils.hexStringToByteArray(IKE_NONCE_INIT_HEX_STRING);
+        byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
+        byte[] sharedDhKey = TestUtils.hexStringToByteArray(IKE_SHARED_DH_KEY_HEX_STRING);
+        byte[] old_skd = TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING);
+
+        byte[] calculatedSKeySeed =
+                mIkeHmacSha1Prf.generateRekeyedSKeySeed(old_skd, nonceInit, nonceResp, sharedDhKey);
+
+        // Verify that the new sKeySeed is different.
+        // TODO: Find actual test vectors to test positive case.
+        byte[] oldSKeySeed = TestUtils.hexStringToByteArray(IKE_SKEYSEED_HEX_STRING);
+        assertFalse(Arrays.equals(oldSKeySeed, calculatedSKeySeed));
     }
 
     @Test

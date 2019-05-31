@@ -114,6 +114,10 @@ public final class IkeSessionStateMachineTest {
     private static final String IKE_SA_PAYLOAD_HEX_STRING =
             "220000300000002c010100040300000c0100000c800e00800300000803000002030"
                     + "00008020000020000000804000002";
+    private static final String IKE_REKEY_SA_PAYLOAD_HEX_STRING =
+            "22000038000000340101080400000000000000FF0300000c0100000c800e0080030"
+                    + "000080300000203000008020000020000000804000002";
+    private static final int IKE_REKEY_SA_INITIATOR_SPI = 0xff;
     private static final String KE_PAYLOAD_HEX_STRING =
             "2800008800020000b4a2faf4bb54878ae21d638512ece55d9236fc50"
                     + "46ab6cef82220f421f3ce6361faf36564ecb6d28798a94aa"
@@ -515,9 +519,17 @@ public final class IkeSessionStateMachineTest {
     }
 
     private ReceivedIkePacket makeRekeyIkeResponse() throws Exception {
-        // TODO: Build real Rekey IKE response when Rekey IKE response validation is implemented.
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
+
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
+
+        payloadHexStringList.add(IKE_SA_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
+
         return makeDummyEncryptedReceivedIkePacket(
                 mSpyCurrentIkeSaRecord,
                 IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
@@ -545,7 +557,7 @@ public final class IkeSessionStateMachineTest {
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
 
         payloadHexStringList.add(NOTIFY_REKEY_IKE_PAYLOAD_HEX_STRING);
-        payloadHexStringList.add(IKE_SA_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(IKE_REKEY_SA_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NONCE_INIT_PAYLOAD_HEX_STRING);
         return makeDummyEncryptedReceivedIkePacket(
@@ -881,7 +893,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Prepare "rekeyed" SA
-        when(mMockSaRecordHelper.makeNewIkeSaRecord(eq(mSpyCurrentIkeSaRecord), any(), any()))
+        when(mMockSaRecordHelper.makeRekeyedIkeSaRecord(
+                        eq(mSpyCurrentIkeSaRecord), any(), any(), any(), any()))
                 .thenReturn(mSpyLocalInitIkeSaRecord);
 
         // Receive Rekey response
@@ -971,10 +984,11 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
-    public void testRekeyIkeRemote() throws Exception {
-        mockIkeSetup();
+    public void testRekeyIkeRemoteCreate() throws Exception {
+        setupIdleStateMachine();
 
-        when(mMockSaRecordHelper.makeNewIkeSaRecord(eq(mSpyCurrentIkeSaRecord), any(), any()))
+        when(mMockSaRecordHelper.makeRekeyedIkeSaRecord(
+                        eq(mSpyCurrentIkeSaRecord), any(), any(), any(), any()))
                 .thenReturn(mSpyRemoteInitIkeSaRecord);
 
         // Receive Rekey request
@@ -983,6 +997,51 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyRekeyIkeRequestReceivedPacket);
         mLooper.dispatchAll();
         verifyIncrementRemoteReqMsgId();
+        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyRekeyIkeRequestReceivedPacket);
+
+        // Verify SA created with correct parameters
+        ArgumentCaptor<SaRecord.IkeSaRecordConfig> recordConfigCaptor =
+                ArgumentCaptor.forClass(SaRecord.IkeSaRecordConfig.class);
+        verify(mMockSaRecordHelper)
+                .makeRekeyedIkeSaRecord(any(), any(), any(), any(), recordConfigCaptor.capture());
+        assertEquals(IKE_REKEY_SA_INITIATOR_SPI, recordConfigCaptor.getValue().initSpi.getSpi());
+
+        // Verify outbound CREATE_CHILD_SA message
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+        IkeMessage rekeyCreateResp = mIkeMessageCaptor.getValue();
+        IkeHeader rekeyCreateRespHeader = rekeyCreateResp.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, rekeyCreateRespHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyCreateRespHeader.exchangeType);
+        assertTrue(rekeyCreateRespHeader.isResponseMsg);
+        assertTrue(rekeyCreateRespHeader.fromIkeInitiator);
+        assertNotNull(
+                rekeyCreateResp.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class));
+        assertNotNull(
+                rekeyCreateResp.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class));
+        assertNotNull(
+                rekeyCreateResp.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class));
+
+        // Verify SA state
+        assertEquals(mSpyCurrentIkeSaRecord, mIkeSessionStateMachine.mIkeSaRecordAwaitingRemoteDel);
+        assertEquals(mSpyRemoteInitIkeSaRecord, mIkeSessionStateMachine.mIkeSaRecordSurviving);
+    }
+
+    @Test
+    public void testRekeyIkeRemoteDelete() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
+        mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord = mSpyRemoteInitIkeSaRecord;
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+        mLooper.dispatchAll();
 
         // Rekey Delete request
         ReceivedIkePacket dummyDeleteIkeRequestReceivedPacket =
@@ -991,10 +1050,24 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyDeleteIkeRequestReceivedPacket);
         mLooper.dispatchAll();
         verifyIncrementRemoteReqMsgId();
+        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRequestReceivedPacket);
+
+        // Verify outbound DELETE_IKE_SA message
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+        IkeMessage rekeyDeleteResp = mIkeMessageCaptor.getValue();
+        IkeHeader rekeyDeleteRespHeader = rekeyDeleteResp.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, rekeyDeleteRespHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, rekeyDeleteRespHeader.exchangeType);
+        assertTrue(rekeyDeleteRespHeader.isResponseMsg);
+        assertTrue(rekeyDeleteRespHeader.fromIkeInitiator);
+        assertTrue(rekeyDeleteResp.ikePayloadList.isEmpty());
 
         // Verify
-        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyRekeyIkeRequestReceivedPacket);
-        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRequestReceivedPacket);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
         assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyRemoteInitIkeSaRecord);
@@ -1002,10 +1075,10 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testSimulRekey() throws Exception {
-        mockIkeSetup();
+        setupIdleStateMachine();
 
-        when(mMockSaRecordHelper.makeNewIkeSaRecord(eq(mSpyCurrentIkeSaRecord), any(), any()))
-                .thenReturn(mSpyRemoteInitIkeSaRecord)
+        when(mMockSaRecordHelper.makeRekeyedIkeSaRecord(
+                        eq(mSpyCurrentIkeSaRecord), any(), any(), any(), any()))
                 .thenReturn(mSpyLocalInitIkeSaRecord);
         when(mSpyLocalInitIkeSaRecord.compareTo(mSpyRemoteInitIkeSaRecord)).thenReturn(1);
 
@@ -1034,22 +1107,10 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         verifyIncrementLocaReqMsgId();
 
-        // Receive Delete request on mSpyRemoteInitIkeSaRecord
-        ReceivedIkePacket dummyDeleteIkeRequestReceivedPacket =
-                makeDeleteIkeRequest(mSpyRemoteInitIkeSaRecord);
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyDeleteIkeRequestReceivedPacket);
-        mLooper.dispatchAll();
-        assertEquals(
-                mExpectedCurrentSaRemoteReqMsgId,
-                mSpyCurrentIkeSaRecord.getRemoteRequestMessageId());
-
         // Verify
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyRekeyIkeRequestReceivedPacket);
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyRekeyIkeRespReceivedPacket);
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRespReceivedPacket);
-        verifyDecodeEncryptedMessage(
-                mSpyRemoteInitIkeSaRecord, dummyDeleteIkeRequestReceivedPacket);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
         assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyLocalInitIkeSaRecord);
