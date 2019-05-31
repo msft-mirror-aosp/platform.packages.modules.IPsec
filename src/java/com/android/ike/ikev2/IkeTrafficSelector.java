@@ -288,11 +288,8 @@ public final class IkeTrafficSelector {
             int unsignedByteLeft = Byte.toUnsignedInt(leftAddrBytes[i]);
             int unsignedByteRight = Byte.toUnsignedInt(rightAddrBytes[i]);
 
-            if (unsignedByteLeft < unsignedByteRight) {
-                return -1;
-            } else if (unsignedByteLeft > unsignedByteRight) {
-                return 1;
-            }
+            int result = Integer.compare(unsignedByteLeft, unsignedByteRight);
+            if (result != 0) return result;
         }
         return 0;
     }
