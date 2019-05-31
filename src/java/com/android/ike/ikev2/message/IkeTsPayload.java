@@ -18,6 +18,7 @@ package com.android.ike.ikev2.message;
 
 import com.android.ike.ikev2.IkeTrafficSelector;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.nio.ByteBuffer;
 
@@ -49,6 +50,10 @@ public final class IkeTsPayload extends IkePayload {
 
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
         numTs = Byte.toUnsignedInt(inputBuffer.get());
+        if (numTs == 0) {
+            throw new InvalidSyntaxException("Cannot find Traffic Selector in TS payload.");
+        }
+
         // Skip RESERVED byte
         inputBuffer.get(new byte[TS_HEADER_RESERVED_LEN]);
 
@@ -69,6 +74,32 @@ public final class IkeTsPayload extends IkePayload {
 
         numTs = ikeTrafficSelectors.length;
         trafficSelectors = ikeTrafficSelectors;
+    }
+
+    /**
+     * Check if this TS payload contains the all TS in the provided TS payload.
+     *
+     * <p>A TS response cannot be narrower than a TS request. When doing rekey, the newly negotiated
+     * TS cannot be narrower than old negotiated TS.
+     *
+     * <p>This method will be used to (1) validate that an inbound response is subset of a locally
+     * generated request; and (2) validate that an inbound rekey request/response is superset of
+     * current negotiated TS.
+     *
+     * @param tsPayload the other TS payload to validate
+     * @return true if current TS Payload contains all TS in the input tsPayload
+     */
+    public boolean contains(IkeTsPayload tsPayload) {
+        subTsLoop:
+        for (IkeTrafficSelector subTs : tsPayload.trafficSelectors) {
+            for (IkeTrafficSelector superTs : this.trafficSelectors) {
+                if (superTs.contains(subTs)) {
+                    continue subTsLoop;
+                }
+            }
+            return false;
+        }
+        return true;
     }
 
     /**
