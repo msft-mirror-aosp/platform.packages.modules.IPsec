@@ -15,6 +15,9 @@
  */
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
+
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -31,11 +34,13 @@ import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.exceptions.TsUnacceptableException;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.ChildProposal;
+import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -301,7 +306,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         "Failed the negotiation on Child SA mode (conflicting modes chosen).");
             }
 
-            // TODO: Validate TS in the response is the subset of TS in the request.
+            validateTsPayloads(reqPayloads, respPayloads);
 
             IkeSaPayload reqSaPayload =
                     IkePayload.getPayloadForTypeInProvidedList(
@@ -341,6 +346,21 @@ public class ChildSessionStateMachine extends StateMachine {
                 childProposalPair.first.getChildSpiResource().close();
                 childProposalPair.second.getChildSpiResource().close();
                 throw e;
+            }
+        }
+
+        private void validateTsPayloads(List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
+                throws TsUnacceptableException {
+            for (int tsType : new int[] {PAYLOAD_TYPE_TS_INITIATOR, PAYLOAD_TYPE_TS_RESPONDER}) {
+                IkeTsPayload reqPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                tsType, IkeTsPayload.class, reqPayloads);
+                IkeTsPayload respPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                tsType, IkeTsPayload.class, respPayloads);
+                if (!reqPayload.contains(respPayload)) {
+                    throw new TsUnacceptableException();
+                }
             }
         }
     }
