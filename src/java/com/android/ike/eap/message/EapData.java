@@ -50,7 +50,6 @@ public class EapData {
             EAP_IDENTITY,
             EAP_NOTIFICATION,
             EAP_NAK,
-            EAP_MD5_CHALLENGE,
             EAP_TYPE_AKA,
             EAP_TYPE_AKA_PRIME,
             EAP_TYPE_SIM
@@ -62,7 +61,7 @@ public class EapData {
     public static final int EAP_IDENTITY = 1;
     public static final int EAP_NOTIFICATION = 2;
     public static final int EAP_NAK = 3;
-    public static final int EAP_MD5_CHALLENGE = 4;
+    // EAP_MD5_CHALLENGE unsupported, allowable based on RFC 3748, Section 5.4
     public static final int EAP_TYPE_SIM = 18;
     public static final int EAP_TYPE_AKA = 23;
     public static final int EAP_TYPE_AKA_PRIME = 50;
@@ -72,7 +71,6 @@ public class EapData {
         SUPPORTED_TYPES.add(EAP_IDENTITY);
         SUPPORTED_TYPES.add(EAP_NOTIFICATION);
         SUPPORTED_TYPES.add(EAP_NAK);
-        SUPPORTED_TYPES.add(EAP_MD5_CHALLENGE);
         SUPPORTED_TYPES.add(EAP_TYPE_AKA);
         SUPPORTED_TYPES.add(EAP_TYPE_AKA_PRIME);
         SUPPORTED_TYPES.add(EAP_TYPE_SIM);
