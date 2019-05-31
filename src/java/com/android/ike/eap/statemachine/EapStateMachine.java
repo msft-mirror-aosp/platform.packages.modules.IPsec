@@ -16,11 +16,14 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapData.EAP_NAK;
+import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 
 import android.annotation.NonNull;
+import android.util.Log;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
@@ -31,6 +34,8 @@ import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.utils.SimpleStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
+
+import java.nio.charset.StandardCharsets;
 
 /**
  * EapStateMachine represents the valid paths for a single EAP Authentication procedure.
@@ -103,14 +108,36 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     }
 
     protected class CreatedState extends EapState {
+        private final String mTAG = CreatedState.class.getSimpleName();
+
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
                 return decodeResult.eapResult;
             }
             EapMessage message = decodeResult.eapMessage;
-            // TODO(b/133140131): implement logic for state
-            return null;
+
+            if (message.eapCode != EAP_CODE_REQUEST) {
+                return new EapError(
+                        new EapInvalidRequestException("Received non EAP-Request in CreatedState"));
+            }
+
+            switch (message.eapData.eapType) {
+                case EAP_NOTIFICATION:
+                    return handleNotification(mTAG, message);
+
+                case EAP_IDENTITY:
+                    return transitionAndProcess(new IdentityState(), packet);
+
+                case EAP_NAK:
+                    // Nak messages are only allowed in Response messages (RFC 3748 Section 5.3.1)
+                    return new EapError(
+                            new EapInvalidRequestException("EAP-Request/Nak message received"));
+
+                // all EAP methods should be handled by MethodState
+                default:
+                    return transitionAndProcess(new MethodState(), packet);
+            }
         }
     }
 
@@ -150,5 +177,13 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             return new EapError(new EapInvalidRequestException(
                     "Not possible to process messages in Failure State"));
         }
+    }
+
+    private EapResult handleNotification(String tag, EapMessage message) {
+        // Type-Data will be UTF-8 encoded ISO 10646 characters (RFC 3748 Section 5.2)
+        String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
+        Log.i(tag, "Received EAP-Request/Notification: [" + content + "]");
+        EapMessage response = EapMessage.getNotificationResponse(message.eapIdentifier);
+        return EapResponse.getEapResponse(response);
     }
 }
