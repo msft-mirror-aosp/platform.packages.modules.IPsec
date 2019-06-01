@@ -16,6 +16,7 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MD5_CHALLENGE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_EAP_TYPE_NAK;
@@ -42,7 +43,7 @@ import org.junit.Test;
  * EapStateTest
  */
 public class EapStateTest {
-    private EapState mEapState;
+    protected EapState mEapState;
 
     @Before
     public void setUp() {
@@ -99,5 +100,14 @@ public class EapStateTest {
 
         EapError eapError = (EapError) result;
         assertTrue(eapError.cause instanceof EapInvalidRequestException);
+    }
+
+    @Test
+    public void testProcessMd5Challenge() {
+        EapResult result = mEapState.process(EAP_REQUEST_MD5_CHALLENGE);
+        assertTrue(result instanceof EapResponse);
+
+        EapResponse eapResponse = (EapResponse) result;
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);
     }
 }
