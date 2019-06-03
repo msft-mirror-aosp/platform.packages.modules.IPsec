@@ -88,6 +88,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * IkeSessionStateMachine tracks states and manages exchanges of this IKE session.
@@ -110,6 +111,9 @@ import java.util.Set;
 public class IkeSessionStateMachine extends StateMachine {
 
     private static final String TAG = "IkeSessionStateMachine";
+
+    // Use a value greater than the retransmit-failure timeout.
+    static final long REKEY_DELETE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180L);
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -158,6 +162,9 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_LOCAL_REQUEST_DELETE_CHILD = CMD_LOCAL_REQUEST_BASE + 6;
     static final int CMD_LOCAL_REQUEST_REKEY_CHILD = CMD_LOCAL_REQUEST_BASE + 7;
     // TODO: Add signals for other procedure types and notificaitons.
+
+    private static final int TIMEOUT_BASE = CMD_GENERAL_BASE + 200;
+    static final int TIMEOUT_REKEY_REMOTE_DELETE_IKE = TIMEOUT_BASE + 1;
 
     private final IkeSessionOptions mIkeSessionOptions;
 
@@ -886,8 +893,9 @@ public class IkeSessionStateMachine extends StateMachine {
                 IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
                 sendEncryptedIkeMessage(mCurrentIkeSaRecord, resp);
 
-                // TODO: Close IKE SA
                 removeIkeSaRecord(mCurrentIkeSaRecord);
+                mCurrentIkeSaRecord.close();
+                mCurrentIkeSaRecord = null;
 
                 transitionTo(mClosed);
             } catch (InvalidSyntaxException e) {
@@ -1951,11 +1959,13 @@ public class IkeSessionStateMachine extends StateMachine {
                     // remote has successfully rekeyed.
                     if (mIkeSaRecordSurviving == getIkeSaRecordForPacket(ikeHeader)) {
                         deferMessage(message);
-                        // TODO: Locally close old (and losing) IKE SAs.
+
                         finishRekey();
+                        transitionTo(mIdle);
                     } else {
                         handleReceivedIkePacket(message);
                     }
+
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1969,8 +1979,18 @@ public class IkeSessionStateMachine extends StateMachine {
             mRemoteInitNewIkeSaRecord = null;
 
             mIkeSaRecordSurviving = null;
-            mIkeSaRecordAwaitingLocalDel = null;
-            mIkeSaRecordAwaitingRemoteDel = null;
+
+            if (mIkeSaRecordAwaitingLocalDel != null) {
+                removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
+                mIkeSaRecordAwaitingLocalDel.close();
+                mIkeSaRecordAwaitingLocalDel = null;
+            }
+
+            if (mIkeSaRecordAwaitingRemoteDel != null) {
+                removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
+                mIkeSaRecordAwaitingRemoteDel.close();
+                mIkeSaRecordAwaitingRemoteDel = null;
+            }
         }
     }
 
@@ -2073,10 +2093,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 // TODO: Validate that this was received on mIkeSaRecordAwaitingLocalDel
                 validateIkeDeleteResp(ikeMessage);
 
-                removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
-                // TODO: Close mIkeSaRecordAwaitingLocalDel.
                 finishRekey();
-
                 transitionTo(mIdle);
             } catch (InvalidSyntaxException e) {
                 Log.d(TAG, "Validation failed for delete response", e);
@@ -2101,7 +2118,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                 buildIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
                         sendEncryptedIkeMessage(mIkeSaRecordAwaitingRemoteDel, respMsg);
 
-                        removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
+                        finishRekey();
                         transitionTo(mIdle);
                     } catch (InvalidSyntaxException e) {
                         // TODO: The other side deleted the wrong IKE SA and we should close the
@@ -2159,13 +2176,27 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             mIkeSaRecordSurviving = mRemoteInitNewIkeSaRecord;
             mIkeSaRecordAwaitingRemoteDel = mCurrentIkeSaRecord;
-            // TODO: Set timer awaiting delete request.
+
+            sendMessageDelayed(TIMEOUT_REKEY_REMOTE_DELETE_IKE, REKEY_DELETE_TIMEOUT_MS);
+        }
+
+        @Override
+        public boolean processMessage(Message message) {
+            // Intercept rekey delete timeout. Assume rekey succeeded since no retransmissions
+            // were received.
+            if (message.what == TIMEOUT_REKEY_REMOTE_DELETE_IKE) {
+                finishRekey();
+                transitionTo(mIdle);
+
+                return HANDLED;
+            } else {
+                return super.processMessage(message);
+            }
         }
 
         @Override
         public void exit() {
-            finishRekey();
-            // TODO: Stop timer awaiting delete request.
+            removeMessages(TIMEOUT_REKEY_REMOTE_DELETE_IKE);
         }
     }
 
@@ -2208,8 +2239,10 @@ public class IkeSessionStateMachine extends StateMachine {
                 Log.d(TAG, "Invalid syntax on IKE Delete response. Shutting down anyways", e);
             }
 
-            // TODO: Close IKE SA
             removeIkeSaRecord(mCurrentIkeSaRecord);
+            mCurrentIkeSaRecord.close();
+            mCurrentIkeSaRecord = null;
+
             transitionTo(mClosed);
         }
 
