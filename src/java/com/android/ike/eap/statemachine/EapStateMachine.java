@@ -49,6 +49,9 @@ import java.nio.charset.StandardCharsets;
  *
  */
 public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
+    @VisibleForTesting
+    protected static final byte[] DEFAULT_IDENTITY = new byte[0];
+
     public EapStateMachine() {
         transitionTo(new CreatedState());
     }
@@ -56,6 +59,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     @VisibleForTesting
     protected SimpleStateMachine.SimpleState getState() {
         return mState;
+    }
+
+    @VisibleForTesting
+    protected void transitionTo(EapState newState) {
+        super.transitionTo(newState);
     }
 
     protected abstract class EapState extends SimpleState {
@@ -151,8 +159,29 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 return decodeResult.eapResult;
             }
             EapMessage message = decodeResult.eapMessage;
-            // TODO(b/133140131): implement logic for state
-            return null;
+
+            if (message.eapCode != EAP_CODE_REQUEST) {
+                return new EapError(new EapInvalidRequestException(
+                        "Received non EAP-Request in IdentityState"));
+            }
+
+            switch (message.eapData.eapType) {
+                case EAP_NOTIFICATION:
+                    return handleNotification(mTAG, message);
+
+                case EAP_IDENTITY:
+                    // TODO(b/133794339): identity placeholder should be replaced with a real value
+                    return getIdentityResponse(message.eapIdentifier, DEFAULT_IDENTITY);
+
+                case EAP_NAK:
+                    // Nak messages are only allowed in Response messages (RFC 3748 Section 5.3.1)
+                    return new EapError(
+                            new EapInvalidRequestException("EAP-Request/Nak message received"));
+
+                // all EAP methods should be handled by MethodState
+                default:
+                    return transitionAndProcess(new MethodState(), packet);
+            }
         }
 
         @VisibleForTesting
