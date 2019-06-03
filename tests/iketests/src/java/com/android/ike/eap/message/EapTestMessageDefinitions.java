@@ -34,6 +34,9 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("01" + ID + "000A17" + EAP_REQUEST_TYPE_DATA);
     public static final byte[] EAP_REQUEST_IDENTITY_PACKET =
             hexStringToByteArray(("01" + ID + "000501"));
+    // TODO(b/133794339): identity response packet data will need to be updated
+    public static final byte[] EAP_RESPONSE_IDENTITY_PACKET =
+            hexStringToByteArray("02" + ID + "000501");
     public static final byte[] EAP_REQUEST_NOTIFICATION_PACKET =
             hexStringToByteArray("01" + ID + "000802AABBCC");
     public static final byte[] EAP_SUCCESS_PACKET = hexStringToByteArray("03" + ID + "0004");
