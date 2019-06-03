@@ -995,6 +995,56 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testRekeyIkeLocalDeleteWithRequestOnNewSa() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
+        mIkeSessionStateMachine.mLocalInitNewIkeSaRecord = mSpyLocalInitIkeSaRecord;
+        mIkeSessionStateMachine.addIkeSaRecord(mSpyLocalInitIkeSaRecord);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeLocalDelete);
+        mLooper.dispatchAll();
+
+        // Receive an empty (DPD) request on the new IKE SA
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDpdIkeRequest(mSpyLocalInitIkeSaRecord));
+        mLooper.dispatchAll();
+
+        // Verify final state - Idle, with new SA, and old SA closed.
+        verify(mSpyCurrentIkeSaRecord).close();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyLocalInitIkeSaRecord);
+    }
+
+    @Test
+    public void testRekeyIkeRemoteDeleteWithRequestOnNewSa() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyIkeRemoteDelete
+        mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord = mSpyRemoteInitIkeSaRecord;
+        mIkeSessionStateMachine.addIkeSaRecord(mSpyRemoteInitIkeSaRecord);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+        mLooper.dispatchAll();
+
+        // Receive an empty (DPD) request on the new IKE SA
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDpdIkeRequest(mSpyRemoteInitIkeSaRecord));
+        mLooper.dispatchAll();
+
+        // Verify final state - Idle, with new SA, and old SA closed.
+        verify(mSpyCurrentIkeSaRecord).close();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyRemoteInitIkeSaRecord);
+    }
+
+    @Test
     public void testRekeyIkeRemoteCreate() throws Exception {
         setupIdleStateMachine();
 
