@@ -28,7 +28,6 @@ import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.InvalidEapCodeException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
-import com.android.internal.annotations.VisibleForTesting;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -89,8 +88,7 @@ public class EapMessage {
     public final int eapLength;
     public final EapData eapData;
 
-    @VisibleForTesting
-    EapMessage(@EapCode int eapCode, int eapIdentifier, @Nullable EapData eapData)
+    public EapMessage(@EapCode int eapCode, int eapIdentifier, @Nullable EapData eapData)
             throws EapSilentException {
         this.eapCode = eapCode;
         this.eapIdentifier = eapIdentifier;
@@ -164,7 +162,7 @@ public class EapMessage {
     /**
      * Creates and returns an EAP-Response/Notification message with the given EAP Identifier.
      *
-     * @param eapIdentifier the identifier for the message being responded too
+     * @param eapIdentifier the identifier for the message being responded to
      * @return an EAP-Response/Notification message with an identifier matching the given identifier
      */
     public static EapMessage getNotificationResponse(int eapIdentifier) {
@@ -181,7 +179,7 @@ public class EapMessage {
     /**
      * Creates and returns an EAP-Response/Nak message with the given EAP Identifier.
      *
-     * @param eapIdentifier the identifier for the message being responded too
+     * @param eapIdentifier the identifier for the message being responded to
      * @return an EAP-Response/Nak message with an identifier matching the given identifier
      */
     public static EapMessage getNak(int eapIdentifier) {
