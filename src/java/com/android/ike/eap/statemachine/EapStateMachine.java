@@ -138,11 +138,6 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 case EAP_IDENTITY:
                     return transitionAndProcess(new IdentityState(), packet);
 
-                case EAP_NAK:
-                    // Nak messages are only allowed in Response messages (RFC 3748 Section 5.3.1)
-                    return new EapError(
-                            new EapInvalidRequestException("EAP-Request/Nak message received"));
-
                 // all EAP methods should be handled by MethodState
                 default:
                     return transitionAndProcess(new MethodState(), packet);
@@ -172,11 +167,6 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 case EAP_IDENTITY:
                     // TODO(b/133794339): identity placeholder should be replaced with a real value
                     return getIdentityResponse(message.eapIdentifier, DEFAULT_IDENTITY);
-
-                case EAP_NAK:
-                    // Nak messages are only allowed in Response messages (RFC 3748 Section 5.3.1)
-                    return new EapError(
-                            new EapInvalidRequestException("EAP-Request/Nak message received"));
 
                 // all EAP methods should be handled by MethodState
                 default:
