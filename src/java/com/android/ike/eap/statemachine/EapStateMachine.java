@@ -89,8 +89,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 return new DecodeResult(eapMessage);
             } catch (UnsupportedEapTypeException ex) {
-                EapMessage nak = EapMessage.getNak(ex.eapIdentifier);
-                return new DecodeResult(EapResponse.getEapResponse(nak));
+                return new DecodeResult(EapMessage.getNakResponse(ex.eapIdentifier));
             } catch (EapSilentException ex) {
                 return new DecodeResult(new EapError(ex));
             }

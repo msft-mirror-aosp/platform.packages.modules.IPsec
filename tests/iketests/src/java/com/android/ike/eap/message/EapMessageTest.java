@@ -151,12 +151,12 @@ public class EapMessageTest {
     }
 
     @Test
-    public void testGetNak() {
-        EapMessage nak = EapMessage.getNak(ID_INT);
+    public void testGetNakResponse() {
+        EapResult nakResponse = EapMessage.getNakResponse(ID_INT);
 
-        assertEquals(EAP_CODE_RESPONSE, nak.eapCode);
-        assertEquals(ID_INT, nak.eapIdentifier);
-        assertEquals(NAK_DATA, nak.eapData);
+        assertTrue(nakResponse instanceof EapResponse);
+        EapResponse eapResponse = (EapResponse) nakResponse;
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);
     }
 
     @Test
