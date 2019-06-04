@@ -31,6 +31,7 @@ import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
+import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.utils.SimpleStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
@@ -48,6 +49,9 @@ import java.nio.charset.StandardCharsets;
  *
  */
 public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
+    @VisibleForTesting
+    protected static final byte[] DEFAULT_IDENTITY = new byte[0];
+
     public EapStateMachine() {
         transitionTo(new CreatedState());
     }
@@ -55,6 +59,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     @VisibleForTesting
     protected SimpleStateMachine.SimpleState getState() {
         return mState;
+    }
+
+    @VisibleForTesting
+    protected void transitionTo(EapState newState) {
+        super.transitionTo(newState);
     }
 
     protected abstract class EapState extends SimpleState {
@@ -142,14 +151,51 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     }
 
     protected class IdentityState extends EapState {
+        private final String mTAG = IdentityState.class.getSimpleName();
+
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
                 return decodeResult.eapResult;
             }
             EapMessage message = decodeResult.eapMessage;
-            // TODO(b/133140131): implement logic for state
-            return null;
+
+            if (message.eapCode != EAP_CODE_REQUEST) {
+                return new EapError(new EapInvalidRequestException(
+                        "Received non EAP-Request in IdentityState"));
+            }
+
+            switch (message.eapData.eapType) {
+                case EAP_NOTIFICATION:
+                    return handleNotification(mTAG, message);
+
+                case EAP_IDENTITY:
+                    // TODO(b/133794339): identity placeholder should be replaced with a real value
+                    return getIdentityResponse(message.eapIdentifier, DEFAULT_IDENTITY);
+
+                case EAP_NAK:
+                    // Nak messages are only allowed in Response messages (RFC 3748 Section 5.3.1)
+                    return new EapError(
+                            new EapInvalidRequestException("EAP-Request/Nak message received"));
+
+                // all EAP methods should be handled by MethodState
+                default:
+                    return transitionAndProcess(new MethodState(), packet);
+            }
+        }
+
+        @VisibleForTesting
+        EapResult getIdentityResponse(int eapIdentifier, byte[] identity) {
+            try {
+                EapData identityData = new EapData(EAP_IDENTITY, identity);
+                return EapResponse.getEapResponse(
+                        new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, identityData));
+            } catch (EapSilentException ex) {
+                // this should never happen - only identifier and identity bytes are variable
+                Log.wtf(mTAG,  "Failed to create Identity response for message with identifier="
+                        + eapIdentifier);
+                return new EapError(ex);
+            }
         }
     }
 
