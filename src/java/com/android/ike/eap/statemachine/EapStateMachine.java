@@ -229,7 +229,6 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         // Type-Data will be UTF-8 encoded ISO 10646 characters (RFC 3748 Section 5.2)
         String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
         Log.i(tag, "Received EAP-Request/Notification: [" + content + "]");
-        EapMessage response = EapMessage.getNotificationResponse(message.eapIdentifier);
-        return EapResponse.getEapResponse(response);
+        return EapMessage.getNotificationResponse(message.eapIdentifier);
     }
 }
