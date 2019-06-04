@@ -415,31 +415,35 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    /**
-     * Interface for ChildSessionStateMachine to notify IkeSessionStateMachine.
-     *
-     * <p>Package private so as to be injectable for testing.
-     */
-    interface IChildSessionSmCallback {
-        /** Notify that new Child SA is created. */
-        void onCreateChildSa(int remoteSpi, ChildSessionStateMachine childSession);
-        /** Notify that the Child SA is deleted. */
-        void onDeleteChildSa(int remoteSpi);
-        // TODO: Add methods for handling errors and sending out locally built payloads.
-    }
-
-    /**
-     * Callback for ChildSessionStateMachine to notify IkeSessionStateMachine.
-     *
-     * <p>Package private for being passed to only ChildSessionStateMachine.
-     */
-    class ChildSessionSmCallback implements IChildSessionSmCallback {
-        public void onCreateChildSa(int remoteSpi, ChildSessionStateMachine childSession) {
+    /** Callback for ChildSessionStateMachine to notify IkeSessionStateMachine. */
+    private class ChildSessionSmCallback
+            implements ChildSessionStateMachine.IChildSessionSmCallback {
+        @Override
+        public void onChildSaCreated(int remoteSpi, ChildSessionStateMachine childSession) {
             mSpiToChildSessionMap.put(remoteSpi, childSession);
         }
 
-        public void onDeleteChildSa(int remoteSpi) {
+        @Override
+        public void onChildSaDeleted(int remoteSpi) {
             mSpiToChildSessionMap.remove(remoteSpi);
+        }
+
+        @Override
+        public void onOutboundPayloadsReady(
+                @ExchangeType int exchangeType, boolean isResp, List<IkePayload> payloadList) {
+            // TODO: Build IKE message for these payloads and send it out.
+        }
+
+        @Override
+        public void onProcedureFinished() {
+            // TODO: When multiple Child Sessions are involved in this message exchange, release the
+            // lock when all of them have finished the procedure.
+        }
+
+        @Override
+        public void onFatalIkeSessionError(boolean needsNotifyRemote) {
+            // TODO: If needsNotifyRemote is true, send a Delete IKE request and then kill the IKE
+            // Session. Otherwise, directly kill the IKE Session.
         }
     }
 
@@ -1200,7 +1204,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private Retransmitter mRetransmitter;
         private boolean mUseEap;
 
-        /** This method set paramteres for negotiating first Child SA during IKE AUTH exchange. */
+        /** This method set parameters for negotiating first Child SA during IKE AUTH exchange. */
         @VisibleForTesting
         void initializeAuthParams(ChildSessionOptions childOptions) {
             mFirstChildSessionOptions = childOptions;
@@ -1259,6 +1263,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                     getHandler().getLooper(),
                                     mContext,
                                     mFirstChildSessionOptions,
+                                    new ChildSessionSmCallback(),
                                     mLocalAddress,
                                     mRemoteAddress,
                                     mIkePrf,
@@ -1274,8 +1279,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             mIkeInitResponseMessage.getPayloadForType(
                                     IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class));
 
-                    firstChild.handleFirstChildExchange(
-                            childReqList, childRespList, new ChildSessionSmCallback());
+                    firstChild.handleFirstChildExchange(childReqList, childRespList);
 
                     transitionTo(mIdle);
                 }

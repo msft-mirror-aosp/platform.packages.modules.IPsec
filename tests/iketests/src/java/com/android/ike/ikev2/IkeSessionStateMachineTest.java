@@ -310,7 +310,7 @@ public final class IkeSessionStateMachineTest {
         when(mMockIkeMessageHelper.encryptAndEncode(any(), any(), any(), any()))
                 .thenReturn(new byte[0]);
         when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
-                        any(), any(), any(), any(), any(), any(), any(), any()))
+                        any(), any(), any(), any(), any(), any(), any(), any(), any()))
                 .thenReturn(mMockChildSessionStateMachine);
     }
 
@@ -759,7 +759,7 @@ public final class IkeSessionStateMachineTest {
                 ArgumentCaptor.forClass(List.class);
         verify(mMockChildSessionStateMachine)
                 .handleFirstChildExchange(
-                        mReqPayloadListCaptor.capture(), mRespPayloadListCaptor.capture(), any());
+                        mReqPayloadListCaptor.capture(), mRespPayloadListCaptor.capture());
         List<IkePayload> childReqList = mReqPayloadListCaptor.getValue();
         List<IkePayload> childRespList = mRespPayloadListCaptor.getValue();
 

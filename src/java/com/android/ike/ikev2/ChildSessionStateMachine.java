@@ -15,6 +15,7 @@
  */
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.message.IkeHeader.ExchangeType;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 
@@ -27,7 +28,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
 
-import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
@@ -77,7 +77,13 @@ public class ChildSessionStateMachine extends StateMachine {
     private final Context mContext;
     private final IpSecManager mIpSecManager;
 
+    /** User provided configurations. */
     private final ChildSessionOptions mChildSessionOptions;
+
+    /** Callback to notify IKE Session the state changes. */
+    private final IChildSessionSmCallback mChildSmCallback;
+
+    // TODO: Also store ChildSessionCallback for notifying users.
 
     /** Local address assigned on device. */
     private final InetAddress mLocalAddress;
@@ -109,6 +115,7 @@ public class ChildSessionStateMachine extends StateMachine {
             Context context,
             IpSecManager ipSecManager,
             ChildSessionOptions sessionOptions,
+            IChildSessionSmCallback childSmCallback,
             InetAddress localAddress,
             InetAddress remoteAddress,
             IkeMacPrf ikePrf,
@@ -119,6 +126,8 @@ public class ChildSessionStateMachine extends StateMachine {
         mIpSecManager = ipSecManager;
 
         mChildSessionOptions = sessionOptions;
+        mChildSmCallback = childSmCallback;
+
         mLocalAddress = localAddress;
         mRemoteAddress = remoteAddress;
         mIkePrf = ikePrf;
@@ -132,6 +141,48 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
+     * Interface for ChildSessionStateMachine to notify IkeSessionStateMachine its state changes.
+     *
+     * <p>Child Session may encounter an IKE Session fatal error in three cases with different
+     * handling rules:
+     *
+     * <pre>
+     * - When there is a fatal error in an inbound request, onOutboundPayloadsReady will be
+     *   called first to send out an error notification and then onFatalIkeSessionError(false)
+     *   will be called to locally close the IKE Session.
+     * - When there is a fatal error in an inbound response, only onFatalIkeSessionError(true)
+     *   will be called to notify the remote with a Delete request and then close the IKE Session.
+     * - When there is an fatal error notification in an inbound response, only
+     *   onFatalIkeSessionError(false) is called to close the IKE Session locally.
+     * </pre>
+     *
+     * <p>Package private.
+     */
+    interface IChildSessionSmCallback {
+        /** Notify that new Child SA is created. */
+        void onChildSaCreated(int remoteSpi, ChildSessionStateMachine childSession);
+
+        /** Notify that a Child SA is deleted. */
+        void onChildSaDeleted(int remoteSpi);
+
+        /** Notify the IKE Session to send out IKE message for this Child Session. */
+        void onOutboundPayloadsReady(
+                @ExchangeType int exchangeType, boolean isResp, List<IkePayload> payloadList);
+
+        /** Notify that a Child procedure has been finished. */
+        void onProcedureFinished();
+
+        /**
+         * Notify that a Child procedure has been finished and the IKE Session should close itself
+         * because of a fatal error.
+         *
+         * <p>The IKE Session should send a Delete IKE request before closing when needsNotifyRemote
+         * is true.
+         */
+        void onFatalIkeSessionError(boolean needsNotifyRemote);
+    }
+
+    /**
      * Receive requesting and responding payloads for negotiating first Child SA.
      *
      * <p>This method is called synchronously from IkeStateMachine. It proxies the synchronous call
@@ -139,17 +190,14 @@ public class ChildSessionStateMachine extends StateMachine {
      *
      * @param reqPayloads SA negotiation related payloads in IKE_AUTH request.
      * @param respPayloads SA negotiation related payloads in IKE_AUTH response.
-     * @param callback callback for notifying IkeSessionStateMachine the negotiation result.
      */
     public void handleFirstChildExchange(
-            List<IkePayload> reqPayloads,
-            List<IkePayload> respPayloads,
-            IChildSessionSmCallback callback) {
-        registerProvisionalChildSession(respPayloads, callback);
+            List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
+        registerProvisionalChildSession(respPayloads);
 
         sendMessage(
                 CMD_HANDLE_FIRST_CHILD_EXCHANGE,
-                new FirstChildNegotiationData(reqPayloads, respPayloads, callback));
+                new FirstChildNegotiationData(reqPayloads, respPayloads));
     }
 
     /**
@@ -168,8 +216,7 @@ public class ChildSessionStateMachine extends StateMachine {
      * peer sends request for delete/rekey this Child SA before ChildSessionStateMachine sends
      * FirstChildNegotiationData to itself.
      */
-    private void registerProvisionalChildSession(
-            List<IkePayload> respPayloads, IChildSessionSmCallback callback) {
+    private void registerProvisionalChildSession(List<IkePayload> respPayloads) {
         // When decoding responding IkeSaPayload in IkeSessionStateMachine, it is validated that
         // IkeSaPayload has exactly one IkeSaPayload.Proposal.
         IkeSaPayload saPayload = null;
@@ -186,7 +233,7 @@ public class ChildSessionStateMachine extends StateMachine {
         // IkeSaPayload.Proposal stores SPI in long type so as to be applied to both 8-byte IKE SPI
         // and 4-byte Child SPI. Here we cast the stored SPI to int to represent a Child SPI.
         int remoteGenSpi = (int) (saPayload.proposalList.get(0).spi);
-        callback.onCreateChildSa(remoteGenSpi, this);
+        mChildSmCallback.onChildSaCreated(remoteGenSpi, this);
     }
 
     /**
@@ -197,15 +244,10 @@ public class ChildSessionStateMachine extends StateMachine {
     private static class FirstChildNegotiationData {
         public final List<IkePayload> requestPayloads;
         public final List<IkePayload> responsePayloads;
-        public final IChildSessionSmCallback childCallback;
 
-        FirstChildNegotiationData(
-                List<IkePayload> reqPayloads,
-                List<IkePayload> respPayloads,
-                IChildSessionSmCallback callback) {
+        FirstChildNegotiationData(List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
             requestPayloads = reqPayloads;
             responsePayloads = respPayloads;
-            childCallback = callback;
         }
     }
 
@@ -252,8 +294,8 @@ public class ChildSessionStateMachine extends StateMachine {
                     } catch (ResourceUnavailableException
                             | SpiUnavailableException
                             | IOException e) {
-                        // TODO:Fire the ChildCallback.onError() callback and initiate deletion
-                        // exchange on this Child SA.
+                        // TODO:Fire the ChildSessionCallback.onError() callback and initiate
+                        // deletion exchange on this Child SA.
                     } finally {
                         if (!childSetUpSuccess && childSpiPair != null) {
                             childSpiPair.first.close();
@@ -377,7 +419,18 @@ public class ChildSessionStateMachine extends StateMachine {
      * Idle represents a state when there is no ongoing IKE exchange affecting established Child SA.
      */
     class Idle extends State {
-        // TODO: Implement it.
+        @Override
+        public void enter() {
+            mChildSmCallback.onProcedureFinished();
+        }
+
+        // TODO: Support handling local and remote request.
+    }
+
+    /** Called when this StateMachine quits. */
+    @Override
+    protected void onQuitting() {
+        mChildSmCallback.onProcedureFinished();
     }
 
     // TODO: Add states to support creating additional Child SA, deleting Child SA and rekeying

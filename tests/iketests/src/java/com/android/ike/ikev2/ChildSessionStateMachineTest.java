@@ -26,6 +26,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -37,7 +38,7 @@ import android.os.test.TestLooper;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.TestUtils;
-import com.android.ike.ikev2.IkeSessionStateMachine.IChildSessionSmCallback;
+import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ChildSaRecordConfig;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
@@ -98,11 +99,12 @@ public final class ChildSessionStateMachineTest {
     private ChildSaRecord mSpyCurrentChildSaRecord;
 
     private ISaRecordHelper mMockSaRecordHelper;
-    private IChildSessionSmCallback mMockChildSessionSmCallback;
 
     private ChildSessionOptions mChildSessionOptions;
     private EncryptionTransform mChildEncryptionTransform;
     private IntegrityTransform mChildIntegrityTransform;
+
+    private IChildSessionSmCallback mMockChildSessionSmCallback;
 
     private ArgumentCaptor<ChildSaRecordConfig> mChildSaRecordConfigCaptor =
             ArgumentCaptor.forClass(ChildSaRecordConfig.class);
@@ -140,6 +142,7 @@ public final class ChildSessionStateMachineTest {
                         mContext,
                         mMockIpSecManager,
                         mChildSessionOptions,
+                        mMockChildSessionSmCallback,
                         LOCAL_ADDRESS,
                         REMOTE_ADDRESS,
                         mIkePrf,
@@ -151,6 +154,12 @@ public final class ChildSessionStateMachineTest {
         setUpChildSaRecords();
 
         mChildSessionStateMachine.start();
+    }
+
+    @After
+    public void tearDown() {
+        mChildSessionStateMachine.setDbg(false);
+        SaRecord.setSaRecordHelper(new SaRecordHelper());
     }
 
     private ChildSessionOptions buildChildSessionOptions() throws Exception {
@@ -226,12 +235,12 @@ public final class ChildSessionStateMachineTest {
                 null);
     }
 
-    @After
-    public void tearDown() {
+    private void verifyQuit() {
+        reset(mMockChildSessionSmCallback);
         mChildSessionStateMachine.quit();
-        mChildSessionStateMachine.setDbg(false);
+        mLooper.dispatchAll();
 
-        SaRecord.setSaRecordHelper(new SaRecordHelper());
+        verify(mMockChildSessionSmCallback).onProcedureFinished();
     }
 
     @Test
@@ -240,12 +249,13 @@ public final class ChildSessionStateMachineTest {
                 .thenReturn(mSpyCurrentChildSaRecord);
 
         mChildSessionStateMachine.handleFirstChildExchange(
-                mFirstSaReqPayloads, mFirstSaRespPayloads, mMockChildSessionSmCallback);
+                mFirstSaReqPayloads, mFirstSaRespPayloads);
         mLooper.dispatchAll();
 
         verify(mMockChildSessionSmCallback)
-                .onCreateChildSa(
+                .onChildSaCreated(
                         mSpyCurrentChildSaRecord.getRemoteSpi(), mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onProcedureFinished();
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
@@ -280,5 +290,7 @@ public final class ChildSessionStateMachineTest {
         assertTrue(childSaRecordConfig.hasIntegrityAlgo);
 
         assertEquals(mSpyCurrentChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
+
+        verifyQuit();
     }
 }
