@@ -38,51 +38,29 @@ public final class IkeLocalRequestScheduler {
      */
     public IkeLocalRequestScheduler(IProcedureConsumer consumer) {
         mConsumer = consumer;
-        mLocalProcedureOngoing = false;
-        mRemoteProcedureOngoing = false;
     }
 
     /** Add a new local request to the queue. */
     public void addRequest(LocalRequest request) {
         mRequestQueue.offer(request);
-        processRequest();
     }
 
     /** Add a new local request to the front of the queue. */
     public void addRequestAtFront(LocalRequest request) {
         mRequestQueue.offerFirst(request);
-        processRequest();
     }
 
-    private void processRequest() {
-        if (isNewLocalProcedureAllowed() && !mRequestQueue.isEmpty()) {
+    /**
+     * Notifies the scheduler that the caller is ready for a new procedure
+     *
+     * <p>Synchronously triggers the call to onNewProcedureReady.
+     */
+    public void readyForNextProcedure() {
+        if (!mRequestQueue.isEmpty()) {
             LocalRequest request = mRequestQueue.poll();
             mConsumer.onNewProcedureReady(request);
-            mLocalProcedureOngoing = true;
             return;
         }
-    }
-
-    private boolean isNewLocalProcedureAllowed() {
-        // Initiate new procedure only when there is no ongoing procedure.
-        return (!mLocalProcedureOngoing) && (!mRemoteProcedureOngoing);
-    }
-
-    /** Notify the scheduler that a remotely initiated procedure has been started. */
-    public void startRemoteProcedure() {
-        mRemoteProcedureOngoing = true;
-    }
-
-    /** Notify the scheduler that the ongoing local procedure has been finished. */
-    public void finishLocalProcedure() {
-        mLocalProcedureOngoing = false;
-        processRequest();
-    }
-
-    /** Notify the scheduler that the ongoing remote procedure has been finished. */
-    public void finishRemoteProcedure() {
-        mRemoteProcedureOngoing = false;
-        processRequest();
     }
 
     /**

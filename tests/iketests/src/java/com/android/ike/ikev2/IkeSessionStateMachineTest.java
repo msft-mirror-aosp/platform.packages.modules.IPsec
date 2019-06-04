@@ -34,6 +34,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -1402,5 +1403,49 @@ public final class IkeSessionStateMachineTest {
         assertTrue(ikeHeader.isResponseMsg);
         assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
         assertTrue(resp.ikePayloadList.isEmpty());
+    }
+
+    @Test
+    public void testIdleTriggersNewRequests() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE);
+        mLooper.dispatchAll();
+
+        // Verify that the command is executed, and the state machine transitions to the right state
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
+    }
+
+    @Test
+    public void testNonIdleStateDoesNotTriggerNewRequests() throws Exception {
+        setupIdleStateMachine();
+
+        // Force ourselves into a non-idle state
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mReceiving);
+        mLooper.dispatchAll();
+        verify(mMockIkeMessageHelper, never()).encryptAndEncode(any(), any(), any(), any());
+
+        // Queue a local request, and expect that it is not run (yet)
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE);
+        mLooper.dispatchAll();
+
+        // Verify that the state machine is still in the Receiving state
+        verify(mMockIkeMessageHelper, never()).encryptAndEncode(any(), any(), any(), any());
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.Receiving);
+
+        // Go back to Idle, and expect to immediately transition to RekeyIkeLocalCreate from the
+        // queued request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
+        verify(mMockIkeMessageHelper, times(1)).encryptAndEncode(any(), any(), any(), any());
     }
 }
