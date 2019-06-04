@@ -26,6 +26,7 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 
 import android.annotation.NonNull;
+import android.content.Context;
 import android.util.Log;
 
 import com.android.ike.eap.EapResult;
@@ -55,7 +56,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     @VisibleForTesting
     protected static final byte[] DEFAULT_IDENTITY = new byte[0];
 
-    public EapStateMachine() {
+    private final Context mContext;
+
+    public EapStateMachine(@NonNull Context context) {
+        this.mContext = context;
         transitionTo(new CreatedState());
     }
 
