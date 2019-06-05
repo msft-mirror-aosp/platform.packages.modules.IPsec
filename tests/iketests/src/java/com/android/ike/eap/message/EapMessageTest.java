@@ -19,13 +19,13 @@ package com.android.ike.eap.message;
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapData.NAK_DATA;
-import static com.android.ike.eap.message.EapData.NOTIFICATION_DATA;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_TYPE_DATA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.INCOMPLETE_HEADER_PACKET;
@@ -38,8 +38,11 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_PACKET
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.InvalidEapCodeException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
@@ -158,10 +161,10 @@ public class EapMessageTest {
 
     @Test
     public void testGetNotificationResponse() {
-        EapMessage notificationResponse = EapMessage.getNotificationResponse(ID_INT);
+        EapResult notificationResponse = EapMessage.getNotificationResponse(ID_INT);
 
-        assertEquals(EAP_CODE_RESPONSE, notificationResponse.eapCode);
-        assertEquals(ID_INT, notificationResponse.eapIdentifier);
-        assertEquals(NOTIFICATION_DATA, notificationResponse.eapData);
+        assertTrue(notificationResponse instanceof EapResponse);
+        EapResponse eapResponse = (EapResponse) notificationResponse;
+        assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
     }
 }

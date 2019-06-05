@@ -24,6 +24,9 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.util.Log;
 
+import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.InvalidEapCodeException;
@@ -160,19 +163,22 @@ public class EapMessage {
     }
 
     /**
-     * Creates and returns an EAP-Response/Notification message with the given EAP Identifier.
+     * Creates and returns an EAP-Response/Notification message for the given EAP Identifier wrapped
+     * in an EapResponse object.
      *
      * @param eapIdentifier the identifier for the message being responded to
-     * @return an EAP-Response/Notification message with an identifier matching the given identifier
+     * @return an EapResponse object containing an EAP-Response/Notification message with an
+     *         identifier matching the given identifier
      */
-    public static EapMessage getNotificationResponse(int eapIdentifier) {
+    public static EapResult getNotificationResponse(int eapIdentifier) {
         try {
-            return new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NOTIFICATION_DATA);
+            return EapResponse.getEapResponse(
+                    new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NOTIFICATION_DATA));
         } catch (EapSilentException ex) {
             // this should never happen - the only variable value is the identifier
             Log.wtf(TAG, "Failed to create Notification Response for message with identifier="
                     + eapIdentifier);
-            return null;
+            return new EapError(ex);
         }
     }
 
