@@ -66,6 +66,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         super.transitionTo(newState);
     }
 
+    @VisibleForTesting
+    protected EapResult transitionAndProcess(EapState newState, byte[] packet) {
+        return super.transitionAndProcess(newState, packet);
+    }
+
     protected abstract class EapState extends SimpleState {
         protected DecodeResult decode(@NonNull byte[] packet) {
             if (packet == null) {
