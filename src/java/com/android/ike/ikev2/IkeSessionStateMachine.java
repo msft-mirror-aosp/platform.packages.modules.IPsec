@@ -144,6 +144,8 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
 
+    // Constants for local request will be used in both IkeSessionStateMachine and
+    // ChildSessionStateMachine.
     private static final int CMD_LOCAL_REQUEST_BASE = CMD_GENERAL_BASE + 100;
     static final int CMD_LOCAL_REQUEST_CREATE_IKE = CMD_LOCAL_REQUEST_BASE + 1;
     static final int CMD_LOCAL_REQUEST_DELETE_IKE = CMD_LOCAL_REQUEST_BASE + 2;

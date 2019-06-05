@@ -16,6 +16,8 @@
 
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -292,5 +294,26 @@ public final class ChildSessionStateMachineTest {
         assertEquals(mSpyCurrentChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
 
         verifyQuit();
+    }
+
+    @Test
+    public void testCreateChild() throws Exception {
+        mChildSessionStateMachine.createChildSa();
+        mLooper.dispatchAll();
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(eq(EXCHANGE_TYPE_CREATE_CHILD_SA), eq(false), any());
+        // TODO: Verify payloads' types in the outbound message. Implemented in the following CL
+        // aosp/978528
+
+        mChildSessionStateMachine.receiveResponse(
+                EXCHANGE_TYPE_CREATE_CHILD_SA, mFirstSaRespPayloads);
+        mLooper.dispatchAll();
+
+        verify(mMockChildSessionSmCallback)
+                .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
+        verify(mMockChildSessionSmCallback).onProcedureFinished();
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
     }
 }
