@@ -207,7 +207,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     protected class MethodState extends EapState {
         private final String mTAG = MethodState.class.getSimpleName();
 
-        private final EapMethodStateMachine mEapMethodStateMachine;
+        @VisibleForTesting
+        final EapMethodStateMachine mEapMethodStateMachine;
 
         protected MethodState(int eapType) {
             switch (eapType) {
@@ -220,8 +221,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                     mEapMethodStateMachine = new EapMethodStateMachine() {};
                     break;
                 case EAP_TYPE_SIM:
-                    // TODO(133879839): implement EapSimStateMachine
-                    mEapMethodStateMachine = new EapMethodStateMachine() {};
+                    mEapMethodStateMachine = new EapSimMethodStateMachine(mContext);
                     break;
 
                 default:

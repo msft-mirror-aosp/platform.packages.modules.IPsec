@@ -50,6 +50,8 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("01" + ID + "000504");
     public static final byte[] EAP_REQUEST_NAK_PACKET =
             hexStringToByteArray("01" + ID + "000503");
+    public static final byte[] EAP_REQUEST_SIM_START_PACKET =
+            hexStringToByteArray("01" + ID + "0010120A00000F02000200010000");
 
     public static final byte[] REQUEST_UNSUPPORTED_TYPE_PACKET =
             hexStringToByteArray("01" + ID + "0005FF");
