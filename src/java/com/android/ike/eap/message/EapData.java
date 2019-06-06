@@ -66,24 +66,26 @@ public class EapData {
     public static final int EAP_TYPE_AKA = 23;
     public static final int EAP_TYPE_AKA_PRIME = 50;
 
-    private static final Set<Integer> SUPPORTED_TYPES = new HashSet<>();
-    static {
-        SUPPORTED_TYPES.add(EAP_IDENTITY);
-        SUPPORTED_TYPES.add(EAP_NOTIFICATION);
-        SUPPORTED_TYPES.add(EAP_NAK);
-        SUPPORTED_TYPES.add(EAP_TYPE_AKA);
-        SUPPORTED_TYPES.add(EAP_TYPE_AKA_PRIME);
-        SUPPORTED_TYPES.add(EAP_TYPE_SIM);
-    }
-
-    @EapType public final int eapType;
-    public final byte[] eapTypeData;
-
     private static final byte[] VALID_AUTH_TYPES = {
             (byte) EAP_TYPE_AKA,
             (byte) EAP_TYPE_AKA_PRIME,
             (byte) EAP_TYPE_SIM
     };
+
+    private static final Set<Integer> SUPPORTED_TYPES = new HashSet<>();
+    static {
+        SUPPORTED_TYPES.add(EAP_IDENTITY);
+        SUPPORTED_TYPES.add(EAP_NOTIFICATION);
+        SUPPORTED_TYPES.add(EAP_NAK);
+
+        for (int eapMethodType : VALID_AUTH_TYPES) {
+            SUPPORTED_TYPES.add(eapMethodType);
+        }
+    }
+
+    @EapType public final int eapType;
+    public final byte[] eapTypeData;
+
     public static final EapData NAK_DATA = new EapData(EAP_NAK, VALID_AUTH_TYPES);
     public static final EapData NOTIFICATION_DATA = new EapData(EAP_NOTIFICATION, new byte[0]);
 
