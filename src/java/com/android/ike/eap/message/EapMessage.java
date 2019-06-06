@@ -168,7 +168,7 @@ public class EapMessage {
      *
      * @param eapIdentifier the identifier for the message being responded to
      * @return an EapResponse object containing an EAP-Response/Notification message with an
-     *         identifier matching the given identifier
+     *         identifier matching the given identifier, or an EapError if an exception was thrown
      */
     public static EapResult getNotificationResponse(int eapIdentifier) {
         try {
@@ -183,19 +183,22 @@ public class EapMessage {
     }
 
     /**
-     * Creates and returns an EAP-Response/Nak message with the given EAP Identifier.
+     * Creates and returns an EAP-Response/Nak message for the given EAP Identifier wrapped in an
+     * EapResponse object.
      *
      * @param eapIdentifier the identifier for the message being responded to
-     * @return an EAP-Response/Nak message with an identifier matching the given identifier
+     * @return an EapResponse object containing an EAP-Response/Nak message with an identifier
+     *         matching the given identifier, or an EapError if an exception was thrown
      */
-    public static EapMessage getNak(int eapIdentifier) {
+    public static EapResult getNakResponse(int eapIdentifier) {
         try {
-            return new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NAK_DATA);
+            return EapResponse.getEapResponse(
+                    new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NAK_DATA));
         } catch (EapSilentException ex) {
             // this should never happen - the only variable value is the identifier
             Log.wtf(TAG,  "Failed to create Nak for message with identifier="
                     + eapIdentifier);
-            return null;
+            return new EapError(ex);
         }
     }
 
