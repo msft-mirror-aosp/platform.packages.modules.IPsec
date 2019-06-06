@@ -155,7 +155,7 @@ public class IkeSessionStateMachine extends StateMachine {
     // TODO: Add signals for other procedure types and notificaitons.
 
     private final IkeSessionOptions mIkeSessionOptions;
-    private final ChildSessionOptions mFirstChildSessionOptions;
+
     /** Map that stores all IkeSaRecords, keyed by remotely generated IKE SPI. */
     private final LongSparseArray<IkeSaRecord> mSpiToSaRecordMap;
     /**
@@ -233,13 +233,15 @@ public class IkeSessionStateMachine extends StateMachine {
         super(TAG, looper);
 
         mIkeSessionOptions = ikeOptions;
-        mFirstChildSessionOptions = firstChildOptions;
+
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
         mSpiToSaRecordMap = new LongSparseArray<>(3);
         mSpiToChildSessionMap = new SparseArray<>();
 
         mContext = context;
         mIpSecManager = ipSecManager;
+
+        ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth).initializeAuthParams(firstChildOptions);
 
         addState(mInitial);
         addState(mClosed);
@@ -1193,8 +1195,17 @@ public class IkeSessionStateMachine extends StateMachine {
      * after validating the IKE AUTH response.
      */
     class CreateIkeLocalIkeAuth extends BaseState {
+        private ChildSessionOptions mFirstChildSessionOptions;
+
         private Retransmitter mRetransmitter;
         private boolean mUseEap;
+
+        /** This method set paramteres for negotiating first Child SA during IKE AUTH exchange. */
+        @VisibleForTesting
+        void initializeAuthParams(ChildSessionOptions childOptions) {
+            mFirstChildSessionOptions = childOptions;
+            // TODO: Also assign mFirstChildCallback
+        }
 
         @Override
         public void enter() {
