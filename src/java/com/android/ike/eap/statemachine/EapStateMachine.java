@@ -89,8 +89,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 return new DecodeResult(eapMessage);
             } catch (UnsupportedEapTypeException ex) {
-                EapMessage nak = EapMessage.getNak(ex.eapIdentifier);
-                return new DecodeResult(EapResponse.getEapResponse(nak));
+                return new DecodeResult(EapMessage.getNakResponse(ex.eapIdentifier));
             } catch (EapSilentException ex) {
                 return new DecodeResult(new EapError(ex));
             }
@@ -138,11 +137,6 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 case EAP_IDENTITY:
                     return transitionAndProcess(new IdentityState(), packet);
 
-                case EAP_NAK:
-                    // Nak messages are only allowed in Response messages (RFC 3748 Section 5.3.1)
-                    return new EapError(
-                            new EapInvalidRequestException("EAP-Request/Nak message received"));
-
                 // all EAP methods should be handled by MethodState
                 default:
                     return transitionAndProcess(new MethodState(), packet);
@@ -172,11 +166,6 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 case EAP_IDENTITY:
                     // TODO(b/133794339): identity placeholder should be replaced with a real value
                     return getIdentityResponse(message.eapIdentifier, DEFAULT_IDENTITY);
-
-                case EAP_NAK:
-                    // Nak messages are only allowed in Response messages (RFC 3748 Section 5.3.1)
-                    return new EapError(
-                            new EapInvalidRequestException("EAP-Request/Nak message received"));
 
                 // all EAP methods should be handled by MethodState
                 default:
@@ -229,7 +218,6 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         // Type-Data will be UTF-8 encoded ISO 10646 characters (RFC 3748 Section 5.2)
         String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
         Log.i(tag, "Received EAP-Request/Notification: [" + content + "]");
-        EapMessage response = EapMessage.getNotificationResponse(message.eapIdentifier);
-        return EapResponse.getEapResponse(response);
+        return EapMessage.getNotificationResponse(message.eapIdentifier);
     }
 }
