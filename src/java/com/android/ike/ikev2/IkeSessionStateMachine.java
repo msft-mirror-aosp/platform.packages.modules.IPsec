@@ -43,7 +43,6 @@ import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
-import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
@@ -981,21 +980,28 @@ public class IkeSessionStateMachine extends StateMachine {
             ReceivedIkePacket receivedIkePacket = (ReceivedIkePacket) message.obj;
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
-            try {
-                if (ikeHeader.isResponseMsg) {
-                    if (ikeHeader.messageId != 0) {
-                        throw new InvalidMessageIdException(ikeHeader.messageId);
-                    }
-                    IkeMessage ikeMessage = IkeMessage.decode(ikeHeader, ikePacketBytes);
-                    handleResponseIkeMessage(ikeMessage);
-                    mIkeInitResponseMessage = ikeMessage;
-                    mCurrentIkeSaRecord.incrementLocalRequestMessageId();
-                } else {
-                    // TODO: Drop unexpected request.
+            if (ikeHeader.isResponseMsg) {
+                DecodeResult decodeResult = IkeMessage.decode(0, ikeHeader, ikePacketBytes);
+
+                switch (decodeResult.status) {
+                    case DECODE_STATUS_OK:
+                        handleResponseIkeMessage(decodeResult.ikeMessage);
+                        mIkeInitResponseMessage = decodeResult.ikeMessage;
+                        mCurrentIkeSaRecord.incrementLocalRequestMessageId();
+                        break;
+                    case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
+                        // Fall through to default
+                    case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
+                        // TODO:Since IKE_INIT is not protected, log and ignore this message.
+                        throw new UnsupportedOperationException("Cannot handle this error.");
+                    default:
+                        throw new IllegalArgumentException(
+                                "Invalid decoding status: " + decodeResult.status);
                 }
-                // TODO: Handle fatal error notifications.
-            } catch (IkeProtocolException e) {
-                // TODO:Since IKE_INIT is not protected, log and ignore this message.
+
+            } else {
+                // TODO: Also prettyprint IKE header in the log.
+                Log.e(TAG, "Received a request while waiting for IKE_INIT response.");
             }
         }
 

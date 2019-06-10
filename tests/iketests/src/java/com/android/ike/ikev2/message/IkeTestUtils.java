@@ -16,14 +16,26 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import android.util.Pair;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
 
 import java.nio.ByteBuffer;
 
-/** IkeTestUtils provides utility methods for parsing Hex String */
+/**
+ * IkeTestUtils provides utility methods for testing IKE library.
+ *
+ * <p>TODO: Consider moving it under ikev2/
+ */
 public final class IkeTestUtils {
     public static IkePayload hexStringToIkePayload(
             @IkePayload.PayloadType int payloadType, boolean isResp, String payloadHexString)
@@ -33,5 +45,18 @@ public final class IkeTestUtils {
         Pair<IkePayload, Integer> pair =
                 IkePayloadFactory.getIkePayload(payloadType, isResp, ByteBuffer.wrap(payloadBytes));
         return pair.first;
+    }
+
+    public static <T extends IkeProtocolException> T decodeAndVerifyUnprotectedErrorMsg(
+            byte[] inputPacket, Class<T> expectedException) throws Exception {
+        IkeHeader header = new IkeHeader(inputPacket);
+        DecodeResult decodeResult = IkeMessage.decode(0, header, inputPacket);
+
+        assertEquals(DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, decodeResult.status);
+        assertNull(decodeResult.ikeMessage);
+        assertNotNull(decodeResult.ikeException);
+        assertTrue(expectedException.isInstance(decodeResult.ikeException));
+
+        return (T) decodeResult.ikeException;
     }
 }
