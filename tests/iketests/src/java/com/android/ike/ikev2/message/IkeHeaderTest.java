@@ -20,7 +20,6 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
@@ -101,15 +100,12 @@ public final class IkeHeaderTest {
         inputPacket[VERSION_OFFSET] = (byte) 0x30;
         // Set Exchange type 0
         inputPacket[EXCHANGE_TYPE_OFFSET] = (byte) 0x00;
-        IkeHeader header = new IkeHeader(inputPacket);
-        try {
-            IkeMessage.decode(header, inputPacket);
-            fail(
-                    "Expected InvalidMajorVersionException: major version is 3"
-                            + "and exchange type is 0");
-        } catch (InvalidMajorVersionException expected) {
-            assertEquals(3, expected.receivedMajorVersion);
-        }
+
+        InvalidMajorVersionException exception =
+                IkeTestUtils.decodeAndVerifyUnprotectedErrorMsg(
+                        inputPacket, InvalidMajorVersionException.class);
+
+        assertEquals(3, exception.receivedMajorVersion);
     }
 
     @Test
@@ -117,12 +113,8 @@ public final class IkeHeaderTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         // Set Exchange type 0
         inputPacket[EXCHANGE_TYPE_OFFSET] = (byte) 0x00;
-        IkeHeader header = new IkeHeader(inputPacket);
-        try {
-            IkeMessage.decode(header, inputPacket);
-            fail("Expected InvalidSyntaxException: exchange type is 0");
-        } catch (InvalidSyntaxException expected) {
-        }
+
+        IkeTestUtils.decodeAndVerifyUnprotectedErrorMsg(inputPacket, InvalidSyntaxException.class);
     }
 
     @Test
@@ -130,12 +122,8 @@ public final class IkeHeaderTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         // Set Exchange type 0
         inputPacket[MESSAGE_LENGTH_OFFSET] = (byte) 0x01;
-        IkeHeader header = new IkeHeader(inputPacket);
-        try {
-            IkeMessage.decode(header, inputPacket);
-            fail("Expected InvalidSyntaxException: IKE message length.");
-        } catch (InvalidSyntaxException expected) {
-        }
+
+        IkeTestUtils.decodeAndVerifyUnprotectedErrorMsg(inputPacket, InvalidSyntaxException.class);
     }
 
     @Test
