@@ -180,6 +180,9 @@ public class IkeSessionStateMachine extends StateMachine {
     /** Remote address configured by users. Initialized in Initial State. */
     private InetAddress mRemoteAddress;
 
+    /** Indicates if local or remote node is behind a NAT. */
+    private boolean mNatDetected;
+
     /** Package private SaProposal that represents the negotiated IKE SA proposal. */
     @VisibleForTesting SaProposal mSaProposal;
 
@@ -953,6 +956,8 @@ public class IkeSessionStateMachine extends StateMachine {
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
         private Retransmitter mRetransmitter;
 
+        // TODO: Support NAT detection.
+
         @Override
         public void enter() {
             IkeMessage request = buildRequest();
@@ -1274,6 +1279,9 @@ public class IkeSessionStateMachine extends StateMachine {
                                     new ChildSessionSmCallback(),
                                     mLocalAddress,
                                     mRemoteAddress,
+                                    (mNatDetected
+                                            ? mIkeSessionOptions.getUdpEncapsulationSocket()
+                                            : null),
                                     mIkePrf,
                                     mCurrentIkeSaRecord.getSkD());
 

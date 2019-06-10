@@ -35,6 +35,7 @@ import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -91,6 +92,7 @@ public final class ChildSessionStateMachineTest {
     private Context mContext;
     private IpSecService mMockIpSecService;
     private IpSecManager mMockIpSecManager;
+    private UdpEncapsulationSocket mMockUdpEncapSocket;
 
     private TestLooper mLooper;
     private ChildSessionStateMachine mChildSessionStateMachine;
@@ -132,6 +134,7 @@ public final class ChildSessionStateMachineTest {
         mContext = InstrumentationRegistry.getContext();
         mMockIpSecService = mock(IpSecService.class);
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
+        mMockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
 
         mChildSessionOptions = buildChildSessionOptions();
 
@@ -147,6 +150,7 @@ public final class ChildSessionStateMachineTest {
                         mMockChildSessionSmCallback,
                         LOCAL_ADDRESS,
                         REMOTE_ADDRESS,
+                        mMockUdpEncapSocket,
                         mIkePrf,
                         SK_D);
         mChildSessionStateMachine.setDbg(true);
@@ -285,6 +289,7 @@ public final class ChildSessionStateMachineTest {
         assertEquals(CURRENT_CHILD_SA_SPI_OUT, childSaRecordConfig.respSpi.getSpi());
         assertEquals(LOCAL_ADDRESS, childSaRecordConfig.initAddress);
         assertEquals(REMOTE_ADDRESS, childSaRecordConfig.respAddress);
+        assertEquals(mMockUdpEncapSocket, childSaRecordConfig.udpEncapSocket);
         assertEquals(mIkePrf, childSaRecordConfig.ikePrf);
         assertArrayEquals(SK_D, childSaRecordConfig.skD);
         assertFalse(childSaRecordConfig.isTransport);
