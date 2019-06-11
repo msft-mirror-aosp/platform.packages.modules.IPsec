@@ -19,6 +19,9 @@ package com.android.ike.eap.statemachine;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapData.EAP_NAK;
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 
@@ -135,6 +138,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                         new EapInvalidRequestException("Received non EAP-Request in CreatedState"));
             }
 
+            // EapMessage#validate verifies that all EapMessage objects representing
+            // EAP-Request packets have a Type value
             switch (message.eapData.eapType) {
                 case EAP_NOTIFICATION:
                     return handleNotification(mTAG, message);
@@ -144,7 +149,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 // all EAP methods should be handled by MethodState
                 default:
-                    return transitionAndProcess(new MethodState(), packet);
+                    return transitionAndProcess(new MethodState(message.eapData.eapType), packet);
             }
         }
     }
@@ -164,6 +169,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                         "Received non EAP-Request in IdentityState"));
             }
 
+            // EapMessage#validate verifies that all EapMessage objects representing
+            // EAP-Request packets have a Type value
             switch (message.eapData.eapType) {
                 case EAP_NOTIFICATION:
                     return handleNotification(mTAG, message);
@@ -174,7 +181,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 // all EAP methods should be handled by MethodState
                 default:
-                    return transitionAndProcess(new MethodState(), packet);
+                    return transitionAndProcess(new MethodState(message.eapData.eapType), packet);
             }
         }
 
@@ -194,14 +201,40 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     }
 
     protected class MethodState extends EapState {
+        private final String mTAG = MethodState.class.getSimpleName();
+
+        private final EapMethodStateMachine mEapMethodStateMachine;
+
+        protected MethodState(int eapType) {
+            switch (eapType) {
+                case EAP_TYPE_AKA:
+                    // TODO(b/133878992): implement and use EapAkaStateMachine
+                    mEapMethodStateMachine = new EapMethodStateMachine() {};
+                    break;
+                case EAP_TYPE_AKA_PRIME:
+                    // TODO(b/133878093): implement EapAkaPrimeStateMachine
+                    mEapMethodStateMachine = new EapMethodStateMachine() {};
+                    break;
+                case EAP_TYPE_SIM:
+                    // TODO(133879839): implement EapSimStateMachine
+                    mEapMethodStateMachine = new EapMethodStateMachine() {};
+                    break;
+
+                default:
+                    // received unsupported EAP Type. This should never happen.
+                    Log.e(mTAG, "Received unsupported EAP Type=" + eapType);
+                    throw new IllegalArgumentException(
+                            "Received unsupported EAP Type in MethodState constructor");
+            }
+        }
+
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
                 return decodeResult.eapResult;
             }
-            EapMessage message = decodeResult.eapMessage;
-            // TODO(b/133140131): implement logic for state
-            return null;
+
+            return mEapMethodStateMachine.process(decodeResult.eapMessage);
         }
     }
 
