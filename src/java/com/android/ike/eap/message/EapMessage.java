@@ -215,5 +215,10 @@ public class EapMessage {
             throw new EapInvalidPacketLengthException(
                     "EAP Success/Failure packets must be length 4");
         }
+
+        if ((eapCode == EAP_CODE_REQUEST || eapCode == EAP_CODE_RESPONSE) && eapData == null) {
+            throw new EapInvalidPacketLengthException(
+                    "EAP Request/Response packets must include a Type value");
+        }
     }
 }

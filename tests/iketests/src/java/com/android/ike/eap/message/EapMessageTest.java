@@ -51,6 +51,15 @@ import org.junit.Test;
 
 public class EapMessageTest {
     @Test
+    public void testConstructorRequestWithoutType() throws Exception {
+        try {
+            new EapMessage(EAP_CODE_REQUEST, ID_INT, null);
+            fail("Expected EapInvalidPacketLengthException for an EAP-Request without Type value");
+        } catch (EapInvalidPacketLengthException expected) {
+        }
+    }
+
+    @Test
     public void testDecode() throws Exception {
         EapMessage result = EapMessage.decode(EAP_SUCCESS_PACKET);
         assertEquals(EAP_CODE_SUCCESS, result.eapCode);
