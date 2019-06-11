@@ -16,9 +16,13 @@
 
 package com.android.ike.eap.statemachine;
 
+import static androidx.test.InstrumentationRegistry.getInstrumentation;
+
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 
 import static org.junit.Assert.fail;
+
+import android.content.Context;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -26,12 +30,14 @@ import org.junit.Test;
 public class MethodStateTest extends EapStateTest {
     private static final int UNSUPPORTED_EAP_TYPE = 0xFF;
 
+    private Context mContext;
     private EapStateMachine mEapStateMachine;
 
     @Before
     @Override
     public void setUp() {
-        mEapStateMachine = new EapStateMachine();
+        mContext = getInstrumentation().getContext();
+        mEapStateMachine = new EapStateMachine(mContext);
         mEapState = mEapStateMachine.new MethodState(EAP_TYPE_AKA);
     }
 
