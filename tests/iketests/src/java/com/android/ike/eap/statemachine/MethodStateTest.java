@@ -19,10 +19,14 @@ package com.android.ike.eap.statemachine;
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.content.Context;
+
+import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -48,5 +52,14 @@ public class MethodStateTest extends EapStateTest {
             fail("Expected IllegalArgumentException for making MethodState with invalid type");
         } catch (IllegalArgumentException expected) {
         }
+    }
+
+    @Test
+    public void testProcessTransitionsToEapSim() {
+        mEapStateMachine.process(EAP_REQUEST_SIM_START_PACKET);
+
+        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+        MethodState methodState = (MethodState) mEapStateMachine.getState();
+        assertTrue(methodState.mEapMethodStateMachine instanceof EapSimMethodStateMachine);
     }
 }
