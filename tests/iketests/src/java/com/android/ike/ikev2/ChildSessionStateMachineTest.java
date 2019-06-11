@@ -260,15 +260,8 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onProcedureFinished();
     }
 
-    @Test
-    public void testCreateFirstChild() throws Exception {
-        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
-                .thenReturn(mSpyCurrentChildSaRecord);
-
-        mChildSessionStateMachine.handleFirstChildExchange(
-                mFirstSaReqPayloads, mFirstSaRespPayloads);
-        mLooper.dispatchAll();
-
+    private void verifyInitCreateChildResp(
+            List<IkePayload> reqPayloads, List<IkePayload> respPayloads) throws Exception {
         verify(mMockChildSessionSmCallback)
                 .onChildSaCreated(
                         mSpyCurrentChildSaRecord.getRemoteSpi(), mChildSessionStateMachine);
@@ -290,9 +283,7 @@ public final class ChildSessionStateMachineTest {
         // Validate current ChildSaRecord
         verify(mMockSaRecordHelper)
                 .makeChildSaRecord(
-                        eq(mFirstSaReqPayloads),
-                        eq(mFirstSaRespPayloads),
-                        mChildSaRecordConfigCaptor.capture());
+                        eq(reqPayloads), eq(respPayloads), mChildSaRecordConfigCaptor.capture());
         ChildSaRecordConfig childSaRecordConfig = mChildSaRecordConfigCaptor.getValue();
 
         assertEquals(mContext, childSaRecordConfig.context);
@@ -308,14 +299,28 @@ public final class ChildSessionStateMachineTest {
         assertTrue(childSaRecordConfig.hasIntegrityAlgo);
 
         assertEquals(mSpyCurrentChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
+    }
+
+    @Test
+    public void testCreateFirstChild() throws Exception {
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
+                .thenReturn(mSpyCurrentChildSaRecord);
+
+        mChildSessionStateMachine.handleFirstChildExchange(
+                mFirstSaReqPayloads, mFirstSaRespPayloads);
+        mLooper.dispatchAll();
+
+        verifyInitCreateChildResp(mFirstSaReqPayloads, mFirstSaRespPayloads);
 
         quitAndVerify();
     }
 
     @Test
     public void testCreateChild() throws Exception {
-        mChildSessionStateMachine.createChildSa();
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
+                .thenReturn(mSpyCurrentChildSaRecord);
 
+        mChildSessionStateMachine.createChildSa();
         mLooper.dispatchAll();
 
         // Validate outbound payload list
@@ -348,11 +353,8 @@ public final class ChildSessionStateMachineTest {
                 EXCHANGE_TYPE_CREATE_CHILD_SA, mFirstSaRespPayloads);
         mLooper.dispatchAll();
 
-        verify(mMockChildSessionSmCallback)
-                .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
-        verify(mMockChildSessionSmCallback).onProcedureFinished();
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Idle);
+        verifyInitCreateChildResp(reqPayloadList, mFirstSaRespPayloads);
+
+        quitAndVerify();
     }
 }

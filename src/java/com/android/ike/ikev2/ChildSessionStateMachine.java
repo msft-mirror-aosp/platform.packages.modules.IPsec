@@ -17,8 +17,14 @@ package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
+import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
+import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
+import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeHeader.ExchangeType;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_USE_TRANSPORT_MODE;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_KE;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NONCE;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_SA;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
@@ -45,7 +51,6 @@ import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.exceptions.TsUnacceptableException;
-import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -340,13 +345,18 @@ public class ChildSessionStateMachine extends StateMachine {
      * InitCreateChildBase represents the common information for negotiating the initial Child SA
      * for setting up this Child Session.
      */
-    abstract class InitCreateChildBase extends State {
-        protected void handleInitCreateChild(
-                List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
+    private abstract class InitCreateChildBase extends State {
+        protected void validateAndBuildChild(
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                @ExchangeType int exchangeType,
+                @ExchangeType int expectedExchangeType) {
             CreateChildResult createChildResult =
                     CreateChildSaHelper.validateAndNegotiateInitChild(
                             reqPayloads,
                             respPayloads,
+                            exchangeType,
+                            expectedExchangeType,
                             mChildSessionOptions.isTransportMode(),
                             mIpSecManager,
                             mRemoteAddress);
@@ -431,7 +441,13 @@ public class ChildSessionStateMachine extends StateMachine {
                     List<IkePayload> reqPayloads = childNegotiationData.requestPayloads;
                     List<IkePayload> respPayloads = childNegotiationData.responsePayloads;
 
-                    handleInitCreateChild(reqPayloads, respPayloads);
+                    // Negotiate Child SA. The exchangeType has been validated in
+                    // IkeSessionStateMachine. Won't validate it again here.
+                    validateAndBuildChild(
+                            reqPayloads,
+                            respPayloads,
+                            EXCHANGE_TYPE_IKE_AUTH,
+                            EXCHANGE_TYPE_IKE_AUTH);
 
                     return HANDLED;
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
@@ -457,9 +473,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         CreateChildSaHelper.getInitCreateSaRequestPayloads(
                                 mIpSecManager, mLocalAddress, mChildSessionOptions);
                 mChildSmCallback.onOutboundPayloadsReady(
-                        IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
-                        false /*isResp*/,
-                        mRequestPayloads);
+                        EXCHANGE_TYPE_CREATE_CHILD_SA, false /*isResp*/, mRequestPayloads);
             } catch (ResourceUnavailableException e) {
                 // TODO: Notify users and close the Child Session.
             }
@@ -469,9 +483,12 @@ public class ChildSessionStateMachine extends StateMachine {
         public boolean processMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
-                    // TODO: Validate the response against the cached request and construct
-                    // ChildSaRecord.
-                    transitionTo(mIdle);
+                    ReceivedResponse rcvResp = (ReceivedResponse) message.obj;
+                    validateAndBuildChild(
+                            mRequestPayloads,
+                            rcvResp.responsePayloads,
+                            rcvResp.exchangeType,
+                            EXCHANGE_TYPE_CREATE_CHILD_SA);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -561,6 +578,8 @@ public class ChildSessionStateMachine extends StateMachine {
         public static CreateChildResult validateAndNegotiateInitChild(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
+                @ExchangeType int exchangeType,
+                @ExchangeType int expectedExchangeType,
                 boolean expectTransport,
                 IpSecManager ipSecManager,
                 InetAddress remoteAddress) {
@@ -568,6 +587,8 @@ public class ChildSessionStateMachine extends StateMachine {
             return validateAndNegotiateChild(
                     reqPayloads,
                     respPayloads,
+                    exchangeType,
+                    expectedExchangeType,
                     true /*isLocalInit*/,
                     expectTransport,
                     ipSecManager,
@@ -580,13 +601,23 @@ public class ChildSessionStateMachine extends StateMachine {
         private static CreateChildResult validateAndNegotiateChild(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
+                @ExchangeType int exchangeType,
+                @ExchangeType int expectedExchangeType,
                 boolean isLocalInit,
                 boolean expectTransport,
                 IpSecManager ipSecManager,
                 InetAddress remoteAddress) {
             List<IkePayload> inboundPayloads = isLocalInit ? respPayloads : reqPayloads;
 
-            // TODO: Validate payloads' types and exchange type
+            try {
+                validatePayloadAndExchangeType(
+                        inboundPayloads,
+                        isLocalInit /*isResp*/,
+                        exchangeType,
+                        expectedExchangeType);
+            } catch (InvalidSyntaxException e) {
+                return new CreateChildResult(CREATE_STATUS_IKE_ERROR, e);
+            }
 
             List<IkeNotifyPayload> notifyPayloads =
                     IkePayload.getPayloadListForTypeInProvidedList(
@@ -673,6 +704,80 @@ public class ChildSessionStateMachine extends StateMachine {
                     return new CreateChildResult(
                             CREATE_STATUS_CHILD_ERROR_INVALID_MSG, new IkeInternalException(e));
                 }
+            }
+        }
+
+        private static void validatePayloadAndExchangeType(
+                List<IkePayload> inboundPayloads,
+                boolean isResp,
+                @ExchangeType int exchangeType,
+                @ExchangeType int expectedExchangeType)
+                throws InvalidSyntaxException {
+            boolean hasSaPayload = false;
+            boolean hasKePayload = false;
+            boolean hasNoncePayload = false;
+            boolean hasTsInitPayload = false;
+            boolean hasTsRespPayload = false;
+
+            for (IkePayload payload : inboundPayloads) {
+                switch (payload.payloadType) {
+                    case PAYLOAD_TYPE_SA:
+                        hasSaPayload = true;
+                        break;
+                    case PAYLOAD_TYPE_KE:
+                        // Could not decide if KE Payload MUST or MUST NOT be included until SA
+                        // negotiation is done.
+                        hasKePayload = true;
+                        break;
+                    case PAYLOAD_TYPE_NONCE:
+                        hasNoncePayload = true;
+                        break;
+                    case PAYLOAD_TYPE_TS_INITIATOR:
+                        hasTsInitPayload = true;
+                        break;
+                    case PAYLOAD_TYPE_TS_RESPONDER:
+                        hasTsRespPayload = true;
+                        break;
+                    case PAYLOAD_TYPE_NOTIFY:
+                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+
+                        if (notifyPayload.isErrorNotify()) {
+                            if (!isResp) {
+                                throw new InvalidSyntaxException(
+                                        "Received error notification in a Create Child SA request");
+                            }
+                        }
+                        break;
+                    default:
+                        throw new InvalidSyntaxException(
+                                "Received unexpected payload in Create Child SA request. Payload"
+                                        + " type: "
+                                        + payload.payloadType);
+                }
+            }
+
+            // Do not need to check exchange type of a request because it has been already verified
+            // in IkeSessionStateMachine
+            if (isResp
+                    && exchangeType != expectedExchangeType
+                    && exchangeType != EXCHANGE_TYPE_INFORMATIONAL) {
+                throw new InvalidSyntaxException("Received invalid exchange type: " + exchangeType);
+            }
+
+            if (exchangeType == EXCHANGE_TYPE_INFORMATIONAL
+                    && (hasSaPayload
+                            || hasKePayload
+                            || hasNoncePayload
+                            || hasTsInitPayload
+                            || hasTsRespPayload)) {
+                throw new InvalidSyntaxException(
+                        "Unexpected payload found in an INFORMATIONAL message: SA, KE, Nonce,"
+                                + " TS-Initiator or TS-Responder");
+            }
+
+            if (!hasSaPayload || !hasNoncePayload || !hasTsInitPayload || !hasTsRespPayload) {
+                throw new InvalidSyntaxException(
+                        "SA, Nonce, TS-Initiator or TS-Responder missing.");
             }
         }
 
