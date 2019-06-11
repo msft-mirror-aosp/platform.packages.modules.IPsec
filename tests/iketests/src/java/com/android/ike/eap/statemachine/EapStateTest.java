@@ -16,6 +16,8 @@
 
 package com.android.ike.eap.statemachine;
 
+import static androidx.test.InstrumentationRegistry.getInstrumentation;
+
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MD5_CHALLENGE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
@@ -25,6 +27,8 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_PACKET
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
+
+import android.content.Context;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
@@ -43,13 +47,16 @@ import org.junit.Test;
  * EapStateTest
  */
 public class EapStateTest {
+    protected Context mContext;
     protected EapState mEapState;
 
     @Before
     public void setUp() {
+        mContext = getInstrumentation().getContext();
+
         // this EapState definition is used to make sure all non-Success/Failure EAP states
         // produce the same results for error cases.
-        mEapState = new EapStateMachine().new EapState() {
+        mEapState = new EapStateMachine(mContext).new EapState() {
             @Override
             public EapResult process(byte[] msg) {
                 return decode(msg).eapResult;
