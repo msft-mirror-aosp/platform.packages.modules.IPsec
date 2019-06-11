@@ -18,6 +18,9 @@ package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -126,6 +129,10 @@ public final class IkeSessionStateMachineTest {
             "c39b7f368f4681b89fa9b7be6465abd7c5f68b6ed5d3b4c72cb4240eb5c46412";
     private static final String NONCE_RESP_HEX_STRING =
             "9756112ca539f5c25abacc7ee92b73091942a9c06950f98848f1af1694c4ddff";
+    private static final String NAT_DETECTION_SOURCE_PAYLOAD_HEX_STRING =
+            "2900001c00004004e54f73b7d83f6beb881eab2051d8663f421d10b0";
+    private static final String NAT_DETECTION_DESTINATION_PAYLOAD_HEX_STRING =
+            "2b00001c00004005d915368ca036004cb578ae3e3fb268509aeab190";
     private static final String DELETE_IKE_PAYLOAD_HEX_STRING = "0000000801000000";
     private static final String NOTIFY_REKEY_IKE_PAYLOAD_HEX_STRING = "2100000800004009";
     private static final String ID_PAYLOAD_RESPONDER_HEX_STRING = "2700000c010000007f000001";
@@ -193,7 +200,7 @@ public final class IkeSessionStateMachineTest {
     private ArgumentCaptor<IkeSaRecordConfig> mIkeSaRecordConfigCaptor =
             ArgumentCaptor.forClass(IkeSaRecordConfig.class);
 
-    private ReceivedIkePacket makeDummyUnencryptedReceivedIkePacket(
+    private ReceivedIkePacket makeDummyReceivedIkeInitRespPacket(
             long initiatorSpi,
             long responderSpi,
             @IkeHeader.ExchangeType int eType,
@@ -202,6 +209,20 @@ public final class IkeSessionStateMachineTest {
             List<Integer> payloadTypeList,
             List<String> payloadHexStringList)
             throws Exception {
+
+        List<IkePayload> payloadList =
+                hexStrListToIkePayloadList(payloadTypeList, payloadHexStringList, isResp);
+        // Build a remotely generated NAT_DETECTION_SOURCE_IP payload to mock a remote node's
+        // network that is not behind NAT.
+        IkePayload sourceNatPayload =
+                new IkeNotifyPayload(
+                        NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
+                        IkeNotifyPayload.generateNatDetectionData(
+                                initiatorSpi,
+                                responderSpi,
+                                REMOTE_ADDRESS,
+                                IkeSocket.IKE_SERVER_PORT));
+        payloadList.add(sourceNatPayload);
 
         IkeMessage dummyIkeMessage =
                 makeDummyIkeMessageForTest(
@@ -212,8 +233,7 @@ public final class IkeSessionStateMachineTest {
                         fromIkeInit,
                         0,
                         false /*isEncrypted*/,
-                        payloadTypeList,
-                        payloadHexStringList);
+                        payloadList);
 
         byte[] dummyIkePacketBytes = new byte[0];
         when(mMockIkeMessageHelper.decode(0, dummyIkeMessage.ikeHeader, dummyIkePacketBytes))
@@ -231,6 +251,8 @@ public final class IkeSessionStateMachineTest {
             throws Exception {
 
         boolean fromIkeInit = !ikeSaRecord.isLocalInit;
+        List<IkePayload> payloadList =
+                hexStrListToIkePayloadList(payloadTypeList, payloadHexStringList, isResp);
 
         IkeMessage dummyIkeMessage =
                 makeDummyIkeMessageForTest(
@@ -243,8 +265,7 @@ public final class IkeSessionStateMachineTest {
                                 ? ikeSaRecord.getLocalRequestMessageId()
                                 : ikeSaRecord.getRemoteRequestMessageId(),
                         true /*isEncyprted*/,
-                        payloadTypeList,
-                        payloadHexStringList);
+                        payloadList);
 
         byte[] dummyIkePacketBytes = new byte[0];
         when(mMockIkeMessageHelper.decode(
@@ -267,8 +288,7 @@ public final class IkeSessionStateMachineTest {
             boolean fromikeInit,
             int messageId,
             boolean isEncrypted,
-            List<Integer> payloadTypeList,
-            List<String> payloadHexStringList)
+            List<IkePayload> payloadList)
             throws Exception {
         int firstPayloadType =
                 isEncrypted ? IkePayload.PAYLOAD_TYPE_SK : IkePayload.PAYLOAD_TYPE_NO_NEXT;
@@ -277,14 +297,19 @@ public final class IkeSessionStateMachineTest {
                 new IkeHeader(
                         initSpi, respSpi, firstPayloadType, eType, isResp, fromikeInit, messageId);
 
+        return new IkeMessage(header, payloadList);
+    }
+
+    private static List<IkePayload> hexStrListToIkePayloadList(
+            List<Integer> payloadTypeList, List<String> payloadHexStringList, boolean isResp)
+            throws Exception {
         List<IkePayload> payloadList = new LinkedList<>();
         for (int i = 0; i < payloadTypeList.size(); i++) {
             payloadList.add(
                     IkeTestUtils.hexStringToIkePayload(
                             payloadTypeList.get(i), isResp, payloadHexStringList.get(i)));
         }
-
-        return new IkeMessage(header, payloadList);
+        return payloadList;
     }
 
     private void verifyDecodeEncryptedMessage(IkeSaRecord record, ReceivedIkePacket rcvPacket)
@@ -442,16 +467,20 @@ public final class IkeSessionStateMachineTest {
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
 
         payloadHexStringList.add(IKE_SA_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(NAT_DETECTION_SOURCE_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(NAT_DETECTION_DESTINATION_PAYLOAD_HEX_STRING);
 
         // In each test assign different IKE responder SPI in IKE INIT response to avoid remote SPI
         // collision during response validation.
         // STOPSHIP: b/131617794 allow #mockIkeSetup to be independent in each test after we can
         // support IkeSession cleanup.
-        return makeDummyUnencryptedReceivedIkePacket(
+        return makeDummyReceivedIkeInitRespPacket(
                 1L /*initiatorSpi*/,
                 ++sIkeInitResponseSpiBase,
                 IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
@@ -551,6 +580,16 @@ public final class IkeSessionStateMachineTest {
         return false;
     }
 
+    private static boolean isNotifyExist(
+            List<IkePayload> payloadList, @IkeNotifyPayload.NotifyType int notifyType) {
+        for (IkeNotifyPayload notify :
+                IkePayload.getPayloadListForTypeInProvidedList(
+                        PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, payloadList)) {
+            if (notify.notifyType == notifyType) return true;
+        }
+        return false;
+    }
+
     private void verifyIncrementLocaReqMsgId() {
         assertEquals(
                 ++mExpectedCurrentSaLocalReqMsgId,
@@ -618,6 +657,8 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isIkePayloadExist(payloadList, IkePayload.PAYLOAD_TYPE_SA));
         assertTrue(isIkePayloadExist(payloadList, IkePayload.PAYLOAD_TYPE_KE));
         assertTrue(isIkePayloadExist(payloadList, IkePayload.PAYLOAD_TYPE_NONCE));
+        assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP));
+        assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
 
         IkeSocket ikeSocket = mIkeSessionStateMachine.mIkeSocket;
         assertNotNull(ikeSocket);
@@ -654,6 +695,10 @@ public final class IkeSessionStateMachineTest {
         assertEquals(KEY_LEN_IKE_PRF, ikeSaRecordConfig.prf.getKeyLength());
         assertEquals(KEY_LEN_IKE_INTE, ikeSaRecordConfig.integrityKeyLength);
         assertEquals(KEY_LEN_IKE_ENCR, ikeSaRecordConfig.encryptionKeyLength);
+
+        // Validate NAT detection
+        assertTrue(mIkeSessionStateMachine.mIsLocalBehindNat);
+        assertFalse(mIkeSessionStateMachine.mIsRemoteBehindNat);
     }
 
     /** Initializes the mIkeSessionStateMachine in the IDLE state. */

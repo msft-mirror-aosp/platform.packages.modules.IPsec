@@ -21,6 +21,8 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_U
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR_MESSAGE;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 
 import android.annotation.IntDef;
 import android.content.Context;
@@ -179,9 +181,13 @@ public class IkeSessionStateMachine extends StateMachine {
     private InetAddress mLocalAddress;
     /** Remote address configured by users. Initialized in Initial State. */
     private InetAddress mRemoteAddress;
+    /** Local port assigned on device. Initialized in Initial State. */
+    private int mLocalPort;
 
-    /** Indicates if local or remote node is behind a NAT. */
-    private boolean mNatDetected;
+    /** Indicates if local node is behind a NAT. */
+    @VisibleForTesting boolean mIsLocalBehindNat;
+    /** Indicates if remote node is behind a NAT. */
+    @VisibleForTesting boolean mIsRemoteBehindNat;
 
     /** Package private SaProposal that represents the negotiated IKE SA proposal. */
     @VisibleForTesting SaProposal mSaProposal;
@@ -465,7 +471,9 @@ public class IkeSessionStateMachine extends StateMachine {
                                 OsConstants.SOCK_DGRAM,
                                 OsConstants.IPPROTO_UDP);
                 Os.connect(sock, mRemoteAddress, IkeSocket.IKE_SERVER_PORT);
-                mLocalAddress = ((InetSocketAddress) Os.getsockname(sock)).getAddress();
+                InetSocketAddress localAddr = (InetSocketAddress) Os.getsockname(sock);
+                mLocalAddress = localAddr.getAddress();
+                mLocalPort = localAddr.getPort();
                 Os.close(sock);
 
                 mIkeSocket = IkeSocket.getIkeSocket(mIkeSessionOptions.getUdpEncapsulationSocket());
@@ -956,8 +964,6 @@ public class IkeSessionStateMachine extends StateMachine {
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
         private Retransmitter mRetransmitter;
 
-        // TODO: Support NAT detection.
-
         @Override
         public void enter() {
             IkeMessage request = buildRequest();
@@ -1080,7 +1086,14 @@ public class IkeSessionStateMachine extends StateMachine {
             // one SaProposal and all SaProposals are valid for IKE SA negotiation.
             SaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
             List<IkePayload> payloadList =
-                    CreateIkeSaHelper.getIkeInitSaRequestPayloads(saProposals);
+                    CreateIkeSaHelper.getIkeInitSaRequestPayloads(
+                            saProposals,
+                            initSpi,
+                            respSpi,
+                            mLocalAddress,
+                            mRemoteAddress,
+                            mLocalPort,
+                            IkeSocket.IKE_SERVER_PORT);
 
             // TODO: Add Notification Payloads according to user configurations.
 
@@ -1114,6 +1127,13 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeSaPayload respSaPayload = null;
             IkeKePayload respKePayload = null;
 
+            /**
+             * There MAY be multiple NAT_DETECTION_SOURCE_IP payloads in a message if the sender
+             * does not know which of several network attachments will be used to send the packet.
+             */
+            List<IkeNotifyPayload> natSourcePayloads = new LinkedList<>();
+            IkeNotifyPayload natDestPayload = null;
+
             boolean hasNoncePayload = false;
 
             for (IkePayload payload : respMsg.ikePayloadList) {
@@ -1143,7 +1163,23 @@ public class IkeSessionStateMachine extends StateMachine {
                             throw new UnsupportedOperationException(
                                     "Do not support handle error notifications in response.");
                         }
-
+                        switch (notifyPayload.notifyType) {
+                            case NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP:
+                                natSourcePayloads.add(notifyPayload);
+                                break;
+                            case NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP:
+                                if (natDestPayload != null) {
+                                    throw new InvalidSyntaxException(
+                                            "More than one"
+                                                    + " NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP"
+                                                    + " found");
+                                }
+                                natDestPayload = notifyPayload;
+                                break;
+                            default:
+                                throw new UnsupportedOperationException(
+                                        "Cannot handle this notification");
+                        }
                         // TODO: handle status notifications.
 
                         break;
@@ -1154,8 +1190,14 @@ public class IkeSessionStateMachine extends StateMachine {
                 }
             }
 
-            if (respSaPayload == null || respKePayload == null || !hasNoncePayload) {
-                throw new InvalidSyntaxException("SA, KE or Nonce payload missing.");
+            if (respSaPayload == null
+                    || respKePayload == null
+                    || natSourcePayloads.isEmpty()
+                    || natDestPayload == null
+                    || !hasNoncePayload) {
+                throw new InvalidSyntaxException(
+                        "SA, KE, Nonce, Notify-NAT-Detection-Source, or"
+                                + " Notify-NAT-Detection-Destination payload missing.");
             }
 
             IkeSaPayload reqSaPayload =
@@ -1182,6 +1224,30 @@ public class IkeSessionStateMachine extends StateMachine {
             if (reqKePayload.dhGroup != respKePayload.dhGroup
                     && respKePayload.dhGroup != mSaProposal.getDhGroupTransforms()[0].id) {
                 throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
+            }
+
+            // NAT detection
+            long initIkeSpi = respMsg.ikeHeader.ikeInitiatorSpi;
+            long respIkeSpi = respMsg.ikeHeader.ikeResponderSpi;
+            mIsLocalBehindNat = true;
+            mIsRemoteBehindNat = true;
+
+            // Check if local node is behind NAT
+            byte[] expectedLocalNatData =
+                    IkeNotifyPayload.generateNatDetectionData(
+                            initIkeSpi, respIkeSpi, mLocalAddress, mLocalPort);
+            mIsLocalBehindNat = !Arrays.equals(expectedLocalNatData, natDestPayload.notifyData);
+
+            // Check if the remote node is behind NAT
+            byte[] expectedRemoteNatData =
+                    IkeNotifyPayload.generateNatDetectionData(
+                            initIkeSpi, respIkeSpi, mRemoteAddress, IkeSocket.IKE_SERVER_PORT);
+            for (IkeNotifyPayload natPayload : natSourcePayloads) {
+                // If none of the received hash matches the expected value, the remote node is
+                // behind NAT.
+                if (Arrays.equals(expectedRemoteNatData, natPayload.notifyData)) {
+                    mIsRemoteBehindNat = false;
+                }
             }
         }
 
@@ -1270,6 +1336,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
+                    boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
                     ChildSessionStateMachine firstChild =
                             ChildSessionStateMachineFactory.makeChildSessionStateMachine(
                                     "ChildSessionStateMachine",
@@ -1279,7 +1346,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                     new ChildSessionSmCallback(),
                                     mLocalAddress,
                                     mRemoteAddress,
-                                    (mNatDetected
+                                    (isNatDetected
                                             ? mIkeSessionOptions.getUdpEncapsulationSocket()
                                             : null),
                                     mIkePrf,
@@ -1973,9 +2040,32 @@ public class IkeSessionStateMachine extends StateMachine {
      * Helper class to generate IKE SA creation payloads, in both request and response directions.
      */
     private static class CreateIkeSaHelper {
-        public static List<IkePayload> getIkeInitSaRequestPayloads(SaProposal[] saProposals)
+        public static List<IkePayload> getIkeInitSaRequestPayloads(
+                SaProposal[] saProposals,
+                long initIkeSpi,
+                long respIkeSpi,
+                InetAddress localAddr,
+                InetAddress remoteAddr,
+                int localPort,
+                int remotePort)
                 throws IOException {
-            return getCreateIkeSaRequestPayloads(true, saProposals, null);
+            List<IkePayload> payloadList = getCreateIkeSaRequestPayloads(true, saProposals, null);
+
+            // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
+            // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in
+            // which the payloads were not in the "right" order" due to the lack of clarity of the
+            // payload order.
+            payloadList.add(
+                    new IkeNotifyPayload(
+                            NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
+                            IkeNotifyPayload.generateNatDetectionData(
+                                    initIkeSpi, respIkeSpi, localAddr, localPort)));
+            payloadList.add(
+                    new IkeNotifyPayload(
+                            NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
+                            IkeNotifyPayload.generateNatDetectionData(
+                                    initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
+            return payloadList;
         }
 
         public static List<IkePayload> getRekeyIkeSaRequestPayloads(
