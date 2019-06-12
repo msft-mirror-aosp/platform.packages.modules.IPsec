@@ -17,6 +17,8 @@
 package com.android.ike.eap.message;
 
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_COUNTER;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_COUNTER_TOO_SMALL;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IDENTITY;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
@@ -34,6 +36,8 @@ import android.annotation.Nullable;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
 import com.android.ike.eap.message.EapSimAttribute.AtAnyIdReq;
+import com.android.ike.eap.message.EapSimAttribute.AtCounter;
+import com.android.ike.eap.message.EapSimAttribute.AtCounterTooSmall;
 import com.android.ike.eap.message.EapSimAttribute.AtFullauthIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
 import com.android.ike.eap.message.EapSimAttribute.AtMac;
@@ -105,6 +109,10 @@ public class EapSimAttributeFactory {
                 return new AtPadding(lengthInBytes, byteBuffer);
             case EAP_AT_MAC:
                 return new AtMac(lengthInBytes, byteBuffer);
+            case EAP_AT_COUNTER:
+                return new AtCounter(lengthInBytes, byteBuffer);
+            case EAP_AT_COUNTER_TOO_SMALL:
+                return new AtCounterTooSmall(lengthInBytes, byteBuffer);
             default:
                 if (attributeType >= SKIPPABLE_ATTRIBUTE_RANGE_START) {
                     return new EapSimUnsupportedAttribute(attributeType, lengthInBytes, byteBuffer);
