@@ -47,6 +47,7 @@ public class EapTestAttributeDefinitions {
     public static final String RAND_1 = "00112233445566778899AABBCCDDEEFF";
     public static final String RAND_2 = "FFEEDDCCBBAA99887766554433221100";
     public static final byte[] AT_RAND = hexStringToByteArray("01090000" + RAND_1 + RAND_2);
+    public static final byte[] AT_PADDING = hexStringToByteArray("0602000000000000");
 
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
@@ -60,4 +61,5 @@ public class EapTestAttributeDefinitions {
             hexStringToByteArray("01050000" + RAND_1);
     public static final byte[] AT_RAND_DUPLICATE_RANDS =
             hexStringToByteArray("01090000" + RAND_1 + RAND_1);
+    public static final byte[] AT_PADDING_INVALID_PADDING = hexStringToByteArray("0601FFFF");
 }
