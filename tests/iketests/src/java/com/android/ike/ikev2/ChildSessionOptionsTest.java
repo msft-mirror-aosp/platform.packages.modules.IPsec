@@ -30,7 +30,7 @@ public final class ChildSessionOptionsTest {
     @Test
     public void testBuild() throws Exception {
         SaProposal saProposal =
-                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                SaProposal.Builder.newChildSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12,
                                 SaProposal.KEY_LEN_AES_128)
