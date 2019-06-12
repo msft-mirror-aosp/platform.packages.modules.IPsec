@@ -48,6 +48,7 @@ import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.InvalidKeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.exceptions.TsUnacceptableException;
@@ -673,7 +674,7 @@ public class ChildSessionStateMachine extends StateMachine {
                                 reqSaPayload, ipSecManager, remoteAddress);
                 SaProposal saProposal = childProposalPair.second.saProposal;
 
-                // TODO: Validate KE payload against negotiated SaProposal
+                validateKePayloads(inboundPayloads, isLocalInit /*isResp*/, saProposal);
 
                 if (expectTransport != hasTransportNotify) {
                     throw new NoValidProposalChosenException(
@@ -795,6 +796,39 @@ public class ChildSessionStateMachine extends StateMachine {
                 if (!reqPayload.contains(respPayload)) {
                     throw new TsUnacceptableException();
                 }
+            }
+        }
+
+        @VisibleForTesting
+        static void validateKePayloads(
+                List<IkePayload> inboundPayloads, boolean isResp, SaProposal negotiatedProposal)
+                throws IkeProtocolException {
+            DhGroupTransform[] dhTransforms = negotiatedProposal.getDhGroupTransforms();
+
+            if (dhTransforms.length > 1) {
+                throw new IllegalArgumentException(
+                        "Found multiple DH Group Transforms in the negotiated SA proposal");
+            }
+            boolean expectKePayload =
+                    dhTransforms.length == 1 && dhTransforms[0].id != DH_GROUP_NONE;
+
+            IkeKePayload kePayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            PAYLOAD_TYPE_KE, IkeKePayload.class, inboundPayloads);
+
+            if (expectKePayload && (kePayload == null || dhTransforms[0].id != kePayload.dhGroup)) {
+                if (isResp) {
+                    throw new InvalidSyntaxException(
+                            "KE Payload missing or has mismatched DH Group with the negotiated"
+                                    + " proposal.");
+                } else {
+                    throw new InvalidKeException(dhTransforms[0].id);
+                }
+
+            } else if (!expectKePayload && kePayload != null && isResp) {
+                // It is valid when the remote request proposed multiple DH Groups with a KE
+                // payload, and the responder chose DH_GROUP_NONE.
+                throw new InvalidSyntaxException("Received unexpected KE Payload.");
             }
         }
     }
