@@ -27,8 +27,12 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.ID;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapResponse;
@@ -46,15 +50,13 @@ public class IdentityStateTest extends EapStateTest {
     private static final byte[] EXPECTED_IDENTITY_RESPONSE =
             hexStringToByteArray("02" + ID + "000D01" + IDENTITY_HEX_STRING);
 
-    private EapStateMachine mEapStateMachine;
+    private EapStateMachine mEapStateMachineMock;
 
     @Before
     @Override
     public void setUp() {
-        mEapStateMachine = new EapStateMachine();
-        mEapState = mEapStateMachine.new IdentityState();
-        mEapStateMachine.transitionTo(mEapState);
-        assertSame(mEapState, mEapStateMachine.getState());
+        mEapStateMachineMock = mock(EapStateMachine.class);
+        mEapState = mEapStateMachineMock.new IdentityState();
     }
 
     @Test
@@ -65,16 +67,17 @@ public class IdentityStateTest extends EapStateTest {
         assertTrue(result instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EXPECTED_IDENTITY_RESPONSE, eapResponse.packet);
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
     @Test
     public void testProcess() {
         EapResult eapResult = mEapState.process(EAP_REQUEST_IDENTITY_PACKET);
 
-        assertSame(mEapState, mEapStateMachine.getState());
         assertTrue(eapResult instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) eapResult;
         assertArrayEquals(EAP_RESPONSE_IDENTITY_PACKET, eapResponse.packet);
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
     @Test
@@ -82,10 +85,10 @@ public class IdentityStateTest extends EapStateTest {
         EapResult eapResult = mEapState.process(EAP_REQUEST_NOTIFICATION_PACKET);
 
         // state shouldn't change after Notification request
-        assertSame(mEapState, mEapStateMachine.getState());
         assertTrue(eapResult instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) eapResult;
         assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
     @Test
@@ -93,6 +96,8 @@ public class IdentityStateTest extends EapStateTest {
         mEapState.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
 
         // EapStateMachine should change to MethodState for method-type packet
-        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+        verify(mEapStateMachineMock).transitionAndProcess(
+                any(MethodState.class), eq(EAP_REQUEST_AKA_IDENTITY_PACKET));
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 }

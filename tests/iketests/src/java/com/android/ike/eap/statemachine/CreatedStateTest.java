@@ -23,14 +23,17 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
-import com.android.ike.eap.statemachine.EapStateMachine.CreatedState;
 import com.android.ike.eap.statemachine.EapStateMachine.IdentityState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
 
@@ -38,21 +41,22 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class CreatedStateTest extends EapStateTest {
-    private EapStateMachine mEapStateMachine;
+    private EapStateMachine mEapStateMachineMock;
 
     @Before
     @Override
     public void setUp() {
-        mEapStateMachine = new EapStateMachine();
-
-        // EapStateMachine always starts on CreatedState
-        mEapState = (CreatedState) mEapStateMachine.getState();
+        mEapStateMachineMock = mock(EapStateMachine.class);
+        mEapState = mEapStateMachineMock.new CreatedState();
     }
 
     @Test
     public void testProcessIdentityRequest() {
         mEapState.process(EAP_REQUEST_IDENTITY_PACKET);
-        assertTrue(mEapStateMachine.getState() instanceof IdentityState);
+
+        verify(mEapStateMachineMock).transitionAndProcess(
+                any(IdentityState.class), eq(EAP_REQUEST_IDENTITY_PACKET));
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
     @Test
@@ -60,10 +64,10 @@ public class CreatedStateTest extends EapStateTest {
         EapResult eapResult = mEapState.process(EAP_REQUEST_NOTIFICATION_PACKET);
 
         // state shouldn't change after Notification request
-        assertSame(mEapState, mEapStateMachine.getState());
         assertTrue(eapResult instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) eapResult;
         assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
     @Test
@@ -73,6 +77,7 @@ public class CreatedStateTest extends EapStateTest {
         assertTrue(eapResult instanceof EapError);
         EapError eapError = (EapError) eapResult;
         assertTrue(eapError.cause instanceof EapInvalidRequestException);
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
     @Test
@@ -80,7 +85,9 @@ public class CreatedStateTest extends EapStateTest {
         mEapState.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
 
         // EapStateMachine should change to MethodState for method-type packet
-        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+        verify(mEapStateMachineMock).transitionAndProcess(
+                any(MethodState.class), eq(EAP_REQUEST_AKA_IDENTITY_PACKET));
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
     @Test
@@ -90,5 +97,6 @@ public class CreatedStateTest extends EapStateTest {
         assertTrue(eapResult instanceof EapError);
         EapError eapError = (EapError) eapResult;
         assertTrue(eapError.cause instanceof EapInvalidRequestException);
+        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 }

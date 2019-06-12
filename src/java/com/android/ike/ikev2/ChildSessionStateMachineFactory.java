@@ -20,6 +20,7 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.os.Looper;
 
+import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -37,12 +38,21 @@ final class ChildSessionStateMachineFactory {
             Looper looper,
             Context context,
             ChildSessionOptions sessionOptions,
+            IChildSessionSmCallback childSmCallback,
             InetAddress localAddress,
             InetAddress remoteAddress,
             IkeMacPrf prf,
             byte[] skD) {
         return sChildSessionHelper.makeChildSessionStateMachine(
-                name, looper, context, sessionOptions, localAddress, remoteAddress, prf, skD);
+                name,
+                looper,
+                context,
+                sessionOptions,
+                childSmCallback,
+                localAddress,
+                remoteAddress,
+                prf,
+                skD);
     }
 
     @VisibleForTesting
@@ -62,6 +72,7 @@ final class ChildSessionStateMachineFactory {
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
+                IChildSessionSmCallback childSmCallback,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
                 IkeMacPrf prf,
@@ -79,6 +90,7 @@ final class ChildSessionStateMachineFactory {
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
+                IChildSessionSmCallback childSmCallback,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
                 IkeMacPrf prf,
@@ -90,6 +102,7 @@ final class ChildSessionStateMachineFactory {
                             context,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                             sessionOptions,
+                            childSmCallback,
                             localAddress,
                             remoteAddress,
                             prf,
