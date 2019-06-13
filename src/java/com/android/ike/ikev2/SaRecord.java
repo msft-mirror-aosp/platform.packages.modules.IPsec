@@ -21,7 +21,9 @@ import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
+import android.util.Log;
 
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -36,6 +38,8 @@ import com.android.internal.annotations.VisibleForTesting;
 import dalvik.system.CloseGuard;
 
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -348,6 +352,7 @@ public abstract class SaRecord implements AutoCloseable {
                         sIpSecTransformHelper.makeIpSecTransform(
                                 childSaRecordConfig.context,
                                 childSaRecordConfig.initAddress,
+                                childSaRecordConfig.udpEncapSocket,
                                 childSaRecordConfig.initSpi,
                                 childSaRecordConfig.integrityAlgo,
                                 childSaRecordConfig.encryptionAlgo,
@@ -358,6 +363,7 @@ public abstract class SaRecord implements AutoCloseable {
                         sIpSecTransformHelper.makeIpSecTransform(
                                 childSaRecordConfig.context,
                                 childSaRecordConfig.respAddress,
+                                childSaRecordConfig.udpEncapSocket,
                                 childSaRecordConfig.respSpi,
                                 childSaRecordConfig.integrityAlgo,
                                 childSaRecordConfig.encryptionAlgo,
@@ -402,10 +408,13 @@ public abstract class SaRecord implements AutoCloseable {
      * <p>Package private
      */
     static class IpSecTransformHelper implements IIpSecTransformHelper {
+        private static final String TAG = "IpSecTransformHelper";
+
         @Override
         public IpSecTransform makeIpSecTransform(
                 Context context,
                 InetAddress sourceAddress,
+                UdpEncapsulationSocket udpEncapSocket,
                 IpSecManager.SecurityParameterIndex spi,
                 @Nullable IkeMacIntegrity integrityAlgo,
                 IkeCipher encryptionAlgo,
@@ -423,7 +432,12 @@ public abstract class SaRecord implements AutoCloseable {
                 builder.setAuthentication(integrityAlgo.buildIpSecAlgorithmWithKey(integrityKey));
             }
 
-            // TODO: Support UDP Encap if NAT is detected.
+            if (udpEncapSocket != null && sourceAddress instanceof Inet6Address) {
+                Log.wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
+            }
+            if (udpEncapSocket != null && sourceAddress instanceof Inet4Address) {
+                builder.setIpv4Encapsulation(udpEncapSocket, udpEncapSocket.getPort());
+            }
 
             if (isTransport) {
                 return builder.buildTransportModeTransform(sourceAddress, spi);
@@ -441,6 +455,7 @@ public abstract class SaRecord implements AutoCloseable {
         public final SecurityParameterIndex respSpi;
         public final InetAddress initAddress;
         public final InetAddress respAddress;
+        @Nullable public final UdpEncapsulationSocket udpEncapSocket;
         public final IkeMacPrf ikePrf;
         @Nullable public final IkeMacIntegrity integrityAlgo;
         public final IkeCipher encryptionAlgo;
@@ -455,6 +470,7 @@ public abstract class SaRecord implements AutoCloseable {
                 SecurityParameterIndex respSpi,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
+                @Nullable UdpEncapsulationSocket udpEncapSocket,
                 IkeMacPrf ikePrf,
                 @Nullable IkeMacIntegrity integrityAlgo,
                 IkeCipher encryptionAlgo,
@@ -466,6 +482,7 @@ public abstract class SaRecord implements AutoCloseable {
             this.respSpi = respSpi;
             this.initAddress = isLocalInit ? localAddress : remoteAddress;
             this.respAddress = isLocalInit ? remoteAddress : localAddress;
+            this.udpEncapSocket = udpEncapSocket;
             this.ikePrf = ikePrf;
             this.integrityAlgo = integrityAlgo;
             this.encryptionAlgo = encryptionAlgo;
@@ -728,6 +745,7 @@ public abstract class SaRecord implements AutoCloseable {
                 SecurityParameterIndex respSpi,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
+                @Nullable UdpEncapsulationSocket udpEncapSocket,
                 IkeMacPrf prf,
                 @Nullable IkeMacIntegrity integrityAlgo,
                 IkeCipher encryptionAlgo,
@@ -745,6 +763,7 @@ public abstract class SaRecord implements AutoCloseable {
                             respSpi,
                             localAddress,
                             remoteAddress,
+                            udpEncapSocket,
                             prf,
                             integrityAlgo,
                             encryptionAlgo,
@@ -857,6 +876,8 @@ public abstract class SaRecord implements AutoCloseable {
          * @param context current context
          * @param sourceAddress the source {@code InetAddress} of traffic on sockets of interfaces
          *     that will use this transform
+         * @param udpEncapSocket the UDP-Encap socket that allows IpSec traffic to pass through a
+         *     NAT. Null if no NAT exists.
          * @param spi a unique {@link IpSecManager.SecurityParameterIndex} to identify transformed
          *     traffic
          * @param integrityAlgo specifying the authentication algorithm to be applied.
@@ -875,6 +896,7 @@ public abstract class SaRecord implements AutoCloseable {
         IpSecTransform makeIpSecTransform(
                 Context context,
                 InetAddress sourceAddress,
+                UdpEncapsulationSocket udpEncapSocket,
                 IpSecManager.SecurityParameterIndex spi,
                 @Nullable IkeMacIntegrity integrityAlgo,
                 IkeCipher encryptionAlgo,
