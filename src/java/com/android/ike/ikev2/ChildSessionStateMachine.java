@@ -21,11 +21,13 @@ import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_SA;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 
+import android.annotation.Nullable;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
@@ -97,6 +99,12 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Remote address configured by users. */
     private final InetAddress mRemoteAddress;
 
+    /**
+     * UDP-Encapsulated socket that allows IPsec traffic to pass through a NAT. Null if UDP
+     * encapsulation is not needed.
+     */
+    @Nullable private final UdpEncapsulationSocket mUdpEncapSocket;
+
     private final IkeMacPrf mIkePrf;
 
     /** Package private SaProposal that represents the negotiated Child SA proposal. */
@@ -126,6 +134,7 @@ public class ChildSessionStateMachine extends StateMachine {
             IChildSessionSmCallback childSmCallback,
             InetAddress localAddress,
             InetAddress remoteAddress,
+            UdpEncapsulationSocket udpEncapSocket,
             IkeMacPrf ikePrf,
             byte[] skD) {
         super(name, looper);
@@ -138,6 +147,7 @@ public class ChildSessionStateMachine extends StateMachine {
 
         mLocalAddress = localAddress;
         mRemoteAddress = remoteAddress;
+        mUdpEncapSocket = udpEncapSocket;
         mIkePrf = ikePrf;
         mSkD = skD;
 
@@ -340,6 +350,7 @@ public class ChildSessionStateMachine extends StateMachine {
                                         childSpiPair.second,
                                         mLocalAddress,
                                         mRemoteAddress,
+                                        mUdpEncapSocket,
                                         mIkePrf,
                                         mChildIntegrity,
                                         mChildCipher,
