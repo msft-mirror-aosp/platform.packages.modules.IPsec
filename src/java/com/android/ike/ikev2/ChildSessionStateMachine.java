@@ -16,7 +16,9 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
+import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
 import static com.android.ike.ikev2.message.IkeHeader.ExchangeType;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_USE_TRANSPORT_MODE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_SA;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
@@ -40,11 +42,14 @@ import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.exceptions.TsUnacceptableException;
 import com.android.ike.ikev2.message.IkeHeader;
+import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.ChildProposal;
+import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
@@ -54,6 +59,7 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -160,7 +166,7 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
-     * Interface for ChildSessionStateMachine to notify IkeSessionStateMachine its state changes.
+     * Interface for ChildSessionStateMachine to notify IkeSessionStateMachine of state changes.
      *
      * <p>Child Session may encounter an IKE Session fatal error in three cases with different
      * handling rules:
@@ -493,9 +499,17 @@ public class ChildSessionStateMachine extends StateMachine {
 
         @Override
         public void enter() {
-            mRequestPayloads = buildCreateChildPayloads();
-            mChildSmCallback.onOutboundPayloadsReady(
-                    IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, false /*isResp*/, mRequestPayloads);
+            try {
+                mRequestPayloads =
+                        CreateChildSaHelper.getInitCreateSaRequestPayloads(
+                                mIpSecManager, mLocalAddress, mChildSessionOptions);
+                mChildSmCallback.onOutboundPayloadsReady(
+                        IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                        false /*isResp*/,
+                        mRequestPayloads);
+            } catch (ResourceUnavailableException e) {
+                // TODO: Notify users and close the Child Session.
+            }
         }
 
         @Override
@@ -509,12 +523,6 @@ public class ChildSessionStateMachine extends StateMachine {
                 default:
                     return NOT_HANDLED;
             }
-        }
-
-        private List<IkePayload> buildCreateChildPayloads() {
-            // TODO: Build payloads for creating Child SA including SA, Ni, Ti, Tr and notification
-            // for negotiating transport mode.
-            return null;
         }
     }
 
@@ -536,6 +544,62 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         // TODO: Support handling local and remote request.
+    }
+
+    /**
+     * Package private helper class to generate IKE SA creation payloads, in both request and
+     * response directions.
+     */
+    static class CreateChildSaHelper {
+        /** Create payload list for creating the initial Child SA for this Child Session. */
+        public static List<IkePayload> getInitCreateSaRequestPayloads(
+                IpSecManager ipSecManager,
+                InetAddress localAddress,
+                ChildSessionOptions childSessionOptions)
+                throws ResourceUnavailableException {
+            // TODO: b/134625950 Do not include DH Transform and KE Payload when this method is
+            // called for creating the first Child SA under the IKE Session.
+            return getCreateSaPayloads(
+                    false /*isResp*/,
+                    childSessionOptions.isTransportMode(),
+                    ipSecManager,
+                    localAddress,
+                    childSessionOptions.getSaProposals(),
+                    childSessionOptions.getLocalTrafficSelectors(),
+                    childSessionOptions.getRemoteTrafficSelectors());
+        }
+
+        // TODO: Support creating payloads for rekey request and response by calling
+        // #getCreateSaPayloads and adding Notify-Rekey payload.
+
+        /** Create payload list for creating a new Child SA. */
+        private static List<IkePayload> getCreateSaPayloads(
+                boolean isResp,
+                boolean isTransport,
+                IpSecManager ipSecManager,
+                InetAddress localAddress,
+                SaProposal[] saProposals,
+                IkeTrafficSelector[] initTs,
+                IkeTrafficSelector[] respTs)
+                throws ResourceUnavailableException {
+            List<IkePayload> payloadList = new ArrayList<>(5);
+
+            payloadList.add(
+                    IkeSaPayload.createChildSaPayload(
+                            isResp, saProposals, ipSecManager, localAddress));
+            payloadList.add(new IkeTsPayload(true /*isInitiator*/, initTs));
+            payloadList.add(new IkeTsPayload(false /*isInitiator*/, respTs));
+            payloadList.add(new IkeNoncePayload());
+
+            DhGroupTransform[] dhGroups = saProposals[0].getDhGroupTransforms();
+            if (dhGroups.length != 0 && dhGroups[0].id != DH_GROUP_NONE) {
+                payloadList.add(new IkeKePayload(dhGroups[0].id));
+            }
+
+            if (isTransport) payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_USE_TRANSPORT_MODE));
+
+            return payloadList;
+        }
     }
 
     /** Called when this StateMachine quits. */
