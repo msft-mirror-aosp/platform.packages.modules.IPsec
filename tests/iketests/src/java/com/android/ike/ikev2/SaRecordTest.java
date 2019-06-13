@@ -29,6 +29,7 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.SecurityParameterIndex;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
 
 import com.android.ike.TestUtils;
@@ -232,13 +233,13 @@ public final class SaRecordTest {
                         eq(REMOTE_ADDRESS.getHostAddress()), anyInt(), anyObject()))
                 .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(FIRST_CHILD_RESP_SPI));
 
-        SecurityParameterIndex initIkeSpi =
+        SecurityParameterIndex childInitSpi =
                 ipSecManager.allocateSecurityParameterIndex(LOCAL_ADDRESS);
-        SecurityParameterIndex respIkeSpi =
+        SecurityParameterIndex childRespSpi =
                 ipSecManager.allocateSecurityParameterIndex(REMOTE_ADDRESS);
 
         byte[] initAuthKey = TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_INIT_HEX_STRING);
-        byte[] repsAuthKey = TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_RESP_HEX_STRING);
+        byte[] respAuthKey = TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_RESP_HEX_STRING);
         byte[] initEncryptKey = TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_INIT_HEX_STRING);
         byte[] respEncryptKey = TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_RESP_HEX_STRING);
 
@@ -248,11 +249,13 @@ public final class SaRecordTest {
 
         IpSecTransform mockInitTransform = mock(IpSecTransform.class);
         IpSecTransform mockRespTransform = mock(IpSecTransform.class);
+        UdpEncapsulationSocket mockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
 
         when(mockIpSecHelper.makeIpSecTransform(
                         eq(context),
                         eq(LOCAL_ADDRESS),
-                        eq(initIkeSpi),
+                        eq(mockUdpEncapSocket),
+                        eq(childInitSpi),
                         eq(mHmacSha1IntegrityMac),
                         eq(mAesCbcCipher),
                         aryEq(initAuthKey),
@@ -263,10 +266,11 @@ public final class SaRecordTest {
         when(mockIpSecHelper.makeIpSecTransform(
                         eq(context),
                         eq(REMOTE_ADDRESS),
-                        eq(respIkeSpi),
+                        eq(mockUdpEncapSocket),
+                        eq(childRespSpi),
                         eq(mHmacSha1IntegrityMac),
                         eq(mAesCbcCipher),
-                        aryEq(repsAuthKey),
+                        aryEq(respAuthKey),
                         aryEq(respEncryptKey),
                         eq(false)))
                 .thenReturn(mockRespTransform);
@@ -274,10 +278,11 @@ public final class SaRecordTest {
         ChildSaRecordConfig childSaRecordConfig =
                 new ChildSaRecordConfig(
                         mockIpSecTestUtils.getContext(),
-                        initIkeSpi,
-                        respIkeSpi,
+                        childInitSpi,
+                        childRespSpi,
                         LOCAL_ADDRESS,
                         REMOTE_ADDRESS,
+                        mockUdpEncapSocket,
                         mIkeHmacSha1Prf,
                         mHmacSha1IntegrityMac,
                         mAesCbcCipher,
