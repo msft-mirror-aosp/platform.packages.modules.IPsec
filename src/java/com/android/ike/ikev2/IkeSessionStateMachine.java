@@ -38,6 +38,7 @@ import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
 
+import com.android.ike.ikev2.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.ike.ikev2.IkeSessionOptions.IkeAuthConfig;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -1411,26 +1412,9 @@ public class IkeSessionStateMachine extends StateMachine {
                             "Unrecognized authentication method: " + authConfig.mAuthMethod);
             }
 
-            // Build SA Payload
-            IkeSaPayload childSaPayload =
-                    IkeSaPayload.createChildSaPayload(
-                            false /*isResp*/,
-                            mFirstChildSessionOptions.getSaProposals(),
-                            mIpSecManager,
-                            mRemoteAddress);
-            payloadList.add(childSaPayload);
-
-            // Build TS payloads
-            IkeTsPayload initTsPayload =
-                    new IkeTsPayload(
-                            true /*isInitiator*/,
-                            mFirstChildSessionOptions.getLocalTrafficSelectors());
-            IkeTsPayload respTsPayload =
-                    new IkeTsPayload(
-                            false /*isInitiator*/,
-                            mFirstChildSessionOptions.getRemoteTrafficSelectors());
-            payloadList.add(initTsPayload);
-            payloadList.add(respTsPayload);
+            payloadList.addAll(
+                    CreateChildSaHelper.getInitCreateSaRequestPayloads(
+                            mIpSecManager, mLocalAddress, mFirstChildSessionOptions));
 
             // Build IKE header
             IkeHeader ikeHeader =
