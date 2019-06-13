@@ -23,6 +23,7 @@ import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_SA;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 
+import android.annotation.IntDef;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.net.IpSecManager;
@@ -38,7 +39,10 @@ import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.exceptions.TsUnacceptableException;
 import com.android.ike.ikev2.message.IkeHeader;
@@ -56,6 +60,8 @@ import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
 import java.io.IOException;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
@@ -330,30 +336,31 @@ public class ChildSessionStateMachine extends StateMachine {
         }
     }
 
-    /** Initial state of ChildSessionStateMachine. */
-    class Initial extends State {
-        @Override
-        public boolean processMessage(Message message) {
-            switch (message.what) {
-                    // TODO: Handle local request for creating Child SA.
-                case CMD_HANDLE_FIRST_CHILD_EXCHANGE:
-                    boolean childSetUpSuccess = false;
-                    Pair<SecurityParameterIndex, SecurityParameterIndex> childSpiPair = null;
-
-                    FirstChildNegotiationData childNegotiationData =
-                            (FirstChildNegotiationData) message.obj;
+    /**
+     * InitCreateChildBase represents the common information for negotiating the initial Child SA
+     * for setting up this Child Session.
+     */
+    abstract class InitCreateChildBase extends State {
+        protected void handleInitCreateChild(
+                List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
+            CreateChildResult createChildResult =
+                    CreateChildSaHelper.validateAndNegotiateInitChild(
+                            reqPayloads,
+                            respPayloads,
+                            mChildSessionOptions.isTransportMode(),
+                            mIpSecManager,
+                            mRemoteAddress);
+            switch (createChildResult.status) {
+                case CREATE_STATUS_OK:
                     try {
-                        List<IkePayload> reqPayloads = childNegotiationData.requestPayloads;
-                        List<IkePayload> respPayloads = childNegotiationData.responsePayloads;
-                        childSpiPair = validateCreateChildResp(reqPayloads, respPayloads);
-
+                        setUpNegotiatedResult(createChildResult.negotiatedProposal);
                         mCurrentChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
                                         mContext,
                                         reqPayloads,
                                         respPayloads,
-                                        childSpiPair.first,
-                                        childSpiPair.second,
+                                        createChildResult.localSpi,
+                                        createChildResult.remoteSpi,
                                         mLocalAddress,
                                         mRemoteAddress,
                                         mUdpEncapSocket,
@@ -364,24 +371,68 @@ public class ChildSessionStateMachine extends StateMachine {
                                         mChildSessionOptions.isTransportMode(),
                                         true /*isLocalInit*/);
                         // TODO: Add mCurrentChildSaRecord in mSpiToSaRecordMap.
-                        childSetUpSuccess = true;
                         transitionTo(mIdle);
-                    } catch (IkeProtocolException e) {
-                        // TODO: Unregister remotely generated SPI and handle Child SA negotiation
-                        // failure.
-                    } catch (GeneralSecurityException e) {
-                        // TODO: Handle DH shared key calculation failure.
-                    } catch (ResourceUnavailableException
+                    } catch (GeneralSecurityException
+                            | ResourceUnavailableException
                             | SpiUnavailableException
                             | IOException e) {
-                        // TODO:Fire the ChildSessionCallback.onError() callback and initiate
-                        // deletion exchange on this Child SA.
-                    } finally {
-                        if (!childSetUpSuccess && childSpiPair != null) {
-                            childSpiPair.first.close();
-                            childSpiPair.second.close();
-                        }
+                        // #makeChildSaRecord failed.
+                        createChildResult.localSpi.close();
+                        createChildResult.remoteSpi.close();
+                        // TODO: Initiate deletion and close this Child Session
+                        throw new UnsupportedOperationException("Cannot handle this error");
                     }
+                    break;
+                case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
+                    // TODO: Initiate deletion and close this Child Session
+                    throw new UnsupportedOperationException("Cannot handle this error");
+                case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
+                    // TODO: Unregister remotely generated SPI and locally close the Child Session.
+                    throw new UnsupportedOperationException("Cannot handle this error");
+                case CREATE_STATUS_IKE_ERROR:
+                    // TODO: Unregister remotely generated SPI and locally close the Child Session.
+                    mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unrecognized status");
+            }
+        }
+
+        private void setUpNegotiatedResult(SaProposal proposal) {
+            // Build crypto tools using negotiated SaProposal. It is ensured by {@link
+            // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that the negotiated SaProposal
+            // is valid. The negotiated SaProposal has exactly one encryption algorithm. When it has
+            // a combined-mode encryption algorithm, it either does not have integrity
+            // algorithm or only has one NONE value integrity algorithm. When the negotiated
+            // SaProposal has a normal encryption algorithm, it either does not have integrity
+            // algorithm or has one integrity algorithm with any supported value.
+
+            // TODO: Also store negotiated TS in the StateMachine
+            mSaProposal = proposal;
+            Provider provider = IkeMessage.getSecurityProvider();
+            mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
+            if (mSaProposal.getIntegrityTransforms().length != 0
+                    && mSaProposal.getIntegrityTransforms()[0].id
+                            != SaProposal.INTEGRITY_ALGORITHM_NONE) {
+                mChildIntegrity =
+                        IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
+            }
+        }
+    }
+
+    /** Initial state of ChildSessionStateMachine. */
+    class Initial extends InitCreateChildBase {
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_HANDLE_FIRST_CHILD_EXCHANGE:
+                    FirstChildNegotiationData childNegotiationData =
+                            (FirstChildNegotiationData) message.obj;
+                    List<IkePayload> reqPayloads = childNegotiationData.requestPayloads;
+                    List<IkePayload> respPayloads = childNegotiationData.responsePayloads;
+
+                    handleInitCreateChild(reqPayloads, respPayloads);
+
                     return HANDLED;
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
                     transitionTo(mCreateChildLocalCreate);
@@ -390,111 +441,13 @@ public class ChildSessionStateMachine extends StateMachine {
                     return NOT_HANDLED;
             }
         }
-
-        private Pair<SecurityParameterIndex, SecurityParameterIndex> validateCreateChildResp(
-                List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
-                throws IkeProtocolException, ResourceUnavailableException, SpiUnavailableException {
-            // TODO: If the response is unacceptable, extract the corresponding Child SPI in SA
-            // request and initiate Delete Child SA exchange. If the response includes an error
-            // notification, clean up this StateMachine.
-
-            List<IkeNotifyPayload> notifyPayloads =
-                    IkePayload.getPayloadListForTypeInProvidedList(
-                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, respPayloads);
-
-            boolean hasTransportNotify = false;
-            for (IkeNotifyPayload notify : notifyPayloads) {
-                switch (notify.notifyType) {
-                    case IkeNotifyPayload.NOTIFY_TYPE_ADDITIONAL_TS_POSSIBLE:
-                        // TODO: Store it as part of negotiation results that can be retrieved by
-                        // users.
-                        break;
-                    case IkeNotifyPayload.NOTIFY_TYPE_IPCOMP_SUPPORTED:
-                        // Ignore
-                        break;
-                    case IkeNotifyPayload.NOTIFY_TYPE_USE_TRANSPORT_MODE:
-                        hasTransportNotify = true;
-                        break;
-                    case IkeNotifyPayload.NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED:
-                        // Ignore
-                        break;
-                    default:
-                        throw new UnsupportedOperationException(
-                                "Do not support handling error notifications");
-                        // TODO: Throw IkeProtocolException if encountering error notifications.
-
-                }
-            }
-
-            if (mChildSessionOptions.isTransportMode() != hasTransportNotify) {
-                throw new NoValidProposalChosenException(
-                        "Failed the negotiation on Child SA mode (conflicting modes chosen).");
-            }
-
-            validateTsPayloads(reqPayloads, respPayloads);
-
-            IkeSaPayload reqSaPayload =
-                    IkePayload.getPayloadForTypeInProvidedList(
-                            IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
-            IkeSaPayload respSaPayload =
-                    IkePayload.getPayloadForTypeInProvidedList(
-                            IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, respPayloads);
-
-            // This method either throws exception or returns non-null pair that contains two valid
-            // {@link ChildProposal} both with a {@link SecurityParameterIndex} allocated inside.
-            Pair<ChildProposal, ChildProposal> childProposalPair =
-                    respSaPayload.getVerifiedNegotiatedChildProposalPair(
-                            reqSaPayload, mIpSecManager, mRemoteAddress);
-            mSaProposal = childProposalPair.second.saProposal;
-
-            try {
-                // Build crypto tools using mSaProposal. It is ensured by {@link
-                // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that mSaProposal is valid.
-                // mSaProposal has exactly one encryption algorithm. When the encryption algorithm
-                // is combined-mode, it either does not have integrity algorithm or only has one
-                // NONE value integrity algorithm. Otherwise, it has at most one integrity
-                // algorithm.
-                Provider provider = IkeMessage.getSecurityProvider();
-                mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
-                if (mSaProposal.getIntegrityTransforms().length != 0
-                        && mSaProposal.getIntegrityTransforms()[0].id
-                                != SaProposal.INTEGRITY_ALGORITHM_NONE) {
-                    mChildIntegrity =
-                            IkeMacIntegrity.create(
-                                    mSaProposal.getIntegrityTransforms()[0], provider);
-                }
-
-                return new Pair<SecurityParameterIndex, SecurityParameterIndex>(
-                        childProposalPair.first.getChildSpiResource(),
-                        childProposalPair.second.getChildSpiResource());
-            } catch (Exception e) {
-                childProposalPair.first.getChildSpiResource().close();
-                childProposalPair.second.getChildSpiResource().close();
-                throw e;
-            }
-        }
-
-        private void validateTsPayloads(List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
-                throws TsUnacceptableException {
-            for (int tsType : new int[] {PAYLOAD_TYPE_TS_INITIATOR, PAYLOAD_TYPE_TS_RESPONDER}) {
-                IkeTsPayload reqPayload =
-                        IkePayload.getPayloadForTypeInProvidedList(
-                                tsType, IkeTsPayload.class, reqPayloads);
-                IkeTsPayload respPayload =
-                        IkePayload.getPayloadForTypeInProvidedList(
-                                tsType, IkeTsPayload.class, respPayloads);
-                if (!reqPayload.contains(respPayload)) {
-                    throw new TsUnacceptableException();
-                }
-            }
-        }
     }
 
     /**
      * CreateChildLocalCreate represents the state where Child Session initiates the Create Child
      * exchange.
      */
-    class CreateChildLocalCreate extends State {
+    class CreateChildLocalCreate extends InitCreateChildBase {
         private List<IkePayload> mRequestPayloads;
 
         @Override
@@ -599,6 +552,204 @@ public class ChildSessionStateMachine extends StateMachine {
             if (isTransport) payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_USE_TRANSPORT_MODE));
 
             return payloadList;
+        }
+
+        /**
+         * Validate the received response of initial Create Child SA exchange and return the
+         * negotiation result.
+         */
+        public static CreateChildResult validateAndNegotiateInitChild(
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                boolean expectTransport,
+                IpSecManager ipSecManager,
+                InetAddress remoteAddress) {
+
+            return validateAndNegotiateChild(
+                    reqPayloads,
+                    respPayloads,
+                    true /*isLocalInit*/,
+                    expectTransport,
+                    ipSecManager,
+                    remoteAddress);
+        }
+
+        // TODO: Add method to support validating rekey request and response
+
+        /** Validate the received response and negotiate Child SA. */
+        private static CreateChildResult validateAndNegotiateChild(
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                boolean isLocalInit,
+                boolean expectTransport,
+                IpSecManager ipSecManager,
+                InetAddress remoteAddress) {
+            List<IkePayload> inboundPayloads = isLocalInit ? respPayloads : reqPayloads;
+
+            // TODO: Validate payloads' types and exchange type
+
+            List<IkeNotifyPayload> notifyPayloads =
+                    IkePayload.getPayloadListForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_NOTIFY,
+                            IkeNotifyPayload.class,
+                            inboundPayloads);
+
+            boolean hasTransportNotify = false;
+            for (IkeNotifyPayload notify : notifyPayloads) {
+                if (notify.isErrorNotify()) {
+                    // TODO: Return CreateChildResult with CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY and
+                    // IkeProtocolException
+                    throw new UnsupportedOperationException("Cannot handle this error");
+                }
+
+                switch (notify.notifyType) {
+                    case IkeNotifyPayload.NOTIFY_TYPE_ADDITIONAL_TS_POSSIBLE:
+                        // TODO: Store it as part of negotiation results that can be retrieved
+                        // by users.
+                        break;
+                    case IkeNotifyPayload.NOTIFY_TYPE_IPCOMP_SUPPORTED:
+                        // Ignore
+                        break;
+                    case IkeNotifyPayload.NOTIFY_TYPE_USE_TRANSPORT_MODE:
+                        hasTransportNotify = true;
+                        break;
+                    case IkeNotifyPayload.NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED:
+                        // Ignore
+                        break;
+                    default:
+                        return new CreateChildResult(
+                                CREATE_STATUS_IKE_ERROR,
+                                new InvalidSyntaxException(
+                                        "Received unexpected notification type: "
+                                                + notify.notifyType));
+                }
+            }
+
+            Pair<ChildProposal, ChildProposal> childProposalPair = null;
+            try {
+                IkeSaPayload reqSaPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
+                IkeSaPayload respSaPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, respPayloads);
+
+                // This method either throws exception or returns non-null pair that contains two
+                // valid {@link ChildProposal} both with a {@link SecurityParameterIndex} allocated
+                // inside.
+                childProposalPair =
+                        respSaPayload.getVerifiedNegotiatedChildProposalPair(
+                                reqSaPayload, ipSecManager, remoteAddress);
+                SaProposal saProposal = childProposalPair.second.saProposal;
+
+                // TODO: Validate KE payload against negotiated SaProposal
+
+                if (expectTransport != hasTransportNotify) {
+                    throw new NoValidProposalChosenException(
+                            "Failed the negotiation on Child SA mode (conflicting modes chosen).");
+                }
+
+                validateTsPayloads(reqPayloads, respPayloads);
+
+                return new CreateChildResult(
+                        childProposalPair.first.getChildSpiResource(),
+                        childProposalPair.second.getChildSpiResource(),
+                        saProposal);
+            } catch (IkeProtocolException
+                    | ResourceUnavailableException
+                    | SpiUnavailableException e) {
+                if (childProposalPair != null) {
+                    childProposalPair.first.getChildSpiResource().close();
+                    childProposalPair.second.getChildSpiResource().close();
+                }
+
+                if (e instanceof IkeProtocolException) {
+                    int errorStatus =
+                            (e instanceof InvalidSyntaxException)
+                                    ? CREATE_STATUS_IKE_ERROR
+                                    : CREATE_STATUS_CHILD_ERROR_INVALID_MSG;
+                    return new CreateChildResult(errorStatus, (IkeProtocolException) e);
+                } else {
+                    return new CreateChildResult(
+                            CREATE_STATUS_CHILD_ERROR_INVALID_MSG, new IkeInternalException(e));
+                }
+            }
+        }
+
+        private static void validateTsPayloads(
+                List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
+                throws TsUnacceptableException {
+            // TODO: Return negotiated TS.
+            for (int tsType : new int[] {PAYLOAD_TYPE_TS_INITIATOR, PAYLOAD_TYPE_TS_RESPONDER}) {
+                IkeTsPayload reqPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                tsType, IkeTsPayload.class, reqPayloads);
+                IkeTsPayload respPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                tsType, IkeTsPayload.class, respPayloads);
+                if (!reqPayload.contains(respPayload)) {
+                    throw new TsUnacceptableException();
+                }
+            }
+        }
+    }
+
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+        CREATE_STATUS_OK,
+        CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
+        CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY,
+        CREATE_STATUS_IKE_ERROR
+    })
+    @interface CreateStatus {}
+
+    /** The Child SA negotiation succeeds. */
+    private static final int CREATE_STATUS_OK = 0;
+    /** The inbound message is invalid in Child negotiation but is non-fatal for IKE Session. */
+    private static final int CREATE_STATUS_CHILD_ERROR_INVALID_MSG = 1;
+    /** The inbound message includes error notification that failed the Child negotiation. */
+    private static final int CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY = 2;
+    /** The inbound message has fatal error that causes IKE library to close the IKE Session. */
+    private static final int CREATE_STATUS_IKE_ERROR = 3;
+
+    private static class CreateChildResult {
+        @CreateStatus public final int status;
+        public final SecurityParameterIndex localSpi;
+        public final SecurityParameterIndex remoteSpi;
+        public final SaProposal negotiatedProposal;
+        public final IkeException exception;
+
+        // TODO: Also store negotiated TS.
+
+        private CreateChildResult(
+                @CreateStatus int status,
+                SecurityParameterIndex localSpi,
+                SecurityParameterIndex remoteSpi,
+                SaProposal negotiatedProposal,
+                IkeException exception) {
+            this.status = status;
+            this.localSpi = localSpi;
+            this.remoteSpi = remoteSpi;
+            this.negotiatedProposal = negotiatedProposal;
+            this.exception = exception;
+        }
+
+        /* Construct a CreateChildResult instance for a successful case. */
+        CreateChildResult(
+                SecurityParameterIndex localSpi,
+                SecurityParameterIndex remoteSpi,
+                SaProposal negotiatedProposal) {
+            this(CREATE_STATUS_OK, localSpi, remoteSpi, negotiatedProposal, null /*exception*/);
+        }
+
+        /** Construct a CreateChildResult instance for an error case. */
+        CreateChildResult(@CreateStatus int status, IkeException exception) {
+            this(
+                    status,
+                    null /*localSpi*/,
+                    null /*remoteSpi*/,
+                    null /*negotiatedProposal*/,
+                    exception);
         }
     }
 
