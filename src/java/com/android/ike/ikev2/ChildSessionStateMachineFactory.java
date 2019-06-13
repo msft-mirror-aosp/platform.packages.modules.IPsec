@@ -18,6 +18,7 @@ package com.android.ike.ikev2;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
@@ -41,6 +42,7 @@ final class ChildSessionStateMachineFactory {
             IChildSessionSmCallback childSmCallback,
             InetAddress localAddress,
             InetAddress remoteAddress,
+            UdpEncapsulationSocket udpEncapSocket,
             IkeMacPrf prf,
             byte[] skD) {
         return sChildSessionHelper.makeChildSessionStateMachine(
@@ -51,6 +53,7 @@ final class ChildSessionStateMachineFactory {
                 childSmCallback,
                 localAddress,
                 remoteAddress,
+                udpEncapSocket,
                 prf,
                 skD);
     }
@@ -75,6 +78,7 @@ final class ChildSessionStateMachineFactory {
                 IChildSessionSmCallback childSmCallback,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
+                UdpEncapsulationSocket udpEncapSocket,
                 IkeMacPrf prf,
                 byte[] skD);
     }
@@ -93,6 +97,7 @@ final class ChildSessionStateMachineFactory {
                 IChildSessionSmCallback childSmCallback,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
+                UdpEncapsulationSocket udpEncapSocket,
                 IkeMacPrf prf,
                 byte[] skD) {
             ChildSessionStateMachine childSession =
@@ -105,6 +110,7 @@ final class ChildSessionStateMachineFactory {
                             childSmCallback,
                             localAddress,
                             remoteAddress,
+                            udpEncapSocket,
                             prf,
                             skD);
             childSession.start();
