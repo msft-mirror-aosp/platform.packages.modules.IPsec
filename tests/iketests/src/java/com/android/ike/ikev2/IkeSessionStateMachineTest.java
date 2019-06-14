@@ -547,6 +547,15 @@ public final class IkeSessionStateMachineTest {
                 new LinkedList<>());
     }
 
+    private ReceivedIkePacket makeDpdIkeRequest(IkeSaRecord saRecord) throws Exception {
+        return makeDummyEncryptedReceivedIkePacket(
+                saRecord,
+                IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                false /*isResp*/,
+                new LinkedList<>(),
+                new LinkedList<>());
+    }
+
     private ReceivedIkePacket makeRekeyIkeRequest() throws Exception {
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
@@ -1293,5 +1302,72 @@ public final class IkeSessionStateMachineTest {
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Closed);
+    }
+
+    @Test
+    public void testReceiveDpd() throws Exception {
+        setupIdleStateMachine();
+
+        // Receive a DPD request, expect to stay in IDLE state
+        ReceivedIkePacket dummyDpdRequest = makeDpdIkeRequest(mSpyCurrentIkeSaRecord);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyDpdRequest);
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDpdRequest);
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+
+        // Verify outbound response
+        IkeMessage resp = mIkeMessageCaptor.getValue();
+        IkeHeader ikeHeader = resp.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertTrue(ikeHeader.isResponseMsg);
+        assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
+        assertTrue(resp.ikePayloadList.isEmpty());
+    }
+
+    @Test
+    public void testReceiveDpdNonIdle() throws Exception {
+        setupIdleStateMachine();
+
+        // Move to a non-idle state. Use RekeyIkeRemoteDelete, as it doesn't send out any requests.
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+        mLooper.dispatchAll();
+
+        // In a rekey state, receiving (and handling) a DPD should not result in a change of states
+        ReceivedIkePacket dummyDpdRequest = makeDpdIkeRequest(mSpyCurrentIkeSaRecord);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyDpdRequest);
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeRemoteDelete);
+
+        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDpdRequest);
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+
+        // Verify outbound response
+        IkeMessage resp = mIkeMessageCaptor.getValue();
+        IkeHeader ikeHeader = resp.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertTrue(ikeHeader.isResponseMsg);
+        assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
+        assertTrue(resp.ikePayloadList.isEmpty());
     }
 }

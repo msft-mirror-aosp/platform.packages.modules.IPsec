@@ -297,6 +297,18 @@ public final class IkeMessage {
     }
 
     /**
+     * Checks if this Request IkeMessage was a DPD message
+     *
+     * <p>An IKE message is a DPD request iff the message was encrypted (has a SK payload) and there
+     * were no payloads within the SK payload (or outside the SK payload).
+     */
+    public boolean isDpdRequest() {
+        return !ikeHeader.isResponseMsg
+                && ikePayloadList.isEmpty()
+                && ikeHeader.nextPayloadType == IkePayload.PAYLOAD_TYPE_SK;
+    }
+
+    /**
      * IIkeMessageHelper provides interface for decoding, encoding and processing IKE packet.
      *
      * <p>IkeMessageHelper exists so that the interface is injectable for testing.
