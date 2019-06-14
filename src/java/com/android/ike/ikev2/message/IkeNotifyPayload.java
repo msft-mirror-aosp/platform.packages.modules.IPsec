@@ -31,6 +31,7 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.ProviderException;
 import java.util.Set;
 
 /**
@@ -208,18 +209,17 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      * <p>This method calculates NAT DETECTION notification data which is a SHA-1 digest of the IKE
      * initiator's SPI, IKE responder's SPI, IP address and port. Source address and port should be
      * used for generating NAT_DETECTION_SOURCE_IP data. Destination address and port should be used
-     * for generating NAT_DETECTION_DESTINATION_IP data.
+     * for generating NAT_DETECTION_DESTINATION_IP data. Here "source" and "destination" mean the
+     * direction of this IKE message.
      *
      * @param initiatorIkeSpi the SPI of IKE initiator
      * @param responderIkeSpi the SPI of IKE responder
      * @param ipAddress the IP address
      * @param port the port
      * @return the generated NAT DETECTION notification data as a byte array.
-     * @throws NoSuchAlgorithmException when "SHA-1" is not supported by the security provider.
      */
     public static byte[] generateNatDetectionData(
-            long initiatorIkeSpi, long responderIkeSpi, InetAddress ipAddress, int port)
-            throws NoSuchAlgorithmException {
+            long initiatorIkeSpi, long responderIkeSpi, InetAddress ipAddress, int port) {
         byte[] rawIpAddr = ipAddress.getAddress();
 
         ByteBuffer byteBuffer =
@@ -230,10 +230,15 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
                 .put(rawIpAddr)
                 .putShort((short) port);
 
-        MessageDigest natDetectionDataDigest =
-                MessageDigest.getInstance(
-                        NAT_DETECTION_DIGEST_ALGORITHM, IkeMessage.getSecurityProvider());
-        return natDetectionDataDigest.digest(byteBuffer.array());
+        try {
+            MessageDigest natDetectionDataDigest =
+                    MessageDigest.getInstance(
+                            NAT_DETECTION_DIGEST_ALGORITHM, IkeMessage.getSecurityProvider());
+            return natDetectionDataDigest.digest(byteBuffer.array());
+        } catch (NoSuchAlgorithmException e) {
+            throw new ProviderException(
+                    "Failed to obtain algorithm :" + NAT_DETECTION_DIGEST_ALGORITHM, e);
+        }
     }
 
     /**

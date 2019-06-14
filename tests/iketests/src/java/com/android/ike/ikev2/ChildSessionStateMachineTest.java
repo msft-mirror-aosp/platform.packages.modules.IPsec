@@ -17,11 +17,18 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_KE;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NONCE;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_SA;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
@@ -35,6 +42,7 @@ import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -46,8 +54,10 @@ import com.android.ike.ikev2.SaRecord.ChildSaRecordConfig;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNoncePayload;
+import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
@@ -91,6 +101,7 @@ public final class ChildSessionStateMachineTest {
     private Context mContext;
     private IpSecService mMockIpSecService;
     private IpSecManager mMockIpSecManager;
+    private UdpEncapsulationSocket mMockUdpEncapSocket;
 
     private TestLooper mLooper;
     private ChildSessionStateMachine mChildSessionStateMachine;
@@ -110,6 +121,8 @@ public final class ChildSessionStateMachineTest {
 
     private ArgumentCaptor<ChildSaRecordConfig> mChildSaRecordConfigCaptor =
             ArgumentCaptor.forClass(ChildSaRecordConfig.class);
+    private ArgumentCaptor<List<IkePayload>> mPayloadListCaptor =
+            ArgumentCaptor.forClass(List.class);
 
     public ChildSessionStateMachineTest() {
         mMockSaRecordHelper = mock(SaRecord.ISaRecordHelper.class);
@@ -132,6 +145,7 @@ public final class ChildSessionStateMachineTest {
         mContext = InstrumentationRegistry.getContext();
         mMockIpSecService = mock(IpSecService.class);
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
+        mMockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
 
         mChildSessionOptions = buildChildSessionOptions();
 
@@ -147,6 +161,7 @@ public final class ChildSessionStateMachineTest {
                         mMockChildSessionSmCallback,
                         LOCAL_ADDRESS,
                         REMOTE_ADDRESS,
+                        mMockUdpEncapSocket,
                         mIkePrf,
                         SK_D);
         mChildSessionStateMachine.setDbg(true);
@@ -237,7 +252,7 @@ public final class ChildSessionStateMachineTest {
                 null);
     }
 
-    private void verifyQuit() {
+    private void quitAndVerify() {
         reset(mMockChildSessionSmCallback);
         mChildSessionStateMachine.quit();
         mLooper.dispatchAll();
@@ -285,6 +300,7 @@ public final class ChildSessionStateMachineTest {
         assertEquals(CURRENT_CHILD_SA_SPI_OUT, childSaRecordConfig.respSpi.getSpi());
         assertEquals(LOCAL_ADDRESS, childSaRecordConfig.initAddress);
         assertEquals(REMOTE_ADDRESS, childSaRecordConfig.respAddress);
+        assertEquals(mMockUdpEncapSocket, childSaRecordConfig.udpEncapSocket);
         assertEquals(mIkePrf, childSaRecordConfig.ikePrf);
         assertArrayEquals(SK_D, childSaRecordConfig.skD);
         assertFalse(childSaRecordConfig.isTransport);
@@ -293,17 +309,40 @@ public final class ChildSessionStateMachineTest {
 
         assertEquals(mSpyCurrentChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
 
-        verifyQuit();
+        quitAndVerify();
     }
 
     @Test
     public void testCreateChild() throws Exception {
         mChildSessionStateMachine.createChildSa();
+
         mLooper.dispatchAll();
+
+        // Validate outbound payload list
         verify(mMockChildSessionSmCallback)
-                .onOutboundPayloadsReady(eq(EXCHANGE_TYPE_CREATE_CHILD_SA), eq(false), any());
-        // TODO: Verify payloads' types in the outbound message. Implemented in the following CL
-        // aosp/978528
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA), eq(false), mPayloadListCaptor.capture());
+
+        List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloadList));
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class, reqPayloadList));
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class, reqPayloadList));
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_NONCE, IkeNoncePayload.class, reqPayloadList));
+        assertNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloadList));
+        assertTrue(
+                IkePayload.getPayloadListForTypeInProvidedList(
+                                PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, reqPayloadList)
+                        .isEmpty());
 
         mChildSessionStateMachine.receiveResponse(
                 EXCHANGE_TYPE_CREATE_CHILD_SA, mFirstSaRespPayloads);
