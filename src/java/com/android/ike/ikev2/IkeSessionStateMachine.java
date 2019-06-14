@@ -547,6 +547,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         switch (ikeHeader.exchangeType) {
+                // DPD omitted - should never be handled via handleRequestIkeMessage()
             case IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT:
                 return IKE_EXCHANGE_SUBTYPE_IKE_INIT;
             case IkeHeader.EXCHANGE_TYPE_IKE_AUTH:
@@ -722,6 +723,22 @@ public class IkeSessionStateMachine extends StateMachine {
                         case DECODE_STATUS_OK:
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             IkeMessage ikeMessage = decodeResult.ikeMessage;
+
+                            // Handle DPD here.
+                            if (ikeMessage.isDpdRequest()) {
+                                IkeMessage dpdResponse =
+                                        buildEncryptedInformationalMessage(
+                                                ikeSaRecord,
+                                                new IkeInformationalPayload[] {},
+                                                true,
+                                                ikeHeader.messageId);
+                                sendEncryptedIkeMessage(ikeSaRecord, dpdResponse);
+
+                                // Notify state if it is listening for DPD packets
+                                handleDpd();
+                                break;
+                            }
+
                             handleRequestIkeMessage(
                                     ikeMessage, getIkeExchangeSubType(ikeMessage), message);
                             break;
@@ -740,6 +757,10 @@ public class IkeSessionStateMachine extends StateMachine {
             }
 
             // TODO: Handle fatal error notifications.
+        }
+
+        protected void handleDpd() {
+            // Do nothing - Child states should override if they care.
         }
 
         // Default handler for decode errors in encrypted request.
@@ -912,6 +933,12 @@ public class IkeSessionStateMachine extends StateMachine {
      * Receiving represents a state when idle IkeSessionStateMachine receives an incoming packet.
      */
     class Receiving extends RekeyIkeHandlerBase {
+        @Override
+        protected void handleDpd() {
+            // Go back to IDLE - the received request was a DPD
+            transitionTo(mIdle);
+        }
+
         @Override
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
