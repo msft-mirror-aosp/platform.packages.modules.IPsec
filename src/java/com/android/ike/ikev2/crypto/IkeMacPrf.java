@@ -101,6 +101,26 @@ public class IkeMacPrf extends IkeMac {
     }
 
     /**
+     * Generates a rekey SKEYSEED based on the nonces and shared DH secret.
+     *
+     * @param skD the secret for deriving new keys
+     * @param nonceInit the IKE initiator nonce.
+     * @param nonceResp the IKE responder nonce.
+     * @param sharedDhKey the DH shared key.
+     * @return the byte array of SKEYSEED.
+     */
+    public byte[] generateRekeyedSKeySeed(
+            byte[] skD, byte[] nonceInit, byte[] nonceResp, byte[] sharedDhKey) {
+        // TODO: If it is PSEUDORANDOM_FUNCTION_AES128_XCBC, only use first 8 bytes of each nonce.
+
+        ByteBuffer dataToSign =
+                ByteBuffer.allocate(sharedDhKey.length + nonceInit.length + nonceResp.length);
+        dataToSign.put(sharedDhKey).put(nonceInit).put(nonceResp);
+
+        return signBytes(skD, dataToSign.array());
+    }
+
+    /**
      * Derives keying materials from IKE/Child SA negotiation.
      *
      * <p>prf+(K, S) outputs a pseudorandom stream by using negotiated PRF iteratively. In this way

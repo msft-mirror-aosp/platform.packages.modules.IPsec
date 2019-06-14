@@ -671,12 +671,12 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testBuildOutboundIkeRekeySaResponsePayload() throws Exception {
-        final SaProposal[] saProposals = new SaProposal[] {mIkeSaProposalOne};
         IkeSaPayload saPayload =
-                IkeSaPayload.createRekeyIkeSaPayload(true /*isResp*/, saProposals, LOCAL_ADDRESS);
+                IkeSaPayload.createRekeyIkeSaResponsePayload(
+                        (byte) 1, mIkeSaProposalOne, LOCAL_ADDRESS);
 
         assertTrue(saPayload.isSaResponse);
-        assertEquals(saProposals.length, saPayload.proposalList.size());
+        assertEquals(1, saPayload.proposalList.size());
 
         IkeProposal proposal = (IkeProposal) saPayload.proposalList.get(0);
         assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
@@ -750,7 +750,8 @@ public final class IkeSaPayloadTest {
         IkeSaPayload reqPayload = IkeSaPayload.createInitialIkeSaPayload(mTwoIkeSaProposalsArray);
 
         Pair<IkeProposal, IkeProposal> negotiatedProposalPair =
-                respPayload.getVerifiedNegotiatedIkeProposalPair(reqPayload, REMOTE_ADDRESS);
+                respPayload.getVerifiedNegotiatedIkeProposalPair(
+                        reqPayload, LOCAL_ADDRESS, REMOTE_ADDRESS);
         IkeProposal reqProposal = negotiatedProposalPair.first;
         IkeProposal respProposal = negotiatedProposalPair.second;
 
