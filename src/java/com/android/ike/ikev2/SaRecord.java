@@ -181,21 +181,46 @@ public abstract class SaRecord implements AutoCloseable {
         }
 
         @Override
-        public IkeSaRecord makeNewIkeSaRecord(
-                IkeSaRecord oldSaRecord, IkeMessage rekeyRequest, IkeMessage rekeyResponse) {
-            // TODO: Generate keying materials based on old SK_d
-            return null;
+        public IkeSaRecord makeRekeyedIkeSaRecord(
+                IkeSaRecord oldSaRecord,
+                IkeMacPrf oldPrf,
+                IkeMessage rekeyRequest,
+                IkeMessage rekeyResponse,
+                IkeSaRecordConfig ikeSaRecordConfig)
+                throws GeneralSecurityException {
+            // Extract nonces
+            byte[] nonceInit =
+                    rekeyRequest.getPayloadForType(
+                                    IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class)
+                            .nonceData;
+            byte[] nonceResp =
+                    rekeyResponse.getPayloadForType(
+                                    IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class)
+                            .nonceData;
+
+            // Get SKEYSEED
+            IkeMessage localMsg = ikeSaRecordConfig.isLocalInit ? rekeyRequest : rekeyResponse;
+            IkeMessage remoteMsg = ikeSaRecordConfig.isLocalInit ? rekeyResponse : rekeyRequest;
+
+            byte[] sharedDhKey = getSharedKey(localMsg, remoteMsg);
+            byte[] sKeySeed =
+                    oldPrf.generateRekeyedSKeySeed(
+                            oldSaRecord.mSkD, nonceInit, nonceResp, sharedDhKey);
+
+            return makeIkeSaRecord(sKeySeed, nonceInit, nonceResp, ikeSaRecordConfig);
         }
 
-        private byte[] getSharedKey(IkeMessage initRequest, IkeMessage initResponse)
+        private byte[] getSharedKey(IkeMessage keLocalMessage, IkeMessage keRemoteMessage)
                 throws GeneralSecurityException {
-            IkeKePayload keInitPayload =
-                    initRequest.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
-            IkeKePayload keRespPayload =
-                    initResponse.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+            IkeKePayload keLocalPayload =
+                    keLocalMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+            IkeKePayload keRemotePayload =
+                    keRemoteMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
 
             return IkeKePayload.getSharedKey(
-                    keInitPayload.localPrivateKey, keRespPayload.keyExchangeData);
+                    keLocalPayload.localPrivateKey, keRemotePayload.keyExchangeData);
         }
 
         /**
@@ -560,9 +585,30 @@ public abstract class SaRecord implements AutoCloseable {
         }
 
         /** Package private */
-        static IkeSaRecord makeNewIkeSaRecord(
-                IkeSaRecord oldSaRecord, IkeMessage rekeyRequest, IkeMessage rekeyResponse) {
-            return sSaRecordHelper.makeNewIkeSaRecord(oldSaRecord, rekeyRequest, rekeyResponse);
+        static IkeSaRecord makeRekeyedIkeSaRecord(
+                IkeSaRecord oldSaRecord,
+                IkeMacPrf oldPrf,
+                IkeMessage rekeyRequest,
+                IkeMessage rekeyResponse,
+                IkeSecurityParameterIndex initSpi,
+                IkeSecurityParameterIndex respSpi,
+                IkeMacPrf prf,
+                int integrityKeyLength,
+                int encryptionKeyLength,
+                boolean isLocalInit)
+                throws GeneralSecurityException {
+            return sSaRecordHelper.makeRekeyedIkeSaRecord(
+                    oldSaRecord,
+                    oldPrf,
+                    rekeyRequest,
+                    rekeyResponse,
+                    new IkeSaRecordConfig(
+                            initSpi,
+                            respSpi,
+                            prf,
+                            integrityKeyLength,
+                            encryptionKeyLength,
+                            isLocalInit));
         }
 
         /** Package private */
@@ -839,12 +885,20 @@ public abstract class SaRecord implements AutoCloseable {
          * Construct new IkeSaRecord when doing rekey.
          *
          * @param oldSaRecord old IKE SA
+         * @param oldPrf the PRF function from the old SA
          * @param rekeyRequest Rekey IKE request.
          * @param rekeyResponse Rekey IKE response.
+         * @param ikeSaRecordConfig that contains IKE SPI resources and negotiated algorithm
+         *     information for constructing an IkeSaRecord instance.
          * @return ikeSaRecord for new IKE SA.
          */
-        IkeSaRecord makeNewIkeSaRecord(
-                IkeSaRecord oldSaRecord, IkeMessage rekeyRequest, IkeMessage rekeyResponse);
+        IkeSaRecord makeRekeyedIkeSaRecord(
+                IkeSaRecord oldSaRecord,
+                IkeMacPrf oldPrf,
+                IkeMessage rekeyRequest,
+                IkeMessage rekeyResponse,
+                IkeSaRecordConfig ikeSaRecordConfig)
+                throws GeneralSecurityException;
 
         /**
          * Construct ChildSaRecord and generate IpSecTransform pairs.

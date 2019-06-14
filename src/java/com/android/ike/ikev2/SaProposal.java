@@ -227,9 +227,8 @@ public final class SaProposal {
         return Arrays.asList(selectFrom).contains(selected[0]);
     }
 
-    /*Package private*/
     @IkePayload.ProtocolId
-    int getProtocolId() {
+    public int getProtocolId() {
         return mProtocolId;
     }
 
