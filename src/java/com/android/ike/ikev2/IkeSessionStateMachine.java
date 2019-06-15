@@ -63,6 +63,7 @@ import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
+import com.android.ike.ikev2.message.IkeSaPayload.IkeProposal;
 import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
@@ -230,7 +231,7 @@ public class IkeSessionStateMachine extends StateMachine {
     private final State mSimulRekeyIkeLocalDelete = new SimulRekeyIkeLocalDelete();
     private final State mSimulRekeyIkeRemoteDelete = new SimulRekeyIkeRemoteDelete();
     @VisibleForTesting final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
-    private final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
+    @VisibleForTesting final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
     private final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
     // TODO: Add InfoLocal.
 
@@ -365,22 +366,6 @@ public class IkeSessionStateMachine extends StateMachine {
             }
             close();
         }
-    }
-
-    // TODO: b/131122444 Move these methods into States.
-
-    private IkeMessage buildIkeRekeyResp(IkeMessage reqMsg) {
-        // TODO: Implement it.
-        return null;
-    }
-
-    private void validateIkeRekeyReq(IkeMessage ikeMessage) throws IkeProtocolException {
-        // TODO: Validate it against mIkeSessionOptions.
-    }
-
-    private void validateIkeRekeyResp(IkeMessage reqMsg, IkeMessage respMsg)
-            throws IkeProtocolException {
-        // TODO: Validate ikeMessage against Rekey request.
     }
 
     // TODO: Add methods for building and validating general Informational packet.
@@ -562,11 +547,14 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         switch (ikeHeader.exchangeType) {
+                // DPD omitted - should never be handled via handleRequestIkeMessage()
             case IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT:
                 return IKE_EXCHANGE_SUBTYPE_IKE_INIT;
             case IkeHeader.EXCHANGE_TYPE_IKE_AUTH:
                 return IKE_EXCHANGE_SUBTYPE_IKE_AUTH;
             case IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA:
+                // TODO: IKE rekeys do not have the REKEY_SA notification.
+
                 List<IkeNotifyPayload> notifyPayloads =
                         ikeMessage.getPayloadListForType(
                                 IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
@@ -735,6 +723,22 @@ public class IkeSessionStateMachine extends StateMachine {
                         case DECODE_STATUS_OK:
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             IkeMessage ikeMessage = decodeResult.ikeMessage;
+
+                            // Handle DPD here.
+                            if (ikeMessage.isDpdRequest()) {
+                                IkeMessage dpdResponse =
+                                        buildEncryptedInformationalMessage(
+                                                ikeSaRecord,
+                                                new IkeInformationalPayload[] {},
+                                                true,
+                                                ikeHeader.messageId);
+                                sendEncryptedIkeMessage(ikeSaRecord, dpdResponse);
+
+                                // Notify state if it is listening for DPD packets
+                                handleDpd();
+                                break;
+                            }
+
                             handleRequestIkeMessage(
                                     ikeMessage, getIkeExchangeSubType(ikeMessage), message);
                             break;
@@ -753,6 +757,10 @@ public class IkeSessionStateMachine extends StateMachine {
             }
 
             // TODO: Handle fatal error notifications.
+        }
+
+        protected void handleDpd() {
+            // Do nothing - Child states should override if they care.
         }
 
         // Default handler for decode errors in encrypted request.
@@ -924,7 +932,13 @@ public class IkeSessionStateMachine extends StateMachine {
     /**
      * Receiving represents a state when idle IkeSessionStateMachine receives an incoming packet.
      */
-    class Receiving extends DeleteResponderBase {
+    class Receiving extends RekeyIkeHandlerBase {
+        @Override
+        protected void handleDpd() {
+            // Go back to IDLE - the received request was a DPD
+            transitionTo(mIdle);
+        }
+
         @Override
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
@@ -932,17 +946,50 @@ public class IkeSessionStateMachine extends StateMachine {
                 case IKE_EXCHANGE_SUBTYPE_REKEY_IKE:
                     try {
                         validateIkeRekeyReq(ikeMessage);
-                        // Reply
-                        IkeMessage responseIkeMessage = buildIkeRekeyResp(ikeMessage);
-                        // TODO: Encode and send out responseIkeMessage
 
+                        // TODO: Add support for limited re-negotiation of parameters
+
+                        // Build a rekey response payload with our previously selected proposal,
+                        // against which we will validate the received proposals.
+                        IkeSaPayload reqSaPayload =
+                                ikeMessage.getPayloadForType(
+                                        IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+                        byte respProposalNumber =
+                                reqSaPayload.getNegotiatedProposalNumber(mSaProposal);
+
+                        List<IkePayload> payloadList =
+                                CreateIkeSaHelper.getRekeyIkeSaResponsePayloads(
+                                        respProposalNumber, mSaProposal, mLocalAddress);
+
+                        // Build IKE header
+                        IkeHeader ikeHeader =
+                                new IkeHeader(
+                                        mCurrentIkeSaRecord.getInitiatorSpi(),
+                                        mCurrentIkeSaRecord.getResponderSpi(),
+                                        IkePayload.PAYLOAD_TYPE_SK,
+                                        IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                                        true /*isResponseMsg*/,
+                                        mCurrentIkeSaRecord.isLocalInit,
+                                        ikeMessage.ikeHeader.messageId);
+
+                        IkeMessage responseIkeMessage = new IkeMessage(ikeHeader, payloadList);
+
+                        // Build new SA first to ensure that we can find a valid proposal.
                         mRemoteInitNewIkeSaRecord =
-                                IkeSaRecord.makeNewIkeSaRecord(
-                                        mCurrentIkeSaRecord, ikeMessage, responseIkeMessage);
-                        addIkeSaRecord(mRemoteInitNewIkeSaRecord);
+                                validateAndBuildIkeSa(
+                                        ikeMessage, responseIkeMessage, false /*isLocalInit*/);
+
+                        sendEncryptedIkeMessage(responseIkeMessage);
                         transitionTo(mRekeyIkeRemoteDelete);
                     } catch (IkeProtocolException e) {
                         // TODO: Handle processing errors.
+                        Log.e(TAG, "IkeProtocolException: ", e);
+                    } catch (GeneralSecurityException e) {
+                        // TODO: Fatal - kill session.
+                        Log.e(TAG, "GeneralSecurityException: ", e);
+                    } catch (IOException e) {
+                        // TODO: SPI allocation collided - they reused an SPI. Terminate session.
+                        Log.e(TAG, "IOException: ", e);
                     }
                     return;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
@@ -1204,7 +1251,8 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeSaPayload reqSaPayload =
                     reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
             mSaProposal =
-                    respSaPayload.getVerifiedNegotiatedIkeProposalPair(reqSaPayload, mRemoteAddress)
+                    respSaPayload.getVerifiedNegotiatedIkeProposalPair(
+                                    reqSaPayload, mLocalAddress, mRemoteAddress)
                             .second
                             .saProposal;
 
@@ -1576,8 +1624,157 @@ public class IkeSessionStateMachine extends StateMachine {
 
     // TODO: Add CreateIkeLocalIkeAuthInEap and CreateIkeLocalIkeAuthPostEap states.
 
+    private abstract class RekeyIkeHandlerBase extends DeleteResponderBase {
+        private void validateIkeRekeyCommon(IkeMessage ikeMessage) throws InvalidSyntaxException {
+            boolean hasSaPayload = false;
+            boolean hasKePayload = false;
+            boolean hasNoncePayload = false;
+            for (IkePayload payload : ikeMessage.ikePayloadList) {
+                switch (payload.payloadType) {
+                    case IkePayload.PAYLOAD_TYPE_SA:
+                        hasSaPayload = true;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_KE:
+                        hasKePayload = true;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_NONCE:
+                        hasNoncePayload = true;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_VENDOR:
+                        // Vendor payloads allowed, but not verified
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                        // Notification payloads allowed, but left to handler methods to process.
+                        break;
+                    default:
+                        throw new InvalidSyntaxException(
+                                "Received unexpected payload in IKE REKEY request. Payload type: "
+                                        + payload.payloadType);
+                }
+            }
+
+            if (!hasSaPayload || !hasKePayload || !hasNoncePayload) {
+                throw new InvalidSyntaxException("SA, KE or Nonce payload missing.");
+            }
+        }
+
+        @VisibleForTesting
+        void validateIkeRekeyReq(IkeMessage ikeMessage) throws InvalidSyntaxException {
+            // TODO: Validate it against mIkeSessionOptions.
+
+            int exchangeType = ikeMessage.ikeHeader.exchangeType;
+            if (exchangeType != IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA) {
+                throw new InvalidSyntaxException(
+                        "Expected EXCHANGE_TYPE_CREATE_CHILD_SA but received: " + exchangeType);
+            }
+            if (ikeMessage.ikeHeader.isResponseMsg) {
+                throw new IllegalArgumentException("Invalid IKE Rekey request - was a response.");
+            }
+
+            List<IkeNotifyPayload> notificationPayloads =
+                    ikeMessage.getPayloadListForType(
+                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+            for (IkeNotifyPayload notifyPayload : notificationPayloads) {
+                if (notifyPayload.isErrorNotify()) {
+                    throw new InvalidSyntaxException("Error notifications invalid in request");
+                }
+            }
+
+            validateIkeRekeyCommon(ikeMessage);
+        }
+
+        @VisibleForTesting
+        void validateIkeRekeyResp(IkeMessage reqMsg, IkeMessage respMsg)
+                throws InvalidSyntaxException {
+            int exchangeType = respMsg.ikeHeader.exchangeType;
+            if (exchangeType != IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA
+                    && exchangeType != IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
+                throw new InvalidSyntaxException(
+                        "Expected Rekey response (CREATE_CHILD_SA or INFORMATIONAL) but received: "
+                                + exchangeType);
+            }
+            if (!respMsg.ikeHeader.isResponseMsg) {
+                throw new IllegalArgumentException("Invalid IKE Rekey response - was a request.");
+            }
+
+            List<IkeNotifyPayload> notificationPayloads =
+                    respMsg.getPayloadListForType(
+                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+            for (IkeNotifyPayload notifyPayload : notificationPayloads) {
+                if (notifyPayload.isErrorNotify()) {
+                    throw new UnsupportedOperationException(
+                            "Error notifications not yet supported in rekey responses");
+                }
+            }
+
+            validateIkeRekeyCommon(respMsg);
+
+            // Verify DH groups matching
+            IkeKePayload reqKePayload =
+                    reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+            IkeKePayload respKePayload =
+                    respMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+            if (reqKePayload.dhGroup != respKePayload.dhGroup) {
+                throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
+            }
+        }
+
+        protected IkeSaRecord validateAndBuildIkeSa(
+                IkeMessage reqMsg, IkeMessage respMessage, boolean isLocalInit)
+                throws IkeProtocolException, GeneralSecurityException, IOException {
+            InetAddress initAddr = isLocalInit ? mLocalAddress : mRemoteAddress;
+            InetAddress respAddr = isLocalInit ? mRemoteAddress : mLocalAddress;
+
+            IkeSaPayload reqSaPayload =
+                    reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+            IkeSaPayload respSaPayload =
+                    respMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+            Pair<IkeProposal, IkeProposal> negotiatedProposals =
+                    respSaPayload.getVerifiedNegotiatedIkeProposalPair(
+                            reqSaPayload, initAddr, respAddr);
+            IkeProposal reqProposal = negotiatedProposals.first;
+            IkeProposal respProposal = negotiatedProposals.second;
+
+            Provider provider = IkeMessage.getSecurityProvider();
+            IkeMacPrf newPrf;
+            IkeCipher newCipher;
+            IkeMacIntegrity newIntegrity = null;
+
+            newCipher =
+                    IkeCipher.create(
+                            respProposal.saProposal.getEncryptionTransforms()[0], provider);
+            if (!newCipher.isAead()) {
+                newIntegrity =
+                        IkeMacIntegrity.create(
+                                respProposal.saProposal.getIntegrityTransforms()[0], provider);
+            }
+            newPrf = IkeMacPrf.create(respProposal.saProposal.getPrfTransforms()[0], provider);
+
+            // Build new SaRecord
+            IkeSaRecord newSaRecord =
+                    IkeSaRecord.makeRekeyedIkeSaRecord(
+                            mCurrentIkeSaRecord,
+                            mIkePrf,
+                            reqMsg,
+                            respMessage,
+                            reqProposal.getIkeSpiResource(),
+                            respProposal.getIkeSpiResource(),
+                            newPrf,
+                            newIntegrity == null ? 0 : newIntegrity.getKeyLength(),
+                            newCipher.getKeyLength(),
+                            isLocalInit);
+            addIkeSaRecord(newSaRecord);
+
+            mIkeCipher = newCipher;
+            mIkePrf = newPrf;
+            mIkeIntegrity = newIntegrity;
+
+            return newSaRecord;
+        }
+    }
+
     /** RekeyIkeLocalCreate represents state when IKE library initiates Rekey IKE exchange. */
-    class RekeyIkeLocalCreate extends DeleteResponderBase {
+    class RekeyIkeLocalCreate extends RekeyIkeHandlerBase {
         protected Retransmitter mRetransmitter;
 
         @Override
@@ -1627,50 +1824,43 @@ public class IkeSessionStateMachine extends StateMachine {
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             switch (ikeExchangeSubType) {
-                case IKE_EXCHANGE_SUBTYPE_REKEY_IKE:
-                    try {
-                        validateIkeRekeyReq(ikeMessage);
-                        // Reply
-                        IkeMessage responseIkeMessage = buildIkeRekeyResp(ikeMessage);
-                        mRemoteInitNewIkeSaRecord =
-                                IkeSaRecord.makeNewIkeSaRecord(
-                                        mCurrentIkeSaRecord, ikeMessage, responseIkeMessage);
-                        addIkeSaRecord(mRemoteInitNewIkeSaRecord);
-                        // TODO: Encode and send responseIkeMessage.
-
-                        // Continue retransmitting.
-                        // TODO: pass mRetransmitter to next state.
-                        transitionTo(mSimulRekeyIkeLocalCreate);
-                    } catch (IkeProtocolException e) {
-                        // TODO: Handle processing errors.
-                    }
-                    return;
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
+                    handleDeleteSessionRequest(ikeMessage);
+                    break;
                 default:
-                    // TODO: Add more cases for other types of request.
+                    // TODO: Implement simultaneous rekey
+                    IkeInformationalPayload error =
+                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
+                    IkeMessage msg =
+                            buildEncryptedNotificationMessage(
+                                    mCurrentIkeSaRecord,
+                                    new IkeInformationalPayload[] {error},
+                                    ikeMessage.ikeHeader.exchangeType,
+                                    true,
+                                    ikeMessage.ikeHeader.messageId);
+
+                    sendEncryptedIkeMessage(msg);
             }
         }
 
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
-                handleRekeyResp(ikeMessage);
+                validateIkeRekeyResp(mRetransmitter.getMessage(), ikeMessage);
+                mLocalInitNewIkeSaRecord =
+                        validateAndBuildIkeSa(
+                                mRetransmitter.getMessage(), ikeMessage, true /*isLocalInit*/);
                 transitionTo(mRekeyIkeLocalDelete);
 
                 // Stop retransmissions
                 mRetransmitter.stopRetransmitting();
             } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
+            } catch (GeneralSecurityException e) {
+                // TODO: Fatal - kill session.
+            } catch (IOException e) {
+                // TODO: SPI allocation collided - delete new IKE SA, retry rekey.
             }
-        }
-
-        // Is also called by SimulRekeyIkeLocalCreate to handle incoming rekey response.
-        protected void handleRekeyResp(IkeMessage ikeMessage) throws IkeProtocolException {
-            validateIkeRekeyResp(mRetransmitter.getMessage(), ikeMessage);
-            mLocalInitNewIkeSaRecord =
-                    IkeSaRecord.makeNewIkeSaRecord(
-                            mCurrentIkeSaRecord, mRetransmitter.getMessage(), ikeMessage);
-            addIkeSaRecord(mLocalInitNewIkeSaRecord);
-            // TODO: Stop retransmission
         }
     }
 
@@ -1733,10 +1923,17 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
-                handleRekeyResp(ikeMessage);
+                validateIkeRekeyResp(mRetransmitter.getMessage(), ikeMessage);
+                mLocalInitNewIkeSaRecord =
+                        validateAndBuildIkeSa(
+                                mRetransmitter.getMessage(), ikeMessage, true /*isLocalInit*/);
                 transitionTo(mSimulRekeyIkeLocalDeleteRemoteDelete);
             } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
+            } catch (GeneralSecurityException e) {
+                // TODO: Fatal - kill session.
+            } catch (IOException e) {
+                // TODO: SPI allocation collided - delete new IKE SA, retry rekey.
             }
         }
     }
@@ -1878,6 +2075,8 @@ public class IkeSessionStateMachine extends StateMachine {
 
                 removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
                 // TODO: Close mIkeSaRecordAwaitingLocalDel.
+                finishRekey();
+
                 transitionTo(mIdle);
             } catch (InvalidSyntaxException e) {
                 Log.d(TAG, "Validation failed for delete response", e);
@@ -1900,7 +2099,8 @@ public class IkeSessionStateMachine extends StateMachine {
                         validateIkeDeleteReq(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
                         IkeMessage respMsg =
                                 buildIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
-                        // TODO: Encode and send response and close mIkeSaRecordAwaitingRemoteDel
+                        sendEncryptedIkeMessage(mIkeSaRecordAwaitingRemoteDel, respMsg);
+
                         removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
                         transitionTo(mIdle);
                     } catch (InvalidSyntaxException e) {
@@ -1943,7 +2143,6 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void exit() {
-            finishRekey();
             mRetransmitter.stopRetransmitting();
         }
     }
@@ -2033,7 +2232,8 @@ public class IkeSessionStateMachine extends StateMachine {
                 int localPort,
                 int remotePort)
                 throws IOException {
-            List<IkePayload> payloadList = getCreateIkeSaRequestPayloads(true, saProposals, null);
+            List<IkePayload> payloadList = getCreateIkeSaPayloads(
+                    IkeSaPayload.createInitialIkeSaPayload(saProposals));
 
             // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
             // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in
@@ -2058,7 +2258,20 @@ public class IkeSessionStateMachine extends StateMachine {
                 throw new IllegalArgumentException("Local address was null for rekey");
             }
 
-            return getCreateIkeSaRequestPayloads(false, saProposals, localAddr);
+            return getCreateIkeSaPayloads(
+                    IkeSaPayload.createRekeyIkeSaRequestPayload(saProposals, localAddr));
+        }
+
+        public static List<IkePayload> getRekeyIkeSaResponsePayloads(
+                byte respProposalNumber, SaProposal saProposal, InetAddress localAddr)
+                throws IOException {
+            if (localAddr == null) {
+                throw new IllegalArgumentException("Local address was null for rekey");
+            }
+
+            return getCreateIkeSaPayloads(
+                    IkeSaPayload.createRekeyIkeSaResponsePayload(
+                            respProposalNumber, saProposal, localAddr));
         }
 
         /**
@@ -2066,24 +2279,20 @@ public class IkeSessionStateMachine extends StateMachine {
          *
          * <p>Will return a non-empty list of IkePayloads, the first of which WILL be the SA payload
          */
-        private static List<IkePayload> getCreateIkeSaRequestPayloads(
-                boolean isInit, SaProposal[] saProposals, InetAddress localAddr)
+        private static List<IkePayload> getCreateIkeSaPayloads(IkeSaPayload saPayload)
                 throws IOException {
-            if (saProposals.length == 0) {
+            if (saPayload.proposalList.size() == 0) {
                 throw new IllegalArgumentException("Invalid SA proposal list - was empty");
             }
 
             List<IkePayload> payloadList = new ArrayList<>(3);
 
-            payloadList.add(
-                    isInit
-                            ? IkeSaPayload.createInitialIkeSaPayload(saProposals)
-                            : IkeSaPayload.createRekeyIkeSaPayload(false, saProposals, localAddr));
-
+            payloadList.add(saPayload);
             payloadList.add(new IkeNoncePayload());
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
-            DhGroupTransform dhGroupTransform = saProposals[0].getDhGroupTransforms()[0];
+            DhGroupTransform dhGroupTransform =
+                    saPayload.proposalList.get(0).saProposal.getDhGroupTransforms()[0];
             payloadList.add(new IkeKePayload(dhGroupTransform.id));
 
             return payloadList;

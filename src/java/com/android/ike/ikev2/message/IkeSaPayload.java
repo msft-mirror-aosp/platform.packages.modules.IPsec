@@ -83,26 +83,51 @@ public final class IkeSaPayload extends IkePayload {
         isSaResponse = isResp;
     }
 
-    /** Package private constructor for building an outbound SA Payload for IKE SA negotiation. */
+    /** Package private constructor for building a request for IKE SA initial creation or rekey */
     @VisibleForTesting
     IkeSaPayload(boolean isResp, byte spiSize, SaProposal[] saProposals, InetAddress localAddress)
             throws IOException {
-        super(IkePayload.PAYLOAD_TYPE_SA, false);
+        this(isResp, spiSize, localAddress);
 
         if (saProposals.length < 1 || isResp && (saProposals.length > 1)) {
             throw new IllegalArgumentException("Invalid SA payload.");
         }
 
-        // TODO: Check that saProposals.length <= 255 in IkeSessionOptions and ChildSessionOptions
-        isSaResponse = isResp;
-
-        proposalList = new ArrayList<Proposal>(saProposals.length);
         for (int i = 0; i < saProposals.length; i++) {
             // Proposal number must start from 1.
             proposalList.add(
                     IkeProposal.createIkeProposal(
                             (byte) (i + 1) /*number*/, spiSize, saProposals[i], localAddress));
         }
+    }
+
+    /** Package private constructor for building an response SA Payload for IKE SA rekeys. */
+    @VisibleForTesting
+    IkeSaPayload(
+            boolean isResp,
+            byte spiSize,
+            byte proposalNumber,
+            SaProposal saProposal,
+            InetAddress localAddress)
+            throws IOException {
+        this(isResp, spiSize, localAddress);
+
+        proposalList.add(
+                IkeProposal.createIkeProposal(
+                        proposalNumber /*number*/, spiSize, saProposal, localAddress));
+    }
+
+    private IkeSaPayload(boolean isResp, byte spiSize, InetAddress localAddress)
+            throws IOException {
+        super(IkePayload.PAYLOAD_TYPE_SA, false);
+
+        // TODO: Check that proposals.length <= 255 in IkeSessionOptions and ChildSessionOptions
+        isSaResponse = isResp;
+
+        // TODO: Allocate IKE SPI and pass to IkeProposal.createIkeProposal()
+
+        // ProposalList populated in other constructors
+        proposalList = new ArrayList<Proposal>();
     }
 
     /** Package private constructor for building an outbound SA Payload for Child SA negotiation. */
@@ -145,15 +170,28 @@ public final class IkeSaPayload extends IkePayload {
     }
 
     /**
-     * Construct an instance of IkeSaPayload for building an outbound packet for Rekey IKE.
+     * Construct an instance of IkeSaPayload for building an outbound request for Rekey IKE.
      *
-     * @param isResp indicates if this payload is in a response message.
      * @param saProposals the array of all IKE SA Proposals.
      * @param localAddress the local address assigned on-device.
      */
-    public static IkeSaPayload createRekeyIkeSaPayload(
-            boolean isResp, SaProposal[] saProposals, InetAddress localAddress) throws IOException {
-        return new IkeSaPayload(isResp, SPI_LEN_IKE, saProposals, localAddress);
+    public static IkeSaPayload createRekeyIkeSaRequestPayload(
+            SaProposal[] saProposals, InetAddress localAddress) throws IOException {
+        return new IkeSaPayload(false /*isResp*/, SPI_LEN_IKE, saProposals, localAddress);
+    }
+
+    /**
+     * Construct an instance of IkeSaPayload for building an outbound response for Rekey IKE.
+     *
+     * @param respProposalNumber the selected proposal's number.
+     * @param saProposal the array of all IKE SA Proposals.
+     * @param localAddress the local address assigned on-device.
+     */
+    public static IkeSaPayload createRekeyIkeSaResponsePayload(
+            byte respProposalNumber, SaProposal saProposal, InetAddress localAddress)
+            throws IOException {
+        return new IkeSaPayload(
+                true /*isResp*/, SPI_LEN_IKE, respProposalNumber, saProposal, localAddress);
     }
 
     /**
@@ -177,7 +215,27 @@ public final class IkeSaPayload extends IkePayload {
     }
 
     /**
-     * Validate the inbound response IKE SA Payload and return the IKE SA negotiation result.
+     * Finds the proposal in this (request) payload that matches the response proposal.
+     *
+     * @param respProposal the Proposal to match against.
+     * @return the byte-value proposal number of the selected proposal
+     * @throws NoValidProposalChosenException if no matching proposal was found.
+     */
+    public byte getNegotiatedProposalNumber(SaProposal respProposal)
+            throws NoValidProposalChosenException {
+        for (int i = 0; i < proposalList.size(); i++) {
+            Proposal reqProposal = proposalList.get(i);
+            if (respProposal.isNegotiatedFrom(reqProposal.saProposal)
+                    && reqProposal.saProposal.getProtocolId() == respProposal.getProtocolId()) {
+                return reqProposal.number;
+            }
+        }
+        throw new NoValidProposalChosenException("No remotely proposed protocol acceptable");
+    }
+
+    // TODO: Make the below method static.
+    /**
+     * Validate the response IKE SA Payload and return the IKE SA negotiation result.
      *
      * <p>Caller is able to extract the negotiated IKE SA Proposal from the response Proposal and
      * the IKE SPI pair generated by both sides.
@@ -193,26 +251,35 @@ public final class IkeSaPayload extends IkePayload {
      * the response proposal has exact one Transform value.
      *
      * @param reqSaPayload the locally generated IKE SA payload to validate against.
-     * @param remoteAddress the remote address where this IKE message is from.
+     * @param initAddr the IKE SA initiator's InetAddress.
+     * @param respAddr the IKE SA responder's InetAddress.
      * @return the Pair of selected IkeProposal in the locally generated request and the IkeProposal
      *     in this response.
      * @throws NoValidProposalChosenException if received SA proposal is invalid.
      */
     public Pair<IkeProposal, IkeProposal> getVerifiedNegotiatedIkeProposalPair(
-            IkeSaPayload reqSaPayload, InetAddress remoteAddress)
+            IkeSaPayload reqSaPayload, InetAddress initAddr, InetAddress respAddr)
             throws NoValidProposalChosenException, IOException {
         Pair<Proposal, Proposal> proposalPair = getVerifiedNegotiatedProposalPair(reqSaPayload);
         IkeProposal reqProposal = (IkeProposal) proposalPair.first;
         IkeProposal respProposal = (IkeProposal) proposalPair.second;
 
         try {
-            if (respProposal.spi != SPI_NOT_INCLUDED) {
-                respProposal.allocateResourceForRemoteIkeSpi(remoteAddress);
+            // Allocate initiator's inbound SPI as needed for remotely initiated IKE SA creation
+            if (reqProposal.spiSize != SPI_NOT_INCLUDED
+                    && reqProposal.getIkeSpiResource() == null) {
+                reqProposal.allocateResourceForRemoteIkeSpi(initAddr);
+            }
+            // Allocate responder's inbound SPI as needed for locally initiated IKE SA creation
+            if (respProposal.spiSize != SPI_NOT_INCLUDED
+                    && respProposal.getIkeSpiResource() == null) {
+                respProposal.allocateResourceForRemoteIkeSpi(respAddr);
             }
 
             return new Pair(reqProposal, respProposal);
         } catch (Exception e) {
-            reqProposal.releaseSpiResource();
+            reqProposal.releaseSpiResourceIfExists();
+            respProposal.releaseSpiResourceIfExists();
             throw e;
         }
     }
@@ -254,7 +321,7 @@ public final class IkeSaPayload extends IkePayload {
             respProposal.allocateResourceForRemoteChildSpi(ipSecManager, remoteAddress);
             return new Pair(reqProposal, respProposal);
         } catch (Exception e) {
-            reqProposal.releaseSpiResource();
+            reqProposal.releaseSpiResourceIfExists();
             throw e;
         }
     }
@@ -289,15 +356,16 @@ public final class IkeSaPayload extends IkePayload {
                 throw new NoValidProposalChosenException("Invalid negotiated proposal.");
             }
 
-            // Release locally generated SPIs in unselected request Proposals.
+            // Release locally generated SPIs in unselected request Proposals. In remote-initiated
+            // SA creation, unused proposals do not have SPIs, and will silently succeed.
             for (Proposal p : reqProposalList) {
-                if (reqProposal != p) p.releaseSpiResource();
+                if (reqProposal != p) p.releaseSpiResourceIfExists();
             }
 
             return new Pair<Proposal, Proposal>(reqProposal, respProposal);
         } catch (Exception e) {
             // Release all locally generated SPIs in the SA request payload.
-            for (Proposal p : reqSaPayload.proposalList) p.releaseSpiResource();
+            for (Proposal p : reqSaPayload.proposalList) p.releaseSpiResourceIfExists();
             throw e;
         }
     }
@@ -511,7 +579,7 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         /** Package private method for releasing SPI resource in this unselected Proposal. */
-        abstract void releaseSpiResource();
+        abstract void releaseSpiResourceIfExists();
     }
 
     /** This class represents a Proposal for IKE SA negotiation. */
@@ -567,7 +635,7 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         /** Package private method for releasing SPI resource in this unselected Proposal. */
-        void releaseSpiResource() {
+        void releaseSpiResourceIfExists() {
             // mIkeSpiResource is null when doing IKE initial exchanges.
             if (mIkeSpiResource == null) return;
             mIkeSpiResource.close();
@@ -643,7 +711,7 @@ public final class IkeSaPayload extends IkePayload {
         }
 
         /** Package private method for releasing SPI resource in this unselected Proposal. */
-        void releaseSpiResource() {
+        void releaseSpiResourceIfExists() {
             mChildSpiResource.close();
             mChildSpiResource = null;
         }
