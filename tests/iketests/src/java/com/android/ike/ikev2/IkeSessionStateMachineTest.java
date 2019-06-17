@@ -572,12 +572,10 @@ public final class IkeSessionStateMachineTest {
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
 
-        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
 
-        payloadHexStringList.add(NOTIFY_REKEY_IKE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(IKE_REKEY_SA_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NONCE_INIT_PAYLOAD_HEX_STRING);
