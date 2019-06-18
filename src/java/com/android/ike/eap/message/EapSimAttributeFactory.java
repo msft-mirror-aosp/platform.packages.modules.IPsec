@@ -24,6 +24,7 @@ import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IDENTITY;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NONCE_MT;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NONCE_S;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NOTIFICATION;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PADDING;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_RAND;
@@ -44,6 +45,7 @@ import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
 import com.android.ike.eap.message.EapSimAttribute.AtMac;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceS;
+import com.android.ike.eap.message.EapSimAttribute.AtNotification;
 import com.android.ike.eap.message.EapSimAttribute.AtPadding;
 import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtRand;
@@ -117,6 +119,8 @@ public class EapSimAttributeFactory {
                 return new AtCounterTooSmall(lengthInBytes, byteBuffer);
             case EAP_AT_NONCE_S:
                 return new AtNonceS(lengthInBytes, byteBuffer);
+            case EAP_AT_NOTIFICATION:
+                return new AtNotification(lengthInBytes, byteBuffer);
             default:
                 if (attributeType >= SKIPPABLE_ATTRIBUTE_RANGE_START) {
                     return new EapSimUnsupportedAttribute(attributeType, lengthInBytes, byteBuffer);
