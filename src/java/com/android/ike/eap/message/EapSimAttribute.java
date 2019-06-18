@@ -20,6 +20,8 @@ import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * EapSimAttribute represents a single EAP-SIM Attribute.
@@ -76,7 +78,9 @@ public abstract class EapSimAttribute {
      *
      * @param byteBuffer the ByteBuffer that this instance will be written to
      */
-    public void encode(ByteBuffer byteBuffer) {
+    public abstract void encode(ByteBuffer byteBuffer);
+
+    protected void encodeAttributeHeader(ByteBuffer byteBuffer) {
         byteBuffer.put((byte) attributeType);
         byteBuffer.put((byte) (lengthInBytes / LENGTH_SCALING));
     }
@@ -109,8 +113,88 @@ public abstract class EapSimAttribute {
 
         @Override
         public void encode(ByteBuffer byteBuffer) {
-            super.encode(byteBuffer);
+            encodeAttributeHeader(byteBuffer);
             byteBuffer.put(data);
+        }
+    }
+
+    /**
+     * AtVersionList represents the AT_VERSION_LIST attribute defined in RFC 4186 Section 10.2
+     */
+    public static class AtVersionList extends EapSimAttribute {
+        private static final int ATTR_HEADER_BYTES = 4;
+        private static final int BYTES_PER_VERSION = 2;
+
+        public final List<Integer> versions = new ArrayList<>();
+
+        public AtVersionList(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_VERSION_LIST, lengthInBytes);
+
+            // number of bytes used to represent list (RFC 4186 Section 10.2)
+            int bytesInList = Short.toUnsignedInt(byteBuffer.getShort());
+            if (bytesInList % BYTES_PER_VERSION != 0) {
+                throw new EapSimInvalidAttributeException(
+                        "Actual Version List Length must be multiple of 2");
+            }
+
+            int numVersions =  bytesInList / BYTES_PER_VERSION;
+            for (int i = 0; i < numVersions; i++) {
+                versions.add(Short.toUnsignedInt(byteBuffer.getShort()));
+            }
+
+            int bytesUsed = ATTR_HEADER_BYTES + (BYTES_PER_VERSION * versions.size());
+            int paddingRemaining = lengthInBytes - bytesUsed;
+            byteBuffer.get(new byte[paddingRemaining]);
+        }
+
+        @VisibleForTesting
+        public AtVersionList(int lengthInBytes, int... versions)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_VERSION_LIST, lengthInBytes);
+            for (int version : versions) {
+                this.versions.add(version);
+            }
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            byteBuffer.putShort((short) (versions.size() * BYTES_PER_VERSION));
+            for (int i : versions) {
+                byteBuffer.putShort((short) i);
+            }
+
+            int bytesUsed = ATTR_HEADER_BYTES + (BYTES_PER_VERSION * versions.size());
+            int paddingNeeded = lengthInBytes - bytesUsed;
+            byteBuffer.put(new byte[paddingNeeded]);
+        }
+    }
+
+    /**
+     * AtSelectedVersion represents the AT_SELECTED_VERSION attribute defined in RFC 4186 Section
+     * 10.3
+     */
+    public static class AtSelectedVersion extends EapSimAttribute {
+        private static final int LENGTH = LENGTH_SCALING;
+
+        public final int selectedVersion;
+
+        public AtSelectedVersion(int lengthInBytes, int selectedVersion)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_SELECTED_VERSION, LENGTH);
+            this.selectedVersion = selectedVersion;
+
+            if (lengthInBytes != LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.putShort((short) selectedVersion);
         }
     }
 }
