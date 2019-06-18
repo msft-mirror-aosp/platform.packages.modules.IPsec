@@ -30,6 +30,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
@@ -48,18 +49,22 @@ import android.os.test.TestLooper;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.TestUtils;
+import com.android.ike.ikev2.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ChildSaRecordConfig;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.InvalidKeException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
+import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
@@ -116,6 +121,9 @@ public final class ChildSessionStateMachineTest {
     private ChildSessionOptions mChildSessionOptions;
     private EncryptionTransform mChildEncryptionTransform;
     private IntegrityTransform mChildIntegrityTransform;
+    private DhGroupTransform mChildDhGroupTransform;
+
+    private SaProposal mMockNegotiatedProposal;
 
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
@@ -133,6 +141,8 @@ public final class ChildSessionStateMachineTest {
                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128);
         mChildIntegrityTransform =
                 new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96);
+
+        mChildDhGroupTransform = new DhGroupTransform(SaProposal.DH_GROUP_1024_BIT_MODP);
     }
 
     @Before
@@ -146,6 +156,8 @@ public final class ChildSessionStateMachineTest {
         mMockIpSecService = mock(IpSecService.class);
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
         mMockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
+
+        mMockNegotiatedProposal = mock(SaProposal.class);
 
         mChildSessionOptions = buildChildSessionOptions();
 
@@ -260,15 +272,8 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onProcedureFinished();
     }
 
-    @Test
-    public void testCreateFirstChild() throws Exception {
-        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
-                .thenReturn(mSpyCurrentChildSaRecord);
-
-        mChildSessionStateMachine.handleFirstChildExchange(
-                mFirstSaReqPayloads, mFirstSaRespPayloads);
-        mLooper.dispatchAll();
-
+    private void verifyInitCreateChildResp(
+            List<IkePayload> reqPayloads, List<IkePayload> respPayloads) throws Exception {
         verify(mMockChildSessionSmCallback)
                 .onChildSaCreated(
                         mSpyCurrentChildSaRecord.getRemoteSpi(), mChildSessionStateMachine);
@@ -290,9 +295,7 @@ public final class ChildSessionStateMachineTest {
         // Validate current ChildSaRecord
         verify(mMockSaRecordHelper)
                 .makeChildSaRecord(
-                        eq(mFirstSaReqPayloads),
-                        eq(mFirstSaRespPayloads),
-                        mChildSaRecordConfigCaptor.capture());
+                        eq(reqPayloads), eq(respPayloads), mChildSaRecordConfigCaptor.capture());
         ChildSaRecordConfig childSaRecordConfig = mChildSaRecordConfigCaptor.getValue();
 
         assertEquals(mContext, childSaRecordConfig.context);
@@ -308,14 +311,28 @@ public final class ChildSessionStateMachineTest {
         assertTrue(childSaRecordConfig.hasIntegrityAlgo);
 
         assertEquals(mSpyCurrentChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
+    }
+
+    @Test
+    public void testCreateFirstChild() throws Exception {
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
+                .thenReturn(mSpyCurrentChildSaRecord);
+
+        mChildSessionStateMachine.handleFirstChildExchange(
+                mFirstSaReqPayloads, mFirstSaRespPayloads);
+        mLooper.dispatchAll();
+
+        verifyInitCreateChildResp(mFirstSaReqPayloads, mFirstSaRespPayloads);
 
         quitAndVerify();
     }
 
     @Test
     public void testCreateChild() throws Exception {
-        mChildSessionStateMachine.createChildSa();
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
+                .thenReturn(mSpyCurrentChildSaRecord);
 
+        mChildSessionStateMachine.createChildSa();
         mLooper.dispatchAll();
 
         // Validate outbound payload list
@@ -348,11 +365,94 @@ public final class ChildSessionStateMachineTest {
                 EXCHANGE_TYPE_CREATE_CHILD_SA, mFirstSaRespPayloads);
         mLooper.dispatchAll();
 
-        verify(mMockChildSessionSmCallback)
-                .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
-        verify(mMockChildSessionSmCallback).onProcedureFinished();
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Idle);
+        verifyInitCreateChildResp(reqPayloadList, mFirstSaRespPayloads);
+
+        quitAndVerify();
+    }
+
+    @Test
+    public void testValidateExpectKeExistCase() throws Exception {
+        when(mMockNegotiatedProposal.getDhGroupTransforms())
+                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        List<IkePayload> payloadList = new LinkedList<>();
+        payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP));
+
+        CreateChildSaHelper.validateKePayloads(
+                payloadList, true /*isResp*/, mMockNegotiatedProposal);
+        CreateChildSaHelper.validateKePayloads(
+                payloadList, false /*isResp*/, mMockNegotiatedProposal);
+    }
+
+    @Test
+    public void testValidateExpectNoKeExistCase() throws Exception {
+        when(mMockNegotiatedProposal.getDhGroupTransforms()).thenReturn(new DhGroupTransform[0]);
+        List<IkePayload> payloadList = new LinkedList<>();
+
+        CreateChildSaHelper.validateKePayloads(
+                payloadList, true /*isResp*/, mMockNegotiatedProposal);
+        CreateChildSaHelper.validateKePayloads(
+                payloadList, false /*isResp*/, mMockNegotiatedProposal);
+    }
+
+    @Test
+    public void testThrowWhenKeMissing() throws Exception {
+        when(mMockNegotiatedProposal.getDhGroupTransforms())
+                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        List<IkePayload> payloadList = new LinkedList<>();
+
+        try {
+            CreateChildSaHelper.validateKePayloads(
+                    payloadList, true /*isResp*/, mMockNegotiatedProposal);
+            fail("Expected to fail due to the absence of KE Payload");
+        } catch (InvalidSyntaxException expected) {
+        }
+
+        try {
+            CreateChildSaHelper.validateKePayloads(
+                    payloadList, false /*isResp*/, mMockNegotiatedProposal);
+            fail("Expected to fail due to the absence of KE Payload");
+        } catch (InvalidKeException expected) {
+        }
+    }
+
+    @Test
+    public void testThrowWhenKeHasMismatchedDhGroup() throws Exception {
+        when(mMockNegotiatedProposal.getDhGroupTransforms())
+                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        List<IkePayload> payloadList = new LinkedList<>();
+        payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP));
+
+        try {
+            CreateChildSaHelper.validateKePayloads(
+                    payloadList, true /*isResp*/, mMockNegotiatedProposal);
+            fail("Expected to fail due to mismatched DH Group");
+        } catch (InvalidSyntaxException expected) {
+        }
+
+        try {
+            CreateChildSaHelper.validateKePayloads(
+                    payloadList, false /*isResp*/, mMockNegotiatedProposal);
+            fail("Expected to fail due to mismatched DH Group");
+        } catch (InvalidKeException expected) {
+        }
+    }
+
+    @Test
+    public void testThrowForUnexpectedKe() throws Exception {
+        DhGroupTransform noneGroup = new DhGroupTransform(SaProposal.DH_GROUP_NONE);
+        when(mMockNegotiatedProposal.getDhGroupTransforms())
+                .thenReturn(new DhGroupTransform[] {noneGroup});
+        List<IkePayload> payloadList = new LinkedList<>();
+        payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP));
+
+        try {
+            CreateChildSaHelper.validateKePayloads(
+                    payloadList, true /*isResp*/, mMockNegotiatedProposal);
+            fail("Expected to fail due to unexpected KE payload.");
+        } catch (InvalidSyntaxException expected) {
+        }
+
+        CreateChildSaHelper.validateKePayloads(
+                payloadList, false /*isResp*/, mMockNegotiatedProposal);
     }
 }
