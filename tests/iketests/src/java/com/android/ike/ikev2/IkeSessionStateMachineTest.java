@@ -34,6 +34,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -983,10 +984,61 @@ public final class IkeSessionStateMachineTest {
         verifyIncrementLocaReqMsgId();
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRespReceivedPacket);
 
-        // Verify final state - Idle, with new SA record
+        // Verify final state - Idle, with new SA, and old SA closed.
+        verify(mSpyCurrentIkeSaRecord).close();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
         assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyLocalInitIkeSaRecord);
+    }
+
+    @Test
+    public void testRekeyIkeLocalDeleteWithRequestOnNewSa() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
+        mIkeSessionStateMachine.mLocalInitNewIkeSaRecord = mSpyLocalInitIkeSaRecord;
+        mIkeSessionStateMachine.addIkeSaRecord(mSpyLocalInitIkeSaRecord);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeLocalDelete);
+        mLooper.dispatchAll();
+
+        // Receive an empty (DPD) request on the new IKE SA
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDpdIkeRequest(mSpyLocalInitIkeSaRecord));
+        mLooper.dispatchAll();
+
+        // Verify final state - Idle, with new SA, and old SA closed.
+        verify(mSpyCurrentIkeSaRecord).close();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyLocalInitIkeSaRecord);
+    }
+
+    @Test
+    public void testRekeyIkeRemoteDeleteWithRequestOnNewSa() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyIkeRemoteDelete
+        mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord = mSpyRemoteInitIkeSaRecord;
+        mIkeSessionStateMachine.addIkeSaRecord(mSpyRemoteInitIkeSaRecord);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+        mLooper.dispatchAll();
+
+        // Receive an empty (DPD) request on the new IKE SA
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDpdIkeRequest(mSpyRemoteInitIkeSaRecord));
+        mLooper.dispatchAll();
+
+        // Verify final state - Idle, with new SA, and old SA closed.
+        verify(mSpyCurrentIkeSaRecord).close();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyRemoteInitIkeSaRecord);
     }
 
     @Test
@@ -1033,9 +1085,12 @@ public final class IkeSessionStateMachineTest {
                 rekeyCreateResp.getPayloadForType(
                         IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class));
 
-        // Verify SA state
+        // Verify SA, StateMachine state
         assertEquals(mSpyCurrentIkeSaRecord, mIkeSessionStateMachine.mIkeSaRecordAwaitingRemoteDel);
         assertEquals(mSpyRemoteInitIkeSaRecord, mIkeSessionStateMachine.mIkeSaRecordSurviving);
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeRemoteDelete);
     }
 
     @Test
@@ -1073,10 +1128,74 @@ public final class IkeSessionStateMachineTest {
         assertTrue(rekeyDeleteRespHeader.fromIkeInitiator);
         assertTrue(rekeyDeleteResp.ikePayloadList.isEmpty());
 
-        // Verify
+        // Verify final state - Idle, with new SA, and old SA closed.
+        verify(mSpyCurrentIkeSaRecord).close();
+        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRequestReceivedPacket);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
-        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyRemoteInitIkeSaRecord);
+        assertEquals(mSpyRemoteInitIkeSaRecord, mIkeSessionStateMachine.mCurrentIkeSaRecord);
+    }
+
+    @Test
+    public void testRekeyIkeRemoteDeleteExitAndRenter() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
+        mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord = mSpyRemoteInitIkeSaRecord;
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+        mLooper.dispatchAll();
+
+        // Trigger a timeout, and immediately re-enter remote-delete
+        mLooper.moveTimeForward(IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS / 2 + 1);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.TIMEOUT_REKEY_REMOTE_DELETE_IKE);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+        mLooper.dispatchAll();
+
+        // Shift time forward, and assert the previous timeout was NOT fired.
+        mLooper.moveTimeForward(IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS / 2 + 1);
+        mLooper.dispatchAll();
+
+        // Verify no request received, or response sent.
+        verify(mMockIkeMessageHelper, never()).decode(anyInt(), anyObject(), anyObject());
+        verify(mMockIkeMessageHelper, never())
+                .encryptAndEncode(
+                        anyObject(), anyObject(), eq(mSpyCurrentIkeSaRecord), anyObject());
+
+        // Verify final state has not changed - signal was not sent.
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeRemoteDelete);
+    }
+
+    @Test
+    public void testRekeyIkeRemoteDeleteTimedOut() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
+        mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord = mSpyRemoteInitIkeSaRecord;
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+        mLooper.dispatchAll();
+
+        mLooper.moveTimeForward(IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS);
+        mLooper.dispatchAll();
+
+        // Verify no request received, or response sent.
+        verify(mMockIkeMessageHelper, never()).decode(anyInt(), anyObject(), anyObject());
+        verify(mMockIkeMessageHelper, never())
+                .encryptAndEncode(
+                        anyObject(), anyObject(), eq(mSpyCurrentIkeSaRecord), anyObject());
+
+        // Verify final state - Idle, with new SA, and old SA closed.
+        verify(mSpyCurrentIkeSaRecord).close();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        assertEquals(mSpyRemoteInitIkeSaRecord, mIkeSessionStateMachine.mCurrentIkeSaRecord);
     }
 
     @Test
