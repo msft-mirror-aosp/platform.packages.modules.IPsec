@@ -52,6 +52,7 @@ import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
+import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
@@ -205,6 +206,8 @@ public final class IkeSessionStateMachineTest {
             ArgumentCaptor.forClass(IkeMessage.class);
     private ArgumentCaptor<IkeSaRecordConfig> mIkeSaRecordConfigCaptor =
             ArgumentCaptor.forClass(IkeSaRecordConfig.class);
+    private ArgumentCaptor<IChildSessionSmCallback> mChildSessionSmCbCaptor =
+            ArgumentCaptor.forClass(IChildSessionSmCallback.class);
 
     private ReceivedIkePacket makeDummyReceivedIkeInitRespPacket(
             long initiatorSpi,
@@ -742,6 +745,9 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.mIkePrf = mock(IkeMacPrf.class);
         mIkeSessionStateMachine.mSaProposal = buildSaProposal();
         mIkeSessionStateMachine.mCurrentIkeSaRecord = mSpyCurrentIkeSaRecord;
+        mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
+        mIkeSessionStateMachine.mIsLocalBehindNat = true;
+        mIkeSessionStateMachine.mIsRemoteBehindNat = false;
         mIkeSessionStateMachine.addIkeSaRecord(mSpyCurrentIkeSaRecord);
 
         mIkeSessionStateMachine.sendMessage(
@@ -790,8 +796,6 @@ public final class IkeSessionStateMachineTest {
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
 
         // Mock finishing first Child SA negotiation.
-        ArgumentCaptor<IChildSessionSmCallback> mChildSessionSmCbCaptor =
-                ArgumentCaptor.forClass(IChildSessionSmCallback.class);
         verify(mMockChildSessionFactoryHelper)
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
@@ -805,6 +809,69 @@ public final class IkeSessionStateMachineTest {
                         any(byte[].class));
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
 
+        cb.onProcedureFinished(mMockChildSessionStateMachine);
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    @Test
+    public void testCreateAdditionalChild() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD,
+                        mock(IChildSessionCallback.class),
+                        mChildSessionOptions));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(mMockChildSessionStateMachine).createChildSa();
+
+        verify(mMockChildSessionFactoryHelper)
+                .makeChildSessionStateMachine(
+                        eq(mLooper.getLooper()),
+                        eq(mContext),
+                        eq(mChildSessionOptions),
+                        mChildSessionSmCbCaptor.capture(),
+                        eq(LOCAL_ADDRESS),
+                        eq(REMOTE_ADDRESS),
+                        eq(mUdpEncapSocket),
+                        any(IkeMacPrf.class),
+                        any(byte[].class));
+        IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
+
+        // Mocking sending request
+        cb.onOutboundPayloadsReady(
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, false /*isResp*/, new LinkedList<>());
+        mLooper.dispatchAll();
+
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+        IkeMessage createChildRequest = mIkeMessageCaptor.getValue();
+
+        IkeHeader ikeHeader = createChildRequest.ikeHeader;
+        assertEquals(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertTrue(ikeHeader.fromIkeInitiator);
+        assertEquals(mSpyCurrentIkeSaRecord.getLocalRequestMessageId(), ikeHeader.messageId);
+        assertTrue(createChildRequest.ikePayloadList.isEmpty());
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+
+        // TODO: Test receiving response
+
+        // Mock finishing procedure
         cb.onProcedureFinished(mMockChildSessionStateMachine);
         mLooper.dispatchAll();
         assertTrue(
