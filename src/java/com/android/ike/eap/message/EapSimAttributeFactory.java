@@ -16,7 +16,10 @@
 
 package com.android.ike.eap.message;
 
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NONCE_MT;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_SELECTED_VERSION;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimAttribute.LENGTH_SCALING;
@@ -26,7 +29,10 @@ import android.annotation.Nullable;
 
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
+import com.android.ike.eap.message.EapSimAttribute.AtAnyIdReq;
+import com.android.ike.eap.message.EapSimAttribute.AtFullauthIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
+import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimAttribute.EapSimUnsupportedAttribute;
@@ -77,6 +83,12 @@ public class EapSimAttributeFactory {
                 return new AtSelectedVersion(lengthInBytes, selectedVersion);
             case EAP_AT_NONCE_MT:
                 return new AtNonceMt(lengthInBytes, byteBuffer);
+            case EAP_AT_PERMANENT_ID_REQ:
+                return new AtPermanentIdReq(lengthInBytes, byteBuffer);
+            case EAP_AT_ANY_ID_REQ:
+                return new AtAnyIdReq(lengthInBytes, byteBuffer);
+            case EAP_AT_FULLAUTH_ID_REQ:
+                return new AtFullauthIdReq(lengthInBytes, byteBuffer);
             default:
                 if (attributeType >= SKIPPABLE_ATTRIBUTE_RANGE_START) {
                     return new EapSimUnsupportedAttribute(attributeType, lengthInBytes, byteBuffer);
