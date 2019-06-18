@@ -46,7 +46,7 @@ public abstract class EapSimAttribute {
     public static final int EAP_AT_IDENTITY = 14;
     public static final int EAP_AT_VERSION_LIST = 15;
     public static final int EAP_AT_SELECTED_VERSION = 16;
-    public static final int EAP_AT_FULLATH_ID_REQ = 17;
+    public static final int EAP_AT_FULLAUTH_ID_REQ = 17;
     public static final int EAP_AT_COUNTER = 19;
     public static final int EAP_AT_COUNTER_TOO_SMALL = 20;
     public static final int EAP_AT_NONCE_S = 21;
@@ -233,6 +233,80 @@ public abstract class EapSimAttribute {
             encodeAttributeHeader(byteBuffer);
             byteBuffer.put(new byte[RESERVED_BYTES]);
             byteBuffer.put(nonceMt);
+        }
+    }
+
+    private abstract static class AtIdReq extends EapSimAttribute {
+        private static final int ATTR_LENGTH = LENGTH_SCALING;
+        private static final int RESERVED_BYTES = 2;
+
+        protected AtIdReq(int lengthInBytes, int attributeType, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(attributeType, ATTR_LENGTH);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            // next two bytes are reserved (RFC 4186 Section 10.5-10.7)
+            byteBuffer.get(new byte[RESERVED_BYTES]);
+        }
+
+        @VisibleForTesting
+        protected AtIdReq(int attributeType) throws EapSimInvalidAttributeException {
+            super(attributeType, ATTR_LENGTH);
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.put(new byte[RESERVED_BYTES]);
+        }
+    }
+
+    /**
+     * AtPermanentIdReq represents the AT_PERMANENT_ID_REQ attribute defined in RFC 4186 Section
+     * 10.5
+     */
+    public static class AtPermanentIdReq extends AtIdReq {
+        public AtPermanentIdReq(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(lengthInBytes, EAP_AT_PERMANENT_ID_REQ, byteBuffer);
+        }
+
+        @VisibleForTesting
+        public AtPermanentIdReq() throws EapSimInvalidAttributeException {
+            super(EAP_AT_PERMANENT_ID_REQ);
+        }
+    }
+
+    /**
+     * AtAnyIdReq represents the AT_ANY_ID_REQ attribute defined in RFC 4186 Section 10.6
+     */
+    public static class AtAnyIdReq extends AtIdReq {
+        public AtAnyIdReq(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(lengthInBytes, EAP_AT_ANY_ID_REQ, byteBuffer);
+        }
+
+        @VisibleForTesting
+        public AtAnyIdReq() throws EapSimInvalidAttributeException {
+            super(EAP_AT_ANY_ID_REQ);
+        }
+    }
+
+    /**
+     * AtFullauthIdReq represents the AT_FULLAUTH_ID_REQ attribute defined in RFC 4186 Section 10.7
+     */
+    public static class AtFullauthIdReq extends AtIdReq {
+        public AtFullauthIdReq(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(lengthInBytes, EAP_AT_FULLAUTH_ID_REQ, byteBuffer);
+        }
+
+        @VisibleForTesting
+        public AtFullauthIdReq() throws EapSimInvalidAttributeException {
+            super(EAP_AT_FULLAUTH_ID_REQ);
         }
     }
 }
