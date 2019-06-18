@@ -37,6 +37,9 @@ public class EapSimAttributeTest {
     public void testEncode() throws Exception {
         EapSimAttribute eapSimAttribute = new EapSimAttribute(
                 EXPECTED_ATTRIBUTE_TYPE, EXPECTED_LENGTH_IN_BYTES) {
+            public void encode(ByteBuffer byteBuffer) {
+                encodeAttributeHeader(byteBuffer);
+            }
         };
 
         ByteBuffer result = ByteBuffer.allocate(BUFFER_LENGTH);
