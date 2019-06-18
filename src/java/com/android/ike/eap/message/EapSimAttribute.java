@@ -197,4 +197,42 @@ public abstract class EapSimAttribute {
             byteBuffer.putShort((short) selectedVersion);
         }
     }
+
+    /**
+     * AtNonceMt represents the AT_NONCE_MT attribute defined in RFC 4186 Section 10.4
+     */
+    public static class AtNonceMt extends EapSimAttribute {
+        private static final int LENGTH = 5 * LENGTH_SCALING;
+        private static final int NONCE_MT_LENGTH = 16;
+        private static final int RESERVED_BYTES = 2;
+
+        public final byte[] nonceMt = new byte[NONCE_MT_LENGTH];
+
+        public AtNonceMt(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_NONCE_MT, LENGTH);
+            if (lengthInBytes != LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            // next two bytes are reserved (RFC 4186 Section 10.4)
+            byteBuffer.get(new byte[RESERVED_BYTES]);
+            byteBuffer.get(nonceMt);
+        }
+
+        @VisibleForTesting
+        public AtNonceMt(byte[] nonceMt) throws EapSimInvalidAttributeException {
+            super(EAP_AT_NONCE_MT, LENGTH);
+            for (int i = 0; i < nonceMt.length; i++) {
+                this.nonceMt[i] = nonceMt[i];
+            }
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.put(new byte[RESERVED_BYTES]);
+            byteBuffer.put(nonceMt);
+        }
+    }
 }
