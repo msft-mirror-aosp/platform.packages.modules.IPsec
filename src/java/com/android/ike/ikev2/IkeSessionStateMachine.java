@@ -198,10 +198,12 @@ public class IkeSessionStateMachine extends StateMachine {
     @VisibleForTesting IkeMacIntegrity mIkeIntegrity;
     @VisibleForTesting IkeMacPrf mIkePrf;
 
-    // FIXME: b/131265898 Pass these packets from CreateIkeLocalIkeInit to CreateIkeLocalIkeAuth
-    // when Android StateMachine can support that.
-    @VisibleForTesting IkeMessage mIkeInitRequestMessage;
-    @VisibleForTesting IkeMessage mIkeInitResponseMessage;
+    // FIXME: b/131265898 Pass these parameters from CreateIkeLocalIkeInit to CreateIkeLocalIkeAuth
+    // as entry data when Android StateMachine can support that.
+    @VisibleForTesting byte[] mIkeInitRequestBytes;
+    @VisibleForTesting byte[] mIkeInitResponseBytes;
+    @VisibleForTesting IkeNoncePayload mIkeInitNoncePayload;
+    @VisibleForTesting IkeNoncePayload mIkeRespNoncePayload;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -1016,7 +1018,10 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             IkeMessage request = buildRequest();
             mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
-            mIkeInitRequestMessage = request;
+
+            mIkeInitRequestBytes = request.encode();
+            mIkeInitNoncePayload =
+                    request.getPayloadForType(IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
             mRetransmitter = new UnencryptedRetransmitter(request);
         }
 
@@ -1051,7 +1056,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
                         handleResponseIkeMessage(decodeResult.ikeMessage);
-                        mIkeInitResponseMessage = decodeResult.ikeMessage;
+                        mIkeInitResponseBytes = ikePacketBytes;
                         mCurrentIkeSaRecord.incrementLocalRequestMessageId();
                         break;
                     case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
@@ -1199,6 +1204,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         // ignore it.
                     case IkePayload.PAYLOAD_TYPE_NONCE:
                         hasNoncePayload = true;
+                        mIkeRespNoncePayload = (IkeNoncePayload) payload;
                         break;
                     case IkePayload.PAYLOAD_TYPE_VENDOR:
                         // Do not support any vendor defined protocol extensions. Ignore
@@ -1404,12 +1410,8 @@ public class IkeSessionStateMachine extends StateMachine {
                     List<IkePayload> childReqList =
                             extractChildPayloadsFromMessage(mRetransmitter.getMessage());
                     List<IkePayload> childRespList = extractChildPayloadsFromMessage(ikeMessage);
-                    childReqList.add(
-                            mIkeInitRequestMessage.getPayloadForType(
-                                    IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class));
-                    childRespList.add(
-                            mIkeInitResponseMessage.getPayloadForType(
-                                    IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class));
+                    childReqList.add(mIkeInitNoncePayload);
+                    childRespList.add(mIkeRespNoncePayload);
 
                     firstChild.handleFirstChildExchange(childReqList, childRespList);
 
@@ -1441,7 +1443,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     IkeAuthPskPayload pskPayload =
                             new IkeAuthPskPayload(
                                     authConfig.mPsk,
-                                    mIkeInitRequestMessage.encode(),
+                                    mIkeInitRequestBytes,
                                     mCurrentIkeSaRecord.nonceResponder,
                                     initIdPayload.getEncodedPayloadBody(),
                                     mIkePrf,
@@ -1600,7 +1602,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     IkeAuthPskPayload pskPayload = (IkeAuthPskPayload) authPayload;
                     pskPayload.verifyInboundSignature(
                             mIkeSessionOptions.getRemoteAuthConfig().mPsk,
-                            mIkeInitResponseMessage.encode(),
+                            mIkeInitResponseBytes,
                             mCurrentIkeSaRecord.nonceInitiator,
                             respIdPayload.getEncodedPayloadBody(),
                             mIkePrf,
@@ -2232,8 +2234,8 @@ public class IkeSessionStateMachine extends StateMachine {
                 int localPort,
                 int remotePort)
                 throws IOException {
-            List<IkePayload> payloadList = getCreateIkeSaPayloads(
-                    IkeSaPayload.createInitialIkeSaPayload(saProposals));
+            List<IkePayload> payloadList =
+                    getCreateIkeSaPayloads(IkeSaPayload.createInitialIkeSaPayload(saProposals));
 
             // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
             // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in

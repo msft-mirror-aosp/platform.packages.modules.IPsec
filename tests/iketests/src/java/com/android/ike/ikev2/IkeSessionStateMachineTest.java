@@ -757,17 +757,14 @@ public final class IkeSessionStateMachineTest {
         verifyIncrementLocaReqMsgId();
 
         IkeMessage mockIkeInitResp = mock(IkeMessage.class);
-        mIkeSessionStateMachine.mIkeInitResponseMessage = mockIkeInitResp;
-        when(mockIkeInitResp.encode())
-                .thenReturn(TestUtils.hexStringToByteArray(IKE_INIT_RESP_HEX_STRING));
-        when(mockIkeInitResp.getPayloadForType(
-                        eq(IkePayload.PAYLOAD_TYPE_NONCE), eq(IkeNoncePayload.class)))
-                .thenReturn(
-                        (IkeNoncePayload)
-                                IkeTestUtils.hexStringToIkePayload(
-                                        IkePayload.PAYLOAD_TYPE_NONCE,
-                                        true /*isResp*/,
-                                        NONCE_RESP_PAYLOAD_HEX_STRING));
+        mIkeSessionStateMachine.mIkeInitResponseBytes =
+                TestUtils.hexStringToByteArray(IKE_INIT_RESP_HEX_STRING);
+        mIkeSessionStateMachine.mIkeRespNoncePayload =
+                (IkeNoncePayload)
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_NONCE,
+                                true /*isResp*/,
+                                NONCE_RESP_PAYLOAD_HEX_STRING);
 
         // Receive IKE AUTH response
         ReceivedIkePacket dummyIkeAuthRespReceivedPacket = makeIkeAuthResponse();
