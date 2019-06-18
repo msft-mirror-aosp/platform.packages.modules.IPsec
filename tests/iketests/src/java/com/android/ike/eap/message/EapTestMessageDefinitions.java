@@ -69,4 +69,10 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("FF02" + SKIPPABLE_DATA);
     public static final byte[] NON_SKIPPABLE_INVALID_ATTRIBUTE =
             hexStringToByteArray("7F010000");
+
+    // Type-Data
+    public static final byte[] INVALID_SUBTYPE = hexStringToByteArray("FF");
+    public static final byte[] SHORT_TYPE_DATA = hexStringToByteArray("0A");
+    public static final byte[] TYPE_DATA_INVALID_ATTRIBUTE =
+            hexStringToByteArray("0A00007F01");
 }
