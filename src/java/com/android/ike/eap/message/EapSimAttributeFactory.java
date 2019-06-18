@@ -16,6 +16,7 @@
 
 package com.android.ike.eap.message;
 
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NONCE_MT;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_SELECTED_VERSION;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimAttribute.LENGTH_SCALING;
@@ -25,6 +26,7 @@ import android.annotation.Nullable;
 
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
+import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
 import com.android.ike.eap.message.EapSimAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimAttribute.EapSimUnsupportedAttribute;
@@ -73,6 +75,8 @@ public class EapSimAttributeFactory {
             case EAP_AT_SELECTED_VERSION:
                 int selectedVersion = Short.toUnsignedInt(byteBuffer.getShort());
                 return new AtSelectedVersion(lengthInBytes, selectedVersion);
+            case EAP_AT_NONCE_MT:
+                return new AtNonceMt(lengthInBytes, byteBuffer);
             default:
                 if (attributeType >= SKIPPABLE_ATTRIBUTE_RANGE_START) {
                     return new EapSimUnsupportedAttribute(attributeType, lengthInBytes, byteBuffer);

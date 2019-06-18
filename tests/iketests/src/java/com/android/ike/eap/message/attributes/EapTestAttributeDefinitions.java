@@ -32,9 +32,13 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_VERSION_LIST =
             hexStringToByteArray("0F02" + AT_VERSION_LIST_DATA);
     public static final byte[] AT_SELECTED_VERSION = hexStringToByteArray("10010001");
+    public static final String NONCE_MT_STRING = "0123456789ABCDEFFEDCBA9876543210";
+    public static final byte[] NONCE_MT = hexStringToByteArray(NONCE_MT_STRING);
+    public static final byte[] AT_NONCE_MT = hexStringToByteArray("07050000" + NONCE_MT_STRING);
 
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
             hexStringToByteArray("10020001");
-
+    public static final byte[] AT_NONCE_INVALID_LENGTH =
+            hexStringToByteArray("07060000" + NONCE_MT_STRING);
 }
