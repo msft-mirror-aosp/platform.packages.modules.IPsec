@@ -144,7 +144,7 @@ public final class IkeSessionOptionsTest {
     @Test
     public void testBuildWithChildSaProposal() throws Exception {
         SaProposal saProposal =
-                SaProposal.Builder.newChildSaProposalBuilder(true)
+                SaProposal.Builder.newChildSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
                                 SaProposal.KEY_LEN_AES_128)

@@ -207,13 +207,13 @@ public final class IkeSaPayloadTest {
         mTwoIkeSaProposalsArray = new SaProposal[] {mIkeSaProposalOne, mIkeSaProposalTwo};
 
         mChildSaProposalOne =
-                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                SaProposal.Builder.newChildSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .build();
         mChildSaProposalTwo =
-                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                SaProposal.Builder.newChildSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
                                 SaProposal.KEY_LEN_AES_128)
