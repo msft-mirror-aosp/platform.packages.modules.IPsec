@@ -39,6 +39,7 @@ import android.util.Pair;
 import android.util.SparseArray;
 
 import com.android.ike.ikev2.ChildSessionStateMachine.CreateChildSaHelper;
+import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
 import com.android.ike.ikev2.IkeSessionOptions.IkeAuthConfig;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -141,19 +142,29 @@ public class IkeSessionStateMachine extends StateMachine {
 
     /** Package private signals accessible for testing code. */
     private static final int CMD_GENERAL_BASE = 0;
+
+    private static final int CMD_CATEGORY_SIZE = 100;
     /** Receive encoded IKE packet on IkeSessionStateMachine. */
     static final int CMD_RECEIVE_IKE_PACKET = CMD_GENERAL_BASE + 1;
-    /** Receive locally built payloads from Child Session for building outbound IKE message. */
-    static final int CMD_RECEIVE_OUTBOUND_CHILD_PAYLOADS = CMD_GENERAL_BASE + 2;
     /** Receive encoded IKE packet with unrecognized IKE SPI on IkeSessionStateMachine. */
-    static final int CMD_RECEIVE_PACKET_INVALID_IKE_SPI = CMD_GENERAL_BASE + 3;
+    static final int CMD_RECEIVE_PACKET_INVALID_IKE_SPI = CMD_GENERAL_BASE + 2;
+    /** Receive an remote request for a Child procedure. */
+    static final int CMD_RECEIVE_REQUEST_FOR_CHILD = CMD_GENERAL_BASE + 3;
+    /** Receive payloads from Child Session for building an outbound IKE message. */
+    static final int CMD_OUTBOUND_CHILD_PAYLOADS_READY = CMD_GENERAL_BASE + 4;
+    /** A Child Session has finished its procedure. */
+    static final int CMD_CHILD_PROCEDURE_FINISH = CMD_GENERAL_BASE + 5;
+    /** Send request/response payloads to ChildSessionStateMachine for further processing. */
+    static final int CMD_HANDLE_FIRST_CHILD_NEGOTIATION = CMD_GENERAL_BASE + 6;
+    /** Receive a local request to execute from the scheduler */
+    static final int CMD_EXECUTE_LOCAL_REQ = CMD_GENERAL_BASE + 7;
     /** Force state machine to IDLE state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
 
     // Constants for local request will be used in both IkeSessionStateMachine and
     // ChildSessionStateMachine.
-    private static final int CMD_LOCAL_REQUEST_BASE = CMD_GENERAL_BASE + 100;
+    private static final int CMD_LOCAL_REQUEST_BASE = CMD_GENERAL_BASE + CMD_CATEGORY_SIZE;
     static final int CMD_LOCAL_REQUEST_CREATE_IKE = CMD_LOCAL_REQUEST_BASE + 1;
     static final int CMD_LOCAL_REQUEST_DELETE_IKE = CMD_LOCAL_REQUEST_BASE + 2;
     static final int CMD_LOCAL_REQUEST_REKEY_IKE = CMD_LOCAL_REQUEST_BASE + 3;
@@ -179,6 +190,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
     private final Context mContext;
     private final IpSecManager mIpSecManager;
+    private final IkeLocalRequestScheduler mScheduler;
 
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
@@ -187,11 +199,11 @@ public class IkeSessionStateMachine extends StateMachine {
     @VisibleForTesting IkeSocket mIkeSocket;
 
     /** Local address assigned on device. Initialized in Initial State. */
-    private InetAddress mLocalAddress;
+    @VisibleForTesting InetAddress mLocalAddress;
     /** Remote address configured by users. Initialized in Initial State. */
-    private InetAddress mRemoteAddress;
+    @VisibleForTesting InetAddress mRemoteAddress;
     /** Local port assigned on device. Initialized in Initial State. */
-    private int mLocalPort;
+    @VisibleForTesting int mLocalPort;
 
     /** Indicates if local node is behind a NAT. */
     @VisibleForTesting boolean mIsLocalBehindNat;
@@ -227,21 +239,24 @@ public class IkeSessionStateMachine extends StateMachine {
     @VisibleForTesting IkeSaRecord mIkeSaRecordAwaitingRemoteDel;
 
     // States
-    private final State mInitial = new Initial();
-    private final State mClosed = new Closed();
+    @VisibleForTesting final State mInitial = new Initial();
+    @VisibleForTesting final State mClosed = new Closed();
     @VisibleForTesting final State mIdle = new Idle();
-    private final State mReceiving = new Receiving();
-    private final State mCreateIkeLocalIkeInit = new CreateIkeLocalIkeInit();
-    private final State mCreateIkeLocalIkeAuth = new CreateIkeLocalIkeAuth();
-    private final State mRekeyIkeLocalCreate = new RekeyIkeLocalCreate();
-    private final State mSimulRekeyIkeLocalCreate = new SimulRekeyIkeLocalCreate();
-    private final State mSimulRekeyIkeLocalDeleteRemoteDelete =
-            new SimulRekeyIkeLocalDeleteRemoteDelete();
-    private final State mSimulRekeyIkeLocalDelete = new SimulRekeyIkeLocalDelete();
-    private final State mSimulRekeyIkeRemoteDelete = new SimulRekeyIkeRemoteDelete();
+    @VisibleForTesting final State mChildProcedureOngoing = new ChildProcedureOngoing();
+    @VisibleForTesting final State mReceiving = new Receiving();
+    @VisibleForTesting final State mCreateIkeLocalIkeInit = new CreateIkeLocalIkeInit();
+    @VisibleForTesting final State mCreateIkeLocalIkeAuth = new CreateIkeLocalIkeAuth();
+    @VisibleForTesting final State mRekeyIkeLocalCreate = new RekeyIkeLocalCreate();
+    @VisibleForTesting final State mSimulRekeyIkeLocalCreate = new SimulRekeyIkeLocalCreate();
+
+    @VisibleForTesting
+    final State mSimulRekeyIkeLocalDeleteRemoteDelete = new SimulRekeyIkeLocalDeleteRemoteDelete();
+
+    @VisibleForTesting final State mSimulRekeyIkeLocalDelete = new SimulRekeyIkeLocalDelete();
+    @VisibleForTesting final State mSimulRekeyIkeRemoteDelete = new SimulRekeyIkeRemoteDelete();
     @VisibleForTesting final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
     @VisibleForTesting final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
-    private final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
+    @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
     // TODO: Add InfoLocal.
 
     /** Package private constructor */
@@ -269,6 +284,7 @@ public class IkeSessionStateMachine extends StateMachine {
         addState(mCreateIkeLocalIkeInit);
         addState(mCreateIkeLocalIkeAuth);
         addState(mIdle);
+        addState(mChildProcedureOngoing);
         addState(mReceiving);
         addState(mRekeyIkeLocalCreate);
         addState(mSimulRekeyIkeLocalCreate, mRekeyIkeLocalCreate);
@@ -280,7 +296,11 @@ public class IkeSessionStateMachine extends StateMachine {
         addState(mDeleteIkeLocalDelete);
 
         setInitialState(mInitial);
-
+        mScheduler =
+                new IkeLocalRequestScheduler(
+                        localReq -> {
+                            sendMessageAtFrontOfQueue(CMD_EXECUTE_LOCAL_REQ, localReq);
+                        });
         // TODO: Start the StateMachine.
     }
 
@@ -420,6 +440,24 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
+    /** Class to group parameters for negotiating the first Child SA. */
+    private static class FirstChildNegotiationData {
+        public final ChildSessionOptions childSessionOptions;
+        public final List<IkePayload> reqPayloads;
+        public final List<IkePayload> respPayloads;
+
+        // TODO: Also store ChildSessionCallback
+
+        FirstChildNegotiationData(
+                ChildSessionOptions childSessionOptions,
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads) {
+            this.childSessionOptions = childSessionOptions;
+            this.reqPayloads = reqPayloads;
+            this.respPayloads = respPayloads;
+        }
+    }
+
     /** Callback for ChildSessionStateMachine to notify IkeSessionStateMachine. */
     private class ChildSessionSmCallback
             implements ChildSessionStateMachine.IChildSessionSmCallback {
@@ -440,9 +478,8 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void onProcedureFinished() {
-            // TODO: When multiple Child Sessions are involved in this message exchange, release the
-            // lock when all of them have finished the procedure.
+        public void onProcedureFinished(ChildSessionStateMachine childSession) {
+            sendMessage(CMD_CHILD_PROCEDURE_FINISH, childSession);
         }
 
         @Override
@@ -508,7 +545,12 @@ public class IkeSessionStateMachine extends StateMachine {
     /**
      * Idle represents a state when there is no ongoing IKE exchange affecting established IKE SA.
      */
-    class Idle extends State {
+    class Idle extends LocalRequestQueuer {
+        @Override
+        public void enter() {
+            mScheduler.readyForNextProcedure();
+        }
+
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
@@ -516,18 +558,42 @@ public class IkeSessionStateMachine extends StateMachine {
                     deferMessage(message);
                     transitionTo(mReceiving);
                     return HANDLED;
-                case CMD_LOCAL_REQUEST_REKEY_IKE:
-                    transitionTo(mRekeyIkeLocalCreate);
-                    return HANDLED;
-                case CMD_LOCAL_REQUEST_DELETE_IKE:
-                    transitionTo(mDeleteIkeLocalDelete);
-                    return HANDLED;
+
                 case CMD_FORCE_TRANSITION: // Testing command
                     transitionTo((State) message.obj);
                     return HANDLED;
+
+                case CMD_EXECUTE_LOCAL_REQ:
+                    executeLocalRequest((LocalRequest) message.obj);
+                    return HANDLED;
+
                 default:
+                    // Queue local requests, and trigger next procedure
+                    if (message.what >= CMD_LOCAL_REQUEST_BASE
+                            && message.what < CMD_LOCAL_REQUEST_BASE + CMD_CATEGORY_SIZE) {
+                        handleLocalRequest(message.what);
+
+                        // Synchronously calls through to the scheduler callback, which will
+                        // post the CMD_EXECUTE_LOCAL_REQ to the front of the queue, ensuring
+                        // it is always the next request processed.
+                        mScheduler.readyForNextProcedure();
+                        return HANDLED;
+                    }
                     return NOT_HANDLED;
-                    // TODO: Add more cases for supporting local request.
+            }
+        }
+
+        private void executeLocalRequest(LocalRequest req) {
+            switch (req.procedureType) {
+                case CMD_LOCAL_REQUEST_REKEY_IKE:
+                    transitionTo(mRekeyIkeLocalCreate);
+                    break;
+                case CMD_LOCAL_REQUEST_DELETE_IKE:
+                    transitionTo(mDeleteIkeLocalDelete);
+                    break;
+                default:
+                    Log.wtf(TAG, "Invalid local request procedure type: " + req.procedureType);
+                    break;
             }
         }
     }
@@ -662,15 +728,51 @@ public class IkeSessionStateMachine extends StateMachine {
         return new IkeMessage(header, Arrays.asList(payloads));
     }
 
+    private abstract class LocalRequestQueuer extends State {
+        protected void handleLocalRequest(int requestVal) {
+            switch (requestVal) {
+                case CMD_LOCAL_REQUEST_DELETE_IKE:
+                    mScheduler.addRequestAtFront(new LocalRequest(requestVal));
+                    return;
+
+                case CMD_LOCAL_REQUEST_REKEY_IKE: // Fallthrough
+                case CMD_LOCAL_REQUEST_INFO: // Fallthrough
+                case CMD_LOCAL_REQUEST_CREATE_CHILD: // Fallthrough
+                case CMD_LOCAL_REQUEST_REKEY_CHILD: // Fallthrough
+                case CMD_LOCAL_REQUEST_DELETE_CHILD:
+                    mScheduler.addRequest(new LocalRequest(requestVal));
+                    return;
+
+                default:
+                    logw("Unknown local request passed to handleLocalRequest");
+            }
+        }
+    }
+
     /** Base state defines common behaviours when receiving an IKE packet. */
-    private abstract class BaseState extends State {
+    private abstract class BaseState extends LocalRequestQueuer {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_IKE_PACKET:
                     handleReceivedIkePacket(message);
                     return HANDLED;
+
+                case CMD_FORCE_TRANSITION:
+                    transitionTo((State) message.obj);
+                    return HANDLED;
+
+                case CMD_EXECUTE_LOCAL_REQ:
+                    Log.wtf(TAG, "Invalid execute local request command in non-idle state");
+                    return NOT_HANDLED;
+
                 default:
+                    // Queue local requests, and trigger next procedure
+                    if (message.what >= CMD_LOCAL_REQUEST_BASE
+                            && message.what < CMD_LOCAL_REQUEST_BASE + CMD_CATEGORY_SIZE) {
+                        handleLocalRequest(message.what);
+                        return HANDLED;
+                    }
                     return NOT_HANDLED;
             }
         }
@@ -1026,6 +1128,96 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             // TODO: Extract payloads and re-direct to awaiting ChildSessionStateMachines.
+        }
+    }
+
+    /**
+     * This class represents a state when there is at least one ongoing Child procedure
+     * (Create/Rekey/Delete Child)
+     */
+    class ChildProcedureOngoing extends DeleteBase {
+        // It is possible that mChildInLocalProcedure and mChildInRemoteProcedure are the same
+        // when both sides initiated exchange for the same Child Session.
+        private ChildSessionStateMachine mChildInLocalProcedure;
+        private ChildSessionStateMachine mChildInRemoteProcedure;
+
+        // TODO: Support retransmitting.
+
+        // TODO: Store multiple mChildInRemoteProcedures to support multiple Child SAs deletion
+        // initiated by the remote.
+
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_RECEIVE_REQUEST_FOR_CHILD:
+                    handleRequestIkeMessage(
+                            (IkeMessage) message.obj,
+                            message.arg1 /*ikeExchangeSubType*/,
+                            null /*ReceivedIkePacket*/);
+                    return HANDLED;
+                case CMD_OUTBOUND_CHILD_PAYLOADS_READY:
+                    // TODO: build and send message
+                    throw new UnsupportedOperationException("Cannot handle it");
+                case CMD_CHILD_PROCEDURE_FINISH:
+                    ChildSessionStateMachine childSession = (ChildSessionStateMachine) message.obj;
+
+                    if (mChildInLocalProcedure == childSession) {
+                        mChildInLocalProcedure = null;
+                        // TODO: Release local lock
+                    }
+                    if (mChildInRemoteProcedure == childSession) {
+                        mChildInRemoteProcedure = null;
+                        // TODO: Release remote lock
+                    }
+
+                    if (mChildInLocalProcedure == null && mChildInRemoteProcedure == null) {
+                        transitionTo(mIdle);
+                    }
+                    return HANDLED;
+                case CMD_HANDLE_FIRST_CHILD_NEGOTIATION:
+                    FirstChildNegotiationData childData = (FirstChildNegotiationData) message.obj;
+
+                    mChildInLocalProcedure = buildChildSession(childData.childSessionOptions);
+                    mChildInLocalProcedure.handleFirstChildExchange(
+                            childData.reqPayloads, childData.respPayloads);
+                    return HANDLED;
+                case CMD_LOCAL_REQUEST_CREATE_CHILD:
+                    // TODO: Implement it.
+                    throw new UnsupportedOperationException("Cannot handle it");
+
+                default:
+                    return super.processMessage(message);
+            }
+        }
+
+        private ChildSessionStateMachine buildChildSession(ChildSessionOptions childOptions) {
+            boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
+
+            ChildSessionStateMachine childSession =
+                    ChildSessionStateMachineFactory.makeChildSessionStateMachine(
+                            getHandler().getLooper(),
+                            mContext,
+                            childOptions,
+                            new ChildSessionSmCallback(),
+                            mLocalAddress,
+                            mRemoteAddress,
+                            (isNatDetected ? mIkeSessionOptions.getUdpEncapsulationSocket() : null),
+                            mIkePrf,
+                            mCurrentIkeSaRecord.getSkD());
+            return childSession;
+        }
+
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            // TODO: Grab a remote lock and hand payloads to the Child Session
+            throw new UnsupportedOperationException("Cannot handle inbound Child request");
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            // TODO: Stop retransimitting and hand payloads to the mChildInLocalProcedure
+            throw new UnsupportedOperationException("Cannot handle inbound Child response");
         }
     }
 
@@ -1412,31 +1604,21 @@ public class IkeSessionStateMachine extends StateMachine {
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
-                    boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
-                    ChildSessionStateMachine firstChild =
-                            ChildSessionStateMachineFactory.makeChildSessionStateMachine(
-                                    "ChildSessionStateMachine",
-                                    getHandler().getLooper(),
-                                    mContext,
-                                    mFirstChildSessionOptions,
-                                    new ChildSessionSmCallback(),
-                                    mLocalAddress,
-                                    mRemoteAddress,
-                                    (isNatDetected
-                                            ? mIkeSessionOptions.getUdpEncapsulationSocket()
-                                            : null),
-                                    mIkePrf,
-                                    mCurrentIkeSaRecord.getSkD());
-
                     List<IkePayload> childReqList =
                             extractChildPayloadsFromMessage(mRetransmitter.getMessage());
                     List<IkePayload> childRespList = extractChildPayloadsFromMessage(ikeMessage);
                     childReqList.add(mIkeInitNoncePayload);
                     childRespList.add(mIkeRespNoncePayload);
 
-                    firstChild.handleFirstChildExchange(childReqList, childRespList);
+                    deferMessage(
+                            obtainMessage(
+                                    CMD_HANDLE_FIRST_CHILD_NEGOTIATION,
+                                    new FirstChildNegotiationData(
+                                            mFirstChildSessionOptions,
+                                            childReqList,
+                                            childRespList)));
 
-                    transitionTo(mIdle);
+                    transitionTo(mChildProcedureOngoing);
                 }
             } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
@@ -2018,7 +2200,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     return HANDLED;
                 default:
-                    return NOT_HANDLED;
+                    return super.processMessage(message);
                     // TODO: Add more cases for other packet types.
             }
         }

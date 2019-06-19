@@ -144,7 +144,6 @@ public class ChildSessionStateMachine extends StateMachine {
 
     /** Package private */
     ChildSessionStateMachine(
-            String name,
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
@@ -155,7 +154,7 @@ public class ChildSessionStateMachine extends StateMachine {
             UdpEncapsulationSocket udpEncapSocket,
             IkeMacPrf ikePrf,
             byte[] skD) {
-        super(name, looper);
+        super(TAG, looper);
 
         mContext = context;
         mIpSecManager = ipSecManager;
@@ -207,7 +206,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 @ExchangeType int exchangeType, boolean isResp, List<IkePayload> payloadList);
 
         /** Notify that a Child procedure has been finished. */
-        void onProcedureFinished();
+        void onProcedureFinished(ChildSessionStateMachine childSession);
 
         /**
          * Notify that a Child procedure has been finished and the IKE Session should close itself
@@ -511,7 +510,7 @@ public class ChildSessionStateMachine extends StateMachine {
     class Idle extends State {
         @Override
         public void enter() {
-            mChildSmCallback.onProcedureFinished();
+            mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
         }
 
         // TODO: Support handling local and remote request.
@@ -895,7 +894,7 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Called when this StateMachine quits. */
     @Override
     protected void onQuitting() {
-        mChildSmCallback.onProcedureFinished();
+        mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
     }
 
     // TODO: Add states to support creating additional Child SA, deleting Child SA and rekeying
