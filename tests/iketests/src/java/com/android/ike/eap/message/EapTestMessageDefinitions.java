@@ -62,4 +62,17 @@ public class EapTestMessageDefinitions {
     public static final byte[] INCOMPLETE_HEADER_PACKET = hexStringToByteArray("03" + ID);
     public static final byte[] INVALID_CODE_PACKET = hexStringToByteArray("F0" + ID + "0004");
     public static final byte[] REQUEST_EAP_TYPE_NAK = hexStringToByteArray("01" + ID + "000503");
+
+    // Attributes
+    public static final String SKIPPABLE_DATA = "112233445566";
+    public static final byte[] SKIPPABLE_INVALID_ATTRIBUTE =
+            hexStringToByteArray("FF02" + SKIPPABLE_DATA);
+    public static final byte[] NON_SKIPPABLE_INVALID_ATTRIBUTE =
+            hexStringToByteArray("7F010000");
+
+    // Type-Data
+    public static final byte[] INVALID_SUBTYPE = hexStringToByteArray("FF");
+    public static final byte[] SHORT_TYPE_DATA = hexStringToByteArray("0A");
+    public static final byte[] TYPE_DATA_INVALID_ATTRIBUTE =
+            hexStringToByteArray("0A00007F01");
 }
