@@ -35,7 +35,6 @@ final class ChildSessionStateMachineFactory {
 
     /** Package private. */
     static ChildSessionStateMachine makeChildSessionStateMachine(
-            String name,
             Looper looper,
             Context context,
             ChildSessionOptions sessionOptions,
@@ -46,7 +45,6 @@ final class ChildSessionStateMachineFactory {
             IkeMacPrf prf,
             byte[] skD) {
         return sChildSessionHelper.makeChildSessionStateMachine(
-                name,
                 looper,
                 context,
                 sessionOptions,
@@ -71,7 +69,6 @@ final class ChildSessionStateMachineFactory {
      */
     interface IChildSessionFactoryHelper {
         ChildSessionStateMachine makeChildSessionStateMachine(
-                String name,
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
@@ -90,7 +87,6 @@ final class ChildSessionStateMachineFactory {
      */
     static class ChildSessionFactoryHelper implements IChildSessionFactoryHelper {
         public ChildSessionStateMachine makeChildSessionStateMachine(
-                String name,
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
@@ -102,7 +98,6 @@ final class ChildSessionStateMachineFactory {
                 byte[] skD) {
             ChildSessionStateMachine childSession =
                     new ChildSessionStateMachine(
-                            name,
                             looper,
                             context,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),

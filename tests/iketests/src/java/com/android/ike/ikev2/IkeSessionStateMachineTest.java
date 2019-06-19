@@ -48,6 +48,7 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 
 import com.android.ike.TestUtils;
+import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
@@ -339,9 +340,6 @@ public final class IkeSessionStateMachineTest {
         when(mMockIkeMessageHelper.encode(any())).thenReturn(new byte[0]);
         when(mMockIkeMessageHelper.encryptAndEncode(any(), any(), any(), any()))
                 .thenReturn(new byte[0]);
-        when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
-                        any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-                .thenReturn(mMockChildSessionStateMachine);
     }
 
     private static IkeSaRecord makeDummyIkeSaRecord(long initSpi, long respSpi, boolean isLocalInit)
@@ -395,6 +393,7 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.start();
 
         mLooper.dispatchAll();
+        mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
 
         IkeMessage.setIkeMessageHelper(mMockIkeMessageHelper);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
@@ -407,6 +406,18 @@ public final class IkeSessionStateMachineTest {
 
         mExpectedCurrentSaLocalReqMsgId = 0;
         mExpectedCurrentSaRemoteReqMsgId = 0;
+
+        when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
+                        eq(mLooper.getLooper()),
+                        eq(mContext),
+                        eq(mChildSessionOptions),
+                        any(IChildSessionSmCallback.class),
+                        eq(LOCAL_ADDRESS),
+                        eq(REMOTE_ADDRESS),
+                        eq(mUdpEncapSocket),
+                        any(IkeMacPrf.class),
+                        any(byte[].class)))
+                .thenReturn(mMockChildSessionStateMachine);
     }
 
     @After
@@ -772,7 +783,32 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyIkeAuthRespReceivedPacket);
         mLooper.dispatchAll();
+
         verifyIncrementLocaReqMsgId();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+
+        // Mock finishing first Child SA negotiation.
+        ArgumentCaptor<IChildSessionSmCallback> mChildSessionSmCbCaptor =
+                ArgumentCaptor.forClass(IChildSessionSmCallback.class);
+        verify(mMockChildSessionFactoryHelper)
+                .makeChildSessionStateMachine(
+                        eq(mLooper.getLooper()),
+                        eq(mContext),
+                        eq(mChildSessionOptions),
+                        mChildSessionSmCbCaptor.capture(),
+                        eq(LOCAL_ADDRESS),
+                        eq(REMOTE_ADDRESS),
+                        eq(mUdpEncapSocket),
+                        any(IkeMacPrf.class),
+                        any(byte[].class));
+        IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
+
+        cb.onProcedureFinished(mMockChildSessionStateMachine);
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
     @Test
@@ -1485,5 +1521,49 @@ public final class IkeSessionStateMachineTest {
         assertTrue(ikeHeader.isResponseMsg);
         assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
         assertTrue(resp.ikePayloadList.isEmpty());
+    }
+
+    @Test
+    public void testIdleTriggersNewRequests() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE);
+        mLooper.dispatchAll();
+
+        // Verify that the command is executed, and the state machine transitions to the right state
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
+    }
+
+    @Test
+    public void testNonIdleStateDoesNotTriggerNewRequests() throws Exception {
+        setupIdleStateMachine();
+
+        // Force ourselves into a non-idle state
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mReceiving);
+        mLooper.dispatchAll();
+        verify(mMockIkeMessageHelper, never()).encryptAndEncode(any(), any(), any(), any());
+
+        // Queue a local request, and expect that it is not run (yet)
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE);
+        mLooper.dispatchAll();
+
+        // Verify that the state machine is still in the Receiving state
+        verify(mMockIkeMessageHelper, never()).encryptAndEncode(any(), any(), any(), any());
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.Receiving);
+
+        // Go back to Idle, and expect to immediately transition to RekeyIkeLocalCreate from the
+        // queued request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
+        verify(mMockIkeMessageHelper, times(1)).encryptAndEncode(any(), any(), any(), any());
     }
 }
