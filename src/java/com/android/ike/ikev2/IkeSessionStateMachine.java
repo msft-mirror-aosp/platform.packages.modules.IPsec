@@ -1444,10 +1444,11 @@ public class IkeSessionStateMachine extends StateMachine {
                                 natDestPayload = notifyPayload;
                                 break;
                             default:
-                                throw new UnsupportedOperationException(
-                                        "Cannot handle this notification");
+                                // Unknown status notifications are ignored as per RFC7296.
+                                logw(
+                                        "Received unknown status notifications with notify type: "
+                                                + notifyPayload.notifyType);
                         }
-                        // TODO: handle status notifications.
 
                         break;
                     default:
@@ -1726,10 +1727,12 @@ public class IkeSessionStateMachine extends StateMachine {
                                     "Do not support handle error notifications in IKE AUTH"
                                             + " response.");
                         } else {
-                            // TODO: handle status notifications.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handle status notifications in IKE AUTH"
-                                            + " response.");
+                            // TODO: Support more status notification types.
+
+                            // Unknown status notifications are ignored as per RFC7296.
+                            logw(
+                                    "Received unknown status notifications with notify type: "
+                                            + notifyPayload.notifyType);
                         }
 
                     default:
