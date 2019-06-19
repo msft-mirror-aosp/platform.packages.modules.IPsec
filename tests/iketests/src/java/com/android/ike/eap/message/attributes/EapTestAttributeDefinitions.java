@@ -39,6 +39,12 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_ANY_ID_REQ = hexStringToByteArray("0D010000");
     public static final byte[] AT_FULL_AUTH_ID_REQ = hexStringToByteArray("11010000");
 
+    // Identity = "test1@android.net"
+    public static final String IDENTITY_STRING = "746573743140616E64726F69642E6E6574";
+    public static final byte[] IDENTITY = hexStringToByteArray(IDENTITY_STRING);
+    public static final byte[] AT_IDENTITY =
+            hexStringToByteArray("0E060011" + IDENTITY_STRING + "000000");
+
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
             hexStringToByteArray("10020001");
