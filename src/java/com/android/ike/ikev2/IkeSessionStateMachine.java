@@ -88,6 +88,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * IkeSessionStateMachine tracks states and manages exchanges of this IKE session.
@@ -110,6 +111,9 @@ import java.util.Set;
 public class IkeSessionStateMachine extends StateMachine {
 
     private static final String TAG = "IkeSessionStateMachine";
+
+    // Use a value greater than the retransmit-failure timeout.
+    static final long REKEY_DELETE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180L);
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -158,6 +162,9 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_LOCAL_REQUEST_DELETE_CHILD = CMD_LOCAL_REQUEST_BASE + 6;
     static final int CMD_LOCAL_REQUEST_REKEY_CHILD = CMD_LOCAL_REQUEST_BASE + 7;
     // TODO: Add signals for other procedure types and notificaitons.
+
+    private static final int TIMEOUT_BASE = CMD_GENERAL_BASE + 200;
+    static final int TIMEOUT_REKEY_REMOTE_DELETE_IKE = TIMEOUT_BASE + 1;
 
     private final IkeSessionOptions mIkeSessionOptions;
 
@@ -681,6 +688,14 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
             IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeHeader);
+
+            // Drop packets that we don't have an SA for:
+            if (ikeSaRecord == null) {
+                // TODO: Print a summary of the IKE message (perhaps the IKE header)
+                Log.v(TAG, "No matching SA for packet");
+                return;
+            }
+
             if (ikeHeader.isResponseMsg) {
                 DecodeResult decodeResult =
                         IkeMessage.decode(
@@ -888,8 +903,9 @@ public class IkeSessionStateMachine extends StateMachine {
                 IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
                 sendEncryptedIkeMessage(mCurrentIkeSaRecord, resp);
 
-                // TODO: Close IKE SA
                 removeIkeSaRecord(mCurrentIkeSaRecord);
+                mCurrentIkeSaRecord.close();
+                mCurrentIkeSaRecord = null;
 
                 transitionTo(mClosed);
             } catch (InvalidSyntaxException e) {
@@ -917,7 +933,12 @@ public class IkeSessionStateMachine extends StateMachine {
                     ikeSaRecord.getLocalRequestMessageId());
         }
 
-        protected void validateIkeDeleteResp(IkeMessage resp) throws InvalidSyntaxException {
+        protected void validateIkeDeleteResp(IkeMessage resp, IkeSaRecord expectedSaRecord)
+                throws InvalidSyntaxException {
+            if (expectedSaRecord != getIkeSaRecordForPacket(resp.ikeHeader)) {
+                throw new InvalidSyntaxException("Response received on incorrect SA");
+            }
+
             if (resp.ikeHeader.exchangeType != IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
                 throw new InvalidSyntaxException(
                         "Invalid exchange type; expected INFORMATIONAL, but got: "
@@ -1949,15 +1970,52 @@ public class IkeSessionStateMachine extends StateMachine {
                     ReceivedIkePacket receivedIkePacket = (ReceivedIkePacket) message.obj;
                     IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
 
-                    // Request received on the new/surviving SA; treat it as acknowledgement that
-                    // remote has successfully rekeyed.
-                    if (mIkeSaRecordSurviving == getIkeSaRecordForPacket(ikeHeader)) {
-                        deferMessage(message);
-                        // TODO: Locally close old (and losing) IKE SAs.
+                    // Verify that this message is correctly authenticated and encrypted:
+                    IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeHeader);
+                    boolean isMessageOnNewSa = false;
+                    if (ikeSaRecord != null && mIkeSaRecordSurviving == ikeSaRecord) {
+                        DecodeResult decodeResult =
+                                IkeMessage.decode(
+                                        ikeHeader.isResponseMsg
+                                                ? ikeSaRecord.getLocalRequestMessageId()
+                                                : ikeSaRecord.getRemoteRequestMessageId(),
+                                        mIkeIntegrity,
+                                        mIkeCipher,
+                                        ikeSaRecord,
+                                        ikeHeader,
+                                        receivedIkePacket.ikePacketBytes);
+                        isMessageOnNewSa =
+                                (decodeResult.status == DECODE_STATUS_PROTECTED_ERROR_MESSAGE)
+                                        || (decodeResult.status == DECODE_STATUS_OK);
+                    }
+
+                    // Authenticated request received on the new/surviving SA; treat it as
+                    // an acknowledgement that the remote has successfully rekeyed.
+                    if (isMessageOnNewSa) {
+                        State nextState = mIdle;
+
+                        // This is the first IkeMessage seen on the new SA. It cannot be a response.
+                        // Likewise, if it a request, it must not be a retransmission. Verify msgId.
+                        // If either condition happens, consider rekey a success, but immediately
+                        // kill the session.
+                        if (ikeHeader.isResponseMsg
+                                || ikeSaRecord.getRemoteRequestMessageId() - ikeHeader.messageId
+                                        != 0) {
+                            nextState = mDeleteIkeLocalDelete;
+                        } else {
+                            deferMessage(message);
+                        }
+
+                        // Locally close old (and losing) IKE SAs. As a result of not waiting for
+                        // delete responses, the old SA can be left in a state where the stored ID
+                        // is no longer correct. However, this finishRekey() call will remove that
+                        // SA, so it doesn't matter.
                         finishRekey();
+                        transitionTo(nextState);
                     } else {
                         handleReceivedIkePacket(message);
                     }
+
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1971,8 +2029,18 @@ public class IkeSessionStateMachine extends StateMachine {
             mRemoteInitNewIkeSaRecord = null;
 
             mIkeSaRecordSurviving = null;
-            mIkeSaRecordAwaitingLocalDel = null;
-            mIkeSaRecordAwaitingRemoteDel = null;
+
+            if (mIkeSaRecordAwaitingLocalDel != null) {
+                removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
+                mIkeSaRecordAwaitingLocalDel.close();
+                mIkeSaRecordAwaitingLocalDel = null;
+            }
+
+            if (mIkeSaRecordAwaitingRemoteDel != null) {
+                removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
+                mIkeSaRecordAwaitingRemoteDel.close();
+                mIkeSaRecordAwaitingRemoteDel = null;
+            }
         }
     }
 
@@ -2029,8 +2097,7 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
-                // TODO: Validate that this was received on mIkeSaRecordAwaitingLocalDel
-                validateIkeDeleteResp(ikeMessage);
+                validateIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingLocalDel);
 
                 transitionTo(mSimulRekeyIkeRemoteDelete);
                 removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
@@ -2066,19 +2133,27 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
-            // TODO: Handle remote requests.
+            // Always return a TEMPORARY_FAILURE. In no case should we accept a message on an SA
+            // that is going away. All messages on the new SA is caught in RekeyIkeDeleteBase
+            IkeInformationalPayload error =
+                    new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
+            IkeMessage msg =
+                    buildEncryptedNotificationMessage(
+                            mIkeSaRecordAwaitingLocalDel,
+                            new IkeInformationalPayload[] {error},
+                            ikeMessage.ikeHeader.exchangeType,
+                            true,
+                            ikeMessage.ikeHeader.messageId);
+
+            sendEncryptedIkeMessage(msg);
         }
 
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
-                // TODO: Validate that this was received on mIkeSaRecordAwaitingLocalDel
-                validateIkeDeleteResp(ikeMessage);
+                validateIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingLocalDel);
 
-                removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
-                // TODO: Close mIkeSaRecordAwaitingLocalDel.
                 finishRekey();
-
                 transitionTo(mIdle);
             } catch (InvalidSyntaxException e) {
                 Log.d(TAG, "Validation failed for delete response", e);
@@ -2099,11 +2174,12 @@ public class IkeSessionStateMachine extends StateMachine {
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     try {
                         validateIkeDeleteReq(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
+
                         IkeMessage respMsg =
                                 buildIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingRemoteDel);
                         sendEncryptedIkeMessage(mIkeSaRecordAwaitingRemoteDel, respMsg);
 
-                        removeIkeSaRecord(mIkeSaRecordAwaitingRemoteDel);
+                        finishRekey();
                         transitionTo(mIdle);
                     } catch (InvalidSyntaxException e) {
                         // TODO: The other side deleted the wrong IKE SA and we should close the
@@ -2111,7 +2187,23 @@ public class IkeSessionStateMachine extends StateMachine {
                     }
                     return;
                 default:
-                    // TODO: Reply with TEMPORARY_FAILURE
+                    // At this point, the incoming request can ONLY be on
+                    // mIkeSaRecordAwaitingRemoteDel - if it was on the surviving SA, it is defered
+                    // and the rekey is finished. It is likewise impossible to have this on the
+                    // local-deleted SA, since the delete has already been acknowledged in the
+                    // SimulRekeyIkeLocalDeleteRemoteDelete state.
+                    IkeInformationalPayload error =
+                            new IkeNotifyPayload(
+                                    IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
+                    IkeMessage msg =
+                            buildEncryptedNotificationMessage(
+                                    mIkeSaRecordAwaitingRemoteDel,
+                                    new IkeInformationalPayload[] {error},
+                                    ikeMessage.ikeHeader.exchangeType,
+                                    true,
+                                    ikeMessage.ikeHeader.messageId);
+
+                    sendEncryptedIkeMessage(msg);
             }
         }
 
@@ -2161,13 +2253,27 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             mIkeSaRecordSurviving = mRemoteInitNewIkeSaRecord;
             mIkeSaRecordAwaitingRemoteDel = mCurrentIkeSaRecord;
-            // TODO: Set timer awaiting delete request.
+
+            sendMessageDelayed(TIMEOUT_REKEY_REMOTE_DELETE_IKE, REKEY_DELETE_TIMEOUT_MS);
+        }
+
+        @Override
+        public boolean processMessage(Message message) {
+            // Intercept rekey delete timeout. Assume rekey succeeded since no retransmissions
+            // were received.
+            if (message.what == TIMEOUT_REKEY_REMOTE_DELETE_IKE) {
+                finishRekey();
+                transitionTo(mIdle);
+
+                return HANDLED;
+            } else {
+                return super.processMessage(message);
+            }
         }
 
         @Override
         public void exit() {
-            finishRekey();
-            // TODO: Stop timer awaiting delete request.
+            removeMessages(TIMEOUT_REKEY_REMOTE_DELETE_IKE);
         }
     }
 
@@ -2205,13 +2311,15 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
-                validateIkeDeleteResp(ikeMessage);
+                validateIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
             } catch (InvalidSyntaxException e) {
                 Log.d(TAG, "Invalid syntax on IKE Delete response. Shutting down anyways", e);
             }
 
-            // TODO: Close IKE SA
             removeIkeSaRecord(mCurrentIkeSaRecord);
+            mCurrentIkeSaRecord.close();
+            mCurrentIkeSaRecord = null;
+
             transitionTo(mClosed);
         }
 
