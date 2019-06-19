@@ -19,6 +19,7 @@ package com.android.ike.eap.message;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IDENTITY;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NONCE_MT;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PADDING;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
@@ -35,6 +36,7 @@ import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
 import com.android.ike.eap.message.EapSimAttribute.AtAnyIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtFullauthIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
+import com.android.ike.eap.message.EapSimAttribute.AtMac;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
 import com.android.ike.eap.message.EapSimAttribute.AtPadding;
 import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
@@ -101,6 +103,8 @@ public class EapSimAttributeFactory {
                 return new AtRand(lengthInBytes, byteBuffer);
             case EAP_AT_PADDING:
                 return new AtPadding(lengthInBytes, byteBuffer);
+            case EAP_AT_MAC:
+                return new AtMac(lengthInBytes, byteBuffer);
             default:
                 if (attributeType >= SKIPPABLE_ATTRIBUTE_RANGE_START) {
                     return new EapSimUnsupportedAttribute(attributeType, lengthInBytes, byteBuffer);
