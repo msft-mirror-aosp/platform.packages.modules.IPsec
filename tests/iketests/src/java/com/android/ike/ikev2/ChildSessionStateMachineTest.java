@@ -192,7 +192,7 @@ public final class ChildSessionStateMachineTest {
 
     private ChildSessionOptions buildChildSessionOptions() throws Exception {
         SaProposal saProposal =
-                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                SaProposal.Builder.newChildSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
