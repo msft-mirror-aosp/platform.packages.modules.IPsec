@@ -1668,7 +1668,10 @@ public class IkeSessionStateMachine extends StateMachine {
 
             payloadList.addAll(
                     CreateChildSaHelper.getInitCreateSaRequestPayloads(
-                            mIpSecManager, mLocalAddress, mFirstChildSessionOptions));
+                            mIpSecManager,
+                            mLocalAddress,
+                            mFirstChildSessionOptions,
+                            true /*isFirstChild*/));
 
             // Build IKE header
             IkeHeader ikeHeader =
