@@ -16,7 +16,6 @@
 
 package com.android.ike.ikev2;
 
-import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -56,7 +55,11 @@ public final class IkeLocalRequestSchedulerTest {
     public void testAddMultipleRequestProcessOnlyOne() {
         for (LocalRequest r : mMockRequestArray) mScheduler.addRequest(r);
 
+        // Verify that no procedure was preemptively pulled from the queue
+        verify(mMockConsumer, never()).onNewProcedureReady(any());
+
         // Check that the onNewPrcedureReady called exactly once, on the first item
+        mScheduler.readyForNextProcedure();
         verify(mMockConsumer, times(1)).onNewProcedureReady(any());
         verify(mMockConsumer, times(1)).onNewProcedureReady(mMockRequestArray[0]);
         for (int i = 1; i < mMockRequestArray.length; i++) {
@@ -65,53 +68,11 @@ public final class IkeLocalRequestSchedulerTest {
     }
 
     @Test
-    public void testFinishLocalProcedureWithRequestAwaiting() {
-        for (LocalRequest r : mMockRequestArray) mScheduler.addRequest(r);
-
-        for (int i = 0; i < mMockRequestArray.length; i++) {
-            // Verify the calling times and the latest processed LocalRequest
-            verify(mMockConsumer, times(i + 1)).onNewProcedureReady(mLocalRequestCaptor.capture());
-            assertEquals(mMockRequestArray[i], mLocalRequestCaptor.getValue());
-
-            mScheduler.finishLocalProcedure();
-        }
-
-        verify(mMockConsumer, times(mMockRequestArray.length)).onNewProcedureReady(any());
-    }
-
-    @Test
-    public void testFinishLocalProcedureWithNoRequestAwaiting() {
-        mScheduler.addRequest(mock(LocalRequest.class));
-        verify(mMockConsumer, times(1)).onNewProcedureReady(any());
-
-        mScheduler.finishLocalProcedure();
-        verify(mMockConsumer, times(1)).onNewProcedureReady(any());
-    }
-
-    @Test
-    public void testFinishRemoteProcedureWithRequestAwaiting() {
-        mScheduler.startRemoteProcedure();
-        mScheduler.addRequest(mock(LocalRequest.class));
-
-        verify(mMockConsumer, never()).onNewProcedureReady(any());
-
-        mScheduler.finishRemoteProcedure();
-        verify(mMockConsumer).onNewProcedureReady(any());
-    }
-
-    @Test
-    public void testFinishRemoteProcedureWithNoRequestAwaiting() {
-        mScheduler.startRemoteProcedure();
-        mScheduler.finishRemoteProcedure();
-        verify(mMockConsumer, never()).onNewProcedureReady(any());
-    }
-
-    @Test
     public void testProcessOrder() {
         InOrder inOrder = inOrder(mMockConsumer);
 
         for (LocalRequest r : mMockRequestArray) mScheduler.addRequest(r);
-        for (int i = 0; i < mMockRequestArray.length; i++) mScheduler.finishLocalProcedure();
+        for (int i = 0; i < mMockRequestArray.length; i++) mScheduler.readyForNextProcedure();
 
         for (LocalRequest r : mMockRequestArray) {
             inOrder.verify(mMockConsumer).onNewProcedureReady(r);
@@ -127,13 +88,11 @@ public final class IkeLocalRequestSchedulerTest {
             mockHighPriorityRequestArray[i] = mock(LocalRequest.class);
         }
 
-        mScheduler.startRemoteProcedure();
         for (LocalRequest r : mMockRequestArray) mScheduler.addRequest(r);
         for (LocalRequest r : mockHighPriorityRequestArray) mScheduler.addRequestAtFront(r);
 
-        mScheduler.finishRemoteProcedure();
         for (int i = 0; i < mockHighPriorityRequestArray.length + mMockRequestArray.length; i++) {
-            mScheduler.finishLocalProcedure();
+            mScheduler.readyForNextProcedure();
         }
 
         // Verify processing order. mockHighPriorityRequestArray is processed in reverse order

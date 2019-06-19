@@ -165,7 +165,6 @@ public final class ChildSessionStateMachineTest {
         mLooper = new TestLooper();
         mChildSessionStateMachine =
                 new ChildSessionStateMachine(
-                        "ChildSessionStateMachine",
                         mLooper.getLooper(),
                         mContext,
                         mMockIpSecManager,
@@ -269,7 +268,7 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.quit();
         mLooper.dispatchAll();
 
-        verify(mMockChildSessionSmCallback).onProcedureFinished();
+        verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
     }
 
     private void verifyInitCreateChildResp(
@@ -277,7 +276,7 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback)
                 .onChildSaCreated(
                         mSpyCurrentChildSaRecord.getRemoteSpi(), mChildSessionStateMachine);
-        verify(mMockChildSessionSmCallback).onProcedureFinished();
+        verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
@@ -311,6 +310,13 @@ public final class ChildSessionStateMachineTest {
         assertTrue(childSaRecordConfig.hasIntegrityAlgo);
 
         assertEquals(mSpyCurrentChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
+
+        verify(mMockChildSessionSmCallback)
+                .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
+        verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
     }
 
     @Test
