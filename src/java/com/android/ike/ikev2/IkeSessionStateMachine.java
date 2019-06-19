@@ -23,6 +23,9 @@ import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_E
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_VENDOR;
 
 import android.annotation.IntDef;
 import android.content.Context;
@@ -1242,7 +1245,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
         private void executeLocalRequest(ChildLocalRequest req) {
             switch (req.procedureType) {
-                //TODO: Also support Delete Child and Rekey Child.
+                    // TODO: Also support Delete Child and Rekey Child.
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
                     mChildInLocalProcedure = buildChildSession(req.childSessionOptions);
                     mChildInLocalProcedure.createChildSa();
@@ -1266,8 +1269,33 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
-            // TODO: Stop retransimitting and hand payloads to the mChildInLocalProcedure
-            throw new UnsupportedOperationException("Cannot handle inbound Child response");
+            // TODO: Stop retransimitting
+
+            List<IkePayload> handledPayloads = new LinkedList<>();
+
+            for (IkePayload payload : ikeMessage.ikePayloadList) {
+                switch (payload.payloadType) {
+                    case PAYLOAD_TYPE_NOTIFY:
+                        // TODO: Handle fatal IKE error notification and IKE status notification.
+                        break;
+                    case PAYLOAD_TYPE_VENDOR:
+                        // TODO: Handle Vendor ID Payload
+                        handledPayloads.add(payload);
+                        break;
+                    case PAYLOAD_TYPE_CP:
+                        // TODO: Handle IKE related configuration attributes and pass the payload to
+                        // Child to further handle internal IP address attributes.
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            List<IkePayload> payloads = new LinkedList<>();
+            payloads.addAll(ikeMessage.ikePayloadList);
+            payloads.removeAll(handledPayloads);
+
+            mChildInLocalProcedure.receiveResponse(ikeMessage.ikeHeader.exchangeType, payloads);
         }
     }
 

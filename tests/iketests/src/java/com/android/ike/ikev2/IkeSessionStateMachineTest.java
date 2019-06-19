@@ -145,7 +145,7 @@ public final class IkeSessionStateMachineTest {
     private static final String ID_PAYLOAD_RESPONDER_HEX_STRING = "2700000c010000007f000001";
     private static final String PSK_AUTH_RESP_PAYLOAD_HEX_STRING =
             "2100001c0200000058f36412e9b7b38df817a9f7779b7a008dacdd25";
-    private static final String FIRST_CHILD_SA_RESP_PAYLOAD_HEX_STRING =
+    private static final String CHILD_SA_RESP_PAYLOAD_HEX_STRING =
             "2c00002c0000002801030403cae7019f0300000c0100000c800e008003000008030"
                     + "000020000000805000000";
     private static final String TS_INIT_PAYLOAD_HEX_STRING =
@@ -208,6 +208,8 @@ public final class IkeSessionStateMachineTest {
             ArgumentCaptor.forClass(IkeSaRecordConfig.class);
     private ArgumentCaptor<IChildSessionSmCallback> mChildSessionSmCbCaptor =
             ArgumentCaptor.forClass(IChildSessionSmCallback.class);
+    private ArgumentCaptor<List<IkePayload>> mPayloadListCaptor =
+            ArgumentCaptor.forClass(List.class);
 
     private ReceivedIkePacket makeDummyReceivedIkeInitRespPacket(
             long initiatorSpi,
@@ -521,13 +523,35 @@ public final class IkeSessionStateMachineTest {
 
         payloadHexStringList.add(ID_PAYLOAD_RESPONDER_HEX_STRING);
         payloadHexStringList.add(PSK_AUTH_RESP_PAYLOAD_HEX_STRING);
-        payloadHexStringList.add(FIRST_CHILD_SA_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(CHILD_SA_RESP_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_INIT_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_RESP_PAYLOAD_HEX_STRING);
 
         return makeDummyEncryptedReceivedIkePacket(
                 mSpyCurrentIkeSaRecord,
                 IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                true /*isResp*/,
+                payloadTypeList,
+                payloadHexStringList);
+    }
+
+    private ReceivedIkePacket makeCreateChildResponse() throws Exception {
+        List<Integer> payloadTypeList = new LinkedList<>();
+        List<String> payloadHexStringList = new LinkedList<>();
+
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_INITIATOR);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_RESPONDER);
+
+        payloadHexStringList.add(CHILD_SA_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(TS_INIT_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(TS_RESP_PAYLOAD_HEX_STRING);
+
+        return makeDummyEncryptedReceivedIkePacket(
+                mSpyCurrentIkeSaRecord,
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
                 true /*isResp*/,
                 payloadTypeList,
                 payloadHexStringList);
@@ -869,7 +893,24 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
 
-        // TODO: Test receiving response
+        // Mocking receiving response
+        ReceivedIkePacket dummyCreateChildResp = makeCreateChildResponse();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyCreateChildResp);
+        mLooper.dispatchAll();
+
+        verifyIncrementLocaReqMsgId();
+        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyCreateChildResp);
+
+        verify(mMockChildSessionStateMachine)
+                .receiveResponse(
+                        eq(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA), mPayloadListCaptor.capture());
+
+        List<IkePayload> childRespList = mPayloadListCaptor.getValue();
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_SA));
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_INITIATOR));
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_RESPONDER));
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_NONCE));
 
         // Mock finishing procedure
         cb.onProcedureFinished(mMockChildSessionStateMachine);
