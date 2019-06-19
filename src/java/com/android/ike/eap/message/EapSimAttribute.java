@@ -504,4 +504,66 @@ public abstract class EapSimAttribute {
             byteBuffer.put(mac);
         }
     }
+
+    /**
+     * AtCounter represents the AT_COUNTER attribute defined in RFC 4186 Section 10.15
+     */
+    public static class AtCounter extends EapSimAttribute {
+        private static final int ATTR_LENGTH = LENGTH_SCALING;
+
+        public final int counter;
+
+        public AtCounter(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_COUNTER, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            this.counter = Short.toUnsignedInt(byteBuffer.getShort());
+        }
+
+        @VisibleForTesting
+        public AtCounter(int counter) throws EapSimInvalidAttributeException {
+            super(EAP_AT_COUNTER, ATTR_LENGTH);
+            this.counter = counter;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.putShort((short) counter);
+        }
+    }
+
+
+    /**
+     * AtCounterTooSmall represents the AT_COUNTER_TOO_SMALL attribute defined in RFC 4186 Section
+     * 10.16
+     */
+    public static class AtCounterTooSmall extends EapSimAttribute {
+        private static final int ATTR_LENGTH = LENGTH_SCALING;
+        private static final int ATTR_HEADER = 2;
+
+        public AtCounterTooSmall(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_COUNTER_TOO_SMALL, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+            consumePadding(ATTR_HEADER, byteBuffer);
+        }
+
+        public AtCounterTooSmall() throws EapSimInvalidAttributeException {
+            super(EAP_AT_COUNTER_TOO_SMALL, ATTR_LENGTH);
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            addPadding(ATTR_HEADER, byteBuffer);
+        }
+    }
 }
