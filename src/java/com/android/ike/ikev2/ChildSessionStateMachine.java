@@ -128,6 +128,11 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Package private SaProposal that represents the negotiated Child SA proposal. */
     @VisibleForTesting SaProposal mSaProposal;
 
+    /** Negotiated local Traffic Selector. */
+    private IkeTrafficSelector[] mLocalTs;
+    /** Negotiated remote Traffic Selector. */
+    private IkeTrafficSelector[] mRemoteTs;
+
     private IkeCipher mChildCipher;
     private IkeMacIntegrity mChildIntegrity;
 
@@ -363,7 +368,7 @@ public class ChildSessionStateMachine extends StateMachine {
             switch (createChildResult.status) {
                 case CREATE_STATUS_OK:
                     try {
-                        setUpNegotiatedResult(createChildResult.negotiatedProposal);
+                        setUpNegotiatedResult(createChildResult);
                         mCurrentChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
                                         mContext,
@@ -408,7 +413,7 @@ public class ChildSessionStateMachine extends StateMachine {
             }
         }
 
-        private void setUpNegotiatedResult(SaProposal proposal) {
+        private void setUpNegotiatedResult(CreateChildResult createChildResult) {
             // Build crypto tools using negotiated SaProposal. It is ensured by {@link
             // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that the negotiated SaProposal
             // is valid. The negotiated SaProposal has exactly one encryption algorithm. When it has
@@ -417,8 +422,7 @@ public class ChildSessionStateMachine extends StateMachine {
             // SaProposal has a normal encryption algorithm, it either does not have integrity
             // algorithm or has one integrity algorithm with any supported value.
 
-            // TODO: Also store negotiated TS in the StateMachine
-            mSaProposal = proposal;
+            mSaProposal = createChildResult.negotiatedProposal;
             Provider provider = IkeMessage.getSecurityProvider();
             mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
             if (mSaProposal.getIntegrityTransforms().length != 0
@@ -427,6 +431,9 @@ public class ChildSessionStateMachine extends StateMachine {
                 mChildIntegrity =
                         IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
             }
+
+            mLocalTs = createChildResult.localTs;
+            mRemoteTs = createChildResult.remoteTs;
         }
     }
 
@@ -692,12 +699,16 @@ public class ChildSessionStateMachine extends StateMachine {
                             "Failed the negotiation on Child SA mode (conflicting modes chosen).");
                 }
 
-                validateTsPayloads(reqPayloads, respPayloads);
+                Pair<IkeTrafficSelector[], IkeTrafficSelector[]> tsPair =
+                        validateAndGetNegotiatedTsPair(
+                                reqPayloads, respPayloads, true /*isLocalInit*/);
 
                 return new CreateChildResult(
                         childProposalPair.first.getChildSpiResource(),
                         childProposalPair.second.getChildSpiResource(),
-                        saProposal);
+                        saProposal,
+                        tsPair.first,
+                        tsPair.second);
             } catch (IkeProtocolException
                     | ResourceUnavailableException
                     | SpiUnavailableException e) {
@@ -793,21 +804,42 @@ public class ChildSessionStateMachine extends StateMachine {
             }
         }
 
-        private static void validateTsPayloads(
-                List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
-                throws TsUnacceptableException {
-            // TODO: Return negotiated TS.
-            for (int tsType : new int[] {PAYLOAD_TYPE_TS_INITIATOR, PAYLOAD_TYPE_TS_RESPONDER}) {
-                IkeTsPayload reqPayload =
-                        IkePayload.getPayloadForTypeInProvidedList(
-                                tsType, IkeTsPayload.class, reqPayloads);
-                IkeTsPayload respPayload =
-                        IkePayload.getPayloadForTypeInProvidedList(
-                                tsType, IkeTsPayload.class, respPayloads);
-                if (!reqPayload.contains(respPayload)) {
-                    throw new TsUnacceptableException();
-                }
+        private static Pair<IkeTrafficSelector[], IkeTrafficSelector[]>
+                validateAndGetNegotiatedTsPair(
+                        List<IkePayload> reqPayloads,
+                        List<IkePayload> respPayloads,
+                        boolean isLocalInit)
+                        throws TsUnacceptableException {
+            IkeTrafficSelector[] initTs =
+                    validateAndGetNegotiatedTs(reqPayloads, respPayloads, true /*isInitTs*/);
+            IkeTrafficSelector[] respTs =
+                    validateAndGetNegotiatedTs(reqPayloads, respPayloads, false /*isInitTs*/);
+
+            if (isLocalInit) {
+                return new Pair<IkeTrafficSelector[], IkeTrafficSelector[]>(initTs, respTs);
+            } else {
+                return new Pair<IkeTrafficSelector[], IkeTrafficSelector[]>(respTs, initTs);
             }
+        }
+
+        private static IkeTrafficSelector[] validateAndGetNegotiatedTs(
+                List<IkePayload> reqPayloads, List<IkePayload> respPayloads, boolean isInitTs)
+                throws TsUnacceptableException {
+            int tsType = isInitTs ? PAYLOAD_TYPE_TS_INITIATOR : PAYLOAD_TYPE_TS_RESPONDER;
+            IkeTsPayload reqPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            tsType, IkeTsPayload.class, reqPayloads);
+            IkeTsPayload respPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            tsType, IkeTsPayload.class, respPayloads);
+
+            if (!reqPayload.contains(respPayload)) {
+                throw new TsUnacceptableException();
+            }
+
+            // It is guaranteed by decoding inbound TS Payload and constructing outbound TS Payload
+            // that each TS Payload has at least one IkeTrafficSelector.
+            return respPayload.trafficSelectors;
         }
 
         @VisibleForTesting
@@ -867,20 +899,24 @@ public class ChildSessionStateMachine extends StateMachine {
         public final SecurityParameterIndex localSpi;
         public final SecurityParameterIndex remoteSpi;
         public final SaProposal negotiatedProposal;
+        public final IkeTrafficSelector[] localTs;
+        public final IkeTrafficSelector[] remoteTs;
         public final IkeException exception;
-
-        // TODO: Also store negotiated TS.
 
         private CreateChildResult(
                 @CreateStatus int status,
                 SecurityParameterIndex localSpi,
                 SecurityParameterIndex remoteSpi,
                 SaProposal negotiatedProposal,
+                IkeTrafficSelector[] localTs,
+                IkeTrafficSelector[] remoteTs,
                 IkeException exception) {
             this.status = status;
             this.localSpi = localSpi;
             this.remoteSpi = remoteSpi;
             this.negotiatedProposal = negotiatedProposal;
+            this.localTs = localTs;
+            this.remoteTs = remoteTs;
             this.exception = exception;
         }
 
@@ -888,8 +924,17 @@ public class ChildSessionStateMachine extends StateMachine {
         CreateChildResult(
                 SecurityParameterIndex localSpi,
                 SecurityParameterIndex remoteSpi,
-                SaProposal negotiatedProposal) {
-            this(CREATE_STATUS_OK, localSpi, remoteSpi, negotiatedProposal, null /*exception*/);
+                SaProposal negotiatedProposal,
+                IkeTrafficSelector[] localTs,
+                IkeTrafficSelector[] remoteTs) {
+            this(
+                    CREATE_STATUS_OK,
+                    localSpi,
+                    remoteSpi,
+                    negotiatedProposal,
+                    localTs,
+                    remoteTs,
+                    null /*exception*/);
         }
 
         /** Construct a CreateChildResult instance for an error case. */
@@ -899,6 +944,8 @@ public class ChildSessionStateMachine extends StateMachine {
                     null /*localSpi*/,
                     null /*remoteSpi*/,
                     null /*negotiatedProposal*/,
+                    null /*localTs*/,
+                    null /*remoteTs*/,
                     exception);
         }
     }
@@ -909,6 +956,5 @@ public class ChildSessionStateMachine extends StateMachine {
         mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
     }
 
-    // TODO: Add states to support creating additional Child SA, deleting Child SA and rekeying
-    // Child SA.
+    // TODO: Add states to support deleting Child SA and rekeying Child SA.
 }

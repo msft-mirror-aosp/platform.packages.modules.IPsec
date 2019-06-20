@@ -72,6 +72,11 @@ public final class IkeTsPayload extends IkePayload {
     public IkeTsPayload(boolean isInitiator, IkeTrafficSelector[] ikeTrafficSelectors) {
         super((isInitiator ? PAYLOAD_TYPE_TS_INITIATOR : PAYLOAD_TYPE_TS_RESPONDER), false);
 
+        if (ikeTrafficSelectors == null || ikeTrafficSelectors.length == 0) {
+            throw new IllegalArgumentException(
+                    "TS Payload requires at least one Traffic Selector.");
+        }
+
         numTs = ikeTrafficSelectors.length;
         trafficSelectors = ikeTrafficSelectors;
     }
