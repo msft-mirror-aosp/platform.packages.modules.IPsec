@@ -455,4 +455,53 @@ public abstract class EapSimAttribute {
             addPadding(ATTR_HEADER, byteBuffer);
         }
     }
+
+    /**
+     * AtMac represents the AT_MAC attribute defined in RFC 4186 Section 10.14
+     */
+    public static class AtMac extends EapSimAttribute {
+        private static final int ATTR_LENGTH = 5 * LENGTH_SCALING;
+        private static final int MAC_LENGTH = 4 * LENGTH_SCALING;
+        private static final int RESERVED_BYTES = 2;
+
+        public final byte[] mac;
+
+        public AtMac(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_MAC, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            // next two bytes are reserved (RFC 4186 Section 10.14)
+            byteBuffer.get(new byte[RESERVED_BYTES]);
+
+            mac = new byte[MAC_LENGTH];
+            byteBuffer.get(mac);
+        }
+
+        // Used for calculating MACs. Per RFC 4186 Section 10.14, the MAC should be calculated over
+        // the entire packet, with the value field of the MAC attribute set to zero.
+        public AtMac() throws EapSimInvalidAttributeException {
+            super(EAP_AT_MAC, ATTR_LENGTH);
+            mac = new byte[MAC_LENGTH];
+        }
+
+        public AtMac(byte[] mac) throws EapSimInvalidAttributeException {
+            super(EAP_AT_MAC, ATTR_LENGTH);
+            this.mac = mac;
+
+            if (mac.length != MAC_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid length for MAC");
+            }
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.put(new byte[RESERVED_BYTES]);
+            byteBuffer.put(mac);
+        }
+    }
 }
