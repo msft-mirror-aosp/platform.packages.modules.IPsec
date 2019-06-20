@@ -144,7 +144,6 @@ public class ChildSessionStateMachine extends StateMachine {
 
     /** Package private */
     ChildSessionStateMachine(
-            String name,
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
@@ -155,7 +154,7 @@ public class ChildSessionStateMachine extends StateMachine {
             UdpEncapsulationSocket udpEncapSocket,
             IkeMacPrf ikePrf,
             byte[] skD) {
-        super(name, looper);
+        super(TAG, looper);
 
         mContext = context;
         mIpSecManager = ipSecManager;
@@ -207,7 +206,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 @ExchangeType int exchangeType, boolean isResp, List<IkePayload> payloadList);
 
         /** Notify that a Child procedure has been finished. */
-        void onProcedureFinished();
+        void onProcedureFinished(ChildSessionStateMachine childSession);
 
         /**
          * Notify that a Child procedure has been finished and the IKE Session should close itself
@@ -472,7 +471,10 @@ public class ChildSessionStateMachine extends StateMachine {
             try {
                 mRequestPayloads =
                         CreateChildSaHelper.getInitCreateSaRequestPayloads(
-                                mIpSecManager, mLocalAddress, mChildSessionOptions);
+                                mIpSecManager,
+                                mLocalAddress,
+                                mChildSessionOptions,
+                                false /*isFirstChild*/);
                 mChildSmCallback.onOutboundPayloadsReady(
                         EXCHANGE_TYPE_CREATE_CHILD_SA, false /*isResp*/, mRequestPayloads);
             } catch (ResourceUnavailableException e) {
@@ -511,7 +513,7 @@ public class ChildSessionStateMachine extends StateMachine {
     class Idle extends State {
         @Override
         public void enter() {
-            mChildSmCallback.onProcedureFinished();
+            mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
         }
 
         // TODO: Support handling local and remote request.
@@ -526,18 +528,27 @@ public class ChildSessionStateMachine extends StateMachine {
         public static List<IkePayload> getInitCreateSaRequestPayloads(
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
-                ChildSessionOptions childSessionOptions)
+                ChildSessionOptions childSessionOptions,
+                boolean isFirstChild)
                 throws ResourceUnavailableException {
-            // TODO: b/134625950 Do not include DH Transform and KE Payload when this method is
-            // called for creating the first Child SA under the IKE Session.
+
+            SaProposal[] saProposals = childSessionOptions.getSaProposals();
+
+            if (isFirstChild) {
+                for (int i = 0; i < saProposals.length; i++) {
+                    saProposals[i] =
+                            childSessionOptions.getSaProposals()[i].getCopyWithoutDhTransform();
+                }
+            }
+
             return getCreateSaPayloads(
-                    false /*isResp*/,
-                    childSessionOptions.isTransportMode(),
                     ipSecManager,
                     localAddress,
-                    childSessionOptions.getSaProposals(),
+                    saProposals,
                     childSessionOptions.getLocalTrafficSelectors(),
-                    childSessionOptions.getRemoteTrafficSelectors());
+                    childSessionOptions.getRemoteTrafficSelectors(),
+                    false /*isResp*/,
+                    childSessionOptions.isTransportMode());
         }
 
         // TODO: Support creating payloads for rekey request and response by calling
@@ -545,13 +556,13 @@ public class ChildSessionStateMachine extends StateMachine {
 
         /** Create payload list for creating a new Child SA. */
         private static List<IkePayload> getCreateSaPayloads(
-                boolean isResp,
-                boolean isTransport,
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
                 SaProposal[] saProposals,
                 IkeTrafficSelector[] initTs,
-                IkeTrafficSelector[] respTs)
+                IkeTrafficSelector[] respTs,
+                boolean isResp,
+                boolean isTransport)
                 throws ResourceUnavailableException {
             List<IkePayload> payloadList = new ArrayList<>(5);
 
@@ -895,7 +906,7 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Called when this StateMachine quits. */
     @Override
     protected void onQuitting() {
-        mChildSmCallback.onProcedureFinished();
+        mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
     }
 
     // TODO: Add states to support creating additional Child SA, deleting Child SA and rekeying

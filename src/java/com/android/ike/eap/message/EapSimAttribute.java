@@ -16,11 +16,13 @@
 
 package com.android.ike.eap.message;
 
+import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -30,7 +32,8 @@ import java.util.List;
  * Section 10</a>
  */
 public abstract class EapSimAttribute {
-    protected static final int LENGTH_SCALING = 4;
+    static final int LENGTH_SCALING = 4;
+    private static final int MIN_ATTR_LENGTH = 4;
 
     public static final int SKIPPABLE_ATTRIBUTE_RANGE_START = 128;
 
@@ -85,6 +88,16 @@ public abstract class EapSimAttribute {
         byteBuffer.put((byte) (lengthInBytes / LENGTH_SCALING));
     }
 
+    void consumePadding(int bytesUsed, ByteBuffer byteBuffer) {
+        int paddingRemaining = lengthInBytes - bytesUsed;
+        byteBuffer.get(new byte[paddingRemaining]);
+    }
+
+    void addPadding(int bytesUsed, ByteBuffer byteBuffer) {
+        int paddingNeeded = lengthInBytes - bytesUsed;
+        byteBuffer.put(new byte[paddingNeeded]);
+    }
+
     /**
      * EapSimUnsupportedAttribute represents any unsupported, skippable EAP-SIM attribute.
      */
@@ -122,7 +135,6 @@ public abstract class EapSimAttribute {
      * AtVersionList represents the AT_VERSION_LIST attribute defined in RFC 4186 Section 10.2
      */
     public static class AtVersionList extends EapSimAttribute {
-        private static final int ATTR_HEADER_BYTES = 4;
         private static final int BYTES_PER_VERSION = 2;
 
         public final List<Integer> versions = new ArrayList<>();
@@ -143,9 +155,8 @@ public abstract class EapSimAttribute {
                 versions.add(Short.toUnsignedInt(byteBuffer.getShort()));
             }
 
-            int bytesUsed = ATTR_HEADER_BYTES + (BYTES_PER_VERSION * versions.size());
-            int paddingRemaining = lengthInBytes - bytesUsed;
-            byteBuffer.get(new byte[paddingRemaining]);
+            int bytesUsed = MIN_ATTR_LENGTH + (BYTES_PER_VERSION * versions.size());
+            consumePadding(bytesUsed, byteBuffer);
         }
 
         @VisibleForTesting
@@ -166,9 +177,8 @@ public abstract class EapSimAttribute {
                 byteBuffer.putShort((short) i);
             }
 
-            int bytesUsed = ATTR_HEADER_BYTES + (BYTES_PER_VERSION * versions.size());
-            int paddingNeeded = lengthInBytes - bytesUsed;
-            byteBuffer.put(new byte[paddingNeeded]);
+            int bytesUsed = MIN_ATTR_LENGTH + (BYTES_PER_VERSION * versions.size());
+            addPadding(bytesUsed, byteBuffer);
         }
     }
 
@@ -307,6 +317,109 @@ public abstract class EapSimAttribute {
         @VisibleForTesting
         public AtFullauthIdReq() throws EapSimInvalidAttributeException {
             super(EAP_AT_FULLAUTH_ID_REQ);
+        }
+    }
+
+    /**
+     * AtIdentity represents the AT_IDENTITY attribute defined in RFC 4186 Section 10.8
+     */
+    public static class AtIdentity extends EapSimAttribute {
+        public final byte[] identity;
+
+        public AtIdentity(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_IDENTITY, lengthInBytes);
+
+            int identityLength = Short.toUnsignedInt(byteBuffer.getShort());
+            identity = new byte[identityLength];
+            byteBuffer.get(identity);
+
+            int bytesUsed = MIN_ATTR_LENGTH + identityLength;
+            consumePadding(bytesUsed, byteBuffer);
+        }
+
+        @VisibleForTesting
+        public AtIdentity(int lengthInBytes, byte[] identity)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_IDENTITY, lengthInBytes);
+            this.identity = identity;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.putShort((short) identity.length);
+            byteBuffer.put(identity);
+
+            int bytesUsed = MIN_ATTR_LENGTH + identity.length;
+            addPadding(bytesUsed, byteBuffer);
+        }
+    }
+
+    /**
+     * AtRand represents the AT_RAND attribute defined in RFC 4186 Section 10.9
+     */
+    public static class AtRand extends EapSimAttribute {
+        private static final int RAND_LENGTH = 16;
+        private static final int RESERVED_BYTES = 2;
+        private static final int MIN_RANDS = 2;
+        private static final int MAX_RANDS = 3;
+
+        public final List<byte[]> rands = new ArrayList<>(MAX_RANDS);
+
+        public AtRand(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_RAND, lengthInBytes);
+
+            // next two bytes are reserved (RFC 4186 Section 10.9)
+            byteBuffer.get(new byte[RESERVED_BYTES]);
+
+            int numRands = (lengthInBytes - MIN_ATTR_LENGTH) / RAND_LENGTH;
+            if (!isValidNumRands(numRands)) {
+                throw new EapSimInvalidAtRandException("Unexpected number of rands: " + numRands);
+            }
+
+            for (int i = 0; i < numRands; i++) {
+                byte[] rand = new byte[RAND_LENGTH];
+                byteBuffer.get(rand);
+
+                // check for rand being unique (RFC 4186 Section 10.9)
+                for (int j = 0; j < i; j++) {
+                    byte[] otherRand = rands.get(j);
+                    if (Arrays.equals(rand, otherRand)) {
+                        throw new EapSimInvalidAttributeException("Received two identical RANDs");
+                    }
+                }
+                rands.add(rand);
+            }
+        }
+
+        @VisibleForTesting
+        public AtRand(int lengthInBytes, byte[]... rands) throws EapSimInvalidAttributeException {
+            super(EAP_AT_RAND, lengthInBytes);
+
+            if (!isValidNumRands(rands.length)) {
+                throw new EapSimInvalidAtRandException("Unexpected number of rands: "
+                        + rands.length);
+            }
+            for (byte[] rand : rands) {
+                this.rands.add(rand);
+            }
+        }
+
+        private boolean isValidNumRands(int numRands) {
+            // numRands is valid iff 2 <= numRands <= 3
+            return MIN_RANDS <= numRands && numRands <= MAX_RANDS;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.put(new byte[RESERVED_BYTES]);
+
+            for (byte[] rand : rands) {
+                byteBuffer.put(rand);
+            }
         }
     }
 }
