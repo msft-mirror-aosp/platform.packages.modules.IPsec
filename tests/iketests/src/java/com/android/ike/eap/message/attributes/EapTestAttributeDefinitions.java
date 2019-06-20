@@ -56,6 +56,8 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_COUNTER_TOO_SMALL = hexStringToByteArray("14010000");
     public static final String NONCE_S = "0123456789ABCDEFFEDCBA9876543210";
     public static final byte[] AT_NONCE_S = hexStringToByteArray("15050000" + NONCE_S);
+    public static final String NOTIFICATION_CODE = "8000";
+    public static final byte[] AT_NOTIFICATION = hexStringToByteArray("0C01" + NOTIFICATION_CODE);
 
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
@@ -74,4 +76,5 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_COUNTER_INVALID_LENGTH = hexStringToByteArray("1302");
     public static final byte[] AT_COUNTER_TOO_SMALL_INVALID_LENGTH = hexStringToByteArray("1402");
     public static final byte[] AT_NONCE_S_INVALID_LENGTH = hexStringToByteArray("1506");
+    public static final byte[] AT_NOTIFICATION_INVALID_LENGTH = hexStringToByteArray("0C02");
 }
