@@ -39,6 +39,7 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 import android.os.Message;
+import android.util.Log;
 import android.util.Pair;
 
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
@@ -667,11 +668,12 @@ public class ChildSessionStateMachine extends StateMachine {
                         // Ignore
                         break;
                     default:
-                        return new CreateChildResult(
-                                CREATE_STATUS_IKE_ERROR,
-                                new InvalidSyntaxException(
-                                        "Received unexpected notification type: "
-                                                + notify.notifyType));
+                        // Unknown and unexpected status notifications are ignored as per RFC7296.
+                        Log.w(
+                                TAG,
+                                "Received unknown or unexpected status notifications with notify"
+                                        + " type: "
+                                        + notify.notifyType);
                 }
             }
 
