@@ -16,6 +16,7 @@
 
 package com.android.ike.eap.message;
 
+import com.android.ike.eap.exceptions.EapSimInvalidAtPaddingException;
 import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.internal.annotations.VisibleForTesting;
@@ -420,6 +421,38 @@ public abstract class EapSimAttribute {
             for (byte[] rand : rands) {
                 byteBuffer.put(rand);
             }
+        }
+    }
+
+    /**
+     * AtPadding represents the AT_PADDING attribute defined in RFC 4186 Section 10.12
+     */
+    public static class AtPadding extends EapSimAttribute {
+        private static final int ATTR_HEADER = 2;
+
+        public AtPadding(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_PADDING, lengthInBytes);
+
+            int remainingBytes = lengthInBytes - ATTR_HEADER;
+            for (int i = 0; i < remainingBytes; i++) {
+                // Padding must be checked to all be 0x00 bytes (RFC 4186 Section 10.12)
+                if (byteBuffer.get() != 0) {
+                    throw new EapSimInvalidAtPaddingException("Padding bytes must all be 0x00");
+                }
+            }
+        }
+
+        @VisibleForTesting
+        public AtPadding(int lengthInBytes) throws EapSimInvalidAttributeException {
+            super(EAP_AT_PADDING, lengthInBytes);
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            addPadding(ATTR_HEADER, byteBuffer);
         }
     }
 }
