@@ -24,7 +24,9 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * EapSimAttribute represents a single EAP-SIM Attribute.
@@ -605,6 +607,88 @@ public abstract class EapSimAttribute {
             encodeAttributeHeader(byteBuffer);
             byteBuffer.put(new byte[RESERVED_BYTES]);
             byteBuffer.put(nonceS);
+        }
+    }
+
+    /**
+     * AtNotification represents the AT_NOTIFICATION attribute defined in RFC 4186 Section 10.18
+     */
+    public static class AtNotification extends EapSimAttribute {
+        private static final int ATTR_LENGTH = 4;
+        private static final int SUCCESS_MASK = 0x8000;
+        private static final int PRE_CHALLENGE_MASK = 0x4000;
+
+        // Notification codes defined in RFC 4186 Section 10.18
+        public static final int GENERAL_FAILURE_POST_CHALLENGE = 0;
+        public static final int GENERAL_FAILURE_PRE_CHALLENGE = 16384; // 0x4000
+        public static final int SUCCESS = 32768; // 0x8000
+        public static final int DENIED_ACCESS_POST_CHALLENGE = 1026;
+        public static final int USER_NOT_SUBSCRIBED_POST_CHALLENGE = 1031;
+
+        private static final Map<Integer, String> CODE_DEFS = loadCodeDefs();
+
+        public final boolean isSuccessCode;
+        public final boolean isPreChallenge;
+        public final int notificationCode;
+
+        public AtNotification(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_NOTIFICATION, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            notificationCode = Short.toUnsignedInt(byteBuffer.getShort());
+
+            // If Success bit == 0, failure is implied
+            isSuccessCode = (notificationCode & SUCCESS_MASK) == SUCCESS_MASK;
+
+            // if Phase bit == 0, notification code can only be used after a successful
+            isPreChallenge = (notificationCode & PRE_CHALLENGE_MASK) == PRE_CHALLENGE_MASK;
+        }
+
+        @VisibleForTesting
+        public AtNotification(int notificationCode) throws EapSimInvalidAttributeException {
+            super(EAP_AT_NOTIFICATION, ATTR_LENGTH);
+            this.notificationCode = notificationCode;
+
+            // If Success bit == 0, failure is implied
+            isSuccessCode = (notificationCode & SUCCESS_MASK) != 0;
+
+            // if Phase bit == 0, notification code can only be used after a successful
+            isPreChallenge = (notificationCode & PRE_CHALLENGE_MASK) != 0;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.putShort((short) notificationCode);
+        }
+
+        @Override
+        public String toString() {
+            String description = CODE_DEFS.getOrDefault(notificationCode, "Code not recognized");
+            return "{Notification Code=" + notificationCode + ", descr=" + description + "}";
+        }
+
+        private static Map<Integer, String> loadCodeDefs() {
+            Map<Integer, String> defs = new HashMap<>();
+            defs.put(GENERAL_FAILURE_POST_CHALLENGE,
+                    "General failure after authentication. (Implies failure, used after successful"
+                    + " authentication.)");
+            defs.put(GENERAL_FAILURE_PRE_CHALLENGE,
+                    "General failure. (Implies failure, used before authentication.)");
+            defs.put(SUCCESS,
+                    "Success.  User has been successfully authenticated. (Does not imply failure,"
+                    + " used after successful authentication).");
+            defs.put(DENIED_ACCESS_POST_CHALLENGE,
+                    "User has been temporarily denied access to the requested service. (Implies"
+                    + " failure, used after successful authentication.)");
+            defs.put(USER_NOT_SUBSCRIBED_POST_CHALLENGE,
+                    "User has not subscribed to the requested service.  (Implies failure, used"
+                    + " after successful authentication.)");
+            return defs;
         }
     }
 }
