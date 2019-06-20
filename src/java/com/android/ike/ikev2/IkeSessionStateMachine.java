@@ -750,7 +750,7 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /** Base state defines common behaviours when receiving an IKE packet. */
-    private abstract class BaseState extends LocalRequestQueuer {
+    private abstract class BusyState extends LocalRequestQueuer {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
@@ -966,7 +966,7 @@ public class IkeSessionStateMachine extends StateMachine {
      * <p>All post-init states share common functionality of being able to respond to IKE_DELETE
      * requests.
      */
-    private abstract class DeleteResponderBase extends BaseState {
+    private abstract class DeleteResponderBase extends BusyState {
         /** Builds a IKE Delete Response for the given IKE SA and request. */
         protected IkeMessage buildIkeDeleteResp(IkeMessage req, IkeSaRecord ikeSaRecord) {
             IkeInformationalPayload[] payloads = new IkeInformationalPayload[] {};
@@ -1222,7 +1222,7 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /** CreateIkeLocalIkeInit represents state when IKE library initiates IKE_INIT exchange. */
-    class CreateIkeLocalIkeInit extends BaseState {
+    class CreateIkeLocalIkeInit extends BusyState {
         private IkeSecurityParameterIndex mLocalIkeSpiResource;
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
         private Retransmitter mRetransmitter;
@@ -1546,7 +1546,7 @@ public class IkeSessionStateMachine extends StateMachine {
      * <p>If using EAP, CreateIkeLocalIkeAuth will transition to CreateIkeLocalIkeAuthInEap state
      * after validating the IKE AUTH response.
      */
-    class CreateIkeLocalIkeAuth extends BaseState {
+    class CreateIkeLocalIkeAuth extends BusyState {
         private ChildSessionOptions mFirstChildSessionOptions;
 
         private Retransmitter mRetransmitter;
