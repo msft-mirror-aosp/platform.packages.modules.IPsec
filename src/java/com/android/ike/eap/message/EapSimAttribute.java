@@ -16,6 +16,8 @@
 
 package com.android.ike.eap.message;
 
+import android.util.Log;
+
 import com.android.ike.eap.exceptions.EapSimInvalidAtPaddingException;
 import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
@@ -689,6 +691,49 @@ public abstract class EapSimAttribute {
                     "User has not subscribed to the requested service.  (Implies failure, used"
                     + " after successful authentication.)");
             return defs;
+        }
+    }
+
+    /**
+     * AtClientErrorCode reprents the AT_CLIENT_ERROR_CODE attribute defined in RFC 4186 Section
+     * 10.19
+     */
+    public static class AtClientErrorCode extends EapSimAttribute {
+        private static final String TAG = AtClientErrorCode.class.getSimpleName();
+        private static final int ATTR_LENGTH = 4;
+
+        // Error codes defined in RFC 4186 Section 10.19
+        public static final AtClientErrorCode UNABLE_TO_PROCESS = getClientErrorCode(0);
+        public static final AtClientErrorCode UNSUPPORTED_VERSION = getClientErrorCode(1);
+        public static final AtClientErrorCode INSUFFICIENT_CHALLENGES = getClientErrorCode(2);
+        public static final AtClientErrorCode STALE_RANDS = getClientErrorCode(3);
+
+        public final int errorCode;
+
+        public AtClientErrorCode(int lengthInBytes, int errorCode)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_CLIENT_ERROR_CODE, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            this.errorCode = errorCode;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.putShort((short) errorCode);
+        }
+
+        private static AtClientErrorCode getClientErrorCode(int errorCode) {
+            try {
+                return new AtClientErrorCode(ATTR_LENGTH, errorCode);
+            } catch (EapSimInvalidAttributeException exception) {
+                Log.wtf(TAG, "Exception thrown while making AtClientErrorCodeConstants");
+                return null;
+            }
         }
     }
 }
