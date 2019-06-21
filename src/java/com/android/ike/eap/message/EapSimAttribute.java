@@ -16,6 +16,7 @@
 
 package com.android.ike.eap.message;
 
+import com.android.ike.eap.exceptions.EapSimInvalidAtPaddingException;
 import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.internal.annotations.VisibleForTesting;
@@ -420,6 +421,190 @@ public abstract class EapSimAttribute {
             for (byte[] rand : rands) {
                 byteBuffer.put(rand);
             }
+        }
+    }
+
+    /**
+     * AtPadding represents the AT_PADDING attribute defined in RFC 4186 Section 10.12
+     */
+    public static class AtPadding extends EapSimAttribute {
+        private static final int ATTR_HEADER = 2;
+
+        public AtPadding(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_PADDING, lengthInBytes);
+
+            int remainingBytes = lengthInBytes - ATTR_HEADER;
+            for (int i = 0; i < remainingBytes; i++) {
+                // Padding must be checked to all be 0x00 bytes (RFC 4186 Section 10.12)
+                if (byteBuffer.get() != 0) {
+                    throw new EapSimInvalidAtPaddingException("Padding bytes must all be 0x00");
+                }
+            }
+        }
+
+        @VisibleForTesting
+        public AtPadding(int lengthInBytes) throws EapSimInvalidAttributeException {
+            super(EAP_AT_PADDING, lengthInBytes);
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            addPadding(ATTR_HEADER, byteBuffer);
+        }
+    }
+
+    /**
+     * AtMac represents the AT_MAC attribute defined in RFC 4186 Section 10.14
+     */
+    public static class AtMac extends EapSimAttribute {
+        private static final int ATTR_LENGTH = 5 * LENGTH_SCALING;
+        private static final int MAC_LENGTH = 4 * LENGTH_SCALING;
+        private static final int RESERVED_BYTES = 2;
+
+        public final byte[] mac;
+
+        public AtMac(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_MAC, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            // next two bytes are reserved (RFC 4186 Section 10.14)
+            byteBuffer.get(new byte[RESERVED_BYTES]);
+
+            mac = new byte[MAC_LENGTH];
+            byteBuffer.get(mac);
+        }
+
+        // Used for calculating MACs. Per RFC 4186 Section 10.14, the MAC should be calculated over
+        // the entire packet, with the value field of the MAC attribute set to zero.
+        public AtMac() throws EapSimInvalidAttributeException {
+            super(EAP_AT_MAC, ATTR_LENGTH);
+            mac = new byte[MAC_LENGTH];
+        }
+
+        public AtMac(byte[] mac) throws EapSimInvalidAttributeException {
+            super(EAP_AT_MAC, ATTR_LENGTH);
+            this.mac = mac;
+
+            if (mac.length != MAC_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid length for MAC");
+            }
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.put(new byte[RESERVED_BYTES]);
+            byteBuffer.put(mac);
+        }
+    }
+
+    /**
+     * AtCounter represents the AT_COUNTER attribute defined in RFC 4186 Section 10.15
+     */
+    public static class AtCounter extends EapSimAttribute {
+        private static final int ATTR_LENGTH = LENGTH_SCALING;
+
+        public final int counter;
+
+        public AtCounter(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_COUNTER, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            this.counter = Short.toUnsignedInt(byteBuffer.getShort());
+        }
+
+        @VisibleForTesting
+        public AtCounter(int counter) throws EapSimInvalidAttributeException {
+            super(EAP_AT_COUNTER, ATTR_LENGTH);
+            this.counter = counter;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.putShort((short) counter);
+        }
+    }
+
+
+    /**
+     * AtCounterTooSmall represents the AT_COUNTER_TOO_SMALL attribute defined in RFC 4186 Section
+     * 10.16
+     */
+    public static class AtCounterTooSmall extends EapSimAttribute {
+        private static final int ATTR_LENGTH = LENGTH_SCALING;
+        private static final int ATTR_HEADER = 2;
+
+        public AtCounterTooSmall(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_COUNTER_TOO_SMALL, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+            consumePadding(ATTR_HEADER, byteBuffer);
+        }
+
+        public AtCounterTooSmall() throws EapSimInvalidAttributeException {
+            super(EAP_AT_COUNTER_TOO_SMALL, ATTR_LENGTH);
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            addPadding(ATTR_HEADER, byteBuffer);
+        }
+    }
+
+    /**
+     * AtNonceS represents the AT_NONCE_S attribute defined in RFC 4186 Section 10.17
+     *
+     * <p>This Nonce is generated by the server and used for fast re-authentication only.
+     */
+    public static class AtNonceS extends EapSimAttribute {
+        private static final int ATTR_LENGTH = 5 * LENGTH_SCALING;
+        private static final int NONCE_S_LENGTH = 4 * LENGTH_SCALING;
+        private static final int RESERVED_BYTES = 2;
+
+        public final byte[] nonceS;
+
+        public AtNonceS(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimInvalidAttributeException {
+            super(EAP_AT_NONCE_S, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimInvalidAttributeException("Invalid Length specified");
+            }
+
+            // next two bytes are reserved (RFC 4186 Section 10.17)
+            byteBuffer.get(new byte[RESERVED_BYTES]);
+
+            nonceS = new byte[NONCE_S_LENGTH];
+            byteBuffer.get(nonceS);
+        }
+
+        @VisibleForTesting
+        public AtNonceS(byte[] nonceS) throws EapSimInvalidAttributeException {
+            super(EAP_AT_NONCE_S, ATTR_LENGTH);
+            this.nonceS = nonceS;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.put(new byte[RESERVED_BYTES]);
+            byteBuffer.put(nonceS);
         }
     }
 }

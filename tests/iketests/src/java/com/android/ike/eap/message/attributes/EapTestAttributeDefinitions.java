@@ -47,6 +47,15 @@ public class EapTestAttributeDefinitions {
     public static final String RAND_1 = "00112233445566778899AABBCCDDEEFF";
     public static final String RAND_2 = "FFEEDDCCBBAA99887766554433221100";
     public static final byte[] AT_RAND = hexStringToByteArray("01090000" + RAND_1 + RAND_2);
+    public static final byte[] AT_PADDING = hexStringToByteArray("0602000000000000");
+    public static final String MAC = "112233445566778899AABBCCDDEEFF11";
+    public static final byte[] AT_MAC = hexStringToByteArray("0B050000" + MAC);
+    public static final String COUNTER = "000A";
+    public static final int COUNTER_INT = Integer.parseInt(COUNTER, 16 /* radix */);
+    public static final byte[] AT_COUNTER = hexStringToByteArray("1301" + COUNTER);
+    public static final byte[] AT_COUNTER_TOO_SMALL = hexStringToByteArray("14010000");
+    public static final String NONCE_S = "0123456789ABCDEFFEDCBA9876543210";
+    public static final byte[] AT_NONCE_S = hexStringToByteArray("15050000" + NONCE_S);
 
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
@@ -60,4 +69,9 @@ public class EapTestAttributeDefinitions {
             hexStringToByteArray("01050000" + RAND_1);
     public static final byte[] AT_RAND_DUPLICATE_RANDS =
             hexStringToByteArray("01090000" + RAND_1 + RAND_1);
+    public static final byte[] AT_PADDING_INVALID_PADDING = hexStringToByteArray("0601FFFF");
+    public static final byte[] AT_MAC_INVALID_LENGTH = hexStringToByteArray("0B06");
+    public static final byte[] AT_COUNTER_INVALID_LENGTH = hexStringToByteArray("1302");
+    public static final byte[] AT_COUNTER_TOO_SMALL_INVALID_LENGTH = hexStringToByteArray("1402");
+    public static final byte[] AT_NONCE_S_INVALID_LENGTH = hexStringToByteArray("1506");
 }
