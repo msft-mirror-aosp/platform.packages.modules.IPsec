@@ -27,6 +27,7 @@ import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.util.ArraySet;
+import android.util.Log;
 import android.util.Pair;
 
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
@@ -54,6 +55,8 @@ import java.util.Set;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class IkeSaPayload extends IkePayload {
+    private static final String TAG = "IkeSaPayload";
+
     public final boolean isSaResponse;
     public final List<Proposal> proposalList;
     /**
@@ -74,6 +77,10 @@ public final class IkeSaPayload extends IkePayload {
             proposalList.add(proposal);
         }
 
+        if (proposalList.isEmpty()) {
+            throw new InvalidSyntaxException("Found no SA Proposal in this SA Payload.");
+        }
+
         // An SA response must have exactly one SA proposal.
         if (isResp && proposalList.size() != 1) {
             throw new InvalidSyntaxException(
@@ -81,6 +88,15 @@ public final class IkeSaPayload extends IkePayload {
                             + "Multiple negotiated proposals found.");
         }
         isSaResponse = isResp;
+
+        boolean firstIsIkeProposal = (proposalList.get(0).protocolId == PROTOCOL_ID_IKE);
+        for (int i = 1; i < proposalList.size(); i++) {
+            boolean isIkeProposal = (proposalList.get(i).protocolId == PROTOCOL_ID_IKE);
+            if (firstIsIkeProposal != isIkeProposal) {
+                Log.w(TAG, "Found both IKE proposals and Child proposals in this SA Payload.");
+                break;
+            }
+        }
     }
 
     /** Package private constructor for building a request for IKE SA initial creation or rekey */
