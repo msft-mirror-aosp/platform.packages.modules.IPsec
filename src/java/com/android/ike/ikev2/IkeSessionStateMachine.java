@@ -1444,9 +1444,11 @@ public class IkeSessionStateMachine extends StateMachine {
                                 natDestPayload = notifyPayload;
                                 break;
                             default:
-                                // Unknown status notifications are ignored as per RFC7296.
+                                // Unknown and unexpected status notifications are ignored as per
+                                // RFC7296.
                                 logw(
-                                        "Received unknown status notifications with notify type: "
+                                        "Received unknown or unexpected status notifications with"
+                                                + " notify type: "
                                                 + notifyPayload.notifyType);
                         }
 
@@ -1727,14 +1729,14 @@ public class IkeSessionStateMachine extends StateMachine {
                         if (notifyPayload.isErrorNotify()) {
                             // TODO: Throw IkeExceptions according to error types.
                             throw new UnsupportedOperationException(
-                                    "Do not support handle error notifications in IKE AUTH"
+                                    "Do not support handling error notifications in IKE AUTH"
                                             + " response.");
                         } else {
-                            // TODO: Support more status notification types.
-
-                            // Unknown status notifications are ignored as per RFC7296.
+                            // Unknown and unexpected status notifications are ignored as per
+                            // RFC7296.
                             logw(
-                                    "Received unknown status notifications with notify type: "
+                                    "Received unknown or unexpected status notifications with"
+                                            + " notify type: "
                                             + notifyPayload.notifyType);
                         }
 
@@ -2381,8 +2383,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // local-deleted SA, since the delete has already been acknowledged in the
                     // SimulRekeyIkeLocalDeleteRemoteDelete state.
                     IkeInformationalPayload error =
-                            new IkeNotifyPayload(
-                                    IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
+                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
                     IkeMessage msg =
                             buildEncryptedNotificationMessage(
                                     mIkeSaRecordAwaitingRemoteDel,
