@@ -52,6 +52,7 @@ import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
+import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
@@ -144,7 +145,7 @@ public final class IkeSessionStateMachineTest {
     private static final String ID_PAYLOAD_RESPONDER_HEX_STRING = "2700000c010000007f000001";
     private static final String PSK_AUTH_RESP_PAYLOAD_HEX_STRING =
             "2100001c0200000058f36412e9b7b38df817a9f7779b7a008dacdd25";
-    private static final String FIRST_CHILD_SA_RESP_PAYLOAD_HEX_STRING =
+    private static final String CHILD_SA_RESP_PAYLOAD_HEX_STRING =
             "2c00002c0000002801030403cae7019f0300000c0100000c800e008003000008030"
                     + "000020000000805000000";
     private static final String TS_INIT_PAYLOAD_HEX_STRING =
@@ -205,6 +206,10 @@ public final class IkeSessionStateMachineTest {
             ArgumentCaptor.forClass(IkeMessage.class);
     private ArgumentCaptor<IkeSaRecordConfig> mIkeSaRecordConfigCaptor =
             ArgumentCaptor.forClass(IkeSaRecordConfig.class);
+    private ArgumentCaptor<IChildSessionSmCallback> mChildSessionSmCbCaptor =
+            ArgumentCaptor.forClass(IChildSessionSmCallback.class);
+    private ArgumentCaptor<List<IkePayload>> mPayloadListCaptor =
+            ArgumentCaptor.forClass(List.class);
 
     private ReceivedIkePacket makeDummyReceivedIkeInitRespPacket(
             long initiatorSpi,
@@ -518,13 +523,35 @@ public final class IkeSessionStateMachineTest {
 
         payloadHexStringList.add(ID_PAYLOAD_RESPONDER_HEX_STRING);
         payloadHexStringList.add(PSK_AUTH_RESP_PAYLOAD_HEX_STRING);
-        payloadHexStringList.add(FIRST_CHILD_SA_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(CHILD_SA_RESP_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_INIT_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_RESP_PAYLOAD_HEX_STRING);
 
         return makeDummyEncryptedReceivedIkePacket(
                 mSpyCurrentIkeSaRecord,
                 IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                true /*isResp*/,
+                payloadTypeList,
+                payloadHexStringList);
+    }
+
+    private ReceivedIkePacket makeCreateChildResponse() throws Exception {
+        List<Integer> payloadTypeList = new LinkedList<>();
+        List<String> payloadHexStringList = new LinkedList<>();
+
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_INITIATOR);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_RESPONDER);
+
+        payloadHexStringList.add(CHILD_SA_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(TS_INIT_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(TS_RESP_PAYLOAD_HEX_STRING);
+
+        return makeDummyEncryptedReceivedIkePacket(
+                mSpyCurrentIkeSaRecord,
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
                 true /*isResp*/,
                 payloadTypeList,
                 payloadHexStringList);
@@ -740,6 +767,9 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.mIkePrf = mock(IkeMacPrf.class);
         mIkeSessionStateMachine.mSaProposal = buildSaProposal();
         mIkeSessionStateMachine.mCurrentIkeSaRecord = mSpyCurrentIkeSaRecord;
+        mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
+        mIkeSessionStateMachine.mIsLocalBehindNat = true;
+        mIkeSessionStateMachine.mIsRemoteBehindNat = false;
         mIkeSessionStateMachine.addIkeSaRecord(mSpyCurrentIkeSaRecord);
 
         mIkeSessionStateMachine.sendMessage(
@@ -788,8 +818,6 @@ public final class IkeSessionStateMachineTest {
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
 
         // Mock finishing first Child SA negotiation.
-        ArgumentCaptor<IChildSessionSmCallback> mChildSessionSmCbCaptor =
-                ArgumentCaptor.forClass(IChildSessionSmCallback.class);
         verify(mMockChildSessionFactoryHelper)
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
@@ -803,6 +831,86 @@ public final class IkeSessionStateMachineTest {
                         any(byte[].class));
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
 
+        cb.onProcedureFinished(mMockChildSessionStateMachine);
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    @Test
+    public void testCreateAdditionalChild() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD,
+                        mock(IChildSessionCallback.class),
+                        mChildSessionOptions));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(mMockChildSessionStateMachine).createChildSa();
+
+        verify(mMockChildSessionFactoryHelper)
+                .makeChildSessionStateMachine(
+                        eq(mLooper.getLooper()),
+                        eq(mContext),
+                        eq(mChildSessionOptions),
+                        mChildSessionSmCbCaptor.capture(),
+                        eq(LOCAL_ADDRESS),
+                        eq(REMOTE_ADDRESS),
+                        eq(mUdpEncapSocket),
+                        any(IkeMacPrf.class),
+                        any(byte[].class));
+        IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
+
+        // Mocking sending request
+        cb.onOutboundPayloadsReady(
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, false /*isResp*/, new LinkedList<>());
+        mLooper.dispatchAll();
+
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+        IkeMessage createChildRequest = mIkeMessageCaptor.getValue();
+
+        IkeHeader ikeHeader = createChildRequest.ikeHeader;
+        assertEquals(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertTrue(ikeHeader.fromIkeInitiator);
+        assertEquals(mSpyCurrentIkeSaRecord.getLocalRequestMessageId(), ikeHeader.messageId);
+        assertTrue(createChildRequest.ikePayloadList.isEmpty());
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+
+        // Mocking receiving response
+        ReceivedIkePacket dummyCreateChildResp = makeCreateChildResponse();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyCreateChildResp);
+        mLooper.dispatchAll();
+
+        verifyIncrementLocaReqMsgId();
+        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyCreateChildResp);
+
+        verify(mMockChildSessionStateMachine)
+                .receiveResponse(
+                        eq(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA), mPayloadListCaptor.capture());
+
+        List<IkePayload> childRespList = mPayloadListCaptor.getValue();
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_SA));
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_INITIATOR));
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_RESPONDER));
+        assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_NONCE));
+
+        // Mock finishing procedure
         cb.onProcedureFinished(mMockChildSessionStateMachine);
         mLooper.dispatchAll();
         assertTrue(
