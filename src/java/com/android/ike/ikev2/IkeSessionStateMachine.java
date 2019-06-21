@@ -121,6 +121,7 @@ public class IkeSessionStateMachine extends StateMachine {
     // to the subtype specific rules.
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
+        IKE_EXCHANGE_SUBTYPE_INVALID,
         IKE_EXCHANGE_SUBTYPE_IKE_INIT,
         IKE_EXCHANGE_SUBTYPE_IKE_AUTH,
         IKE_EXCHANGE_SUBTYPE_DELETE_IKE,
@@ -131,6 +132,7 @@ public class IkeSessionStateMachine extends StateMachine {
     })
     @interface IkeExchangeSubType {}
 
+    static final int IKE_EXCHANGE_SUBTYPE_INVALID = 0;
     static final int IKE_EXCHANGE_SUBTYPE_IKE_INIT = 1;
     static final int IKE_EXCHANGE_SUBTYPE_IKE_AUTH = 2;
     static final int IKE_EXCHANGE_SUBTYPE_CREATE_CHILD = 3;
@@ -628,25 +630,39 @@ public class IkeSessionStateMachine extends StateMachine {
             case IkeHeader.EXCHANGE_TYPE_IKE_AUTH:
                 return IKE_EXCHANGE_SUBTYPE_IKE_AUTH;
             case IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA:
-                // TODO: IKE rekeys do not have the REKEY_SA notification.
+                // It is guaranteed in the decoding process that SA Payload has at least one SA
+                // Proposal. Since Rekey IKE and Create Child (both initial creation and rekey
+                // creation) will cause a collision, although the RFC 7296 does not prohibit one SA
+                // Payload to contain both IKE proposals and Child proposals, containing two types
+                // does not make sense. IKE libary will reply according to the first SA Proposal
+                // type and ignore the other type.
+                IkeSaPayload saPayload =
+                        ikeMessage.getPayloadForType(
+                                IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+                if (saPayload == null) {
+                    return IKE_EXCHANGE_SUBTYPE_INVALID;
+                }
 
+                // If the received message has both SA(IKE) Payload and Notify-Rekey Payload, IKE
+                // library will treat it as a Rekey IKE request and ignore the Notify-Rekey
+                // Payload to provide better interoperability.
+                if (saPayload.proposalList.get(0).protocolId == IkePayload.PROTOCOL_ID_IKE) {
+                    return IKE_EXCHANGE_SUBTYPE_REKEY_IKE;
+                }
+
+                // If a Notify-Rekey Payload is found, this message is for rekeying a Child SA.
                 List<IkeNotifyPayload> notifyPayloads =
                         ikeMessage.getPayloadListForType(
                                 IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
 
-                // It is checked during decoding that there is only one Rekey notification
-                // payload. For Rekey IKE notification, the protocolId is unset. For Rekey Child
-                // notification, the protocolId is set to ESP.
+                // It is checked during decoding that there is at most one Rekey notification
+                // payload.
                 for (IkeNotifyPayload notifyPayload : notifyPayloads) {
                     if (notifyPayload.notifyType == IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA) {
-                        return notifyPayload.protocolId == IkePayload.PROTOCOL_ID_UNSET
-                                ? IKE_EXCHANGE_SUBTYPE_REKEY_IKE
-                                : IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+                        return IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
                     }
                 }
 
-                // If no Rekey notification payload found, this request is for creating new
-                // Child SA.
                 return IKE_EXCHANGE_SUBTYPE_CREATE_CHILD;
             case IkeHeader.EXCHANGE_TYPE_INFORMATIONAL:
                 List<IkeDeletePayload> deletePayloads =
@@ -858,8 +874,13 @@ public class IkeSessionStateMachine extends StateMachine {
                                 break;
                             }
 
-                            handleRequestIkeMessage(
-                                    ikeMessage, getIkeExchangeSubType(ikeMessage), message);
+                            int ikeExchangeSubType = getIkeExchangeSubType(ikeMessage);
+                            if (ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_INVALID) {
+                                // TODO: Reply with INVALID_SYNTAX and close IKE Session.
+                                throw new UnsupportedOperationException(
+                                        "Cannot handle message with invalid IkeExchangeSubType.");
+                            }
+                            handleRequestIkeMessage(ikeMessage, ikeExchangeSubType, message);
                             break;
                         case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
                             ikeSaRecord.incrementRemoteRequestMessageId();
