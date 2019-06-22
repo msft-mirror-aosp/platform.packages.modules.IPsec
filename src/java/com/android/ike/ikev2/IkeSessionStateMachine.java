@@ -1269,7 +1269,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // TODO: Also support Delete Child and Rekey Child.
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
                     mChildInLocalProcedure = buildChildSession(req.childSessionOptions);
-                    mChildInLocalProcedure.createChildSa();
+                    mChildInLocalProcedure.createChildSession();
                     break;
                 default:
                     Log.wtf(TAG, "Invalid Child procedure type: " + req.procedureType);
