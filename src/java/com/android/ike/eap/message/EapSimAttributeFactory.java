@@ -17,6 +17,7 @@
 package com.android.ike.eap.message;
 
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_CLIENT_ERROR_CODE;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_COUNTER;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_COUNTER_TOO_SMALL;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ;
@@ -24,6 +25,7 @@ import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IDENTITY;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NONCE_MT;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NONCE_S;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NOTIFICATION;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PADDING;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_RAND;
@@ -37,6 +39,7 @@ import android.annotation.Nullable;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
 import com.android.ike.eap.message.EapSimAttribute.AtAnyIdReq;
+import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.EapSimAttribute.AtCounter;
 import com.android.ike.eap.message.EapSimAttribute.AtCounterTooSmall;
 import com.android.ike.eap.message.EapSimAttribute.AtFullauthIdReq;
@@ -44,6 +47,7 @@ import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
 import com.android.ike.eap.message.EapSimAttribute.AtMac;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceS;
+import com.android.ike.eap.message.EapSimAttribute.AtNotification;
 import com.android.ike.eap.message.EapSimAttribute.AtPadding;
 import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtRand;
@@ -117,6 +121,11 @@ public class EapSimAttributeFactory {
                 return new AtCounterTooSmall(lengthInBytes, byteBuffer);
             case EAP_AT_NONCE_S:
                 return new AtNonceS(lengthInBytes, byteBuffer);
+            case EAP_AT_NOTIFICATION:
+                return new AtNotification(lengthInBytes, byteBuffer);
+            case EAP_AT_CLIENT_ERROR_CODE:
+                int errorCode = Short.toUnsignedInt(byteBuffer.getShort());
+                return new AtClientErrorCode(lengthInBytes, errorCode);
             default:
                 if (attributeType >= SKIPPABLE_ATTRIBUTE_RANGE_START) {
                     return new EapSimUnsupportedAttribute(attributeType, lengthInBytes, byteBuffer);

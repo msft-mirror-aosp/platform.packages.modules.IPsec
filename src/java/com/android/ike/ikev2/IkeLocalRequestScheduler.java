@@ -69,13 +69,27 @@ public final class IkeLocalRequestScheduler {
      */
     public static class LocalRequest {
         public final int procedureType;
-
-        // TODO: Also store parameters to support Child exchange and specific payloads for INFO
-        // exchange.
+        // TODO: Also store specific payloads for INFO exchange.
         // TODO: Support cancelling a scheduled rekey request
 
         LocalRequest(int type) {
             procedureType = type;
+        }
+    }
+
+    /**
+     * This class represents a user requested or internally scheduled Child procedure that will be
+     * initiated locally.
+     */
+    public static class ChildLocalRequest extends LocalRequest {
+        public final IChildSessionCallback childSessionCallback;
+        public final ChildSessionOptions childSessionOptions;
+
+        ChildLocalRequest(
+                int type, IChildSessionCallback childCallback, ChildSessionOptions childOptions) {
+            super(type);
+            childSessionOptions = childOptions;
+            childSessionCallback = childCallback;
         }
     }
 
