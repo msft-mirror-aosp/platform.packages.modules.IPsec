@@ -17,6 +17,7 @@ package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
@@ -77,6 +78,7 @@ import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -287,7 +289,7 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     public void receiveRequest(
             @IkeExchangeSubType int exchangeSubtype, List<IkePayload> payloadList) {
-        // TODO:Send CMD_HANDLE_RECEIVED_REQUEST message to StateMachine
+        sendMessage(CMD_HANDLE_RECEIVED_REQUEST, new ReceivedRequest(exchangeSubtype, payloadList));
     }
 
     /**
@@ -366,6 +368,20 @@ public class ChildSessionStateMachine extends StateMachine {
         FirstChildNegotiationData(List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
             requestPayloads = reqPayloads;
             responsePayloads = respPayloads;
+        }
+    }
+
+    /**
+     * ReceivedRequest contains exchange subtype and payloads that are extracted from a request
+     * message to the current Child procedure.
+     */
+    private static class ReceivedRequest {
+        @IkeExchangeSubType public final int exchangeSubtype;
+        public final List<IkePayload> requestPayloads;
+
+        ReceivedRequest(@IkeExchangeSubType int eType, List<IkePayload> reqPayloads) {
+            exchangeSubtype = eType;
+            requestPayloads = reqPayloads;
         }
     }
 
@@ -676,9 +692,11 @@ public class ChildSessionStateMachine extends StateMachine {
      * exchange.
      */
     class DeleteChildLocalDelete extends DeleteBase {
-        // TODO: Support simultaneous deletion and reply TEMPORARY_FAILURE to other requests.
+        private boolean mSimulDeleteDetected = false;
+
         @Override
         public void enter() {
+            mSimulDeleteDetected = false;
             sendDeleteChild(mCurrentChildSaRecord, false /*isResp*/);
         }
 
@@ -693,9 +711,17 @@ public class ChildSessionStateMachine extends StateMachine {
 
                         boolean currentSaSpiFound =
                                 hasRemoteChildSpi(resp.responsePayloads, mCurrentChildSaRecord);
-                        if (!currentSaSpiFound) {
+                        if (!currentSaSpiFound && !mSimulDeleteDetected) {
                             throw new InvalidSyntaxException(
                                     "Found no remote SPI in received Delete response.");
+                        } else if (currentSaSpiFound && mSimulDeleteDetected) {
+                            // As required by the RFC 7296, in simultaneous delete case, the remote
+                            // side MUST NOT include SPI of mCurrentChildSaRecord. However, to
+                            // provide better interoperatibility, IKE library will keep IKE Session
+                            // alive and continue the deleting process.
+                            logw(
+                                    "Found remote SPI in the Delete response in a simultaneous"
+                                            + " deletion case");
                         }
 
                         mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
@@ -707,6 +733,32 @@ public class ChildSessionStateMachine extends StateMachine {
                         mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
                     }
                     return HANDLED;
+                case CMD_HANDLE_RECEIVED_REQUEST:
+                    ReceivedRequest req = (ReceivedRequest) message.obj;
+                    switch (req.exchangeSubtype) {
+                        case IKE_EXCHANGE_SUBTYPE_DELETE_CHILD:
+                            // It has been verified in IkeSessionStateMachine that the incoming
+                            // request can be ONLY for mCurrentChildSaRecord at this point.
+                            if (!hasRemoteChildSpi(req.requestPayloads, mCurrentChildSaRecord)) {
+                                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
+                                // TODO: Reply with Invalid Syntax Notification and close IKE
+                                // Session.
+
+                            } else {
+                                mChildSmCallback.onOutboundPayloadsReady(
+                                        EXCHANGE_TYPE_INFORMATIONAL,
+                                        true /*isResp*/,
+                                        new LinkedList<>(),
+                                        ChildSessionStateMachine.this);
+                                mSimulDeleteDetected = true;
+                            }
+                            return HANDLED;
+
+                        default:
+                            // TODO: Reply TEMPORARY_FAILURE
+                            throw new UnsupportedOperationException(
+                                    "Cannot handle Child procedure collision.");
+                    }
                 default:
                     return NOT_HANDLED;
             }
