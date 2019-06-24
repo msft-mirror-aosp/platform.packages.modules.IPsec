@@ -19,6 +19,7 @@ package com.android.ike.ikev2;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
 import android.os.Looper;
 
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
@@ -38,6 +39,8 @@ final class ChildSessionStateMachineFactory {
             Looper looper,
             Context context,
             ChildSessionOptions sessionOptions,
+            Handler userCbHandler,
+            IChildSessionCallback userCallbacks,
             IChildSessionSmCallback childSmCallback,
             InetAddress localAddress,
             InetAddress remoteAddress,
@@ -48,6 +51,8 @@ final class ChildSessionStateMachineFactory {
                 looper,
                 context,
                 sessionOptions,
+                userCbHandler,
+                userCallbacks,
                 childSmCallback,
                 localAddress,
                 remoteAddress,
@@ -72,6 +77,8 @@ final class ChildSessionStateMachineFactory {
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
+                Handler userCbHandler,
+                IChildSessionCallback userCallbacks,
                 IChildSessionSmCallback childSmCallback,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
@@ -90,6 +97,8 @@ final class ChildSessionStateMachineFactory {
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
+                Handler userCbHandler,
+                IChildSessionCallback userCallbacks,
                 IChildSessionSmCallback childSmCallback,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
@@ -102,6 +111,8 @@ final class ChildSessionStateMachineFactory {
                             context,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                             sessionOptions,
+                            userCbHandler,
+                            userCallbacks,
                             childSmCallback,
                             localAddress,
                             remoteAddress,

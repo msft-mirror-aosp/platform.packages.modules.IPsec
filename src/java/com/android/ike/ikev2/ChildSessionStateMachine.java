@@ -43,6 +43,7 @@ import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
@@ -120,6 +121,9 @@ public class ChildSessionStateMachine extends StateMachine {
     /** User provided configurations. */
     private final ChildSessionOptions mChildSessionOptions;
 
+    private final Handler mUserCbHandler;
+    private final IChildSessionCallback mUserCallback;
+
     /** Callback to notify IKE Session the state changes. */
     private final IChildSessionSmCallback mChildSmCallback;
 
@@ -167,6 +171,8 @@ public class ChildSessionStateMachine extends StateMachine {
             Context context,
             IpSecManager ipSecManager,
             ChildSessionOptions sessionOptions,
+            Handler userCbHandler,
+            IChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback,
             InetAddress localAddress,
             InetAddress remoteAddress,
@@ -179,6 +185,9 @@ public class ChildSessionStateMachine extends StateMachine {
         mIpSecManager = ipSecManager;
 
         mChildSessionOptions = sessionOptions;
+
+        mUserCbHandler = userCbHandler;
+        mUserCallback = userCallback;
         mChildSmCallback = childSmCallback;
 
         mLocalAddress = localAddress;

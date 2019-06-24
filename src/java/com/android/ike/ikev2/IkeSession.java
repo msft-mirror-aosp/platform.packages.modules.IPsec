@@ -17,11 +17,10 @@ package com.android.ike.ikev2;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.os.Handler;
 import android.os.HandlerThread;
 
 import com.android.internal.annotations.VisibleForTesting;
-
-import java.util.concurrent.Executor;
 
 /** This class represents an IKE Session management object. */
 public final class IkeSession extends IkeSessionStateMachine implements AutoCloseable {
@@ -32,7 +31,7 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
             Context context,
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
-            Executor executor,
+            Handler userCbHandler,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
 
@@ -42,7 +41,7 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
                 (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                 ikeSessionOptions,
                 firstChildSessionOptions,
-                executor,
+                userCbHandler,
                 ikeSessionCallback,
                 firstChildSessionCallback);
     }
@@ -55,7 +54,7 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
             IpSecManager ipSecManager,
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
-            Executor executor,
+            Handler userCbHandler,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
 
@@ -64,8 +63,10 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
                 context,
                 ipSecManager,
                 ikeSessionOptions,
-                firstChildSessionOptions);
-        // TODO: Change the super constructor to take executor and callbacks
+                firstChildSessionOptions,
+                userCbHandler,
+                ikeSessionCallback,
+                firstChildSessionCallback);
     }
 
     /** Initialization-on-demand holder */

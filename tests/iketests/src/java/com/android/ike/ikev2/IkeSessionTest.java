@@ -23,13 +23,14 @@ import static org.mockito.Mockito.mock;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionTest {
@@ -41,19 +42,21 @@ public final class IkeSessionTest {
 
     private IkeSessionOptions mMockIkeSessionOptions;
     private ChildSessionOptions mMockChildSessionOptions;
-    private Executor mMockExecutor;
+    private Handler mUserCbHandler;
     private IIkeSessionCallback mMockIkeSessionCb;
     private IChildSessionCallback mMockChildSessionCb;
 
     @Before
     public void setUp() throws Exception {
+        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
 
         mMockIkeSessionOptions = mock(IkeSessionOptions.class);
         mMockChildSessionOptions = mock(ChildSessionOptions.class);
-        mMockExecutor = mock(Executor.class);
+        mUserCbHandler = new Handler();
         mMockIkeSessionCb = mock(IIkeSessionCallback.class);
         mMockChildSessionCb = mock(IChildSessionCallback.class);
     }
@@ -65,7 +68,7 @@ public final class IkeSessionTest {
                         mContext,
                         mMockIkeSessionOptions,
                         mMockChildSessionOptions,
-                        mMockExecutor,
+                        mUserCbHandler,
                         mMockIkeSessionCb,
                         mMockChildSessionCb);
         assertNotNull(ikeSession.getHandler().getLooper());
@@ -93,7 +96,7 @@ public final class IkeSessionTest {
                                         mContext,
                                         mMockIkeSessionOptions,
                                         mMockChildSessionOptions,
-                                        mMockExecutor,
+                                        mUserCbHandler,
                                         mMockIkeSessionCb,
                                         mMockChildSessionCb);
                         cntLatch.countDown();

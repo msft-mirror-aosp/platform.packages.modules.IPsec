@@ -51,6 +51,8 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -134,6 +136,8 @@ public final class ChildSessionStateMachineTest {
 
     private SaProposal mMockNegotiatedProposal;
 
+    private Handler mUserCbHandler;
+    private IChildSessionCallback mMockChildSessionCallback;
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
     private ArgumentCaptor<ChildSaRecordConfig> mChildSaRecordConfigCaptor =
@@ -156,6 +160,8 @@ public final class ChildSessionStateMachineTest {
 
     @Before
     public void setup() throws Exception {
+        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+
         mIkePrf =
                 IkeMacPrf.create(
                         new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
@@ -168,6 +174,8 @@ public final class ChildSessionStateMachineTest {
 
         mMockNegotiatedProposal = mock(SaProposal.class);
 
+        mUserCbHandler = new Handler();
+        mMockChildSessionCallback = mock(IChildSessionCallback.class);
         mChildSessionOptions = buildChildSessionOptions();
 
         // Setup thread and looper
@@ -178,6 +186,8 @@ public final class ChildSessionStateMachineTest {
                         mContext,
                         mMockIpSecManager,
                         mChildSessionOptions,
+                        mUserCbHandler,
+                        mMockChildSessionCallback,
                         mMockChildSessionSmCallback,
                         LOCAL_ADDRESS,
                         REMOTE_ADDRESS,
