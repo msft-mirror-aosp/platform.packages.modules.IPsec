@@ -18,7 +18,10 @@ package com.android.ike.ikev2;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -62,6 +65,7 @@ import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
+import com.android.ike.ikev2.message.IkeNotifyPayload.NotifyType;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.ChildProposal;
@@ -354,6 +358,19 @@ public class ChildSessionStateMachine extends StateMachine {
         // and 4-byte Child SPI. Here we cast the stored SPI to int to represent a Child SPI.
         int remoteGenSpi = (int) (saPayload.proposalList.get(0).spi);
         mChildSmCallback.onChildSaCreated(remoteGenSpi, this);
+    }
+
+    private void replyErrorNotification(@NotifyType int notifyType) {
+        replyErrorNotification(notifyType, new byte[0]);
+    }
+
+    private void replyErrorNotification(@NotifyType int notifyType, byte[] notifyData) {
+        List<IkePayload> outPayloads = new ArrayList<>(1);
+        IkeNotifyPayload notifyPayload = new IkeNotifyPayload(notifyType, notifyData);
+        outPayloads.add(notifyPayload);
+
+        mChildSmCallback.onOutboundPayloadsReady(
+                EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, outPayloads, this);
     }
 
     /**
@@ -741,8 +758,10 @@ public class ChildSessionStateMachine extends StateMachine {
                             // request can be ONLY for mCurrentChildSaRecord at this point.
                             if (!hasRemoteChildSpi(req.requestPayloads, mCurrentChildSaRecord)) {
                                 Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
-                                // TODO: Reply with Invalid Syntax Notification and close IKE
-                                // Session.
+
+                                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
+                                mChildSmCallback.onFatalIkeSessionError(
+                                        false /*needsNotifyRemote*/);
 
                             } else {
                                 mChildSmCallback.onOutboundPayloadsReady(
@@ -753,11 +772,13 @@ public class ChildSessionStateMachine extends StateMachine {
                                 mSimulDeleteDetected = true;
                             }
                             return HANDLED;
-
+                        case IKE_EXCHANGE_SUBTYPE_REKEY_CHILD:
+                            replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
+                            return HANDLED;
                         default:
-                            // TODO: Reply TEMPORARY_FAILURE
-                            throw new UnsupportedOperationException(
-                                    "Cannot handle Child procedure collision.");
+                            throw new IllegalArgumentException(
+                                    "Invalid exchange subtype for Child Session: "
+                                            + req.exchangeSubtype);
                     }
                 default:
                     return NOT_HANDLED;
