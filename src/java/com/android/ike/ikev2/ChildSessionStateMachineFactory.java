@@ -18,15 +18,11 @@ package com.android.ike.ikev2;
 
 import android.content.Context;
 import android.net.IpSecManager;
-import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Handler;
 import android.os.Looper;
 
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
-import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.internal.annotations.VisibleForTesting;
-
-import java.net.InetAddress;
 
 /** Package private factory for making ChildSessionStateMachine. */
 // TODO: Make it a inner Creator class of ChildSessionStateMachine
@@ -41,24 +37,9 @@ final class ChildSessionStateMachineFactory {
             ChildSessionOptions sessionOptions,
             Handler userCbHandler,
             IChildSessionCallback userCallbacks,
-            IChildSessionSmCallback childSmCallback,
-            InetAddress localAddress,
-            InetAddress remoteAddress,
-            UdpEncapsulationSocket udpEncapSocket,
-            IkeMacPrf prf,
-            byte[] skD) {
+            IChildSessionSmCallback childSmCallback) {
         return sChildSessionHelper.makeChildSessionStateMachine(
-                looper,
-                context,
-                sessionOptions,
-                userCbHandler,
-                userCallbacks,
-                childSmCallback,
-                localAddress,
-                remoteAddress,
-                udpEncapSocket,
-                prf,
-                skD);
+                looper, context, sessionOptions, userCbHandler, userCallbacks, childSmCallback);
     }
 
     @VisibleForTesting
@@ -79,12 +60,7 @@ final class ChildSessionStateMachineFactory {
                 ChildSessionOptions sessionOptions,
                 Handler userCbHandler,
                 IChildSessionCallback userCallbacks,
-                IChildSessionSmCallback childSmCallback,
-                InetAddress localAddress,
-                InetAddress remoteAddress,
-                UdpEncapsulationSocket udpEncapSocket,
-                IkeMacPrf prf,
-                byte[] skD);
+                IChildSessionSmCallback childSmCallback);
     }
 
     /**
@@ -99,12 +75,7 @@ final class ChildSessionStateMachineFactory {
                 ChildSessionOptions sessionOptions,
                 Handler userCbHandler,
                 IChildSessionCallback userCallbacks,
-                IChildSessionSmCallback childSmCallback,
-                InetAddress localAddress,
-                InetAddress remoteAddress,
-                UdpEncapsulationSocket udpEncapSocket,
-                IkeMacPrf prf,
-                byte[] skD) {
+                IChildSessionSmCallback childSmCallback) {
             ChildSessionStateMachine childSession =
                     new ChildSessionStateMachine(
                             looper,
@@ -113,12 +84,7 @@ final class ChildSessionStateMachineFactory {
                             sessionOptions,
                             userCbHandler,
                             userCallbacks,
-                            childSmCallback,
-                            localAddress,
-                            remoteAddress,
-                            udpEncapSocket,
-                            prf,
-                            skD);
+                            childSmCallback);
             childSession.start();
             return childSession;
         }

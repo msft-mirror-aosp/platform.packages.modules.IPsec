@@ -71,7 +71,7 @@ public final class IkeSessionTest {
                         mUserCbHandler,
                         mMockIkeSessionCb,
                         mMockChildSessionCb);
-        assertNotNull(ikeSession.getHandler().getLooper());
+        assertNotNull(ikeSession.mIkeSessionStateMachine.getHandler().getLooper());
     }
 
     /**
@@ -110,6 +110,8 @@ public final class IkeSessionTest {
         assertTrue(cntLatch.await(TIMEOUT_MS, TimeUnit.MILLISECONDS));
 
         // Verify that two sessions use the same looper.
-        assertEquals(sessions[0].getHandler().getLooper(), sessions[1].getHandler().getLooper());
+        assertEquals(
+                sessions[0].mIkeSessionStateMachine.getHandler().getLooper(),
+                sessions[1].mIkeSessionStateMachine.getHandler().getLooper());
     }
 }

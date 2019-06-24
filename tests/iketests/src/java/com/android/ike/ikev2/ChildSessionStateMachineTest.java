@@ -188,12 +188,7 @@ public final class ChildSessionStateMachineTest {
                         mChildSessionOptions,
                         mUserCbHandler,
                         mMockChildSessionCallback,
-                        mMockChildSessionSmCallback,
-                        LOCAL_ADDRESS,
-                        REMOTE_ADDRESS,
-                        mMockUdpEncapSocket,
-                        mIkePrf,
-                        SK_D);
+                        mMockChildSessionSmCallback);
         mChildSessionStateMachine.setDbg(true);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
 
@@ -290,6 +285,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
     }
 
     private void verifyInitCreateChildResp(
@@ -346,7 +342,13 @@ public final class ChildSessionStateMachineTest {
                 .thenReturn(mSpyCurrentChildSaRecord);
 
         mChildSessionStateMachine.handleFirstChildExchange(
-                mFirstSaReqPayloads, mFirstSaRespPayloads);
+                mFirstSaReqPayloads,
+                mFirstSaRespPayloads,
+                LOCAL_ADDRESS,
+                REMOTE_ADDRESS,
+                mMockUdpEncapSocket,
+                mIkePrf,
+                SK_D);
         mLooper.dispatchAll();
 
         verifyInitCreateChildResp(mFirstSaReqPayloads, mFirstSaRespPayloads);
@@ -359,7 +361,8 @@ public final class ChildSessionStateMachineTest {
         when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
                 .thenReturn(mSpyCurrentChildSaRecord);
 
-        mChildSessionStateMachine.createChildSession();
+        mChildSessionStateMachine.createChildSession(
+                LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
         mLooper.dispatchAll();
 
         // Validate outbound payload list

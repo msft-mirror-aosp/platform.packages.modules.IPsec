@@ -411,19 +411,7 @@ public final class IkeSessionStateMachineTest {
 
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
                 mMockChildSessionFactoryHelper);
-        when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
-                        eq(mLooper.getLooper()),
-                        eq(mContext),
-                        eq(mChildSessionOptions),
-                        eq(mUserCbHandler),
-                        eq(mMockChildSessionCallback),
-                        any(IChildSessionSmCallback.class),
-                        eq(LOCAL_ADDRESS),
-                        eq(REMOTE_ADDRESS),
-                        eq(mUdpEncapSocket),
-                        any(IkeMacPrf.class),
-                        any(byte[].class)))
-                .thenReturn(mMockChildSessionStateMachine);
+        setupChildStateMachineFactory(mMockChildSessionStateMachine);
 
         // Setup state machine
         mIkeSessionStateMachine =
@@ -858,12 +846,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mChildSessionOptions),
                         eq(mUserCbHandler),
                         eq(mMockChildSessionCallback),
-                        mChildSessionSmCbCaptor.capture(),
-                        eq(LOCAL_ADDRESS),
-                        eq(REMOTE_ADDRESS),
-                        eq(mUdpEncapSocket),
-                        any(IkeMacPrf.class),
-                        any(byte[].class));
+                        mChildSessionSmCbCaptor.capture());
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
 
         cb.onProcedureFinished(mMockChildSessionStateMachine);
@@ -872,36 +855,69 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
+    private void setupChildStateMachineFactory(ChildSessionStateMachine child) {
+        // After state machine start, add to the callback->statemachine map
+        when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
+                        eq(mLooper.getLooper()),
+                        eq(mContext),
+                        eq(mChildSessionOptions),
+                        eq(mUserCbHandler),
+                        any(IChildSessionCallback.class),
+                        any(IChildSessionSmCallback.class)))
+                .thenReturn(child);
+    }
+
+    /**
+     * Utility to register a new callback -> state machine mapping.
+     *
+     * <p>Must be used if IkeSessionStateMachine.openChildSession() is not called, but commands
+     * injected instead.
+     *
+     * @param callback The callback to be used for the mapping
+     * @param sm The ChildSessionStateMachine instance to be used.
+     */
+    private void registerChildStateMachine(
+            IChildSessionCallback callback, ChildSessionStateMachine sm) {
+        setupChildStateMachineFactory(sm);
+        mIkeSessionStateMachine.registerChildSessionCallback(mChildSessionOptions, callback);
+    }
+
     @Test
     public void testCreateAdditionalChild() throws Exception {
         setupIdleStateMachine();
+
+        IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
+        ChildSessionStateMachine childStateMachine = mock(ChildSessionStateMachine.class);
+        registerChildStateMachine(childCallback, childStateMachine);
 
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD,
-                        mMockChildSessionCallback,
+                        childCallback,
                         mChildSessionOptions));
         mLooper.dispatchAll();
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
-        verify(mMockChildSessionStateMachine).createChildSession();
+        verify(childStateMachine)
+                .createChildSession(
+                        eq(LOCAL_ADDRESS),
+                        eq(REMOTE_ADDRESS),
+                        any(), // udpEncapSocket
+                        eq(mIkeSessionStateMachine.mIkePrf),
+                        any()); // sk_d
 
+        // Once for initial child, a second time for the additional child.
         verify(mMockChildSessionFactoryHelper)
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
                         eq(mUserCbHandler),
-                        eq(mMockChildSessionCallback),
-                        mChildSessionSmCbCaptor.capture(),
-                        eq(LOCAL_ADDRESS),
-                        eq(REMOTE_ADDRESS),
-                        eq(mUdpEncapSocket),
-                        any(IkeMacPrf.class),
-                        any(byte[].class));
+                        eq(childCallback),
+                        mChildSessionSmCbCaptor.capture());
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
 
         // Mocking sending request
@@ -909,7 +925,7 @@ public final class IkeSessionStateMachineTest {
                 IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
                 false /*isResp*/,
                 new LinkedList<>(),
-                mMockChildSessionStateMachine);
+                childStateMachine);
         mLooper.dispatchAll();
 
         verify(mMockIkeMessageHelper)
@@ -940,7 +956,7 @@ public final class IkeSessionStateMachineTest {
         verifyIncrementLocaReqMsgId();
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyCreateChildResp);
 
-        verify(mMockChildSessionStateMachine)
+        verify(childStateMachine)
                 .receiveResponse(
                         eq(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA), mPayloadListCaptor.capture());
 
@@ -951,7 +967,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_NONCE));
 
         // Mock finishing procedure
-        cb.onProcedureFinished(mMockChildSessionStateMachine);
+        cb.onProcedureFinished(childStateMachine);
         mLooper.dispatchAll();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
@@ -959,26 +975,20 @@ public final class IkeSessionStateMachineTest {
 
     private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
             ChildSessionStateMachine child, int remoteSpi) throws Exception {
-        reset(mMockChildSessionFactoryHelper);
-        when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
-                        eq(mLooper.getLooper()),
-                        eq(mContext),
-                        eq(mChildSessionOptions),
-                        eq(mUserCbHandler),
-                        any(IChildSessionCallback.class),
-                        any(IChildSessionSmCallback.class),
-                        eq(LOCAL_ADDRESS),
-                        eq(REMOTE_ADDRESS),
-                        eq(mUdpEncapSocket),
-                        any(IkeMacPrf.class),
-                        any(byte[].class)))
-                .thenReturn(child);
+        return createChildAndGetChildSessionSmCallback(
+                child, remoteSpi, mock(IChildSessionCallback.class));
+    }
+
+    private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
+            ChildSessionStateMachine child, int remoteSpi, IChildSessionCallback childCallback)
+            throws Exception {
+        registerChildStateMachine(childCallback, child);
 
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD,
-                        mock(IChildSessionCallback.class),
+                        childCallback,
                         mChildSessionOptions));
         mLooper.dispatchAll();
 
@@ -988,13 +998,8 @@ public final class IkeSessionStateMachineTest {
                         eq(mContext),
                         eq(mChildSessionOptions),
                         eq(mUserCbHandler),
-                        any(IChildSessionCallback.class),
-                        mChildSessionSmCbCaptor.capture(),
-                        eq(LOCAL_ADDRESS),
-                        eq(REMOTE_ADDRESS),
-                        eq(mUdpEncapSocket),
-                        any(IkeMacPrf.class),
-                        any(byte[].class));
+                        eq(childCallback),
+                        mChildSessionSmCbCaptor.capture());
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
         cb.onChildSaCreated(remoteSpi, child);
         cb.onProcedureFinished(child);
@@ -1280,7 +1285,13 @@ public final class IkeSessionStateMachineTest {
                 ArgumentCaptor.forClass(List.class);
         verify(mMockChildSessionStateMachine)
                 .handleFirstChildExchange(
-                        mReqPayloadListCaptor.capture(), mRespPayloadListCaptor.capture());
+                        mReqPayloadListCaptor.capture(),
+                        mRespPayloadListCaptor.capture(),
+                        eq(LOCAL_ADDRESS),
+                        eq(REMOTE_ADDRESS),
+                        any(), // udpEncapSocket
+                        eq(mIkeSessionStateMachine.mIkePrf),
+                        any()); // sk_d
         List<IkePayload> childReqList = mReqPayloadListCaptor.getValue();
         List<IkePayload> childRespList = mRespPayloadListCaptor.getValue();
 
@@ -2002,5 +2013,108 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
         verify(mMockIkeMessageHelper, times(1)).encryptAndEncode(any(), any(), any(), any());
+    }
+
+    @Test
+    public void testOpenChildSessionValidatesArgs() throws Exception {
+        setupIdleStateMachine();
+
+        // Expect failure - no callbacks provided
+        try {
+            mIkeSessionStateMachine.openChildSession(mChildSessionOptions, null);
+        } catch (IllegalArgumentException expected) {
+        }
+
+        // Expect failure - callbacks already registered
+        try {
+            mIkeSessionStateMachine.openChildSession(
+                    mChildSessionOptions, mMockChildSessionCallback);
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testOpenChildSession() throws Exception {
+        setupIdleStateMachine();
+
+        IChildSessionCallback cb = mock(IChildSessionCallback.class);
+        mIkeSessionStateMachine.openChildSession(mChildSessionOptions, cb);
+
+        // Test that inserting the same cb returns an error, even before the state
+        // machine has a chance to process it.
+        try {
+            mIkeSessionStateMachine.openChildSession(mChildSessionOptions, cb);
+        } catch (IllegalArgumentException expected) {
+        }
+
+        verify(mMockChildSessionFactoryHelper)
+                .makeChildSessionStateMachine(
+                        eq(mLooper.getLooper()),
+                        eq(mContext),
+                        eq(mChildSessionOptions),
+                        eq(mUserCbHandler),
+                        eq(cb),
+                        any());
+
+        // Verify state in IkeSessionStateMachine
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+
+        synchronized (mIkeSessionStateMachine.mChildCbToSessions) {
+            assertTrue(mIkeSessionStateMachine.mChildCbToSessions.containsKey(cb));
+        }
+    }
+
+    @Test
+    public void testCloseChildSessionValidatesArgs() throws Exception {
+        setupIdleStateMachine();
+
+        // Expect failure - callbacks not registered
+        try {
+            mIkeSessionStateMachine.closeChildSession(mock(IChildSessionCallback.class));
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testCloseChildSession() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.closeChildSession(mMockChildSessionCallback);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+    }
+
+    @Test
+    public void testCloseImmediatelyAfterOpenChildSession() throws Exception {
+        setupIdleStateMachine();
+
+        IChildSessionCallback cb = mock(IChildSessionCallback.class);
+        mIkeSessionStateMachine.openChildSession(mChildSessionOptions, cb);
+
+        // Verify that closing the session immediately still picks up the child callback
+        // even before the looper has a chance to run.
+        mIkeSessionStateMachine.closeChildSession(mMockChildSessionCallback);
+    }
+
+    @Test
+    public void testOnChildSessionClosed() throws Exception {
+        setupIdleStateMachine();
+
+        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
+        IChildSessionCallback childCb = mock(IChildSessionCallback.class);
+        IChildSessionSmCallback smCb =
+                createChildAndGetChildSessionSmCallback(child, 0 /* placeholder */, childCb);
+
+        smCb.onChildSessionClosed(childCb);
+
+        synchronized (mIkeSessionStateMachine.mChildCbToSessions) {
+            assertFalse(mIkeSessionStateMachine.mChildCbToSessions.containsKey(childCb));
+        }
     }
 }
