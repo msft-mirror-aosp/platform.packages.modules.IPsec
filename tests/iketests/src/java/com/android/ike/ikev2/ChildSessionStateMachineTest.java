@@ -355,7 +355,10 @@ public final class ChildSessionStateMachineTest {
         // Validate outbound payload list
         verify(mMockChildSessionSmCallback)
                 .onOutboundPayloadsReady(
-                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA), eq(false), mPayloadListCaptor.capture());
+                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA),
+                        eq(false),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
 
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
         assertNotNull(
@@ -422,7 +425,10 @@ public final class ChildSessionStateMachineTest {
                         instanceof ChildSessionStateMachine.DeleteChildLocalDelete);
         verify(mMockChildSessionSmCallback)
                 .onOutboundPayloadsReady(
-                        eq(EXCHANGE_TYPE_INFORMATIONAL), eq(false), mPayloadListCaptor.capture());
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(false),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
 
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
         assertEquals(1, reqPayloadList.size());

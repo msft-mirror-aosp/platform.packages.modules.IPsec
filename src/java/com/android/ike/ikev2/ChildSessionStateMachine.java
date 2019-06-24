@@ -44,6 +44,7 @@ import android.os.Message;
 import android.util.Log;
 import android.util.Pair;
 
+import com.android.ike.ikev2.IkeSessionStateMachine.IkeExchangeSubType;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
@@ -216,7 +217,10 @@ public class ChildSessionStateMachine extends StateMachine {
 
         /** Notify the IKE Session to send out IKE message for this Child Session. */
         void onOutboundPayloadsReady(
-                @ExchangeType int exchangeType, boolean isResp, List<IkePayload> payloadList);
+                @ExchangeType int exchangeType,
+                boolean isResp,
+                List<IkePayload> payloadList,
+                ChildSessionStateMachine childSession);
 
         /** Notify that a Child procedure has been finished. */
         void onProcedureFinished(ChildSessionStateMachine childSession);
@@ -269,7 +273,22 @@ public class ChildSessionStateMachine extends StateMachine {
         sendMessage(CMD_LOCAL_REQUEST_DELETE_CHILD);
     }
 
-    // TODO: Add receiveRequest() and rekeyChildSession()
+    // TODO: Add rekeyChildSession()
+
+    /**
+     * Receive a request
+     *
+     * <p>This method is called synchronously from IkeStateMachine. It proxies the synchronous call
+     * as an asynchronous job to the ChildStateMachine handler.
+     *
+     * @param exchangeSubtype the exchange subtype of this inbound request.
+     * @param payloadList the Child-procedure-related payload list in the request message that needs
+     *     validation.
+     */
+    public void receiveRequest(
+            @IkeExchangeSubType int exchangeSubtype, List<IkePayload> payloadList) {
+        // TODO:Send CMD_HANDLE_RECEIVED_REQUEST message to StateMachine
+    }
 
     /**
      * Receive a response.
@@ -504,7 +523,10 @@ public class ChildSessionStateMachine extends StateMachine {
                                 mChildSessionOptions,
                                 false /*isFirstChild*/);
                 mChildSmCallback.onOutboundPayloadsReady(
-                        EXCHANGE_TYPE_CREATE_CHILD_SA, false /*isResp*/, mRequestPayloads);
+                        EXCHANGE_TYPE_CREATE_CHILD_SA,
+                        false /*isResp*/,
+                        mRequestPayloads,
+                        ChildSessionStateMachine.this);
             } catch (ResourceUnavailableException e) {
                 // TODO: Notify users and close the Child Session.
             }
@@ -592,7 +614,10 @@ public class ChildSessionStateMachine extends StateMachine {
             outIkePayloads.add(new IkeDeletePayload(new int[] {childSaRecord.getLocalSpi()}));
 
             mChildSmCallback.onOutboundPayloadsReady(
-                    EXCHANGE_TYPE_INFORMATIONAL, isResp, outIkePayloads);
+                    EXCHANGE_TYPE_INFORMATIONAL,
+                    isResp,
+                    outIkePayloads,
+                    ChildSessionStateMachine.this);
         }
 
         // TODO: Add a method to handle an inbound Child Session deletion request
