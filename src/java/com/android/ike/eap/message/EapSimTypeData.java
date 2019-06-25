@@ -19,9 +19,10 @@ package com.android.ike.eap.message;
 import android.annotation.NonNull;
 import android.util.Log;
 
+import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
-import com.android.ike.eap.exceptions.EapSimInvalidTypeDataException;
 import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
+import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.EapSimAttribute.EapSimUnsupportedAttribute;
 
 import java.nio.BufferUnderflowException;
@@ -65,49 +66,80 @@ public class EapSimTypeData {
     }
 
     /**
-     * Decodes the given byte-array into an EapSimTypeData instance.
-     *
-     * @param typeData the byte-encoding of the EapSimTypeData to be parsed
-     * @return an EapSimTypeData instance representing the data stored in typeData
-     * @throws EapSimInvalidTypeDataException when typeData contains invalid EAP Subtypes, invalid
-     *         Attributes, or the given typeData doesn't contain a full EapSimTypeData
+     * EapSimTypeDataDecoder will be used for decoding {@link EapSimTypeData} objects.
      */
-    public static EapSimTypeData decode(@NonNull byte[] typeData) throws
-            EapSimInvalidTypeDataException {
-        if (typeData == null) {
-            throw new IllegalArgumentException("typeData must be non-null");
+    public static class EapSimTypeDataDecoder {
+        /**
+         * Decodes the given byte-array into a DecodeResult object.
+         *
+         * @param typeData the byte-encoding of the EapSimTypeData to be parsed
+         * @return a DecodeResult object. If the decoding is successful, this will encapsulate an
+         *         EapSimTypeData instance representing the data stored in typeData. Otherwise, it
+         *         will contain the relevant AtClientErrorCode for the decoding error.
+         */
+        public DecodeResult decode(@NonNull byte[] typeData) {
+            if (typeData == null) {
+                Log.d(TAG, "Invalid EAP Type-Data");
+                return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
+
+            ByteBuffer byteBuffer = ByteBuffer.wrap(typeData);
+            try {
+                int eapSubType = Byte.toUnsignedInt(byteBuffer.get());
+                if (!SUPPORTED_SUBTYPES.contains(eapSubType)) {
+                    Log.d(TAG, "Invalid EAP Type-Data");
+                    return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
+                }
+
+                // next two bytes are reserved (RFC 4186 Section 8.1)
+                byteBuffer.get(new byte[2]);
+
+                // read attributes
+                LinkedHashMap<Integer, EapSimAttribute> attributeMap = new LinkedHashMap<>();
+                while (byteBuffer.hasRemaining()) {
+                    // TODO(b/135637161): check for duplicate attributes
+                    EapSimAttribute attribute = EapSimAttributeFactory.getInstance()
+                            .getEapSimAttribute(byteBuffer);
+                    if (attribute instanceof EapSimUnsupportedAttribute) {
+                        Log.d(TAG, "Unsupported EAP-SIM attribute during decoding: "
+                                + attribute.attributeType);
+                    }
+                    attributeMap.put(attribute.attributeType, attribute);
+                }
+                return new DecodeResult(new EapSimTypeData(eapSubType, attributeMap));
+            } catch (EapSimInvalidAtRandException ex) {
+                Log.d(TAG, "Invalid AtRand attribute", ex);
+                return new DecodeResult(AtClientErrorCode.INSUFFICIENT_CHALLENGES);
+            } catch (EapSimInvalidAttributeException | BufferUnderflowException ex) {
+                Log.d(TAG, "Incorrectly formatted attribute", ex);
+                return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
+            } catch (EapSimUnsupportedAttributeException ex) {
+                Log.d(TAG, "Unrecognized, non-skippable attribute encountered", ex);
+                return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
         }
 
-        ByteBuffer byteBuffer = ByteBuffer.wrap(typeData);
+        /**
+         * DecodeResult represents the result from calling EapSimTypeDataDecoder.decode(). It will
+         * contain either a decoded EapSimTypeData or the relevant AtClientErrorCode.
+         */
+        public class DecodeResult {
+            public final EapSimTypeData eapSimTypeData;
+            public final AtClientErrorCode mAtClientErrorCode;
 
-        try {
-            int eapSubType = Byte.toUnsignedInt(byteBuffer.get());
-            if (!SUPPORTED_SUBTYPES.contains(eapSubType)) {
-                throw new EapSimInvalidTypeDataException("Invalid EAP Type-Data");
+            public DecodeResult(EapSimTypeData eapSimTypeData) {
+                this.eapSimTypeData = eapSimTypeData;
+                this.mAtClientErrorCode = null;
             }
 
-            // next two bytes are reserved (RFC 4186 Section 8.1)
-            byteBuffer.getShort();
-
-            // read attributes
-            LinkedHashMap<Integer, EapSimAttribute> attributeMap = new LinkedHashMap<>();
-            while (byteBuffer.hasRemaining()) {
-                EapSimAttribute attribute = EapSimAttributeFactory.getInstance()
-                        .getEapSimAttribute(byteBuffer);
-                if (attribute instanceof EapSimUnsupportedAttribute) {
-                    Log.d(TAG, "Unsupported EAP-SIM attribute during decoding: "
-                            + attribute.attributeType);
-                }
-                attributeMap.put(attribute.attributeType, attribute);
+            public DecodeResult(AtClientErrorCode atClientErrorCode) {
+                this.mAtClientErrorCode = atClientErrorCode;
+                eapSimTypeData = null;
             }
-            return new EapSimTypeData(eapSubType, attributeMap);
-        } catch (EapSimInvalidAttributeException ex) {
-            throw new EapSimInvalidTypeDataException("Incorrectly formatted attribute", ex);
-        } catch (EapSimUnsupportedAttributeException ex) {
-            throw new EapSimInvalidTypeDataException("Invalid EAP-SIM Type-Data", ex);
-        } catch (BufferUnderflowException ex) {
-            throw new EapSimInvalidTypeDataException(
-                    "Error reading EapSimTypeData from ByteBuffer", ex);
+
+            public boolean isSuccessfulDecode() {
+                return eapSimTypeData != null;
+            }
         }
     }
 }
