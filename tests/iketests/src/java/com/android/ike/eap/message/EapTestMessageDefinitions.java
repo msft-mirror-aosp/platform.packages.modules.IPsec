@@ -17,6 +17,8 @@
 package com.android.ike.eap.message;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_VERSION_LIST_DATA;
+import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_1;
 
 /**
  * EapTestMessageDefinitions provides byte[] encodings of commonly used EAP Messages.
@@ -71,7 +73,11 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("7F010000");
 
     // Type-Data
+    public static final byte[] EAP_SIM_START_SUBTYPE =
+            hexStringToByteArray("0A00000F02" + AT_VERSION_LIST_DATA + "0A010000");
     public static final byte[] INVALID_SUBTYPE = hexStringToByteArray("FF");
+    public static final byte[] TYPE_DATA_INVALID_AT_RAND =
+            hexStringToByteArray("0A000001050000" + RAND_1);
     public static final byte[] SHORT_TYPE_DATA = hexStringToByteArray("0A");
     public static final byte[] TYPE_DATA_INVALID_ATTRIBUTE =
             hexStringToByteArray("0A00007F01");
