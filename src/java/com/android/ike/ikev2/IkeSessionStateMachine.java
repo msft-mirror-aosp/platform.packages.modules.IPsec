@@ -1197,25 +1197,12 @@ public class IkeSessionStateMachine extends StateMachine {
                     int exchangeType = message.arg1;
                     boolean isResp = (message.arg2 == CHILD_PAYLOADS_DIRECTION_RESPONSE);
 
-                    // Remote message ID has incremented when decoding the last received request
-                    int messageId =
-                            isResp
-                                    ? mLastInboundRequestMsgId
-                                    : mCurrentIkeSaRecord.getLocalRequestMessageId();
+                    if (isResp) {
+                        handleOutboundResponse(exchangeType, (List<IkePayload>) message.obj);
+                    } else {
+                        handleOutboundRequest(exchangeType, (List<IkePayload>) message.obj);
+                    }
 
-                    IkeHeader ikeHeader =
-                            new IkeHeader(
-                                    mCurrentIkeSaRecord.getInitiatorSpi(),
-                                    mCurrentIkeSaRecord.getResponderSpi(),
-                                    IkePayload.PAYLOAD_TYPE_SK,
-                                    exchangeType,
-                                    isResp,
-                                    mCurrentIkeSaRecord.isLocalInit,
-                                    messageId);
-                    IkeMessage ikeMessage =
-                            new IkeMessage(ikeHeader, (List<IkePayload>) message.obj);
-
-                    sendEncryptedIkeMessage(ikeMessage);
                     return HANDLED;
                 case CMD_CHILD_PROCEDURE_FINISHED:
                     ChildSessionStateMachine childSession = (ChildSessionStateMachine) message.obj;
@@ -1317,6 +1304,26 @@ public class IkeSessionStateMachine extends StateMachine {
             payloads.removeAll(handledPayloads);
 
             mChildInLocalProcedure.receiveResponse(ikeMessage.ikeHeader.exchangeType, payloads);
+        }
+
+        private void handleOutboundRequest(int exchangeType, List<IkePayload> outboundPayloads) {
+            IkeHeader ikeHeader =
+                    new IkeHeader(
+                            mCurrentIkeSaRecord.getInitiatorSpi(),
+                            mCurrentIkeSaRecord.getResponderSpi(),
+                            IkePayload.PAYLOAD_TYPE_SK,
+                            exchangeType,
+                            false /*isResp*/,
+                            mCurrentIkeSaRecord.isLocalInit,
+                            mCurrentIkeSaRecord.getLocalRequestMessageId());
+            IkeMessage ikeMessage = new IkeMessage(ikeHeader, outboundPayloads);
+
+            sendEncryptedIkeMessage(ikeMessage);
+            // TODO: Start retransmission
+        }
+
+        private void handleOutboundResponse(int exchangeType, List<IkePayload> outboundPayloads) {
+            // TODO: Build and send out response when all Child Sessions have replied.
         }
     }
 
