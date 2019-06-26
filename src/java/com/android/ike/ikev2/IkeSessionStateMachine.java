@@ -1553,7 +1553,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                         break;
                     default:
-                        throw new InvalidSyntaxException(
+                        logw(
                                 "Received unexpected payload in IKE INIT response. Payload type: "
                                         + payload.payloadType);
                 }
@@ -1840,10 +1840,10 @@ public class IkeSessionStateMachine extends StateMachine {
                         }
 
                     default:
-                        throw new InvalidSyntaxException(
+                        logw(
                                 "Received unexpected payload in IKE AUTH response. Payload"
                                         + " type: "
-                                        + payload);
+                                        + payload.payloadType);
                 }
             }
 
@@ -1959,7 +1959,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         // Notification payloads allowed, but left to handler methods to process.
                         break;
                     default:
-                        throw new InvalidSyntaxException(
+                        logw(
                                 "Received unexpected payload in IKE REKEY request. Payload type: "
                                         + payload.payloadType);
                 }
@@ -1988,7 +1988,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
             for (IkeNotifyPayload notifyPayload : notificationPayloads) {
                 if (notifyPayload.isErrorNotify()) {
-                    throw new InvalidSyntaxException("Error notifications invalid in request");
+                    logw("Error notifications invalid in request: " + notifyPayload.notifyType);
                 }
             }
 

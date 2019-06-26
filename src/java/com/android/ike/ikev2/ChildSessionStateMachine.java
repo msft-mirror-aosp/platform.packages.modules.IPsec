@@ -766,16 +766,17 @@ public class ChildSessionStateMachine extends StateMachine {
                     case PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
 
-                        if (notifyPayload.isErrorNotify()) {
-                            if (!isResp) {
-                                throw new InvalidSyntaxException(
-                                        "Received error notification in a Create Child SA request");
-                            }
+                        if (notifyPayload.isErrorNotify() && !isResp) {
+                            Log.w(
+                                    TAG,
+                                    "Received error notification in a Create Child SA request: "
+                                            + notifyPayload.notifyType);
                         }
                         break;
                     default:
-                        throw new InvalidSyntaxException(
-                                "Received unexpected payload in Create Child SA request. Payload"
+                        Log.w(
+                                TAG,
+                                "Received unexpected payload in Create Child SA message. Payload"
                                         + " type: "
                                         + payload.payloadType);
                 }
@@ -795,7 +796,8 @@ public class ChildSessionStateMachine extends StateMachine {
                             || hasNoncePayload
                             || hasTsInitPayload
                             || hasTsRespPayload)) {
-                throw new InvalidSyntaxException(
+                Log.w(
+                        TAG,
                         "Unexpected payload found in an INFORMATIONAL message: SA, KE, Nonce,"
                                 + " TS-Initiator or TS-Responder");
             }
