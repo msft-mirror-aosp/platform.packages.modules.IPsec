@@ -30,6 +30,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -66,6 +67,15 @@ public class EapSimTypeData {
     public EapSimTypeData(int eapSubType, LinkedHashMap<Integer, EapSimAttribute> attributeMap) {
         this.eapSubtype = eapSubType;
         this.attributeMap = attributeMap;
+    }
+
+    public EapSimTypeData(int eapSubtype, List<EapSimAttribute> attributes) {
+        this.eapSubtype = eapSubtype;
+        attributeMap = new LinkedHashMap<>();
+        for (EapSimAttribute attribute : attributes) {
+            // TODO(b/135637161): check for duplicate attributes
+            attributeMap.put(attribute.attributeType, attribute);
+        }
     }
 
     /**
