@@ -16,56 +16,95 @@
 
 package com.android.ike.eap.message;
 
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
+import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_START_SUBTYPE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.INVALID_SUBTYPE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_TYPE_DATA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_ATTRIBUTE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_AT_RAND;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
-import com.android.ike.eap.exceptions.EapSimInvalidTypeDataException;
-import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
+import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
+import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
+import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 
+import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.BufferUnderflowException;
+import java.util.Arrays;
+import java.util.Iterator;
 
 public class EapSimTypeDataTest {
+    private static final int UNABLE_TO_PROCESS_CODE = 0;
+    private static final int INSUFFICIENT_CHALLENGES_CODE = 2;
+
+    private EapSimTypeDataDecoder mEapSimTypeDataDecoder;
+
+    @Before
+    public void setUp() {
+        mEapSimTypeDataDecoder = new EapSimTypeDataDecoder();
+    }
+
     @Test
-    public void testDecodeNullTypeData() throws Exception {
-        try {
-            EapSimTypeData.decode(null);
-            fail("Expected IllegalArgumentException for null typeData");
-        } catch (IllegalArgumentException expected) {
-        }
+    public void testDecode() throws Exception {
+        DecodeResult result = mEapSimTypeDataDecoder.decode(EAP_SIM_START_SUBTYPE);
+
+        assertTrue(result.isSuccessfulDecode());
+        EapSimTypeData eapSimTypeData = result.eapSimTypeData;
+        assertEquals(EAP_SIM_START, eapSimTypeData.eapSubtype);
+        assertTrue(eapSimTypeData.attributeMap.containsKey(EAP_AT_VERSION_LIST));
+        AtVersionList atVersionList = (AtVersionList)
+                eapSimTypeData.attributeMap.get(EAP_AT_VERSION_LIST);
+        assertEquals(Arrays.asList(1), atVersionList.versions);
+        assertTrue(eapSimTypeData.attributeMap.containsKey(EAP_AT_PERMANENT_ID_REQ));
+
+        // also check order of Map entries (needs to match input order)
+        Iterator<Integer> itr = eapSimTypeData.attributeMap.keySet().iterator();
+        assertEquals(EAP_AT_VERSION_LIST, (int) itr.next());
+        assertEquals(EAP_AT_PERMANENT_ID_REQ, (int) itr.next());
+        assertFalse(itr.hasNext());
+    }
+
+    @Test
+    public void testDecodeNullTypeData() {
+        DecodeResult result = mEapSimTypeDataDecoder.decode(null);
+        assertFalse(result.isSuccessfulDecode());
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
     }
 
     @Test
     public void testDecodeInvalidSubtype() {
-        try {
-            EapSimTypeData.decode(INVALID_SUBTYPE);
-            fail("Expected EapSimInvalidTypeDataException for invalid EAP Subtype");
-        } catch (EapSimInvalidTypeDataException expected) {
-        }
+        DecodeResult result = mEapSimTypeDataDecoder.decode(INVALID_SUBTYPE);
+        assertFalse(result.isSuccessfulDecode());
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+
+    }
+
+    @Test
+    public void testDecodeInvalidAtRand() {
+        DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_AT_RAND);
+        assertFalse(result.isSuccessfulDecode());
+        assertEquals(INSUFFICIENT_CHALLENGES_CODE, result.mAtClientErrorCode.errorCode);
     }
 
     @Test
     public void testDecodeShortPacket() {
-        try {
-            EapSimTypeData.decode(SHORT_TYPE_DATA);
-            fail("Expected EapSimInvalidTypeDataException for incomplete EapSimTypeData in byte[]");
-        } catch (EapSimInvalidTypeDataException expected) {
-            assertTrue(expected.getCause() instanceof BufferUnderflowException);
-        }
+        DecodeResult result = mEapSimTypeDataDecoder.decode(SHORT_TYPE_DATA);
+        assertFalse(result.isSuccessfulDecode());
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+
     }
 
     @Test
     public void testDecodeInvalidEapAttribute() {
-        try {
-            EapSimTypeData.decode(TYPE_DATA_INVALID_ATTRIBUTE);
-            fail("Expected EapSimInvalidTypeDataException for invalid EAP Attribute");
-        } catch (EapSimInvalidTypeDataException expected) {
-            assertTrue(expected.getCause() instanceof EapSimUnsupportedAttributeException);
-        }
+        DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_ATTRIBUTE);
+        assertFalse(result.isSuccessfulDecode());
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+
     }
 }
