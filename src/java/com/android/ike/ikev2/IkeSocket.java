@@ -29,7 +29,7 @@ import android.util.LongSparseArray;
 
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeHeader;
-import com.android.ike.ikev2.utils.PacketReader;
+import com.android.ike.utils.PacketReader;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
