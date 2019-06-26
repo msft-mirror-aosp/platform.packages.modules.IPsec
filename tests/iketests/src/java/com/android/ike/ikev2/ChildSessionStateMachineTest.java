@@ -219,11 +219,8 @@ public final class ChildSessionStateMachineTest {
                         eq(LOCAL_ADDRESS.getHostAddress()), anyInt(), anyObject()))
                 .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(CURRENT_CHILD_SA_SPI_IN));
         IkeSaPayload reqSaPayload =
-                IkeSaPayload.createChildSaPayload(
-                        false /*isResp*/,
-                        mChildSessionOptions.getSaProposals(),
-                        mMockIpSecManager,
-                        LOCAL_ADDRESS);
+                IkeSaPayload.createChildSaRequestPayload(
+                        mChildSessionOptions.getSaProposals(), mMockIpSecManager, LOCAL_ADDRESS);
         mFirstSaReqPayloads.add(reqSaPayload);
 
         // Build a remotely generated SA payload whoes SPI resource has not been allocated.
