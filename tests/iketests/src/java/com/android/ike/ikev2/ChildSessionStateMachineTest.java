@@ -22,6 +22,7 @@ import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_DELETE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_KE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NONCE;
@@ -29,6 +30,7 @@ import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_SA;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
+import static com.android.ike.ikev2.message.IkePayload.PROTOCOL_ID_ESP;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -356,6 +358,24 @@ public final class ChildSessionStateMachineTest {
         quitAndVerify();
     }
 
+    private void verifyOutboundCreatePayloadTypes(List<IkePayload> outboundPayloads) {
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_SA, IkeSaPayload.class, outboundPayloads));
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class, outboundPayloads));
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class, outboundPayloads));
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_NONCE, IkeNoncePayload.class, outboundPayloads));
+        assertNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_KE, IkeKePayload.class, outboundPayloads));
+    }
+
     @Test
     public void testCreateChild() throws Exception {
         when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
@@ -374,21 +394,7 @@ public final class ChildSessionStateMachineTest {
                         eq(mChildSessionStateMachine));
 
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
-        assertNotNull(
-                IkePayload.getPayloadForTypeInProvidedList(
-                        PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloadList));
-        assertNotNull(
-                IkePayload.getPayloadForTypeInProvidedList(
-                        PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class, reqPayloadList));
-        assertNotNull(
-                IkePayload.getPayloadForTypeInProvidedList(
-                        PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class, reqPayloadList));
-        assertNotNull(
-                IkePayload.getPayloadForTypeInProvidedList(
-                        PAYLOAD_TYPE_NONCE, IkeNoncePayload.class, reqPayloadList));
-        assertNull(
-                IkePayload.getPayloadForTypeInProvidedList(
-                        PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloadList));
+        verifyOutboundCreatePayloadTypes(reqPayloadList);
         assertTrue(
                 IkePayload.getPayloadListForTypeInProvidedList(
                                 PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, reqPayloadList)
@@ -404,6 +410,12 @@ public final class ChildSessionStateMachineTest {
     }
 
     private void setupIdleStateMachine() throws Exception {
+        mChildSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
+        mChildSessionStateMachine.mRemoteAddress = REMOTE_ADDRESS;
+        mChildSessionStateMachine.mUdpEncapSocket = mMockUdpEncapSocket;
+        mChildSessionStateMachine.mIkePrf = mIkePrf;
+        mChildSessionStateMachine.mSkD = SK_D;
+
         mChildSessionStateMachine.mSaProposal = buildSaProposal();
         mChildSessionStateMachine.mLocalTs = mChildSessionOptions.getLocalTrafficSelectors();
         mChildSessionStateMachine.mRemoteTs = mChildSessionOptions.getRemoteTrafficSelectors();
@@ -544,6 +556,50 @@ public final class ChildSessionStateMachineTest {
         assertArrayEquals(
                 new int[] {mSpyCurrentChildSaRecord.getLocalSpi()},
                 ((IkeDeletePayload) respPayloadList.get(0)).spisToDelete);
+    }
+
+    @Test
+    public void testRekeyChildLocalCreateSendsRequest() throws Exception {
+        setupIdleStateMachine();
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA),
+                        eq(false),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+
+        // Verify outbound payload list
+        List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
+        verifyOutboundCreatePayloadTypes(reqPayloadList);
+
+        // Verify SA Payload
+        IkeSaPayload saPayload =
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloadList);
+        assertFalse(saPayload.isSaResponse);
+        assertEquals(1, saPayload.proposalList.size());
+
+        IkeSaPayload.ChildProposal proposal =
+                (IkeSaPayload.ChildProposal) saPayload.proposalList.get(0);
+        assertEquals(1, proposal.number); // Must be 1-indexed
+        assertEquals(mChildSessionStateMachine.mSaProposal, proposal.saProposal);
+
+        // Verify Notify-Rekey Payload
+        List<IkeNotifyPayload> notifyPayloads =
+                IkePayload.getPayloadListForTypeInProvidedList(
+                        PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, reqPayloadList);
+        assertEquals(1, notifyPayloads.size());
+        IkeNotifyPayload notifyPayload = notifyPayloads.get(0);
+        assertEquals(NOTIFY_TYPE_REKEY_SA, notifyPayload.notifyType);
+        assertEquals(PROTOCOL_ID_ESP, notifyPayload.protocolId);
+        assertEquals(mSpyCurrentChildSaRecord.getLocalSpi(), notifyPayload.spi);
     }
 
     @Test
