@@ -38,6 +38,7 @@ import java.util.Map;
  */
 public abstract class EapSimAttribute {
     static final int LENGTH_SCALING = 4;
+
     private static final int MIN_ATTR_LENGTH = 4;
 
     public static final int SKIPPABLE_ATTRIBUTE_RANGE_START = 128;
@@ -383,6 +384,22 @@ public abstract class EapSimAttribute {
 
             int bytesUsed = MIN_ATTR_LENGTH + identity.length;
             addPadding(bytesUsed, byteBuffer);
+        }
+
+        /**
+         * Creates and returns an AtIdentity instance for the given identity.
+         *
+         * @param identity byte-array representing the identity for the AtIdentity
+         * @return AtIdentity instance for the given identity byte-array
+         */
+        public static AtIdentity getAtIdentity(byte[] identity)
+                throws EapSimInvalidAttributeException {
+            int lengthInBytes = MIN_ATTR_LENGTH + identity.length;
+            if (lengthInBytes % LENGTH_SCALING != 0) {
+                lengthInBytes += LENGTH_SCALING - (lengthInBytes % LENGTH_SCALING);
+            }
+
+            return new AtIdentity(lengthInBytes, identity);
         }
     }
 
