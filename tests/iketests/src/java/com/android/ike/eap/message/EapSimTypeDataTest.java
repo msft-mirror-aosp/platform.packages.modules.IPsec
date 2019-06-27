@@ -41,16 +41,39 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map.Entry;
 
 public class EapSimTypeDataTest {
     private static final int UNABLE_TO_PROCESS_CODE = 0;
     private static final int INSUFFICIENT_CHALLENGES_CODE = 2;
+    private static final int EAP_SIM_START = 10;
 
     private EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
     @Before
     public void setUp() {
         mEapSimTypeDataDecoder = new EapSimTypeDataDecoder();
+    }
+
+    @Test
+    public void testConstructor() throws Exception {
+        List<EapSimAttribute> attributes = Arrays.asList(
+                new AtVersionList(8, 1), new AtPermanentIdReq());
+
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, attributes);
+        assertEquals(EAP_SIM_START, eapSimTypeData.eapSubtype);
+
+        // check order of entries in EapSimTypeData.attributeMap
+        Iterator<Entry<Integer, EapSimAttribute>> itr =
+                eapSimTypeData.attributeMap.entrySet().iterator();
+        Entry<Integer, EapSimAttribute> pair = itr.next();
+        assertEquals(EAP_AT_VERSION_LIST, (int) pair.getKey());
+        assertEquals(Arrays.asList(1), ((AtVersionList) pair.getValue()).versions);
+
+        pair = itr.next();
+        assertEquals(EAP_AT_PERMANENT_ID_REQ, (int) pair.getKey());
+        assertTrue(pair.getValue() instanceof AtPermanentIdReq);
     }
 
     @Test
