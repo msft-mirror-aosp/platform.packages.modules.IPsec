@@ -79,5 +79,6 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_COUNTER_TOO_SMALL_INVALID_LENGTH = hexStringToByteArray("1402");
     public static final byte[] AT_NONCE_S_INVALID_LENGTH = hexStringToByteArray("1506");
     public static final byte[] AT_NOTIFICATION_INVALID_LENGTH = hexStringToByteArray("0C02");
+    public static final byte[] AT_NOTIFICATION_INVALID_STATE = hexStringToByteArray("0C01C000");
     public static final byte[] AT_CLIENT_ERROR_CODE_INVALID_LENGTH = hexStringToByteArray("1602");
 }
