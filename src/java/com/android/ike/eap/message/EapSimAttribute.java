@@ -209,6 +209,12 @@ public abstract class EapSimAttribute {
             }
         }
 
+        @VisibleForTesting
+        public AtSelectedVersion(int selectedVersion) throws EapSimInvalidAttributeException {
+            super(EAP_AT_SELECTED_VERSION, LENGTH);
+            this.selectedVersion = selectedVersion;
+        }
+
         @Override
         public void encode(ByteBuffer byteBuffer) {
             encodeAttributeHeader(byteBuffer);

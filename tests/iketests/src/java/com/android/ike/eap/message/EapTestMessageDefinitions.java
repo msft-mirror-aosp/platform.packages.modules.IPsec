@@ -18,6 +18,7 @@ package com.android.ike.eap.message;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_VERSION_LIST_DATA;
+import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.IDENTITY_STRING;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_1;
 
 /**
@@ -44,6 +45,10 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_SUCCESS_PACKET = hexStringToByteArray("03" + ID + "0004");
     public static final byte[] EAP_SIM_CLIENT_ERROR_RESPONSE =
             hexStringToByteArray("02" + ID + "000C120E000016010001");
+
+    // EAP-SIM response containing SELECTED_VERSION (1) and IDENTITY attributes
+    public static final byte[] EAP_SIM_RESPONSE_PACKET = hexStringToByteArray(
+            "02" + ID + "0024120A0000100100010E060011" + IDENTITY_STRING + "000000");
 
     // Body of EapData is the list of supported methods
     public static final byte[] EAP_RESPONSE_NAK_PACKET =
