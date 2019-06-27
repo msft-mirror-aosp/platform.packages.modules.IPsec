@@ -77,14 +77,14 @@ public class EapSimTypeDataTest {
     public void testDecodeNullTypeData() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(null);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
     }
 
     @Test
     public void testDecodeInvalidSubtype() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(INVALID_SUBTYPE);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
 
     }
 
@@ -92,14 +92,14 @@ public class EapSimTypeDataTest {
     public void testDecodeInvalidAtRand() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_AT_RAND);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(INSUFFICIENT_CHALLENGES_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(INSUFFICIENT_CHALLENGES_CODE, result.atClientErrorCode.errorCode);
     }
 
     @Test
     public void testDecodeShortPacket() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(SHORT_TYPE_DATA);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
 
     }
 
@@ -107,7 +107,7 @@ public class EapSimTypeDataTest {
     public void testDecodeInvalidEapAttribute() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_ATTRIBUTE);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
     }
 
     @Test

@@ -152,15 +152,15 @@ public class EapSimTypeData {
          */
         public class DecodeResult {
             public final EapSimTypeData eapSimTypeData;
-            public final AtClientErrorCode mAtClientErrorCode;
+            public final AtClientErrorCode atClientErrorCode;
 
             public DecodeResult(EapSimTypeData eapSimTypeData) {
                 this.eapSimTypeData = eapSimTypeData;
-                this.mAtClientErrorCode = null;
+                this.atClientErrorCode = null;
             }
 
             public DecodeResult(AtClientErrorCode atClientErrorCode) {
-                this.mAtClientErrorCode = atClientErrorCode;
+                this.atClientErrorCode = atClientErrorCode;
                 eapSimTypeData = null;
             }
 
