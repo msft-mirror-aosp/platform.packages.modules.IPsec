@@ -20,7 +20,6 @@ import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_CLIENT_ERROR_CODE;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ENCR_DATA;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IV;
@@ -56,7 +55,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
@@ -260,17 +259,25 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         return EapMessage.getNotificationResponse(message.eapIdentifier);
     }
 
-    private EapResult buildResponseMessage(int subtype, int identifier,
+    @VisibleForTesting
+    EapResult buildResponseMessage(int subtype, int identifier,
             List<EapSimAttribute> eapSimAttributes) {
-        // TODO(b/135607789): implement response building here
-        return null;
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(subtype, eapSimAttributes);
+        EapData eapData = new EapData(EAP_TYPE_SIM, eapSimTypeData.encode());
+
+        try {
+            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
+            return EapResponse.getEapResponse(eapMessage);
+        } catch (EapSilentException ex) {
+            Log.d(TAG, "Exception while creating EapMessage response for Client Error", ex);
+            return new EapError(ex);
+        }
     }
 
     @VisibleForTesting
     EapResult buildClientErrorResponse(int identifier, AtClientErrorCode clientErrorCode) {
-        LinkedHashMap<Integer, EapSimAttribute> attributeMap = new LinkedHashMap<>();
-        attributeMap.put(EAP_AT_CLIENT_ERROR_CODE, clientErrorCode);
-        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_CLIENT_ERROR, attributeMap);
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(
+                EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
         byte[] encodedTypeData = eapSimTypeData.encode();
 
         EapData eapData = new EapData(EAP_TYPE_SIM, encodedTypeData);
