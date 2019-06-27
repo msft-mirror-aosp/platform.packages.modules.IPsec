@@ -42,6 +42,8 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_REQUEST_NOTIFICATION_PACKET =
             hexStringToByteArray("01" + ID + "000802AABBCC");
     public static final byte[] EAP_SUCCESS_PACKET = hexStringToByteArray("03" + ID + "0004");
+    public static final byte[] EAP_SIM_CLIENT_ERROR_RESPONSE =
+            hexStringToByteArray("02" + ID + "000C120E000016010001");
 
     // Body of EapData is the list of supported methods
     public static final byte[] EAP_RESPONSE_NAK_PACKET =
