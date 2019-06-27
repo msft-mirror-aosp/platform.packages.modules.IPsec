@@ -667,6 +667,10 @@ public abstract class EapSimAttribute {
 
             // if Phase bit == 0, notification code can only be used after a successful
             isPreChallenge = (notificationCode & PRE_CHALLENGE_MASK) == PRE_CHALLENGE_MASK;
+
+            if (isSuccessCode && isPreChallenge) {
+                throw new EapSimInvalidAttributeException("Invalid state specified");
+            }
         }
 
         @VisibleForTesting
@@ -679,6 +683,10 @@ public abstract class EapSimAttribute {
 
             // if Phase bit == 0, notification code can only be used after a successful
             isPreChallenge = (notificationCode & PRE_CHALLENGE_MASK) != 0;
+
+            if (isSuccessCode && isPreChallenge) {
+                throw new EapSimInvalidAttributeException("Invalid state specified");
+            }
         }
 
         @Override

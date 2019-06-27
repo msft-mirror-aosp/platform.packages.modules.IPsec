@@ -21,6 +21,7 @@ import static com.android.ike.eap.message.EapSimAttribute.AtNotification.GENERAL
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NOTIFICATION;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION_INVALID_LENGTH;
+import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION_INVALID_STATE;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.NOTIFICATION_CODE;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -43,7 +44,7 @@ import java.nio.ByteBuffer;
 
 public class AtNotificationTest {
     private static final int EXPECTED_LENGTH = 4;
-    private static final int UNKNOWN_CODE = 0xFFFF;
+    private static final int UNKNOWN_CODE = 0xA0FF;
 
     private EapSimAttributeFactory mEapSimAttributeFactory;
 
@@ -73,6 +74,16 @@ public class AtNotificationTest {
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
             fail("Expected EapSimInvalidAttributeException for invalid attribute length");
+        } catch (EapSimInvalidAttributeException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodeInvalidState() throws Exception {
+        ByteBuffer input = ByteBuffer.wrap(AT_NOTIFICATION_INVALID_STATE);
+        try {
+            mEapSimAttributeFactory.getEapSimAttribute(input);
+            fail("Expected EapSimInvalidAttributeException for invalid state");
         } catch (EapSimInvalidAttributeException expected) {
         }
     }
