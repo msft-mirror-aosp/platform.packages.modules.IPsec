@@ -24,6 +24,7 @@ import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
 import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.EapSimAttribute.EapSimUnsupportedAttribute;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -36,6 +37,7 @@ import java.util.Set;
  */
 public class EapSimTypeData {
     private static final String TAG = EapSimTypeData.class.getSimpleName();
+    private static final int MIN_LEN_BYTES = 3; // subtype (1B) + reserved bytes (2B)
 
     // EAP-SIM Subtype values defined by IANA
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
@@ -60,9 +62,34 @@ public class EapSimTypeData {
     // the MAC value for the message
     public final LinkedHashMap<Integer, EapSimAttribute> attributeMap;
 
-    private EapSimTypeData(int eapSubType, LinkedHashMap<Integer, EapSimAttribute> attributeMap) {
+    @VisibleForTesting
+    EapSimTypeData(int eapSubType, LinkedHashMap<Integer, EapSimAttribute> attributeMap) {
         this.eapSubtype = eapSubType;
         this.attributeMap = attributeMap;
+    }
+
+    /**
+     * Creates and returns the byte-array encoding of this EapSimTypeData instance.
+     *
+     * @return byte[] representing the byte-encoding of this EapSimTypeData instance.
+     */
+    public byte[] encode() {
+        int lengthInBytes = MIN_LEN_BYTES;
+        for (EapSimAttribute attribute : attributeMap.values()) {
+            lengthInBytes += attribute.lengthInBytes;
+        }
+
+        ByteBuffer output = ByteBuffer.allocate(lengthInBytes);
+        output.put((byte) eapSubtype);
+
+        // two reserved bytes (RFC 4186 Section 8.1)
+        output.put(new byte[2]);
+
+        for (EapSimAttribute attribute : attributeMap.values()) {
+            attribute.encode(output);
+        }
+
+        return output.array();
     }
 
     /**
