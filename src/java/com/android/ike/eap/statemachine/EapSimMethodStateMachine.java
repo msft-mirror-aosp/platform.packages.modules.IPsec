@@ -17,7 +17,10 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_CLIENT_ERROR_CODE;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ENCR_DATA;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IV;
@@ -25,6 +28,7 @@ import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CHALLENGE;
+import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_NOTIFICATION;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
 
@@ -34,7 +38,10 @@ import android.util.Log;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
+import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
@@ -49,6 +56,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 
@@ -68,6 +76,7 @@ import java.util.Set;
  * Method for Subscriber Identity Modules (EAP-SIM)</a>
  */
 public class EapSimMethodStateMachine extends EapMethodStateMachine {
+    private static final String TAG = "EapSimMethodStateMachine";
     private static final SecureRandom EAP_SIM_RANDOM = new SecureRandom();
 
     private final TelephonyManager mTelephonyManager;
@@ -257,8 +266,20 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         return null;
     }
 
-    private EapResult buildClientErrorResponse(int identifier, AtClientErrorCode clientErrorCode) {
-        // TODO(b/135066016): implement buildClientErrorResponse
-        return null;
+    @VisibleForTesting
+    EapResult buildClientErrorResponse(int identifier, AtClientErrorCode clientErrorCode) {
+        LinkedHashMap<Integer, EapSimAttribute> attributeMap = new LinkedHashMap<>();
+        attributeMap.put(EAP_AT_CLIENT_ERROR_CODE, clientErrorCode);
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_CLIENT_ERROR, attributeMap);
+        byte[] encodedTypeData = eapSimTypeData.encode();
+
+        EapData eapData = new EapData(EAP_TYPE_SIM, encodedTypeData);
+        try {
+            EapMessage response = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
+            return EapResponse.getEapResponse(response);
+        } catch (EapSilentException ex) {
+            Log.d(TAG, "Exception while creating EapMessage response for Client Error", ex);
+            return new EapError(ex);
+        }
     }
 }
