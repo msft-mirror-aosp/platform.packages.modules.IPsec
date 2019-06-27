@@ -63,7 +63,7 @@ public class EapSimTypeData {
     public final LinkedHashMap<Integer, EapSimAttribute> attributeMap;
 
     @VisibleForTesting
-    EapSimTypeData(int eapSubType, LinkedHashMap<Integer, EapSimAttribute> attributeMap) {
+    public EapSimTypeData(int eapSubType, LinkedHashMap<Integer, EapSimAttribute> attributeMap) {
         this.eapSubtype = eapSubType;
         this.attributeMap = attributeMap;
     }

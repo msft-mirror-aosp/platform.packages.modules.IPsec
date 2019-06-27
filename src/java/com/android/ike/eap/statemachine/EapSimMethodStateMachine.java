@@ -17,6 +17,12 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ENCR_DATA;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IV;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CHALLENGE;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_NOTIFICATION;
@@ -44,6 +50,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 /**
  * EapSimMethodStateMachine represents the valid paths possible for the EAP-SIM protocol.
@@ -192,9 +199,36 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
             return buildResponseMessage(EAP_SIM_START, message.eapIdentifier, responseAttributes);
         }
 
-        private boolean isValidStartAttributes(EapSimTypeData eapSimTypeData) {
-            // TODO(b/135624652): implement isValidStartAttributes
-            return false;
+        @VisibleForTesting
+        boolean isValidStartAttributes(EapSimTypeData eapSimTypeData) {
+            // must contain: version list
+            Set<Integer> attrs = eapSimTypeData.attributeMap.keySet();
+            if (!attrs.contains(EAP_AT_VERSION_LIST)) {
+                return false;
+            }
+
+            // may contain: ID request (but only 1)
+            int idRequests = 0;
+            if (attrs.contains(EAP_AT_PERMANENT_ID_REQ)) {
+                idRequests++;
+            }
+            if (attrs.contains(EAP_AT_ANY_ID_REQ)) {
+                idRequests++;
+            }
+            if (attrs.contains(EAP_AT_FULLAUTH_ID_REQ)) {
+                idRequests++;
+            }
+            if (idRequests > 1) {
+                return false;
+            }
+
+            // can't contain mac, iv, encr data
+            if (attrs.contains(EAP_AT_MAC)
+                    || attrs.contains(EAP_AT_IV)
+                    || attrs.contains(EAP_AT_ENCR_DATA)) {
+                return false;
+            }
+            return true;
         }
 
         private void addIdentityAttributeToResponse(
