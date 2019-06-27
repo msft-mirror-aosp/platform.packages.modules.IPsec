@@ -25,10 +25,12 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_TYPE_D
 import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_ATTRIBUTE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_AT_RAND;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
 import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
@@ -38,6 +40,7 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 
 public class EapSimTypeDataTest {
     private static final int UNABLE_TO_PROCESS_CODE = 0;
@@ -51,7 +54,7 @@ public class EapSimTypeDataTest {
     }
 
     @Test
-    public void testDecode() throws Exception {
+    public void testDecode() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(EAP_SIM_START_SUBTYPE);
 
         assertTrue(result.isSuccessfulDecode());
@@ -105,6 +108,16 @@ public class EapSimTypeDataTest {
         DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_ATTRIBUTE);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+    }
 
+    @Test
+    public void testEncode() throws Exception {
+        LinkedHashMap<Integer, EapSimAttribute> attributes = new LinkedHashMap<>();
+        attributes.put(EAP_AT_VERSION_LIST, new AtVersionList(8, 1));
+        attributes.put(EAP_AT_PERMANENT_ID_REQ, new AtPermanentIdReq());
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, attributes);
+
+        byte[] result = eapSimTypeData.encode();
+        assertArrayEquals(EAP_SIM_START_SUBTYPE, result);
     }
 }
