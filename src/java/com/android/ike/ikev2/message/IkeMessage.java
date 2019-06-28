@@ -385,7 +385,9 @@ public final class IkeMessage {
                 IkeMessage ikeMessage) {
             return encryptAndEncode(
                     ikeMessage.ikeHeader,
-                    ikeMessage.ikePayloadList.get(0).payloadType,
+                    ikeMessage.ikePayloadList.isEmpty()
+                            ? IkePayload.PAYLOAD_TYPE_NO_NEXT
+                            : ikeMessage.ikePayloadList.get(0).payloadType,
                     ikeMessage.encodePayloads(),
                     integrityMac,
                     encryptCipher,

@@ -45,6 +45,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
+import java.util.LinkedList;
 
 import javax.crypto.IllegalBlockSizeException;
 
@@ -103,6 +104,19 @@ public final class IkeMessageTest {
                     + "2900001801000000070000100000ffff00000000ffffffff"
                     + "29000008000040000000000c000040010000000100000000"
                     + "000000000000000b";
+
+    private static final long INIT_SPI = 0x5f54bf6d8b48e6e1L;
+    private static final long RESP_SPI = 0x909232b3d1edcb5cL;
+    private static final String IKE_EMPTY_INFO_MSG_HEX_STRING =
+            "5f54bf6d8b48e6e1909232b3d1edcb5c2e20252800000000"
+                    + "0000004c00000030e376871750fdba9f7012446c5dc3f97a"
+                    + "f83b48ba0dbc68bcc4a78136832100aa4192f251cd4d1b97"
+                    + "d298e550";
+    private static final String IKE_EMPTY_INFO_MSG_IV_HEX_STRING =
+            "e376871750fdba9f7012446c5dc3f97a";
+    private static final String IKE_EMPTY_INFO_MSG_ENCRYPTED_DATA_HEX_STRING =
+            "f83b48ba0dbc68bcc4a78136832100aa";
+    private static final String IKE_EMPTY_INFO_MSG_CHECKSUM_HEX_STRING = "4192f251cd4d1b97d298e550";
 
     private static final int IKE_AUTH_EXPECTED_MESSAGE_ID = 1;
     private static final int IKE_AUTH_CIPHER_BLOCK_SIZE = 16;
@@ -383,6 +397,37 @@ public final class IkeMessageTest {
 
         byte[] encodedIkeMessage = message.attachEncodedHeader(ikeBodyBytes);
         assertArrayEquals(inputPacket, encodedIkeMessage);
+    }
+
+    @Test
+    public void testEncodeAndEncryptEmptyMsg() throws Exception {
+        when(mMockCipher.generateIv())
+                .thenReturn(TestUtils.hexStringToByteArray(IKE_EMPTY_INFO_MSG_IV_HEX_STRING));
+        when(mMockCipher.encrypt(any(), any(), any()))
+                .thenReturn(
+                        TestUtils.hexStringToByteArray(
+                                IKE_EMPTY_INFO_MSG_ENCRYPTED_DATA_HEX_STRING));
+
+        byte[] checkSum = TestUtils.hexStringToByteArray(IKE_EMPTY_INFO_MSG_CHECKSUM_HEX_STRING);
+        when(mMockIntegrity.getChecksumLen()).thenReturn(checkSum.length);
+        when(mMockIntegrity.generateChecksum(any(), any())).thenReturn(checkSum);
+
+        IkeHeader ikeHeader =
+                new IkeHeader(
+                        INIT_SPI,
+                        RESP_SPI,
+                        IkePayload.PAYLOAD_TYPE_SK,
+                        IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                        true /*isResp*/,
+                        true /*fromInit*/,
+                        0);
+        IkeMessage ikeMessage = new IkeMessage(ikeHeader, new LinkedList<>());
+
+        byte[] ikeMessageBytes =
+                ikeMessage.encryptAndEncode(mMockIntegrity, mMockCipher, mMockIkeSaRecord);
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(IKE_EMPTY_INFO_MSG_HEX_STRING);
+
+        assertArrayEquals(expectedBytes, ikeMessageBytes);
     }
 
     // TODO: Implement encodeToByteBuffer() of each payload and add test for encoding message
