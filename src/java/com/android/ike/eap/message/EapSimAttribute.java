@@ -192,7 +192,10 @@ public abstract class EapSimAttribute {
      * 10.3
      */
     public static class AtSelectedVersion extends EapSimAttribute {
+        private static final String TAG = AtSelectedVersion.class.getSimpleName();
         private static final int LENGTH = LENGTH_SCALING;
+
+        public static final int SUPPORTED_VERSION = 1;
 
         public final int selectedVersion;
 
@@ -206,10 +209,31 @@ public abstract class EapSimAttribute {
             }
         }
 
+        @VisibleForTesting
+        public AtSelectedVersion(int selectedVersion) throws EapSimInvalidAttributeException {
+            super(EAP_AT_SELECTED_VERSION, LENGTH);
+            this.selectedVersion = selectedVersion;
+        }
+
         @Override
         public void encode(ByteBuffer byteBuffer) {
             encodeAttributeHeader(byteBuffer);
             byteBuffer.putShort((short) selectedVersion);
+        }
+
+        /**
+         * Constructs and returns an AtSelectedVersion for the only supported version of EAP-SIM
+         *
+         * @return an AtSelectedVersion for the supported version (1) of EAP-SIM
+         */
+        public static AtSelectedVersion getSelectedVersion() {
+            try {
+                return new AtSelectedVersion(LENGTH, SUPPORTED_VERSION);
+            } catch (EapSimInvalidAttributeException ex) {
+                Log.wtf(TAG,
+                        "Error thrown while creating AtSelectedVersion with correct length", ex);
+                throw new AssertionError("Impossible exception encountered", ex);
+            }
         }
     }
 
@@ -218,8 +242,9 @@ public abstract class EapSimAttribute {
      */
     public static class AtNonceMt extends EapSimAttribute {
         private static final int LENGTH = 5 * LENGTH_SCALING;
-        private static final int NONCE_MT_LENGTH = 16;
         private static final int RESERVED_BYTES = 2;
+
+        public static final int NONCE_MT_LENGTH = 16;
 
         public final byte[] nonceMt = new byte[NONCE_MT_LENGTH];
 
@@ -648,6 +673,10 @@ public abstract class EapSimAttribute {
 
             // if Phase bit == 0, notification code can only be used after a successful
             isPreChallenge = (notificationCode & PRE_CHALLENGE_MASK) == PRE_CHALLENGE_MASK;
+
+            if (isSuccessCode && isPreChallenge) {
+                throw new EapSimInvalidAttributeException("Invalid state specified");
+            }
         }
 
         @VisibleForTesting
@@ -660,6 +689,10 @@ public abstract class EapSimAttribute {
 
             // if Phase bit == 0, notification code can only be used after a successful
             isPreChallenge = (notificationCode & PRE_CHALLENGE_MASK) != 0;
+
+            if (isSuccessCode && isPreChallenge) {
+                throw new EapSimInvalidAttributeException("Invalid state specified");
+            }
         }
 
         @Override

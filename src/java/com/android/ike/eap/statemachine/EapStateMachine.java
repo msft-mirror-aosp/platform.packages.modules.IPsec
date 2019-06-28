@@ -232,6 +232,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             }
         }
 
+        // Not all EAP Method implementations may support EAP-Notifications, so allow the EAP-Method
+        // to handle any EAP-REQUEST/Notification messages (RFC 3748 Section 5.2)
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {

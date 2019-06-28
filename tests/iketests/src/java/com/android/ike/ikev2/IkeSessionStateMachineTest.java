@@ -852,7 +852,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
-        verify(mMockChildSessionStateMachine).createChildSa();
+        verify(mMockChildSessionStateMachine).createChildSession();
 
         verify(mMockChildSessionFactoryHelper)
                 .makeChildSessionStateMachine(

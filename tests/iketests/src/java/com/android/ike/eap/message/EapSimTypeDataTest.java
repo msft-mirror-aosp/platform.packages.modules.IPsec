@@ -25,10 +25,12 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_TYPE_D
 import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_ATTRIBUTE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_AT_RAND;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
 import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
@@ -38,10 +40,14 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map.Entry;
 
 public class EapSimTypeDataTest {
     private static final int UNABLE_TO_PROCESS_CODE = 0;
     private static final int INSUFFICIENT_CHALLENGES_CODE = 2;
+    private static final int EAP_SIM_START = 10;
 
     private EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
@@ -51,7 +57,27 @@ public class EapSimTypeDataTest {
     }
 
     @Test
-    public void testDecode() throws Exception {
+    public void testConstructor() throws Exception {
+        List<EapSimAttribute> attributes = Arrays.asList(
+                new AtVersionList(8, 1), new AtPermanentIdReq());
+
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, attributes);
+        assertEquals(EAP_SIM_START, eapSimTypeData.eapSubtype);
+
+        // check order of entries in EapSimTypeData.attributeMap
+        Iterator<Entry<Integer, EapSimAttribute>> itr =
+                eapSimTypeData.attributeMap.entrySet().iterator();
+        Entry<Integer, EapSimAttribute> pair = itr.next();
+        assertEquals(EAP_AT_VERSION_LIST, (int) pair.getKey());
+        assertEquals(Arrays.asList(1), ((AtVersionList) pair.getValue()).versions);
+
+        pair = itr.next();
+        assertEquals(EAP_AT_PERMANENT_ID_REQ, (int) pair.getKey());
+        assertTrue(pair.getValue() instanceof AtPermanentIdReq);
+    }
+
+    @Test
+    public void testDecode() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(EAP_SIM_START_SUBTYPE);
 
         assertTrue(result.isSuccessfulDecode());
@@ -74,14 +100,14 @@ public class EapSimTypeDataTest {
     public void testDecodeNullTypeData() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(null);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
     }
 
     @Test
     public void testDecodeInvalidSubtype() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(INVALID_SUBTYPE);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
 
     }
 
@@ -89,14 +115,14 @@ public class EapSimTypeDataTest {
     public void testDecodeInvalidAtRand() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_AT_RAND);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(INSUFFICIENT_CHALLENGES_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(INSUFFICIENT_CHALLENGES_CODE, result.atClientErrorCode.errorCode);
     }
 
     @Test
     public void testDecodeShortPacket() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(SHORT_TYPE_DATA);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
 
     }
 
@@ -104,7 +130,17 @@ public class EapSimTypeDataTest {
     public void testDecodeInvalidEapAttribute() {
         DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_ATTRIBUTE);
         assertFalse(result.isSuccessfulDecode());
-        assertEquals(UNABLE_TO_PROCESS_CODE, result.mAtClientErrorCode.errorCode);
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
+    }
 
+    @Test
+    public void testEncode() throws Exception {
+        LinkedHashMap<Integer, EapSimAttribute> attributes = new LinkedHashMap<>();
+        attributes.put(EAP_AT_VERSION_LIST, new AtVersionList(8, 1));
+        attributes.put(EAP_AT_PERMANENT_ID_REQ, new AtPermanentIdReq());
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, attributes);
+
+        byte[] result = eapSimTypeData.encode();
+        assertArrayEquals(EAP_SIM_START_SUBTYPE, result);
     }
 }

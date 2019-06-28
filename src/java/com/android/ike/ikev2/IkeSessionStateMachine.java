@@ -1197,25 +1197,12 @@ public class IkeSessionStateMachine extends StateMachine {
                     int exchangeType = message.arg1;
                     boolean isResp = (message.arg2 == CHILD_PAYLOADS_DIRECTION_RESPONSE);
 
-                    // Remote message ID has incremented when decoding the last received request
-                    int messageId =
-                            isResp
-                                    ? mLastInboundRequestMsgId
-                                    : mCurrentIkeSaRecord.getLocalRequestMessageId();
+                    if (isResp) {
+                        handleOutboundResponse(exchangeType, (List<IkePayload>) message.obj);
+                    } else {
+                        handleOutboundRequest(exchangeType, (List<IkePayload>) message.obj);
+                    }
 
-                    IkeHeader ikeHeader =
-                            new IkeHeader(
-                                    mCurrentIkeSaRecord.getInitiatorSpi(),
-                                    mCurrentIkeSaRecord.getResponderSpi(),
-                                    IkePayload.PAYLOAD_TYPE_SK,
-                                    exchangeType,
-                                    isResp,
-                                    mCurrentIkeSaRecord.isLocalInit,
-                                    messageId);
-                    IkeMessage ikeMessage =
-                            new IkeMessage(ikeHeader, (List<IkePayload>) message.obj);
-
-                    sendEncryptedIkeMessage(ikeMessage);
                     return HANDLED;
                 case CMD_CHILD_PROCEDURE_FINISHED:
                     ChildSessionStateMachine childSession = (ChildSessionStateMachine) message.obj;
@@ -1269,7 +1256,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // TODO: Also support Delete Child and Rekey Child.
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
                     mChildInLocalProcedure = buildChildSession(req.childSessionOptions);
-                    mChildInLocalProcedure.createChildSa();
+                    mChildInLocalProcedure.createChildSession();
                     break;
                 default:
                     Log.wtf(TAG, "Invalid Child procedure type: " + req.procedureType);
@@ -1317,6 +1304,26 @@ public class IkeSessionStateMachine extends StateMachine {
             payloads.removeAll(handledPayloads);
 
             mChildInLocalProcedure.receiveResponse(ikeMessage.ikeHeader.exchangeType, payloads);
+        }
+
+        private void handleOutboundRequest(int exchangeType, List<IkePayload> outboundPayloads) {
+            IkeHeader ikeHeader =
+                    new IkeHeader(
+                            mCurrentIkeSaRecord.getInitiatorSpi(),
+                            mCurrentIkeSaRecord.getResponderSpi(),
+                            IkePayload.PAYLOAD_TYPE_SK,
+                            exchangeType,
+                            false /*isResp*/,
+                            mCurrentIkeSaRecord.isLocalInit,
+                            mCurrentIkeSaRecord.getLocalRequestMessageId());
+            IkeMessage ikeMessage = new IkeMessage(ikeHeader, outboundPayloads);
+
+            sendEncryptedIkeMessage(ikeMessage);
+            // TODO: Start retransmission
+        }
+
+        private void handleOutboundResponse(int exchangeType, List<IkePayload> outboundPayloads) {
+            // TODO: Build and send out response when all Child Sessions have replied.
         }
     }
 
@@ -1553,7 +1560,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                         break;
                     default:
-                        throw new InvalidSyntaxException(
+                        logw(
                                 "Received unexpected payload in IKE INIT response. Payload type: "
                                         + payload.payloadType);
                 }
@@ -1840,10 +1847,10 @@ public class IkeSessionStateMachine extends StateMachine {
                         }
 
                     default:
-                        throw new InvalidSyntaxException(
+                        logw(
                                 "Received unexpected payload in IKE AUTH response. Payload"
                                         + " type: "
-                                        + payload);
+                                        + payload.payloadType);
                 }
             }
 
@@ -1959,7 +1966,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         // Notification payloads allowed, but left to handler methods to process.
                         break;
                     default:
-                        throw new InvalidSyntaxException(
+                        logw(
                                 "Received unexpected payload in IKE REKEY request. Payload type: "
                                         + payload.payloadType);
                 }
@@ -1988,7 +1995,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
             for (IkeNotifyPayload notifyPayload : notificationPayloads) {
                 if (notifyPayload.isErrorNotify()) {
-                    throw new InvalidSyntaxException("Error notifications invalid in request");
+                    logw("Error notifications invalid in request: " + notifyPayload.notifyType);
                 }
             }
 
