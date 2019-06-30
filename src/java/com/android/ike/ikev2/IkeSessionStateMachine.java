@@ -1296,8 +1296,19 @@ public class IkeSessionStateMachine extends StateMachine {
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     handleDeleteSessionRequest(ikeMessage);
                     return;
+                case IKE_EXCHANGE_SUBTYPE_CREATE_CHILD: // Fall through
+                case IKE_EXCHANGE_SUBTYPE_DELETE_CHILD: // Fall through
+                case IKE_EXCHANGE_SUBTYPE_REKEY_CHILD:
+                    deferMessage(
+                            obtainMessage(
+                                    CMD_RECEIVE_REQUEST_FOR_CHILD,
+                                    ikeExchangeSubType,
+                                    0 /*placeHolder*/,
+                                    ikeMessage));
+                    transitionTo(mChildProcedureOngoing);
+                    return;
                 default:
-                    // TODO: Add more cases for supporting other types of request.
+                    // TODO: Add support for generic INFORMATIONAL request
             }
         }
 

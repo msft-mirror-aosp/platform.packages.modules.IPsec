@@ -520,6 +520,33 @@ public final class ChildSessionStateMachineTest {
     }
 
     @Test
+    public void testDeleteChildRemote() throws Exception {
+        setupIdleStateMachine();
+
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Closed);
+        // Verify response
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(true),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
+
+        assertEquals(1, respPayloadList.size());
+        assertArrayEquals(
+                new int[] {mSpyCurrentChildSaRecord.getLocalSpi()},
+                ((IkeDeletePayload) respPayloadList.get(0)).spisToDelete);
+    }
+
+    @Test
     public void testValidateExpectKeExistCase() throws Exception {
         when(mMockNegotiatedProposal.getDhGroupTransforms())
                 .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
