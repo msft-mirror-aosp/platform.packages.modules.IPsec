@@ -23,6 +23,7 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.NONCE_MT;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.EapResult;
@@ -30,16 +31,22 @@ import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.message.EapMessage;
+import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
+import com.android.ike.eap.message.EapSimTypeData;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 public class EapSimChallengeStateTest extends EapSimStateTest {
+    private static final int EAP_SIM_CHALLENGE = 11;
+    private static final int EAP_AT_RAND = 1;
+    private static final int EAP_AT_MAC = 11;
     private static final List<Integer> VERSIONS = Arrays.asList(1);
     private static final byte[] MSK = hexStringToByteArray(
             "00112233445566778899AABBCCDDEEFF"
@@ -89,5 +96,20 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
         assertTrue(mEapSimMethodStateMachine.getState() instanceof FinalState);
 
         assertTrue(result instanceof EapFailure);
+    }
+
+    @Test
+    public void testIsValidChallengeAttributes() {
+        LinkedHashMap<Integer, EapSimAttribute> attributeMap = new LinkedHashMap<>();
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_CHALLENGE, attributeMap);
+        assertFalse(mChallengeState.isValidChallengeAttributes(eapSimTypeData));
+
+        attributeMap.put(EAP_AT_RAND, null); // value doesn't matter, just need key
+        eapSimTypeData = new EapSimTypeData(EAP_SIM_CHALLENGE, attributeMap);
+        assertFalse(mChallengeState.isValidChallengeAttributes(eapSimTypeData));
+
+        attributeMap.put(EAP_AT_MAC, null); // value doesn't matter, just need key
+        eapSimTypeData = new EapSimTypeData(EAP_SIM_CHALLENGE, attributeMap);
+        assertTrue(mChallengeState.isValidChallengeAttributes(eapSimTypeData));
     }
 }
