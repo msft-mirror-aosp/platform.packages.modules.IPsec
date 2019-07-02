@@ -63,4 +63,22 @@ public class AtIdentityTest {
 
         assertArrayEquals(AT_IDENTITY, result.array());
     }
+
+    @Test
+    public void testGetAtIdentity() throws Exception {
+        AtIdentity atIdentity = AtIdentity.getAtIdentity(IDENTITY);
+
+        assertArrayEquals(IDENTITY, atIdentity.identity);
+
+        ByteBuffer buffer = ByteBuffer.allocate(atIdentity.lengthInBytes);
+        atIdentity.encode(buffer);
+        buffer.rewind();
+
+        EapSimAttribute eapSimAttribute =
+                EapSimAttributeFactory.getInstance().getEapSimAttribute(buffer);
+        assertTrue(eapSimAttribute instanceof AtIdentity);
+        AtIdentity newAtIdentity = (AtIdentity) eapSimAttribute;
+        assertEquals(atIdentity.lengthInBytes, newAtIdentity.lengthInBytes);
+        assertArrayEquals(atIdentity.identity, newAtIdentity.identity);
+    }
 }
