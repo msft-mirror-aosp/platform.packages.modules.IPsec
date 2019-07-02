@@ -66,6 +66,8 @@ import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ChildSaRecordConfig;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
 import com.android.ike.ikev2.SaRecord.SaRecordHelper;
+import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.InvalidKeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -92,6 +94,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -105,9 +108,15 @@ public final class ChildSessionStateMachineTest {
     private static final String IKE_AUTH_RESP_SA_PAYLOAD =
             "2c00002c0000002801030403cae7019f0300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
+    private static final String REKEY_CHILD_RESP_PAYLOAD =
+            "2800002c0000002801030403cd1736b30300000c0100000c800e0080"
+                    + "03000008030000020000000805000000";
 
     private static final int CURRENT_CHILD_SA_SPI_IN = 0x2ad4c0a2;
     private static final int CURRENT_CHILD_SA_SPI_OUT = 0xcae7019f;
+
+    private static final int LOCAL_INIT_NEW_CHILD_SA_SPI_IN = 0x57a09b0f;
+    private static final int LOCAL_INIT_NEW_CHILD_SA_SPI_OUT = 0xcd1736b3;
 
     private static final String IKE_SK_D_HEX_STRING = "C86B56EFCF684DCC2877578AEF3137167FE0EBF6";
     private static final byte[] SK_D = TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING);
@@ -128,6 +137,7 @@ public final class ChildSessionStateMachineTest {
     private List<IkePayload> mFirstSaRespPayloads = new LinkedList<>();
 
     private ChildSaRecord mSpyCurrentChildSaRecord;
+    private ChildSaRecord mSpyLocalInitNewChildSaRecord;
 
     private ISaRecordHelper mMockSaRecordHelper;
 
@@ -221,23 +231,27 @@ public final class ChildSessionStateMachineTest {
     private void setUpChildSaRecords() {
         mSpyCurrentChildSaRecord =
                 makeSpyChildSaRecord(CURRENT_CHILD_SA_SPI_IN, CURRENT_CHILD_SA_SPI_OUT);
+        mSpyLocalInitNewChildSaRecord =
+                makeSpyChildSaRecord(
+                        LOCAL_INIT_NEW_CHILD_SA_SPI_IN, LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
+    }
+
+    private void setUpSpiResource(InetAddress address, int spiRequested) throws Exception {
+        when(mMockIpSecService.allocateSecurityParameterIndex(
+                        eq(address.getHostAddress()), anyInt(), anyObject()))
+                .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(spiRequested));
     }
 
     private void setUpFirstSaNegoPayloadLists() throws Exception {
         // Build locally generated SA payload that has its SPI resource allocated.
-        when(mMockIpSecService.allocateSecurityParameterIndex(
-                        eq(LOCAL_ADDRESS.getHostAddress()), anyInt(), anyObject()))
-                .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(CURRENT_CHILD_SA_SPI_IN));
+        setUpSpiResource(LOCAL_ADDRESS, CURRENT_CHILD_SA_SPI_IN);
         IkeSaPayload reqSaPayload =
                 IkeSaPayload.createChildSaRequestPayload(
                         mChildSessionOptions.getSaProposals(), mMockIpSecManager, LOCAL_ADDRESS);
         mFirstSaReqPayloads.add(reqSaPayload);
 
         // Build a remotely generated SA payload whoes SPI resource has not been allocated.
-        when(mMockIpSecService.allocateSecurityParameterIndex(
-                        eq(REMOTE_ADDRESS.getHostAddress()), anyInt(), anyObject()))
-                .thenReturn(
-                        MockIpSecTestUtils.buildDummyIpSecSpiResponse(CURRENT_CHILD_SA_SPI_OUT));
+        setUpSpiResource(REMOTE_ADDRESS, CURRENT_CHILD_SA_SPI_OUT);
         IkeSaPayload respSaPayload =
                 (IkeSaPayload)
                         (IkeTestUtils.hexStringToIkePayload(
@@ -290,6 +304,24 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
     }
 
+    private void verifyChildSaRecordConfig(
+            ChildSaRecordConfig childSaRecordConfig,
+            int initSpi,
+            int respSpi,
+            boolean isLocalInit) {
+        assertEquals(mContext, childSaRecordConfig.context);
+        assertEquals(initSpi, childSaRecordConfig.initSpi.getSpi());
+        assertEquals(respSpi, childSaRecordConfig.respSpi.getSpi());
+        assertEquals(LOCAL_ADDRESS, childSaRecordConfig.initAddress);
+        assertEquals(REMOTE_ADDRESS, childSaRecordConfig.respAddress);
+        assertEquals(mMockUdpEncapSocket, childSaRecordConfig.udpEncapSocket);
+        assertEquals(mIkePrf, childSaRecordConfig.ikePrf);
+        assertArrayEquals(SK_D, childSaRecordConfig.skD);
+        assertFalse(childSaRecordConfig.isTransport);
+        assertEquals(isLocalInit, childSaRecordConfig.isLocalInit);
+        assertTrue(childSaRecordConfig.hasIntegrityAlgo);
+    }
+
     private void verifyInitCreateChildResp(
             List<IkePayload> reqPayloads, List<IkePayload> respPayloads) throws Exception {
         verify(mMockChildSessionSmCallback)
@@ -316,17 +348,11 @@ public final class ChildSessionStateMachineTest {
                         eq(reqPayloads), eq(respPayloads), mChildSaRecordConfigCaptor.capture());
         ChildSaRecordConfig childSaRecordConfig = mChildSaRecordConfigCaptor.getValue();
 
-        assertEquals(mContext, childSaRecordConfig.context);
-        assertEquals(CURRENT_CHILD_SA_SPI_IN, childSaRecordConfig.initSpi.getSpi());
-        assertEquals(CURRENT_CHILD_SA_SPI_OUT, childSaRecordConfig.respSpi.getSpi());
-        assertEquals(LOCAL_ADDRESS, childSaRecordConfig.initAddress);
-        assertEquals(REMOTE_ADDRESS, childSaRecordConfig.respAddress);
-        assertEquals(mMockUdpEncapSocket, childSaRecordConfig.udpEncapSocket);
-        assertEquals(mIkePrf, childSaRecordConfig.ikePrf);
-        assertArrayEquals(SK_D, childSaRecordConfig.skD);
-        assertFalse(childSaRecordConfig.isTransport);
-        assertTrue(childSaRecordConfig.isLocalInit);
-        assertTrue(childSaRecordConfig.hasIntegrityAlgo);
+        verifyChildSaRecordConfig(
+                childSaRecordConfig,
+                CURRENT_CHILD_SA_SPI_IN,
+                CURRENT_CHILD_SA_SPI_OUT,
+                true /*isLocalInit*/);
 
         assertEquals(mSpyCurrentChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
 
@@ -417,6 +443,8 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.mSkD = SK_D;
 
         mChildSessionStateMachine.mSaProposal = buildSaProposal();
+        mChildSessionStateMachine.mChildCipher = mock(IkeCipher.class);
+        mChildSessionStateMachine.mChildIntegrity = mock(IkeMacIntegrity.class);
         mChildSessionStateMachine.mLocalTs = mChildSessionOptions.getLocalTrafficSelectors();
         mChildSessionStateMachine.mRemoteTs = mChildSessionOptions.getRemoteTrafficSelectors();
 
@@ -600,6 +628,95 @@ public final class ChildSessionStateMachineTest {
         assertEquals(NOTIFY_TYPE_REKEY_SA, notifyPayload.notifyType);
         assertEquals(PROTOCOL_ID_ESP, notifyPayload.protocolId);
         assertEquals(mSpyCurrentChildSaRecord.getLocalSpi(), notifyPayload.spi);
+    }
+
+    private List<IkePayload> makeInboundRekeyChildPayloads(
+            int remoteSpi, String inboundSaHexString, boolean isLocalInitRekey) throws Exception {
+        List<IkePayload> inboundPayloads = new LinkedList<>();
+
+        IkeSaPayload saPayload =
+                (IkeSaPayload)
+                        (IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_SA, true, inboundSaHexString));
+        inboundPayloads.add(saPayload);
+
+        // Build TS Payloads
+        IkeTrafficSelector[] initTs =
+                isLocalInitRekey
+                        ? mChildSessionStateMachine.mLocalTs
+                        : mChildSessionStateMachine.mRemoteTs;
+        IkeTrafficSelector[] respTs =
+                isLocalInitRekey
+                        ? mChildSessionStateMachine.mRemoteTs
+                        : mChildSessionStateMachine.mLocalTs;
+        inboundPayloads.add(new IkeTsPayload(true /*isInitiator*/, initTs));
+        inboundPayloads.add(new IkeTsPayload(false /*isInitiator*/, respTs));
+
+        // Build Nonce Payloads
+        inboundPayloads.add(new IkeNoncePayload());
+
+        // Build Rekey-Notification
+        inboundPayloads.add(
+                new IkeNotifyPayload(
+                        PROTOCOL_ID_ESP,
+                        mSpyCurrentChildSaRecord.getRemoteSpi(),
+                        NOTIFY_TYPE_REKEY_SA,
+                        new byte[0]));
+
+        return inboundPayloads;
+    }
+
+    @Test
+    public void testRekeyChildLocalCreateValidatesResponse() throws Exception {
+        setupIdleStateMachine();
+        setUpSpiResource(LOCAL_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_IN);
+        setUpSpiResource(REMOTE_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
+
+        // Prepare "rekeyed" SA and receive Rekey response
+        List<IkePayload> rekeyRespPayloads =
+                makeInboundRekeyChildPayloads(
+                        LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_RESP_PAYLOAD,
+                        true /*isLocalInitRekey*/);
+        when(mMockSaRecordHelper.makeChildSaRecord(
+                        any(List.class), eq(rekeyRespPayloads), any(ChildSaRecordConfig.class)))
+                .thenReturn(mSpyLocalInitNewChildSaRecord);
+
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyRespPayloads);
+        mLooper.dispatchAll();
+
+        // Verify state transition
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalDelete);
+
+        // Verify newly created ChildSaRecord
+        assertEquals(
+                mSpyLocalInitNewChildSaRecord,
+                mChildSessionStateMachine.mLocalInitNewChildSaRecord);
+        verify(mMockChildSessionSmCallback)
+                .onChildSaCreated(
+                        eq(mSpyLocalInitNewChildSaRecord.getRemoteSpi()),
+                        eq(mChildSessionStateMachine));
+
+        verify(mMockSaRecordHelper)
+                .makeChildSaRecord(
+                        any(List.class),
+                        eq(rekeyRespPayloads),
+                        mChildSaRecordConfigCaptor.capture());
+        ChildSaRecordConfig childSaRecordConfig = mChildSaRecordConfigCaptor.getValue();
+        verifyChildSaRecordConfig(
+                childSaRecordConfig,
+                LOCAL_INIT_NEW_CHILD_SA_SPI_IN,
+                LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
+                true /*isLocalInit*/);
     }
 
     @Test

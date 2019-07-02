@@ -156,11 +156,13 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Negotiated remote Traffic Selector. */
     @VisibleForTesting IkeTrafficSelector[] mRemoteTs;
 
-    private IkeCipher mChildCipher;
-    private IkeMacIntegrity mChildIntegrity;
+    @VisibleForTesting IkeCipher mChildCipher;
+    @VisibleForTesting IkeMacIntegrity mChildIntegrity;
 
     /** Package private */
     @VisibleForTesting ChildSaRecord mCurrentChildSaRecord;
+    /** Package private */
+    @VisibleForTesting ChildSaRecord mLocalInitNewChildSaRecord;
 
     @VisibleForTesting final State mInitial = new Initial();
     @VisibleForTesting final State mCreateChildLocalCreate = new CreateChildLocalCreate();
@@ -169,6 +171,7 @@ public class ChildSessionStateMachine extends StateMachine {
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
     @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
     @VisibleForTesting final State mRekeyChildLocalCreate = new RekeyChildLocalCreate();
+    @VisibleForTesting final State mRekeyChildLocalDelete = new RekeyChildLocalDelete();
 
     /**
      * Builds a new uninitialized ChildSessionStateMachine
@@ -207,6 +210,7 @@ public class ChildSessionStateMachine extends StateMachine {
         addState(mDeleteChildLocalDelete);
         addState(mDeleteChildRemoteDelete);
         addState(mRekeyChildLocalCreate);
+        addState(mRekeyChildLocalDelete);
 
         setInitialState(mInitial);
     }
@@ -384,8 +388,8 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     private boolean isAwaitingCreateResp() {
-        // TODO: Also check if Child Session is waiting for Rekey Create response.
-        return getCurrentState() == mCreateChildLocalCreate;
+        return (getCurrentState() == mCreateChildLocalCreate
+                || getCurrentState() == mRekeyChildLocalCreate);
     }
 
     /**
@@ -913,6 +917,9 @@ public class ChildSessionStateMachine extends StateMachine {
     /**
      * RekeyChildLocalCreate represents the state where Child Session initiates the Rekey Child
      * exchange.
+     *
+     * <p>As indicated in RFC 7296 section 2.8, "when rekeying, the new Child SA SHOULD NOT have
+     * different Traffic Selectors and algorithms than the old one."
      */
     class RekeyChildLocalCreate extends DeleteResponderBase {
         private List<IkePayload> mRequestPayloads;
@@ -920,6 +927,7 @@ public class ChildSessionStateMachine extends StateMachine {
         @Override
         public void enter() {
             try {
+                // Build request with negotiated proposal and TS.
                 mRequestPayloads =
                         CreateChildSaHelper.getRekeyChildCreateReqPayloads(
                                 mIpSecManager,
@@ -939,7 +947,84 @@ public class ChildSessionStateMachine extends StateMachine {
             }
         }
 
-        // TODO: Override #processMessage to support validating response and handling other requests
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_HANDLE_RECEIVED_RESPONSE:
+                    ReceivedResponse resp = (ReceivedResponse) message.obj;
+                    CreateChildResult createChildResult =
+                            CreateChildSaHelper.validateAndNegotiateRekeyChildResp(
+                                    mRequestPayloads,
+                                    resp.responsePayloads,
+                                    resp.exchangeType,
+                                    EXCHANGE_TYPE_CREATE_CHILD_SA,
+                                    mChildSessionOptions.isTransportMode(),
+                                    mCurrentChildSaRecord.getRemoteSpi(),
+                                    mIpSecManager,
+                                    mRemoteAddress);
+
+                    switch (createChildResult.status) {
+                        case CREATE_STATUS_OK:
+                            try {
+                                // Do not need to update the negotiated proposal and TS because they
+                                // are not changed.
+                                mLocalInitNewChildSaRecord =
+                                        ChildSaRecord.makeChildSaRecord(
+                                                mContext,
+                                                mRequestPayloads,
+                                                resp.responsePayloads,
+                                                createChildResult.localSpi,
+                                                createChildResult.remoteSpi,
+                                                mLocalAddress,
+                                                mRemoteAddress,
+                                                mUdpEncapSocket,
+                                                mIkePrf,
+                                                mChildIntegrity,
+                                                mChildCipher,
+                                                mSkD,
+                                                mChildSessionOptions.isTransportMode(),
+                                                true /*isLocalInit*/);
+
+                                transitionTo(mRekeyChildLocalDelete);
+                            } catch (GeneralSecurityException
+                                    | ResourceUnavailableException
+                                    | SpiUnavailableException
+                                    | IOException e) {
+                                // #makeChildSaRecord failed.
+                                createChildResult.localSpi.close();
+                                createChildResult.remoteSpi.close();
+                                // TODO: Initiate deletion on newly created SA and retry rekey
+                                throw new UnsupportedOperationException("Cannot handle this error");
+                            }
+                            break;
+                        case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
+                            // TODO: Initiate deletion on newly created SA and retry rekey
+                            throw new UnsupportedOperationException("Cannot handle this error");
+                        case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
+                            // TODO: Locally delete newly created Child SA and retry rekey
+                            throw new UnsupportedOperationException("Cannot handle this error");
+                        case CREATE_STATUS_IKE_ERROR:
+                            // TODO: Locally delete newly created Child SA
+                            mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                            break;
+                        default:
+                            throw new IllegalArgumentException(
+                                    "Unrecognized status: " + createChildResult.status);
+                    }
+                    return HANDLED;
+                default:
+                    // TODO: Handle rekey and delete request
+                    return NOT_HANDLED;
+            }
+        }
+    }
+
+    /**
+     * RekeyChildLocalDelete represents the deleting stage of a locally-initiated Rekey Child
+     * procedure.
+     */
+    class RekeyChildLocalDelete extends State {
+        // TODO: Implement it.
     }
 
     /**
@@ -1056,7 +1141,54 @@ public class ChildSessionStateMachine extends StateMachine {
                     remoteAddress);
         }
 
-        // TODO: Add method to support validating rekey request and response
+        // TODO: Add method to support validating rekey request
+
+        public static CreateChildResult validateAndNegotiateRekeyChildResp(
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                @ExchangeType int exchangeType,
+                @ExchangeType int expectedExchangeType,
+                boolean expectTransport,
+                int expectedRemoteSpi,
+                IpSecManager ipSecManager,
+                InetAddress remoteAddress) {
+            // Verify Notify-Rekey payload
+            List<IkeNotifyPayload> notifyPayloads =
+                    IkePayload.getPayloadListForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, respPayloads);
+
+            boolean hasExpectedRekeyNotify = false;
+            for (IkeNotifyPayload notifyPayload : notifyPayloads) {
+                if (notifyPayload.notifyType == NOTIFY_TYPE_REKEY_SA
+                        && notifyPayload.spi == expectedRemoteSpi) {
+                    hasExpectedRekeyNotify = true;
+                    break;
+                }
+            }
+
+            if (!hasExpectedRekeyNotify) {
+                return new CreateChildResult(
+                        CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
+                        new InvalidSyntaxException(
+                                "Found no Rekey notification with remotely generated IPsec SPI"));
+            }
+
+            // Validate rest of payloads and negotiate Child SA.
+            CreateChildResult childResult =
+                    validateAndNegotiateChild(
+                            reqPayloads,
+                            respPayloads,
+                            exchangeType,
+                            expectedExchangeType,
+                            true /*isLocalInit*/,
+                            expectTransport,
+                            ipSecManager,
+                            remoteAddress);
+
+            // TODO: Validate new Child SA does not have different Traffic Selectors
+
+            return childResult;
+        }
 
         /** Validate the received response and negotiate Child SA. */
         private static CreateChildResult validateAndNegotiateChild(
