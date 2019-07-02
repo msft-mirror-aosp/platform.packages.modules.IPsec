@@ -175,6 +175,7 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         private final AtNonceMt mAtNonceMt;
 
         private List<Integer> mVersions;
+        @VisibleForTesting byte[] mIdentity;
 
         protected StartState(AtNonceMt atNonceMt) {
             this.mAtNonceMt = atNonceMt;
@@ -291,8 +292,10 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
                 // TODO(b/136482803): handle case where identity unavailable
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
                 String identity = "1" + mTelephonyManager.getSubscriberId();
-                return AtIdentity.getAtIdentity(identity.getBytes());
+                mIdentity = identity.getBytes();
+                return AtIdentity.getAtIdentity(mIdentity);
             }
+
             return null;
         }
     }
