@@ -24,6 +24,7 @@ import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_DELETE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_VENDOR;
 
@@ -89,6 +90,7 @@ import java.security.Provider;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
@@ -145,9 +147,6 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int IKE_EXCHANGE_SUBTYPE_REKEY_IKE = 6;
     static final int IKE_EXCHANGE_SUBTYPE_REKEY_CHILD = 7;
     static final int IKE_EXCHANGE_SUBTYPE_GENERIC_INFO = 8;
-
-    private static final int CHILD_PAYLOADS_DIRECTION_REQUEST = 0;
-    private static final int CHILD_PAYLOADS_DIRECTION_RESPONSE = 1;
 
     /** Package private signals accessible for testing code. */
     private static final int CMD_GENERAL_BASE = 0;
@@ -467,6 +466,25 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
+    /** Class to group parameters for building an outbound message for ChildSessions. */
+    private static class ChildOutboundData {
+        @ExchangeType public final int exchangeType;
+        public final boolean isResp;
+        public final List<IkePayload> payloadList;
+        public final ChildSessionStateMachine childSession;
+
+        ChildOutboundData(
+                @ExchangeType int exchangeType,
+                boolean isResp,
+                List<IkePayload> payloadList,
+                ChildSessionStateMachine childSession) {
+            this.exchangeType = exchangeType;
+            this.isResp = isResp;
+            this.payloadList = payloadList;
+            this.childSession = childSession;
+        }
+    }
+
     /** Callback for ChildSessionStateMachine to notify IkeSessionStateMachine. */
     private class ChildSessionSmCallback
             implements ChildSessionStateMachine.IChildSessionSmCallback {
@@ -482,12 +500,13 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void onOutboundPayloadsReady(
-                @ExchangeType int exchangeType, boolean isResp, List<IkePayload> payloadList) {
+                @ExchangeType int exchangeType,
+                boolean isResp,
+                List<IkePayload> payloadList,
+                ChildSessionStateMachine childSession) {
             sendMessage(
                     CMD_OUTBOUND_CHILD_PAYLOADS_READY,
-                    exchangeType,
-                    isResp ? CHILD_PAYLOADS_DIRECTION_RESPONSE : CHILD_PAYLOADS_DIRECTION_REQUEST,
-                    payloadList);
+                    new ChildOutboundData(exchangeType, isResp, payloadList, childSession));
         }
 
         @Override
@@ -890,10 +909,14 @@ public class IkeSessionStateMachine extends StateMachine {
                             }
 
                             int ikeExchangeSubType = getIkeExchangeSubType(ikeMessage);
-                            if (ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_INVALID) {
+                            if (ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_INVALID
+                                    || ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_IKE_INIT
+                                    || ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_IKE_AUTH) {
                                 // TODO: Reply with INVALID_SYNTAX and close IKE Session.
                                 throw new UnsupportedOperationException(
-                                        "Cannot handle message with invalid IkeExchangeSubType.");
+                                        "Cannot handle message with invalid or unexpected"
+                                                + " IkeExchangeSubType: "
+                                                + ikeExchangeSubType);
                             }
                             handleRequestIkeMessage(ikeMessage, ikeExchangeSubType, message);
                             break;
@@ -1170,37 +1193,69 @@ public class IkeSessionStateMachine extends StateMachine {
     /**
      * This class represents a state when there is at least one ongoing Child procedure
      * (Create/Rekey/Delete Child)
+     *
+     * <p>For a locally initiated Child procedure, this state is responsible for notifying Child
+     * Session to initiate the exchange, building outbound request IkeMessage with Child Session
+     * provided payload list and redirecting the inbound response to Child Session for validation.
+     *
+     * <p>For a remotely initiated Child procedure, this state is responsible for redirecting the
+     * inbound request to Child Session(s) and building outbound response IkeMessage with Child
+     * Session provided payload list. Exchange collision on a Child Session will be resolved inside
+     * the Child Session.
+     *
+     * <p>For a remotely initiated IKE procedure, this state will only accept a Delete IKE request
+     * and reject other types with TEMPORARY_FAILURE, since it causes conflict with the ongoing
+     * Child procedure.
+     *
+     * <p>For most inbound request/response, this state will first pick out and handle IKE related
+     * payloads and then send the rest of the payloads to Child Session for further validation. It
+     * is the Child Session's responsibility to check required payloads (and verify the exchange
+     * type) according to its procedure type. Only when receiving an inbound delete Child request,
+     * as the only case where multiple Child Sessions will be affected by one IkeMessage, this state
+     * will only send Delete Payload(s) to Child Session.
      */
     class ChildProcedureOngoing extends DeleteBase {
-        // It is possible that mChildInLocalProcedure and mChildInRemoteProcedure are the same
-        // when both sides initiated exchange for the same Child Session.
+        // It is possible that mChildInLocalProcedure is also in mChildInRemoteProcedures when both
+        // sides initiated exchange for the same Child Session.
         private ChildSessionStateMachine mChildInLocalProcedure;
-        private ChildSessionStateMachine mChildInRemoteProcedure;
+        private Set<ChildSessionStateMachine> mChildInRemoteProcedures;
 
         private int mLastInboundRequestMsgId;
+        private List<IkePayload> mOutboundRespPayloads;
+        private Set<ChildSessionStateMachine> mAwaitingChildResponse;
 
         // TODO: Support retransmitting.
 
-        // TODO: Store multiple mChildInRemoteProcedures to support multiple Child SAs deletion
-        // initiated by the remote.
+        @Override
+        public void enter() {
+            mChildInLocalProcedure = null;
+            mChildInRemoteProcedures = new HashSet<>();
+
+            mLastInboundRequestMsgId = 0;
+            mOutboundRespPayloads = new LinkedList<>();
+            mAwaitingChildResponse = new HashSet<>();
+        }
 
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_REQUEST_FOR_CHILD:
+                    // Handle remote request (and do state transition)
                     handleRequestIkeMessage(
                             (IkeMessage) message.obj,
                             message.arg1 /*ikeExchangeSubType*/,
                             null /*ReceivedIkePacket*/);
                     return HANDLED;
                 case CMD_OUTBOUND_CHILD_PAYLOADS_READY:
-                    int exchangeType = message.arg1;
-                    boolean isResp = (message.arg2 == CHILD_PAYLOADS_DIRECTION_RESPONSE);
+                    ChildOutboundData outboundData = (ChildOutboundData) message.obj;
+                    int exchangeType = outboundData.exchangeType;
+                    List<IkePayload> outboundPayloads = outboundData.payloadList;
 
-                    if (isResp) {
-                        handleOutboundResponse(exchangeType, (List<IkePayload>) message.obj);
+                    if (outboundData.isResp) {
+                        handleOutboundResponse(
+                                exchangeType, outboundPayloads, outboundData.childSession);
                     } else {
-                        handleOutboundRequest(exchangeType, (List<IkePayload>) message.obj);
+                        handleOutboundRequest(exchangeType, outboundPayloads);
                     }
 
                     return HANDLED;
@@ -1210,13 +1265,9 @@ public class IkeSessionStateMachine extends StateMachine {
                     if (mChildInLocalProcedure == childSession) {
                         mChildInLocalProcedure = null;
                     }
-                    if (mChildInRemoteProcedure == childSession) {
-                        mChildInRemoteProcedure = null;
-                    }
+                    mChildInRemoteProcedures.remove(childSession);
 
-                    if (mChildInLocalProcedure == null && mChildInRemoteProcedure == null) {
-                        transitionTo(mIdle);
-                    }
+                    transitionToIdleIfAllProceduresDone();
                     return HANDLED;
                 case CMD_HANDLE_FIRST_CHILD_NEGOTIATION:
                     FirstChildNegotiationData childData = (FirstChildNegotiationData) message.obj;
@@ -1230,6 +1281,12 @@ public class IkeSessionStateMachine extends StateMachine {
                     return HANDLED;
                 default:
                     return super.processMessage(message);
+            }
+        }
+
+        private void transitionToIdleIfAllProceduresDone() {
+            if (mChildInLocalProcedure == null && mChildInRemoteProcedures.isEmpty()) {
+                transitionTo(mIdle);
             }
         }
 
@@ -1260,19 +1317,44 @@ public class IkeSessionStateMachine extends StateMachine {
                     break;
                 default:
                     Log.wtf(TAG, "Invalid Child procedure type: " + req.procedureType);
-                    if (mChildInRemoteProcedure == null) {
-                        transitionTo(mIdle);
-                    }
+                    transitionToIdleIfAllProceduresDone();
                     break;
             }
         }
 
+        /**
+         * This method is called when this state receives an inbound request or when mReceiving
+         * received an inbound Child request and deferred it to this state.
+         */
         @Override
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             // TODO: Grab a remote lock and hand payloads to the Child Session
+
             mLastInboundRequestMsgId = ikeMessage.ikeHeader.messageId;
-            throw new UnsupportedOperationException("Cannot handle inbound Child request");
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_CREATE_CHILD:
+                    // TODO: Reply ERROR_TYPE_NO_ADDITIONAL_SAS
+                    break;
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
+                    // TODO: Reply and close IKE Session.
+                    break;
+                case IKE_EXCHANGE_SUBTYPE_DELETE_CHILD:
+                    handleInboundDeleteChildRequest(ikeMessage);
+                    break;
+                case IKE_EXCHANGE_SUBTYPE_REKEY_IKE:
+                    // TODO: Reply ERROR_TYPE_TEMPORARY_FAILURE;
+                    break;
+                case IKE_EXCHANGE_SUBTYPE_REKEY_CHILD:
+                    // TODO: Handle rekey Child request.
+                    break;
+                case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
+                    // TODO: Handle general informational request
+                default:
+                    throw new IllegalArgumentException(
+                            "Invalid IKE exchange subtype: " + ikeExchangeSubType);
+            }
+            transitionToIdleIfAllProceduresDone();
         }
 
         @Override
@@ -1306,6 +1388,69 @@ public class IkeSessionStateMachine extends StateMachine {
             mChildInLocalProcedure.receiveResponse(ikeMessage.ikeHeader.exchangeType, payloads);
         }
 
+        private void handleInboundDeleteChildRequest(IkeMessage ikeMessage) {
+            // It is guaranteed in #getIkeExchangeSubType that at least one Delete Child Payload
+            // exists.
+
+            HashMap<ChildSessionStateMachine, List<IkePayload>> childToDelPayloadsMap =
+                    new HashMap<>();
+            Set<Integer> spiHandled = new HashSet<>();
+
+            for (IkePayload payload : ikeMessage.ikePayloadList) {
+                handlePayload:
+                switch (payload.payloadType) {
+                    case PAYLOAD_TYPE_VENDOR:
+                        // TODO: Investigate if Vendor ID Payload can be in an INFORMATIONAL
+                        // message.
+                        break handlePayload;
+                    case PAYLOAD_TYPE_NOTIFY:
+                        logw(
+                                "Unexpected or unknown notification: "
+                                        + ((IkeNotifyPayload) payload).notifyType);
+                        break handlePayload;
+                    case PAYLOAD_TYPE_DELETE:
+                        IkeDeletePayload delPayload = (IkeDeletePayload) payload;
+
+                        for (int spi : delPayload.spisToDelete) {
+                            ChildSessionStateMachine child = mSpiToChildSessionMap.get(spi);
+                            if (child == null) {
+                                // TODO: Investigate how other implementations handle that.
+                                logw("Child SA not found with received SPI: " + spi);
+                            } else if (!spiHandled.add(spi)) {
+                                logw("Received repeated Child SPI: " + spi);
+                            } else {
+                                // Store Delete Payload with its target ChildSession
+                                if (!childToDelPayloadsMap.containsKey(child)) {
+                                    childToDelPayloadsMap.put(child, new LinkedList<>());
+                                }
+                                List<IkePayload> delPayloads = childToDelPayloadsMap.get(child);
+
+                                // Avoid storing repeated Delete Payload
+                                if (!delPayloads.contains(delPayload)) delPayloads.add(delPayload);
+                            }
+                        }
+
+                        break handlePayload;
+                    case PAYLOAD_TYPE_CP:
+                        // TODO: Handle it
+                        break handlePayload;
+                    default:
+                        logw("Unexpected payload types found: " + payload.payloadType);
+                }
+            }
+
+            // TODO: If no Child SA is found, only reply with IKE related payloads or an empty
+            // message.
+
+            // Send Delete Payloads to Child Sessions
+            for (ChildSessionStateMachine child : childToDelPayloadsMap.keySet()) {
+                child.receiveRequest(
+                        IKE_EXCHANGE_SUBTYPE_DELETE_CHILD, childToDelPayloadsMap.get(child));
+                mAwaitingChildResponse.add(child);
+                mChildInRemoteProcedures.add(child);
+            }
+        }
+
         private void handleOutboundRequest(int exchangeType, List<IkePayload> outboundPayloads) {
             IkeHeader ikeHeader =
                     new IkeHeader(
@@ -1322,8 +1467,28 @@ public class IkeSessionStateMachine extends StateMachine {
             // TODO: Start retransmission
         }
 
-        private void handleOutboundResponse(int exchangeType, List<IkePayload> outboundPayloads) {
-            // TODO: Build and send out response when all Child Sessions have replied.
+        private void handleOutboundResponse(
+                int exchangeType,
+                List<IkePayload> outboundPayloads,
+                ChildSessionStateMachine childSession) {
+            // For each request IKE passed to Child, Child will send back to IKE a response. Even
+            // if the Child Sesison is under simultaneous deletion, it will send back an empty
+            // payload list.
+            mOutboundRespPayloads.addAll(outboundPayloads);
+            mAwaitingChildResponse.remove(childSession);
+            if (!mAwaitingChildResponse.isEmpty()) return;
+
+            IkeHeader ikeHeader =
+                    new IkeHeader(
+                            mCurrentIkeSaRecord.getInitiatorSpi(),
+                            mCurrentIkeSaRecord.getResponderSpi(),
+                            IkePayload.PAYLOAD_TYPE_SK,
+                            exchangeType,
+                            true /*isResp*/,
+                            mCurrentIkeSaRecord.isLocalInit,
+                            mLastInboundRequestMsgId);
+            IkeMessage ikeMessage = new IkeMessage(ikeHeader, mOutboundRespPayloads);
+            sendEncryptedIkeMessage(ikeMessage);
         }
     }
 
