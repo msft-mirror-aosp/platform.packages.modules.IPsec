@@ -21,6 +21,7 @@ import static org.junit.Assert.fail;
 
 import com.android.ike.TestUtils;
 
+import org.junit.Before;
 import org.junit.Test;
 
 /**
@@ -38,10 +39,17 @@ public final class Fips186_2PrfTest {
     private static final String EXPECTED_RESULT =
             "2070b3223dba372fde1c0ffc7b2e3b498b2606143c6c18bacb0f6c55babb13788e20d737a3275116";
 
+    private Fips186_2Prf mFipsPrf;
+
+    @Before
+    public void setUp() {
+        mFipsPrf = new Fips186_2Prf();
+    }
+
     @Test
     public void testFips186_2Prf_Invalid_Seed() throws Exception {
         try {
-            Fips186_2Prf.getRandom(new byte[0], 40);
+            mFipsPrf.getRandom(new byte[0], 40);
             fail("Expected exception for invalid length seed");
         } catch (IllegalArgumentException expected) {
         }
@@ -50,7 +58,7 @@ public final class Fips186_2PrfTest {
     @Test
     public void testFips186_2Prf() throws Exception {
         byte[] seed = TestUtils.hexStringToByteArray(SEED);
-        byte[] actual = Fips186_2Prf.getRandom(seed, 40);
+        byte[] actual = mFipsPrf.getRandom(seed, 40);
 
         assertArrayEquals(TestUtils.hexStringToByteArray(EXPECTED_RESULT), actual);
     }
