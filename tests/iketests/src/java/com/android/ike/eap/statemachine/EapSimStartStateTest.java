@@ -16,8 +16,6 @@
 
 package com.android.ike.eap.statemachine;
 
-import static androidx.test.InstrumentationRegistry.getInstrumentation;
-
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ENCR_DATA;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IV;
@@ -26,34 +24,47 @@ import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_RE
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
-import android.content.Context;
+import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtAnyIdReq;
+import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
 import com.android.ike.eap.message.EapSimAttribute.AtMac;
 import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimTypeData;
+import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 
 public class EapSimStartStateTest {
-    private Context mContext;
+    private static final String IMSI = "123456789012345";
+    private static final String IDENTITY = "1" + IMSI;
+
+    private TelephonyManager mMockTelephonyManager;
     private EapSimMethodStateMachine mEapSimMethodStateMachine;
     private StartState mStartState;
     private LinkedHashMap<Integer, EapSimAttribute> mAttributes;
 
     @Before
     public void setUp() {
-        mContext = getInstrumentation().getContext();
-        mEapSimMethodStateMachine = new EapSimMethodStateMachine(mContext);
+        mMockTelephonyManager = mock(TelephonyManager.class);
+        mEapSimMethodStateMachine = new EapSimMethodStateMachine(
+                mMockTelephonyManager, new EapSimTypeDataDecoder());
         mStartState = mEapSimMethodStateMachine.new StartState(null);
 
         mAttributes = new LinkedHashMap<>();
@@ -100,5 +111,27 @@ public class EapSimStartStateTest {
         mAttributes.put(EAP_AT_ENCR_DATA, null); // just need <K, V> pair in the map
         eapSimTypeData = new EapSimTypeData(EAP_SIM_START, mAttributes);
         assertFalse(mStartState.isValidStartAttributes(eapSimTypeData));
+    }
+
+    @Test
+    public void testAddIdentityAttributeToResponse() throws Exception {
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(
+                EAP_SIM_START, Arrays.asList(new AtPermanentIdReq()));
+
+        when(mMockTelephonyManager.getSubscriberId()).thenReturn(IMSI);
+
+        AtIdentity atIdentity = mStartState.getIdentityResponse(eapSimTypeData);
+        verify(mMockTelephonyManager).getSubscriberId();
+        assertArrayEquals(IDENTITY.getBytes(), atIdentity.identity);
+        verifyNoMoreInteractions(mMockTelephonyManager);
+    }
+
+    @Test
+    public void testAddIdentityAttributeToResponseNoIdRequest() throws Exception {
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, Arrays.asList());
+
+        AtIdentity atIdentity = mStartState.getIdentityResponse(eapSimTypeData);
+        assertNull(atIdentity);
+        verifyNoMoreInteractions(mMockTelephonyManager);
     }
 }

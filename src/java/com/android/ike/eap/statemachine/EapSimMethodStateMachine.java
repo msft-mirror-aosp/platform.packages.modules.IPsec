@@ -31,6 +31,7 @@ import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_NOTIFICATION;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
 
+import android.annotation.Nullable;
 import android.content.Context;
 import android.telephony.TelephonyManager;
 import android.util.Log;
@@ -44,6 +45,7 @@ import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
 import com.android.ike.eap.message.EapSimAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
@@ -89,9 +91,15 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
     }
 
     @VisibleForTesting
-    public EapSimMethodStateMachine(Context context, EapSimTypeDataDecoder eapSimTypeDataDecoder) {
-        this.mTelephonyManager = (TelephonyManager)
-                context.getSystemService(Context.TELEPHONY_SERVICE);
+    public EapSimMethodStateMachine(TelephonyManager telephonyManager,
+            EapSimTypeDataDecoder eapSimTypeDataDecoder) {
+        if (telephonyManager == null) {
+            throw new IllegalArgumentException("TelephonyManager must be non-null");
+        } else if (eapSimTypeDataDecoder == null) {
+            throw new IllegalArgumentException("EapSimTypeDataDecoder must be non-null");
+        }
+
+        this.mTelephonyManager = telephonyManager;
         this.mEapSimTypeDataDecoder = eapSimTypeDataDecoder;
         transitionTo(new CreatedState());
     }
@@ -202,7 +210,15 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
             }
             responseAttributes.add(AtSelectedVersion.getSelectedVersion());
 
-            addIdentityAttributeToResponse(eapSimTypeData, responseAttributes);
+            try {
+                AtIdentity atIdentity = getIdentityResponse(eapSimTypeData);
+                if (atIdentity != null) {
+                    responseAttributes.add(atIdentity);
+                }
+            } catch (EapSimInvalidAttributeException ex) {
+                Log.d(mTAG, "Exception thrown while making AtIdentity attribute", ex);
+                return new EapError(ex);
+            }
 
             return buildResponseMessage(EAP_SIM_START, message.eapIdentifier, responseAttributes);
         }
@@ -239,9 +255,22 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
             return true;
         }
 
-        private void addIdentityAttributeToResponse(
-                EapSimTypeData eapSimTypeData, List<EapSimAttribute> responseAttributes) {
-            // TODO(b/135628016): implement handleIdentityRequest
+        @VisibleForTesting
+        @Nullable
+        AtIdentity getIdentityResponse(EapSimTypeData eapSimTypeData)
+                throws EapSimInvalidAttributeException {
+            Set<Integer> attributes = eapSimTypeData.attributeMap.keySet();
+
+            // TODO(b/136180022): process separate ID requests differently (pseudonym vs permanent)
+            if (attributes.contains(EAP_AT_PERMANENT_ID_REQ)
+                    || attributes.contains(EAP_AT_FULLAUTH_ID_REQ)
+                    || attributes.contains(EAP_AT_ANY_ID_REQ)) {
+                // TODO(b/136482803): handle case where identity unavailable
+                // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
+                String identity = "1" + mTelephonyManager.getSubscriberId();
+                return AtIdentity.getAtIdentity(identity.getBytes());
+            }
+            return null;
         }
     }
 
