@@ -163,6 +163,11 @@ public class ChildSessionStateMachine extends StateMachine {
     @VisibleForTesting ChildSaRecord mCurrentChildSaRecord;
     /** Package private */
     @VisibleForTesting ChildSaRecord mLocalInitNewChildSaRecord;
+    /** Package private */
+    @VisibleForTesting ChildSaRecord mRemoteInitNewChildSaRecord;
+
+    /** Package private */
+    @VisibleForTesting ChildSaRecord mChildSaRecordSurviving;
 
     @VisibleForTesting final State mInitial = new Initial();
     @VisibleForTesting final State mCreateChildLocalCreate = new CreateChildLocalCreate();
@@ -687,6 +692,9 @@ public class ChildSessionStateMachine extends StateMachine {
                             // TODO: Handle remote rekey request
                             return NOT_HANDLED;
                     }
+                case CMD_FORCE_TRANSITION: // Testing command
+                    transitionTo((State) message.obj);
+                    return HANDLED;
                 default:
                     return NOT_HANDLED;
             }
@@ -772,7 +780,7 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     private abstract class DeleteBase extends DeleteResponderBase {
         /** Validate payload types in Delete Child response. */
-        protected void validateRespPayloadAndExchangeType(
+        protected void validateDeleteRespPayloadAndExchangeType(
                 List<IkePayload> respPayloads, @ExchangeType int exchangeType)
                 throws InvalidSyntaxException {
 
@@ -830,7 +838,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     try {
                         ReceivedResponse resp = (ReceivedResponse) message.obj;
-                        validateRespPayloadAndExchangeType(
+                        validateDeleteRespPayloadAndExchangeType(
                                 resp.responsePayloads, resp.exchangeType);
 
                         boolean currentSaSpiFound =
@@ -1020,11 +1028,64 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
+     * RekeyChildDeleteBase represents common behaviours of deleting stage during rekeying Child SA.
+     */
+    abstract class RekeyChildDeleteBase extends DeleteBase {
+        // TODO: Handle requests on newly created Child SA
+
+        protected void finishRekey() {
+            mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
+            mCurrentChildSaRecord.close();
+
+            mCurrentChildSaRecord = mChildSaRecordSurviving;
+
+            mLocalInitNewChildSaRecord = null;
+            mRemoteInitNewChildSaRecord = null;
+            mChildSaRecordSurviving = null;
+        }
+    }
+
+    /**
      * RekeyChildLocalDelete represents the deleting stage of a locally-initiated Rekey Child
      * procedure.
      */
-    class RekeyChildLocalDelete extends State {
-        // TODO: Implement it.
+    class RekeyChildLocalDelete extends RekeyChildDeleteBase {
+        @Override
+        public void enter() {
+            mChildSaRecordSurviving = mLocalInitNewChildSaRecord;
+            sendDeleteChild(mCurrentChildSaRecord, false /*isResp*/);
+        }
+
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_HANDLE_RECEIVED_RESPONSE:
+                    try {
+                        ReceivedResponse resp = (ReceivedResponse) message.obj;
+                        validateDeleteRespPayloadAndExchangeType(
+                                resp.responsePayloads, resp.exchangeType);
+
+                        boolean currentSaSpiFound =
+                                hasRemoteChildSpi(resp.responsePayloads, mCurrentChildSaRecord);
+                        if (!currentSaSpiFound) {
+                            throw new InvalidSyntaxException(
+                                    "Found no remote SPI in received Delete response.");
+                        }
+
+                        finishRekey();
+
+                        transitionTo(mIdle);
+                    } catch (InvalidSyntaxException e) {
+                        // Handle validation error and absence of remotely generated SPI.
+                        mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                    }
+                    return HANDLED;
+                default:
+                    // TODO: Handle requests on mCurrentChildSaRecord: Reply TEMPORARY_FAILURE to
+                    // a rekey request and reply empty INFORMATIONAL message to a delete request.
+                    return NOT_HANDLED;
+            }
+        }
     }
 
     /**

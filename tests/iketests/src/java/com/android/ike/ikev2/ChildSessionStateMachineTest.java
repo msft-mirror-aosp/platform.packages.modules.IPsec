@@ -47,6 +47,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -465,6 +466,25 @@ public final class ChildSessionStateMachineTest {
         return inboundPayloads;
     }
 
+    private void verifyOutboundDeletePayload(int expectedSpi, boolean isResp) {
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(isResp),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+
+        List<IkePayload> outPayloadList = mPayloadListCaptor.getValue();
+        assertEquals(1, outPayloadList.size());
+
+        List<IkeDeletePayload> deletePayloads =
+                IkePayload.getPayloadListForTypeInProvidedList(
+                        PAYLOAD_TYPE_DELETE, IkeDeletePayload.class, outPayloadList);
+        assertEquals(1, deletePayloads.size());
+        IkeDeletePayload deletePayload = deletePayloads.get(0);
+        assertEquals(expectedSpi, deletePayload.spisToDelete[0]);
+    }
+
     @Test
     public void testDeleteChildLocal() throws Exception {
         setupIdleStateMachine();
@@ -476,22 +496,7 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.DeleteChildLocalDelete);
-        verify(mMockChildSessionSmCallback)
-                .onOutboundPayloadsReady(
-                        eq(EXCHANGE_TYPE_INFORMATIONAL),
-                        eq(false),
-                        mPayloadListCaptor.capture(),
-                        eq(mChildSessionStateMachine));
-
-        List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
-        assertEquals(1, reqPayloadList.size());
-
-        List<IkeDeletePayload> deletePayloads =
-                IkePayload.getPayloadListForTypeInProvidedList(
-                        PAYLOAD_TYPE_DELETE, IkeDeletePayload.class, reqPayloadList);
-        assertEquals(1, deletePayloads.size());
-        IkeDeletePayload deletePayload = deletePayloads.get(0);
-        assertEquals(mSpyCurrentChildSaRecord.getLocalSpi(), deletePayload.spisToDelete[0]);
+        verifyOutboundDeletePayload(mSpyCurrentChildSaRecord.getLocalSpi(), false /*isResp*/);
 
         // Test receiving Delete response
         mChildSessionStateMachine.receiveResponse(
@@ -717,6 +722,60 @@ public final class ChildSessionStateMachineTest {
                 LOCAL_INIT_NEW_CHILD_SA_SPI_IN,
                 LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
                 true /*isLocalInit*/);
+    }
+
+    @Test
+    public void testRekeyChildLocalDeleteSendsRequest() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildLocalDelete
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = mSpyLocalInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildLocalDelete);
+        mLooper.dispatchAll();
+
+        // Verify outbound delete request
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalDelete);
+        verifyOutboundDeletePayload(mSpyCurrentChildSaRecord.getLocalSpi(), false /*isResp*/);
+
+        assertEquals(mSpyCurrentChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
+        assertEquals(
+                mSpyLocalInitNewChildSaRecord, mChildSessionStateMachine.mChildSaRecordSurviving);
+    }
+
+    @Test
+    public void testRekeyChildLocalDeleteValidatesResponse() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildLocalDelete
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = mSpyLocalInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildLocalDelete);
+        mLooper.dispatchAll();
+
+        // Test receiving Delete response
+        mChildSessionStateMachine.receiveResponse(
+                EXCHANGE_TYPE_INFORMATIONAL,
+                makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+
+        // First invoked in #setupIdleStateMachine
+        verify(mMockChildSessionSmCallback, times(2))
+                .onProcedureFinished(mChildSessionStateMachine);
+
+        verify(mMockChildSessionSmCallback)
+                .onChildSaDeleted(mSpyCurrentChildSaRecord.getRemoteSpi());
+        verify(mSpyCurrentChildSaRecord).close();
+
+        assertNull(mChildSessionStateMachine.mChildSaRecordSurviving);
+        assertEquals(
+                mSpyLocalInitNewChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
     }
 
     @Test
