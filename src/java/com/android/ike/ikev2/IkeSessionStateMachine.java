@@ -1744,8 +1744,8 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeSaPayload reqSaPayload =
                     reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
             mSaProposal =
-                    respSaPayload.getVerifiedNegotiatedIkeProposalPair(
-                                    reqSaPayload, mLocalAddress, mRemoteAddress)
+                    IkeSaPayload.getVerifiedNegotiatedIkeProposalPair(
+                                    reqSaPayload, respSaPayload, mRemoteAddress)
                             .second
                             .saProposal;
 
@@ -2214,8 +2214,8 @@ public class IkeSessionStateMachine extends StateMachine {
             IkeSaPayload respSaPayload =
                     respMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
             Pair<IkeProposal, IkeProposal> negotiatedProposals =
-                    respSaPayload.getVerifiedNegotiatedIkeProposalPair(
-                            reqSaPayload, initAddr, respAddr);
+                    IkeSaPayload.getVerifiedNegotiatedIkeProposalPair(
+                            reqSaPayload, respSaPayload, mRemoteAddress);
             IkeProposal reqProposal = negotiatedProposals.first;
             IkeProposal respProposal = negotiatedProposals.second;
 
