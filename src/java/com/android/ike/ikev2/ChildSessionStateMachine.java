@@ -17,7 +17,11 @@ package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -44,6 +48,7 @@ import android.os.Message;
 import android.util.Log;
 import android.util.Pair;
 
+import com.android.ike.ikev2.IkeSessionStateMachine.IkeExchangeSubType;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
@@ -60,6 +65,7 @@ import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
+import com.android.ike.ikev2.message.IkeNotifyPayload.NotifyType;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.ChildProposal;
@@ -76,6 +82,7 @@ import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -216,7 +223,10 @@ public class ChildSessionStateMachine extends StateMachine {
 
         /** Notify the IKE Session to send out IKE message for this Child Session. */
         void onOutboundPayloadsReady(
-                @ExchangeType int exchangeType, boolean isResp, List<IkePayload> payloadList);
+                @ExchangeType int exchangeType,
+                boolean isResp,
+                List<IkePayload> payloadList,
+                ChildSessionStateMachine childSession);
 
         /** Notify that a Child procedure has been finished. */
         void onProcedureFinished(ChildSessionStateMachine childSession);
@@ -269,7 +279,22 @@ public class ChildSessionStateMachine extends StateMachine {
         sendMessage(CMD_LOCAL_REQUEST_DELETE_CHILD);
     }
 
-    // TODO: Add receiveRequest() and rekeyChildSession()
+    // TODO: Add rekeyChildSession()
+
+    /**
+     * Receive a request
+     *
+     * <p>This method is called synchronously from IkeStateMachine. It proxies the synchronous call
+     * as an asynchronous job to the ChildStateMachine handler.
+     *
+     * @param exchangeSubtype the exchange subtype of this inbound request.
+     * @param payloadList the Child-procedure-related payload list in the request message that needs
+     *     validation.
+     */
+    public void receiveRequest(
+            @IkeExchangeSubType int exchangeSubtype, List<IkePayload> payloadList) {
+        sendMessage(CMD_HANDLE_RECEIVED_REQUEST, new ReceivedRequest(exchangeSubtype, payloadList));
+    }
 
     /**
      * Receive a response.
@@ -335,6 +360,19 @@ public class ChildSessionStateMachine extends StateMachine {
         mChildSmCallback.onChildSaCreated(remoteGenSpi, this);
     }
 
+    private void replyErrorNotification(@NotifyType int notifyType) {
+        replyErrorNotification(notifyType, new byte[0]);
+    }
+
+    private void replyErrorNotification(@NotifyType int notifyType, byte[] notifyData) {
+        List<IkePayload> outPayloads = new ArrayList<>(1);
+        IkeNotifyPayload notifyPayload = new IkeNotifyPayload(notifyType, notifyData);
+        outPayloads.add(notifyPayload);
+
+        mChildSmCallback.onOutboundPayloadsReady(
+                EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, outPayloads, this);
+    }
+
     /**
      * FirstChildNegotiationData contains payloads for negotiating first Child SA in IKE_AUTH
      * request and IKE_AUTH response and callback to notify IkeSessionStateMachine the SA
@@ -347,6 +385,20 @@ public class ChildSessionStateMachine extends StateMachine {
         FirstChildNegotiationData(List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
             requestPayloads = reqPayloads;
             responsePayloads = respPayloads;
+        }
+    }
+
+    /**
+     * ReceivedRequest contains exchange subtype and payloads that are extracted from a request
+     * message to the current Child procedure.
+     */
+    private static class ReceivedRequest {
+        @IkeExchangeSubType public final int exchangeSubtype;
+        public final List<IkePayload> requestPayloads;
+
+        ReceivedRequest(@IkeExchangeSubType int eType, List<IkePayload> reqPayloads) {
+            exchangeSubtype = eType;
+            requestPayloads = reqPayloads;
         }
     }
 
@@ -504,7 +556,10 @@ public class ChildSessionStateMachine extends StateMachine {
                                 mChildSessionOptions,
                                 false /*isFirstChild*/);
                 mChildSmCallback.onOutboundPayloadsReady(
-                        EXCHANGE_TYPE_CREATE_CHILD_SA, false /*isResp*/, mRequestPayloads);
+                        EXCHANGE_TYPE_CREATE_CHILD_SA,
+                        false /*isResp*/,
+                        mRequestPayloads,
+                        ChildSessionStateMachine.this);
             } catch (ResourceUnavailableException e) {
                 // TODO: Notify users and close the Child Session.
             }
@@ -592,7 +647,10 @@ public class ChildSessionStateMachine extends StateMachine {
             outIkePayloads.add(new IkeDeletePayload(new int[] {childSaRecord.getLocalSpi()}));
 
             mChildSmCallback.onOutboundPayloadsReady(
-                    EXCHANGE_TYPE_INFORMATIONAL, isResp, outIkePayloads);
+                    EXCHANGE_TYPE_INFORMATIONAL,
+                    isResp,
+                    outIkePayloads,
+                    ChildSessionStateMachine.this);
         }
 
         // TODO: Add a method to handle an inbound Child Session deletion request
@@ -651,9 +709,11 @@ public class ChildSessionStateMachine extends StateMachine {
      * exchange.
      */
     class DeleteChildLocalDelete extends DeleteBase {
-        // TODO: Support simultaneous deletion and reply TEMPORARY_FAILURE to other requests.
+        private boolean mSimulDeleteDetected = false;
+
         @Override
         public void enter() {
+            mSimulDeleteDetected = false;
             sendDeleteChild(mCurrentChildSaRecord, false /*isResp*/);
         }
 
@@ -668,9 +728,17 @@ public class ChildSessionStateMachine extends StateMachine {
 
                         boolean currentSaSpiFound =
                                 hasRemoteChildSpi(resp.responsePayloads, mCurrentChildSaRecord);
-                        if (!currentSaSpiFound) {
+                        if (!currentSaSpiFound && !mSimulDeleteDetected) {
                             throw new InvalidSyntaxException(
                                     "Found no remote SPI in received Delete response.");
+                        } else if (currentSaSpiFound && mSimulDeleteDetected) {
+                            // As required by the RFC 7296, in simultaneous delete case, the remote
+                            // side MUST NOT include SPI of mCurrentChildSaRecord. However, to
+                            // provide better interoperatibility, IKE library will keep IKE Session
+                            // alive and continue the deleting process.
+                            logw(
+                                    "Found remote SPI in the Delete response in a simultaneous"
+                                            + " deletion case");
                         }
 
                         mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
@@ -682,6 +750,36 @@ public class ChildSessionStateMachine extends StateMachine {
                         mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
                     }
                     return HANDLED;
+                case CMD_HANDLE_RECEIVED_REQUEST:
+                    ReceivedRequest req = (ReceivedRequest) message.obj;
+                    switch (req.exchangeSubtype) {
+                        case IKE_EXCHANGE_SUBTYPE_DELETE_CHILD:
+                            // It has been verified in IkeSessionStateMachine that the incoming
+                            // request can be ONLY for mCurrentChildSaRecord at this point.
+                            if (!hasRemoteChildSpi(req.requestPayloads, mCurrentChildSaRecord)) {
+                                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
+
+                                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
+                                mChildSmCallback.onFatalIkeSessionError(
+                                        false /*needsNotifyRemote*/);
+
+                            } else {
+                                mChildSmCallback.onOutboundPayloadsReady(
+                                        EXCHANGE_TYPE_INFORMATIONAL,
+                                        true /*isResp*/,
+                                        new LinkedList<>(),
+                                        ChildSessionStateMachine.this);
+                                mSimulDeleteDetected = true;
+                            }
+                            return HANDLED;
+                        case IKE_EXCHANGE_SUBTYPE_REKEY_CHILD:
+                            replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
+                            return HANDLED;
+                        default:
+                            throw new IllegalArgumentException(
+                                    "Invalid exchange subtype for Child Session: "
+                                            + req.exchangeSubtype);
+                    }
                 default:
                     return NOT_HANDLED;
             }

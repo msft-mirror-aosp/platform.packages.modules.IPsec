@@ -17,6 +17,9 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_DELETE;
@@ -355,7 +358,10 @@ public final class ChildSessionStateMachineTest {
         // Validate outbound payload list
         verify(mMockChildSessionSmCallback)
                 .onOutboundPayloadsReady(
-                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA), eq(false), mPayloadListCaptor.capture());
+                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA),
+                        eq(false),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
 
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
         assertNotNull(
@@ -422,7 +428,10 @@ public final class ChildSessionStateMachineTest {
                         instanceof ChildSessionStateMachine.DeleteChildLocalDelete);
         verify(mMockChildSessionSmCallback)
                 .onOutboundPayloadsReady(
-                        eq(EXCHANGE_TYPE_INFORMATIONAL), eq(false), mPayloadListCaptor.capture());
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(false),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
 
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
         assertEquals(1, reqPayloadList.size());
@@ -443,6 +452,61 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Closed);
+    }
+
+    @Test
+    public void testSimultaneousDeleteChild() throws Exception {
+        setupIdleStateMachine();
+
+        mChildSessionStateMachine.deleteChildSession();
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(true),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
+        assertTrue(respPayloadList.isEmpty());
+
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Closed);
+    }
+
+    @Test
+    public void testReplyRekeyRequestDuringDeletion() throws Exception {
+        setupIdleStateMachine();
+
+        mChildSessionStateMachine.deleteChildSession();
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, mock(List.class));
+        mLooper.dispatchAll();
+
+        // Verify outbound response to Rekey Child request
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(true),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
+        assertEquals(1, respPayloadList.size());
+
+        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) respPayloadList.get(0);
+        assertEquals(ERROR_TYPE_TEMPORARY_FAILURE, notifyPayload.notifyType);
+        assertEquals(0, notifyPayload.notifyData.length);
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.DeleteChildLocalDelete);
     }
 
     @Test
