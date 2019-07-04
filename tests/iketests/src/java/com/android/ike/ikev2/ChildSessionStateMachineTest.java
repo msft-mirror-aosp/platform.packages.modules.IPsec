@@ -51,6 +51,8 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -134,6 +136,8 @@ public final class ChildSessionStateMachineTest {
 
     private SaProposal mMockNegotiatedProposal;
 
+    private Handler mUserCbHandler;
+    private IChildSessionCallback mMockChildSessionCallback;
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
     private ArgumentCaptor<ChildSaRecordConfig> mChildSaRecordConfigCaptor =
@@ -156,6 +160,8 @@ public final class ChildSessionStateMachineTest {
 
     @Before
     public void setup() throws Exception {
+        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+
         mIkePrf =
                 IkeMacPrf.create(
                         new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
@@ -168,6 +174,8 @@ public final class ChildSessionStateMachineTest {
 
         mMockNegotiatedProposal = mock(SaProposal.class);
 
+        mUserCbHandler = new Handler();
+        mMockChildSessionCallback = mock(IChildSessionCallback.class);
         mChildSessionOptions = buildChildSessionOptions();
 
         // Setup thread and looper
@@ -178,12 +186,9 @@ public final class ChildSessionStateMachineTest {
                         mContext,
                         mMockIpSecManager,
                         mChildSessionOptions,
-                        mMockChildSessionSmCallback,
-                        LOCAL_ADDRESS,
-                        REMOTE_ADDRESS,
-                        mMockUdpEncapSocket,
-                        mIkePrf,
-                        SK_D);
+                        mUserCbHandler,
+                        mMockChildSessionCallback,
+                        mMockChildSessionSmCallback);
         mChildSessionStateMachine.setDbg(true);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
 
@@ -280,6 +285,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
     }
 
     private void verifyInitCreateChildResp(
@@ -336,7 +342,13 @@ public final class ChildSessionStateMachineTest {
                 .thenReturn(mSpyCurrentChildSaRecord);
 
         mChildSessionStateMachine.handleFirstChildExchange(
-                mFirstSaReqPayloads, mFirstSaRespPayloads);
+                mFirstSaReqPayloads,
+                mFirstSaRespPayloads,
+                LOCAL_ADDRESS,
+                REMOTE_ADDRESS,
+                mMockUdpEncapSocket,
+                mIkePrf,
+                SK_D);
         mLooper.dispatchAll();
 
         verifyInitCreateChildResp(mFirstSaReqPayloads, mFirstSaRespPayloads);
@@ -349,7 +361,8 @@ public final class ChildSessionStateMachineTest {
         when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
                 .thenReturn(mSpyCurrentChildSaRecord);
 
-        mChildSessionStateMachine.createChildSession();
+        mChildSessionStateMachine.createChildSession(
+                LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
         mLooper.dispatchAll();
 
         // Validate outbound payload list
