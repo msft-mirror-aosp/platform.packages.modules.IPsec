@@ -43,6 +43,7 @@ import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
@@ -120,23 +121,29 @@ public class ChildSessionStateMachine extends StateMachine {
     /** User provided configurations. */
     private final ChildSessionOptions mChildSessionOptions;
 
+    private final Handler mUserCbHandler;
+    private final IChildSessionCallback mUserCallback;
+
     /** Callback to notify IKE Session the state changes. */
     private final IChildSessionSmCallback mChildSmCallback;
 
     // TODO: Also store ChildSessionCallback for notifying users.
 
     /** Local address assigned on device. */
-    private final InetAddress mLocalAddress;
+    private InetAddress mLocalAddress;
     /** Remote address configured by users. */
-    private final InetAddress mRemoteAddress;
+    private InetAddress mRemoteAddress;
 
     /**
      * UDP-Encapsulated socket that allows IPsec traffic to pass through a NAT. Null if UDP
      * encapsulation is not needed.
      */
-    @Nullable private final UdpEncapsulationSocket mUdpEncapSocket;
+    @Nullable private UdpEncapsulationSocket mUdpEncapSocket;
 
-    private final IkeMacPrf mIkePrf;
+    /** Crypto parameters. Updated upon initial negotiation or IKE SA rekey. */
+    private IkeMacPrf mIkePrf;
+
+    private byte[] mSkD;
 
     /** Package private SaProposal that represents the negotiated Child SA proposal. */
     @VisibleForTesting SaProposal mSaProposal;
@@ -149,8 +156,6 @@ public class ChildSessionStateMachine extends StateMachine {
     private IkeCipher mChildCipher;
     private IkeMacIntegrity mChildIntegrity;
 
-    /** SK_d is renewed when IKE SA is rekeyed. */
-    private byte[] mSkD;
 
     /** Package private */
     @VisibleForTesting ChildSaRecord mCurrentChildSaRecord;
@@ -161,31 +166,35 @@ public class ChildSessionStateMachine extends StateMachine {
     @VisibleForTesting final State mIdle = new Idle();
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
 
-    /** Package private */
+    /**
+     * Builds a new uninitialized ChildSessionStateMachine
+     *
+     * <p>Upon creation, this state machine will await either the handleFirstChildExchange
+     * (IKE_AUTH), or the createChildSession (Additional child creation beyond the first child) to
+     * be called, both of which must pass keying and SA information.
+     *
+     * <p>This two-stage initialization is required to allow race-free user interaction with the IKE
+     * Session keyed on the child state machine callbacks.
+     *
+     * <p>Package private
+     */
     ChildSessionStateMachine(
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
             ChildSessionOptions sessionOptions,
-            IChildSessionSmCallback childSmCallback,
-            InetAddress localAddress,
-            InetAddress remoteAddress,
-            UdpEncapsulationSocket udpEncapSocket,
-            IkeMacPrf ikePrf,
-            byte[] skD) {
+            Handler userCbHandler,
+            IChildSessionCallback userCallback,
+            IChildSessionSmCallback childSmCallback) {
         super(TAG, looper);
 
         mContext = context;
         mIpSecManager = ipSecManager;
-
         mChildSessionOptions = sessionOptions;
-        mChildSmCallback = childSmCallback;
 
-        mLocalAddress = localAddress;
-        mRemoteAddress = remoteAddress;
-        mUdpEncapSocket = udpEncapSocket;
-        mIkePrf = ikePrf;
-        mSkD = skD;
+        mUserCbHandler = userCbHandler;
+        mUserCallback = userCallback;
+        mChildSmCallback = childSmCallback;
 
         addState(mInitial);
         addState(mCreateChildLocalCreate);
@@ -232,6 +241,14 @@ public class ChildSessionStateMachine extends StateMachine {
         void onProcedureFinished(ChildSessionStateMachine childSession);
 
         /**
+         * Notify the IKE Session State Machine that this Child has been fully shut down.
+         *
+         * <p>This method MUST be called after the user callbacks have been fired, and MUST always
+         * be called before the state machine can shut down.
+         */
+        void onChildSessionClosed(IChildSessionCallback userCallbacks);
+
+        /**
          * Notify that a Child procedure has been finished and the IKE Session should close itself
          * because of a fatal error.
          *
@@ -249,10 +266,26 @@ public class ChildSessionStateMachine extends StateMachine {
      *
      * @param reqPayloads SA negotiation related payloads in IKE_AUTH request.
      * @param respPayloads SA negotiation related payloads in IKE_AUTH response.
+     * @param localAddress The local (outer) address of the Child Session.
+     * @param remoteAddress The remote (outer) address of the Child Session.
+     * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
+     * @param ikePrf The pseudo-random function to use for key derivation
+     * @param skD The key for which to derive new keying information from.
      */
     public void handleFirstChildExchange(
-            List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
+            List<IkePayload> reqPayloads,
+            List<IkePayload> respPayloads,
+            InetAddress localAddress,
+            InetAddress remoteAddress,
+            UdpEncapsulationSocket udpEncapSocket,
+            IkeMacPrf ikePrf,
+            byte[] skD) {
         registerProvisionalChildSession(respPayloads);
+        this.mLocalAddress = localAddress;
+        this.mRemoteAddress = remoteAddress;
+        this.mUdpEncapSocket = udpEncapSocket;
+        this.mIkePrf = ikePrf;
+        this.mSkD = skD;
 
         sendMessage(
                 CMD_HANDLE_FIRST_CHILD_EXCHANGE,
@@ -264,8 +297,25 @@ public class ChildSessionStateMachine extends StateMachine {
      *
      * <p>This method is called synchronously from IkeStateMachine. It proxies the synchronous call
      * as an asynchronous job to the ChildStateMachine handler.
+     *
+     * @param localAddress The local (outer) address from which traffic will originate.
+     * @param remoteAddress The remote (outer) address to which traffic will be sent.
+     * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
+     * @param ikePrf The pseudo-random function to use for key derivation
+     * @param skD The key for which to derive new keying information from.
      */
-    public void createChildSession() {
+    public void createChildSession(
+            InetAddress localAddress,
+            InetAddress remoteAddress,
+            UdpEncapsulationSocket udpEncapSocket,
+            IkeMacPrf ikePrf,
+            byte[] skD) {
+        this.mLocalAddress = localAddress;
+        this.mRemoteAddress = remoteAddress;
+        this.mUdpEncapSocket = udpEncapSocket;
+        this.mIkePrf = ikePrf;
+        this.mSkD = skD;
+
         sendMessage(CMD_LOCAL_REQUEST_CREATE_CHILD);
     }
 
@@ -1217,6 +1267,7 @@ public class ChildSessionStateMachine extends StateMachine {
     @Override
     protected void onQuitting() {
         mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
+        mChildSmCallback.onChildSessionClosed(mUserCallback);
     }
 
     // TODO: Add states to support deleting Child SA and rekeying Child SA.
