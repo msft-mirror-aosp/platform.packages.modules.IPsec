@@ -834,8 +834,8 @@ public class ChildSessionStateMachine extends StateMachine {
             List<IkePayload> payloadList = new ArrayList<>(5);
 
             payloadList.add(
-                    IkeSaPayload.createChildSaPayload(
-                            isResp, saProposals, ipSecManager, localAddress));
+                    IkeSaPayload.createChildSaRequestPayload(
+                            saProposals, ipSecManager, localAddress));
             payloadList.add(new IkeTsPayload(true /*isInitiator*/, initTs));
             payloadList.add(new IkeTsPayload(false /*isInitiator*/, respTs));
             payloadList.add(new IkeNoncePayload());
@@ -949,8 +949,8 @@ public class ChildSessionStateMachine extends StateMachine {
                 // valid {@link ChildProposal} both with a {@link SecurityParameterIndex} allocated
                 // inside.
                 childProposalPair =
-                        respSaPayload.getVerifiedNegotiatedChildProposalPair(
-                                reqSaPayload, ipSecManager, remoteAddress);
+                        IkeSaPayload.getVerifiedNegotiatedChildProposalPair(
+                                reqSaPayload, respSaPayload, ipSecManager, remoteAddress);
                 SaProposal saProposal = childProposalPair.second.saProposal;
 
                 validateKePayloads(inboundPayloads, isLocalInit /*isResp*/, saProposal);
