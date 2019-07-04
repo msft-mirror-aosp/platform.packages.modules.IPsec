@@ -45,11 +45,11 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class EapSimStateTest {
-    private static final int EAP_CODE_REQUEST = 1;
-    private static final int EAP_NOTIFICATION = 2;
-    private static final int EAP_TYPE_SIM = 18;
-    private static final String NOTIFICATION_MESSAGE = "test";
-    private static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
+    protected static final int EAP_CODE_REQUEST = 1;
+    protected static final int EAP_NOTIFICATION = 2;
+    protected static final int EAP_TYPE_SIM = 18;
+    protected static final String NOTIFICATION_MESSAGE = "test";
+    protected static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
 
     protected TelephonyManager mMockTelephonyManager;
     protected EapSimTypeDataDecoder mMockEapSimTypeDataDecoder;
