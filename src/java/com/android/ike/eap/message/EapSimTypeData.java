@@ -160,7 +160,7 @@ public class EapSimTypeData {
          * DecodeResult represents the result from calling EapSimTypeDataDecoder.decode(). It will
          * contain either a decoded EapSimTypeData or the relevant AtClientErrorCode.
          */
-        public class DecodeResult {
+        public static class DecodeResult {
             public final EapSimTypeData eapSimTypeData;
             public final AtClientErrorCode atClientErrorCode;
 

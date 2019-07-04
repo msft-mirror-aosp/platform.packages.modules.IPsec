@@ -28,12 +28,9 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
-
-import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtAnyIdReq;
@@ -42,7 +39,6 @@ import com.android.ike.eap.message.EapSimAttribute.AtMac;
 import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimTypeData;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
 import org.junit.Before;
@@ -51,20 +47,16 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 
-public class EapSimStartStateTest {
+public class EapSimStartStateTest extends EapSimStateTest {
     private static final String IMSI = "123456789012345";
     private static final String IDENTITY = "1" + IMSI;
 
-    private TelephonyManager mMockTelephonyManager;
-    private EapSimMethodStateMachine mEapSimMethodStateMachine;
     private StartState mStartState;
     private LinkedHashMap<Integer, EapSimAttribute> mAttributes;
 
     @Before
     public void setUp() {
-        mMockTelephonyManager = mock(TelephonyManager.class);
-        mEapSimMethodStateMachine = new EapSimMethodStateMachine(
-                mMockTelephonyManager, new EapSimTypeDataDecoder());
+        super.setUp();
         mStartState = mEapSimMethodStateMachine.new StartState(null);
 
         mAttributes = new LinkedHashMap<>();
