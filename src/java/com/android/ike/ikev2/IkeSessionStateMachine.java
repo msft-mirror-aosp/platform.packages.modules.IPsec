@@ -32,6 +32,8 @@ import android.annotation.IntDef;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
+import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.system.ErrnoException;
@@ -71,6 +73,7 @@ import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IkeProposal;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
@@ -199,6 +202,13 @@ public class IkeSessionStateMachine extends StateMachine {
     private final Context mContext;
     private final IpSecManager mIpSecManager;
     private final IkeLocalRequestScheduler mScheduler;
+    private final Handler mUserCbHandler;
+    private final IIkeSessionCallback mIkeSessionCallbacks;
+
+    @VisibleForTesting
+    @GuardedBy("mChildCbToSessions")
+    final HashMap<IChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
+            new HashMap<>();
 
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
@@ -273,7 +283,10 @@ public class IkeSessionStateMachine extends StateMachine {
             Context context,
             IpSecManager ipSecManager,
             IkeSessionOptions ikeOptions,
-            ChildSessionOptions firstChildOptions) {
+            ChildSessionOptions firstChildOptions,
+            Handler userCbHandler,
+            IIkeSessionCallback ikeSessionCallback,
+            IChildSessionCallback firstChildSessionCallback) {
         super(TAG, looper);
 
         mIkeSessionOptions = ikeOptions;
@@ -285,7 +298,12 @@ public class IkeSessionStateMachine extends StateMachine {
         mContext = context;
         mIpSecManager = ipSecManager;
 
-        ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth).initializeAuthParams(firstChildOptions);
+        mUserCbHandler = userCbHandler;
+        mIkeSessionCallbacks = ikeSessionCallback;
+
+        ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth)
+                .initializeAuthParams(firstChildOptions, firstChildSessionCallback);
+        registerChildSessionCallback(firstChildOptions, firstChildSessionCallback);
 
         addState(mInitial);
         addState(mClosed);
@@ -310,6 +328,75 @@ public class IkeSessionStateMachine extends StateMachine {
                             sendMessageAtFrontOfQueue(CMD_EXECUTE_LOCAL_REQ, localReq);
                         });
         // TODO: Start the StateMachine.
+    }
+
+    private boolean hasChildSessionCallback(IChildSessionCallback callback) {
+        synchronized (mChildCbToSessions) {
+            return mChildCbToSessions.containsKey(callback);
+        }
+    }
+
+    /**
+     * Synchronously builds and registers a child session.
+     *
+     * <p>Setup of the child state machines MUST be done in two stages to ensure that if an external
+     * caller calls openChildSession and then calls closeChildSession before the state machine has
+     * gotten a chance to negotiate the sessions, a valid callback mapping exists (and does not
+     * throw an exception that the callback was not found).
+     *
+     * <p>In the edge case where a child creation fails, and deletes itself, all pending requests
+     * will no longer find the session in the map. Assume it has errored/failed, and skip/ignore.
+     * This is safe, as closeChildSession() (previously) validated that the callback was registered.
+     */
+    @VisibleForTesting
+    void registerChildSessionCallback(
+            ChildSessionOptions childOptions, IChildSessionCallback callbacks) {
+        ChildSessionStateMachine childSession =
+                ChildSessionStateMachineFactory.makeChildSessionStateMachine(
+                        getHandler().getLooper(),
+                        mContext,
+                        childOptions,
+                        mUserCbHandler,
+                        callbacks,
+                        new ChildSessionSmCallback());
+        synchronized (mChildCbToSessions) {
+            mChildCbToSessions.put(callbacks, childSession);
+        }
+    }
+
+    void openChildSession(
+            ChildSessionOptions childSessionOptions, IChildSessionCallback childSessionCallback) {
+        if (childSessionCallback == null) {
+            throw new IllegalArgumentException("Child Session Callback must be provided");
+        }
+
+        if (hasChildSessionCallback(childSessionCallback)) {
+            throw new IllegalArgumentException("Child Session Callback handle already registered");
+        }
+
+        registerChildSessionCallback(childSessionOptions, childSessionCallback);
+        sendMessage(
+                CMD_LOCAL_REQUEST_CREATE_CHILD,
+                new ChildLocalRequest(
+                        CMD_LOCAL_REQUEST_CREATE_CHILD, childSessionCallback, childSessionOptions));
+    }
+
+    void closeChildSession(IChildSessionCallback childSessionCallback) {
+        if (childSessionCallback == null) {
+            throw new IllegalArgumentException("Child Session Callback must be provided");
+        }
+
+        if (!hasChildSessionCallback(childSessionCallback)) {
+            throw new IllegalArgumentException("Child Session Callback handle not registered");
+        }
+
+        sendMessage(
+                CMD_LOCAL_REQUEST_DELETE_CHILD,
+                new ChildLocalRequest(CMD_LOCAL_REQUEST_DELETE_CHILD, childSessionCallback, null));
+    }
+
+    void closeSession() {
+        sendMessage(CMD_LOCAL_REQUEST_DELETE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
     }
 
     // TODO: Add interfaces to initiate IKE exchanges.
@@ -451,6 +538,7 @@ public class IkeSessionStateMachine extends StateMachine {
     /** Class to group parameters for negotiating the first Child SA. */
     private static class FirstChildNegotiationData {
         public final ChildSessionOptions childSessionOptions;
+        public final IChildSessionCallback childSessionCallback;
         public final List<IkePayload> reqPayloads;
         public final List<IkePayload> respPayloads;
 
@@ -458,9 +546,11 @@ public class IkeSessionStateMachine extends StateMachine {
 
         FirstChildNegotiationData(
                 ChildSessionOptions childSessionOptions,
+                IChildSessionCallback childSessionCallback,
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads) {
             this.childSessionOptions = childSessionOptions;
+            this.childSessionCallback = childSessionCallback;
             this.reqPayloads = reqPayloads;
             this.respPayloads = respPayloads;
         }
@@ -512,6 +602,13 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void onProcedureFinished(ChildSessionStateMachine childSession) {
             sendMessage(CMD_CHILD_PROCEDURE_FINISHED, childSession);
+        }
+
+        @Override
+        public void onChildSessionClosed(IChildSessionCallback userCallbacks) {
+            synchronized (mChildCbToSessions) {
+                mChildCbToSessions.remove(userCallbacks);
+            }
         }
 
         @Override
@@ -603,7 +700,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // Queue local requests, and trigger next procedure
                     if (message.what >= CMD_LOCAL_REQUEST_BASE
                             && message.what < CMD_LOCAL_REQUEST_BASE + CMD_CATEGORY_SIZE) {
-                        handleLocalRequest(message.what);
+                        handleLocalRequest(message.what, (LocalRequest) message.obj);
 
                         // Synchronously calls through to the scheduler callback, which will
                         // post the CMD_EXECUTE_LOCAL_REQ to the front of the queue, ensuring
@@ -623,7 +720,9 @@ public class IkeSessionStateMachine extends StateMachine {
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     transitionTo(mDeleteIkeLocalDelete);
                     break;
-                case CMD_LOCAL_REQUEST_CREATE_CHILD:
+                case CMD_LOCAL_REQUEST_CREATE_CHILD: // fallthrough
+                case CMD_LOCAL_REQUEST_REKEY_CHILD: // fallthrough
+                case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     deferMessage(message);
                     transitionTo(mChildProcedureOngoing);
                     break;
@@ -779,18 +878,36 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     private abstract class LocalRequestQueuer extends State {
-        protected void handleLocalRequest(int requestVal) {
+        /**
+         * Reroutes all local requests to the scheduler
+         *
+         * @param requestVal The command value of the request
+         * @param req The instance of the LocalRequest to be queued.
+         */
+        protected void handleLocalRequest(int requestVal, LocalRequest req) {
             switch (requestVal) {
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
-                    mScheduler.addRequestAtFront(new LocalRequest(requestVal));
+                    mScheduler.addRequestAtFront(req);
                     return;
 
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Fallthrough
-                case CMD_LOCAL_REQUEST_INFO: // Fallthrough
+                case CMD_LOCAL_REQUEST_INFO:
+                    mScheduler.addRequest(req);
+                    return;
+
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
-                    mScheduler.addRequest(new LocalRequest(requestVal));
+                    if (!(req instanceof ChildLocalRequest)) {
+                        throw new IllegalArgumentException(
+                                "Local child request issued without valid ChildLocalRequest");
+                    }
+                    ChildLocalRequest childReq = (ChildLocalRequest) req;
+                    if (childReq.procedureType != requestVal) {
+                        throw new IllegalArgumentException(
+                                "ChildLocalRequest procedure type was invalid");
+                    }
+                    mScheduler.addRequest(childReq);
                     return;
 
                 default:
@@ -820,7 +937,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     // Queue local requests, and trigger next procedure
                     if (message.what >= CMD_LOCAL_REQUEST_BASE
                             && message.what < CMD_LOCAL_REQUEST_BASE + CMD_CATEGORY_SIZE) {
-                        handleLocalRequest(message.what);
+                        handleLocalRequest(message.what, (LocalRequest) message.obj);
                         return HANDLED;
                     }
                     return NOT_HANDLED;
@@ -1272,9 +1389,22 @@ public class IkeSessionStateMachine extends StateMachine {
                 case CMD_HANDLE_FIRST_CHILD_NEGOTIATION:
                     FirstChildNegotiationData childData = (FirstChildNegotiationData) message.obj;
 
-                    mChildInLocalProcedure = buildChildSession(childData.childSessionOptions);
+                    mChildInLocalProcedure = getChildSession(childData.childSessionCallback);
+                    if (mChildInLocalProcedure == null) {
+                        Log.wtf(TAG, "First child not found.");
+
+                        // TODO: Kill session, fire callbacks, and exit state machine.
+                        return HANDLED;
+                    }
+
                     mChildInLocalProcedure.handleFirstChildExchange(
-                            childData.reqPayloads, childData.respPayloads);
+                            childData.reqPayloads,
+                            childData.respPayloads,
+                            mLocalAddress,
+                            mRemoteAddress,
+                            getEncapSocketIfNeeded(),
+                            mIkePrf,
+                            mCurrentIkeSaRecord.getSkD());
                     return HANDLED;
                 case CMD_EXECUTE_LOCAL_REQ:
                     executeLocalRequest((ChildLocalRequest) message.obj);
@@ -1290,30 +1420,41 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
-        private ChildSessionStateMachine buildChildSession(ChildSessionOptions childOptions) {
+        private ChildSessionStateMachine getChildSession(IChildSessionCallback callbacks) {
+            synchronized (mChildCbToSessions) {
+                return mChildCbToSessions.get(callbacks);
+            }
+        }
+
+        private UdpEncapsulationSocket getEncapSocketIfNeeded() {
             boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
 
-            // TODO: Also pass IChildSessionCallback to ChildSessionStateMachine.
-            ChildSessionStateMachine childSession =
-                    ChildSessionStateMachineFactory.makeChildSessionStateMachine(
-                            getHandler().getLooper(),
-                            mContext,
-                            childOptions,
-                            new ChildSessionSmCallback(),
-                            mLocalAddress,
-                            mRemoteAddress,
-                            (isNatDetected ? mIkeSessionOptions.getUdpEncapsulationSocket() : null),
-                            mIkePrf,
-                            mCurrentIkeSaRecord.getSkD());
-            return childSession;
+            return (isNatDetected ? mIkeSessionOptions.getUdpEncapsulationSocket() : null);
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
             switch (req.procedureType) {
-                    // TODO: Also support Delete Child and Rekey Child.
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
-                    mChildInLocalProcedure = buildChildSession(req.childSessionOptions);
-                    mChildInLocalProcedure.createChildSession();
+                    mChildInLocalProcedure = getChildSession(req.childSessionCallback);
+                    if (mChildInLocalProcedure == null) {
+                        Log.wtf(TAG, "Additional child state machine not found during creation.");
+
+                        // TODO: Fire child failed callback, and recover.
+                        break;
+                    }
+
+                    mChildInLocalProcedure.createChildSession(
+                            mLocalAddress,
+                            mRemoteAddress,
+                            getEncapSocketIfNeeded(),
+                            mIkePrf,
+                            mCurrentIkeSaRecord.getSkD());
+                    break;
+                case CMD_LOCAL_REQUEST_REKEY_CHILD:
+                    // TODO: Implement this.
+                    break;
+                case CMD_LOCAL_REQUEST_DELETE_CHILD:
+                    // TODO: Implement this.
                     break;
                 default:
                     Log.wtf(TAG, "Invalid Child procedure type: " + req.procedureType);
@@ -1821,14 +1962,16 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     class CreateIkeLocalIkeAuth extends BusyState {
         private ChildSessionOptions mFirstChildSessionOptions;
+        private IChildSessionCallback mFirstChildCallbacks;
 
         private Retransmitter mRetransmitter;
         private boolean mUseEap;
 
         /** This method set parameters for negotiating first Child SA during IKE AUTH exchange. */
         @VisibleForTesting
-        void initializeAuthParams(ChildSessionOptions childOptions) {
+        void initializeAuthParams(ChildSessionOptions childOptions, IChildSessionCallback childCb) {
             mFirstChildSessionOptions = childOptions;
+            mFirstChildCallbacks = childCb;
             // TODO: Also assign mFirstChildCallback
         }
 
@@ -1889,6 +2032,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                     CMD_HANDLE_FIRST_CHILD_NEGOTIATION,
                                     new FirstChildNegotiationData(
                                             mFirstChildSessionOptions,
+                                            mFirstChildCallbacks,
                                             childReqList,
                                             childRespList)));
 
@@ -2502,6 +2646,8 @@ public class IkeSessionStateMachine extends StateMachine {
                 mIkeSaRecordAwaitingRemoteDel.close();
                 mIkeSaRecordAwaitingRemoteDel = null;
             }
+
+            // TODO: Update sk_D, prf of all child sessions
         }
     }
 
