@@ -16,8 +16,7 @@
 package com.android.ike.ikev2;
 
 import android.content.Context;
-
-import java.util.concurrent.Executor;
+import android.os.Handler;
 
 /** This class contains methods for managing IKE sessions. */
 public final class IkeManager {
@@ -33,8 +32,7 @@ public final class IkeManager {
      *     configurations.
      * @param firstChildSessionOptions the {@link ChildSessionOptions} that contains acceptable
      *     first Child Session configurations.
-     * @param callbackExecutor the {@link Executor} upon which all callbacks will be executed. This
-     *     method will enforce that these are executed sequentially.
+     * @param userCbHandler the {@link Handler} upon which all callbacks will be posted.
      * @param ikeSessionCallback the {@link IIkeSessionCallback} interface to notify users the state
      *     changes of the IKE Session.
      * @param firstChildSessionCallback the {@link IChildSessionCallback} interface to notify users
@@ -45,14 +43,14 @@ public final class IkeManager {
             Context context,
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
-            Executor callbackExecutor,
+            Handler userCbHandler,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
         return new IkeSession(
                 context,
                 ikeSessionOptions,
                 firstChildSessionOptions,
-                callbackExecutor,
+                userCbHandler,
                 ikeSessionCallback,
                 firstChildSessionCallback);
     }
