@@ -27,6 +27,7 @@ import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IV;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_RAND;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CHALLENGE;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
@@ -233,6 +234,13 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
             return buildResponseMessage(EAP_SIM_START, message.eapIdentifier, responseAttributes);
         }
 
+        /**
+         * Returns true iff the given EapSimTypeData meets the following conditions:
+         *  - contains an AT_VERSION_LIST attribute
+         *  - contains at most one of AT_PERMANENT_ID_REQ, AT_ANY_ID_REQ, or AT_FULLAUTH_D_REQ
+         *      attributes
+         *  - does not contain AT_MAC, AT_IV, or AT_ENCR_DATA attributes
+         */
         @VisibleForTesting
         boolean isValidStartAttributes(EapSimTypeData eapSimTypeData) {
             // must contain: version list
@@ -347,9 +355,13 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
             return null;
         }
 
-        private boolean isValidChallengeAttributes(EapSimTypeData eapSimTypeData) {
-            // TODO(b/136278476): implement isValidChallengeAttributes
-            return false;
+        /**
+         * Returns true iff the given EapSimTypeData contains both AT_RAND and AT_MAC attributes.
+         */
+        @VisibleForTesting
+        boolean isValidChallengeAttributes(EapSimTypeData eapSimTypeData) {
+            Set<Integer> attrs = eapSimTypeData.attributeMap.keySet();
+            return attrs.contains(EAP_AT_RAND) && attrs.contains(EAP_AT_MAC);
         }
     }
 
