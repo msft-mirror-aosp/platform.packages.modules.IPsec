@@ -17,32 +17,35 @@ package com.android.ike.ikev2;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.os.Handler;
 import android.os.HandlerThread;
 
 import com.android.internal.annotations.VisibleForTesting;
 
-import java.util.concurrent.Executor;
+import dalvik.system.CloseGuard;
 
 /** This class represents an IKE Session management object. */
-public final class IkeSession extends IkeSessionStateMachine implements AutoCloseable {
-    // TODO: Add a CloseGuard
+public final class IkeSession implements AutoCloseable {
+    private final CloseGuard mCloseGuard = CloseGuard.get();
 
+    @VisibleForTesting final IkeSessionStateMachine mIkeSessionStateMachine;
+
+    // TODO: Switch from using handlers to a serialized executor.
     /** Package private */
     IkeSession(
             Context context,
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
-            Executor executor,
+            Handler userCbHandler,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
-
         this(
                 IkeThreadHolder.IKE_WORKER_THREAD,
                 context,
                 (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                 ikeSessionOptions,
                 firstChildSessionOptions,
-                executor,
+                userCbHandler,
                 ikeSessionCallback,
                 firstChildSessionCallback);
     }
@@ -55,17 +58,28 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
             IpSecManager ipSecManager,
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
-            Executor executor,
+            Handler userCbHandler,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
+        mIkeSessionStateMachine =
+                new IkeSessionStateMachine(
+                        handlerThread.getLooper(),
+                        context,
+                        ipSecManager,
+                        ikeSessionOptions,
+                        firstChildSessionOptions,
+                        userCbHandler,
+                        ikeSessionCallback,
+                        firstChildSessionCallback);
 
-        super(
-                handlerThread.getLooper(),
-                context,
-                ipSecManager,
-                ikeSessionOptions,
-                firstChildSessionOptions);
-        // TODO: Change the super constructor to take executor and callbacks
+        mCloseGuard.open("open");
+    }
+
+    @Override
+    public void finalize() {
+        if (mCloseGuard != null) {
+            mCloseGuard.warnIfOpen();
+        }
     }
 
     /** Initialization-on-demand holder */
@@ -94,7 +108,7 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
      */
     public void openChildSession(
             ChildSessionOptions childSessionOptions, IChildSessionCallback childSessionCallback) {
-        // TODO: Post a request for initiating a Create Child exchange on IKE worker thread.
+        mIkeSessionStateMachine.openChildSession(childSessionOptions, childSessionCallback);
     }
 
     /**
@@ -105,8 +119,7 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
      * @throws IllegalArgumentException if no Child Session found bound with this callback.
      */
     public void closeChildSession(IChildSessionCallback childSessionCallback) {
-        // TODO: Validate the callback and post a deletion request for the corresponding Child
-        // Session.
+        mIkeSessionStateMachine.closeChildSession(childSessionCallback);
     }
 
     /**
@@ -116,7 +129,8 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
      * Session before calling this method.
      */
     public void closeSafely() {
-        // TODO: Post a request for initiating a Delete IKE exchange on IKE worker thread.
+        mCloseGuard.close();
+        mIkeSessionStateMachine.closeSession();
     }
 
     /**
@@ -129,9 +143,8 @@ public final class IkeSession extends IkeSessionStateMachine implements AutoClos
      */
     @Override
     public void close() throws Exception {
-        // TODO: Post a request to send out a Delete IKE request on IKE worker thread and
-        // close this IKE Session.
-        // TODO: call mCloseGuard.close()
+        mCloseGuard.close();
+        mIkeSessionStateMachine.closeSession();
     }
 
     // TODO: Add methods to retrieve negotiable and non-negotiable configurations of IKE Session and

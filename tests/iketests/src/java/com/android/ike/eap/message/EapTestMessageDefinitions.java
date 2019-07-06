@@ -45,6 +45,8 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_SUCCESS_PACKET = hexStringToByteArray("03" + ID + "0004");
     public static final byte[] EAP_SIM_CLIENT_ERROR_RESPONSE =
             hexStringToByteArray("02" + ID + "000C120E000016010001");
+    public static final byte[] EAP_SIM_CLIENT_ERROR_INSUFFICIENT_CHALLENGES =
+            hexStringToByteArray("02" + ID + "000C120E000016010002");
 
     // EAP-SIM response containing SELECTED_VERSION (1) and IDENTITY attributes
     public static final byte[] EAP_SIM_RESPONSE_PACKET = hexStringToByteArray(

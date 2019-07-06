@@ -17,6 +17,9 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_DELETE;
@@ -48,6 +51,8 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -131,6 +136,8 @@ public final class ChildSessionStateMachineTest {
 
     private SaProposal mMockNegotiatedProposal;
 
+    private Handler mUserCbHandler;
+    private IChildSessionCallback mMockChildSessionCallback;
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
     private ArgumentCaptor<ChildSaRecordConfig> mChildSaRecordConfigCaptor =
@@ -153,6 +160,8 @@ public final class ChildSessionStateMachineTest {
 
     @Before
     public void setup() throws Exception {
+        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+
         mIkePrf =
                 IkeMacPrf.create(
                         new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
@@ -165,6 +174,8 @@ public final class ChildSessionStateMachineTest {
 
         mMockNegotiatedProposal = mock(SaProposal.class);
 
+        mUserCbHandler = new Handler();
+        mMockChildSessionCallback = mock(IChildSessionCallback.class);
         mChildSessionOptions = buildChildSessionOptions();
 
         // Setup thread and looper
@@ -175,12 +186,9 @@ public final class ChildSessionStateMachineTest {
                         mContext,
                         mMockIpSecManager,
                         mChildSessionOptions,
-                        mMockChildSessionSmCallback,
-                        LOCAL_ADDRESS,
-                        REMOTE_ADDRESS,
-                        mMockUdpEncapSocket,
-                        mIkePrf,
-                        SK_D);
+                        mUserCbHandler,
+                        mMockChildSessionCallback,
+                        mMockChildSessionSmCallback);
         mChildSessionStateMachine.setDbg(true);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
 
@@ -219,11 +227,8 @@ public final class ChildSessionStateMachineTest {
                         eq(LOCAL_ADDRESS.getHostAddress()), anyInt(), anyObject()))
                 .thenReturn(MockIpSecTestUtils.buildDummyIpSecSpiResponse(CURRENT_CHILD_SA_SPI_IN));
         IkeSaPayload reqSaPayload =
-                IkeSaPayload.createChildSaPayload(
-                        false /*isResp*/,
-                        mChildSessionOptions.getSaProposals(),
-                        mMockIpSecManager,
-                        LOCAL_ADDRESS);
+                IkeSaPayload.createChildSaRequestPayload(
+                        mChildSessionOptions.getSaProposals(), mMockIpSecManager, LOCAL_ADDRESS);
         mFirstSaReqPayloads.add(reqSaPayload);
 
         // Build a remotely generated SA payload whoes SPI resource has not been allocated.
@@ -280,6 +285,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
     }
 
     private void verifyInitCreateChildResp(
@@ -336,7 +342,13 @@ public final class ChildSessionStateMachineTest {
                 .thenReturn(mSpyCurrentChildSaRecord);
 
         mChildSessionStateMachine.handleFirstChildExchange(
-                mFirstSaReqPayloads, mFirstSaRespPayloads);
+                mFirstSaReqPayloads,
+                mFirstSaRespPayloads,
+                LOCAL_ADDRESS,
+                REMOTE_ADDRESS,
+                mMockUdpEncapSocket,
+                mIkePrf,
+                SK_D);
         mLooper.dispatchAll();
 
         verifyInitCreateChildResp(mFirstSaReqPayloads, mFirstSaRespPayloads);
@@ -349,13 +361,17 @@ public final class ChildSessionStateMachineTest {
         when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
                 .thenReturn(mSpyCurrentChildSaRecord);
 
-        mChildSessionStateMachine.createChildSession();
+        mChildSessionStateMachine.createChildSession(
+                LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
         mLooper.dispatchAll();
 
         // Validate outbound payload list
         verify(mMockChildSessionSmCallback)
                 .onOutboundPayloadsReady(
-                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA), eq(false), mPayloadListCaptor.capture());
+                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA),
+                        eq(false),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
 
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
         assertNotNull(
@@ -422,7 +438,10 @@ public final class ChildSessionStateMachineTest {
                         instanceof ChildSessionStateMachine.DeleteChildLocalDelete);
         verify(mMockChildSessionSmCallback)
                 .onOutboundPayloadsReady(
-                        eq(EXCHANGE_TYPE_INFORMATIONAL), eq(false), mPayloadListCaptor.capture());
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(false),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
 
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
         assertEquals(1, reqPayloadList.size());
@@ -443,6 +462,61 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Closed);
+    }
+
+    @Test
+    public void testSimultaneousDeleteChild() throws Exception {
+        setupIdleStateMachine();
+
+        mChildSessionStateMachine.deleteChildSession();
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(true),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
+        assertTrue(respPayloadList.isEmpty());
+
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Closed);
+    }
+
+    @Test
+    public void testReplyRekeyRequestDuringDeletion() throws Exception {
+        setupIdleStateMachine();
+
+        mChildSessionStateMachine.deleteChildSession();
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, mock(List.class));
+        mLooper.dispatchAll();
+
+        // Verify outbound response to Rekey Child request
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(true),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
+        assertEquals(1, respPayloadList.size());
+
+        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) respPayloadList.get(0);
+        assertEquals(ERROR_TYPE_TEMPORARY_FAILURE, notifyPayload.notifyType);
+        assertEquals(0, notifyPayload.notifyData.length);
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.DeleteChildLocalDelete);
     }
 
     @Test
