@@ -90,4 +90,19 @@ public class EapTestMessageDefinitions {
     public static final byte[] SHORT_TYPE_DATA = hexStringToByteArray("0A");
     public static final byte[] TYPE_DATA_INVALID_ATTRIBUTE =
             hexStringToByteArray("0A00007F01");
+
+    // RAND Challenge Results
+    public static final String SRES_1 = "11223344";
+    public static final byte[] SRES_1_BYTES = hexStringToByteArray(SRES_1);
+    public static final String SRES_2 = "44332211";
+    public static final byte[] SRES_2_BYTES = hexStringToByteArray(SRES_2);
+    public static final String KC_1 = "0102030405060708";
+    public static final byte[] KC_1_BYTES = hexStringToByteArray(KC_1);
+    public static final String KC_2 = "0807060504030201";
+    public static final byte[] KC_2_BYTES = hexStringToByteArray(KC_2);
+    public static final byte[] VALID_CHALLENGE_RESPONSE =
+            hexStringToByteArray("04" + SRES_1 + "08" + KC_1);
+    public static final byte[] CHALLENGE_RESPONSE_INVALID_SRES = hexStringToByteArray("03");
+    public static final byte[] CHALLENGE_RESPONSE_INVALID_KC =
+            hexStringToByteArray("04" + SRES_1 + "04");
 }
