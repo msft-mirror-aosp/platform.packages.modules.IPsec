@@ -30,6 +30,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -1795,7 +1796,7 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
-    public void testRetransmitterImmediatelySendsRequest() throws Exception {
+    public void testEncryptedRetransmitterImmediatelySendsRequest() throws Exception {
         setupIdleStateMachine();
 
         IkeMessage mockIkeMessage = mock(IkeMessage.class);
@@ -1805,8 +1806,8 @@ public final class IkeSessionStateMachineTest {
         when(mockIkeMessage.encryptAndEncode(any(), any(), eq(mSpyCurrentIkeSaRecord)))
                 .thenReturn(dummyBytes);
 
-        IkeSessionStateMachine.Retransmitter retransmitter =
-                mIkeSessionStateMachine.new Retransmitter(mockIkeMessage);
+        IkeSessionStateMachine.EncryptedRetransmitter retransmitter =
+                mIkeSessionStateMachine.new EncryptedRetransmitter(mockIkeMessage);
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyBytes), eq(REMOTE_ADDRESS));
     }
 
@@ -1864,8 +1865,8 @@ public final class IkeSessionStateMachineTest {
 
         // TODO: Verify callbacks
 
-        assertTrue(
-                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Closed);
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
     @Test
@@ -1946,8 +1947,8 @@ public final class IkeSessionStateMachineTest {
 
         // TODO: Verify callbacks
 
-        assertTrue(
-                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Closed);
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
     @Test

@@ -77,6 +77,7 @@ import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IkeProposal;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.ikev2.utils.Retransmitter;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
@@ -173,6 +174,8 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_HANDLE_FIRST_CHILD_NEGOTIATION = CMD_GENERAL_BASE + 6;
     /** Receive a local request to execute from the scheduler */
     static final int CMD_EXECUTE_LOCAL_REQ = CMD_GENERAL_BASE + 7;
+    /** Trigger a retransmission. */
+    public static final int CMD_RETRANSMIT = CMD_GENERAL_BASE + 8;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
@@ -676,9 +679,11 @@ public class IkeSessionStateMachine extends StateMachine {
     class Closed extends State {
         @Override
         public void enter() {
-            // TODO: Notify all child sessions that they have been force-closed
-            // TODO: Notify user that IKE Session is closed.
-            // TODO: Cleanup all state
+            // TODO: Notify all children to fire closed callbacks, cleanup all SaRecords.
+            // TODO: Notify user that IKE Session is closed, cleanup all SaRecords.
+            // TODO: Deregister from IkeSocket
+
+            quitNow();
         }
     }
 
@@ -960,6 +965,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     Log.wtf(TAG, "Invalid execute local request command in non-idle state");
                     return NOT_HANDLED;
 
+                case CMD_RETRANSMIT:
+                    triggerRetransmit();
+                    return HANDLED;
+
                 default:
                     // Queue local requests, and trigger next procedure
                     if (message.what >= CMD_LOCAL_REQUEST_BASE
@@ -969,6 +978,18 @@ public class IkeSessionStateMachine extends StateMachine {
                     }
                     return NOT_HANDLED;
             }
+        }
+
+        /**
+         * Handler for retransmission timer firing
+         *
+         * <p>By default, the trigger is logged and dropped. States that have a retransmitter should
+         * override this function, and proxy the call to Retransmitter.retransmit()
+         */
+        protected void triggerRetransmit() {
+            Log.wtf(
+                    TAG,
+                    "Retransmission trigger dropped in state: " + this.getClass().getSimpleName());
         }
 
         protected IkeSaRecord getIkeSaRecordForPacket(IkeHeader ikeHeader) {
@@ -1127,39 +1148,32 @@ public class IkeSessionStateMachine extends StateMachine {
      * <p>The Retransmitter class will automatically start transmission upon creation.
      */
     @VisibleForTesting
-    class Retransmitter {
-        private final IkeMessage mRetransmitMsg;
+    class EncryptedRetransmitter extends Retransmitter {
         private final IkeSaRecord mIkeSaRecord;
 
         @VisibleForTesting
-        Retransmitter(IkeMessage msg) {
+        EncryptedRetransmitter(IkeMessage msg) {
             this(mCurrentIkeSaRecord, msg);
         }
 
-        @VisibleForTesting
-        Retransmitter(IkeSaRecord ikeSaRecord, IkeMessage msg) {
+        private EncryptedRetransmitter(IkeSaRecord ikeSaRecord, IkeMessage msg) {
+            super(getHandler(), msg);
+
             mIkeSaRecord = ikeSaRecord;
-            mRetransmitMsg = msg;
 
-            sendAndStartRetransmission();
+            retransmit();
         }
 
-        private void sendAndStartRetransmission() {
-            if (mRetransmitMsg == null) {
-                return;
-            }
-
-            send(mRetransmitMsg);
+        @Override
+        public void send(IkeMessage msg) {
+            sendEncryptedIkeMessage(mIkeSaRecord, msg);
         }
 
-        protected void send(IkeMessage msg) {
-            sendEncryptedIkeMessage(mIkeSaRecord, mRetransmitMsg);
-        }
+        @Override
+        public void handleRetransmissionFailure() {
+            // Fire fatal error callbacks.
 
-        public void stopRetransmitting() {}
-
-        public IkeMessage getMessage() {
-            return mRetransmitMsg;
+            transitionTo(mClosed);
         }
     }
 
@@ -1694,6 +1708,11 @@ public class IkeSessionStateMachine extends StateMachine {
             mRetransmitter = new UnencryptedRetransmitter(request);
         }
 
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
         private IkeMessage buildRequest() {
             try {
                 return buildIkeInitReq();
@@ -1710,8 +1729,9 @@ public class IkeSessionStateMachine extends StateMachine {
                 case CMD_RECEIVE_IKE_PACKET:
                     handleReceivedIkePacket(message);
                     return HANDLED;
+
                 default:
-                    return NOT_HANDLED;
+                    return super.processMessage(message);
             }
         }
 
@@ -1986,14 +2006,23 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         private class UnencryptedRetransmitter extends Retransmitter {
-            UnencryptedRetransmitter(IkeMessage msg) {
-                super(null /* SaRecord */, msg);
+            private UnencryptedRetransmitter(IkeMessage msg) {
+                super(getHandler(), msg);
+
+                retransmit();
             }
 
             @Override
-            protected void send(IkeMessage msg) {
+            public void send(IkeMessage msg) {
                 // Sends unencrypted
                 mIkeSocket.sendIkePacket(msg.encode(), mRemoteAddress);
+            }
+
+            @Override
+            public void handleRetransmissionFailure() {
+                // Fire fatal error callbacks.
+
+                transitionTo(mClosed);
             }
         }
     }
@@ -2020,9 +2049,14 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
+        @Override
         public void enter() {
             super.enter();
-            mRetransmitter = new Retransmitter(buildRequest());
+            mRetransmitter = new EncryptedRetransmitter(buildRequest());
             mUseEap =
                     (IkeSessionOptions.IKE_AUTH_METHOD_EAP
                             == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
@@ -2453,7 +2487,7 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             // TODO: Give mRetransmitter an actual request once buildIkeRekeyReq is implemented
             try {
-                mRetransmitter = new Retransmitter(buildIkeRekeyReq());
+                mRetransmitter = new EncryptedRetransmitter(buildIkeRekeyReq());
             } catch (IOException e) {
                 // TODO: Schedule next rekey for RETRY_TIMEOUT
 
@@ -2540,7 +2574,7 @@ public class IkeSessionStateMachine extends StateMachine {
     class SimulRekeyIkeLocalCreate extends RekeyIkeLocalCreate {
         @Override
         public void enter() {
-            super.mRetransmitter = new Retransmitter(null);
+            mRetransmitter = new EncryptedRetransmitter(null);
             // TODO: Populate super.mRetransmitter from state initialization data
             // Do not send request.
         }
@@ -2568,8 +2602,9 @@ public class IkeSessionStateMachine extends StateMachine {
                         handleReceivedIkePacket(message);
                     }
                     return HANDLED;
+
                 default:
-                    return NOT_HANDLED;
+                    return super.processMessage(message);
             }
         }
 
@@ -2709,8 +2744,16 @@ public class IkeSessionStateMachine extends StateMachine {
                 mIkeSaRecordAwaitingLocalDel = mLocalInitNewIkeSaRecord;
                 mIkeSaRecordAwaitingRemoteDel = mCurrentIkeSaRecord;
             }
-            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
+            mRetransmitter =
+                    new EncryptedRetransmitter(
+                            mIkeSaRecordAwaitingLocalDel,
+                            buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
             // TODO: Set timer awaiting for delete request.
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
@@ -2770,8 +2813,13 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void enter() {
-            mRetransmitter = new Retransmitter(null);
+            mRetransmitter = new EncryptedRetransmitter(mIkeSaRecordAwaitingLocalDel, null);
             // TODO: Populate mRetransmitter from state initialization data.
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
@@ -2861,7 +2909,15 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             mIkeSaRecordSurviving = mLocalInitNewIkeSaRecord;
             mIkeSaRecordAwaitingLocalDel = mCurrentIkeSaRecord;
-            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
+            mRetransmitter =
+                    new EncryptedRetransmitter(
+                            mIkeSaRecordAwaitingLocalDel,
+                            buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
@@ -2912,7 +2968,12 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void enter() {
-            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mCurrentIkeSaRecord));
+            mRetransmitter = new EncryptedRetransmitter(buildIkeDeleteReq(mCurrentIkeSaRecord));
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
