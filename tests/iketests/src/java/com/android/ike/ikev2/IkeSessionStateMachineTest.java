@@ -385,7 +385,7 @@ public final class IkeSessionStateMachineTest {
 
     @Before
     public void setUp() throws Exception {
-        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+        if (Looper.myLooper() == null) Looper.prepare();
 
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
