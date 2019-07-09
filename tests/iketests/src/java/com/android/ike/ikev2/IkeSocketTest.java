@@ -141,7 +141,7 @@ public final class IkeSocketTest {
 
     @Test
     public void testGetAndCloseIkeSocket() throws Exception {
-        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+        if (Looper.myLooper() == null) Looper.prepare();
 
         IkeSocket ikeSocketOne = IkeSocket.getIkeSocket(mClientUdpEncapSocket);
         assertEquals(1, ikeSocketOne.mRefCount);
@@ -159,7 +159,7 @@ public final class IkeSocketTest {
 
     @Test
     public void testSendIkePacket() throws Exception {
-        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+        if (Looper.myLooper() == null) Looper.prepare();
 
         // Send IKE packet
         IkeSocket ikeSocket = IkeSocket.getIkeSocket(mClientUdpEncapSocket);
