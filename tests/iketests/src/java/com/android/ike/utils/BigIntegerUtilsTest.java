@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.ike.ikev2.utils;
+package com.android.ike.utils;
 
 import static org.junit.Assert.assertArrayEquals;
 

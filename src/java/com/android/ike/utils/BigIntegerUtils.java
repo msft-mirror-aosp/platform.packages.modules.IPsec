@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.ike.ikev2.utils;
+package com.android.ike.utils;
 
 import java.math.BigInteger;
 

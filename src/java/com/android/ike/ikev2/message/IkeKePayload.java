@@ -22,7 +22,7 @@ import com.android.ike.ikev2.IkeDhParams;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
-import com.android.ike.ikev2.utils.BigIntegerUtils;
+import com.android.ike.utils.BigIntegerUtils;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
