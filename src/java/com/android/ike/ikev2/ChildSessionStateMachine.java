@@ -165,6 +165,7 @@ public class ChildSessionStateMachine extends StateMachine {
     @VisibleForTesting final State mClosed = new Closed();
     @VisibleForTesting final State mIdle = new Idle();
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
+    @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
 
     /**
      * Builds a new uninitialized ChildSessionStateMachine
@@ -201,6 +202,7 @@ public class ChildSessionStateMachine extends StateMachine {
         addState(mClosed);
         addState(mIdle);
         addState(mDeleteChildLocalDelete);
+        addState(mDeleteChildRemoteDelete);
 
         setInitialState(mInitial);
     }
@@ -655,6 +657,17 @@ public class ChildSessionStateMachine extends StateMachine {
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     transitionTo(mDeleteChildLocalDelete);
                     return HANDLED;
+                case CMD_HANDLE_RECEIVED_REQUEST:
+                    ReceivedRequest req = (ReceivedRequest) message.obj;
+                    switch (req.exchangeSubtype) {
+                        case IKE_EXCHANGE_SUBTYPE_DELETE_CHILD:
+                            deferMessage(message);
+                            transitionTo(mDeleteChildRemoteDelete);
+                            return HANDLED;
+                        default:
+                            // TODO: Handle remote rekey request
+                            return NOT_HANDLED;
+                    }
                 default:
                     return NOT_HANDLED;
             }
@@ -703,7 +716,32 @@ public class ChildSessionStateMachine extends StateMachine {
                     ChildSessionStateMachine.this);
         }
 
-        // TODO: Add a method to handle an inbound Child Session deletion request
+        /**
+         * Helper method for responding to a session deletion request
+         *
+         * <p>Note that this method expects that the session is keyed on the mCurrentChildSaRecord
+         * and closing this Child SA indicates that the remote wishes to end the session as a whole.
+         * As such, this should not be used in rekey cases where there is any ambiguity as to which
+         * Child SA the session is reliant upon.
+         *
+         * <p>Note that this method will also move the state machine to the closed state.
+         */
+        protected void handleDeleteSessionRequest(List<IkePayload> payloads) {
+            if (!hasRemoteChildSpi(payloads, mCurrentChildSaRecord)) {
+                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
+                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
+                mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
+
+            } else {
+                sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
+
+                mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
+                mCurrentChildSaRecord.close();
+                mCurrentChildSaRecord = null;
+
+                transitionTo(mClosed);
+            }
+        }
     }
 
     /**
@@ -830,6 +868,27 @@ public class ChildSessionStateMachine extends StateMachine {
                                     "Invalid exchange subtype for Child Session: "
                                             + req.exchangeSubtype);
                     }
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+    }
+
+    /**
+     * DeleteChildRemoteDelete represents the state where Child Session receives the Delete Child
+     * request.
+     */
+    class DeleteChildRemoteDelete extends DeleteResponderBase {
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_HANDLE_RECEIVED_REQUEST:
+                    ReceivedRequest req = (ReceivedRequest) message.obj;
+                    if (req.exchangeSubtype == IKE_EXCHANGE_SUBTYPE_DELETE_CHILD) {
+                        handleDeleteSessionRequest(req.requestPayloads);
+                        return HANDLED;
+                    }
+                    return NOT_HANDLED;
                 default:
                     return NOT_HANDLED;
             }
