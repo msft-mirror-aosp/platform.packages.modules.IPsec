@@ -37,6 +37,7 @@ import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.telephony.TelephonyManager;
+import android.util.Base64;
 import android.util.Log;
 
 import com.android.ike.eap.EapResult;
@@ -46,12 +47,14 @@ import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
+import com.android.ike.eap.exceptions.EapSimInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
+import com.android.ike.eap.message.EapSimAttribute.AtRand;
 import com.android.ike.eap.message.EapSimAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimTypeData;
@@ -59,6 +62,8 @@ import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
 import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.ArrayList;
@@ -170,6 +175,7 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         private final AtNonceMt mAtNonceMt;
 
         private List<Integer> mVersions;
+        @VisibleForTesting byte[] mIdentity;
 
         protected StartState(AtNonceMt atNonceMt) {
             this.mAtNonceMt = atNonceMt;
@@ -286,8 +292,10 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
                 // TODO(b/136482803): handle case where identity unavailable
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
                 String identity = "1" + mTelephonyManager.getSubscriberId();
-                return AtIdentity.getAtIdentity(identity.getBytes());
+                mIdentity = identity.getBytes();
+                return AtIdentity.getAtIdentity(mIdentity);
             }
+
             return null;
         }
     }
@@ -300,6 +308,12 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
 
         // Session Key lengths are 64 bytes (RFC 4186 Section 7)
         private final int mSessionKeyLength = 64;
+
+        // Lengths defined by TS 31.102 Section 7.1.2.1 (case 3)
+        // SRES stands for "SIM response"
+        // Kc stands for "cipher key"
+        private final int mSresLenBytes = 4;
+        private final int mKcLenBytes = 8;
 
         private final List<Integer> mVersions;
         private final byte[] mNonce;
@@ -346,7 +360,14 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
-            // TODO(b/136279114): process RAND challenges
+            List<RandChallengeResult> randChallengeResults;
+            try {
+                randChallengeResults = getRandChallengeResults(eapSimTypeData);
+            } catch (EapSimInvalidLengthException | BufferUnderflowException ex) {
+                Log.e(mTAG, "Invalid SRES/Kc tuple returned from SIM", ex);
+                return buildClientErrorResponse(message.eapIdentifier,
+                        AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
 
             // TODO(b/136280277): generate keys with FIPS 186-2
 
@@ -362,6 +383,86 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         boolean isValidChallengeAttributes(EapSimTypeData eapSimTypeData) {
             Set<Integer> attrs = eapSimTypeData.attributeMap.keySet();
             return attrs.contains(EAP_AT_RAND) && attrs.contains(EAP_AT_MAC);
+        }
+
+        @VisibleForTesting
+        List<RandChallengeResult> getRandChallengeResults(EapSimTypeData eapSimTypeData)
+                throws EapSimInvalidLengthException {
+            List<byte[]> randList = ((AtRand) (eapSimTypeData.attributeMap.get(EAP_AT_RAND))).rands;
+            List<RandChallengeResult> challengeResults = new ArrayList<>();
+
+            for (byte[] rand : randList) {
+                String base64Challenge = Base64.encodeToString(rand, Base64.NO_WRAP);
+                String challengeResponse = mTelephonyManager.getIccAuthentication(
+                        TelephonyManager.APPTYPE_SIM,
+                        TelephonyManager.AUTHTYPE_EAP_SIM,
+                        base64Challenge);
+                byte[] challengeResponseBytes = Base64.decode(challengeResponse, Base64.DEFAULT);
+                challengeResults
+                        .add(getRandChallengeResultFromResponse(challengeResponseBytes));
+            }
+
+            return challengeResults;
+        }
+
+        /**
+         * Parses the SRES and Kc values from the given challengeResponse. The values are returned
+         * in a Pair<byte[], byte[]>, where SRES and Kc are the first and second values,
+         * respectively.
+         */
+        @VisibleForTesting
+        RandChallengeResult getRandChallengeResultFromResponse(byte[] challengeResponse)
+                throws EapSimInvalidLengthException {
+            ByteBuffer buffer = ByteBuffer.wrap(challengeResponse);
+            int lenSres = Byte.toUnsignedInt(buffer.get());
+            if (lenSres != mSresLenBytes) {
+                throw new EapSimInvalidLengthException("Invalid SRES length specified");
+            }
+            byte[] sres = new byte[mSresLenBytes];
+            buffer.get(sres);
+
+            int lenKc = Byte.toUnsignedInt(buffer.get());
+            if (lenKc != mKcLenBytes) {
+                throw new EapSimInvalidLengthException("Invalid Kc length specified");
+            }
+            byte[] kc = new byte[mKcLenBytes];
+            buffer.get(kc);
+
+            return new RandChallengeResult(sres, kc);
+        }
+
+        @VisibleForTesting
+        class RandChallengeResult {
+            public final byte[] sres;
+            public final byte[] kc;
+
+            RandChallengeResult(byte[] sres, byte[] kc) throws EapSimInvalidLengthException {
+                this.sres = sres;
+                this.kc = kc;
+
+                if (sres.length != mSresLenBytes) {
+                    throw new EapSimInvalidLengthException("Invalid SRES length");
+                }
+                if (kc.length != mKcLenBytes) {
+                    throw new EapSimInvalidLengthException("Invalid Kc length");
+                }
+            }
+
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (!(o instanceof RandChallengeResult)) return false;
+                RandChallengeResult that = (RandChallengeResult) o;
+                return Arrays.equals(sres, that.sres)
+                        && Arrays.equals(kc, that.kc);
+            }
+
+            @Override
+            public int hashCode() {
+                int result = Arrays.hashCode(sres);
+                result = 31 * result + Arrays.hashCode(kc);
+                return result;
+            }
         }
     }
 

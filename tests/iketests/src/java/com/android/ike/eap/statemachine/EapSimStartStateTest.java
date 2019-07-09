@@ -113,6 +113,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
         when(mMockTelephonyManager.getSubscriberId()).thenReturn(IMSI);
 
         AtIdentity atIdentity = mStartState.getIdentityResponse(eapSimTypeData);
+        assertArrayEquals(IDENTITY.getBytes(), mStartState.mIdentity);
         verify(mMockTelephonyManager).getSubscriberId();
         assertArrayEquals(IDENTITY.getBytes(), atIdentity.identity);
         verifyNoMoreInteractions(mMockTelephonyManager);
