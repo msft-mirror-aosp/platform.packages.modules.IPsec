@@ -160,7 +160,7 @@ public final class ChildSessionStateMachineTest {
 
     @Before
     public void setup() throws Exception {
-        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+        if (Looper.myLooper() == null) Looper.prepare();
 
         mIkePrf =
                 IkeMacPrf.create(
