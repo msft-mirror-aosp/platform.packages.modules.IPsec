@@ -576,7 +576,8 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /** Callback for ChildSessionStateMachine to notify IkeSessionStateMachine. */
-    private class ChildSessionSmCallback
+    @VisibleForTesting
+    class ChildSessionSmCallback
             implements ChildSessionStateMachine.IChildSessionSmCallback {
         @Override
         public void onChildSaCreated(int remoteSpi, ChildSessionStateMachine childSession) {

@@ -984,29 +984,10 @@ public final class IkeSessionStateMachineTest {
             throws Exception {
         registerChildStateMachine(childCallback, child);
 
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
-                new ChildLocalRequest(
-                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD,
-                        childCallback,
-                        mChildSessionOptions));
-        mLooper.dispatchAll();
-
-        verify(mMockChildSessionFactoryHelper)
-                .makeChildSessionStateMachine(
-                        eq(mLooper.getLooper()),
-                        eq(mContext),
-                        eq(mChildSessionOptions),
-                        eq(mUserCbHandler),
-                        eq(childCallback),
-                        mChildSessionSmCbCaptor.capture());
-        IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
+        IChildSessionSmCallback cb = mIkeSessionStateMachine.new ChildSessionSmCallback();
         cb.onChildSaCreated(remoteSpi, child);
-        cb.onProcedureFinished(child);
         mLooper.dispatchAll();
 
-        assertTrue(
-                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
         return cb;
     }
 
