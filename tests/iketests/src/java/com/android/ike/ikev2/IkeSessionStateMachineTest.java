@@ -1049,6 +1049,28 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testDeferChildRequestToChildProcedureOngoing() throws Exception {
+        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
+        int dummyChildSpi = 1;
+
+        setupIdleStateMachine();
+        IChildSessionSmCallback childSmCb =
+                createChildAndGetChildSessionSmCallback(child, dummyChildSpi);
+
+        IkeDeletePayload[] inboundDelPayloads =
+                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {dummyChildSpi})};
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDeleteChildPacket(inboundDelPayloads, false /*isResp*/));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verifyChildReceiveDeleteRequest(child, inboundDelPayloads);
+    }
+
+    @Test
     public void testRemoteDeleteOneChild() throws Exception {
         ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
         int childRemoteSpi = 11;
