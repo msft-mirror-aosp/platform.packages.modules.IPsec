@@ -490,10 +490,10 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
-     * InitCreateChildBase represents the common information for negotiating the initial Child SA
-     * for setting up this Child Session.
+     * CreateChildLocalCreateBase represents the common information for a locally-initiated initial
+     * Child SA negotiation for setting up this Child Session.
      */
-    private abstract class InitCreateChildBase extends State {
+    private abstract class CreateChildLocalCreateBase extends State {
         protected void validateAndBuildChild(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
@@ -517,8 +517,8 @@ public class ChildSessionStateMachine extends StateMachine {
                                         mContext,
                                         reqPayloads,
                                         respPayloads,
-                                        createChildResult.localSpi,
-                                        createChildResult.remoteSpi,
+                                        createChildResult.initSpi,
+                                        createChildResult.respSpi,
                                         mLocalAddress,
                                         mRemoteAddress,
                                         mUdpEncapSocket,
@@ -535,8 +535,8 @@ public class ChildSessionStateMachine extends StateMachine {
                             | SpiUnavailableException
                             | IOException e) {
                         // #makeChildSaRecord failed.
-                        createChildResult.localSpi.close();
-                        createChildResult.remoteSpi.close();
+                        createChildResult.initSpi.close();
+                        createChildResult.respSpi.close();
                         // TODO: Initiate deletion and close this Child Session
                         throw new UnsupportedOperationException("Cannot handle this error");
                     }
@@ -575,13 +575,13 @@ public class ChildSessionStateMachine extends StateMachine {
                         IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
             }
 
-            mLocalTs = createChildResult.localTs;
-            mRemoteTs = createChildResult.remoteTs;
+            mLocalTs = createChildResult.initTs;
+            mRemoteTs = createChildResult.respTs;
         }
     }
 
     /** Initial state of ChildSessionStateMachine. */
-    class Initial extends InitCreateChildBase {
+    class Initial extends CreateChildLocalCreateBase {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
@@ -616,7 +616,7 @@ public class ChildSessionStateMachine extends StateMachine {
      * CreateChildLocalCreate represents the state where Child Session initiates the Create Child
      * exchange.
      */
-    class CreateChildLocalCreate extends InitCreateChildBase {
+    class CreateChildLocalCreate extends CreateChildLocalCreateBase {
         private List<IkePayload> mRequestPayloads;
 
         @Override
@@ -981,8 +981,8 @@ public class ChildSessionStateMachine extends StateMachine {
                                                 mContext,
                                                 mRequestPayloads,
                                                 resp.responsePayloads,
-                                                createChildResult.localSpi,
-                                                createChildResult.remoteSpi,
+                                                createChildResult.initSpi,
+                                                createChildResult.respSpi,
                                                 mLocalAddress,
                                                 mRemoteAddress,
                                                 mUdpEncapSocket,
@@ -999,8 +999,8 @@ public class ChildSessionStateMachine extends StateMachine {
                                     | SpiUnavailableException
                                     | IOException e) {
                                 // #makeChildSaRecord failed.
-                                createChildResult.localSpi.close();
-                                createChildResult.remoteSpi.close();
+                                createChildResult.initSpi.close();
+                                createChildResult.respSpi.close();
                                 // TODO: Initiate deletion on newly created SA and retry rekey
                                 throw new UnsupportedOperationException("Cannot handle this error");
                             }
@@ -1251,7 +1251,7 @@ public class ChildSessionStateMachine extends StateMachine {
             return childResult;
         }
 
-        /** Validate the received response and negotiate Child SA. */
+        /** Validate the received payload list and negotiate Child SA. */
         private static CreateChildResult validateAndNegotiateChild(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
@@ -1283,7 +1283,8 @@ public class ChildSessionStateMachine extends StateMachine {
             for (IkeNotifyPayload notify : notifyPayloads) {
                 if (notify.isErrorNotify()) {
                     // TODO: Return CreateChildResult with CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY and
-                    // IkeProtocolException
+                    // IkeProtocolException if inboundPayloads is a response. Otherwise, ignore
+                    // error notifications.
                     throw new UnsupportedOperationException("Cannot handle this error");
                 }
 
@@ -1336,8 +1337,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 }
 
                 Pair<IkeTrafficSelector[], IkeTrafficSelector[]> tsPair =
-                        validateAndGetNegotiatedTsPair(
-                                reqPayloads, respPayloads, true /*isLocalInit*/);
+                        validateAndGetNegotiatedTsPair(reqPayloads, respPayloads);
 
                 return new CreateChildResult(
                         childProposalPair.first.getChildSpiResource(),
@@ -1444,20 +1444,14 @@ public class ChildSessionStateMachine extends StateMachine {
 
         private static Pair<IkeTrafficSelector[], IkeTrafficSelector[]>
                 validateAndGetNegotiatedTsPair(
-                        List<IkePayload> reqPayloads,
-                        List<IkePayload> respPayloads,
-                        boolean isLocalInit)
+                        List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
                         throws TsUnacceptableException {
             IkeTrafficSelector[] initTs =
                     validateAndGetNegotiatedTs(reqPayloads, respPayloads, true /*isInitTs*/);
             IkeTrafficSelector[] respTs =
                     validateAndGetNegotiatedTs(reqPayloads, respPayloads, false /*isInitTs*/);
 
-            if (isLocalInit) {
-                return new Pair<IkeTrafficSelector[], IkeTrafficSelector[]>(initTs, respTs);
-            } else {
-                return new Pair<IkeTrafficSelector[], IkeTrafficSelector[]>(respTs, initTs);
-            }
+            return new Pair<IkeTrafficSelector[], IkeTrafficSelector[]>(initTs, respTs);
         }
 
         private static IkeTrafficSelector[] validateAndGetNegotiatedTs(
@@ -1534,44 +1528,44 @@ public class ChildSessionStateMachine extends StateMachine {
 
     private static class CreateChildResult {
         @CreateStatus public final int status;
-        public final SecurityParameterIndex localSpi;
-        public final SecurityParameterIndex remoteSpi;
+        public final SecurityParameterIndex initSpi;
+        public final SecurityParameterIndex respSpi;
         public final SaProposal negotiatedProposal;
-        public final IkeTrafficSelector[] localTs;
-        public final IkeTrafficSelector[] remoteTs;
+        public final IkeTrafficSelector[] initTs;
+        public final IkeTrafficSelector[] respTs;
         public final IkeException exception;
 
         private CreateChildResult(
                 @CreateStatus int status,
-                SecurityParameterIndex localSpi,
-                SecurityParameterIndex remoteSpi,
+                SecurityParameterIndex initSpi,
+                SecurityParameterIndex respSpi,
                 SaProposal negotiatedProposal,
-                IkeTrafficSelector[] localTs,
-                IkeTrafficSelector[] remoteTs,
+                IkeTrafficSelector[] initTs,
+                IkeTrafficSelector[] respTs,
                 IkeException exception) {
             this.status = status;
-            this.localSpi = localSpi;
-            this.remoteSpi = remoteSpi;
+            this.initSpi = initSpi;
+            this.respSpi = respSpi;
             this.negotiatedProposal = negotiatedProposal;
-            this.localTs = localTs;
-            this.remoteTs = remoteTs;
+            this.initTs = initTs;
+            this.respTs = respTs;
             this.exception = exception;
         }
 
         /* Construct a CreateChildResult instance for a successful case. */
         CreateChildResult(
-                SecurityParameterIndex localSpi,
-                SecurityParameterIndex remoteSpi,
+                SecurityParameterIndex initSpi,
+                SecurityParameterIndex respSpi,
                 SaProposal negotiatedProposal,
-                IkeTrafficSelector[] localTs,
-                IkeTrafficSelector[] remoteTs) {
+                IkeTrafficSelector[] initTs,
+                IkeTrafficSelector[] respTs) {
             this(
                     CREATE_STATUS_OK,
-                    localSpi,
-                    remoteSpi,
+                    initSpi,
+                    respSpi,
                     negotiatedProposal,
-                    localTs,
-                    remoteTs,
+                    initTs,
+                    respTs,
                     null /*exception*/);
         }
 
@@ -1579,11 +1573,11 @@ public class ChildSessionStateMachine extends StateMachine {
         CreateChildResult(@CreateStatus int status, IkeException exception) {
             this(
                     status,
-                    null /*localSpi*/,
-                    null /*remoteSpi*/,
+                    null /*initSpi*/,
+                    null /*respSpi*/,
                     null /*negotiatedProposal*/,
-                    null /*localTs*/,
-                    null /*remoteTs*/,
+                    null /*initTs*/,
+                    null /*respTs*/,
                     exception);
         }
     }
