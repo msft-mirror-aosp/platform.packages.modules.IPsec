@@ -92,6 +92,7 @@ public final class IkeSkPayloadTest {
 
         IkeSkPayload payload =
                 IkePayloadFactory.getIkeSkPayload(
+                                false /*isSkf*/,
                                 message,
                                 mHmacSha1IntegrityMac,
                                 mAesCbcDecryptCipher,
