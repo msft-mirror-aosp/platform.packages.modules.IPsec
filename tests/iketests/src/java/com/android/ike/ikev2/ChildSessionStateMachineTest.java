@@ -51,7 +51,6 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.os.Handler;
 import android.os.Looper;
 import android.os.test.TestLooper;
 
@@ -93,6 +92,8 @@ import java.net.Inet4Address;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class ChildSessionStateMachineTest {
     private static final Inet4Address LOCAL_ADDRESS =
@@ -136,7 +137,7 @@ public final class ChildSessionStateMachineTest {
 
     private SaProposal mMockNegotiatedProposal;
 
-    private Handler mUserCbHandler;
+    private ExecutorService mUserCbExecutor;
     private IChildSessionCallback mMockChildSessionCallback;
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
@@ -174,7 +175,7 @@ public final class ChildSessionStateMachineTest {
 
         mMockNegotiatedProposal = mock(SaProposal.class);
 
-        mUserCbHandler = new Handler();
+        mUserCbExecutor = Executors.newSingleThreadExecutor();
         mMockChildSessionCallback = mock(IChildSessionCallback.class);
         mChildSessionOptions = buildChildSessionOptions();
 
@@ -186,7 +187,7 @@ public final class ChildSessionStateMachineTest {
                         mContext,
                         mMockIpSecManager,
                         mChildSessionOptions,
-                        mUserCbHandler,
+                        mUserCbExecutor,
                         mMockChildSessionCallback,
                         mMockChildSessionSmCallback);
         mChildSessionStateMachine.setDbg(true);
@@ -202,6 +203,8 @@ public final class ChildSessionStateMachineTest {
     public void tearDown() {
         mChildSessionStateMachine.setDbg(false);
         SaRecord.setSaRecordHelper(new SaRecordHelper());
+
+        mUserCbExecutor.shutdown();
     }
 
     private SaProposal buildSaProposal() throws Exception {

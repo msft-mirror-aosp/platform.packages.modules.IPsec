@@ -33,7 +33,6 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.system.ErrnoException;
@@ -98,6 +97,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -202,7 +202,7 @@ public class IkeSessionStateMachine extends StateMachine {
     private final Context mContext;
     private final IpSecManager mIpSecManager;
     private final IkeLocalRequestScheduler mScheduler;
-    private final Handler mUserCbHandler;
+    private final Executor mUserCbExecutor;
     private final IIkeSessionCallback mIkeSessionCallbacks;
 
     @VisibleForTesting
@@ -284,7 +284,7 @@ public class IkeSessionStateMachine extends StateMachine {
             IpSecManager ipSecManager,
             IkeSessionOptions ikeOptions,
             ChildSessionOptions firstChildOptions,
-            Handler userCbHandler,
+            Executor userCbExecutor,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
         super(TAG, looper);
@@ -298,7 +298,7 @@ public class IkeSessionStateMachine extends StateMachine {
         mContext = context;
         mIpSecManager = ipSecManager;
 
-        mUserCbHandler = userCbHandler;
+        mUserCbExecutor = userCbExecutor;
         mIkeSessionCallbacks = ikeSessionCallback;
 
         ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth)
@@ -356,7 +356,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         getHandler().getLooper(),
                         mContext,
                         childOptions,
-                        mUserCbHandler,
+                        mUserCbExecutor,
                         callbacks,
                         new ChildSessionSmCallback());
         synchronized (mChildCbToSessions) {

@@ -43,7 +43,6 @@ import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
@@ -85,6 +84,7 @@ import java.security.Provider;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.Executor;
 
 /**
  * ChildSessionStateMachine tracks states and manages exchanges of this Child Session.
@@ -121,7 +121,7 @@ public class ChildSessionStateMachine extends StateMachine {
     /** User provided configurations. */
     private final ChildSessionOptions mChildSessionOptions;
 
-    private final Handler mUserCbHandler;
+    private final Executor mUserCbExecutor;
     private final IChildSessionCallback mUserCallback;
 
     /** Callback to notify IKE Session the state changes. */
@@ -183,7 +183,7 @@ public class ChildSessionStateMachine extends StateMachine {
             Context context,
             IpSecManager ipSecManager,
             ChildSessionOptions sessionOptions,
-            Handler userCbHandler,
+            Executor userCbExecutor,
             IChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback) {
         super(TAG, looper);
@@ -192,7 +192,7 @@ public class ChildSessionStateMachine extends StateMachine {
         mIpSecManager = ipSecManager;
         mChildSessionOptions = sessionOptions;
 
-        mUserCbHandler = userCbHandler;
+        mUserCbExecutor = userCbExecutor;
         mUserCallback = userCallback;
         mChildSmCallback = childSmCallback;
 
