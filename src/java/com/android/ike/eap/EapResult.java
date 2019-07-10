@@ -20,6 +20,7 @@ import android.annotation.NonNull;
 
 import com.android.ike.eap.exceptions.InvalidEapResponseException;
 import com.android.ike.eap.message.EapMessage;
+import com.android.internal.annotations.VisibleForTesting;
 
 /**
  * EapResult represents the return type R for a process operation within the EapStateMachine.
@@ -62,7 +63,8 @@ public abstract class EapResult {
     public static class EapResponse extends EapResult {
         public final byte[] packet;
 
-        private EapResponse(byte[] packet) {
+        @VisibleForTesting
+        protected EapResponse(byte[] packet) {
             this.packet = packet;
         }
 
