@@ -18,10 +18,10 @@ package com.android.ike.eap;
 
 /**
  * IEapCallback represents a Callback interface to be implemented by clients of the
- * EapAuthenticator.
+ * {@link EapAuthenticator}.
  *
  * <p>Exactly one of these callbacks will be called for each message processed by the
- * EapAuthenticator.
+ * {@link EapAuthenticator}.
  *
  * @see <a href="https://tools.ietf.org/html/rfc3748#section-4">RFC 3748, Extensible Authentication
  * Protocol (EAP)</a>
