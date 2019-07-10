@@ -385,7 +385,7 @@ public final class IkeSessionStateMachineTest {
 
     @Before
     public void setUp() throws Exception {
-        if (Looper.myLooper() == null) Looper.myLooper().prepare();
+        if (Looper.myLooper() == null) Looper.prepare();
 
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
@@ -1046,6 +1046,28 @@ public final class IkeSessionStateMachineTest {
         assertEquals(isResp, ikeHeader.isResponseMsg);
 
         return deleteChildMessage.ikePayloadList;
+    }
+
+    @Test
+    public void testDeferChildRequestToChildProcedureOngoing() throws Exception {
+        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
+        int dummyChildSpi = 1;
+
+        setupIdleStateMachine();
+        IChildSessionSmCallback childSmCb =
+                createChildAndGetChildSessionSmCallback(child, dummyChildSpi);
+
+        IkeDeletePayload[] inboundDelPayloads =
+                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {dummyChildSpi})};
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDeleteChildPacket(inboundDelPayloads, false /*isResp*/));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verifyChildReceiveDeleteRequest(child, inboundDelPayloads);
     }
 
     @Test
