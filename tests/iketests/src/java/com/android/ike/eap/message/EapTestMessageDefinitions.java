@@ -106,4 +106,28 @@ public class EapTestMessageDefinitions {
     public static final byte[] CHALLENGE_RESPONSE_INVALID_SRES = hexStringToByteArray("03");
     public static final byte[] CHALLENGE_RESPONSE_INVALID_KC =
             hexStringToByteArray("04" + SRES_1 + "04");
+
+    public static final String IMSI = "123456789012345";
+    public static final String EAP_SIM_IDENTITY = "1" + IMSI;
+    public static final byte[] EAP_SIM_IDENTITY_BYTES = hexStringToByteArray(EAP_SIM_IDENTITY);
+
+    // Master Key generation
+    public static final String MK_STRING = "0123456789ABCDEF0123456789ABCDEF01234567";
+    public static final byte[] MK = hexStringToByteArray(MK_STRING);
+    public static final String K_ENCR_STRING = "000102030405060708090A0B0C0D0E0F";
+    public static final byte[] K_ENCR = hexStringToByteArray(K_ENCR_STRING);
+    public static final String K_AUT_STRING = "0F0E0D0C0B0A09080706050403020100";
+    public static final byte[] K_AUT = hexStringToByteArray(K_AUT_STRING);
+    public static final String MSK_STRING =
+            "00112233445566778899AABBCCDDEEFF"
+            + "00112233445566778899AABBCCDDEEFF"
+            + "00112233445566778899AABBCCDDEEFF"
+            + "00112233445566778899AABBCCDDEEFF";
+    public static final byte[] MSK = hexStringToByteArray(MSK_STRING);
+    public static final String EMSK_STRING =
+            "FFEEDDCCBBAA99887766554433221100"
+            + "FFEEDDCCBBAA99887766554433221100"
+            + "FFEEDDCCBBAA99887766554433221100"
+            + "FFEEDDCCBBAA99887766554433221100";
+    public static final byte[] EMSK = hexStringToByteArray(EMSK_STRING);
 }
