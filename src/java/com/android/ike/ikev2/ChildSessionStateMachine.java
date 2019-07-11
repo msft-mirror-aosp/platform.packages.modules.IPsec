@@ -178,6 +178,7 @@ public class ChildSessionStateMachine extends StateMachine {
     @VisibleForTesting final State mRekeyChildLocalCreate = new RekeyChildLocalCreate();
     @VisibleForTesting final State mRekeyChildRemoteCreate = new RekeyChildRemoteCreate();
     @VisibleForTesting final State mRekeyChildLocalDelete = new RekeyChildLocalDelete();
+    @VisibleForTesting final State mRekeyChildRemoteDelete = new RekeyChildRemoteDelete();
 
     /**
      * Builds a new uninitialized ChildSessionStateMachine
@@ -218,6 +219,7 @@ public class ChildSessionStateMachine extends StateMachine {
         addState(mRekeyChildLocalCreate);
         addState(mRekeyChildRemoteCreate);
         addState(mRekeyChildLocalDelete);
+        addState(mRekeyChildRemoteDelete);
 
         setInitialState(mInitial);
     }
@@ -1133,7 +1135,7 @@ public class ChildSessionStateMachine extends StateMachine {
                                     respPayloads,
                                     ChildSessionStateMachine.this);
 
-                            // TODO: Transition to delete state
+                            transitionTo(mRekeyChildRemoteDelete);
                         } catch (GeneralSecurityException
                                 | ResourceUnavailableException
                                 | SpiUnavailableException
@@ -1216,6 +1218,47 @@ public class ChildSessionStateMachine extends StateMachine {
                     // TODO: Handle requests on mCurrentChildSaRecord: Reply TEMPORARY_FAILURE to
                     // a rekey request and reply empty INFORMATIONAL message to a delete request.
                     return NOT_HANDLED;
+            }
+        }
+    }
+
+    /**
+     * RekeyChildRemoteDelete represents the deleting stage of a remotely-initiated Rekey Child
+     * procedure.
+     */
+    class RekeyChildRemoteDelete extends RekeyChildDeleteBase {
+        @Override
+        public void enter() {
+            mChildSaRecordSurviving = mRemoteInitNewChildSaRecord;
+            // TODO: Set a timer awaiting for delete request on current Child SA
+        }
+
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_HANDLE_RECEIVED_REQUEST:
+                    ReceivedRequest req = (ReceivedRequest) message.obj;
+
+                    if (req.exchangeSubtype == IKE_EXCHANGE_SUBTYPE_DELETE_CHILD) {
+                        handleDeleteRequest(req.requestPayloads);
+                    } else {
+                        replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
+                    }
+                    return HANDLED;
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+
+        private void handleDeleteRequest(List<IkePayload> payloads) {
+            if (!hasRemoteChildSpi(payloads, mCurrentChildSaRecord)) {
+                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
+                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
+                mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
+            } else {
+                sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
+                finishRekey();
+                transitionTo(mIdle);
             }
         }
     }

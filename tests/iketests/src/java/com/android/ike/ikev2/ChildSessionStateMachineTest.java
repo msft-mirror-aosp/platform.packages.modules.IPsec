@@ -769,6 +769,14 @@ public final class ChildSessionStateMachineTest {
                 mSpyLocalInitNewChildSaRecord, mChildSessionStateMachine.mChildSaRecordSurviving);
     }
 
+    void verifyChildSaUpdated(ChildSaRecord oldSaRecord, ChildSaRecord newSaRecord) {
+        verify(mMockChildSessionSmCallback).onChildSaDeleted(oldSaRecord.getRemoteSpi());
+        verify(oldSaRecord).close();
+
+        assertNull(mChildSessionStateMachine.mChildSaRecordSurviving);
+        assertEquals(newSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
+    }
+
     @Test
     public void testRekeyChildLocalDeleteValidatesResponse() throws Exception {
         setupIdleStateMachine();
@@ -793,13 +801,7 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback, times(2))
                 .onProcedureFinished(mChildSessionStateMachine);
 
-        verify(mMockChildSessionSmCallback)
-                .onChildSaDeleted(mSpyCurrentChildSaRecord.getRemoteSpi());
-        verify(mSpyCurrentChildSaRecord).close();
-
-        assertNull(mChildSessionStateMachine.mChildSaRecordSurviving);
-        assertEquals(
-                mSpyLocalInitNewChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
+        verifyChildSaUpdated(mSpyCurrentChildSaRecord, mSpyLocalInitNewChildSaRecord);
     }
 
     @Test
@@ -824,7 +826,9 @@ public final class ChildSessionStateMachineTest {
                 IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
         mLooper.dispatchAll();
 
-        // TODO: Verify transitioning to deleting state
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildRemoteDelete);
 
         // Verify outbound rekey response
         verify(mMockChildSessionSmCallback)
@@ -860,6 +864,37 @@ public final class ChildSessionStateMachineTest {
                 REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
                 REMOTE_INIT_NEW_CHILD_SA_SPI_IN,
                 false /*isLocalInit*/);
+    }
+
+    @Test
+    public void testRekeyChildRemoteDelete() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildRemoteDelete
+        mChildSessionStateMachine.mRemoteInitNewChildSaRecord = mSpyRemoteInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildRemoteDelete);
+
+        // Test receiving Delete request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                EXCHANGE_TYPE_INFORMATIONAL,
+                makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        // Verify outbound Delete response
+        verifyOutboundDeletePayload(mSpyCurrentChildSaRecord.getLocalSpi(), true /*isResp*/);
+
+        // Verify Child SA has been updated
+        verifyChildSaUpdated(mSpyCurrentChildSaRecord, mSpyRemoteInitNewChildSaRecord);
+
+        // Verify procedure has been finished. #onProcedureFinished was first invoked in
+        // #setupIdleStateMachine
+        verify(mMockChildSessionSmCallback, times(2))
+                .onProcedureFinished(mChildSessionStateMachine);
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
     }
 
     @Test
