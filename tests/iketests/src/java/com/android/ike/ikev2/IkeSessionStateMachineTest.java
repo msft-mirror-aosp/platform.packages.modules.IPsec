@@ -16,8 +16,10 @@
 
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -149,7 +151,7 @@ public final class IkeSessionStateMachineTest {
     private static final String ID_PAYLOAD_RESPONDER_HEX_STRING = "2700000c010000007f000001";
     private static final String PSK_AUTH_RESP_PAYLOAD_HEX_STRING =
             "2100001c0200000058f36412e9b7b38df817a9f7779b7a008dacdd25";
-    private static final String CHILD_SA_RESP_PAYLOAD_HEX_STRING =
+    private static final String CHILD_SA_PAYLOAD_HEX_STRING =
             "2c00002c0000002801030403cae7019f0300000c0100000c800e008003000008030"
                     + "000020000000805000000";
     private static final String TS_INIT_PAYLOAD_HEX_STRING =
@@ -539,7 +541,7 @@ public final class IkeSessionStateMachineTest {
 
         payloadHexStringList.add(ID_PAYLOAD_RESPONDER_HEX_STRING);
         payloadHexStringList.add(PSK_AUTH_RESP_PAYLOAD_HEX_STRING);
-        payloadHexStringList.add(CHILD_SA_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(CHILD_SA_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_INIT_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_RESP_PAYLOAD_HEX_STRING);
 
@@ -551,7 +553,7 @@ public final class IkeSessionStateMachineTest {
                 payloadHexStringList);
     }
 
-    private ReceivedIkePacket makeCreateChildResponse() throws Exception {
+    private ReceivedIkePacket makeCreateChildMessage(boolean isResp) throws Exception {
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
 
@@ -560,7 +562,7 @@ public final class IkeSessionStateMachineTest {
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_INITIATOR);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_RESPONDER);
 
-        payloadHexStringList.add(CHILD_SA_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(CHILD_SA_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_INIT_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_RESP_PAYLOAD_HEX_STRING);
@@ -568,7 +570,7 @@ public final class IkeSessionStateMachineTest {
         return makeDummyEncryptedReceivedIkePacket(
                 mSpyCurrentIkeSaRecord,
                 IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
-                true /*isResp*/,
+                isResp,
                 payloadTypeList,
                 payloadHexStringList);
     }
@@ -948,7 +950,7 @@ public final class IkeSessionStateMachineTest {
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
 
         // Mocking receiving response
-        ReceivedIkePacket dummyCreateChildResp = makeCreateChildResponse();
+        ReceivedIkePacket dummyCreateChildResp = makeCreateChildMessage(true /*isResp*/);
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyCreateChildResp);
         mLooper.dispatchAll();
@@ -1238,6 +1240,25 @@ public final class IkeSessionStateMachineTest {
         List<IkePayload> payloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
         assertEquals(1, payloadList.size());
         assertEquals(outPayload, ((IkeDeletePayload) payloadList.get(0)));
+    }
+
+    @Test
+    public void testRemoteCreateChild() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET, makeCreateChildMessage(false /*isResp*/));
+
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        List<IkePayload> ikePayloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertEquals(1, ikePayloadList.size());
+        assertEquals(
+                ERROR_TYPE_NO_ADDITIONAL_SAS,
+                ((IkeNotifyPayload) ikePayloadList.get(0)).notifyType);
     }
 
     @Test
@@ -1857,7 +1878,7 @@ public final class IkeSessionStateMachineTest {
 
         IkeHeader ikeHeader = resp.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
-        assertEquals(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, ikeHeader.exchangeType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
         assertTrue(ikeHeader.isResponseMsg);
         assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
 
