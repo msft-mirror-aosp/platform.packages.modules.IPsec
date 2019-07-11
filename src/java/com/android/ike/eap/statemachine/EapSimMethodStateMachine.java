@@ -45,6 +45,7 @@ import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
+import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimInvalidLengthException;
@@ -65,6 +66,8 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -203,7 +206,8 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
                     // EAP-SIM/Start request. Receipt of an EAP-SIM/Challenge request indicates that
                     // the server has accepted our EAP-SIM/Start response, including our identity
                     // (if any).
-                    return transitionAndProcess(new ChallengeState(mVersions, mAtNonceMt), message);
+                    return transitionAndProcess(
+                            new ChallengeState(mVersions, mAtNonceMt, mIdentity), message);
                 default:
                     return buildClientErrorResponse(message.eapIdentifier,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
@@ -302,9 +306,11 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
 
     protected class ChallengeState extends EapSimState {
         private final String mTAG = ChallengeState.class.getSimpleName();
+        private final int mBytesPerShort = 2;
+        private final int mVersionLenBytes = 2;
 
-        // K_aut length is 16 bytes (RFC 4186 Section 7)
-        private final int mKeyAutLen = 16;
+        // K_encr and K_aut lengths are 16 bytes (RFC 4186 Section 7)
+        private final int mKeyLen = 16;
 
         // Session Key lengths are 64 bytes (RFC 4186 Section 7)
         private final int mSessionKeyLength = 64;
@@ -315,16 +321,21 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         private final int mSresLenBytes = 4;
         private final int mKcLenBytes = 8;
 
+        private final String mMasterKeyGenerationAlg = "SHA-1";
+
         private final List<Integer> mVersions;
         private final byte[] mNonce;
+        private final byte[] mIdentity;
 
-        private final byte[] mKAutn = new byte[mKeyAutLen];
+        @VisibleForTesting final byte[] mKEncr = new byte[mKeyLen];
+        @VisibleForTesting final byte[] mKAut = new byte[mKeyLen];
         @VisibleForTesting final byte[] mMsk = new byte[mSessionKeyLength];
         @VisibleForTesting final byte[] mEmsk = new byte[mSessionKeyLength];
 
-        protected ChallengeState(List<Integer> versions, AtNonceMt atNonceMt) {
+        protected ChallengeState(List<Integer> versions, AtNonceMt atNonceMt, byte[] identity) {
             mVersions = versions;
             mNonce = atNonceMt.nonceMt;
+            mIdentity = identity;
         }
 
         public EapResult process(EapMessage message) {
@@ -369,7 +380,14 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
-            // TODO(b/136280277): generate keys with FIPS 186-2
+            try {
+                MessageDigest sha1 = MessageDigest.getInstance(mMasterKeyGenerationAlg);
+                generateAndPersistKeys(sha1, new Fips186_2Prf(), randChallengeResults);
+            } catch (NoSuchAlgorithmException | BufferUnderflowException ex) {
+                Log.e(mTAG, "Invalid SRES/Kc tuple returned from SIM", ex);
+                return buildClientErrorResponse(message.eapIdentifier,
+                        AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
 
             // TODO(b/136281777): check if received MAC == MAC(packet | nonce)
 
@@ -463,6 +481,42 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
                 result = 31 * result + Arrays.hashCode(kc);
                 return result;
             }
+        }
+
+        @VisibleForTesting
+        void generateAndPersistKeys(
+                MessageDigest messageDigest,
+                Fips186_2Prf prf,
+                List<RandChallengeResult> randChallengeResults) {
+            int numInputBytes =
+                    mIdentity.length
+                    + (randChallengeResults.size() * mKcLenBytes)
+                    + mNonce.length
+                    + (mVersions.size() * mBytesPerShort) // 2B per version
+                    + mVersionLenBytes;
+
+            ByteBuffer mkInputBuffer = ByteBuffer.allocate(numInputBytes);
+            mkInputBuffer.put(mIdentity);
+            for (RandChallengeResult randChallengeResult : randChallengeResults) {
+                mkInputBuffer.put(randChallengeResult.kc);
+            }
+            mkInputBuffer.put(mNonce);
+            for (int i : mVersions) {
+                mkInputBuffer.putShort((short) i);
+            }
+            mkInputBuffer.putShort((short) AtSelectedVersion.SUPPORTED_VERSION);
+
+            byte[] mk = messageDigest.digest(mkInputBuffer.array());
+
+            // run mk through FIPS 186-2
+            int outputBytes = mKEncr.length + mKAut.length + mMsk.length + mEmsk.length;
+            byte[] prfResult = prf.getRandom(mk, outputBytes);
+
+            ByteBuffer mkResultBuffer = ByteBuffer.wrap(prfResult);
+            mkResultBuffer.get(mKEncr);
+            mkResultBuffer.get(mKAut);
+            mkResultBuffer.get(mMsk);
+            mkResultBuffer.get(mEmsk);
         }
     }
 

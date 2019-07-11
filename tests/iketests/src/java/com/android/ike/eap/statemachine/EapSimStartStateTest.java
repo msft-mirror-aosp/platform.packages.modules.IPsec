@@ -23,6 +23,8 @@ import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.IMSI;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -48,8 +50,6 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 
 public class EapSimStartStateTest extends EapSimStateTest {
-    private static final String IMSI = "123456789012345";
-    private static final String IDENTITY = "1" + IMSI;
 
     private StartState mStartState;
     private LinkedHashMap<Integer, EapSimAttribute> mAttributes;
@@ -113,9 +113,9 @@ public class EapSimStartStateTest extends EapSimStateTest {
         when(mMockTelephonyManager.getSubscriberId()).thenReturn(IMSI);
 
         AtIdentity atIdentity = mStartState.getIdentityResponse(eapSimTypeData);
-        assertArrayEquals(IDENTITY.getBytes(), mStartState.mIdentity);
+        assertArrayEquals(EAP_SIM_IDENTITY.getBytes(), mStartState.mIdentity);
         verify(mMockTelephonyManager).getSubscriberId();
-        assertArrayEquals(IDENTITY.getBytes(), atIdentity.identity);
+        assertArrayEquals(EAP_SIM_IDENTITY.getBytes(), atIdentity.identity);
         verifyNoMoreInteractions(mMockTelephonyManager);
     }
 
