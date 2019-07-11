@@ -36,6 +36,7 @@ import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -183,6 +184,8 @@ public final class IkeSessionStateMachineTest {
     private Context mContext;
     private IpSecManager mIpSecManager;
     private UdpEncapsulationSocket mUdpEncapSocket;
+
+    private IkeSocket mSpyIkeSocket;
 
     private TestLooper mLooper;
     private IkeSessionStateMachine mIkeSessionStateMachine;
@@ -431,6 +434,10 @@ public final class IkeSessionStateMachineTest {
 
         mLooper.dispatchAll();
         mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
+
+        mSpyIkeSocket = spy(IkeSocket.getIkeSocket(mUdpEncapSocket, mIkeSessionStateMachine));
+        doNothing().when(mSpyIkeSocket).sendIkePacket(any(), any());
+        mIkeSessionStateMachine.mIkeSocket = mSpyIkeSocket;
 
         IkeMessage.setIkeMessageHelper(mMockIkeMessageHelper);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
@@ -688,6 +695,15 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testQuit() {
+        mIkeSessionStateMachine.quit();
+        mLooper.dispatchAll();
+
+        verify(mSpyIkeSocket).releaseReference(eq(mIkeSessionStateMachine));
+        verify(mSpyIkeSocket).close();
+    }
+
+    @Test
     public void testAllocateIkeSpi() throws Exception {
         // Test randomness.
         IkeSecurityParameterIndex ikeSpiOne =
@@ -744,10 +760,8 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP));
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
 
-        IkeSocket ikeSocket = mIkeSessionStateMachine.mIkeSocket;
-        assertNotNull(ikeSocket);
-        assertNotEquals(
-                -1 /*not found*/, ikeSocket.mSpiToIkeSession.indexOfValue(mIkeSessionStateMachine));
+        verify(mSpyIkeSocket)
+                .registerIke(eq(mSpyCurrentIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
 
         verify(mMockIkeMessageHelper)
                 .decode(0, dummyReceivedIkePacket.ikeHeader, dummyReceivedIkePacket.ikePacketBytes);
@@ -1413,6 +1427,9 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeLocalDelete);
         assertEquals(mSpyLocalInitIkeSaRecord, mIkeSessionStateMachine.mLocalInitNewIkeSaRecord);
+        verify(mSpyIkeSocket)
+                .registerIke(
+                        eq(mSpyLocalInitIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
     }
 
     @Test
@@ -1460,6 +1477,14 @@ public final class IkeSessionStateMachineTest {
         assertArrayEquals(new int[0], deletePayload.spisToDelete);
     }
 
+    private void verifyRekeyReplaceSa(IkeSaRecord newSaRecord) {
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mSpyIkeSocket).unregisterIke(eq(mSpyCurrentIkeSaRecord.getLocalSpi()));
+        verify(mSpyIkeSocket, never()).unregisterIke(eq(newSaRecord.getLocalSpi()));
+
+        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, newSaRecord);
+    }
+
     @Test
     public void testRekeyIkeLocalDeleteHandlesResponse() throws Exception {
         setupIdleStateMachine();
@@ -1481,10 +1506,9 @@ public final class IkeSessionStateMachineTest {
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRespReceivedPacket);
 
         // Verify final state - Idle, with new SA, and old SA closed.
-        verify(mSpyCurrentIkeSaRecord).close();
+        verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
-        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyLocalInitIkeSaRecord);
     }
 
     @Test
@@ -1506,10 +1530,9 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify final state - Idle, with new SA, and old SA closed.
-        verify(mSpyCurrentIkeSaRecord).close();
+        verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
-        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyLocalInitIkeSaRecord);
     }
 
     @Test
@@ -1531,10 +1554,9 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify final state - Idle, with new SA, and old SA closed.
-        verify(mSpyCurrentIkeSaRecord).close();
+        verifyRekeyReplaceSa(mSpyRemoteInitIkeSaRecord);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
-        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyRemoteInitIkeSaRecord);
     }
 
     @Test
@@ -1587,6 +1609,9 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeRemoteDelete);
+        verify(mSpyIkeSocket)
+                .registerIke(
+                        eq(mSpyRemoteInitIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
     }
 
     @Test
@@ -1625,11 +1650,11 @@ public final class IkeSessionStateMachineTest {
         assertTrue(rekeyDeleteResp.ikePayloadList.isEmpty());
 
         // Verify final state - Idle, with new SA, and old SA closed.
-        verify(mSpyCurrentIkeSaRecord).close();
+        verifyRekeyReplaceSa(mSpyRemoteInitIkeSaRecord);
+
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRequestReceivedPacket);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
-        assertEquals(mSpyRemoteInitIkeSaRecord, mIkeSessionStateMachine.mCurrentIkeSaRecord);
     }
 
     @Test
@@ -1688,10 +1713,10 @@ public final class IkeSessionStateMachineTest {
                         anyObject(), anyObject(), eq(mSpyCurrentIkeSaRecord), anyObject());
 
         // Verify final state - Idle, with new SA, and old SA closed.
-        verify(mSpyCurrentIkeSaRecord).close();
+        verifyRekeyReplaceSa(mSpyRemoteInitIkeSaRecord);
+
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
-        assertEquals(mSpyRemoteInitIkeSaRecord, mIkeSessionStateMachine.mCurrentIkeSaRecord);
     }
 
     @Test
@@ -1721,6 +1746,9 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyRekeyIkeRespReceivedPacket);
         mLooper.dispatchAll();
         verifyIncrementLocaReqMsgId();
+        verify(mSpyIkeSocket)
+                .registerIke(
+                        eq(mSpyLocalInitIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
 
         // Receive Delete response on mSpyCurrentIkeSaRecord
         ReceivedIkePacket dummyDeleteIkeRespReceivedPacket =
@@ -1736,7 +1764,8 @@ public final class IkeSessionStateMachineTest {
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRespReceivedPacket);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
-        assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, mSpyLocalInitIkeSaRecord);
+
+        verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
     }
 
     @Test
@@ -1769,9 +1798,6 @@ public final class IkeSessionStateMachineTest {
     public void testRetransmitterImmediatelySendsRequest() throws Exception {
         setupIdleStateMachine();
 
-        IkeSocket mockIkeSocket = mock(IkeSocket.class);
-        mIkeSessionStateMachine.mIkeSocket = mockIkeSocket;
-
         IkeMessage mockIkeMessage = mock(IkeMessage.class);
 
         // Use something unique as a sentinel value
@@ -1781,7 +1807,7 @@ public final class IkeSessionStateMachineTest {
 
         IkeSessionStateMachine.Retransmitter retransmitter =
                 mIkeSessionStateMachine.new Retransmitter(mockIkeMessage);
-        verify(mockIkeSocket).sendIkePacket(eq(dummyBytes), eq(REMOTE_ADDRESS));
+        verify(mSpyIkeSocket).sendIkePacket(eq(dummyBytes), eq(REMOTE_ADDRESS));
     }
 
     @Test

@@ -141,20 +141,26 @@ public final class IkeSocketTest {
 
     @Test
     public void testGetAndCloseIkeSocket() throws Exception {
+        // Must be prepared here; AndroidJUnitRunner runs tests on different threads from the
+        // setUp() call. Since the new Handler() call is run in getIkeSocket, the Looper must be
+        // prepared here.
         if (Looper.myLooper() == null) Looper.prepare();
 
-        IkeSocket ikeSocketOne = IkeSocket.getIkeSocket(mClientUdpEncapSocket);
-        assertEquals(1, ikeSocketOne.mRefCount);
+        IkeSessionStateMachine mMockIkeSessionOne = mock(IkeSessionStateMachine.class);
+        IkeSessionStateMachine mMockIkeSessionTwo = mock(IkeSessionStateMachine.class);
 
-        IkeSocket ikeSocketTwo = IkeSocket.getIkeSocket(mClientUdpEncapSocket);
+        IkeSocket ikeSocketOne = IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionOne);
+        assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
+
+        IkeSocket ikeSocketTwo = IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionTwo);
         assertEquals(ikeSocketOne, ikeSocketTwo);
-        assertEquals(2, ikeSocketTwo.mRefCount);
+        assertEquals(2, ikeSocketTwo.mAliveIkeSessions.size());
 
-        ikeSocketOne.releaseReference();
-        assertEquals(1, ikeSocketOne.mRefCount);
+        ikeSocketOne.releaseReference(mMockIkeSessionOne);
+        assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
-        ikeSocketTwo.releaseReference();
-        assertEquals(0, ikeSocketTwo.mRefCount);
+        ikeSocketTwo.releaseReference(mMockIkeSessionTwo);
+        assertEquals(0, ikeSocketTwo.mAliveIkeSessions.size());
     }
 
     @Test
@@ -162,7 +168,8 @@ public final class IkeSocketTest {
         if (Looper.myLooper() == null) Looper.prepare();
 
         // Send IKE packet
-        IkeSocket ikeSocket = IkeSocket.getIkeSocket(mClientUdpEncapSocket);
+        IkeSocket ikeSocket =
+                IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionStateMachine);
         ikeSocket.sendIkePacket(mDataOne, mLocalAddress);
 
         byte[] receivedData = receive(mDummyRemoteServerFd);
@@ -174,7 +181,7 @@ public final class IkeSocketTest {
 
         assertArrayEquals(expectedBuffer.array(), receivedData);
 
-        ikeSocket.releaseReference();
+        ikeSocket.releaseReference(mMockIkeSessionStateMachine);
     }
 
     @Test
@@ -192,7 +199,9 @@ public final class IkeSocketTest {
                         () -> {
                             try {
                                 socketReceiver.setIkeSocket(
-                                        IkeSocket.getIkeSocket(mClientUdpEncapSocket));
+                                        IkeSocket.getIkeSocket(
+                                                mClientUdpEncapSocket,
+                                                mMockIkeSessionStateMachine));
                                 createLatch.countDown();
                                 Log.d("IkeSocketTest", "IkeSocket created.");
                             } catch (ErrnoException e) {
@@ -229,7 +238,7 @@ public final class IkeSocketTest {
                 .getHandler()
                 .post(
                         () -> {
-                            ikeSocket.releaseReference();
+                            ikeSocket.releaseReference(mMockIkeSessionStateMachine);
                             closeLatch.countDown();
                         });
         closeLatch.await();
