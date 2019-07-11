@@ -148,4 +148,16 @@ public class EapTestMessageDefinitions {
             + "0B05000000000000000000000000000000000000"; // AT_MAC attribute with no MAC
     public static final byte[] MAC_INPUT =
             hexStringToByteArray(EAP_SIM_CHALLENGE_REQUEST_STRING + NONCE_MT_STRING);
+
+    // Response Message with MAC
+    public static final String EAP_SIM_CHALLENGE_RESPONSE_EMPTY_MAC =
+            "02" + ID + "001C" // EAP-Response | ID | length in bytes
+            + "120b0000" // EAP-SIM | Challenge | 2B padding
+            + "0B05000000000000000000000000000000000000"; // AT_MAC attribute with no MAC
+    public static final byte[] EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT =
+            hexStringToByteArray(EAP_SIM_CHALLENGE_RESPONSE_EMPTY_MAC + SRES_1 + SRES_2);
+    public static final byte[] EAP_SIM_CHALLENGE_RESPONSE_WITH_MAC = hexStringToByteArray(
+            "02" + ID + "001C" // EAP-Response | ID | length in bytes
+            + "120b0000" // EAP-SIM | Challenge | 2B padding
+            + "0B050000" + COMPUTED_MAC_STRING); // AT_MAC attribute
 }
