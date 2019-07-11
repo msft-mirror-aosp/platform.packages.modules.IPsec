@@ -91,6 +91,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 public class EapSimChallengeStateTest extends EapSimStateTest {
     private static final int EAP_REQUEST = 1;
@@ -124,6 +125,8 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
 
     // Base64 of "04" + SRES_1 + '081122"
     private static final String BASE_64_INVALID_RESP = "BBEiM0QIESI=";
+
+    private static final byte[] SHA_1_INPUT = hexStringToByteArray("0123456789ABCDEF");
 
     private AtNonceMt mAtNonceMt;
     private ChallengeState mChallengeState;
@@ -358,6 +361,21 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
 
         verify(mockMac).doFinal(eq(MAC_INPUT));
         verifyNoMoreInteractions(mockMac);
+    }
+
+    /**
+     * Test that we can actually instantiate and use the SHA-1 and HMAC-SHA-1 algorithms.
+     */
+    @Test
+    public void testCreateAlgorithms() throws Exception {
+        MessageDigest sha1 = MessageDigest.getInstance(mChallengeState.mMasterKeyGenerationAlg);
+        byte[] sha1Result = sha1.digest(SHA_1_INPUT);
+        assertFalse(Arrays.equals(SHA_1_INPUT, sha1Result));
+
+        Mac macAlgorithm = Mac.getInstance(mChallengeState.mMacAlgorithm);
+        macAlgorithm.init(new SecretKeySpec(K_AUT, mChallengeState.mMacAlgorithm));
+        byte[] mac = macAlgorithm.doFinal(MAC_INPUT);
+        assertFalse(Arrays.equals(MAC_INPUT, mac));
     }
 
     @Test
