@@ -2096,7 +2096,7 @@ public class IkeSessionStateMachine extends StateMachine {
             }
 
             payloadList.addAll(
-                    CreateChildSaHelper.getInitCreateSaRequestPayloads(
+                    CreateChildSaHelper.getInitChildCreateReqPayloads(
                             mIpSecManager,
                             mLocalAddress,
                             mFirstChildSessionOptions,
