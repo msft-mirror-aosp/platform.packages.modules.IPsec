@@ -22,6 +22,8 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_KC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_SRES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.COMPUTED_MAC;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CHALLENGE_RESPONSE_WITH_MAC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EMSK;
@@ -65,6 +67,7 @@ import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapFailure;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
@@ -354,6 +357,24 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
         assertArrayEquals(ORIGINAL_MAC, postCalculationAtMac.mac);
 
         verify(mockMac).doFinal(eq(MAC_INPUT));
+        verifyNoMoreInteractions(mockMac);
+    }
+
+    @Test
+    public void testBuildResponseMessageWithMac() throws Exception {
+        List<RandChallengeResult> randChallengeResults = Arrays.asList(
+                mChallengeState.new RandChallengeResult(SRES_1_BYTES, KC_1_BYTES),
+                mChallengeState.new RandChallengeResult(SRES_2_BYTES, KC_2_BYTES));
+
+        Mac mockMac = mock(Mac.class);
+        when(mockMac.doFinal(eq(EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT))).thenReturn(COMPUTED_MAC);
+
+        EapResult result =
+                mChallengeState.buildResponseMessageWithMac(mockMac, ID_INT, randChallengeResults);
+
+        EapResponse eapResponse = (EapResponse) result;
+        assertArrayEquals(EAP_SIM_CHALLENGE_RESPONSE_WITH_MAC, eapResponse.packet);
+        verify(mockMac).doFinal(eq(EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT));
         verifyNoMoreInteractions(mockMac);
     }
 }
