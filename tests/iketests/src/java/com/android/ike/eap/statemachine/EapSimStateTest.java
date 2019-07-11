@@ -76,7 +76,6 @@ public class EapSimStateTest {
         assertTrue(result instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
-
     }
 
     @Test
