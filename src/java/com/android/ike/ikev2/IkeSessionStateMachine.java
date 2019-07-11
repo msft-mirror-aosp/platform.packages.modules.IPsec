@@ -194,14 +194,14 @@ public class IkeSessionStateMachine extends StateMachine {
 
     private final IkeSessionOptions mIkeSessionOptions;
 
-    /** Map that stores all IkeSaRecords, keyed by remotely generated IKE SPI. */
-    private final LongSparseArray<IkeSaRecord> mSpiToSaRecordMap;
+    /** Map that stores all IkeSaRecords, keyed by locally generated IKE SPI. */
+    private final LongSparseArray<IkeSaRecord> mLocalSpiToIkeSaRecordMap;
     /**
      * Map that stores all ChildSessionStateMachines, keyed by remotely generated Child SPI for
      * sending IPsec packet. Different SPIs may point to the same ChildSessionStateMachine if this
      * Child Session is doing Rekey.
      */
-    private final SparseArray<ChildSessionStateMachine> mSpiToChildSessionMap;
+    private final SparseArray<ChildSessionStateMachine> mRemoteSpiToChildSessionMap;
 
     private final Context mContext;
     private final IpSecManager mIpSecManager;
@@ -296,8 +296,8 @@ public class IkeSessionStateMachine extends StateMachine {
         mIkeSessionOptions = ikeOptions;
 
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
-        mSpiToSaRecordMap = new LongSparseArray<>(3);
-        mSpiToChildSessionMap = new SparseArray<>();
+        mLocalSpiToIkeSaRecordMap = new LongSparseArray<>(3);
+        mRemoteSpiToChildSessionMap = new SparseArray<>();
 
         mContext = context;
         mIpSecManager = ipSecManager;
@@ -500,14 +500,18 @@ public class IkeSessionStateMachine extends StateMachine {
 
     @VisibleForTesting
     void addIkeSaRecord(IkeSaRecord record) {
-        // TODO: We register local SPI in IkeSocket. For consistency we should also use local IKE
-        // SPI here.
-        mSpiToSaRecordMap.put(record.getRemoteSpi(), record);
+        mLocalSpiToIkeSaRecordMap.put(record.getLocalSpi(), record);
+
+        // In IKE_INIT exchange, local SPI was registered with this IkeSessionStateMachine before
+        // IkeSaRecord is created. Calling this method at the end of exchange will double-register
+        // the SPI but it is safe because the key and value are not changed.
+        mIkeSocket.registerIke(record.getLocalSpi(), this);
     }
 
     @VisibleForTesting
     void removeIkeSaRecord(IkeSaRecord record) {
-        mSpiToSaRecordMap.remove(record.getRemoteSpi());
+        mIkeSocket.unregisterIke(record.getLocalSpi());
+        mLocalSpiToIkeSaRecordMap.remove(record.getLocalSpi());
     }
 
     /**
@@ -584,12 +588,12 @@ public class IkeSessionStateMachine extends StateMachine {
     class ChildSessionSmCallback implements ChildSessionStateMachine.IChildSessionSmCallback {
         @Override
         public void onChildSaCreated(int remoteSpi, ChildSessionStateMachine childSession) {
-            mSpiToChildSessionMap.put(remoteSpi, childSession);
+            mRemoteSpiToChildSessionMap.put(remoteSpi, childSession);
         }
 
         @Override
         public void onChildSaDeleted(int remoteSpi) {
-            mSpiToChildSessionMap.remove(remoteSpi);
+            mRemoteSpiToChildSessionMap.remove(remoteSpi);
         }
 
         @Override
@@ -641,7 +645,10 @@ public class IkeSessionStateMachine extends StateMachine {
                 mLocalPort = localAddr.getPort();
                 Os.close(sock);
 
-                mIkeSocket = IkeSocket.getIkeSocket(mIkeSessionOptions.getUdpEncapsulationSocket());
+                mIkeSocket =
+                        IkeSocket.getIkeSocket(
+                                mIkeSessionOptions.getUdpEncapsulationSocket(),
+                                IkeSessionStateMachine.this);
             } catch (ErrnoException | SocketException e) {
                 // TODO: handle exception and close IkeSession.
             }
@@ -966,9 +973,9 @@ public class IkeSessionStateMachine extends StateMachine {
 
         protected IkeSaRecord getIkeSaRecordForPacket(IkeHeader ikeHeader) {
             if (ikeHeader.fromIkeInitiator) {
-                return mSpiToSaRecordMap.get(ikeHeader.ikeInitiatorSpi);
+                return mLocalSpiToIkeSaRecordMap.get(ikeHeader.ikeResponderSpi);
             } else {
-                return mSpiToSaRecordMap.get(ikeHeader.ikeResponderSpi);
+                return mLocalSpiToIkeSaRecordMap.get(ikeHeader.ikeInitiatorSpi);
             }
         }
 
@@ -1588,7 +1595,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         IkeDeletePayload delPayload = (IkeDeletePayload) payload;
 
                         for (int spi : delPayload.spisToDelete) {
-                            ChildSessionStateMachine child = mSpiToChildSessionMap.get(spi);
+                            ChildSessionStateMachine child = mRemoteSpiToChildSessionMap.get(spi);
                             if (child == null) {
                                 // TODO: Investigate how other implementations handle that.
                                 logw("Child SA not found with received SPI: " + spi);
@@ -1677,6 +1684,8 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void enter() {
             IkeMessage request = buildRequest();
+
+            // Register local SPI to receive the IKE INIT response.
             mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
 
             mIkeInitRequestBytes = request.encode();
@@ -3020,5 +3029,11 @@ public class IkeSessionStateMachine extends StateMachine {
 
             return payloadList;
         }
+    }
+
+    /** Called when this StateMachine quits. */
+    @Override
+    protected void onQuitting() {
+        mIkeSocket.releaseReference(this);
     }
 }
