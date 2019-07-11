@@ -54,6 +54,7 @@ import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
+import com.android.ike.eap.message.EapSimAttribute.AtMac;
 import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
 import com.android.ike.eap.message.EapSimAttribute.AtRand;
 import com.android.ike.eap.message.EapSimAttribute.AtSelectedVersion;
@@ -66,6 +67,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
@@ -73,6 +75,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * EapSimMethodStateMachine represents the valid paths possible for the EAP-SIM protocol.
@@ -322,6 +327,7 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         private final int mKcLenBytes = 8;
 
         private final String mMasterKeyGenerationAlg = "SHA-1";
+        private final String mMacAlgorithm = "HmacSHA1";
 
         private final List<Integer> mVersions;
         private final byte[] mNonce;
@@ -389,7 +395,34 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
-            // TODO(b/136281777): check if received MAC == MAC(packet | nonce)
+            Mac macAlgorithm;
+            try {
+                macAlgorithm = Mac.getInstance(mMacAlgorithm);
+                macAlgorithm.init(new SecretKeySpec(mKAut, mMacAlgorithm));
+
+                byte[] mac = getMac(
+                        macAlgorithm,
+                        message.eapCode,
+                        message.eapIdentifier,
+                        eapSimTypeData,
+                        mNonce);
+                // attributes are 'valid', so must have AtMac
+                AtMac atMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
+                if (!Arrays.equals(mac, atMac.mac)) {
+                    // MAC in message != calculated mac
+                    String msg = "Received message with invalid Mac."
+                            + "expected=" + Arrays.toString(mac)
+                            + ", actual=" + Arrays.toString(atMac.mac);
+                    Log.d(mTAG, msg);
+                    return buildClientErrorResponse(message.eapIdentifier,
+                            AtClientErrorCode.UNABLE_TO_PROCESS);
+                }
+            } catch (GeneralSecurityException | EapSilentException
+                    | EapSimInvalidAttributeException ex) {
+                // if the MAC can't be generated, we can't continue
+                Log.e(mTAG, "Error computing MAC for EapMessage", ex);
+                return new EapError(ex);
+            }
 
             return null;
         }
@@ -517,6 +550,33 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
             mkResultBuffer.get(mKAut);
             mkResultBuffer.get(mMsk);
             mkResultBuffer.get(mEmsk);
+        }
+
+        @VisibleForTesting
+        byte[] getMac(
+                Mac macAlgorithm,
+                int eapCode,
+                int eapIdentifier,
+                EapSimTypeData eapSimTypeData,
+                byte[] extraData) throws EapSimInvalidAttributeException, EapSilentException {
+            // cache original Mac so it can be restored after calculating the Mac
+            AtMac originalMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
+            eapSimTypeData.attributeMap.put(EAP_AT_MAC, new AtMac());
+
+            byte[] typeDataWithEmptyMac = eapSimTypeData.encode();
+            EapData eapData = new EapData(EAP_TYPE_SIM, typeDataWithEmptyMac);
+            EapMessage messageForMac = new EapMessage(eapCode, eapIdentifier, eapData);
+
+            ByteBuffer buffer =
+                    ByteBuffer.allocate(messageForMac.eapLength + extraData.length);
+            buffer.put(messageForMac.encode());
+            buffer.put(extraData);
+            byte[] mac = macAlgorithm.doFinal(buffer.array());
+
+            eapSimTypeData.attributeMap.put(EAP_AT_MAC, originalMac);
+
+            // need HMAC-SHA1-128 - first 16 bytes of SHA1 (RFC 4186 Section 10.14)
+            return Arrays.copyOfRange(mac, 0, AtMac.MAC_LENGTH);
         }
     }
 
