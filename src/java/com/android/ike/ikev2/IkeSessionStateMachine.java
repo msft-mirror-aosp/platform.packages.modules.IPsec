@@ -17,7 +17,11 @@ package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ErrorType;
+import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR_MESSAGE;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
@@ -577,8 +581,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
     /** Callback for ChildSessionStateMachine to notify IkeSessionStateMachine. */
     @VisibleForTesting
-    class ChildSessionSmCallback
-            implements ChildSessionStateMachine.IChildSessionSmCallback {
+    class ChildSessionSmCallback implements ChildSessionStateMachine.IChildSessionSmCallback {
         @Override
         public void onChildSaCreated(int remoteSpi, ChildSessionStateMachine childSession) {
             mSpiToChildSessionMap.put(remoteSpi, childSession);
@@ -833,6 +836,22 @@ public class IkeSessionStateMachine extends StateMachine {
     void sendEncryptedIkeMessage(IkeSaRecord ikeSaRecord, IkeMessage msg) {
         byte[] bytes = msg.encryptAndEncode(mIkeIntegrity, mIkeCipher, ikeSaRecord);
         mIkeSocket.sendIkePacket(bytes, mRemoteAddress);
+    }
+
+    // Builds and sends error notification response on the provided IKE SA record
+    @VisibleForTesting
+    void buildAndSendErrorNotificationResponse(
+            IkeSaRecord ikeSaRecord, int messageId, @ErrorType int errorType) {
+        IkeInformationalPayload error = new IkeNotifyPayload(errorType);
+        IkeMessage msg =
+                buildEncryptedNotificationMessage(
+                        ikeSaRecord,
+                        new IkeInformationalPayload[] {error},
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        true /*isResponse*/,
+                        messageId);
+
+        sendEncryptedIkeMessage(ikeSaRecord, msg);
     }
 
     // Builds an Encrypted IKE Informational Message for the given IkeInformationalPayload using the
@@ -1487,7 +1506,11 @@ public class IkeSessionStateMachine extends StateMachine {
             mLastInboundRequestMsgId = ikeMessage.ikeHeader.messageId;
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_CREATE_CHILD:
-                    // TODO: Reply ERROR_TYPE_NO_ADDITIONAL_SAS
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_NO_ADDITIONAL_SAS);
+                    transitionToIdleIfAllProceduresDone();
                     break;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     // TODO: Reply and close IKE Session.
@@ -2469,17 +2492,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     break;
                 default:
                     // TODO: Implement simultaneous rekey
-                    IkeInformationalPayload error =
-                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
-                    IkeMessage msg =
-                            buildEncryptedNotificationMessage(
-                                    mCurrentIkeSaRecord,
-                                    new IkeInformationalPayload[] {error},
-                                    ikeMessage.ikeHeader.exchangeType,
-                                    true,
-                                    ikeMessage.ikeHeader.messageId);
-
-                    sendEncryptedIkeMessage(msg);
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
             }
         }
 
@@ -2754,17 +2770,10 @@ public class IkeSessionStateMachine extends StateMachine {
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             // Always return a TEMPORARY_FAILURE. In no case should we accept a message on an SA
             // that is going away. All messages on the new SA is caught in RekeyIkeDeleteBase
-            IkeInformationalPayload error =
-                    new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
-            IkeMessage msg =
-                    buildEncryptedNotificationMessage(
-                            mIkeSaRecordAwaitingLocalDel,
-                            new IkeInformationalPayload[] {error},
-                            ikeMessage.ikeHeader.exchangeType,
-                            true,
-                            ikeMessage.ikeHeader.messageId);
-
-            sendEncryptedIkeMessage(msg);
+            buildAndSendErrorNotificationResponse(
+                    mIkeSaRecordAwaitingLocalDel,
+                    ikeMessage.ikeHeader.messageId,
+                    ERROR_TYPE_TEMPORARY_FAILURE);
         }
 
         @Override
@@ -2811,17 +2820,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     // and the rekey is finished. It is likewise impossible to have this on the
                     // local-deleted SA, since the delete has already been acknowledged in the
                     // SimulRekeyIkeLocalDeleteRemoteDelete state.
-                    IkeInformationalPayload error =
-                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
-                    IkeMessage msg =
-                            buildEncryptedNotificationMessage(
-                                    mIkeSaRecordAwaitingRemoteDel,
-                                    new IkeInformationalPayload[] {error},
-                                    ikeMessage.ikeHeader.exchangeType,
-                                    true,
-                                    ikeMessage.ikeHeader.messageId);
-
-                    sendEncryptedIkeMessage(msg);
+                    buildAndSendErrorNotificationResponse(
+                            mIkeSaRecordAwaitingRemoteDel,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
             }
         }
 
@@ -2912,17 +2914,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     handleDeleteSessionRequest(ikeMessage);
                     return;
                 default:
-                    IkeInformationalPayload error =
-                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
-                    IkeMessage msg =
-                            buildEncryptedNotificationMessage(
-                                    mCurrentIkeSaRecord,
-                                    new IkeInformationalPayload[] {error},
-                                    ikeMessage.ikeHeader.exchangeType,
-                                    true,
-                                    ikeMessage.ikeHeader.messageId);
-
-                    sendEncryptedIkeMessage(msg);
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
             }
         }
 
