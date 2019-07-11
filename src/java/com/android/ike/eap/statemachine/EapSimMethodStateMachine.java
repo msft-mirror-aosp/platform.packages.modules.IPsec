@@ -424,7 +424,11 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
                 return new EapError(ex);
             }
 
-            return null;
+            // server has been authenticated, so we can send a response
+            return buildResponseMessageWithMac(
+                    macAlgorithm,
+                    message.eapIdentifier,
+                    randChallengeResults);
         }
 
         /**
@@ -577,6 +581,39 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
 
             // need HMAC-SHA1-128 - first 16 bytes of SHA1 (RFC 4186 Section 10.14)
             return Arrays.copyOfRange(mac, 0, AtMac.MAC_LENGTH);
+        }
+
+        @VisibleForTesting
+        EapResult buildResponseMessageWithMac(
+                Mac macAlgorithm,
+                int identifier,
+                List<RandChallengeResult> randChallengeResults) {
+            try {
+                EapSimTypeData eapSimTypeData =
+                        new EapSimTypeData(EAP_SIM_CHALLENGE, Arrays.asList(new AtMac()));
+
+                ByteBuffer sresValues =
+                        ByteBuffer.allocate(randChallengeResults.size() * mSresLenBytes);
+                for (RandChallengeResult result : randChallengeResults) {
+                    sresValues.put(result.sres);
+                }
+
+                byte[] mac = getMac(
+                        macAlgorithm,
+                        EAP_CODE_RESPONSE,
+                        identifier,
+                        eapSimTypeData,
+                        sresValues.array());
+
+                eapSimTypeData.attributeMap.put(EAP_AT_MAC, new AtMac(mac));
+                EapData eapData = new EapData(EAP_TYPE_SIM, eapSimTypeData.encode());
+                EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
+                return EapResponse.getEapResponse(eapMessage);
+            } catch (EapSimInvalidAttributeException | EapSilentException ex) {
+                // this should never happen
+                Log.e(mTAG, "Error building response for EAP-SIM/Challenge response", ex);
+                return new EapError(ex);
+            }
         }
     }
 
