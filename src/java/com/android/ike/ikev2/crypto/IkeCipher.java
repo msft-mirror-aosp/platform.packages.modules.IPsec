@@ -49,18 +49,27 @@ public class IkeCipher extends IkeCrypto {
     // Authentication tag is only used in an AEAD.
     private static final int AUTH_TAG_LEN_UNUSED = 0;
 
+    private static final int KEY_LEN_3DES = 24;
+
+    private static final int IV_LEN_3DES = 8;
+    private static final int IV_LEN_AES_CBC = 16;
+    private static final int IV_LEN_AES_GCM = 8;
+
     private final boolean mIsAead;
+    private final int mIvLen;
     private final int mAuthTagLen;
     private final Cipher mCipher;
 
     private IkeCipher(
             int algorithmId,
             int keyLength,
+            int ivLength,
             String algorithmName,
             boolean isAead,
             int authTagLen,
             Provider provider) {
         super(algorithmId, keyLength, algorithmName);
+        mIvLen = ivLength;
         mIsAead = isAead;
         mAuthTagLen = authTagLen;
 
@@ -87,7 +96,8 @@ public class IkeCipher extends IkeCrypto {
             case SaProposal.ENCRYPTION_ALGORITHM_3DES:
                 return new IkeCipher(
                         algorithmId,
-                        20 /*keyLength*/,
+                        KEY_LEN_3DES,
+                        IV_LEN_3DES,
                         "DESede/CBC/NoPadding",
                         false /*isAead*/,
                         AUTH_TAG_LEN_UNUSED,
@@ -96,6 +106,7 @@ public class IkeCipher extends IkeCrypto {
                 return new IkeCipher(
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
+                        IV_LEN_AES_CBC,
                         "AES/CBC/NoPadding",
                         false /*isAead*/,
                         AUTH_TAG_LEN_UNUSED,
@@ -104,6 +115,7 @@ public class IkeCipher extends IkeCrypto {
                 return new IkeCipher(
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
+                        IV_LEN_AES_GCM,
                         "AES/GCM/NoPadding",
                         true /*isAead*/,
                         8 /*authTagLen*/,
@@ -112,6 +124,7 @@ public class IkeCipher extends IkeCrypto {
                 return new IkeCipher(
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
+                        IV_LEN_AES_GCM,
                         "AES/GCM/NoPadding",
                         true /*isAead*/,
                         12 /*authTagLen*/,
@@ -120,6 +133,7 @@ public class IkeCipher extends IkeCrypto {
                 return new IkeCipher(
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
+                        IV_LEN_AES_GCM,
                         "AES/GCM/NoPadding",
                         true /*isAead*/,
                         16 /*authTagLen*/,
@@ -151,12 +165,21 @@ public class IkeCipher extends IkeCrypto {
     }
 
     /**
+     * Get initialization vector (IV) length.
+     *
+     * @return the IV length.
+     */
+    public int getIvLen() {
+        return mIvLen;
+    }
+
+    /**
      * Generate initialization vector (IV).
      *
      * @return the initialization vector (IV).
      */
     public byte[] generateIv() {
-        byte[] iv = new byte[getBlockSize()];
+        byte[] iv = new byte[getIvLen()];
         new SecureRandom().nextBytes(iv);
         return iv;
     }
