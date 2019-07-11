@@ -45,7 +45,9 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_IDENTITY =
             hexStringToByteArray("0E060011" + IDENTITY_STRING + "000000");
     public static final String RAND_1 = "00112233445566778899AABBCCDDEEFF";
+    public static final byte[] RAND_1_BYTES = hexStringToByteArray(RAND_1);
     public static final String RAND_2 = "FFEEDDCCBBAA99887766554433221100";
+    public static final byte[] RAND_2_BYTES = hexStringToByteArray(RAND_2);
     public static final byte[] AT_RAND = hexStringToByteArray("01090000" + RAND_1 + RAND_2);
     public static final byte[] AT_PADDING = hexStringToByteArray("0602000000000000");
     public static final String MAC = "112233445566778899AABBCCDDEEFF11";
