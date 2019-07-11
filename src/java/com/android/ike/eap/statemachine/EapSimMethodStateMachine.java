@@ -326,8 +326,8 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         private final int mSresLenBytes = 4;
         private final int mKcLenBytes = 8;
 
-        private final String mMasterKeyGenerationAlg = "SHA-1";
-        private final String mMacAlgorithm = "HmacSHA1";
+        @VisibleForTesting final String mMasterKeyGenerationAlg = "SHA-1";
+        @VisibleForTesting final String mMacAlgorithm = "HmacSHA1";
 
         private final List<Integer> mVersions;
         private final byte[] mNonce;
