@@ -18,11 +18,12 @@ package com.android.ike.ikev2;
 
 import android.content.Context;
 import android.net.IpSecManager;
-import android.os.Handler;
 import android.os.Looper;
 
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.internal.annotations.VisibleForTesting;
+
+import java.util.concurrent.Executor;
 
 /** Package private factory for making ChildSessionStateMachine. */
 // TODO: Make it a inner Creator class of ChildSessionStateMachine
@@ -35,11 +36,11 @@ final class ChildSessionStateMachineFactory {
             Looper looper,
             Context context,
             ChildSessionOptions sessionOptions,
-            Handler userCbHandler,
+            Executor userCbExecutor,
             IChildSessionCallback userCallbacks,
             IChildSessionSmCallback childSmCallback) {
         return sChildSessionHelper.makeChildSessionStateMachine(
-                looper, context, sessionOptions, userCbHandler, userCallbacks, childSmCallback);
+                looper, context, sessionOptions, userCbExecutor, userCallbacks, childSmCallback);
     }
 
     @VisibleForTesting
@@ -58,7 +59,7 @@ final class ChildSessionStateMachineFactory {
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
-                Handler userCbHandler,
+                Executor userCbExecutor,
                 IChildSessionCallback userCallbacks,
                 IChildSessionSmCallback childSmCallback);
     }
@@ -73,7 +74,7 @@ final class ChildSessionStateMachineFactory {
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
-                Handler userCbHandler,
+                Executor userCbExecutor,
                 IChildSessionCallback userCallbacks,
                 IChildSessionSmCallback childSmCallback) {
             ChildSessionStateMachine childSession =
@@ -82,7 +83,7 @@ final class ChildSessionStateMachineFactory {
                             context,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                             sessionOptions,
-                            userCbHandler,
+                            userCbExecutor,
                             userCallbacks,
                             childSmCallback);
             childSession.start();
