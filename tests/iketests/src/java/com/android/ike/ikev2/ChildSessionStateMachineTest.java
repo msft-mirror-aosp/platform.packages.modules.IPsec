@@ -112,12 +112,18 @@ public final class ChildSessionStateMachineTest {
     private static final String REKEY_CHILD_RESP_PAYLOAD =
             "2800002c0000002801030403cd1736b30300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
+    private static final String REKEY_CHILD_REQ_PAYLOAD =
+            "2800002c0000002801030403c88336490300000c0100000c800e0080"
+                    + "03000008030000020000000805000000";
 
     private static final int CURRENT_CHILD_SA_SPI_IN = 0x2ad4c0a2;
     private static final int CURRENT_CHILD_SA_SPI_OUT = 0xcae7019f;
 
     private static final int LOCAL_INIT_NEW_CHILD_SA_SPI_IN = 0x57a09b0f;
     private static final int LOCAL_INIT_NEW_CHILD_SA_SPI_OUT = 0xcd1736b3;
+
+    private static final int REMOTE_INIT_NEW_CHILD_SA_SPI_IN = 0xd2d01795;
+    private static final int REMOTE_INIT_NEW_CHILD_SA_SPI_OUT = 0xc8833649;
 
     private static final String IKE_SK_D_HEX_STRING = "C86B56EFCF684DCC2877578AEF3137167FE0EBF6";
     private static final byte[] SK_D = TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING);
@@ -139,6 +145,7 @@ public final class ChildSessionStateMachineTest {
 
     private ChildSaRecord mSpyCurrentChildSaRecord;
     private ChildSaRecord mSpyLocalInitNewChildSaRecord;
+    private ChildSaRecord mSpyRemoteInitNewChildSaRecord;
 
     private ISaRecordHelper mMockSaRecordHelper;
 
@@ -235,6 +242,9 @@ public final class ChildSessionStateMachineTest {
         mSpyLocalInitNewChildSaRecord =
                 makeSpyChildSaRecord(
                         LOCAL_INIT_NEW_CHILD_SA_SPI_IN, LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
+        mSpyRemoteInitNewChildSaRecord =
+                makeSpyChildSaRecord(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_IN, REMOTE_INIT_NEW_CHILD_SA_SPI_OUT);
     }
 
     private void setUpSpiResource(InetAddress address, int spiRequested) throws Exception {
@@ -313,8 +323,15 @@ public final class ChildSessionStateMachineTest {
         assertEquals(mContext, childSaRecordConfig.context);
         assertEquals(initSpi, childSaRecordConfig.initSpi.getSpi());
         assertEquals(respSpi, childSaRecordConfig.respSpi.getSpi());
-        assertEquals(LOCAL_ADDRESS, childSaRecordConfig.initAddress);
-        assertEquals(REMOTE_ADDRESS, childSaRecordConfig.respAddress);
+
+        if (isLocalInit) {
+            assertEquals(LOCAL_ADDRESS, childSaRecordConfig.initAddress);
+            assertEquals(REMOTE_ADDRESS, childSaRecordConfig.respAddress);
+        } else {
+            assertEquals(REMOTE_ADDRESS, childSaRecordConfig.initAddress);
+            assertEquals(LOCAL_ADDRESS, childSaRecordConfig.respAddress);
+        }
+
         assertEquals(mMockUdpEncapSocket, childSaRecordConfig.udpEncapSocket);
         assertEquals(mIkePrf, childSaRecordConfig.ikePrf);
         assertArrayEquals(SK_D, childSaRecordConfig.skD);
@@ -516,6 +533,7 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.deleteChildSession();
         mChildSessionStateMachine.receiveRequest(
                 IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                EXCHANGE_TYPE_INFORMATIONAL,
                 makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
         mLooper.dispatchAll();
 
@@ -542,7 +560,7 @@ public final class ChildSessionStateMachineTest {
 
         mChildSessionStateMachine.deleteChildSession();
         mChildSessionStateMachine.receiveRequest(
-                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, mock(List.class));
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, mock(List.class));
         mLooper.dispatchAll();
 
         // Verify outbound response to Rekey Child request
@@ -570,6 +588,7 @@ public final class ChildSessionStateMachineTest {
 
         mChildSessionStateMachine.receiveRequest(
                 IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                EXCHANGE_TYPE_INFORMATIONAL,
                 makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
         mLooper.dispatchAll();
 
@@ -589,6 +608,30 @@ public final class ChildSessionStateMachineTest {
         assertArrayEquals(
                 new int[] {mSpyCurrentChildSaRecord.getLocalSpi()},
                 ((IkeDeletePayload) respPayloadList.get(0)).spisToDelete);
+    }
+
+    private void verifyOutboundRekeySaPayload(List<IkePayload> outboundPayloads, boolean isResp) {
+        IkeSaPayload saPayload =
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_SA, IkeSaPayload.class, outboundPayloads);
+        assertEquals(isResp, saPayload.isSaResponse);
+        assertEquals(1, saPayload.proposalList.size());
+
+        IkeSaPayload.ChildProposal proposal =
+                (IkeSaPayload.ChildProposal) saPayload.proposalList.get(0);
+        assertEquals(1, proposal.number); // Must be 1-indexed
+        assertEquals(mChildSessionStateMachine.mSaProposal, proposal.saProposal);
+    }
+
+    private void verifyOutboundRekeyNotifyPayload(List<IkePayload> outboundPayloads) {
+        List<IkeNotifyPayload> notifyPayloads =
+                IkePayload.getPayloadListForTypeInProvidedList(
+                        PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, outboundPayloads);
+        assertEquals(1, notifyPayloads.size());
+        IkeNotifyPayload notifyPayload = notifyPayloads.get(0);
+        assertEquals(NOTIFY_TYPE_REKEY_SA, notifyPayload.notifyType);
+        assertEquals(PROTOCOL_ID_ESP, notifyPayload.protocolId);
+        assertEquals(mSpyCurrentChildSaRecord.getLocalSpi(), notifyPayload.spi);
     }
 
     @Test
@@ -612,27 +655,8 @@ public final class ChildSessionStateMachineTest {
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
         verifyOutboundCreatePayloadTypes(reqPayloadList);
 
-        // Verify SA Payload
-        IkeSaPayload saPayload =
-                IkePayload.getPayloadForTypeInProvidedList(
-                        PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloadList);
-        assertFalse(saPayload.isSaResponse);
-        assertEquals(1, saPayload.proposalList.size());
-
-        IkeSaPayload.ChildProposal proposal =
-                (IkeSaPayload.ChildProposal) saPayload.proposalList.get(0);
-        assertEquals(1, proposal.number); // Must be 1-indexed
-        assertEquals(mChildSessionStateMachine.mSaProposal, proposal.saProposal);
-
-        // Verify Notify-Rekey Payload
-        List<IkeNotifyPayload> notifyPayloads =
-                IkePayload.getPayloadListForTypeInProvidedList(
-                        PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, reqPayloadList);
-        assertEquals(1, notifyPayloads.size());
-        IkeNotifyPayload notifyPayload = notifyPayloads.get(0);
-        assertEquals(NOTIFY_TYPE_REKEY_SA, notifyPayload.notifyType);
-        assertEquals(PROTOCOL_ID_ESP, notifyPayload.protocolId);
-        assertEquals(mSpyCurrentChildSaRecord.getLocalSpi(), notifyPayload.spi);
+        verifyOutboundRekeySaPayload(reqPayloadList, false /*isResp*/);
+        verifyOutboundRekeyNotifyPayload(reqPayloadList);
     }
 
     private List<IkePayload> makeInboundRekeyChildPayloads(
@@ -776,6 +800,66 @@ public final class ChildSessionStateMachineTest {
         assertNull(mChildSessionStateMachine.mChildSaRecordSurviving);
         assertEquals(
                 mSpyLocalInitNewChildSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
+    }
+
+    @Test
+    public void testRekeyChildRemoteCreate() throws Exception {
+        setupIdleStateMachine();
+
+        // Setup for new Child SA negotiation.
+        setUpSpiResource(LOCAL_ADDRESS, REMOTE_INIT_NEW_CHILD_SA_SPI_IN);
+        setUpSpiResource(REMOTE_ADDRESS, REMOTE_INIT_NEW_CHILD_SA_SPI_OUT);
+
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_REQ_PAYLOAD,
+                        false /*isLocalInitRekey*/);
+        when(mMockSaRecordHelper.makeChildSaRecord(
+                        eq(rekeyReqPayloads), any(List.class), any(ChildSaRecordConfig.class)))
+                .thenReturn(mSpyRemoteInitNewChildSaRecord);
+
+        // Receive rekey Child request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
+        mLooper.dispatchAll();
+
+        // TODO: Verify transitioning to deleting state
+
+        // Verify outbound rekey response
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA),
+                        eq(true),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
+        verifyOutboundCreatePayloadTypes(respPayloadList);
+
+        verifyOutboundRekeySaPayload(respPayloadList, true /*isResp*/);
+        verifyOutboundRekeyNotifyPayload(respPayloadList);
+
+        // Verify new Child SA
+        assertEquals(
+                mSpyRemoteInitNewChildSaRecord,
+                mChildSessionStateMachine.mRemoteInitNewChildSaRecord);
+
+        verify(mMockChildSessionSmCallback)
+                .onChildSaCreated(
+                        eq(mSpyRemoteInitNewChildSaRecord.getRemoteSpi()),
+                        eq(mChildSessionStateMachine));
+
+        verify(mMockSaRecordHelper)
+                .makeChildSaRecord(
+                        eq(rekeyReqPayloads),
+                        any(List.class),
+                        mChildSaRecordConfigCaptor.capture());
+        ChildSaRecordConfig childSaRecordConfig = mChildSaRecordConfigCaptor.getValue();
+        verifyChildSaRecordConfig(
+                childSaRecordConfig,
+                REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
+                REMOTE_INIT_NEW_CHILD_SA_SPI_IN,
+                false /*isLocalInit*/);
     }
 
     @Test

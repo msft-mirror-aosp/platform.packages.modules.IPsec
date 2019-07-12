@@ -20,6 +20,7 @@ import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKE
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
+import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -1021,7 +1022,9 @@ public final class IkeSessionStateMachineTest {
             ChildSessionStateMachine child, IkeDeletePayload[] expectedDelPayloads) {
         verify(child)
                 .receiveRequest(
-                        eq(IKE_EXCHANGE_SUBTYPE_DELETE_CHILD), mPayloadListCaptor.capture());
+                        eq(IKE_EXCHANGE_SUBTYPE_DELETE_CHILD),
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        mPayloadListCaptor.capture());
         List<IkePayload> reqPayloads = mPayloadListCaptor.getValue();
 
         int numExpectedDelPayloads = expectedDelPayloads.length;
