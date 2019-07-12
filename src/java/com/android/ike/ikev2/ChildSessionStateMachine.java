@@ -20,6 +20,7 @@ import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DEL
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
@@ -115,6 +116,8 @@ public class ChildSessionStateMachine extends StateMachine {
     private static final int CMD_HANDLE_RECEIVED_REQUEST = 2;
     /** Receive a reponse from the remote. */
     private static final int CMD_HANDLE_RECEIVED_RESPONSE = 3;
+    /** Timeout when the remote side fails to send a Rekey-Delete request. */
+    @VisibleForTesting static final int TIMEOUT_REKEY_REMOTE_DELETE = 4;
     /** Force state machine to a target state for testing purposes. */
     @VisibleForTesting static final int CMD_FORCE_TRANSITION = 99;
 
@@ -1230,7 +1233,7 @@ public class ChildSessionStateMachine extends StateMachine {
         @Override
         public void enter() {
             mChildSaRecordSurviving = mRemoteInitNewChildSaRecord;
-            // TODO: Set a timer awaiting for delete request on current Child SA
+            sendMessageDelayed(TIMEOUT_REKEY_REMOTE_DELETE, REKEY_DELETE_TIMEOUT_MS);
         }
 
         @Override
@@ -1241,9 +1244,25 @@ public class ChildSessionStateMachine extends StateMachine {
 
                     if (req.exchangeSubtype == IKE_EXCHANGE_SUBTYPE_DELETE_CHILD) {
                         handleDeleteRequest(req.requestPayloads);
+
                     } else {
                         replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
                     }
+                    return HANDLED;
+                case TIMEOUT_REKEY_REMOTE_DELETE:
+                    // Receiving this signal means the remote side has received the outbound
+                    // Rekey-Create response since no retransmissions were received during the
+                    // waiting time. IKE library will assume the remote side has set up the new
+                    // Child SA and finish the rekey procedure. Users should be warned there is
+                    // a risk that the remote side failed to set up the new Child SA and all
+                    // outbound IPsec traffic protected by new Child SA will be dropped.
+
+                    // TODO:Consider finishing rekey procedure if the IKE Session receives a new
+                    // request. Since window size is one, receiving a new request indicates the
+                    // remote side has received the outbound Rekey-Create response
+
+                    finishRekey();
+                    transitionTo(mIdle);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1260,6 +1279,11 @@ public class ChildSessionStateMachine extends StateMachine {
                 finishRekey();
                 transitionTo(mIdle);
             }
+        }
+
+        @Override
+        public void exit() {
+            removeMessages(TIMEOUT_REKEY_REMOTE_DELETE);
         }
     }
 
