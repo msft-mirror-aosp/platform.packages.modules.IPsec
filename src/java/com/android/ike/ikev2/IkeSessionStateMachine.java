@@ -1628,7 +1628,9 @@ public class IkeSessionStateMachine extends StateMachine {
             // Send Delete Payloads to Child Sessions
             for (ChildSessionStateMachine child : childToDelPayloadsMap.keySet()) {
                 child.receiveRequest(
-                        IKE_EXCHANGE_SUBTYPE_DELETE_CHILD, childToDelPayloadsMap.get(child));
+                        IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        childToDelPayloadsMap.get(child));
                 mAwaitingChildResponse.add(child);
                 mChildInRemoteProcedures.add(child);
             }
