@@ -176,6 +176,7 @@ public class ChildSessionStateMachine extends StateMachine {
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
     @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
     @VisibleForTesting final State mRekeyChildLocalCreate = new RekeyChildLocalCreate();
+    @VisibleForTesting final State mRekeyChildRemoteCreate = new RekeyChildRemoteCreate();
     @VisibleForTesting final State mRekeyChildLocalDelete = new RekeyChildLocalDelete();
 
     /**
@@ -215,6 +216,7 @@ public class ChildSessionStateMachine extends StateMachine {
         addState(mDeleteChildLocalDelete);
         addState(mDeleteChildRemoteDelete);
         addState(mRekeyChildLocalCreate);
+        addState(mRekeyChildRemoteCreate);
         addState(mRekeyChildLocalDelete);
 
         setInitialState(mInitial);
@@ -361,12 +363,17 @@ public class ChildSessionStateMachine extends StateMachine {
      * as an asynchronous job to the ChildStateMachine handler.
      *
      * @param exchangeSubtype the exchange subtype of this inbound request.
+     * @param exchangeType the exchange type in the request message.
      * @param payloadList the Child-procedure-related payload list in the request message that needs
      *     validation.
      */
     public void receiveRequest(
-            @IkeExchangeSubType int exchangeSubtype, List<IkePayload> payloadList) {
-        sendMessage(CMD_HANDLE_RECEIVED_REQUEST, new ReceivedRequest(exchangeSubtype, payloadList));
+            @IkeExchangeSubType int exchangeSubtype,
+            @ExchangeType int exchangeType,
+            List<IkePayload> payloadList) {
+        sendMessage(
+                CMD_HANDLE_RECEIVED_REQUEST,
+                new ReceivedRequest(exchangeSubtype, exchangeType, payloadList));
     }
 
     /**
@@ -467,10 +474,15 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     private static class ReceivedRequest {
         @IkeExchangeSubType public final int exchangeSubtype;
+        @ExchangeType public final int exchangeType;
         public final List<IkePayload> requestPayloads;
 
-        ReceivedRequest(@IkeExchangeSubType int eType, List<IkePayload> reqPayloads) {
-            exchangeSubtype = eType;
+        ReceivedRequest(
+                @IkeExchangeSubType int eSubtype,
+                @ExchangeType int eType,
+                List<IkePayload> reqPayloads) {
+            exchangeSubtype = eSubtype;
+            exchangeType = eType;
             requestPayloads = reqPayloads;
         }
     }
@@ -480,7 +492,7 @@ public class ChildSessionStateMachine extends StateMachine {
      * message to the current Child procedure.
      */
     private static class ReceivedResponse {
-        public final int exchangeType;
+        @ExchangeType public final int exchangeType;
         public final List<IkePayload> responsePayloads;
 
         ReceivedResponse(@ExchangeType int eType, List<IkePayload> respPayloads) {
@@ -490,10 +502,10 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
-     * InitCreateChildBase represents the common information for negotiating the initial Child SA
-     * for setting up this Child Session.
+     * CreateChildLocalCreateBase represents the common information for a locally-initiated initial
+     * Child SA negotiation for setting up this Child Session.
      */
-    private abstract class InitCreateChildBase extends State {
+    private abstract class CreateChildLocalCreateBase extends State {
         protected void validateAndBuildChild(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
@@ -517,8 +529,8 @@ public class ChildSessionStateMachine extends StateMachine {
                                         mContext,
                                         reqPayloads,
                                         respPayloads,
-                                        createChildResult.localSpi,
-                                        createChildResult.remoteSpi,
+                                        createChildResult.initSpi,
+                                        createChildResult.respSpi,
                                         mLocalAddress,
                                         mRemoteAddress,
                                         mUdpEncapSocket,
@@ -535,8 +547,8 @@ public class ChildSessionStateMachine extends StateMachine {
                             | SpiUnavailableException
                             | IOException e) {
                         // #makeChildSaRecord failed.
-                        createChildResult.localSpi.close();
-                        createChildResult.remoteSpi.close();
+                        createChildResult.initSpi.close();
+                        createChildResult.respSpi.close();
                         // TODO: Initiate deletion and close this Child Session
                         throw new UnsupportedOperationException("Cannot handle this error");
                     }
@@ -575,13 +587,13 @@ public class ChildSessionStateMachine extends StateMachine {
                         IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
             }
 
-            mLocalTs = createChildResult.localTs;
-            mRemoteTs = createChildResult.remoteTs;
+            mLocalTs = createChildResult.initTs;
+            mRemoteTs = createChildResult.respTs;
         }
     }
 
     /** Initial state of ChildSessionStateMachine. */
-    class Initial extends InitCreateChildBase {
+    class Initial extends CreateChildLocalCreateBase {
         @Override
         public boolean processMessage(Message message) {
             switch (message.what) {
@@ -616,7 +628,7 @@ public class ChildSessionStateMachine extends StateMachine {
      * CreateChildLocalCreate represents the state where Child Session initiates the Create Child
      * exchange.
      */
-    class CreateChildLocalCreate extends InitCreateChildBase {
+    class CreateChildLocalCreate extends CreateChildLocalCreateBase {
         private List<IkePayload> mRequestPayloads;
 
         @Override
@@ -688,8 +700,11 @@ public class ChildSessionStateMachine extends StateMachine {
                             deferMessage(message);
                             transitionTo(mDeleteChildRemoteDelete);
                             return HANDLED;
+                        case IKE_EXCHANGE_SUBTYPE_REKEY_CHILD:
+                            deferMessage(message);
+                            transitionTo(mRekeyChildRemoteCreate);
+                            return HANDLED;
                         default:
-                            // TODO: Handle remote rekey request
                             return NOT_HANDLED;
                     }
                 case CMD_FORCE_TRANSITION: // Testing command
@@ -981,8 +996,8 @@ public class ChildSessionStateMachine extends StateMachine {
                                                 mContext,
                                                 mRequestPayloads,
                                                 resp.responsePayloads,
-                                                createChildResult.localSpi,
-                                                createChildResult.remoteSpi,
+                                                createChildResult.initSpi,
+                                                createChildResult.respSpi,
                                                 mLocalAddress,
                                                 mRemoteAddress,
                                                 mUdpEncapSocket,
@@ -999,8 +1014,8 @@ public class ChildSessionStateMachine extends StateMachine {
                                     | SpiUnavailableException
                                     | IOException e) {
                                 // #makeChildSaRecord failed.
-                                createChildResult.localSpi.close();
-                                createChildResult.remoteSpi.close();
+                                createChildResult.initSpi.close();
+                                createChildResult.respSpi.close();
                                 // TODO: Initiate deletion on newly created SA and retry rekey
                                 throw new UnsupportedOperationException("Cannot handle this error");
                             }
@@ -1023,6 +1038,123 @@ public class ChildSessionStateMachine extends StateMachine {
                 default:
                     // TODO: Handle rekey and delete request
                     return NOT_HANDLED;
+            }
+        }
+    }
+
+    /**
+     * RekeyChildRemoteCreate represents the state where Child Session receives a Rekey Child
+     * request.
+     *
+     * <p>As indicated in RFC 7296 section 2.8, "when rekeying, the new Child SA SHOULD NOT have
+     * different Traffic Selectors and algorithms than the old one."
+     */
+    class RekeyChildRemoteCreate extends State {
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_HANDLE_RECEIVED_REQUEST:
+                    ReceivedRequest req = (ReceivedRequest) message.obj;
+
+                    if (req.exchangeSubtype == IKE_EXCHANGE_SUBTYPE_REKEY_CHILD) {
+                        handleCreateChildRequest(req);
+                        return HANDLED;
+                    }
+
+                    return NOT_HANDLED;
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+
+        private void handleCreateChildRequest(ReceivedRequest req) {
+            try {
+                List<IkePayload> reqPayloads = req.requestPayloads;
+
+                // Build a rekey response payload list with our previously selected proposal,
+                // against which we will validate the received request. It is guaranteed in
+                // IkeSessionStateMachine#getIkeExchangeSubType that a SA Payload is included in the
+                // inbound request payload list.
+                IkeSaPayload reqSaPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
+                byte respProposalNumber = reqSaPayload.getNegotiatedProposalNumber(mSaProposal);
+
+                List<IkePayload> respPayloads =
+                        CreateChildSaHelper.getRekeyChildCreateRespPayloads(
+                                mIpSecManager,
+                                mLocalAddress,
+                                respProposalNumber,
+                                mSaProposal,
+                                mLocalTs,
+                                mRemoteTs,
+                                mCurrentChildSaRecord.getLocalSpi(),
+                                mChildSessionOptions.isTransportMode());
+
+                CreateChildResult createChildResult =
+                        CreateChildSaHelper.validateAndNegotiateRekeyChildRequest(
+                                reqPayloads,
+                                respPayloads,
+                                req.exchangeType /*exchangeType*/,
+                                EXCHANGE_TYPE_CREATE_CHILD_SA /*expectedExchangeType*/,
+                                mChildSessionOptions.isTransportMode(),
+                                mIpSecManager,
+                                mRemoteAddress);
+
+                switch (createChildResult.status) {
+                    case CREATE_STATUS_OK:
+                        try {
+                            // Do not need to update the negotiated proposal and TS
+                            // because they are not changed.
+                            mRemoteInitNewChildSaRecord =
+                                    ChildSaRecord.makeChildSaRecord(
+                                            mContext,
+                                            reqPayloads,
+                                            respPayloads,
+                                            createChildResult.initSpi,
+                                            createChildResult.respSpi,
+                                            mLocalAddress,
+                                            mRemoteAddress,
+                                            mUdpEncapSocket,
+                                            mIkePrf,
+                                            mChildIntegrity,
+                                            mChildCipher,
+                                            mSkD,
+                                            mChildSessionOptions.isTransportMode(),
+                                            false /*isLocalInit*/);
+
+                            mChildSmCallback.onChildSaCreated(
+                                    mRemoteInitNewChildSaRecord.getRemoteSpi(),
+                                    ChildSessionStateMachine.this);
+
+                            mChildSmCallback.onOutboundPayloadsReady(
+                                    EXCHANGE_TYPE_CREATE_CHILD_SA,
+                                    true /*isResp*/,
+                                    respPayloads,
+                                    ChildSessionStateMachine.this);
+
+                            // TODO: Transition to delete state
+                        } catch (GeneralSecurityException
+                                | ResourceUnavailableException
+                                | SpiUnavailableException
+                                | IOException e) {
+                            // #makeChildSaRecord failed.
+                            createChildResult.initSpi.close();
+                            createChildResult.respSpi.close();
+
+                            // TODO: Reply with error notification and transition to
+                            // Idle state.
+                            throw new UnsupportedOperationException("Cannot handle this error");
+                        }
+                        break;
+                    default:
+                        // TODO: Handle error status
+                        throw new IllegalArgumentException(
+                                "Unrecognized status: " + createChildResult.status);
+                }
+
+            } catch (NoValidProposalChosenException | ResourceUnavailableException e) {
+                // TODO: Reply with error notification and transition to Idle state.
             }
         }
     }
@@ -1111,16 +1243,14 @@ public class ChildSessionStateMachine extends StateMachine {
             }
 
             return getChildCreatePayloads(
-                    ipSecManager,
-                    localAddress,
-                    saProposals,
+                    IkeSaPayload.createChildSaRequestPayload(
+                            saProposals, ipSecManager, localAddress),
                     childSessionOptions.getLocalTrafficSelectors(),
                     childSessionOptions.getRemoteTrafficSelectors(),
-                    false /*isResp*/,
                     childSessionOptions.isTransportMode());
         }
 
-        /** Create payload list for creating a new Child SA to rekey this Child Session. */
+        /** Create payload list as a rekey Child Session request. */
         public static List<IkePayload> getRekeyChildCreateReqPayloads(
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
@@ -1132,12 +1262,10 @@ public class ChildSessionStateMachine extends StateMachine {
                 throws ResourceUnavailableException {
             List<IkePayload> payloads =
                     getChildCreatePayloads(
-                            ipSecManager,
-                            localAddress,
-                            new SaProposal[] {currentProposal},
+                            IkeSaPayload.createChildSaRequestPayload(
+                                    new SaProposal[] {currentProposal}, ipSecManager, localAddress),
                             currentLocalTs,
                             currentRemoteTs,
-                            false /*isResp*/,
                             isTransport);
 
             payloads.add(
@@ -1146,29 +1274,47 @@ public class ChildSessionStateMachine extends StateMachine {
             return payloads;
         }
 
-        // TODO: Support creating payloads for rekey response by calling #getChildCreatePayloads and
-        // adding Notify-Rekey payload.
+        /** Create payload list as a rekey Child Session response. */
+        public static List<IkePayload> getRekeyChildCreateRespPayloads(
+                IpSecManager ipSecManager,
+                InetAddress localAddress,
+                byte proposalNumber,
+                SaProposal currentProposal,
+                IkeTrafficSelector[] currentLocalTs,
+                IkeTrafficSelector[] currentRemoteTs,
+                int localSpi,
+                boolean isTransport)
+                throws ResourceUnavailableException {
+            List<IkePayload> payloads =
+                    getChildCreatePayloads(
+                            IkeSaPayload.createChildSaResponsePayload(
+                                    proposalNumber, currentProposal, ipSecManager, localAddress),
+                            currentRemoteTs /*initTs*/,
+                            currentLocalTs /*respTs*/,
+                            isTransport);
+
+            payloads.add(
+                    new IkeNotifyPayload(
+                            PROTOCOL_ID_ESP, localSpi, NOTIFY_TYPE_REKEY_SA, new byte[0]));
+            return payloads;
+        }
 
         /** Create payload list for creating a new Child SA. */
         private static List<IkePayload> getChildCreatePayloads(
-                IpSecManager ipSecManager,
-                InetAddress localAddress,
-                SaProposal[] saProposals,
+                IkeSaPayload saPayload,
                 IkeTrafficSelector[] initTs,
                 IkeTrafficSelector[] respTs,
-                boolean isResp,
                 boolean isTransport)
                 throws ResourceUnavailableException {
             List<IkePayload> payloadList = new ArrayList<>(5);
 
-            payloadList.add(
-                    IkeSaPayload.createChildSaRequestPayload(
-                            saProposals, ipSecManager, localAddress));
+            payloadList.add(saPayload);
             payloadList.add(new IkeTsPayload(true /*isInitiator*/, initTs));
             payloadList.add(new IkeTsPayload(false /*isInitiator*/, respTs));
             payloadList.add(new IkeNoncePayload());
 
-            DhGroupTransform[] dhGroups = saProposals[0].getDhGroupTransforms();
+            DhGroupTransform[] dhGroups =
+                    saPayload.proposalList.get(0).saProposal.getDhGroupTransforms();
             if (dhGroups.length != 0 && dhGroups[0].id != DH_GROUP_NONE) {
                 payloadList.add(new IkeKePayload(dhGroups[0].id));
             }
@@ -1202,8 +1348,36 @@ public class ChildSessionStateMachine extends StateMachine {
                     remoteAddress);
         }
 
-        // TODO: Add method to support validating rekey request
+        /**
+         * Validate the received rekey-create request against locally built response (based on
+         * previously negotiated Child SA) and return the negotiation result.
+         */
+        public static CreateChildResult validateAndNegotiateRekeyChildRequest(
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                @ExchangeType int exchangeType,
+                @ExchangeType int expectedExchangeType,
+                boolean expectTransport,
+                IpSecManager ipSecManager,
+                InetAddress remoteAddress) {
 
+            // It is guaranteed that a Rekey-Notify Payload with remote SPI of current Child SA is
+            // included in the reqPayloads. So we won't validate it again here.
+            return validateAndNegotiateChild(
+                    reqPayloads,
+                    respPayloads,
+                    exchangeType,
+                    expectedExchangeType,
+                    false /*isLocalInit*/,
+                    expectTransport,
+                    ipSecManager,
+                    remoteAddress);
+        }
+
+        /**
+         * Validate the received rekey-create response against locally built request and previously
+         * negotiated Child SA, and return the negotiation result.
+         */
         public static CreateChildResult validateAndNegotiateRekeyChildResp(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
@@ -1251,7 +1425,7 @@ public class ChildSessionStateMachine extends StateMachine {
             return childResult;
         }
 
-        /** Validate the received response and negotiate Child SA. */
+        /** Validate the received payload list and negotiate Child SA. */
         private static CreateChildResult validateAndNegotiateChild(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
@@ -1283,7 +1457,8 @@ public class ChildSessionStateMachine extends StateMachine {
             for (IkeNotifyPayload notify : notifyPayloads) {
                 if (notify.isErrorNotify()) {
                     // TODO: Return CreateChildResult with CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY and
-                    // IkeProtocolException
+                    // IkeProtocolException if inboundPayloads is a response. Otherwise, ignore
+                    // error notifications.
                     throw new UnsupportedOperationException("Cannot handle this error");
                 }
 
@@ -1336,8 +1511,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 }
 
                 Pair<IkeTrafficSelector[], IkeTrafficSelector[]> tsPair =
-                        validateAndGetNegotiatedTsPair(
-                                reqPayloads, respPayloads, true /*isLocalInit*/);
+                        validateAndGetNegotiatedTsPair(reqPayloads, respPayloads);
 
                 return new CreateChildResult(
                         childProposalPair.first.getChildSpiResource(),
@@ -1444,20 +1618,14 @@ public class ChildSessionStateMachine extends StateMachine {
 
         private static Pair<IkeTrafficSelector[], IkeTrafficSelector[]>
                 validateAndGetNegotiatedTsPair(
-                        List<IkePayload> reqPayloads,
-                        List<IkePayload> respPayloads,
-                        boolean isLocalInit)
+                        List<IkePayload> reqPayloads, List<IkePayload> respPayloads)
                         throws TsUnacceptableException {
             IkeTrafficSelector[] initTs =
                     validateAndGetNegotiatedTs(reqPayloads, respPayloads, true /*isInitTs*/);
             IkeTrafficSelector[] respTs =
                     validateAndGetNegotiatedTs(reqPayloads, respPayloads, false /*isInitTs*/);
 
-            if (isLocalInit) {
-                return new Pair<IkeTrafficSelector[], IkeTrafficSelector[]>(initTs, respTs);
-            } else {
-                return new Pair<IkeTrafficSelector[], IkeTrafficSelector[]>(respTs, initTs);
-            }
+            return new Pair<IkeTrafficSelector[], IkeTrafficSelector[]>(initTs, respTs);
         }
 
         private static IkeTrafficSelector[] validateAndGetNegotiatedTs(
@@ -1534,44 +1702,44 @@ public class ChildSessionStateMachine extends StateMachine {
 
     private static class CreateChildResult {
         @CreateStatus public final int status;
-        public final SecurityParameterIndex localSpi;
-        public final SecurityParameterIndex remoteSpi;
+        public final SecurityParameterIndex initSpi;
+        public final SecurityParameterIndex respSpi;
         public final SaProposal negotiatedProposal;
-        public final IkeTrafficSelector[] localTs;
-        public final IkeTrafficSelector[] remoteTs;
+        public final IkeTrafficSelector[] initTs;
+        public final IkeTrafficSelector[] respTs;
         public final IkeException exception;
 
         private CreateChildResult(
                 @CreateStatus int status,
-                SecurityParameterIndex localSpi,
-                SecurityParameterIndex remoteSpi,
+                SecurityParameterIndex initSpi,
+                SecurityParameterIndex respSpi,
                 SaProposal negotiatedProposal,
-                IkeTrafficSelector[] localTs,
-                IkeTrafficSelector[] remoteTs,
+                IkeTrafficSelector[] initTs,
+                IkeTrafficSelector[] respTs,
                 IkeException exception) {
             this.status = status;
-            this.localSpi = localSpi;
-            this.remoteSpi = remoteSpi;
+            this.initSpi = initSpi;
+            this.respSpi = respSpi;
             this.negotiatedProposal = negotiatedProposal;
-            this.localTs = localTs;
-            this.remoteTs = remoteTs;
+            this.initTs = initTs;
+            this.respTs = respTs;
             this.exception = exception;
         }
 
         /* Construct a CreateChildResult instance for a successful case. */
         CreateChildResult(
-                SecurityParameterIndex localSpi,
-                SecurityParameterIndex remoteSpi,
+                SecurityParameterIndex initSpi,
+                SecurityParameterIndex respSpi,
                 SaProposal negotiatedProposal,
-                IkeTrafficSelector[] localTs,
-                IkeTrafficSelector[] remoteTs) {
+                IkeTrafficSelector[] initTs,
+                IkeTrafficSelector[] respTs) {
             this(
                     CREATE_STATUS_OK,
-                    localSpi,
-                    remoteSpi,
+                    initSpi,
+                    respSpi,
                     negotiatedProposal,
-                    localTs,
-                    remoteTs,
+                    initTs,
+                    respTs,
                     null /*exception*/);
         }
 
@@ -1579,11 +1747,11 @@ public class ChildSessionStateMachine extends StateMachine {
         CreateChildResult(@CreateStatus int status, IkeException exception) {
             this(
                     status,
-                    null /*localSpi*/,
-                    null /*remoteSpi*/,
+                    null /*initSpi*/,
+                    null /*respSpi*/,
                     null /*negotiatedProposal*/,
-                    null /*localTs*/,
-                    null /*remoteTs*/,
+                    null /*initTs*/,
+                    null /*respTs*/,
                     exception);
         }
     }
