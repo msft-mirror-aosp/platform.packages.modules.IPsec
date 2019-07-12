@@ -50,7 +50,6 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.os.Handler;
 import android.os.Looper;
 import android.os.test.TestLooper;
 
@@ -105,6 +104,8 @@ import java.net.Inet4Address;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public final class IkeSessionStateMachineTest {
     private static final Inet4Address LOCAL_ADDRESS =
@@ -195,7 +196,7 @@ public final class IkeSessionStateMachineTest {
     private IkeSessionOptions mIkeSessionOptions;
     private ChildSessionOptions mChildSessionOptions;
 
-    private Handler mUserCbHandler;
+    private ExecutorService mUserCbExecutor;
     private IIkeSessionCallback mMockIkeSessionCallback;
     private IChildSessionCallback mMockChildSessionCallback;
 
@@ -410,7 +411,7 @@ public final class IkeSessionStateMachineTest {
         mIkePrfTransform = new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1);
         mIkeDhGroupTransform = new DhGroupTransform(SaProposal.DH_GROUP_1024_BIT_MODP);
 
-        mUserCbHandler = new Handler();
+        mUserCbExecutor = Executors.newSingleThreadExecutor();
         mMockIkeSessionCallback = mock(IIkeSessionCallback.class);
         mMockChildSessionCallback = mock(IChildSessionCallback.class);
 
@@ -428,7 +429,7 @@ public final class IkeSessionStateMachineTest {
                         mIpSecManager,
                         mIkeSessionOptions,
                         mChildSessionOptions,
-                        mUserCbHandler,
+                        mUserCbExecutor,
                         mMockIkeSessionCallback,
                         mMockChildSessionCallback);
         mIkeSessionStateMachine.setDbg(true);
@@ -466,6 +467,8 @@ public final class IkeSessionStateMachineTest {
         SaRecord.setSaRecordHelper(new SaRecordHelper());
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
                 new ChildSessionFactoryHelper());
+
+        mUserCbExecutor.shutdown();
     }
 
     private SaProposal buildSaProposal() throws Exception {
@@ -862,7 +865,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
-                        eq(mUserCbHandler),
+                        eq(mUserCbExecutor),
                         eq(mMockChildSessionCallback),
                         mChildSessionSmCbCaptor.capture());
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
@@ -879,7 +882,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
-                        eq(mUserCbHandler),
+                        eq(mUserCbExecutor),
                         any(IChildSessionCallback.class),
                         any(IChildSessionSmCallback.class)))
                 .thenReturn(child);
@@ -933,7 +936,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
-                        eq(mUserCbHandler),
+                        eq(mUserCbExecutor),
                         eq(childCallback),
                         mChildSessionSmCbCaptor.capture());
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
@@ -2106,7 +2109,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
-                        eq(mUserCbHandler),
+                        eq(mUserCbExecutor),
                         eq(cb),
                         any());
 

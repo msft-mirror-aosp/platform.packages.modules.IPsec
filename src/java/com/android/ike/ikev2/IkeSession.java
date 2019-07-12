@@ -17,12 +17,13 @@ package com.android.ike.ikev2;
 
 import android.content.Context;
 import android.net.IpSecManager;
-import android.os.Handler;
 import android.os.HandlerThread;
 
 import com.android.internal.annotations.VisibleForTesting;
 
 import dalvik.system.CloseGuard;
+
+import java.util.concurrent.Executor;
 
 /** This class represents an IKE Session management object. */
 public final class IkeSession implements AutoCloseable {
@@ -30,13 +31,12 @@ public final class IkeSession implements AutoCloseable {
 
     @VisibleForTesting final IkeSessionStateMachine mIkeSessionStateMachine;
 
-    // TODO: Switch from using handlers to a serialized executor.
     /** Package private */
     IkeSession(
             Context context,
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
-            Handler userCbHandler,
+            Executor userCbExecutor,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
         this(
@@ -45,7 +45,7 @@ public final class IkeSession implements AutoCloseable {
                 (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                 ikeSessionOptions,
                 firstChildSessionOptions,
-                userCbHandler,
+                userCbExecutor,
                 ikeSessionCallback,
                 firstChildSessionCallback);
     }
@@ -58,7 +58,7 @@ public final class IkeSession implements AutoCloseable {
             IpSecManager ipSecManager,
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
-            Handler userCbHandler,
+            Executor userCbExecutor,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
         mIkeSessionStateMachine =
@@ -68,7 +68,7 @@ public final class IkeSession implements AutoCloseable {
                         ipSecManager,
                         ikeSessionOptions,
                         firstChildSessionOptions,
-                        userCbHandler,
+                        userCbExecutor,
                         ikeSessionCallback,
                         firstChildSessionCallback);
 
