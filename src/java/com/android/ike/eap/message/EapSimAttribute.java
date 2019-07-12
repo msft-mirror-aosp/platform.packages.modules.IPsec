@@ -507,8 +507,9 @@ public abstract class EapSimAttribute {
      */
     public static class AtMac extends EapSimAttribute {
         private static final int ATTR_LENGTH = 5 * LENGTH_SCALING;
-        private static final int MAC_LENGTH = 4 * LENGTH_SCALING;
         private static final int RESERVED_BYTES = 2;
+
+        public static final int MAC_LENGTH = 4 * LENGTH_SCALING;
 
         public final byte[] mac;
 

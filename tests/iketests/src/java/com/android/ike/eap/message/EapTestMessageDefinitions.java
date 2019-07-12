@@ -19,7 +19,11 @@ package com.android.ike.eap.message;
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_VERSION_LIST_DATA;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.IDENTITY_STRING;
+import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_2;
+
+import java.util.Arrays;
 
 /**
  * EapTestMessageDefinitions provides byte[] encodings of commonly used EAP Messages.
@@ -130,4 +134,18 @@ public class EapTestMessageDefinitions {
             + "FFEEDDCCBBAA99887766554433221100"
             + "FFEEDDCCBBAA99887766554433221100";
     public static final byte[] EMSK = hexStringToByteArray(EMSK_STRING);
+
+    // MAC computation
+    public static final String ORIGINAL_MAC_STRING = "112233445566778899AABBCCDDEEFF11";
+    public static final byte[] ORIGINAL_MAC = hexStringToByteArray(ORIGINAL_MAC_STRING);
+    public static final String COMPUTED_MAC_STRING = "FFEEDDCCBBAA998877665544332211FF";
+    public static final byte[] COMPUTED_MAC = hexStringToByteArray(COMPUTED_MAC_STRING);
+    public static final byte[] RETURNED_MAC = Arrays.copyOf(COMPUTED_MAC, 16);
+    public static final String EAP_SIM_CHALLENGE_REQUEST_STRING =
+            "01" + ID + "0040" // EAP-Request | ID | length in bytes
+            + "120b0000" // EAP-SIM | Challenge | 2B padding
+            + "01090000" + RAND_1 + RAND_2 // AT_RAND attribute
+            + "0B05000000000000000000000000000000000000"; // AT_MAC attribute with no MAC
+    public static final byte[] MAC_INPUT =
+            hexStringToByteArray(EAP_SIM_CHALLENGE_REQUEST_STRING + NONCE_MT_STRING);
 }
