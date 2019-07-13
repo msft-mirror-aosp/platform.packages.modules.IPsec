@@ -901,6 +901,62 @@ public final class ChildSessionStateMachineTest {
     }
 
     @Test
+    public void testRekeyChildLocalDeleteWithReqForNewSa() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildLocalDelete
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = mSpyLocalInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildLocalDelete);
+        mLooper.dispatchAll();
+
+        // Test receiving Delete new Child SA request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                EXCHANGE_TYPE_INFORMATIONAL,
+                makeDeletePayloads(mSpyLocalInitNewChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        // Verify outbound Delete response on new Child SA
+        verifyOutboundDeletePayload(mSpyLocalInitNewChildSaRecord.getLocalSpi(), true /*isResp*/);
+        verify(mMockChildSessionSmCallback)
+                .onChildSaDeleted(mSpyLocalInitNewChildSaRecord.getRemoteSpi());
+        verify(mSpyLocalInitNewChildSaRecord).close();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Closed);
+    }
+
+    @Test
+    public void testRekeyChildRemoteDeleteWithReqForNewSa() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildRemoteDelete
+        mChildSessionStateMachine.mRemoteInitNewChildSaRecord = mSpyRemoteInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildRemoteDelete);
+        mLooper.dispatchAll();
+
+        // Test receiving Delete new Child SA request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                EXCHANGE_TYPE_INFORMATIONAL,
+                makeDeletePayloads(mSpyRemoteInitNewChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        // Verify outbound Delete response on new Child SA
+        verifyOutboundDeletePayload(mSpyRemoteInitNewChildSaRecord.getLocalSpi(), true /*isResp*/);
+        verify(mMockChildSessionSmCallback)
+                .onChildSaDeleted(mSpyRemoteInitNewChildSaRecord.getRemoteSpi());
+        verify(mSpyRemoteInitNewChildSaRecord).close();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Closed);
+    }
+
+    @Test
     public void testRekeyChildRemoteDeleteTimeout() throws Exception {
         setupIdleStateMachine();
 
