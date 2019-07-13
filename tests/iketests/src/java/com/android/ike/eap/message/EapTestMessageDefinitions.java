@@ -19,7 +19,11 @@ package com.android.ike.eap.message;
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_VERSION_LIST_DATA;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.IDENTITY_STRING;
+import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_2;
+
+import java.util.Arrays;
 
 /**
  * EapTestMessageDefinitions provides byte[] encodings of commonly used EAP Messages.
@@ -106,4 +110,54 @@ public class EapTestMessageDefinitions {
     public static final byte[] CHALLENGE_RESPONSE_INVALID_SRES = hexStringToByteArray("03");
     public static final byte[] CHALLENGE_RESPONSE_INVALID_KC =
             hexStringToByteArray("04" + SRES_1 + "04");
+
+    public static final String IMSI = "123456789012345";
+    public static final String EAP_SIM_IDENTITY = "1" + IMSI;
+    public static final byte[] EAP_SIM_IDENTITY_BYTES = hexStringToByteArray(EAP_SIM_IDENTITY);
+
+    // Master Key generation
+    public static final String MK_STRING = "0123456789ABCDEF0123456789ABCDEF01234567";
+    public static final byte[] MK = hexStringToByteArray(MK_STRING);
+    public static final String K_ENCR_STRING = "000102030405060708090A0B0C0D0E0F";
+    public static final byte[] K_ENCR = hexStringToByteArray(K_ENCR_STRING);
+    public static final String K_AUT_STRING = "0F0E0D0C0B0A09080706050403020100";
+    public static final byte[] K_AUT = hexStringToByteArray(K_AUT_STRING);
+    public static final String MSK_STRING =
+            "00112233445566778899AABBCCDDEEFF"
+            + "00112233445566778899AABBCCDDEEFF"
+            + "00112233445566778899AABBCCDDEEFF"
+            + "00112233445566778899AABBCCDDEEFF";
+    public static final byte[] MSK = hexStringToByteArray(MSK_STRING);
+    public static final String EMSK_STRING =
+            "FFEEDDCCBBAA99887766554433221100"
+            + "FFEEDDCCBBAA99887766554433221100"
+            + "FFEEDDCCBBAA99887766554433221100"
+            + "FFEEDDCCBBAA99887766554433221100";
+    public static final byte[] EMSK = hexStringToByteArray(EMSK_STRING);
+
+    // MAC computation
+    public static final String ORIGINAL_MAC_STRING = "112233445566778899AABBCCDDEEFF11";
+    public static final byte[] ORIGINAL_MAC = hexStringToByteArray(ORIGINAL_MAC_STRING);
+    public static final String COMPUTED_MAC_STRING = "FFEEDDCCBBAA998877665544332211FF";
+    public static final byte[] COMPUTED_MAC = hexStringToByteArray(COMPUTED_MAC_STRING);
+    public static final byte[] RETURNED_MAC = Arrays.copyOf(COMPUTED_MAC, 16);
+    public static final String EAP_SIM_CHALLENGE_REQUEST_STRING =
+            "01" + ID + "0040" // EAP-Request | ID | length in bytes
+            + "120b0000" // EAP-SIM | Challenge | 2B padding
+            + "01090000" + RAND_1 + RAND_2 // AT_RAND attribute
+            + "0B05000000000000000000000000000000000000"; // AT_MAC attribute with no MAC
+    public static final byte[] MAC_INPUT =
+            hexStringToByteArray(EAP_SIM_CHALLENGE_REQUEST_STRING + NONCE_MT_STRING);
+
+    // Response Message with MAC
+    public static final String EAP_SIM_CHALLENGE_RESPONSE_EMPTY_MAC =
+            "02" + ID + "001C" // EAP-Response | ID | length in bytes
+            + "120b0000" // EAP-SIM | Challenge | 2B padding
+            + "0B05000000000000000000000000000000000000"; // AT_MAC attribute with no MAC
+    public static final byte[] EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT =
+            hexStringToByteArray(EAP_SIM_CHALLENGE_RESPONSE_EMPTY_MAC + SRES_1 + SRES_2);
+    public static final byte[] EAP_SIM_CHALLENGE_RESPONSE_WITH_MAC = hexStringToByteArray(
+            "02" + ID + "001C" // EAP-Response | ID | length in bytes
+            + "120b0000" // EAP-SIM | Challenge | 2B padding
+            + "0B050000" + COMPUTED_MAC_STRING); // AT_MAC attribute
 }

@@ -42,7 +42,7 @@ public class Fips186_2Prf {
      * @param outputLenBytes the output byte count required. Will run multiple iterations as needed.
      * @return the byte-array random result
      */
-    public static byte[] getRandom(byte[] seed, int outputLenBytes) {
+    public byte[] getRandom(byte[] seed, int outputLenBytes) {
         if (seed.length != SEED_LEN_BYTES) {
             throw new IllegalArgumentException("Invalid seed length. Must be 160b (20B)");
         }

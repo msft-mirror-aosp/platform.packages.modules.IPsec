@@ -17,7 +17,11 @@ package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ErrorType;
+import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR_MESSAGE;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
@@ -33,7 +37,6 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.system.ErrnoException;
@@ -73,6 +76,7 @@ import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IkeProposal;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.ikev2.utils.Retransmitter;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
@@ -98,6 +102,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -169,6 +174,8 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_HANDLE_FIRST_CHILD_NEGOTIATION = CMD_GENERAL_BASE + 6;
     /** Receive a local request to execute from the scheduler */
     static final int CMD_EXECUTE_LOCAL_REQ = CMD_GENERAL_BASE + 7;
+    /** Trigger a retransmission. */
+    public static final int CMD_RETRANSMIT = CMD_GENERAL_BASE + 8;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
@@ -190,19 +197,19 @@ public class IkeSessionStateMachine extends StateMachine {
 
     private final IkeSessionOptions mIkeSessionOptions;
 
-    /** Map that stores all IkeSaRecords, keyed by remotely generated IKE SPI. */
-    private final LongSparseArray<IkeSaRecord> mSpiToSaRecordMap;
+    /** Map that stores all IkeSaRecords, keyed by locally generated IKE SPI. */
+    private final LongSparseArray<IkeSaRecord> mLocalSpiToIkeSaRecordMap;
     /**
      * Map that stores all ChildSessionStateMachines, keyed by remotely generated Child SPI for
      * sending IPsec packet. Different SPIs may point to the same ChildSessionStateMachine if this
      * Child Session is doing Rekey.
      */
-    private final SparseArray<ChildSessionStateMachine> mSpiToChildSessionMap;
+    private final SparseArray<ChildSessionStateMachine> mRemoteSpiToChildSessionMap;
 
     private final Context mContext;
     private final IpSecManager mIpSecManager;
     private final IkeLocalRequestScheduler mScheduler;
-    private final Handler mUserCbHandler;
+    private final Executor mUserCbExecutor;
     private final IIkeSessionCallback mIkeSessionCallbacks;
 
     @VisibleForTesting
@@ -284,7 +291,7 @@ public class IkeSessionStateMachine extends StateMachine {
             IpSecManager ipSecManager,
             IkeSessionOptions ikeOptions,
             ChildSessionOptions firstChildOptions,
-            Handler userCbHandler,
+            Executor userCbExecutor,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
         super(TAG, looper);
@@ -292,13 +299,13 @@ public class IkeSessionStateMachine extends StateMachine {
         mIkeSessionOptions = ikeOptions;
 
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
-        mSpiToSaRecordMap = new LongSparseArray<>(3);
-        mSpiToChildSessionMap = new SparseArray<>();
+        mLocalSpiToIkeSaRecordMap = new LongSparseArray<>(3);
+        mRemoteSpiToChildSessionMap = new SparseArray<>();
 
         mContext = context;
         mIpSecManager = ipSecManager;
 
-        mUserCbHandler = userCbHandler;
+        mUserCbExecutor = userCbExecutor;
         mIkeSessionCallbacks = ikeSessionCallback;
 
         ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth)
@@ -356,7 +363,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         getHandler().getLooper(),
                         mContext,
                         childOptions,
-                        mUserCbHandler,
+                        mUserCbExecutor,
                         callbacks,
                         new ChildSessionSmCallback());
         synchronized (mChildCbToSessions) {
@@ -496,14 +503,18 @@ public class IkeSessionStateMachine extends StateMachine {
 
     @VisibleForTesting
     void addIkeSaRecord(IkeSaRecord record) {
-        // TODO: We register local SPI in IkeSocket. For consistency we should also use local IKE
-        // SPI here.
-        mSpiToSaRecordMap.put(record.getRemoteSpi(), record);
+        mLocalSpiToIkeSaRecordMap.put(record.getLocalSpi(), record);
+
+        // In IKE_INIT exchange, local SPI was registered with this IkeSessionStateMachine before
+        // IkeSaRecord is created. Calling this method at the end of exchange will double-register
+        // the SPI but it is safe because the key and value are not changed.
+        mIkeSocket.registerIke(record.getLocalSpi(), this);
     }
 
     @VisibleForTesting
     void removeIkeSaRecord(IkeSaRecord record) {
-        mSpiToSaRecordMap.remove(record.getRemoteSpi());
+        mIkeSocket.unregisterIke(record.getLocalSpi());
+        mLocalSpiToIkeSaRecordMap.remove(record.getLocalSpi());
     }
 
     /**
@@ -577,16 +588,15 @@ public class IkeSessionStateMachine extends StateMachine {
 
     /** Callback for ChildSessionStateMachine to notify IkeSessionStateMachine. */
     @VisibleForTesting
-    class ChildSessionSmCallback
-            implements ChildSessionStateMachine.IChildSessionSmCallback {
+    class ChildSessionSmCallback implements ChildSessionStateMachine.IChildSessionSmCallback {
         @Override
         public void onChildSaCreated(int remoteSpi, ChildSessionStateMachine childSession) {
-            mSpiToChildSessionMap.put(remoteSpi, childSession);
+            mRemoteSpiToChildSessionMap.put(remoteSpi, childSession);
         }
 
         @Override
         public void onChildSaDeleted(int remoteSpi) {
-            mSpiToChildSessionMap.remove(remoteSpi);
+            mRemoteSpiToChildSessionMap.remove(remoteSpi);
         }
 
         @Override
@@ -638,7 +648,10 @@ public class IkeSessionStateMachine extends StateMachine {
                 mLocalPort = localAddr.getPort();
                 Os.close(sock);
 
-                mIkeSocket = IkeSocket.getIkeSocket(mIkeSessionOptions.getUdpEncapsulationSocket());
+                mIkeSocket =
+                        IkeSocket.getIkeSocket(
+                                mIkeSessionOptions.getUdpEncapsulationSocket(),
+                                IkeSessionStateMachine.this);
             } catch (ErrnoException | SocketException e) {
                 // TODO: handle exception and close IkeSession.
             }
@@ -666,9 +679,11 @@ public class IkeSessionStateMachine extends StateMachine {
     class Closed extends State {
         @Override
         public void enter() {
-            // TODO: Notify all child sessions that they have been force-closed
-            // TODO: Notify user that IKE Session is closed.
-            // TODO: Cleanup all state
+            // TODO: Notify all children to fire closed callbacks, cleanup all SaRecords.
+            // TODO: Notify user that IKE Session is closed, cleanup all SaRecords.
+            // TODO: Deregister from IkeSocket
+
+            quitNow();
         }
     }
 
@@ -835,6 +850,22 @@ public class IkeSessionStateMachine extends StateMachine {
         mIkeSocket.sendIkePacket(bytes, mRemoteAddress);
     }
 
+    // Builds and sends error notification response on the provided IKE SA record
+    @VisibleForTesting
+    void buildAndSendErrorNotificationResponse(
+            IkeSaRecord ikeSaRecord, int messageId, @ErrorType int errorType) {
+        IkeInformationalPayload error = new IkeNotifyPayload(errorType);
+        IkeMessage msg =
+                buildEncryptedNotificationMessage(
+                        ikeSaRecord,
+                        new IkeInformationalPayload[] {error},
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        true /*isResponse*/,
+                        messageId);
+
+        sendEncryptedIkeMessage(ikeSaRecord, msg);
+    }
+
     // Builds an Encrypted IKE Informational Message for the given IkeInformationalPayload using the
     // current IKE SA record.
     @VisibleForTesting
@@ -934,6 +965,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     Log.wtf(TAG, "Invalid execute local request command in non-idle state");
                     return NOT_HANDLED;
 
+                case CMD_RETRANSMIT:
+                    triggerRetransmit();
+                    return HANDLED;
+
                 default:
                     // Queue local requests, and trigger next procedure
                     if (message.what >= CMD_LOCAL_REQUEST_BASE
@@ -945,11 +980,23 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
+        /**
+         * Handler for retransmission timer firing
+         *
+         * <p>By default, the trigger is logged and dropped. States that have a retransmitter should
+         * override this function, and proxy the call to Retransmitter.retransmit()
+         */
+        protected void triggerRetransmit() {
+            Log.wtf(
+                    TAG,
+                    "Retransmission trigger dropped in state: " + this.getClass().getSimpleName());
+        }
+
         protected IkeSaRecord getIkeSaRecordForPacket(IkeHeader ikeHeader) {
             if (ikeHeader.fromIkeInitiator) {
-                return mSpiToSaRecordMap.get(ikeHeader.ikeInitiatorSpi);
+                return mLocalSpiToIkeSaRecordMap.get(ikeHeader.ikeResponderSpi);
             } else {
-                return mSpiToSaRecordMap.get(ikeHeader.ikeResponderSpi);
+                return mLocalSpiToIkeSaRecordMap.get(ikeHeader.ikeInitiatorSpi);
             }
         }
 
@@ -1101,39 +1148,32 @@ public class IkeSessionStateMachine extends StateMachine {
      * <p>The Retransmitter class will automatically start transmission upon creation.
      */
     @VisibleForTesting
-    class Retransmitter {
-        private final IkeMessage mRetransmitMsg;
+    class EncryptedRetransmitter extends Retransmitter {
         private final IkeSaRecord mIkeSaRecord;
 
         @VisibleForTesting
-        Retransmitter(IkeMessage msg) {
+        EncryptedRetransmitter(IkeMessage msg) {
             this(mCurrentIkeSaRecord, msg);
         }
 
-        @VisibleForTesting
-        Retransmitter(IkeSaRecord ikeSaRecord, IkeMessage msg) {
+        private EncryptedRetransmitter(IkeSaRecord ikeSaRecord, IkeMessage msg) {
+            super(getHandler(), msg);
+
             mIkeSaRecord = ikeSaRecord;
-            mRetransmitMsg = msg;
 
-            sendAndStartRetransmission();
+            retransmit();
         }
 
-        private void sendAndStartRetransmission() {
-            if (mRetransmitMsg == null) {
-                return;
-            }
-
-            send(mRetransmitMsg);
+        @Override
+        public void send(IkeMessage msg) {
+            sendEncryptedIkeMessage(mIkeSaRecord, msg);
         }
 
-        protected void send(IkeMessage msg) {
-            sendEncryptedIkeMessage(mIkeSaRecord, mRetransmitMsg);
-        }
+        @Override
+        public void handleRetransmissionFailure() {
+            // Fire fatal error callbacks.
 
-        public void stopRetransmitting() {}
-
-        public IkeMessage getMessage() {
-            return mRetransmitMsg;
+            transitionTo(mClosed);
         }
     }
 
@@ -1487,7 +1527,11 @@ public class IkeSessionStateMachine extends StateMachine {
             mLastInboundRequestMsgId = ikeMessage.ikeHeader.messageId;
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_CREATE_CHILD:
-                    // TODO: Reply ERROR_TYPE_NO_ADDITIONAL_SAS
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_NO_ADDITIONAL_SAS);
+                    transitionToIdleIfAllProceduresDone();
                     break;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     // TODO: Reply and close IKE Session.
@@ -1565,7 +1609,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         IkeDeletePayload delPayload = (IkeDeletePayload) payload;
 
                         for (int spi : delPayload.spisToDelete) {
-                            ChildSessionStateMachine child = mSpiToChildSessionMap.get(spi);
+                            ChildSessionStateMachine child = mRemoteSpiToChildSessionMap.get(spi);
                             if (child == null) {
                                 // TODO: Investigate how other implementations handle that.
                                 logw("Child SA not found with received SPI: " + spi);
@@ -1598,7 +1642,9 @@ public class IkeSessionStateMachine extends StateMachine {
             // Send Delete Payloads to Child Sessions
             for (ChildSessionStateMachine child : childToDelPayloadsMap.keySet()) {
                 child.receiveRequest(
-                        IKE_EXCHANGE_SUBTYPE_DELETE_CHILD, childToDelPayloadsMap.get(child));
+                        IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        childToDelPayloadsMap.get(child));
                 mAwaitingChildResponse.add(child);
                 mChildInRemoteProcedures.add(child);
             }
@@ -1654,12 +1700,19 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void enter() {
             IkeMessage request = buildRequest();
+
+            // Register local SPI to receive the IKE INIT response.
             mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
 
             mIkeInitRequestBytes = request.encode();
             mIkeInitNoncePayload =
                     request.getPayloadForType(IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
             mRetransmitter = new UnencryptedRetransmitter(request);
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         private IkeMessage buildRequest() {
@@ -1678,8 +1731,9 @@ public class IkeSessionStateMachine extends StateMachine {
                 case CMD_RECEIVE_IKE_PACKET:
                     handleReceivedIkePacket(message);
                     return HANDLED;
+
                 default:
-                    return NOT_HANDLED;
+                    return super.processMessage(message);
             }
         }
 
@@ -1954,14 +2008,23 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         private class UnencryptedRetransmitter extends Retransmitter {
-            UnencryptedRetransmitter(IkeMessage msg) {
-                super(null /* SaRecord */, msg);
+            private UnencryptedRetransmitter(IkeMessage msg) {
+                super(getHandler(), msg);
+
+                retransmit();
             }
 
             @Override
-            protected void send(IkeMessage msg) {
+            public void send(IkeMessage msg) {
                 // Sends unencrypted
                 mIkeSocket.sendIkePacket(msg.encode(), mRemoteAddress);
+            }
+
+            @Override
+            public void handleRetransmissionFailure() {
+                // Fire fatal error callbacks.
+
+                transitionTo(mClosed);
             }
         }
     }
@@ -1988,9 +2051,14 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
+        @Override
         public void enter() {
             super.enter();
-            mRetransmitter = new Retransmitter(buildRequest());
+            mRetransmitter = new EncryptedRetransmitter(buildRequest());
             mUseEap =
                     (IkeSessionOptions.IKE_AUTH_METHOD_EAP
                             == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
@@ -2096,7 +2164,7 @@ public class IkeSessionStateMachine extends StateMachine {
             }
 
             payloadList.addAll(
-                    CreateChildSaHelper.getInitCreateSaRequestPayloads(
+                    CreateChildSaHelper.getInitChildCreateReqPayloads(
                             mIpSecManager,
                             mLocalAddress,
                             mFirstChildSessionOptions,
@@ -2421,7 +2489,7 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             // TODO: Give mRetransmitter an actual request once buildIkeRekeyReq is implemented
             try {
-                mRetransmitter = new Retransmitter(buildIkeRekeyReq());
+                mRetransmitter = new EncryptedRetransmitter(buildIkeRekeyReq());
             } catch (IOException e) {
                 // TODO: Schedule next rekey for RETRY_TIMEOUT
 
@@ -2469,17 +2537,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     break;
                 default:
                     // TODO: Implement simultaneous rekey
-                    IkeInformationalPayload error =
-                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
-                    IkeMessage msg =
-                            buildEncryptedNotificationMessage(
-                                    mCurrentIkeSaRecord,
-                                    new IkeInformationalPayload[] {error},
-                                    ikeMessage.ikeHeader.exchangeType,
-                                    true,
-                                    ikeMessage.ikeHeader.messageId);
-
-                    sendEncryptedIkeMessage(msg);
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
             }
         }
 
@@ -2515,7 +2576,7 @@ public class IkeSessionStateMachine extends StateMachine {
     class SimulRekeyIkeLocalCreate extends RekeyIkeLocalCreate {
         @Override
         public void enter() {
-            super.mRetransmitter = new Retransmitter(null);
+            mRetransmitter = new EncryptedRetransmitter(null);
             // TODO: Populate super.mRetransmitter from state initialization data
             // Do not send request.
         }
@@ -2543,8 +2604,9 @@ public class IkeSessionStateMachine extends StateMachine {
                         handleReceivedIkePacket(message);
                     }
                     return HANDLED;
+
                 default:
-                    return NOT_HANDLED;
+                    return super.processMessage(message);
             }
         }
 
@@ -2684,8 +2746,16 @@ public class IkeSessionStateMachine extends StateMachine {
                 mIkeSaRecordAwaitingLocalDel = mLocalInitNewIkeSaRecord;
                 mIkeSaRecordAwaitingRemoteDel = mCurrentIkeSaRecord;
             }
-            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
+            mRetransmitter =
+                    new EncryptedRetransmitter(
+                            mIkeSaRecordAwaitingLocalDel,
+                            buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
             // TODO: Set timer awaiting for delete request.
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
@@ -2745,8 +2815,13 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void enter() {
-            mRetransmitter = new Retransmitter(null);
+            mRetransmitter = new EncryptedRetransmitter(mIkeSaRecordAwaitingLocalDel, null);
             // TODO: Populate mRetransmitter from state initialization data.
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
@@ -2754,17 +2829,10 @@ public class IkeSessionStateMachine extends StateMachine {
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             // Always return a TEMPORARY_FAILURE. In no case should we accept a message on an SA
             // that is going away. All messages on the new SA is caught in RekeyIkeDeleteBase
-            IkeInformationalPayload error =
-                    new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
-            IkeMessage msg =
-                    buildEncryptedNotificationMessage(
-                            mIkeSaRecordAwaitingLocalDel,
-                            new IkeInformationalPayload[] {error},
-                            ikeMessage.ikeHeader.exchangeType,
-                            true,
-                            ikeMessage.ikeHeader.messageId);
-
-            sendEncryptedIkeMessage(msg);
+            buildAndSendErrorNotificationResponse(
+                    mIkeSaRecordAwaitingLocalDel,
+                    ikeMessage.ikeHeader.messageId,
+                    ERROR_TYPE_TEMPORARY_FAILURE);
         }
 
         @Override
@@ -2811,17 +2879,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     // and the rekey is finished. It is likewise impossible to have this on the
                     // local-deleted SA, since the delete has already been acknowledged in the
                     // SimulRekeyIkeLocalDeleteRemoteDelete state.
-                    IkeInformationalPayload error =
-                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
-                    IkeMessage msg =
-                            buildEncryptedNotificationMessage(
-                                    mIkeSaRecordAwaitingRemoteDel,
-                                    new IkeInformationalPayload[] {error},
-                                    ikeMessage.ikeHeader.exchangeType,
-                                    true,
-                                    ikeMessage.ikeHeader.messageId);
-
-                    sendEncryptedIkeMessage(msg);
+                    buildAndSendErrorNotificationResponse(
+                            mIkeSaRecordAwaitingRemoteDel,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
             }
         }
 
@@ -2850,7 +2911,15 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enter() {
             mIkeSaRecordSurviving = mLocalInitNewIkeSaRecord;
             mIkeSaRecordAwaitingLocalDel = mCurrentIkeSaRecord;
-            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
+            mRetransmitter =
+                    new EncryptedRetransmitter(
+                            mIkeSaRecordAwaitingLocalDel,
+                            buildIkeDeleteReq(mIkeSaRecordAwaitingLocalDel));
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
@@ -2901,7 +2970,12 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void enter() {
-            mRetransmitter = new Retransmitter(buildIkeDeleteReq(mCurrentIkeSaRecord));
+            mRetransmitter = new EncryptedRetransmitter(buildIkeDeleteReq(mCurrentIkeSaRecord));
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
@@ -2912,17 +2986,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     handleDeleteSessionRequest(ikeMessage);
                     return;
                 default:
-                    IkeInformationalPayload error =
-                            new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE);
-                    IkeMessage msg =
-                            buildEncryptedNotificationMessage(
-                                    mCurrentIkeSaRecord,
-                                    new IkeInformationalPayload[] {error},
-                                    ikeMessage.ikeHeader.exchangeType,
-                                    true,
-                                    ikeMessage.ikeHeader.messageId);
-
-                    sendEncryptedIkeMessage(msg);
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
             }
         }
 
@@ -3025,5 +3092,11 @@ public class IkeSessionStateMachine extends StateMachine {
 
             return payloadList;
         }
+    }
+
+    /** Called when this StateMachine quits. */
+    @Override
+    protected void onQuitting() {
+        mIkeSocket.releaseReference(this);
     }
 }
