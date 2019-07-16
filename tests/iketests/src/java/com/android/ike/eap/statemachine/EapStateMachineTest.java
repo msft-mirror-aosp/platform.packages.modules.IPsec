@@ -34,6 +34,8 @@ import com.android.ike.eap.statemachine.EapStateMachine.SuccessState;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.security.SecureRandom;
+
 public class EapStateMachineTest {
     private Context mContext;
 
@@ -44,13 +46,14 @@ public class EapStateMachineTest {
 
     @Test
     public void testEapStateMachineStartState() {
-        EapStateMachine eapStateMachine = new EapStateMachine(mContext);
+        EapStateMachine eapStateMachine = new EapStateMachine(mContext, new SecureRandom());
         assertTrue(eapStateMachine.getState() instanceof CreatedState);
     }
 
     @Test
     public void testSuccessStateProcessFails() {
-        SuccessState successState = new EapStateMachine(mContext).new SuccessState();
+        SuccessState successState =
+                new EapStateMachine(mContext, new SecureRandom()).new SuccessState();
         EapResult result = successState.process(EAP_SUCCESS_PACKET);
         assertTrue(result instanceof EapError);
 
@@ -60,7 +63,8 @@ public class EapStateMachineTest {
 
     @Test
     public void testFailureStateProcessFails() {
-        FailureState failureState = new EapStateMachine(mContext).new FailureState();
+        FailureState failureState =
+                new EapStateMachine(mContext, new SecureRandom()).new FailureState();
         EapResult result = failureState.process(EAP_SUCCESS_PACKET);
         assertTrue(result instanceof EapError);
 

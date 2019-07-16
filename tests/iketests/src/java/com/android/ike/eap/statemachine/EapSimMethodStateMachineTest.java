@@ -40,6 +40,7 @@ import com.android.ike.eap.statemachine.EapSimMethodStateMachine.CreatedState;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -52,7 +53,7 @@ public class EapSimMethodStateMachineTest {
     @Before
     public void setUp() {
         mContext = getInstrumentation().getContext();
-        mEapSimMethodStateMachine = new EapSimMethodStateMachine(mContext);
+        mEapSimMethodStateMachine = new EapSimMethodStateMachine(mContext, new SecureRandom());
     }
 
     @Test

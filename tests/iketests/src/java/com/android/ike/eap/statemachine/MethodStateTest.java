@@ -31,6 +31,8 @@ import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.security.SecureRandom;
+
 public class MethodStateTest extends EapStateTest {
     private static final int UNSUPPORTED_EAP_TYPE = 0xFF;
 
@@ -41,7 +43,7 @@ public class MethodStateTest extends EapStateTest {
     @Override
     public void setUp() {
         mContext = getInstrumentation().getContext();
-        mEapStateMachine = new EapStateMachine(mContext);
+        mEapStateMachine = new EapStateMachine(mContext, new SecureRandom());
         mEapState = mEapStateMachine.new MethodState(EAP_TYPE_AKA);
     }
 

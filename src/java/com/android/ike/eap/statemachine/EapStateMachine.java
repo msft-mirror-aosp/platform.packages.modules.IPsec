@@ -41,6 +41,7 @@ import com.android.ike.utils.SimpleStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 
 /**
  * EapStateMachine represents the valid paths for a single EAP Authentication procedure.
@@ -57,9 +58,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     protected static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     private final Context mContext;
+    private final SecureRandom mSecureRandom;
 
-    public EapStateMachine(@NonNull Context context) {
+    public EapStateMachine(@NonNull Context context, @NonNull SecureRandom secureRandom) {
         this.mContext = context;
+        this.mSecureRandom = secureRandom;
         transitionTo(new CreatedState());
     }
 
@@ -221,7 +224,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                     mEapMethodStateMachine = new EapMethodStateMachine() {};
                     break;
                 case EAP_TYPE_SIM:
-                    mEapMethodStateMachine = new EapSimMethodStateMachine(mContext);
+                    mEapMethodStateMachine = new EapSimMethodStateMachine(mContext, mSecureRandom);
                     break;
 
                 default:

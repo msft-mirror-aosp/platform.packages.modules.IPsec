@@ -95,21 +95,24 @@ import javax.crypto.spec.SecretKeySpec;
  * Method for Subscriber Identity Modules (EAP-SIM)</a>
  */
 public class EapSimMethodStateMachine extends EapMethodStateMachine {
-    private static final String TAG = "EapSimMethodStateMachine";
-    private static final SecureRandom EAP_SIM_RANDOM = new SecureRandom();
+    private static final String TAG = EapSimMethodStateMachine.class.getSimpleName();
 
     private final TelephonyManager mTelephonyManager;
+    private final SecureRandom mSecureRandom;
     private final EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
-    public EapSimMethodStateMachine(Context context) {
+    public EapSimMethodStateMachine(Context context, SecureRandom secureRandom) {
         this.mTelephonyManager = (TelephonyManager)
                 context.getSystemService(Context.TELEPHONY_SERVICE);
+        this.mSecureRandom = secureRandom;
         this.mEapSimTypeDataDecoder = new EapSimTypeDataDecoder();
         transitionTo(new CreatedState());
     }
 
     @VisibleForTesting
-    public EapSimMethodStateMachine(TelephonyManager telephonyManager,
+    public EapSimMethodStateMachine(
+            TelephonyManager telephonyManager,
+            SecureRandom secureRandom,
             EapSimTypeDataDecoder eapSimTypeDataDecoder) {
         if (telephonyManager == null) {
             throw new IllegalArgumentException("TelephonyManager must be non-null");
@@ -118,6 +121,7 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
         }
 
         this.mTelephonyManager = telephonyManager;
+        this.mSecureRandom = secureRandom;
         this.mEapSimTypeDataDecoder = eapSimTypeDataDecoder;
         transitionTo(new CreatedState());
     }
@@ -166,7 +170,7 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
             }
 
             byte[] nonce = new byte[AtNonceMt.NONCE_MT_LENGTH];
-            EAP_SIM_RANDOM.nextBytes(nonce);
+            mSecureRandom.nextBytes(nonce);
             AtNonceMt atNonceMt;
             try {
                 atNonceMt = new AtNonceMt(nonce);
