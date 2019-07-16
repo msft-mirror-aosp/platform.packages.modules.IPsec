@@ -68,7 +68,7 @@ final class IkeEncryptedPayloadBody {
         inputBuffer.get(tempArray);
 
         // Extract bytes for authentication and decryption.
-        int expectedIvLen = decryptCipher.getBlockSize();
+        int expectedIvLen = decryptCipher.getIvLen();
         mIv = new byte[expectedIvLen];
 
         int checksumLen = integrityMac.getChecksumLen();
