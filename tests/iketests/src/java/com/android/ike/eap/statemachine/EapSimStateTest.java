@@ -44,6 +44,8 @@ import com.android.ike.eap.statemachine.EapSimMethodStateMachine.EapSimState;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.security.SecureRandom;
+
 public class EapSimStateTest {
     protected static final int EAP_CODE_REQUEST = 1;
     protected static final int EAP_NOTIFICATION = 2;
@@ -60,7 +62,7 @@ public class EapSimStateTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockEapSimTypeDataDecoder = mock(EapSimTypeDataDecoder.class);
         mEapSimMethodStateMachine = new EapSimMethodStateMachine(
-                mMockTelephonyManager, mMockEapSimTypeDataDecoder);
+                mMockTelephonyManager, new SecureRandom(), mMockEapSimTypeDataDecoder);
     }
 
     @Test
