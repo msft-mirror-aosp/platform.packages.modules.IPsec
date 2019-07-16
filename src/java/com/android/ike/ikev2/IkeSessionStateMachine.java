@@ -1485,16 +1485,18 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
+            mChildInLocalProcedure = getChildSession(req.childSessionCallback);
+            if (mChildInLocalProcedure == null) {
+                Log.wtf(
+                        TAG,
+                        "Child state machine not found for local request: " + req.procedureType);
+
+                // TODO: Fire child creation failed callback or child fatal error callback, and
+                // recover.
+                return;
+            }
             switch (req.procedureType) {
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
-                    mChildInLocalProcedure = getChildSession(req.childSessionCallback);
-                    if (mChildInLocalProcedure == null) {
-                        Log.wtf(TAG, "Additional child state machine not found during creation.");
-
-                        // TODO: Fire child failed callback, and recover.
-                        break;
-                    }
-
                     mChildInLocalProcedure.createChildSession(
                             mLocalAddress,
                             mRemoteAddress,
@@ -1503,10 +1505,10 @@ public class IkeSessionStateMachine extends StateMachine {
                             mCurrentIkeSaRecord.getSkD());
                     break;
                 case CMD_LOCAL_REQUEST_REKEY_CHILD:
-                    // TODO: Implement this.
+                    mChildInLocalProcedure.rekeyChildSession();
                     break;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
-                    // TODO: Implement this.
+                    mChildInLocalProcedure.deleteChildSession();
                     break;
                 default:
                     Log.wtf(TAG, "Invalid Child procedure type: " + req.procedureType);
