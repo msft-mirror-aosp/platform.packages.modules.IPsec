@@ -31,7 +31,9 @@ import android.util.Log;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
@@ -235,6 +237,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             }
         }
 
+        @VisibleForTesting
+        MethodState(EapMethodStateMachine eapMethodStateMachine) {
+            this.mEapMethodStateMachine = eapMethodStateMachine;
+        }
+
         // Not all EAP Method implementations may support EAP-Notifications, so allow the EAP-Method
         // to handle any EAP-REQUEST/Notification messages (RFC 3748 Section 5.2)
         public EapResult process(@NonNull byte[] packet) {
@@ -243,7 +250,13 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 return decodeResult.eapResult;
             }
 
-            return mEapMethodStateMachine.process(decodeResult.eapMessage);
+            EapResult result = mEapMethodStateMachine.process(decodeResult.eapMessage);
+            if (result instanceof EapSuccess) {
+                transitionTo(new SuccessState());
+            } else if (result instanceof EapFailure) {
+                transitionTo(new FailureState());
+            }
+            return result;
         }
     }
 
