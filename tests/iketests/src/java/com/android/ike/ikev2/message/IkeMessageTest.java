@@ -119,6 +119,7 @@ public final class IkeMessageTest {
     private static final String IKE_EMPTY_INFO_MSG_CHECKSUM_HEX_STRING = "4192f251cd4d1b97d298e550";
 
     private static final int IKE_AUTH_EXPECTED_MESSAGE_ID = 1;
+    private static final int IKE_AUTH_CIPHER_IV_SIZE = 16;
     private static final int IKE_AUTH_CIPHER_BLOCK_SIZE = 16;
     private static final int IKE_AUTH_PAYLOAD_SIZE = 8;
 
@@ -191,6 +192,7 @@ public final class IkeMessageTest {
         when(mMockIntegrity.getChecksumLen()).thenReturn(expectedChecksum.length);
 
         mMockCipher = mock(IkeCipher.class);
+        when(mMockCipher.getIvLen()).thenReturn(IKE_AUTH_CIPHER_IV_SIZE);
         when(mMockCipher.getBlockSize()).thenReturn(IKE_AUTH_CIPHER_BLOCK_SIZE);
         when(mMockCipher.decrypt(any(), any(), any())).thenReturn(mUnencryptedPaddedData);
 
