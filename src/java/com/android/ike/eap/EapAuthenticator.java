@@ -28,6 +28,7 @@ import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.statemachine.EapStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.security.SecureRandom;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
@@ -61,7 +62,7 @@ public class EapAuthenticator extends Handler {
         this(looper,
                 cbHandler,
                 cb,
-                new EapStateMachine(context),
+                new EapStateMachine(context, new SecureRandom()),
                 Executors.newSingleThreadExecutor(),
                 DEFAULT_TIMEOUT_MILLIS);
     }

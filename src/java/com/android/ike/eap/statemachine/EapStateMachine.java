@@ -31,7 +31,9 @@ import android.util.Log;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
@@ -41,6 +43,7 @@ import com.android.ike.utils.SimpleStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 
 /**
  * EapStateMachine represents the valid paths for a single EAP Authentication procedure.
@@ -57,9 +60,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     protected static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     private final Context mContext;
+    private final SecureRandom mSecureRandom;
 
-    public EapStateMachine(@NonNull Context context) {
+    public EapStateMachine(@NonNull Context context, @NonNull SecureRandom secureRandom) {
         this.mContext = context;
+        this.mSecureRandom = secureRandom;
         transitionTo(new CreatedState());
     }
 
@@ -221,7 +226,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                     mEapMethodStateMachine = new EapMethodStateMachine() {};
                     break;
                 case EAP_TYPE_SIM:
-                    mEapMethodStateMachine = new EapSimMethodStateMachine(mContext);
+                    mEapMethodStateMachine = new EapSimMethodStateMachine(mContext, mSecureRandom);
                     break;
 
                 default:
@@ -232,6 +237,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             }
         }
 
+        @VisibleForTesting
+        MethodState(EapMethodStateMachine eapMethodStateMachine) {
+            this.mEapMethodStateMachine = eapMethodStateMachine;
+        }
+
         // Not all EAP Method implementations may support EAP-Notifications, so allow the EAP-Method
         // to handle any EAP-REQUEST/Notification messages (RFC 3748 Section 5.2)
         public EapResult process(@NonNull byte[] packet) {
@@ -240,7 +250,13 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 return decodeResult.eapResult;
             }
 
-            return mEapMethodStateMachine.process(decodeResult.eapMessage);
+            EapResult result = mEapMethodStateMachine.process(decodeResult.eapMessage);
+            if (result instanceof EapSuccess) {
+                transitionTo(new SuccessState());
+            } else if (result instanceof EapFailure) {
+                transitionTo(new FailureState());
+            }
+            return result;
         }
     }
 

@@ -40,6 +40,8 @@ import com.android.ike.eap.statemachine.EapStateMachine.EapState;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.security.SecureRandom;
+
 /**
  * EapStateTest is a test template for testing EapState implementations.
  *
@@ -56,7 +58,7 @@ public class EapStateTest {
 
         // this EapState definition is used to make sure all non-Success/Failure EAP states
         // produce the same results for error cases.
-        mEapState = new EapStateMachine(mContext).new EapState() {
+        mEapState = new EapStateMachine(mContext, new SecureRandom()).new EapState() {
             @Override
             public EapResult process(byte[] msg) {
                 return decode(msg).eapResult;
