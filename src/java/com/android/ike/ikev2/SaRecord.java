@@ -21,7 +21,9 @@ import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
+import android.util.Log;
 
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -36,6 +38,8 @@ import com.android.internal.annotations.VisibleForTesting;
 import dalvik.system.CloseGuard;
 
 import java.io.IOException;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -177,21 +181,46 @@ public abstract class SaRecord implements AutoCloseable {
         }
 
         @Override
-        public IkeSaRecord makeNewIkeSaRecord(
-                IkeSaRecord oldSaRecord, IkeMessage rekeyRequest, IkeMessage rekeyResponse) {
-            // TODO: Generate keying materials based on old SK_d
-            return null;
+        public IkeSaRecord makeRekeyedIkeSaRecord(
+                IkeSaRecord oldSaRecord,
+                IkeMacPrf oldPrf,
+                IkeMessage rekeyRequest,
+                IkeMessage rekeyResponse,
+                IkeSaRecordConfig ikeSaRecordConfig)
+                throws GeneralSecurityException {
+            // Extract nonces
+            byte[] nonceInit =
+                    rekeyRequest.getPayloadForType(
+                                    IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class)
+                            .nonceData;
+            byte[] nonceResp =
+                    rekeyResponse.getPayloadForType(
+                                    IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class)
+                            .nonceData;
+
+            // Get SKEYSEED
+            IkeMessage localMsg = ikeSaRecordConfig.isLocalInit ? rekeyRequest : rekeyResponse;
+            IkeMessage remoteMsg = ikeSaRecordConfig.isLocalInit ? rekeyResponse : rekeyRequest;
+
+            byte[] sharedDhKey = getSharedKey(localMsg, remoteMsg);
+            byte[] sKeySeed =
+                    oldPrf.generateRekeyedSKeySeed(
+                            oldSaRecord.mSkD, nonceInit, nonceResp, sharedDhKey);
+
+            return makeIkeSaRecord(sKeySeed, nonceInit, nonceResp, ikeSaRecordConfig);
         }
 
-        private byte[] getSharedKey(IkeMessage initRequest, IkeMessage initResponse)
+        private byte[] getSharedKey(IkeMessage keLocalMessage, IkeMessage keRemoteMessage)
                 throws GeneralSecurityException {
-            IkeKePayload keInitPayload =
-                    initRequest.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
-            IkeKePayload keRespPayload =
-                    initResponse.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+            IkeKePayload keLocalPayload =
+                    keLocalMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+            IkeKePayload keRemotePayload =
+                    keRemoteMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
 
             return IkeKePayload.getSharedKey(
-                    keInitPayload.localPrivateKey, keRespPayload.keyExchangeData);
+                    keLocalPayload.localPrivateKey, keRemotePayload.keyExchangeData);
         }
 
         /**
@@ -348,6 +377,7 @@ public abstract class SaRecord implements AutoCloseable {
                         sIpSecTransformHelper.makeIpSecTransform(
                                 childSaRecordConfig.context,
                                 childSaRecordConfig.initAddress,
+                                childSaRecordConfig.udpEncapSocket,
                                 childSaRecordConfig.initSpi,
                                 childSaRecordConfig.integrityAlgo,
                                 childSaRecordConfig.encryptionAlgo,
@@ -358,6 +388,7 @@ public abstract class SaRecord implements AutoCloseable {
                         sIpSecTransformHelper.makeIpSecTransform(
                                 childSaRecordConfig.context,
                                 childSaRecordConfig.respAddress,
+                                childSaRecordConfig.udpEncapSocket,
                                 childSaRecordConfig.respSpi,
                                 childSaRecordConfig.integrityAlgo,
                                 childSaRecordConfig.encryptionAlgo,
@@ -402,10 +433,13 @@ public abstract class SaRecord implements AutoCloseable {
      * <p>Package private
      */
     static class IpSecTransformHelper implements IIpSecTransformHelper {
+        private static final String TAG = "IpSecTransformHelper";
+
         @Override
         public IpSecTransform makeIpSecTransform(
                 Context context,
                 InetAddress sourceAddress,
+                UdpEncapsulationSocket udpEncapSocket,
                 IpSecManager.SecurityParameterIndex spi,
                 @Nullable IkeMacIntegrity integrityAlgo,
                 IkeCipher encryptionAlgo,
@@ -423,7 +457,12 @@ public abstract class SaRecord implements AutoCloseable {
                 builder.setAuthentication(integrityAlgo.buildIpSecAlgorithmWithKey(integrityKey));
             }
 
-            // TODO: Support UDP Encap if NAT is detected.
+            if (udpEncapSocket != null && sourceAddress instanceof Inet6Address) {
+                Log.wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
+            }
+            if (udpEncapSocket != null && sourceAddress instanceof Inet4Address) {
+                builder.setIpv4Encapsulation(udpEncapSocket, udpEncapSocket.getPort());
+            }
 
             if (isTransport) {
                 return builder.buildTransportModeTransform(sourceAddress, spi);
@@ -441,6 +480,7 @@ public abstract class SaRecord implements AutoCloseable {
         public final SecurityParameterIndex respSpi;
         public final InetAddress initAddress;
         public final InetAddress respAddress;
+        @Nullable public final UdpEncapsulationSocket udpEncapSocket;
         public final IkeMacPrf ikePrf;
         @Nullable public final IkeMacIntegrity integrityAlgo;
         public final IkeCipher encryptionAlgo;
@@ -455,6 +495,7 @@ public abstract class SaRecord implements AutoCloseable {
                 SecurityParameterIndex respSpi,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
+                @Nullable UdpEncapsulationSocket udpEncapSocket,
                 IkeMacPrf ikePrf,
                 @Nullable IkeMacIntegrity integrityAlgo,
                 IkeCipher encryptionAlgo,
@@ -466,6 +507,7 @@ public abstract class SaRecord implements AutoCloseable {
             this.respSpi = respSpi;
             this.initAddress = isLocalInit ? localAddress : remoteAddress;
             this.respAddress = isLocalInit ? remoteAddress : localAddress;
+            this.udpEncapSocket = udpEncapSocket;
             this.ikePrf = ikePrf;
             this.integrityAlgo = integrityAlgo;
             this.encryptionAlgo = encryptionAlgo;
@@ -543,9 +585,30 @@ public abstract class SaRecord implements AutoCloseable {
         }
 
         /** Package private */
-        static IkeSaRecord makeNewIkeSaRecord(
-                IkeSaRecord oldSaRecord, IkeMessage rekeyRequest, IkeMessage rekeyResponse) {
-            return sSaRecordHelper.makeNewIkeSaRecord(oldSaRecord, rekeyRequest, rekeyResponse);
+        static IkeSaRecord makeRekeyedIkeSaRecord(
+                IkeSaRecord oldSaRecord,
+                IkeMacPrf oldPrf,
+                IkeMessage rekeyRequest,
+                IkeMessage rekeyResponse,
+                IkeSecurityParameterIndex initSpi,
+                IkeSecurityParameterIndex respSpi,
+                IkeMacPrf prf,
+                int integrityKeyLength,
+                int encryptionKeyLength,
+                boolean isLocalInit)
+                throws GeneralSecurityException {
+            return sSaRecordHelper.makeRekeyedIkeSaRecord(
+                    oldSaRecord,
+                    oldPrf,
+                    rekeyRequest,
+                    rekeyResponse,
+                    new IkeSaRecordConfig(
+                            initSpi,
+                            respSpi,
+                            prf,
+                            integrityKeyLength,
+                            encryptionKeyLength,
+                            isLocalInit));
         }
 
         /** Package private */
@@ -728,6 +791,7 @@ public abstract class SaRecord implements AutoCloseable {
                 SecurityParameterIndex respSpi,
                 InetAddress localAddress,
                 InetAddress remoteAddress,
+                @Nullable UdpEncapsulationSocket udpEncapSocket,
                 IkeMacPrf prf,
                 @Nullable IkeMacIntegrity integrityAlgo,
                 IkeCipher encryptionAlgo,
@@ -745,6 +809,7 @@ public abstract class SaRecord implements AutoCloseable {
                             respSpi,
                             localAddress,
                             remoteAddress,
+                            udpEncapSocket,
                             prf,
                             integrityAlgo,
                             encryptionAlgo,
@@ -820,12 +885,20 @@ public abstract class SaRecord implements AutoCloseable {
          * Construct new IkeSaRecord when doing rekey.
          *
          * @param oldSaRecord old IKE SA
+         * @param oldPrf the PRF function from the old SA
          * @param rekeyRequest Rekey IKE request.
          * @param rekeyResponse Rekey IKE response.
+         * @param ikeSaRecordConfig that contains IKE SPI resources and negotiated algorithm
+         *     information for constructing an IkeSaRecord instance.
          * @return ikeSaRecord for new IKE SA.
          */
-        IkeSaRecord makeNewIkeSaRecord(
-                IkeSaRecord oldSaRecord, IkeMessage rekeyRequest, IkeMessage rekeyResponse);
+        IkeSaRecord makeRekeyedIkeSaRecord(
+                IkeSaRecord oldSaRecord,
+                IkeMacPrf oldPrf,
+                IkeMessage rekeyRequest,
+                IkeMessage rekeyResponse,
+                IkeSaRecordConfig ikeSaRecordConfig)
+                throws GeneralSecurityException;
 
         /**
          * Construct ChildSaRecord and generate IpSecTransform pairs.
@@ -857,6 +930,8 @@ public abstract class SaRecord implements AutoCloseable {
          * @param context current context
          * @param sourceAddress the source {@code InetAddress} of traffic on sockets of interfaces
          *     that will use this transform
+         * @param udpEncapSocket the UDP-Encap socket that allows IpSec traffic to pass through a
+         *     NAT. Null if no NAT exists.
          * @param spi a unique {@link IpSecManager.SecurityParameterIndex} to identify transformed
          *     traffic
          * @param integrityAlgo specifying the authentication algorithm to be applied.
@@ -875,6 +950,7 @@ public abstract class SaRecord implements AutoCloseable {
         IpSecTransform makeIpSecTransform(
                 Context context,
                 InetAddress sourceAddress,
+                UdpEncapsulationSocket udpEncapSocket,
                 IpSecManager.SecurityParameterIndex spi,
                 @Nullable IkeMacIntegrity integrityAlgo,
                 IkeCipher encryptionAlgo,

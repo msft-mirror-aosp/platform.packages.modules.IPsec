@@ -17,12 +17,32 @@
 package com.android.ike.eap.message;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
-import static com.android.ike.TestUtils.hexStringToInt;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.NAK_DATA;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_TYPE_DATA;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.INCOMPLETE_HEADER_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.INVALID_CODE_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.LONG_SUCCESS_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_MISSING_TYPE_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_UNSUPPORTED_TYPE_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_PACKET;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.InvalidEapCodeException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
@@ -30,77 +50,45 @@ import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
 import org.junit.Test;
 
 public class EapMessageTest {
-    // TODO(b/133327025): cleanup packet definitions to be all inline definitions
-    private static final String REQUEST_CODE = "01";
-    private static final String SUCCESS_CODE = "03";
-    private static final String IDENTIFIER = "10";
-    private static final String REQUEST_LENGTH = "000A";
-    private static final String SUCCESS_LENGTH = "0004";
-
-    private static final String INVALID_CODE = "F0";
-    private static final String INVALID_LENGTH = "0005";
-    private static final String UNSUPPORTED_EAP_TYPE = "FF";
-
-    private static final String SUCCESS_PACKET = SUCCESS_CODE + IDENTIFIER + SUCCESS_LENGTH;
-    private static final String INVALID_CODE_PACKET = INVALID_CODE + IDENTIFIER + SUCCESS_LENGTH;
-    private static final String SHORT_HEADER = SUCCESS_CODE + IDENTIFIER;
-    private static final String SHORT_PACKET = SUCCESS_CODE + IDENTIFIER + INVALID_LENGTH;
-    private static final String SUCCESS_PACKET_TOO_LONG =
-            SUCCESS_CODE + IDENTIFIER + INVALID_LENGTH + "00";
-
-    private static final String MISSING_TYPE_LENGTH = "0004";
-    private static final String AKA_TYPE = "17"; // 0x17 = 23
-    private static final String AKA_IDENTITY_SUBTYPE = "05";
-    private static final String AKA_AT_PERMANENT_ID_REQ_ATTRIBUTE = "0C010000";
-
-    private static final String REQUEST_PACKET =
-            REQUEST_CODE
-            + IDENTIFIER
-            + REQUEST_LENGTH
-            + AKA_TYPE
-            + AKA_IDENTITY_SUBTYPE
-            + AKA_AT_PERMANENT_ID_REQ_ATTRIBUTE;
-    private static final String MISSING_TYPE_PACKET =
-            REQUEST_CODE
-            + IDENTIFIER
-            + MISSING_TYPE_LENGTH;
-    private static final String REQUEST_PACKET_UNSUPPORTED_TYPE =
-            REQUEST_CODE
-            + IDENTIFIER
-            + INVALID_LENGTH
-            + UNSUPPORTED_EAP_TYPE;
+    @Test
+    public void testConstructorRequestWithoutType() throws Exception {
+        try {
+            new EapMessage(EAP_CODE_REQUEST, ID_INT, null);
+            fail("Expected EapInvalidPacketLengthException for an EAP-Request without Type value");
+        } catch (EapInvalidPacketLengthException expected) {
+        }
+    }
 
     @Test
     public void testDecode() throws Exception {
-        EapMessage result = EapMessage.decode(hexStringToByteArray(SUCCESS_PACKET));
-
-        assertEquals(hexStringToInt(SUCCESS_CODE), result.eapCode);
-        assertEquals(hexStringToInt(IDENTIFIER), result.eapIdentifier);
-        assertEquals(hexStringToInt(SUCCESS_LENGTH), result.eapLength);
+        EapMessage result = EapMessage.decode(EAP_SUCCESS_PACKET);
+        assertEquals(EAP_CODE_SUCCESS, result.eapCode);
+        assertEquals(ID_INT, result.eapIdentifier);
+        assertEquals(EAP_SUCCESS_PACKET.length, result.eapLength);
         assertNull(result.eapData);
 
-        EapData expectedEapData = new EapData(EapData.EAP_TYPE_AKA,
-                hexStringToByteArray(AKA_IDENTITY_SUBTYPE + AKA_AT_PERMANENT_ID_REQ_ATTRIBUTE));
-        result = EapMessage.decode(hexStringToByteArray(REQUEST_PACKET));
-        assertEquals(hexStringToInt(REQUEST_CODE), result.eapCode);
-        assertEquals(hexStringToInt(IDENTIFIER), result.eapIdentifier);
-        assertEquals(hexStringToInt(REQUEST_LENGTH), result.eapLength);
+        EapData expectedEapData = new EapData(EAP_TYPE_AKA,
+                hexStringToByteArray(EAP_REQUEST_TYPE_DATA));
+        result = EapMessage.decode(EAP_REQUEST_AKA_IDENTITY_PACKET);
+        assertEquals(EAP_CODE_REQUEST, result.eapCode);
+        assertEquals(ID_INT, result.eapIdentifier);
+        assertEquals(EAP_REQUEST_AKA_IDENTITY_PACKET.length, result.eapLength);
         assertEquals(expectedEapData, result.eapData);
     }
 
     @Test
     public void testDecodeInvalidCode() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(INVALID_CODE_PACKET));
+            EapMessage.decode(INVALID_CODE_PACKET);
             fail("Expected InvalidEapCodeException");
         } catch (InvalidEapCodeException expected) {
         }
     }
 
     @Test
-    public void testDecodeShortHeader() throws Exception {
+    public void testDecodeIncompleteHeader() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(SHORT_HEADER));
+            EapMessage.decode(INCOMPLETE_HEADER_PACKET);
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
@@ -109,7 +97,7 @@ public class EapMessageTest {
     @Test
     public void testDecodeShortPacket() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(SHORT_PACKET));
+            EapMessage.decode(SHORT_PACKET);
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
@@ -118,7 +106,7 @@ public class EapMessageTest {
     @Test
     public void testDecodeSuccessIncorrectLength() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(SUCCESS_PACKET_TOO_LONG));
+            EapMessage.decode(LONG_SUCCESS_PACKET);
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
@@ -127,7 +115,7 @@ public class EapMessageTest {
     @Test
     public void testDecodeMissingTypeData() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(MISSING_TYPE_PACKET));
+            EapMessage.decode(REQUEST_MISSING_TYPE_PACKET);
             fail("Expected EapInvalidPacketLengthException");
         } catch (EapInvalidPacketLengthException expected) {
         }
@@ -136,20 +124,56 @@ public class EapMessageTest {
     @Test
     public void testDecodeUnsupportedEapType() throws Exception {
         try {
-            EapMessage.decode(hexStringToByteArray(REQUEST_PACKET_UNSUPPORTED_TYPE));
+            EapMessage.decode(REQUEST_UNSUPPORTED_TYPE_PACKET);
             fail("Expected UnsupportedEapDataTypeException");
         } catch (UnsupportedEapTypeException expected) {
-            assertEquals(hexStringToInt(IDENTIFIER), expected.eapIdentifier);
+            assertEquals(ID_INT, expected.eapIdentifier);
         }
     }
 
     @Test
     public void testEncode() throws Exception {
-        // TODO(b/133248540): fully test EapMessage#encode functionality
-        byte[] expectedPacket = hexStringToByteArray(SUCCESS_PACKET);
-        EapMessage eapMessage = EapMessage.decode(expectedPacket);
-
+        EapMessage eapMessage = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
         byte[] actualPacket = eapMessage.encode();
-        assertEquals(expectedPacket.length, actualPacket.length);
+        assertArrayEquals(EAP_SUCCESS_PACKET, actualPacket);
+
+        eapMessage = new EapMessage(EAP_CODE_RESPONSE, ID_INT, NAK_DATA);
+        actualPacket = eapMessage.encode();
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, actualPacket);
+    }
+
+    @Test
+    public void testEncodeDecode() throws Exception {
+        EapMessage eapMessage = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
+        EapMessage result = EapMessage.decode(eapMessage.encode());
+
+        assertEquals(eapMessage.eapCode, result.eapCode);
+        assertEquals(eapMessage.eapIdentifier, result.eapIdentifier);
+        assertEquals(eapMessage.eapLength, result.eapLength);
+        assertEquals(eapMessage.eapData, result.eapData);
+    }
+
+    @Test
+    public void testDecodeEncode() throws Exception {
+        byte[] result = EapMessage.decode(EAP_REQUEST_AKA_IDENTITY_PACKET).encode();
+        assertArrayEquals(EAP_REQUEST_AKA_IDENTITY_PACKET, result);
+    }
+
+    @Test
+    public void testGetNakResponse() {
+        EapResult nakResponse = EapMessage.getNakResponse(ID_INT);
+
+        assertTrue(nakResponse instanceof EapResponse);
+        EapResponse eapResponse = (EapResponse) nakResponse;
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);
+    }
+
+    @Test
+    public void testGetNotificationResponse() {
+        EapResult notificationResponse = EapMessage.getNotificationResponse(ID_INT);
+
+        assertTrue(notificationResponse instanceof EapResponse);
+        EapResponse eapResponse = (EapResponse) notificationResponse;
+        assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
     }
 }

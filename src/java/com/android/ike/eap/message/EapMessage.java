@@ -16,10 +16,17 @@
 
 package com.android.ike.eap.message;
 
+import static com.android.ike.eap.message.EapData.NAK_DATA;
+import static com.android.ike.eap.message.EapData.NOTIFICATION_DATA;
+
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.util.Log;
 
+import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.InvalidEapCodeException;
@@ -61,6 +68,8 @@ import java.nio.ByteBuffer;
  * Protocol (EAP)</a>
  */
 public class EapMessage {
+    private static final String TAG = EapMessage.class.getSimpleName();
+
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
             EAP_CODE_REQUEST,
@@ -82,11 +91,11 @@ public class EapMessage {
     public final int eapLength;
     public final EapData eapData;
 
-    private EapMessage(@EapCode int eapCode, int eapIdentifier, int eapLength,
-            @Nullable EapData eapData) throws EapSilentException {
+    public EapMessage(@EapCode int eapCode, int eapIdentifier, @Nullable EapData eapData)
+            throws EapSilentException {
         this.eapCode = eapCode;
         this.eapIdentifier = eapIdentifier;
-        this.eapLength = eapLength;
+        this.eapLength = EAP_HEADER_LENGTH + ((eapData == null) ? 0 : eapData.getLength());
         this.eapData = eapData;
 
         validate();
@@ -127,7 +136,12 @@ public class EapMessage {
             throw new EapInvalidPacketLengthException("Packet is missing required values", ex);
         }
 
-        return new EapMessage(eapCode, eapIdentifier, eapLength, eapData);
+        int eapDataLength = (eapData == null) ? 0 : eapData.getLength();
+        if (eapLength > EAP_HEADER_LENGTH + eapDataLength) {
+            throw new EapInvalidPacketLengthException("Packet is shorter than specified length");
+        }
+
+        return new EapMessage(eapCode, eapIdentifier, eapData);
     }
 
     /**
@@ -136,8 +150,56 @@ public class EapMessage {
      * @return byte[] representing the byte-encoded EapMessage
      */
     public byte[] encode() {
-        // TODO(b/133248540): implement and utilize EapMessage#encode functionality
-        return new byte[eapLength];
+        ByteBuffer byteBuffer = ByteBuffer.allocate(eapLength);
+        byteBuffer.put((byte) eapCode);
+        byteBuffer.put((byte) eapIdentifier);
+        byteBuffer.putShort((short) eapLength);
+
+        if (eapData != null) {
+            eapData.encodeToByteBuffer(byteBuffer);
+        }
+
+        return byteBuffer.array();
+    }
+
+    /**
+     * Creates and returns an EAP-Response/Notification message for the given EAP Identifier wrapped
+     * in an EapResponse object.
+     *
+     * @param eapIdentifier the identifier for the message being responded to
+     * @return an EapResponse object containing an EAP-Response/Notification message with an
+     *         identifier matching the given identifier, or an EapError if an exception was thrown
+     */
+    public static EapResult getNotificationResponse(int eapIdentifier) {
+        try {
+            return EapResponse.getEapResponse(
+                    new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NOTIFICATION_DATA));
+        } catch (EapSilentException ex) {
+            // this should never happen - the only variable value is the identifier
+            Log.wtf(TAG, "Failed to create Notification Response for message with identifier="
+                    + eapIdentifier);
+            return new EapError(ex);
+        }
+    }
+
+    /**
+     * Creates and returns an EAP-Response/Nak message for the given EAP Identifier wrapped in an
+     * EapResponse object.
+     *
+     * @param eapIdentifier the identifier for the message being responded to
+     * @return an EapResponse object containing an EAP-Response/Nak message with an identifier
+     *         matching the given identifier, or an EapError if an exception was thrown
+     */
+    public static EapResult getNakResponse(int eapIdentifier) {
+        try {
+            return EapResponse.getEapResponse(
+                    new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NAK_DATA));
+        } catch (EapSilentException ex) {
+            // this should never happen - the only variable value is the identifier
+            Log.wtf(TAG,  "Failed to create Nak for message with identifier="
+                    + eapIdentifier);
+            return new EapError(ex);
+        }
     }
 
     private void validate() throws EapSilentException {
@@ -148,15 +210,15 @@ public class EapMessage {
             throw new InvalidEapCodeException(eapCode);
         }
 
-        int eapDataLength = (eapData == null) ? 0 : eapData.getLength();
-        if (eapLength > EAP_HEADER_LENGTH + eapDataLength) {
-            throw new EapInvalidPacketLengthException("Packet is shorter than specified length");
-        }
-
         if ((eapCode == EAP_CODE_SUCCESS || eapCode == EAP_CODE_FAILURE)
                 && eapLength != EAP_HEADER_LENGTH) {
             throw new EapInvalidPacketLengthException(
                     "EAP Success/Failure packets must be length 4");
+        }
+
+        if ((eapCode == EAP_CODE_REQUEST || eapCode == EAP_CODE_RESPONSE) && eapData == null) {
+            throw new EapInvalidPacketLengthException(
+                    "EAP Request/Response packets must include a Type value");
         }
     }
 }

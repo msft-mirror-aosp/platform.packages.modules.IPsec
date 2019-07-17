@@ -60,7 +60,9 @@ public abstract class IkePayload {
         PAYLOAD_TYPE_VENDOR,
         PAYLOAD_TYPE_TS_INITIATOR,
         PAYLOAD_TYPE_TS_RESPONDER,
-        PAYLOAD_TYPE_SK
+        PAYLOAD_TYPE_SK,
+        PAYLOAD_TYPE_CP,
+        PAYLOAD_TYPE_EAP
     })
     public @interface PayloadType {}
 
@@ -94,6 +96,10 @@ public abstract class IkePayload {
     public static final int PAYLOAD_TYPE_TS_RESPONDER = 45;
     /** Encrypted and Authenticated Payload */
     public static final int PAYLOAD_TYPE_SK = 46;
+    /** Configuration Payload */
+    public static final int PAYLOAD_TYPE_CP = 47;
+    /** EAP Payload */
+    public static final int PAYLOAD_TYPE_EAP = 48;
 
     // TODO: List all payload types.
 

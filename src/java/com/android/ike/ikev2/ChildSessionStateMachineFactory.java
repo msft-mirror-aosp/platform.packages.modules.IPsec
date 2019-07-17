@@ -20,10 +20,10 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.os.Looper;
 
-import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.internal.annotations.VisibleForTesting;
 
-import java.net.InetAddress;
+import java.util.concurrent.Executor;
 
 /** Package private factory for making ChildSessionStateMachine. */
 // TODO: Make it a inner Creator class of ChildSessionStateMachine
@@ -33,16 +33,14 @@ final class ChildSessionStateMachineFactory {
 
     /** Package private. */
     static ChildSessionStateMachine makeChildSessionStateMachine(
-            String name,
             Looper looper,
             Context context,
             ChildSessionOptions sessionOptions,
-            InetAddress localAddress,
-            InetAddress remoteAddress,
-            IkeMacPrf prf,
-            byte[] skD) {
+            Executor userCbExecutor,
+            IChildSessionCallback userCallbacks,
+            IChildSessionSmCallback childSmCallback) {
         return sChildSessionHelper.makeChildSessionStateMachine(
-                name, looper, context, sessionOptions, localAddress, remoteAddress, prf, skD);
+                looper, context, sessionOptions, userCbExecutor, userCallbacks, childSmCallback);
     }
 
     @VisibleForTesting
@@ -58,14 +56,12 @@ final class ChildSessionStateMachineFactory {
      */
     interface IChildSessionFactoryHelper {
         ChildSessionStateMachine makeChildSessionStateMachine(
-                String name,
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
-                InetAddress localAddress,
-                InetAddress remoteAddress,
-                IkeMacPrf prf,
-                byte[] skD);
+                Executor userCbExecutor,
+                IChildSessionCallback userCallbacks,
+                IChildSessionSmCallback childSmCallback);
     }
 
     /**
@@ -75,25 +71,21 @@ final class ChildSessionStateMachineFactory {
      */
     static class ChildSessionFactoryHelper implements IChildSessionFactoryHelper {
         public ChildSessionStateMachine makeChildSessionStateMachine(
-                String name,
                 Looper looper,
                 Context context,
                 ChildSessionOptions sessionOptions,
-                InetAddress localAddress,
-                InetAddress remoteAddress,
-                IkeMacPrf prf,
-                byte[] skD) {
+                Executor userCbExecutor,
+                IChildSessionCallback userCallbacks,
+                IChildSessionSmCallback childSmCallback) {
             ChildSessionStateMachine childSession =
                     new ChildSessionStateMachine(
-                            name,
                             looper,
                             context,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                             sessionOptions,
-                            localAddress,
-                            remoteAddress,
-                            prf,
-                            skD);
+                            userCbExecutor,
+                            userCallbacks,
+                            childSmCallback);
             childSession.start();
             return childSession;
         }

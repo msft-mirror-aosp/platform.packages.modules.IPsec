@@ -46,4 +46,14 @@ public class TestUtils {
 
         return ByteBuffer.wrap(hexStringToByteArray(hexString)).getInt();
     }
+
+    public static String stringToHexString(String s) {
+        // two hex characters for each char in s
+        StringBuilder sb = new StringBuilder(s.length() * 2);
+        char[] chars = s.toCharArray();
+        for (char c : chars) {
+            sb.append(Integer.toHexString(c));
+        }
+        return sb.toString();
+    }
 }
