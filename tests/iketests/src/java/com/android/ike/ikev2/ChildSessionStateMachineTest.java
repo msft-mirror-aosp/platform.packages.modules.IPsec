@@ -57,6 +57,7 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.IpSecTransform;
 import android.os.Looper;
 import android.os.test.TestLooper;
 
@@ -101,8 +102,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 public final class ChildSessionStateMachineTest {
     private static final Inet4Address LOCAL_ADDRESS =
@@ -160,7 +160,7 @@ public final class ChildSessionStateMachineTest {
 
     private SaProposal mMockNegotiatedProposal;
 
-    private ExecutorService mUserCbExecutor;
+    private Executor mSpyUserCbExecutor;
     private IChildSessionCallback mMockChildSessionCallback;
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
@@ -198,7 +198,12 @@ public final class ChildSessionStateMachineTest {
 
         mMockNegotiatedProposal = mock(SaProposal.class);
 
-        mUserCbExecutor = Executors.newSingleThreadExecutor();
+        mSpyUserCbExecutor =
+                spy(
+                        (command) -> {
+                            command.run();
+                        });
+
         mMockChildSessionCallback = mock(IChildSessionCallback.class);
         mChildSessionOptions = buildChildSessionOptions();
 
@@ -210,7 +215,7 @@ public final class ChildSessionStateMachineTest {
                         mContext,
                         mMockIpSecManager,
                         mChildSessionOptions,
-                        mUserCbExecutor,
+                        mSpyUserCbExecutor,
                         mMockChildSessionCallback,
                         mMockChildSessionSmCallback);
         mChildSessionStateMachine.setDbg(true);
@@ -226,8 +231,6 @@ public final class ChildSessionStateMachineTest {
     public void tearDown() {
         mChildSessionStateMachine.setDbg(false);
         SaRecord.setSaRecordHelper(new SaRecordHelper());
-
-        mUserCbExecutor.shutdown();
     }
 
     private SaProposal buildSaProposal() throws Exception {
@@ -306,8 +309,8 @@ public final class ChildSessionStateMachineTest {
                                 null,
                                 null,
                                 null,
-                                null,
-                                null));
+                                mock(IpSecTransform.class),
+                                mock(IpSecTransform.class)));
         doNothing().when(child).close();
         return child;
     }
@@ -344,6 +347,17 @@ public final class ChildSessionStateMachineTest {
         assertFalse(childSaRecordConfig.isTransport);
         assertEquals(isLocalInit, childSaRecordConfig.isLocalInit);
         assertTrue(childSaRecordConfig.hasIntegrityAlgo);
+    }
+
+    private void verifyNotifyUsersCreateIpSecSa(
+            ChildSaRecord childSaRecord, boolean expectInbound) {
+        IpSecTransform transform =
+                expectInbound
+                        ? childSaRecord.getInboundIpSecTransform()
+                        : childSaRecord.getOutboundIpSecTransform();
+        int direction = expectInbound ? IpSecManager.DIRECTION_IN : IpSecManager.DIRECTION_OUT;
+
+        verify(mMockChildSessionCallback).onIpSecTransformCreated(eq(transform), eq(direction));
     }
 
     private void verifyInitCreateChildResp(
@@ -386,6 +400,13 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
+
+        // Verify users have been notified
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+
+        verifyNotifyUsersCreateIpSecSa(mSpyCurrentChildSaRecord, true /*expectInbound*/);
+        verifyNotifyUsersCreateIpSecSa(mSpyCurrentChildSaRecord, false /*expectInbound*/);
+        verify(mMockChildSessionCallback).onOpened();
     }
 
     @Test

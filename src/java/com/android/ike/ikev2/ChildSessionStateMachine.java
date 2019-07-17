@@ -545,7 +545,18 @@ public class ChildSessionStateMachine extends StateMachine {
                                         mSkD,
                                         mChildSessionOptions.isTransportMode(),
                                         true /*isLocalInit*/);
-                        // TODO: Add mCurrentChildSaRecord in mSpiToSaRecordMap.
+
+                        mUserCbExecutor.execute(
+                                () -> {
+                                    mUserCallback.onIpSecTransformCreated(
+                                            mCurrentChildSaRecord.getInboundIpSecTransform(),
+                                            IpSecManager.DIRECTION_IN);
+                                    mUserCallback.onIpSecTransformCreated(
+                                            mCurrentChildSaRecord.getOutboundIpSecTransform(),
+                                            IpSecManager.DIRECTION_OUT);
+                                    mUserCallback.onOpened();
+                                });
+
                         transitionTo(mIdle);
                     } catch (GeneralSecurityException
                             | ResourceUnavailableException
