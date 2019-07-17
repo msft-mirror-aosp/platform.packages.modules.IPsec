@@ -458,6 +458,14 @@ public class ChildSessionStateMachine extends StateMachine {
                 EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, outPayloads, this);
     }
 
+    /** Notify users the deletion of a Child SA. MUST be called through mUserCbExecutor */
+    private void onIpSecTransformPairDeleted(ChildSaRecord childSaRecord) {
+        mUserCallback.onIpSecTransformDeleted(
+                childSaRecord.getOutboundIpSecTransform(), IpSecManager.DIRECTION_OUT);
+        mUserCallback.onIpSecTransformDeleted(
+                childSaRecord.getInboundIpSecTransform(), IpSecManager.DIRECTION_IN);
+    }
+
     /**
      * FirstChildNegotiationData contains payloads for negotiating first Child SA in IKE_AUTH
      * request and IKE_AUTH response and callback to notify IkeSessionStateMachine the SA
@@ -688,7 +696,36 @@ public class ChildSessionStateMachine extends StateMachine {
      * actions can be performed on it.
      */
     class Closed extends State {
-        // TODO: Implement it.
+        @Override
+        public void enter() {
+            verifyChildSaRecordIsClosed(mCurrentChildSaRecord);
+            verifyChildSaRecordIsClosed(mLocalInitNewChildSaRecord);
+            verifyChildSaRecordIsClosed(mRemoteInitNewChildSaRecord);
+
+            mCurrentChildSaRecord = null;
+            mLocalInitNewChildSaRecord = null;
+            mRemoteInitNewChildSaRecord = null;
+
+            quitNow();
+        }
+
+        private void verifyChildSaRecordIsClosed(ChildSaRecord childSaRecord) {
+            if (childSaRecord == null) return;
+
+            Log.wtf(
+                    TAG,
+                    "ChildSaRecord with local SPI: "
+                            + childSaRecord.getLocalSpi()
+                            + " is not correctly closed.");
+
+            mUserCbExecutor.execute(
+                    () -> {
+                        onIpSecTransformPairDeleted(childSaRecord);
+                    });
+
+            mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
+            childSaRecord.close();
+        }
     }
 
     /**
@@ -791,6 +828,13 @@ public class ChildSessionStateMachine extends StateMachine {
                 mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
 
             } else {
+
+                mUserCbExecutor.execute(
+                        () -> {
+                            mUserCallback.onClosed();
+                            onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                        });
+
                 sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
 
                 mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
@@ -887,6 +931,12 @@ public class ChildSessionStateMachine extends StateMachine {
                                     "Found remote SPI in the Delete response in a simultaneous"
                                             + " deletion case");
                         }
+
+                        mUserCbExecutor.execute(
+                                () -> {
+                                    mUserCallback.onClosed();
+                                    onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                                });
 
                         mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
                         mCurrentChildSaRecord.close();

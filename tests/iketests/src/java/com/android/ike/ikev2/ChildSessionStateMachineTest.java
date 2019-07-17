@@ -529,6 +529,23 @@ public final class ChildSessionStateMachineTest {
         assertEquals(expectedSpi, deletePayload.spisToDelete[0]);
     }
 
+    private void verifyNotifyUserDeleteChildSa(ChildSaRecord childSaRecord) {
+        verify(mMockChildSessionCallback)
+                .onIpSecTransformDeleted(
+                        eq(childSaRecord.getInboundIpSecTransform()),
+                        eq(IpSecManager.DIRECTION_IN));
+        verify(mMockChildSessionCallback)
+                .onIpSecTransformDeleted(
+                        eq(childSaRecord.getOutboundIpSecTransform()),
+                        eq(IpSecManager.DIRECTION_OUT));
+    }
+
+    private void verifyNotifyUsersDeleteSession() {
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockChildSessionCallback).onClosed();
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+    }
+
     @Test
     public void testDeleteChildLocal() throws Exception {
         setupIdleStateMachine();
@@ -548,9 +565,9 @@ public final class ChildSessionStateMachineTest {
                 makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
         mLooper.dispatchAll();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verifyNotifyUsersDeleteSession();
     }
 
     @Test
@@ -576,9 +593,9 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
         mLooper.dispatchAll();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verifyNotifyUsersDeleteSession();
     }
 
     @Test
@@ -619,9 +636,7 @@ public final class ChildSessionStateMachineTest {
                 makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
         mLooper.dispatchAll();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
         // Verify response
         verify(mMockChildSessionSmCallback)
                 .onOutboundPayloadsReady(
@@ -635,6 +650,8 @@ public final class ChildSessionStateMachineTest {
         assertArrayEquals(
                 new int[] {mSpyCurrentChildSaRecord.getLocalSpi()},
                 ((IkeDeletePayload) respPayloadList.get(0)).spisToDelete);
+
+        verifyNotifyUsersDeleteSession();
     }
 
     private void verifyOutboundRekeySaPayload(List<IkePayload> outboundPayloads, boolean isResp) {
@@ -947,9 +964,7 @@ public final class ChildSessionStateMachineTest {
                 .onChildSaDeleted(mSpyLocalInitNewChildSaRecord.getRemoteSpi());
         verify(mSpyLocalInitNewChildSaRecord).close();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
     }
 
     @Test
@@ -975,9 +990,7 @@ public final class ChildSessionStateMachineTest {
                 .onChildSaDeleted(mSpyRemoteInitNewChildSaRecord.getRemoteSpi());
         verify(mSpyRemoteInitNewChildSaRecord).close();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
     }
 
     @Test
