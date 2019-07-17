@@ -1076,6 +1076,18 @@ public class ChildSessionStateMachine extends StateMachine {
                                                 mChildSessionOptions.isTransportMode(),
                                                 true /*isLocalInit*/);
 
+                                mUserCbExecutor.execute(
+                                        () -> {
+                                            mUserCallback.onIpSecTransformCreated(
+                                                    mLocalInitNewChildSaRecord
+                                                            .getInboundIpSecTransform(),
+                                                    IpSecManager.DIRECTION_IN);
+                                            mUserCallback.onIpSecTransformCreated(
+                                                    mLocalInitNewChildSaRecord
+                                                            .getOutboundIpSecTransform(),
+                                                    IpSecManager.DIRECTION_OUT);
+                                        });
+
                                 transitionTo(mRekeyChildLocalDelete);
                             } catch (GeneralSecurityException
                                     | ResourceUnavailableException
@@ -1195,6 +1207,18 @@ public class ChildSessionStateMachine extends StateMachine {
                                     mRemoteInitNewChildSaRecord.getRemoteSpi(),
                                     ChildSessionStateMachine.this);
 
+                            // To avoid traffic loss, outbound transform should only be applied once
+                            // the remote has (implicitly) acknowledged our response via the
+                            // delete-old-SA request. This will be performed in the finishRekey()
+                            // method.
+                            mUserCbExecutor.execute(
+                                    () -> {
+                                        mUserCallback.onIpSecTransformCreated(
+                                                mRemoteInitNewChildSaRecord
+                                                        .getInboundIpSecTransform(),
+                                                IpSecManager.DIRECTION_IN);
+                                    });
+
                             mChildSmCallback.onOutboundPayloadsReady(
                                     EXCHANGE_TYPE_CREATE_CHILD_SA,
                                     true /*isResp*/,
@@ -1261,6 +1285,11 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         protected void finishRekey() {
+            mUserCbExecutor.execute(
+                    () -> {
+                        onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                    });
+
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
             mCurrentChildSaRecord.close();
 
@@ -1378,6 +1407,18 @@ public class ChildSessionStateMachine extends StateMachine {
                 finishRekey();
                 transitionTo(mIdle);
             }
+        }
+
+        @Override
+        protected void finishRekey() {
+            mUserCbExecutor.execute(
+                    () -> {
+                        mUserCallback.onIpSecTransformCreated(
+                                mRemoteInitNewChildSaRecord.getOutboundIpSecTransform(),
+                                IpSecManager.DIRECTION_OUT);
+                    });
+
+            super.finishRekey();
         }
 
         @Override
