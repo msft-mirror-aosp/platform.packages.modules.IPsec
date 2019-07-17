@@ -66,6 +66,22 @@ public final class IkeEncryptedPayloadBodyTest {
 
     private static final String ENCR_ALGO_AES_CBC = "AES/CBC/NoPadding";
 
+    // Test vectors for IKE message protected by HmacSha1 and 3DES
+    private static final String HMAC_SHA1_3DES_MSG_HEX_STRING =
+            "5837b1bd28ec424f85ddd0c609c8dbfe2e20232000000002"
+                    + "00000064300000488beaf41d88544baabd95eac60269f19a"
+                    + "5986295fe318ce02f65368cd957985f36b183794c4c78d35"
+                    + "437762297a131a773d7f7806aaa0c590f48b9d71001f4d65"
+                    + "70a44533";
+
+    private static final String HMAC_SHA1_3DES_DECRYPTED_BODY_HEX_STRING =
+            "00000028013c00241a013c001f10dac4f8b759138776091dd0f00033c5b07374726f6e675377616e";
+
+    private static final String HMAC_SHA1_3DES_MSG_ENCR_KEY =
+            "ee0fdd6d35bbdbe9eeef2f24495b6632e5047bdd8e413c87";
+    private static final String HMAC_SHA1_3DES_MSG_INTE_KEY =
+            "867a0bd019108db856cf6984fc9fb62d70c0de74";
+
     private IkeCipher mAesCbcCipher;
     private byte[] mAesCbcKey;
 
@@ -195,7 +211,7 @@ public final class IkeEncryptedPayloadBodyTest {
     public void testBuildAndEncodeOutboundIkeEncryptedPayloadBody() throws Exception {
         IkeHeader ikeHeader = new IkeHeader(mIkeMessage);
 
-        IkeEncryptedPayloadBody paylaodBody =
+        IkeEncryptedPayloadBody payloadBody =
                 new IkeEncryptedPayloadBody(
                         ikeHeader,
                         IkePayload.PAYLOAD_TYPE_ID_INITIATOR,
@@ -212,12 +228,12 @@ public final class IkeEncryptedPayloadBodyTest {
                         IKE_AUTH_INIT_REQUEST_IV
                                 + IKE_AUTH_INIT_REQUEST_ENCRYPT_PADDED_DATA
                                 + IKE_AUTH_INIT_REQUEST_CHECKSUM);
-        assertArrayEquals(expectedEncodedData, paylaodBody.encode());
+        assertArrayEquals(expectedEncodedData, payloadBody.encode());
     }
 
     @Test
-    public void testAuthenticateAndDecryptInboundIkeEncryptedPayloadBody() throws Exception {
-        IkeEncryptedPayloadBody paylaodBody =
+    public void testAuthAndDecodeHmacSha1AesCbc() throws Exception {
+        IkeEncryptedPayloadBody payloadBody =
                 new IkeEncryptedPayloadBody(
                         mIkeMessage,
                         mHmacSha1IntegrityMac,
@@ -225,6 +241,27 @@ public final class IkeEncryptedPayloadBodyTest {
                         mHmacSha1IntegrityKey,
                         mAesCbcKey);
 
-        assertArrayEquals(mDataToPadAndEncrypt, paylaodBody.getUnencryptedData());
+        assertArrayEquals(mDataToPadAndEncrypt, payloadBody.getUnencryptedData());
+    }
+
+    @Test
+    public void testAuthAndDecodeHmacSha13Des() throws Exception {
+        byte[] message = TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_HEX_STRING);
+        byte[] expectedDecryptedData =
+                TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_DECRYPTED_BODY_HEX_STRING);
+        IkeCipher tripleDesCipher =
+                IkeCipher.create(
+                        new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES),
+                        IkeMessage.getSecurityProvider());
+
+        IkeEncryptedPayloadBody payloadBody =
+                new IkeEncryptedPayloadBody(
+                        message,
+                        mHmacSha1IntegrityMac,
+                        tripleDesCipher,
+                        TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_INTE_KEY),
+                        TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_ENCR_KEY));
+
+        assertArrayEquals(expectedDecryptedData, payloadBody.getUnencryptedData());
     }
 }
