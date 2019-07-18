@@ -1019,6 +1019,50 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
+    @Test
+    public void testTriggerDeleteChildLocal() throws Exception {
+        setupIdleStateMachine();
+
+        IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
+        ChildSessionStateMachine childStateMachine = mock(ChildSessionStateMachine.class);
+        registerChildStateMachine(childCallback, childStateMachine);
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD,
+                        childCallback,
+                        null /*childOptions*/));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(childStateMachine).deleteChildSession();
+    }
+
+    @Test
+    public void testTriggerRekeyChildLocal() throws Exception {
+        setupIdleStateMachine();
+
+        IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
+        ChildSessionStateMachine childStateMachine = mock(ChildSessionStateMachine.class);
+        registerChildStateMachine(childCallback, childStateMachine);
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
+                        childCallback,
+                        null /*childOptions*/));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(childStateMachine).rekeyChildSession();
+    }
+
     private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
             ChildSessionStateMachine child, int remoteSpi) throws Exception {
         return createChildAndGetChildSessionSmCallback(
