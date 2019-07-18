@@ -62,6 +62,7 @@ import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeCertPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
+import com.android.ike.ikev2.message.IkeEapPayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeHeader.ExchangeType;
 import com.android.ike.ikev2.message.IkeIdPayload;
@@ -176,6 +177,12 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_EXECUTE_LOCAL_REQ = CMD_GENERAL_BASE + 7;
     /** Trigger a retransmission. */
     public static final int CMD_RETRANSMIT = CMD_GENERAL_BASE + 8;
+    /** Send EAP request payloads to EapAuthenticator for further processing. */
+    static final int CMD_START_EAP_AUTH = CMD_GENERAL_BASE + 9;
+    /** Send the outbound IKE-wrapped EAP-Response message. */
+    static final int CMD_OUTBOUND_EAP_MSG_READY = CMD_GENERAL_BASE + 10;
+    /** Start the post-EAP authentication state for further processing. */
+    static final int CMD_START_POST_EAP_AUTH = CMD_GENERAL_BASE + 11;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
@@ -248,6 +255,10 @@ public class IkeSessionStateMachine extends StateMachine {
     @VisibleForTesting byte[] mIkeInitResponseBytes;
     @VisibleForTesting IkeNoncePayload mIkeInitNoncePayload;
     @VisibleForTesting IkeNoncePayload mIkeRespNoncePayload;
+
+    // FIXME: b/131265898 Pass this parameter from CreateIkeLocalIkeAuth to InEap state so the
+    //  child SAs can be negotiated.
+    @VisibleForTesting List<IkePayload> mFirstChildReqList;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -2094,15 +2105,28 @@ public class IkeSessionStateMachine extends StateMachine {
                             "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
                 }
 
+                List<IkePayload> childReqList =
+                        extractChildPayloadsFromMessage(mRetransmitter.getMessage());
+
                 if (mUseEap) {
-                    // TODO: Implement #validateIkeAuthRespWithEapPayload() to validate Auth payload
-                    // and extract EAP payload in the inbound message.
-                    throw new UnsupportedOperationException("Do not support EAP.");
+                    validateIkeAuthRespWithEapPayload(ikeMessage);
+
+                    // childReqList needed after EAP completed, so persist to IkeSessionStateMachine
+                    // state.
+                    mFirstChildReqList = childReqList;
+
+                    IkeEapPayload ikeEapPayload = ikeMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
+
+                    deferMessage(
+                            obtainMessage(
+                                    CMD_START_EAP_AUTH,
+                                    ikeEapPayload));
+
+                    // TODO(b/137394968): transition to InEap state
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
-                    List<IkePayload> childReqList =
-                            extractChildPayloadsFromMessage(mRetransmitter.getMessage());
                     List<IkePayload> childRespList = extractChildPayloadsFromMessage(ikeMessage);
                     childReqList.add(mIkeInitNoncePayload);
                     childRespList.add(mIkeRespNoncePayload);
@@ -2182,6 +2206,21 @@ public class IkeSessionStateMachine extends StateMachine {
                             mCurrentIkeSaRecord.getLocalRequestMessageId());
 
             return new IkeMessage(ikeHeader, payloadList);
+        }
+
+        private void validateIkeAuthRespWithEapPayload(IkeMessage respMsg)
+                throws IkeProtocolException {
+            IkeEapPayload ikeEapPayload =
+                    respMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
+            if (ikeEapPayload == null) {
+                throw new AuthenticationFailedException("Missing EAP payload");
+            }
+
+            // TODO: check that we don't receive any ChildSaRespPayloads here
+
+            List<IkePayload> nonEapPayloads = new LinkedList<>();
+            nonEapPayloads.remove(ikeEapPayload);
+            validateIkeAuthResp(nonEapPayloads);
         }
 
         private void validateIkeAuthRespWithChildPayloads(IkeMessage respMsg)
