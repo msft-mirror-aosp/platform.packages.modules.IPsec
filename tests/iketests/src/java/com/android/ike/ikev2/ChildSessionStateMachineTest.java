@@ -316,6 +316,10 @@ public final class ChildSessionStateMachineTest {
     }
 
     private void quitAndVerify() {
+        mChildSessionStateMachine.mCurrentChildSaRecord = null;
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = null;
+        mChildSessionStateMachine.mRemoteInitNewChildSaRecord = null;
+
         reset(mMockChildSessionSmCallback);
         mChildSessionStateMachine.quit();
         mLooper.dispatchAll();
@@ -1047,6 +1051,28 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.RekeyChildRemoteDelete);
+    }
+
+    @Test
+    public void testCloseSessionNow() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildLocalDelete
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = mSpyLocalInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildLocalDelete);
+
+        mChildSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verify(mSpyUserCbExecutor, times(3)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUserDeleteChildSa(mSpyLocalInitNewChildSaRecord);
+
+        verify(mMockChildSessionCallback).onClosed();
     }
 
     @Test

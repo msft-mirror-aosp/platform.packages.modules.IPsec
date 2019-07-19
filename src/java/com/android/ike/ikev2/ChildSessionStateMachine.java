@@ -94,8 +94,8 @@ import java.util.concurrent.Executor;
  * ChildSessionStateMachine tracks states and manages exchanges of this Child Session.
  *
  * <p>ChildSessionStateMachine has two types of states. One type are states where there is no
- * ongoing procedure affecting Child Session (non-procedure state), including Initial, Closed, Idle
- * and Receiving. All other states are "procedure" states which are named as follows:
+ * ongoing procedure affecting Child Session (non-procedure state), including Initial, Idle and
+ * Receiving. All other states are "procedure" states which are named as follows:
  *
  * <pre>
  * State Name = [Procedure Type] + [Exchange Initiator] + [Exchange Type].
@@ -116,8 +116,10 @@ public class ChildSessionStateMachine extends StateMachine {
     private static final int CMD_HANDLE_RECEIVED_REQUEST = 2;
     /** Receive a reponse from the remote. */
     private static final int CMD_HANDLE_RECEIVED_RESPONSE = 3;
+    /** Kill Session and close all alive Child SAs immediately. */
+    private static final int CMD_KILL_SESSION = 4;
     /** Timeout when the remote side fails to send a Rekey-Delete request. */
-    @VisibleForTesting static final int TIMEOUT_REKEY_REMOTE_DELETE = 4;
+    @VisibleForTesting static final int TIMEOUT_REKEY_REMOTE_DELETE = 5;
     /** Force state machine to a target state for testing purposes. */
     @VisibleForTesting static final int CMD_FORCE_TRANSITION = 99;
 
@@ -172,9 +174,10 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Package private */
     @VisibleForTesting ChildSaRecord mChildSaRecordSurviving;
 
+    @VisibleForTesting final State mKillChildSessionParent = new KillChildSessionParent();
+
     @VisibleForTesting final State mInitial = new Initial();
     @VisibleForTesting final State mCreateChildLocalCreate = new CreateChildLocalCreate();
-    @VisibleForTesting final State mClosed = new Closed();
     @VisibleForTesting final State mIdle = new Idle();
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
     @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
@@ -213,16 +216,17 @@ public class ChildSessionStateMachine extends StateMachine {
         mUserCallback = userCallback;
         mChildSmCallback = childSmCallback;
 
-        addState(mInitial);
-        addState(mCreateChildLocalCreate);
-        addState(mClosed);
-        addState(mIdle);
-        addState(mDeleteChildLocalDelete);
-        addState(mDeleteChildRemoteDelete);
-        addState(mRekeyChildLocalCreate);
-        addState(mRekeyChildRemoteCreate);
-        addState(mRekeyChildLocalDelete);
-        addState(mRekeyChildRemoteDelete);
+        addState(mKillChildSessionParent);
+
+        addState(mInitial, mKillChildSessionParent);
+        addState(mCreateChildLocalCreate, mKillChildSessionParent);
+        addState(mIdle, mKillChildSessionParent);
+        addState(mDeleteChildLocalDelete, mKillChildSessionParent);
+        addState(mDeleteChildRemoteDelete, mKillChildSessionParent);
+        addState(mRekeyChildLocalCreate, mKillChildSessionParent);
+        addState(mRekeyChildRemoteCreate, mKillChildSessionParent);
+        addState(mRekeyChildLocalDelete, mKillChildSessionParent);
+        addState(mRekeyChildRemoteDelete, mKillChildSessionParent);
 
         setInitialState(mInitial);
     }
@@ -359,6 +363,15 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     public void rekeyChildSession() {
         sendMessage(CMD_LOCAL_REQUEST_REKEY_CHILD);
+    }
+
+    /**
+     * Kill Child Session and all alive Child SAs without doing IKE exchange.
+     *
+     * <p>It is usually called when IKE Session is being closed.
+     */
+    public void killSession() {
+        sendMessage(CMD_KILL_SESSION);
     }
 
     /**
@@ -511,6 +524,52 @@ public class ChildSessionStateMachine extends StateMachine {
         ReceivedResponse(@ExchangeType int eType, List<IkePayload> respPayloads) {
             exchangeType = eType;
             responsePayloads = respPayloads;
+        }
+    }
+
+    /**
+     * This state handles the request to close Child Session immediately without initiating any
+     * exchange.
+     *
+     * <p>Request for closing Child Session immediately is usually caused by the closing of IKE
+     * Session. All states MUST be a child state of KillChildSessionParent to handle the closing
+     * request.
+     */
+    private class KillChildSessionParent extends State {
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_KILL_SESSION:
+                    mUserCbExecutor.execute(
+                            () -> {
+                                mUserCallback.onClosed();
+                            });
+
+                    closeChildSaRecordIfExist(mCurrentChildSaRecord);
+                    closeChildSaRecordIfExist(mLocalInitNewChildSaRecord);
+                    closeChildSaRecordIfExist(mRemoteInitNewChildSaRecord);
+
+                    mCurrentChildSaRecord = null;
+                    mLocalInitNewChildSaRecord = null;
+                    mRemoteInitNewChildSaRecord = null;
+
+                    quitNow();
+                    return HANDLED;
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+
+        private void closeChildSaRecordIfExist(ChildSaRecord childSaRecord) {
+            if (childSaRecord == null) return;
+
+            mUserCbExecutor.execute(
+                    () -> {
+                        onIpSecTransformPairDeleted(childSaRecord);
+                    });
+
+            mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
+            childSaRecord.close();
         }
     }
 
@@ -692,43 +751,6 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
-     * Closed represents the state when this ChildSessionStateMachine is closed, and no further
-     * actions can be performed on it.
-     */
-    class Closed extends State {
-        @Override
-        public void enter() {
-            verifyChildSaRecordIsClosed(mCurrentChildSaRecord);
-            verifyChildSaRecordIsClosed(mLocalInitNewChildSaRecord);
-            verifyChildSaRecordIsClosed(mRemoteInitNewChildSaRecord);
-
-            mCurrentChildSaRecord = null;
-            mLocalInitNewChildSaRecord = null;
-            mRemoteInitNewChildSaRecord = null;
-
-            quitNow();
-        }
-
-        private void verifyChildSaRecordIsClosed(ChildSaRecord childSaRecord) {
-            if (childSaRecord == null) return;
-
-            Log.wtf(
-                    TAG,
-                    "ChildSaRecord with local SPI: "
-                            + childSaRecord.getLocalSpi()
-                            + " is not correctly closed.");
-
-            mUserCbExecutor.execute(
-                    () -> {
-                        onIpSecTransformPairDeleted(childSaRecord);
-                    });
-
-            mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
-            childSaRecord.close();
-        }
-    }
-
-    /**
      * Idle represents a state when there is no ongoing IKE exchange affecting established Child SA.
      */
     class Idle extends State {
@@ -819,7 +841,7 @@ public class ChildSessionStateMachine extends StateMachine {
          * As such, this should not be used in rekey cases where there is any ambiguity as to which
          * Child SA the session is reliant upon.
          *
-         * <p>Note that this method will also move the state machine to the closed state.
+         * <p>Note that this method will also quit the state machine
          */
         protected void handleDeleteSessionRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
@@ -841,7 +863,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 mCurrentChildSaRecord.close();
                 mCurrentChildSaRecord = null;
 
-                transitionTo(mClosed);
+                quitNow();
             }
         }
     }
@@ -942,7 +964,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         mCurrentChildSaRecord.close();
                         mCurrentChildSaRecord = null;
 
-                        transitionTo(mClosed);
+                        quitNow();
                     } catch (InvalidSyntaxException e) {
                         mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
                     }
@@ -1934,8 +1956,34 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Called when this StateMachine quits. */
     @Override
     protected void onQuitting() {
-        mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
+        verifyChildSaRecordIsClosed(mCurrentChildSaRecord);
+        verifyChildSaRecordIsClosed(mLocalInitNewChildSaRecord);
+        verifyChildSaRecordIsClosed(mRemoteInitNewChildSaRecord);
+
+        mCurrentChildSaRecord = null;
+        mLocalInitNewChildSaRecord = null;
+        mRemoteInitNewChildSaRecord = null;
+
+        mChildSmCallback.onProcedureFinished(this);
         mChildSmCallback.onChildSessionClosed(mUserCallback);
+    }
+
+    private void verifyChildSaRecordIsClosed(ChildSaRecord childSaRecord) {
+        if (childSaRecord == null) return;
+
+        Log.wtf(
+                TAG,
+                "ChildSaRecord with local SPI: "
+                        + childSaRecord.getLocalSpi()
+                        + " is not correctly closed.");
+
+        mUserCbExecutor.execute(
+                () -> {
+                    onIpSecTransformPairDeleted(childSaRecord);
+                });
+
+        mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
+        childSaRecord.close();
     }
 
     // TODO: Add states to support deleting Child SA and rekeying Child SA.
