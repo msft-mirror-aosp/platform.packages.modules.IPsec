@@ -1548,13 +1548,19 @@ public class IkeSessionStateMachine extends StateMachine {
                             ERROR_TYPE_NO_ADDITIONAL_SAS);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
-                    // TODO: Reply and close IKE Session.
-                    break;
+                    // Send response and transition to mClosed
+                    handleDeleteSessionRequest(ikeMessage);
+
+                    // Return immediately to avoid transitioning to mIdle
+                    return;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_CHILD:
                     handleInboundDeleteChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_REKEY_IKE:
-                    // TODO: Reply ERROR_TYPE_TEMPORARY_FAILURE;
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_REKEY_CHILD:
                     handleInboundRekeyChildRequest(ikeMessage);
