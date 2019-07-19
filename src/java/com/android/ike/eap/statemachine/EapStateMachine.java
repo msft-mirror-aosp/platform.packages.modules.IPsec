@@ -34,10 +34,14 @@ import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
+import com.android.ike.eap.EapSessionConfig;
+import com.android.ike.eap.EapSessionConfig.EapMethodConfig;
+import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
 import com.android.ike.eap.message.EapData;
+import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.utils.SimpleStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
@@ -60,10 +64,15 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     protected static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     private final Context mContext;
+    private final EapSessionConfig mEapSessionConfig;
     private final SecureRandom mSecureRandom;
 
-    public EapStateMachine(@NonNull Context context, @NonNull SecureRandom secureRandom) {
+    public EapStateMachine(
+            @NonNull Context context,
+            @NonNull EapSessionConfig eapSessionConfig,
+            @NonNull SecureRandom secureRandom) {
         this.mContext = context;
+        this.mEapSessionConfig = eapSessionConfig;
         this.mSecureRandom = secureRandom;
         transitionTo(new CreatedState());
     }
@@ -215,18 +224,28 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         @VisibleForTesting
         final EapMethodStateMachine mEapMethodStateMachine;
 
-        protected MethodState(int eapType) {
+        protected MethodState(@EapMethod int eapType) {
+            EapMethodConfig eapMethodConfig = getEapSessionConfig().eapConfigs.get(eapType);
+            if (eapMethodConfig == null) {
+                // configs not provided for selected EAP Method
+                // TODO: throw exception and transition to failure state in caller-method
+            }
+
             switch (eapType) {
                 case EAP_TYPE_AKA:
                     // TODO(b/133878992): implement and use EapAkaStateMachine
                     mEapMethodStateMachine = new EapMethodStateMachine() {};
                     break;
+
                 case EAP_TYPE_AKA_PRIME:
                     // TODO(b/133878093): implement EapAkaPrimeStateMachine
                     mEapMethodStateMachine = new EapMethodStateMachine() {};
                     break;
+
                 case EAP_TYPE_SIM:
-                    mEapMethodStateMachine = new EapSimMethodStateMachine(mContext, mSecureRandom);
+                    EapSimConfig eapSimConfig = (EapSimConfig) eapMethodConfig;
+                    mEapMethodStateMachine =
+                            new EapSimMethodStateMachine(mContext, eapSimConfig, mSecureRandom);
                     break;
 
                 default:
@@ -279,5 +298,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
         Log.i(tag, "Received EAP-Request/Notification: [" + content + "]");
         return EapMessage.getNotificationResponse(message.eapIdentifier);
+    }
+
+    @VisibleForTesting
+    EapSessionConfig getEapSessionConfig() {
+        return mEapSessionConfig;
     }
 }

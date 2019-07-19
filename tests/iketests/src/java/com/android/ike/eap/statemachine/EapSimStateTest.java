@@ -34,6 +34,7 @@ import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
@@ -50,19 +51,32 @@ public class EapSimStateTest {
     protected static final int EAP_CODE_REQUEST = 1;
     protected static final int EAP_NOTIFICATION = 2;
     protected static final int EAP_TYPE_SIM = 18;
+    protected static final int SUB_ID = 1;
     protected static final String NOTIFICATION_MESSAGE = "test";
     protected static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
 
     protected TelephonyManager mMockTelephonyManager;
     protected EapSimTypeDataDecoder mMockEapSimTypeDataDecoder;
+
+    protected EapSimConfig mEapSimConfig = new EapSimConfig(SUB_ID);
     protected EapSimMethodStateMachine mEapSimMethodStateMachine;
 
     @Before
     public void setUp() {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockEapSimTypeDataDecoder = mock(EapSimTypeDataDecoder.class);
-        mEapSimMethodStateMachine = new EapSimMethodStateMachine(
-                mMockTelephonyManager, new SecureRandom(), mMockEapSimTypeDataDecoder);
+
+        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
+                .thenReturn(mMockTelephonyManager);
+
+        mEapSimMethodStateMachine =
+                new EapSimMethodStateMachine(
+                        mMockTelephonyManager,
+                        mEapSimConfig,
+                        new SecureRandom(),
+                        mMockEapSimTypeDataDecoder);
+
+        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
     }
 
     @Test
