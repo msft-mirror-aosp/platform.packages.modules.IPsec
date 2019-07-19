@@ -22,6 +22,7 @@ import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
@@ -1399,6 +1400,44 @@ public final class IkeSessionStateMachineTest {
         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) ikePayloadList.get(0);
         assertEquals(ERROR_TYPE_CHILD_SA_NOT_FOUND, notifyPayload.notifyType);
         assertEquals(unrecognizedSpi, notifyPayload.spi);
+    }
+
+    @Test
+    public void testRcvRemoteDeleteIkeWhenChildProcedureOngoing() throws Exception {
+        setupIdleStateMachine();
+        transitionToChildProcedureOngoing();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET, makeDeleteIkeRequest(mSpyCurrentIkeSaRecord));
+
+        mLooper.dispatchAll();
+
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+
+        List<IkePayload> ikePayloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertTrue(ikePayloadList.isEmpty());
+    }
+
+    @Test
+    public void testRcvRemoteRekeyIkeWhenChildProcedureOngoing() throws Exception {
+        setupIdleStateMachine();
+        transitionToChildProcedureOngoing();
+
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, makeRekeyIkeRequest());
+
+        mLooper.dispatchAll();
+
+        // Since we have forced state machine to transition to ChildProcedureOngoing state without
+        // really starting any Child procedure, it should transition to Idle at this time.
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        List<IkePayload> ikePayloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertEquals(1, ikePayloadList.size());
+        assertEquals(
+                ERROR_TYPE_TEMPORARY_FAILURE,
+                ((IkeNotifyPayload) ikePayloadList.get(0)).notifyType);
     }
 
     @Test
