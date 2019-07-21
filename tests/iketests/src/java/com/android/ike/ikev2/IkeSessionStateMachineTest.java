@@ -18,8 +18,12 @@ package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
+import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
@@ -565,7 +569,34 @@ public final class IkeSessionStateMachineTest {
                 payloadHexStringList);
     }
 
-    private ReceivedIkePacket makeCreateChildMessage(boolean isResp) throws Exception {
+    private ReceivedIkePacket makeCreateChildCreateMessage(boolean isResp) throws Exception {
+        return makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                mSpyCurrentIkeSaRecord,
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                isResp,
+                makeCreateChildPayloadList(isResp));
+    }
+
+    private ReceivedIkePacket makeRekeyChildCreateMessage(boolean isResp, int spi)
+            throws Exception {
+        IkeNotifyPayload rekeyPayload =
+                new IkeNotifyPayload(
+                        IkePayload.PROTOCOL_ID_ESP,
+                        spi,
+                        IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA,
+                        new byte[0]);
+
+        List<IkePayload> payloadList = makeCreateChildPayloadList(isResp);
+        payloadList.add(rekeyPayload);
+
+        return makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                mSpyCurrentIkeSaRecord,
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                isResp,
+                payloadList);
+    }
+
+    private List<IkePayload> makeCreateChildPayloadList(boolean isResp) throws Exception {
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
 
@@ -579,12 +610,7 @@ public final class IkeSessionStateMachineTest {
         payloadHexStringList.add(TS_INIT_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(TS_RESP_PAYLOAD_HEX_STRING);
 
-        return makeDummyEncryptedReceivedIkePacket(
-                mSpyCurrentIkeSaRecord,
-                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
-                isResp,
-                payloadTypeList,
-                payloadHexStringList);
+        return hexStrListToIkePayloadList(payloadTypeList, payloadHexStringList, isResp);
     }
 
     private ReceivedIkePacket makeDeleteChildPacket(IkeDeletePayload[] payloads, boolean isResp)
@@ -969,7 +995,7 @@ public final class IkeSessionStateMachineTest {
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
 
         // Mocking receiving response
-        ReceivedIkePacket dummyCreateChildResp = makeCreateChildMessage(true /*isResp*/);
+        ReceivedIkePacket dummyCreateChildResp = makeCreateChildCreateMessage(true /*isResp*/);
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyCreateChildResp);
         mLooper.dispatchAll();
@@ -992,6 +1018,50 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    @Test
+    public void testTriggerDeleteChildLocal() throws Exception {
+        setupIdleStateMachine();
+
+        IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
+        ChildSessionStateMachine childStateMachine = mock(ChildSessionStateMachine.class);
+        registerChildStateMachine(childCallback, childStateMachine);
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD,
+                        childCallback,
+                        null /*childOptions*/));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(childStateMachine).deleteChildSession();
+    }
+
+    @Test
+    public void testTriggerRekeyChildLocal() throws Exception {
+        setupIdleStateMachine();
+
+        IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
+        ChildSessionStateMachine childStateMachine = mock(ChildSessionStateMachine.class);
+        registerChildStateMachine(childCallback, childStateMachine);
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
+                        childCallback,
+                        null /*childOptions*/));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(childStateMachine).rekeyChildSession();
     }
 
     private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
@@ -1268,7 +1338,7 @@ public final class IkeSessionStateMachineTest {
         setupIdleStateMachine();
 
         mIkeSessionStateMachine.sendMessage(
-                CMD_RECEIVE_IKE_PACKET, makeCreateChildMessage(false /*isResp*/));
+                CMD_RECEIVE_IKE_PACKET, makeCreateChildCreateMessage(false /*isResp*/));
 
         mLooper.dispatchAll();
 
@@ -1279,6 +1349,94 @@ public final class IkeSessionStateMachineTest {
         assertEquals(1, ikePayloadList.size());
         assertEquals(
                 ERROR_TYPE_NO_ADDITIONAL_SAS,
+                ((IkeNotifyPayload) ikePayloadList.get(0)).notifyType);
+    }
+
+    @Test
+    public void testTriggerRemoteRekeyChild() throws Exception {
+        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
+        int childRemoteSpi = 1;
+
+        setupIdleStateMachine();
+        IChildSessionSmCallback childSmCb =
+                createChildAndGetChildSessionSmCallback(child, childRemoteSpi);
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET,
+                makeRekeyChildCreateMessage(false /*isResp*/, childRemoteSpi));
+        mLooper.dispatchAll();
+
+        verify(child)
+                .receiveRequest(
+                        eq(IKE_EXCHANGE_SUBTYPE_REKEY_CHILD),
+                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA),
+                        any(List.class));
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+    }
+
+    @Test
+    public void testHandleRekeyChildReqWithUnrecognizedSpi() throws Exception {
+        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
+        int childRemoteSpi = 1;
+        int unrecognizedSpi = 2;
+
+        setupIdleStateMachine();
+        IChildSessionSmCallback childSmCb =
+                createChildAndGetChildSessionSmCallback(child, childRemoteSpi);
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET,
+                makeRekeyChildCreateMessage(false /*isResp*/, unrecognizedSpi));
+        mLooper.dispatchAll();
+
+        verify(child, never()).receiveRequest(anyInt(), anyInt(), any());
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        List<IkePayload> ikePayloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertEquals(1, ikePayloadList.size());
+        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) ikePayloadList.get(0);
+        assertEquals(ERROR_TYPE_CHILD_SA_NOT_FOUND, notifyPayload.notifyType);
+        assertEquals(unrecognizedSpi, notifyPayload.spi);
+    }
+
+    @Test
+    public void testRcvRemoteDeleteIkeWhenChildProcedureOngoing() throws Exception {
+        setupIdleStateMachine();
+        transitionToChildProcedureOngoing();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET, makeDeleteIkeRequest(mSpyCurrentIkeSaRecord));
+
+        mLooper.dispatchAll();
+
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+
+        List<IkePayload> ikePayloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertTrue(ikePayloadList.isEmpty());
+    }
+
+    @Test
+    public void testRcvRemoteRekeyIkeWhenChildProcedureOngoing() throws Exception {
+        setupIdleStateMachine();
+        transitionToChildProcedureOngoing();
+
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, makeRekeyIkeRequest());
+
+        mLooper.dispatchAll();
+
+        // Since we have forced state machine to transition to ChildProcedureOngoing state without
+        // really starting any Child procedure, it should transition to Idle at this time.
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        List<IkePayload> ikePayloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertEquals(1, ikePayloadList.size());
+        assertEquals(
+                ERROR_TYPE_TEMPORARY_FAILURE,
                 ((IkeNotifyPayload) ikePayloadList.get(0)).notifyType);
     }
 

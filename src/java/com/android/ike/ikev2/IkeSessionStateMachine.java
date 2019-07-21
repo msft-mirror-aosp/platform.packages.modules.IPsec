@@ -15,6 +15,7 @@
  */
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -27,6 +28,7 @@ import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_E
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_DELETE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
@@ -62,6 +64,7 @@ import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeCertPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
+import com.android.ike.ikev2.message.IkeEapPayload;
 import com.android.ike.ikev2.message.IkeHeader;
 import com.android.ike.ikev2.message.IkeHeader.ExchangeType;
 import com.android.ike.ikev2.message.IkeIdPayload;
@@ -176,6 +179,12 @@ public class IkeSessionStateMachine extends StateMachine {
     static final int CMD_EXECUTE_LOCAL_REQ = CMD_GENERAL_BASE + 7;
     /** Trigger a retransmission. */
     public static final int CMD_RETRANSMIT = CMD_GENERAL_BASE + 8;
+    /** Send EAP request payloads to EapAuthenticator for further processing. */
+    static final int CMD_START_EAP_AUTH = CMD_GENERAL_BASE + 9;
+    /** Send the outbound IKE-wrapped EAP-Response message. */
+    static final int CMD_OUTBOUND_EAP_MSG_READY = CMD_GENERAL_BASE + 10;
+    /** Start the post-EAP authentication state for further processing. */
+    static final int CMD_START_POST_EAP_AUTH = CMD_GENERAL_BASE + 11;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
@@ -248,6 +257,10 @@ public class IkeSessionStateMachine extends StateMachine {
     @VisibleForTesting byte[] mIkeInitResponseBytes;
     @VisibleForTesting IkeNoncePayload mIkeInitNoncePayload;
     @VisibleForTesting IkeNoncePayload mIkeRespNoncePayload;
+
+    // FIXME: b/131265898 Pass this parameter from CreateIkeLocalIkeAuth to InEap state so the
+    //  child SAs can be negotiated.
+    @VisibleForTesting List<IkePayload> mFirstChildReqList;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -850,7 +863,7 @@ public class IkeSessionStateMachine extends StateMachine {
         mIkeSocket.sendIkePacket(bytes, mRemoteAddress);
     }
 
-    // Builds and sends error notification response on the provided IKE SA record
+    // Builds and sends IKE-level error notification response on the provided IKE SA record
     @VisibleForTesting
     void buildAndSendErrorNotificationResponse(
             IkeSaRecord ikeSaRecord, int messageId, @ErrorType int errorType) {
@@ -1485,16 +1498,18 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
+            mChildInLocalProcedure = getChildSession(req.childSessionCallback);
+            if (mChildInLocalProcedure == null) {
+                Log.wtf(
+                        TAG,
+                        "Child state machine not found for local request: " + req.procedureType);
+
+                // TODO: Fire child creation failed callback or child fatal error callback, and
+                // recover.
+                return;
+            }
             switch (req.procedureType) {
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
-                    mChildInLocalProcedure = getChildSession(req.childSessionCallback);
-                    if (mChildInLocalProcedure == null) {
-                        Log.wtf(TAG, "Additional child state machine not found during creation.");
-
-                        // TODO: Fire child failed callback, and recover.
-                        break;
-                    }
-
                     mChildInLocalProcedure.createChildSession(
                             mLocalAddress,
                             mRemoteAddress,
@@ -1503,10 +1518,10 @@ public class IkeSessionStateMachine extends StateMachine {
                             mCurrentIkeSaRecord.getSkD());
                     break;
                 case CMD_LOCAL_REQUEST_REKEY_CHILD:
-                    // TODO: Implement this.
+                    mChildInLocalProcedure.rekeyChildSession();
                     break;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
-                    // TODO: Implement this.
+                    mChildInLocalProcedure.deleteChildSession();
                     break;
                 default:
                     Log.wtf(TAG, "Invalid Child procedure type: " + req.procedureType);
@@ -1531,19 +1546,24 @@ public class IkeSessionStateMachine extends StateMachine {
                             mCurrentIkeSaRecord,
                             ikeMessage.ikeHeader.messageId,
                             ERROR_TYPE_NO_ADDITIONAL_SAS);
-                    transitionToIdleIfAllProceduresDone();
                     break;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
-                    // TODO: Reply and close IKE Session.
-                    break;
+                    // Send response and transition to mClosed
+                    handleDeleteSessionRequest(ikeMessage);
+
+                    // Return immediately to avoid transitioning to mIdle
+                    return;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_CHILD:
                     handleInboundDeleteChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_REKEY_IKE:
-                    // TODO: Reply ERROR_TYPE_TEMPORARY_FAILURE;
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_REKEY_CHILD:
-                    // TODO: Handle rekey Child request.
+                    handleInboundRekeyChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
                     // TODO: Handle general informational request
@@ -1594,17 +1614,16 @@ public class IkeSessionStateMachine extends StateMachine {
             Set<Integer> spiHandled = new HashSet<>();
 
             for (IkePayload payload : ikeMessage.ikePayloadList) {
-                handlePayload:
                 switch (payload.payloadType) {
                     case PAYLOAD_TYPE_VENDOR:
                         // TODO: Investigate if Vendor ID Payload can be in an INFORMATIONAL
                         // message.
-                        break handlePayload;
+                        break;
                     case PAYLOAD_TYPE_NOTIFY:
                         logw(
                                 "Unexpected or unknown notification: "
                                         + ((IkeNotifyPayload) payload).notifyType);
-                        break handlePayload;
+                        break;
                     case PAYLOAD_TYPE_DELETE:
                         IkeDeletePayload delPayload = (IkeDeletePayload) payload;
 
@@ -1627,10 +1646,10 @@ public class IkeSessionStateMachine extends StateMachine {
                             }
                         }
 
-                        break handlePayload;
+                        break;
                     case PAYLOAD_TYPE_CP:
                         // TODO: Handle it
-                        break handlePayload;
+                        break;
                     default:
                         logw("Unexpected payload types found: " + payload.payloadType);
                 }
@@ -1648,6 +1667,89 @@ public class IkeSessionStateMachine extends StateMachine {
                 mAwaitingChildResponse.add(child);
                 mChildInRemoteProcedures.add(child);
             }
+        }
+
+        private void handleInboundRekeyChildRequest(IkeMessage ikeMessage) {
+            // It is guaranteed in #getIkeExchangeSubType that at least one Notify-Rekey Child
+            // Payload exists.
+            List<IkePayload> handledPayloads = new LinkedList<>();
+            ChildSessionStateMachine targetChild = null;
+            Set<Integer> unrecognizedSpis = new HashSet<>();
+
+            for (IkePayload payload : ikeMessage.ikePayloadList) {
+                switch (payload.payloadType) {
+                    case PAYLOAD_TYPE_VENDOR:
+                        // TODO: Handle it.
+                        handledPayloads.add(payload);
+                        break;
+                    case PAYLOAD_TYPE_NOTIFY:
+                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                        if (NOTIFY_TYPE_REKEY_SA != notifyPayload.notifyType) break;
+
+                        int childSpi = notifyPayload.spi;
+                        ChildSessionStateMachine child = mRemoteSpiToChildSessionMap.get(childSpi);
+
+                        if (child == null) {
+                            // Remember unrecognized SPIs and reply error notification if no
+                            // recognized SPI found.
+                            unrecognizedSpis.add(childSpi);
+                            logw("Child SA not found with received SPI: " + childSpi);
+                        } else if (targetChild == null) {
+                            // Each message should have only one Notify-Rekey Payload. If there are
+                            // multiple of them, we only process the first valid one and ignore
+                            // others.
+                            targetChild = mRemoteSpiToChildSessionMap.get(childSpi);
+                        } else {
+                            logw("More than one Notify-Rekey Payload found with SPI: " + childSpi);
+                            handledPayloads.add(notifyPayload);
+                        }
+                        break;
+                    case PAYLOAD_TYPE_CP:
+                        // TODO: Handle IKE related configuration attributes and pass the payload to
+                        // Child to further handle internal IP address attributes.
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            // Reject request with error notification.
+            if (targetChild == null) {
+                IkeInformationalPayload[] errorPayloads =
+                        new IkeInformationalPayload[unrecognizedSpis.size()];
+                int i = 0;
+                for (Integer spi : unrecognizedSpis) {
+                    errorPayloads[i++] =
+                            new IkeNotifyPayload(
+                                    IkePayload.PROTOCOL_ID_ESP,
+                                    spi,
+                                    ERROR_TYPE_CHILD_SA_NOT_FOUND,
+                                    new byte[0]);
+                }
+
+                IkeMessage msg =
+                        buildEncryptedNotificationMessage(
+                                mCurrentIkeSaRecord,
+                                errorPayloads,
+                                EXCHANGE_TYPE_INFORMATIONAL,
+                                true /*isResponse*/,
+                                ikeMessage.ikeHeader.messageId);
+
+                sendEncryptedIkeMessage(mCurrentIkeSaRecord, msg);
+                transitionToIdleIfAllProceduresDone();
+                return;
+            }
+
+            // Normal path
+            List<IkePayload> payloads = new LinkedList<>();
+            payloads.addAll(ikeMessage.ikePayloadList);
+            payloads.removeAll(handledPayloads);
+
+            mAwaitingChildResponse.add(targetChild);
+            mChildInRemoteProcedures.add(targetChild);
+
+            targetChild.receiveRequest(
+                    IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, ikeMessage.ikeHeader.exchangeType, payloads);
         }
 
         private void handleOutboundRequest(int exchangeType, List<IkePayload> outboundPayloads) {
@@ -2094,15 +2196,28 @@ public class IkeSessionStateMachine extends StateMachine {
                             "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
                 }
 
+                List<IkePayload> childReqList =
+                        extractChildPayloadsFromMessage(mRetransmitter.getMessage());
+
                 if (mUseEap) {
-                    // TODO: Implement #validateIkeAuthRespWithEapPayload() to validate Auth payload
-                    // and extract EAP payload in the inbound message.
-                    throw new UnsupportedOperationException("Do not support EAP.");
+                    validateIkeAuthRespWithEapPayload(ikeMessage);
+
+                    // childReqList needed after EAP completed, so persist to IkeSessionStateMachine
+                    // state.
+                    mFirstChildReqList = childReqList;
+
+                    IkeEapPayload ikeEapPayload = ikeMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
+
+                    deferMessage(
+                            obtainMessage(
+                                    CMD_START_EAP_AUTH,
+                                    ikeEapPayload));
+
+                    // TODO(b/137394968): transition to InEap state
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
-                    List<IkePayload> childReqList =
-                            extractChildPayloadsFromMessage(mRetransmitter.getMessage());
                     List<IkePayload> childRespList = extractChildPayloadsFromMessage(ikeMessage);
                     childReqList.add(mIkeInitNoncePayload);
                     childRespList.add(mIkeRespNoncePayload);
@@ -2182,6 +2297,21 @@ public class IkeSessionStateMachine extends StateMachine {
                             mCurrentIkeSaRecord.getLocalRequestMessageId());
 
             return new IkeMessage(ikeHeader, payloadList);
+        }
+
+        private void validateIkeAuthRespWithEapPayload(IkeMessage respMsg)
+                throws IkeProtocolException {
+            IkeEapPayload ikeEapPayload =
+                    respMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
+            if (ikeEapPayload == null) {
+                throw new AuthenticationFailedException("Missing EAP payload");
+            }
+
+            // TODO: check that we don't receive any ChildSaRespPayloads here
+
+            List<IkePayload> nonEapPayloads = new LinkedList<>();
+            nonEapPayloads.remove(ikeEapPayload);
+            validateIkeAuthResp(nonEapPayloads);
         }
 
         private void validateIkeAuthRespWithChildPayloads(IkeMessage respMsg)
