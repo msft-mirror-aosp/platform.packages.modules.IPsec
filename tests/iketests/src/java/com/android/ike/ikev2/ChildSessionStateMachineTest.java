@@ -403,7 +403,6 @@ public final class ChildSessionStateMachineTest {
 
         // Verify users have been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-
         verifyNotifyUsersCreateIpSecSa(mSpyCurrentChildSaRecord, true /*expectInbound*/);
         verifyNotifyUsersCreateIpSecSa(mSpyCurrentChildSaRecord, false /*expectInbound*/);
         verify(mMockChildSessionCallback).onOpened();
@@ -790,6 +789,11 @@ public final class ChildSessionStateMachineTest {
                 LOCAL_INIT_NEW_CHILD_SA_SPI_IN,
                 LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
                 true /*isLocalInit*/);
+
+        // Verify users have been notified
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verifyNotifyUsersCreateIpSecSa(mSpyLocalInitNewChildSaRecord, true /*expectInbound*/);
+        verifyNotifyUsersCreateIpSecSa(mSpyLocalInitNewChildSaRecord, false /*expectInbound*/);
     }
 
     @Test
@@ -846,6 +850,10 @@ public final class ChildSessionStateMachineTest {
                 .onProcedureFinished(mChildSessionStateMachine);
 
         verifyChildSaUpdated(mSpyCurrentChildSaRecord, mSpyLocalInitNewChildSaRecord);
+
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockChildSessionCallback, never()).onClosed();
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
     }
 
     @Test
@@ -908,6 +916,10 @@ public final class ChildSessionStateMachineTest {
                 REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
                 REMOTE_INIT_NEW_CHILD_SA_SPI_IN,
                 false /*isLocalInit*/);
+
+        // Verify that users are notified the creation of new inbound IpSecTransform
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, true /*expectInbound*/);
     }
 
     @Test
@@ -939,6 +951,12 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
+
+        verify(mSpyUserCbExecutor, times(2)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
+        verify(mMockChildSessionCallback, never()).onClosed();
     }
 
     @Test
@@ -965,6 +983,13 @@ public final class ChildSessionStateMachineTest {
         verify(mSpyLocalInitNewChildSaRecord).close();
 
         assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verify(mSpyUserCbExecutor, times(2)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUserDeleteChildSa(mSpyLocalInitNewChildSaRecord);
+
+        verify(mMockChildSessionCallback).onClosed();
     }
 
     @Test
@@ -991,6 +1016,14 @@ public final class ChildSessionStateMachineTest {
         verify(mSpyRemoteInitNewChildSaRecord).close();
 
         assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verify(mSpyUserCbExecutor, times(3)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUserDeleteChildSa(mSpyRemoteInitNewChildSaRecord);
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
+
+        verify(mMockChildSessionCallback).onClosed();
     }
 
     @Test
@@ -1020,6 +1053,13 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
+
+        verify(mSpyUserCbExecutor, times(2)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
+
+        verify(mMockChildSessionCallback, never()).onClosed();
     }
 
     @Test
@@ -1047,6 +1087,13 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.RekeyChildRemoteDelete);
+
+        verify(mSpyUserCbExecutor, times(2)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
+
+        verify(mMockChildSessionCallback, never()).onClosed();
     }
 
     @Test
