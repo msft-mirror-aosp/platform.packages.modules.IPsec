@@ -50,11 +50,19 @@ public class EapData {
             EAP_IDENTITY,
             EAP_NOTIFICATION,
             EAP_NAK,
+            EAP_TYPE_SIM,
             EAP_TYPE_AKA,
-            EAP_TYPE_AKA_PRIME,
-            EAP_TYPE_SIM
+            EAP_TYPE_AKA_PRIME
     })
     public @interface EapType {}
+
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            EAP_TYPE_SIM,
+            EAP_TYPE_AKA,
+            EAP_TYPE_AKA_PRIME
+    })
+    public @interface EapMethod {}
 
     // EAP Type values defined by IANA
     // https://www.iana.org/assignments/eap-numbers/eap-numbers.xhtml
