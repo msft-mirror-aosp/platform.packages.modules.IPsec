@@ -16,9 +16,11 @@
 
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.SA_SOFT_LIFETIME_MS;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -400,7 +402,8 @@ public final class IkeSessionStateMachineTest {
                 new byte[KEY_LEN_IKE_ENCR],
                 new byte[KEY_LEN_IKE_ENCR],
                 TestUtils.hexStringToByteArray(PRF_KEY_INIT_HEX_STRING),
-                TestUtils.hexStringToByteArray(PRF_KEY_RESP_HEX_STRING));
+                TestUtils.hexStringToByteArray(PRF_KEY_RESP_HEX_STRING),
+                new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
     }
 
     @Before
@@ -850,6 +853,7 @@ public final class IkeSessionStateMachineTest {
         assertEquals(KEY_LEN_IKE_PRF, ikeSaRecordConfig.prf.getKeyLength());
         assertEquals(KEY_LEN_IKE_INTE, ikeSaRecordConfig.integrityKeyLength);
         assertEquals(KEY_LEN_IKE_ENCR, ikeSaRecordConfig.encryptionKeyLength);
+        assertEquals(CMD_LOCAL_REQUEST_REKEY_IKE, ikeSaRecordConfig.futureRekeyEvent.procedureType);
 
         // Validate NAT detection
         assertTrue(mIkeSessionStateMachine.mIsLocalBehindNat);
@@ -2078,6 +2082,70 @@ public final class IkeSessionStateMachineTest {
 
         verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
         verify(mMockIkeSessionCallback, never()).onClosed();
+    }
+
+    @Test
+    public void testIkeInitSchedulesRekey() throws Exception {
+        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any()))
+                .thenReturn(mSpyCurrentIkeSaRecord);
+
+        // Send IKE INIT request
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+
+        // Receive IKE INIT response
+        ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyReceivedIkePacket);
+
+        // Mock IKE AUTH and transition to Idle
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+        mIkeSessionStateMachine.mSaProposal = buildSaProposal();
+
+        // Move time forward to trigger rekey
+        mLooper.moveTimeForward(SA_SOFT_LIFETIME_MS);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
+    }
+
+    @Test
+    public void testRekeyCreateIkeSchedulesRekey() throws Exception {
+        setupIdleStateMachine();
+
+        // Send Rekey-Create request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE));
+        mLooper.dispatchAll();
+
+        // Prepare "rekeyed" SA
+        when(mMockSaRecordHelper.makeRekeyedIkeSaRecord(
+                        eq(mSpyCurrentIkeSaRecord), any(), any(), any(), any()))
+                .thenReturn(mSpyLocalInitIkeSaRecord);
+
+        // Receive Rekey response
+        ReceivedIkePacket dummyRekeyIkeRespReceivedPacket = makeRekeyIkeResponse();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyRekeyIkeRespReceivedPacket);
+        mLooper.dispatchAll();
+
+        // Mock rekey delete and transition to Idle
+        mIkeSessionStateMachine.mCurrentIkeSaRecord = mSpyLocalInitIkeSaRecord;
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+
+        // Move time forward to trigger rekey
+        mLooper.moveTimeForward(SA_SOFT_LIFETIME_MS);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
     }
 
     @Test

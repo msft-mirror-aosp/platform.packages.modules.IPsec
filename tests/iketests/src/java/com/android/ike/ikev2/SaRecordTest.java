@@ -24,6 +24,7 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
@@ -33,6 +34,7 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
 
 import com.android.ike.TestUtils;
+import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ChildSaRecordConfig;
@@ -138,6 +140,8 @@ public final class SaRecordTest {
     private IkeMacIntegrity mHmacSha1IntegrityMac;
     private IkeCipher mAesCbcCipher;
 
+    private LocalRequest mMockFutureRekeyIkeEvent;
+
     private SaRecordHelper mSaRecordHelper = new SaRecordHelper();
 
     @Before
@@ -156,6 +160,8 @@ public final class SaRecordTest {
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
                                 SaProposal.KEY_LEN_AES_128),
                         IkeMessage.getSecurityProvider());
+
+        mMockFutureRekeyIkeEvent = mock(LocalRequest.class);
     }
 
     // Test generating keying material for making IKE SA.
@@ -178,7 +184,8 @@ public final class SaRecordTest {
                         mIkeHmacSha1Prf,
                         IKE_AUTH_ALGO_KEY_LEN,
                         IKE_ENCR_ALGO_KEY_LEN,
-                        true /*isLocalInit*/);
+                        true /*isLocalInit*/,
+                        mMockFutureRekeyIkeEvent);
 
         int keyMaterialLen =
                 IKE_SK_D_KEY_LEN
@@ -212,6 +219,8 @@ public final class SaRecordTest {
                 TestUtils.hexStringToByteArray(IKE_SK_PRF_RESP_HEX_STRING), ikeSaRecord.getSkPr());
 
         ikeSaRecord.close();
+
+        verify(mMockFutureRekeyIkeEvent).cancel();
     }
 
     // Test generating keying material and building IpSecTransform for making Child SA.
