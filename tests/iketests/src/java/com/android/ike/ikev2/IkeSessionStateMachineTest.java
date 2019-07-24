@@ -108,8 +108,7 @@ import java.net.Inet4Address;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 public final class IkeSessionStateMachineTest {
     private static final Inet4Address LOCAL_ADDRESS =
@@ -200,7 +199,7 @@ public final class IkeSessionStateMachineTest {
     private IkeSessionOptions mIkeSessionOptions;
     private ChildSessionOptions mChildSessionOptions;
 
-    private ExecutorService mUserCbExecutor;
+    private Executor mSpyUserCbExecutor;
     private IIkeSessionCallback mMockIkeSessionCallback;
     private IChildSessionCallback mMockChildSessionCallback;
 
@@ -415,7 +414,12 @@ public final class IkeSessionStateMachineTest {
         mIkePrfTransform = new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1);
         mIkeDhGroupTransform = new DhGroupTransform(SaProposal.DH_GROUP_1024_BIT_MODP);
 
-        mUserCbExecutor = Executors.newSingleThreadExecutor();
+        mSpyUserCbExecutor =
+                spy(
+                        (command) -> {
+                            command.run();
+                        });
+
         mMockIkeSessionCallback = mock(IIkeSessionCallback.class);
         mMockChildSessionCallback = mock(IChildSessionCallback.class);
 
@@ -433,7 +437,7 @@ public final class IkeSessionStateMachineTest {
                         mIpSecManager,
                         mIkeSessionOptions,
                         mChildSessionOptions,
-                        mUserCbExecutor,
+                        mSpyUserCbExecutor,
                         mMockIkeSessionCallback,
                         mMockChildSessionCallback);
         mIkeSessionStateMachine.setDbg(true);
@@ -471,8 +475,6 @@ public final class IkeSessionStateMachineTest {
         SaRecord.setSaRecordHelper(new SaRecordHelper());
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
                 new ChildSessionFactoryHelper());
-
-        mUserCbExecutor.shutdown();
     }
 
     private SaProposal buildSaProposal() throws Exception {
@@ -891,7 +893,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
-                        eq(mUserCbExecutor),
+                        eq(mSpyUserCbExecutor),
                         eq(mMockChildSessionCallback),
                         mChildSessionSmCbCaptor.capture());
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
@@ -908,7 +910,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
-                        eq(mUserCbExecutor),
+                        eq(mSpyUserCbExecutor),
                         any(IChildSessionCallback.class),
                         any(IChildSessionSmCallback.class)))
                 .thenReturn(child);
@@ -926,7 +928,8 @@ public final class IkeSessionStateMachineTest {
     private void registerChildStateMachine(
             IChildSessionCallback callback, ChildSessionStateMachine sm) {
         setupChildStateMachineFactory(sm);
-        mIkeSessionStateMachine.registerChildSessionCallback(mChildSessionOptions, callback);
+        mIkeSessionStateMachine.registerChildSessionCallback(
+                mChildSessionOptions, callback, false /*isFirstChild*/);
     }
 
     @Test
@@ -962,7 +965,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
-                        eq(mUserCbExecutor),
+                        eq(mSpyUserCbExecutor),
                         eq(childCallback),
                         mChildSessionSmCbCaptor.capture());
         IChildSessionSmCallback cb = mChildSessionSmCbCaptor.getValue();
@@ -1402,6 +1405,11 @@ public final class IkeSessionStateMachineTest {
         assertEquals(unrecognizedSpi, notifyPayload.spi);
     }
 
+    private void verifyNotifyUserCloseSession() {
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockIkeSessionCallback).onClosed();
+    }
+
     @Test
     public void testRcvRemoteDeleteIkeWhenChildProcedureOngoing() throws Exception {
         setupIdleStateMachine();
@@ -1411,6 +1419,8 @@ public final class IkeSessionStateMachineTest {
                 CMD_RECEIVE_IKE_PACKET, makeDeleteIkeRequest(mSpyCurrentIkeSaRecord));
 
         mLooper.dispatchAll();
+
+        verifyNotifyUserCloseSession();
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -1438,6 +1448,25 @@ public final class IkeSessionStateMachineTest {
         assertEquals(
                 ERROR_TYPE_TEMPORARY_FAILURE,
                 ((IkeNotifyPayload) ikePayloadList.get(0)).notifyType);
+    }
+
+    @Test
+    public void testKillChildSessions() throws Exception {
+        setupIdleStateMachine();
+
+        ChildSessionStateMachine childOne = mock(ChildSessionStateMachine.class);
+        ChildSessionStateMachine childTwo = mock(ChildSessionStateMachine.class);
+        registerChildStateMachine(mock(IChildSessionCallback.class), childOne);
+        registerChildStateMachine(mock(IChildSessionCallback.class), childTwo);
+
+        mIkeSessionStateMachine.mCurrentIkeSaRecord = null;
+
+        mIkeSessionStateMachine.quitNow();
+
+        mLooper.dispatchAll();
+
+        verify(childOne).killSession();
+        verify(childTwo).killSession();
     }
 
     @Test
@@ -1482,6 +1511,11 @@ public final class IkeSessionStateMachineTest {
         // Validate inbound IKE AUTH response
         verify(mMockIkeMessageHelper).decode(anyInt(), any(), any(), any(), any(), any());
 
+        // Validate that user has been notified
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockIkeSessionCallback).onOpened();
+
+        // Validate payload list pair for first Child negotiation.
         ArgumentCaptor<List<IkePayload>> mReqPayloadListCaptor =
                 ArgumentCaptor.forClass(List.class);
         ArgumentCaptor<List<IkePayload>> mRespPayloadListCaptor =
@@ -1672,6 +1706,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify final state - Idle, with new SA, and old SA closed.
         verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
+        verify(mMockIkeSessionCallback, never()).onClosed();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
@@ -1817,6 +1852,8 @@ public final class IkeSessionStateMachineTest {
         // Verify final state - Idle, with new SA, and old SA closed.
         verifyRekeyReplaceSa(mSpyRemoteInitIkeSaRecord);
 
+        verify(mMockIkeSessionCallback, never()).onClosed();
+
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRequestReceivedPacket);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
@@ -1931,6 +1968,7 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
 
         verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
+        verify(mMockIkeSessionCallback, never()).onClosed();
     }
 
     @Test
@@ -2027,7 +2065,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         verifyIncrementLocaReqMsgId();
 
-        // TODO: Verify callbacks
+        verifyNotifyUserCloseSession();
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -2109,7 +2147,7 @@ public final class IkeSessionStateMachineTest {
 
         assertTrue(delMsg.ikePayloadList.isEmpty());
 
-        // TODO: Verify callbacks
+        verifyNotifyUserCloseSession();
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -2267,7 +2305,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mLooper.getLooper()),
                         eq(mContext),
                         eq(mChildSessionOptions),
-                        eq(mUserCbExecutor),
+                        eq(mSpyUserCbExecutor),
                         eq(cb),
                         any());
 
