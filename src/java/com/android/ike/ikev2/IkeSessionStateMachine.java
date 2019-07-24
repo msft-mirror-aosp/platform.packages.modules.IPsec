@@ -112,8 +112,8 @@ import java.util.concurrent.TimeUnit;
  * IkeSessionStateMachine tracks states and manages exchanges of this IKE session.
  *
  * <p>IkeSessionStateMachine has two types of states. One type are states where there is no ongoing
- * procedure affecting IKE session (non-procedure state), including Initial, Closed, Idle and
- * Receiving. All other states are "procedure" states which are named as follows:
+ * procedure affecting IKE session (non-procedure state), including Initial, Idle and Receiving. All
+ * other states are "procedure" states which are named as follows:
  *
  * <pre>
  * State Name = [Procedure Type] + [Exchange Initiator] + [Exchange Type].
@@ -219,7 +219,7 @@ public class IkeSessionStateMachine extends StateMachine {
     private final IpSecManager mIpSecManager;
     private final IkeLocalRequestScheduler mScheduler;
     private final Executor mUserCbExecutor;
-    private final IIkeSessionCallback mIkeSessionCallbacks;
+    private final IIkeSessionCallback mIkeSessionCallback;
 
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
@@ -278,7 +278,6 @@ public class IkeSessionStateMachine extends StateMachine {
 
     // States
     @VisibleForTesting final State mInitial = new Initial();
-    @VisibleForTesting final State mClosed = new Closed();
     @VisibleForTesting final State mIdle = new Idle();
     @VisibleForTesting final State mChildProcedureOngoing = new ChildProcedureOngoing();
     @VisibleForTesting final State mReceiving = new Receiving();
@@ -319,14 +318,14 @@ public class IkeSessionStateMachine extends StateMachine {
         mIpSecManager = ipSecManager;
 
         mUserCbExecutor = userCbExecutor;
-        mIkeSessionCallbacks = ikeSessionCallback;
+        mIkeSessionCallback = ikeSessionCallback;
 
         ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth)
                 .initializeAuthParams(firstChildOptions, firstChildSessionCallback);
-        registerChildSessionCallback(firstChildOptions, firstChildSessionCallback);
+        registerChildSessionCallback(
+                firstChildOptions, firstChildSessionCallback, true /*isFirstChild*/);
 
         addState(mInitial);
-        addState(mClosed);
         addState(mCreateIkeLocalIkeInit);
         addState(mCreateIkeLocalIkeAuth);
         addState(mIdle);
@@ -370,17 +369,24 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     @VisibleForTesting
     void registerChildSessionCallback(
-            ChildSessionOptions childOptions, IChildSessionCallback callbacks) {
-        ChildSessionStateMachine childSession =
-                ChildSessionStateMachineFactory.makeChildSessionStateMachine(
-                        getHandler().getLooper(),
-                        mContext,
-                        childOptions,
-                        mUserCbExecutor,
-                        callbacks,
-                        new ChildSessionSmCallback());
+            ChildSessionOptions childOptions,
+            IChildSessionCallback callbacks,
+            boolean isFirstChild) {
         synchronized (mChildCbToSessions) {
-            mChildCbToSessions.put(callbacks, childSession);
+            if (!isFirstChild && getCurrentState() == null) {
+                throw new IllegalStateException(
+                        "Request rejected because IKE Session is being closed. ");
+            }
+
+            mChildCbToSessions.put(
+                    callbacks,
+                    ChildSessionStateMachineFactory.makeChildSessionStateMachine(
+                            getHandler().getLooper(),
+                            mContext,
+                            childOptions,
+                            mUserCbExecutor,
+                            callbacks,
+                            new ChildSessionSmCallback()));
         }
     }
 
@@ -394,7 +400,8 @@ public class IkeSessionStateMachine extends StateMachine {
             throw new IllegalArgumentException("Child Session Callback handle already registered");
         }
 
-        registerChildSessionCallback(childSessionOptions, childSessionCallback);
+        registerChildSessionCallback(
+                childSessionOptions, childSessionCallback, false /*isFirstChild*/);
         sendMessage(
                 CMD_LOCAL_REQUEST_CREATE_CHILD,
                 new ChildLocalRequest(
@@ -625,6 +632,12 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void onProcedureFinished(ChildSessionStateMachine childSession) {
+            if (getHandler() == null) {
+                // If the state machine has quit (because IKE Session is being closed), do not send
+                // any message.
+                return;
+            }
+
             sendMessage(CMD_CHILD_PROCEDURE_FINISHED, childSession);
         }
 
@@ -682,21 +695,6 @@ public class IkeSessionStateMachine extends StateMachine {
                 default:
                     return NOT_HANDLED;
             }
-        }
-    }
-
-    /**
-     * Closed represents the state when this IkeSessionStateMachine is closed, and no further
-     * actions can be performed on it.
-     */
-    class Closed extends State {
-        @Override
-        public void enter() {
-            // TODO: Notify all children to fire closed callbacks, cleanup all SaRecords.
-            // TODO: Notify user that IKE Session is closed, cleanup all SaRecords.
-            // TODO: Deregister from IkeSocket
-
-            quitNow();
         }
     }
 
@@ -1186,7 +1184,7 @@ public class IkeSessionStateMachine extends StateMachine {
         public void handleRetransmissionFailure() {
             // Fire fatal error callbacks.
 
-            transitionTo(mClosed);
+            quitNow();
         }
     }
 
@@ -1225,7 +1223,7 @@ public class IkeSessionStateMachine extends StateMachine {
          * such, this should not be used in rekey cases where there is any ambiguity as to which IKE
          * SA the session is reliant upon.
          *
-         * <p>Note that this method will also move the state machine to the closed state.
+         * <p>Note that this method will also quit the state machine.
          *
          * @param ikeMessage The received session deletion request
          */
@@ -1233,13 +1231,19 @@ public class IkeSessionStateMachine extends StateMachine {
             try {
                 validateIkeDeleteReq(ikeMessage, mCurrentIkeSaRecord);
                 IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
+
+                mUserCbExecutor.execute(
+                        () -> {
+                            mIkeSessionCallback.onClosed();
+                        });
+
                 sendEncryptedIkeMessage(mCurrentIkeSaRecord, resp);
 
                 removeIkeSaRecord(mCurrentIkeSaRecord);
                 mCurrentIkeSaRecord.close();
                 mCurrentIkeSaRecord = null;
 
-                transitionTo(mClosed);
+                quitNow();
             } catch (InvalidSyntaxException e) {
                 Log.wtf(TAG, "Got deletion of a non-Current IKE SA - rekey error?", e);
                 // TODO: Send the INVALID_SYNTAX error
@@ -1548,7 +1552,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             ERROR_TYPE_NO_ADDITIONAL_SAS);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
-                    // Send response and transition to mClosed
+                    // Send response and quit state machine
                     handleDeleteSessionRequest(ikeMessage);
 
                     // Return immediately to avoid transitioning to mIdle
@@ -1885,8 +1889,6 @@ public class IkeSessionStateMachine extends StateMachine {
             try {
                 validateIkeInitResp(mRetransmitter.getMessage(), ikeMessage);
 
-                // TODO: Pass mLocalIkeSpiResource and mRemoteIkeSpiResource to
-                // makeFirstIkeSaRecord()
                 mCurrentIkeSaRecord =
                         IkeSaRecord.makeFirstIkeSaRecord(
                                 mRetransmitter.getMessage(),
@@ -2126,7 +2128,7 @@ public class IkeSessionStateMachine extends StateMachine {
             public void handleRetransmissionFailure() {
                 // Fire fatal error callbacks.
 
-                transitionTo(mClosed);
+                quitNow();
             }
         }
     }
@@ -2206,13 +2208,11 @@ public class IkeSessionStateMachine extends StateMachine {
                     // state.
                     mFirstChildReqList = childReqList;
 
-                    IkeEapPayload ikeEapPayload = ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
+                    IkeEapPayload ikeEapPayload =
+                            ikeMessage.getPayloadForType(
+                                    IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
 
-                    deferMessage(
-                            obtainMessage(
-                                    CMD_START_EAP_AUTH,
-                                    ikeEapPayload));
+                    deferMessage(obtainMessage(CMD_START_EAP_AUTH, ikeEapPayload));
 
                     // TODO(b/137394968): transition to InEap state
                 } else {
@@ -2231,6 +2231,10 @@ public class IkeSessionStateMachine extends StateMachine {
                                             childReqList,
                                             childRespList)));
 
+                    mUserCbExecutor.execute(
+                            () -> {
+                                mIkeSessionCallback.onOpened();
+                            });
                     transitionTo(mChildProcedureOngoing);
                 }
             } catch (IkeProtocolException e) {
@@ -3131,11 +3135,16 @@ public class IkeSessionStateMachine extends StateMachine {
                 Log.d(TAG, "Invalid syntax on IKE Delete response. Shutting down anyways", e);
             }
 
+            mUserCbExecutor.execute(
+                    () -> {
+                        mIkeSessionCallback.onClosed();
+                    });
+
             removeIkeSaRecord(mCurrentIkeSaRecord);
             mCurrentIkeSaRecord.close();
             mCurrentIkeSaRecord = null;
 
-            transitionTo(mClosed);
+            quitNow();
         }
 
         @Override
@@ -3227,6 +3236,36 @@ public class IkeSessionStateMachine extends StateMachine {
     /** Called when this StateMachine quits. */
     @Override
     protected void onQuitting() {
+        // Clean up all SaRecords.
+        verifyIkeSaRecordIsClosed(mCurrentIkeSaRecord);
+        verifyIkeSaRecordIsClosed(mLocalInitNewIkeSaRecord);
+        verifyIkeSaRecordIsClosed(mRemoteInitNewIkeSaRecord);
+
+        mCurrentIkeSaRecord = null;
+        mLocalInitNewIkeSaRecord = null;
+        mRemoteInitNewIkeSaRecord = null;
+
+        synchronized (mChildCbToSessions) {
+            for (ChildSessionStateMachine child : mChildCbToSessions.values()) {
+                // Fire asynchronous call for Child Sessions to do cleanup and remove itself
+                // from the map.
+                child.killSession();
+            }
+        }
+
         mIkeSocket.releaseReference(this);
+    }
+
+    private void verifyIkeSaRecordIsClosed(IkeSaRecord ikeSaRecord) {
+        if (ikeSaRecord == null) return;
+
+        Log.wtf(
+                TAG,
+                "IkeSaRecord with local SPI: "
+                        + ikeSaRecord.getLocalSpi()
+                        + " is not correctly closed.");
+
+        removeIkeSaRecord(ikeSaRecord);
+        ikeSaRecord.close();
     }
 }
