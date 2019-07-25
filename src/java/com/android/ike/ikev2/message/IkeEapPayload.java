@@ -53,7 +53,7 @@ public final class IkeEapPayload extends IkePayload {
      *
      * @param eapMessage byte-array encoded EapMessage
      */
-    IkeEapPayload(byte[] eapMessage) {
+    public IkeEapPayload(byte[] eapMessage) {
         super(PAYLOAD_TYPE_EAP, false);
 
         this.eapMessage = eapMessage;
