@@ -53,6 +53,7 @@ import com.android.ike.ikev2.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
 import com.android.ike.ikev2.IkeSessionOptions.IkeAuthConfig;
+import com.android.ike.ikev2.IkeSessionOptions.IkeAuthPskConfig;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
@@ -2262,7 +2263,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 case IkeSessionOptions.IKE_AUTH_METHOD_PSK:
                     IkeAuthPskPayload pskPayload =
                             new IkeAuthPskPayload(
-                                    authConfig.mPsk,
+                                    ((IkeAuthPskConfig) authConfig).mPsk,
                                     mIkeInitRequestBytes,
                                     mCurrentIkeSaRecord.nonceResponder,
                                     initIdPayload.getEncodedPayloadBody(),
@@ -2275,8 +2276,8 @@ public class IkeSessionStateMachine extends StateMachine {
                     throw new UnsupportedOperationException(
                             "Do not support public-key based authentication.");
                 case IkeSessionOptions.IKE_AUTH_METHOD_EAP:
-                    // TODO: Support EAP.
-                    throw new UnsupportedOperationException("Do not support EAP.");
+                    // Do not include AUTH payload when using EAP.
+                    break;
                 default:
                     throw new IllegalArgumentException(
                             "Unrecognized authentication method: " + authConfig.mAuthMethod);
@@ -2314,6 +2315,7 @@ public class IkeSessionStateMachine extends StateMachine {
             // TODO: check that we don't receive any ChildSaRespPayloads here
 
             List<IkePayload> nonEapPayloads = new LinkedList<>();
+            nonEapPayloads.addAll(respMsg.ikePayloadList);
             nonEapPayloads.remove(ikeEapPayload);
             validateIkeAuthResp(nonEapPayloads);
         }
@@ -2441,7 +2443,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     }
                     IkeAuthPskPayload pskPayload = (IkeAuthPskPayload) authPayload;
                     pskPayload.verifyInboundSignature(
-                            mIkeSessionOptions.getRemoteAuthConfig().mPsk,
+                            ((IkeAuthPskConfig) mIkeSessionOptions.getRemoteAuthConfig()).mPsk,
                             mIkeInitResponseBytes,
                             mCurrentIkeSaRecord.nonceInitiator,
                             respIdPayload.getEncodedPayloadBody(),
@@ -2449,9 +2451,8 @@ public class IkeSessionStateMachine extends StateMachine {
                             mCurrentIkeSaRecord.getSkPr());
                     break;
                 case IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
-                    // TODO: Support PUB_KEY_SIGNATURE
-                    throw new UnsupportedOperationException(
-                            "Do not support public-key based authentication.");
+                    // STOPSHIP: b/122685769 Validate received certificates and digital signature.
+                    break;
                 default:
                     throw new IllegalArgumentException(
                             "Unrecognized auth method: " + authPayload.authMethod);
