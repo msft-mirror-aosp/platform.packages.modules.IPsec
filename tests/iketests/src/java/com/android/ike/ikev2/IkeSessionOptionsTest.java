@@ -16,10 +16,17 @@
 
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthConfig;
+import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthDigitalSignRemoteConfig;
+import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthEapConfig;
+import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthPskConfig;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.mock;
 
 import android.content.Context;
 import android.net.IpSecManager;
@@ -36,6 +43,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.net.Inet4Address;
+import java.security.cert.X509Certificate;
 
 public final class IkeSessionOptionsTest {
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
@@ -75,17 +83,7 @@ public final class IkeSessionOptionsTest {
         mUdpEncapSocket.close();
     }
 
-    @Test
-    public void testBuild() throws Exception {
-        IkeSessionOptions sessionOptions =
-                new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
-                        .addSaProposal(mIkeSaProposal)
-                        .setLocalIdentification(mLocalIdentification)
-                        .setRemoteIdentification(mRemoteIdentification)
-                        .setLocalAuthPsk(PSK)
-                        .setRemoteAuthPsk(PSK)
-                        .build();
-
+    private void verifyIkeSessionOptionsCommon(IkeSessionOptions sessionOptions) {
         assertEquals(REMOTE_IPV4_ADDRESS, sessionOptions.getServerAddress());
         assertEquals(mUdpEncapSocket, sessionOptions.getUdpEncapsulationSocket());
         assertArrayEquals(new SaProposal[] {mIkeSaProposal}, sessionOptions.getSaProposals());
@@ -93,15 +91,57 @@ public final class IkeSessionOptionsTest {
         assertEquals(mLocalIdentification, sessionOptions.getLocalIdentification());
         assertEquals(mRemoteIdentification, sessionOptions.getRemoteIdentification());
 
-        IkeSessionOptions.IkeAuthConfig localConfig = sessionOptions.getLocalAuthConfig();
-        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PSK, localConfig.mAuthMethod);
-        assertArrayEquals(PSK, localConfig.mPsk);
-
-        IkeSessionOptions.IkeAuthConfig remoteConfig = sessionOptions.getRemoteAuthConfig();
-        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PSK, remoteConfig.mAuthMethod);
-        assertArrayEquals(PSK, remoteConfig.mPsk);
-
         assertFalse(sessionOptions.isIkeFragmentationSupported());
+    }
+
+    @Test
+    public void testBuildWithPsk() throws Exception {
+        IkeSessionOptions sessionOptions =
+                new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .build();
+
+        verifyIkeSessionOptionsCommon(sessionOptions);
+
+        IkeAuthConfig localConfig = sessionOptions.getLocalAuthConfig();
+        assertTrue(localConfig instanceof IkeAuthPskConfig);
+        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PSK, localConfig.mAuthMethod);
+        assertArrayEquals(PSK, ((IkeAuthPskConfig) localConfig).mPsk);
+
+        IkeAuthConfig remoteConfig = sessionOptions.getRemoteAuthConfig();
+        assertTrue(remoteConfig instanceof IkeAuthPskConfig);
+        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PSK, remoteConfig.mAuthMethod);
+        assertArrayEquals(PSK, ((IkeAuthPskConfig) remoteConfig).mPsk);
+    }
+
+    @Test
+    public void testBuildWithEap() throws Exception {
+        X509Certificate mockCert = mock(X509Certificate.class);
+
+        IkeSessionOptions sessionOptions =
+                new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthEap(mockCert)
+                        .build();
+
+        verifyIkeSessionOptionsCommon(sessionOptions);
+
+        IkeAuthConfig localConfig = sessionOptions.getLocalAuthConfig();
+        assertTrue(localConfig instanceof IkeAuthEapConfig);
+        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_EAP, localConfig.mAuthMethod);
+        // TODO: Verify EAP configuration
+
+        IkeAuthConfig remoteConfig = sessionOptions.getRemoteAuthConfig();
+        assertTrue(remoteConfig instanceof IkeAuthDigitalSignRemoteConfig);
+        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, remoteConfig.mAuthMethod);
+        assertEquals(
+                mockCert,
+                ((IkeAuthDigitalSignRemoteConfig) remoteConfig).mTrustAnchor.getTrustedCert());
     }
 
     @Test
@@ -119,8 +159,7 @@ public final class IkeSessionOptionsTest {
             new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
                     .addSaProposal(mIkeSaProposal)
                     .setRemoteIdentification(mRemoteIdentification)
-                    .setLocalAuthPsk(PSK)
-                    .setRemoteAuthPsk(PSK)
+                    .setAuthPsk(PSK)
                     .build();
             fail("Expected to fail because local identification is not set.");
         } catch (IllegalArgumentException expected) {
@@ -128,15 +167,14 @@ public final class IkeSessionOptionsTest {
     }
 
     @Test
-    public void testBuildWithoutSetLocalAuth() throws Exception {
+    public void testBuildWithoutSetAuth() throws Exception {
         try {
             new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
                     .addSaProposal(mIkeSaProposal)
                     .setLocalIdentification(mLocalIdentification)
                     .setRemoteIdentification(mRemoteIdentification)
-                    .setRemoteAuthPsk(PSK)
                     .build();
-            fail("Expected to fail because local authentiction method is not set.");
+            fail("Expected to fail because authentiction method is not set.");
         } catch (IllegalArgumentException expected) {
         }
     }
@@ -152,8 +190,7 @@ public final class IkeSessionOptionsTest {
         try {
             new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
                     .addSaProposal(saProposal)
-                    .setLocalAuthPsk(PSK)
-                    .setRemoteAuthPsk(PSK)
+                    .setAuthPsk(PSK)
                     .build();
             fail("Expected to fail due to wrong type of SA proposal.");
         } catch (IllegalArgumentException expected) {
