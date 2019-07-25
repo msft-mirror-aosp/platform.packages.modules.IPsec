@@ -1052,7 +1052,7 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
-    public void testTriggerRekeyChildLocal() throws Exception {
+    public void testtestTriggerRekeyChildLocal() throws Exception {
         setupIdleStateMachine();
 
         IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
@@ -1065,6 +1065,33 @@ public final class IkeSessionStateMachineTest {
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
                         childCallback,
                         null /*childOptions*/));
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(childStateMachine).rekeyChildSession();
+    }
+
+    @Test
+    public void testScheduleAndTriggerRekeyChildLocal() throws Exception {
+        setupIdleStateMachine();
+        int dummySpi = 1;
+        long dummyRekeyTimeout = 10000L;
+
+        IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
+        ChildSessionStateMachine childStateMachine = mock(ChildSessionStateMachine.class);
+        IChildSessionSmCallback childSmCallback =
+                createChildAndGetChildSessionSmCallback(childStateMachine, dummySpi, childCallback);
+
+        ChildLocalRequest rekeyRequest =
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
+                        childCallback,
+                        null /*childOptions*/);
+        childSmCallback.scheduleLocalRequest(rekeyRequest, dummyRekeyTimeout);
+
+        mLooper.moveTimeForward(dummyRekeyTimeout);
         mLooper.dispatchAll();
 
         assertTrue(

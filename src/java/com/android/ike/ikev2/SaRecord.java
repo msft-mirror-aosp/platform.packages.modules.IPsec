@@ -25,6 +25,7 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
 import android.util.Log;
 
+import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -433,7 +434,8 @@ public abstract class SaRecord implements AutoCloseable {
                         skEi,
                         skEr,
                         inTransform,
-                        outTransform);
+                        outTransform,
+                        childSaRecordConfig.futureRekeyEvent);
 
             } catch (Exception e) {
                 if (initTransform != null) initTransform.close();
@@ -505,6 +507,7 @@ public abstract class SaRecord implements AutoCloseable {
         public final boolean isTransport;
         public final boolean isLocalInit;
         public final boolean hasIntegrityAlgo;
+        public final ChildLocalRequest futureRekeyEvent;
 
         ChildSaRecordConfig(
                 Context context,
@@ -518,7 +521,8 @@ public abstract class SaRecord implements AutoCloseable {
                 IkeCipher encryptionAlgo,
                 byte[] skD,
                 boolean isTransport,
-                boolean isLocalInit) {
+                boolean isLocalInit,
+                ChildLocalRequest futureRekeyEvent) {
             this.context = context;
             this.initSpi = initSpi;
             this.respSpi = respSpi;
@@ -532,6 +536,7 @@ public abstract class SaRecord implements AutoCloseable {
             this.isTransport = isTransport;
             this.isLocalInit = isLocalInit;
             hasIntegrityAlgo = (integrityAlgo != null);
+            this.futureRekeyEvent = futureRekeyEvent;
         }
     }
 
@@ -796,7 +801,8 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] skEi,
                 byte[] skEr,
                 IpSecTransform inTransform,
-                IpSecTransform outTransform) {
+                IpSecTransform outTransform,
+                ChildLocalRequest futureRekeyEvent) {
             super(
                     localInit,
                     nonceInit,
@@ -805,9 +811,7 @@ public abstract class SaRecord implements AutoCloseable {
                     skAr,
                     skEi,
                     skEr,
-                    null /*futureRekeyEvent*/);
-
-            // TODO: Support passing futureRekeyEvent
+                    futureRekeyEvent);
 
             mInboundSpi = inSpi;
             mOutboundSpi = outSpi;
@@ -833,7 +837,8 @@ public abstract class SaRecord implements AutoCloseable {
                 IkeCipher encryptionAlgo,
                 byte[] skD,
                 boolean isTransport,
-                boolean isLocalInit)
+                boolean isLocalInit,
+                ChildLocalRequest futureRekeyEvent)
                 throws GeneralSecurityException, ResourceUnavailableException,
                         SpiUnavailableException, IOException {
             return sSaRecordHelper.makeChildSaRecord(
@@ -851,7 +856,8 @@ public abstract class SaRecord implements AutoCloseable {
                             encryptionAlgo,
                             skD,
                             isTransport,
-                            isLocalInit));
+                            isLocalInit,
+                            futureRekeyEvent));
         }
 
         /** Package private */
@@ -890,6 +896,7 @@ public abstract class SaRecord implements AutoCloseable {
         /** Release IpSecTransform pair. */
         @Override
         public void close() {
+            super.close();
             mInboundTransform.close();
             mOutboundTransform.close();
         }

@@ -637,6 +637,11 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
+        public void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime) {
+            sendMessageDelayed(futureRequest.procedureType, futureRequest, delayedTime);
+        }
+
+        @Override
         public void onOutboundPayloadsReady(
                 @ExchangeType int exchangeType,
                 boolean isResp,

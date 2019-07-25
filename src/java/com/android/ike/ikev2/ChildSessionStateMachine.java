@@ -52,6 +52,7 @@ import android.os.Message;
 import android.util.Log;
 import android.util.Pair;
 
+import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeExchangeSubType;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -89,6 +90,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * ChildSessionStateMachine tracks states and manages exchanges of this Child Session.
@@ -109,6 +111,9 @@ import java.util.concurrent.Executor;
  */
 public class ChildSessionStateMachine extends StateMachine {
     private static final String TAG = "ChildSessionStateMachine";
+
+    // Time after which Child SA needs to be rekeyed
+    @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(2L);
 
     /** Receive request for negotiating first Child SA. */
     private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = 1;
@@ -256,6 +261,9 @@ public class ChildSessionStateMachine extends StateMachine {
         /** Notify that a Child SA is deleted. */
         void onChildSaDeleted(int remoteSpi);
 
+        /** Schedule a future Child Rekey Request on the LocalRequestScheduler. */
+        void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime);
+
         /** Notify the IKE Session to send out IKE message for this Child Session. */
         void onOutboundPayloadsReady(
                 @ExchangeType int exchangeType,
@@ -372,6 +380,16 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     public void killSession() {
         sendMessage(CMD_KILL_SESSION);
+    }
+
+    private ChildLocalRequest makeRekeyLocalRequest() {
+        return new ChildLocalRequest(
+                CMD_LOCAL_REQUEST_REKEY_CHILD, mUserCallback, null /*childOptions*/);
+    }
+
+    private long getRekeyTimeout() {
+        // TODO: Make rekey timout fuzzy
+        return SA_SOFT_LIFETIME_MS;
     }
 
     /**
@@ -596,6 +614,9 @@ public class ChildSessionStateMachine extends StateMachine {
                 case CREATE_STATUS_OK:
                     try {
                         setUpNegotiatedResult(createChildResult);
+
+                        ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
+
                         mCurrentChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
                                         mContext,
@@ -611,7 +632,10 @@ public class ChildSessionStateMachine extends StateMachine {
                                         mChildCipher,
                                         mSkD,
                                         mChildSessionOptions.isTransportMode(),
-                                        true /*isLocalInit*/);
+                                        true /*isLocalInit*/,
+                                        rekeyLocalRequest);
+
+                        mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
 
                         mUserCbExecutor.execute(
                                 () -> {
@@ -1081,6 +1105,9 @@ public class ChildSessionStateMachine extends StateMachine {
                             try {
                                 // Do not need to update the negotiated proposal and TS because they
                                 // are not changed.
+
+                                ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
+
                                 mLocalInitNewChildSaRecord =
                                         ChildSaRecord.makeChildSaRecord(
                                                 mContext,
@@ -1096,7 +1123,11 @@ public class ChildSessionStateMachine extends StateMachine {
                                                 mChildCipher,
                                                 mSkD,
                                                 mChildSessionOptions.isTransportMode(),
-                                                true /*isLocalInit*/);
+                                                true /*isLocalInit*/,
+                                                rekeyLocalRequest);
+
+                                mChildSmCallback.scheduleLocalRequest(
+                                        rekeyLocalRequest, getRekeyTimeout());
 
                                 mUserCbExecutor.execute(
                                         () -> {
@@ -1208,6 +1239,9 @@ public class ChildSessionStateMachine extends StateMachine {
                         try {
                             // Do not need to update the negotiated proposal and TS
                             // because they are not changed.
+
+                            ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
+
                             mRemoteInitNewChildSaRecord =
                                     ChildSaRecord.makeChildSaRecord(
                                             mContext,
@@ -1223,7 +1257,11 @@ public class ChildSessionStateMachine extends StateMachine {
                                             mChildCipher,
                                             mSkD,
                                             mChildSessionOptions.isTransportMode(),
-                                            false /*isLocalInit*/);
+                                            false /*isLocalInit*/,
+                                            rekeyLocalRequest);
+
+                            mChildSmCallback.scheduleLocalRequest(
+                                    rekeyLocalRequest, getRekeyTimeout());
 
                             mChildSmCallback.onChildSaCreated(
                                     mRemoteInitNewChildSaRecord.getRemoteSpi(),
@@ -1306,6 +1344,7 @@ public class ChildSessionStateMachine extends StateMachine {
             }
         }
 
+        // Rekey timer for old SA will be cancelled as part of the closing of the SA.
         protected void finishRekey() {
             mUserCbExecutor.execute(
                     () -> {
