@@ -41,6 +41,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -60,6 +61,7 @@ import android.os.test.TestLooper;
 import com.android.ike.TestUtils;
 import com.android.ike.eap.EapAuthenticator;
 import com.android.ike.eap.EapSessionConfig;
+import com.android.ike.eap.IEapCallback;
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
@@ -75,6 +77,7 @@ import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
@@ -100,6 +103,7 @@ import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.internal.util.State;
 
 import libcore.net.InetAddressUtils;
 
@@ -182,6 +186,8 @@ public final class IkeSessionStateMachineTest {
             "094787780EE466E2CB049FA327B43908BC57E485";
     private static final String PRF_KEY_RESP_HEX_STRING =
             "A30E6B08BE56C0E6BFF4744143C75219299E1BEB";
+
+    private static final byte[] EAP_DUMMY_MSG = "EAP Message".getBytes();
 
     private static final int KEY_LEN_IKE_INTE = 20;
     private static final int KEY_LEN_IKE_ENCR = 16;
@@ -896,7 +902,7 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
-    private void mockIkeInitAndTransitionToIkeAuth() throws Exception {
+    private void mockIkeInitAndTransitionToIkeAuth(State authState) throws Exception {
         setIkeInitResults();
 
         // Need to create a real IkeMacPrf instance for authentication because we cannot inject a
@@ -912,14 +918,8 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.mIkeInitNoncePayload = new IkeNoncePayload();
         mIkeSessionStateMachine.mIkeRespNoncePayload = new IkeNoncePayload();
 
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
-                mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_FORCE_TRANSITION, authState);
         mLooper.dispatchAll();
-
-        assertTrue(
-                mIkeSessionStateMachine.getCurrentState()
-                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
     }
 
     private void setupChildStateMachineFactory(ChildSessionStateMachine child) {
@@ -1522,7 +1522,7 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testCreateIkeLocalIkeAuthPsk() throws Exception {
-        mockIkeInitAndTransitionToIkeAuth();
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
 
         // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
         List<IkePayload> autheRelatedPayloads = new LinkedList<>();
@@ -1631,14 +1631,14 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
 
         // Mock IKE INIT
-        mockIkeInitAndTransitionToIkeAuth();
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
 
         // Build IKE AUTH response with EAP Payload and ID-Responder Payload.
 
         // TODO: Also include Cert Payload.
-        List<IkePayload> autheRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
 
-        autheRelatedPayloads.add(new IkeEapPayload(null));
+        authRelatedPayloads.add(new IkeEapPayload(EAP_DUMMY_MSG));
 
         IkeAuthDigitalSignPayload authPayload =
                 (IkeAuthDigitalSignPayload)
@@ -1646,7 +1646,7 @@ public final class IkeSessionStateMachineTest {
                                 IkePayload.PAYLOAD_TYPE_AUTH,
                                 true /*isResp*/,
                                 GENERIC_DIGITAL_SIGN_AUTH_RESP_HEX_STRING);
-        autheRelatedPayloads.add(authPayload);
+        authRelatedPayloads.add(authPayload);
 
         IkeIdPayload respIdPayload =
                 (IkeIdPayload)
@@ -1654,12 +1654,12 @@ public final class IkeSessionStateMachineTest {
                                 IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
                                 true /*isResp*/,
                                 ID_PAYLOAD_RESPONDER_HEX_STRING);
-        autheRelatedPayloads.add(respIdPayload);
+        authRelatedPayloads.add(respIdPayload);
 
         // Send IKE AUTH response to IKE state machine
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
-                makeIkeAuthRespWithoutChildPayloads(autheRelatedPayloads));
+                makeIkeAuthRespWithoutChildPayloads(authRelatedPayloads));
         mLooper.dispatchAll();
 
         // Validate outbound IKE AUTH request
@@ -1668,7 +1668,138 @@ public final class IkeSessionStateMachineTest {
                 ikeAuthReqMessage.getPayloadForType(
                         IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthPayload.class));
 
-        // TODO: Verify authentication is done and state machine has transitioned to InEap State
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuthInEap);
+
+        // TODO: Verify authentication is done
+    }
+
+    private IEapCallback verifyEapAuthenticatorCreatedAndGetCallback() {
+        ArgumentCaptor<IEapCallback> captor = ArgumentCaptor.forClass(IEapCallback.class);
+
+        verify(mMockEapAuthenticatorFactory)
+                .newEapAuthenticator(
+                        eq(mIkeSessionStateMachine.getHandler().getLooper()),
+                        captor.capture(),
+                        eq(mContext),
+                        eq(mEapSessionConfig));
+
+        return captor.getValue();
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthInEapStartsAuthenticatorAndProxiesMessage()
+            throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+
+        // Setup state and go to IN_EAP state
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
+        mLooper.dispatchAll();
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EAP_START_EAP_AUTH, new IkeEapPayload(EAP_DUMMY_MSG));
+        mLooper.dispatchAll();
+
+        verifyEapAuthenticatorCreatedAndGetCallback();
+
+        verify(mMockEapAuthenticator).processEapMessage(eq(EAP_DUMMY_MSG));
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthInEapHandlesOutboundResponse() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+
+        // Setup state and go to IN_EAP state
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
+        mLooper.dispatchAll();
+
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+        callback.onResponse(EAP_DUMMY_MSG);
+        mLooper.dispatchAll();
+
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture());
+
+        // Verify EAP response
+        IkeMessage resp = mIkeMessageCaptor.getValue();
+        IkeHeader ikeHeader = resp.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_IKE_AUTH, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
+
+        assertEquals(1, resp.ikePayloadList.size());
+        assertArrayEquals(EAP_DUMMY_MSG, ((IkeEapPayload) resp.ikePayloadList.get(0)).eapMessage);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthInEapHandlesSuccess() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+
+        // Setup state and go to IN_EAP state
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
+        mLooper.dispatchAll();
+
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+
+        callback.onSuccess(mPsk, new byte[0]); // use mPsk as MSK, eMSK does not matter
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuthPostEap);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthInEapHandlesError() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+
+        // Setup state and go to IN_EAP state
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
+        mLooper.dispatchAll();
+
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+
+        Throwable error = new IllegalArgumentException();
+        callback.onError(error);
+        mLooper.dispatchAll();
+
+        // Fires user error callbacks
+        verify(mMockIkeSessionCallback).onError(argThat(err -> err.getCause() == error));
+
+        // Verify state machine quit properly
+        verify(mSpyCurrentIkeSaRecord).close();
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthInEapHandlesFailure() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+
+        // Setup state and go to IN_EAP state
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
+        mLooper.dispatchAll();
+
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+        callback.onFail();
+        mLooper.dispatchAll();
+
+        // Fires user error callbacks
+        verify(mMockIkeSessionCallback).onError(any(AuthenticationFailedException.class));
+
+        // Verify state machine quit properly
+        verify(mSpyCurrentIkeSaRecord).close();
+        assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
     @Test
