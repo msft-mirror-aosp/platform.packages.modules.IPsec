@@ -57,12 +57,19 @@ public class EapAuthenticator extends Handler {
      * @param cbHandler Handler for posting callbacks to the given IEapCallback
      * @param cb IEapCallback for callbacks to the client
      * @param context Context for this EapAuthenticator
+     * @param eapSessionConfig Configuration for an EapAuthenticator
      */
-    public EapAuthenticator(Looper looper, Handler cbHandler, IEapCallback cb, Context context) {
-        this(looper,
+    public EapAuthenticator(
+            Looper looper,
+            Handler cbHandler,
+            IEapCallback cb,
+            Context context,
+            EapSessionConfig eapSessionConfig) {
+        this(
+                looper,
                 cbHandler,
                 cb,
-                new EapStateMachine(context, new SecureRandom()),
+                new EapStateMachine(context, eapSessionConfig, new SecureRandom()),
                 Executors.newSingleThreadExecutor(),
                 DEFAULT_TIMEOUT_MILLIS);
     }
