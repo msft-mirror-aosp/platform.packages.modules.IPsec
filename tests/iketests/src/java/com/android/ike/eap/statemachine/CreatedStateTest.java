@@ -29,10 +29,12 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.statemachine.EapStateMachine.IdentityState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
@@ -47,6 +49,7 @@ public class CreatedStateTest extends EapStateTest {
     @Override
     public void setUp() {
         mEapStateMachineMock = mock(EapStateMachine.class);
+        mEapSessionConfig = new EapSessionConfig.Builder().build();
         mEapState = mEapStateMachineMock.new CreatedState();
     }
 
@@ -82,11 +85,14 @@ public class CreatedStateTest extends EapStateTest {
 
     @Test
     public void testProcessAkaIdentity() {
+        when(mEapStateMachineMock.getEapSessionConfig()).thenReturn(mEapSessionConfig);
+
         mEapState.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
 
         // EapStateMachine should change to MethodState for method-type packet
         verify(mEapStateMachineMock).transitionAndProcess(
                 any(MethodState.class), eq(EAP_REQUEST_AKA_IDENTITY_PACKET));
+        verify(mEapStateMachineMock).getEapSessionConfig();
         verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
