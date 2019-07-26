@@ -33,6 +33,7 @@ import android.content.Context;
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.exceptions.EapInvalidPacketLengthException;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.statemachine.EapStateMachine.EapState;
@@ -50,20 +51,24 @@ import java.security.SecureRandom;
  */
 public class EapStateTest {
     protected Context mContext;
+    protected EapSessionConfig mEapSessionConfig;
     protected EapState mEapState;
 
     @Before
     public void setUp() {
         mContext = getInstrumentation().getContext();
+        mEapSessionConfig = new EapSessionConfig.Builder().build();
 
         // this EapState definition is used to make sure all non-Success/Failure EAP states
         // produce the same results for error cases.
-        mEapState = new EapStateMachine(mContext, new SecureRandom()).new EapState() {
-            @Override
-            public EapResult process(byte[] msg) {
-                return decode(msg).eapResult;
-            }
-        };
+        mEapState =
+                new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom())
+                .new EapState() {
+                    @Override
+                    public EapResult process(byte[] msg) {
+                        return decode(msg).eapResult;
+                    }
+                };
     }
 
     @Test
