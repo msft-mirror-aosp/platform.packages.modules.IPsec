@@ -487,7 +487,6 @@ public final class IkeSessionStateMachineTest {
                         mMockIkeSessionCallback,
                         mMockChildSessionCallback);
         ikeSession.setDbg(true);
-        ikeSession.start();
 
         mLooper.dispatchAll();
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
@@ -499,7 +498,7 @@ public final class IkeSessionStateMachineTest {
         return ikeSession;
     }
 
-    private SaProposal buildSaProposal() throws Exception {
+    static SaProposal buildSaProposal() throws Exception {
         return SaProposal.Builder.newIkeSaProposalBuilder()
                 .addEncryptionAlgorithm(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
