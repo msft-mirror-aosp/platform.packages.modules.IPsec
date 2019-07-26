@@ -49,6 +49,8 @@ import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
 
+import com.android.ike.eap.EapAuthenticator;
+import com.android.ike.eap.IEapCallback;
 import com.android.ike.ikev2.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
@@ -289,6 +291,11 @@ public class IkeSessionStateMachine extends StateMachine {
     @VisibleForTesting final State mReceiving = new Receiving();
     @VisibleForTesting final State mCreateIkeLocalIkeInit = new CreateIkeLocalIkeInit();
     @VisibleForTesting final State mCreateIkeLocalIkeAuth = new CreateIkeLocalIkeAuth();
+    @VisibleForTesting final State mCreateIkeLocalIkeAuthInEap = new CreateIkeLocalIkeAuthInEap();
+
+    @VisibleForTesting
+    final State mCreateIkeLocalIkeAuthPostEap = new CreateIkeLocalIkeAuthPostEap();
+
     @VisibleForTesting final State mRekeyIkeLocalCreate = new RekeyIkeLocalCreate();
     @VisibleForTesting final State mSimulRekeyIkeLocalCreate = new SimulRekeyIkeLocalCreate();
 
@@ -337,6 +344,8 @@ public class IkeSessionStateMachine extends StateMachine {
         addState(mInitial);
         addState(mCreateIkeLocalIkeInit);
         addState(mCreateIkeLocalIkeAuth);
+        addState(mCreateIkeLocalIkeAuthInEap);
+        addState(mCreateIkeLocalIkeAuthPostEap);
         addState(mIdle);
         addState(mChildProcedureOngoing);
         addState(mReceiving);
@@ -2326,8 +2335,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                     IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
 
                     deferMessage(obtainMessage(CMD_EAP_START_EAP_AUTH, ikeEapPayload));
-
-                    // TODO(b/137394968): transition to InEap state
+                    transitionTo(mCreateIkeLocalIkeAuthInEap);
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
@@ -2516,7 +2524,157 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    // TODO: Add CreateIkeLocalIkeAuthInEap and CreateIkeLocalIkeAuthPostEap states.
+    /**
+     * CreateIkeLocalIkeAuthInEap represents the state when the IKE library authenticates the client
+     * with an EAP session.
+     */
+    class CreateIkeLocalIkeAuthInEap extends CreateIkeLocalIkeAuthBase {
+        private EapAuthenticator mEapAuthenticator;
+
+        @Override
+        public void enter() {
+            IkeSessionOptions.IkeAuthEapConfig ikeAuthEapConfig =
+                    (IkeSessionOptions.IkeAuthEapConfig) mIkeSessionOptions.getLocalAuthConfig();
+
+            mEapAuthenticator =
+                    mEapAuthenticatorFactory.newEapAuthenticator(
+                            getHandler().getLooper(),
+                            new IkeEapCallback(),
+                            mContext,
+                            ikeAuthEapConfig.mEapConfig);
+        }
+
+        @Override
+        public boolean processMessage(Message msg) {
+            switch (msg.what) {
+                case CMD_EAP_START_EAP_AUTH:
+                    IkeEapPayload ikeEapPayload = (IkeEapPayload) msg.obj;
+                    mEapAuthenticator.processEapMessage(ikeEapPayload.eapMessage);
+
+                    return HANDLED;
+                case CMD_EAP_OUTBOUND_MSG_READY:
+                    byte[] eapMsgBytes = (byte[]) msg.obj;
+                    IkeEapPayload eapPayload = new IkeEapPayload(eapMsgBytes);
+
+                    // Setup new retransmitter with EAP response
+                    mRetransmitter =
+                            new EncryptedRetransmitter(
+                                    buildIkeAuthReqMessage(Arrays.asList(eapPayload)));
+
+                    return HANDLED;
+                case CMD_EAP_ERRORED:
+                    handleAuthenticationFailureAndShutdown(
+                            new AuthenticationFailedException((Throwable) msg.obj));
+                    return HANDLED;
+                case CMD_EAP_FAILED:
+                    AuthenticationFailedException exception =
+                            new AuthenticationFailedException("EAP Authentication Failed");
+
+                    handleAuthenticationFailureAndShutdown(exception);
+                    return HANDLED;
+                case CMD_EAP_FINISH_EAP_AUTH:
+                    deferMessage(msg);
+                    transitionTo(mCreateIkeLocalIkeAuthPostEap);
+
+                    return HANDLED;
+                default:
+                    return super.processMessage(msg);
+            }
+        }
+
+        private void handleAuthenticationFailureAndShutdown(AuthenticationFailedException cause) {
+            mUserCbExecutor.execute(
+                    () -> {
+                        mIkeSessionCallback.onError(cause);
+                    });
+
+            removeIkeSaRecord(mCurrentIkeSaRecord);
+            mCurrentIkeSaRecord.close();
+            mCurrentIkeSaRecord = null;
+
+            quitNow();
+        }
+
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            mRetransmitter.stopRetransmitting();
+
+            int exchangeType = ikeMessage.ikeHeader.exchangeType;
+            if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_AUTH) {
+                // Invalid, but authenticated response.
+
+                // TODO: Clear state and exit
+                return;
+            }
+
+            IkeEapPayload eapPayload = null;
+            for (IkePayload payload : ikeMessage.ikePayloadList) {
+                switch (payload.payloadType) {
+                    case IkePayload.PAYLOAD_TYPE_EAP:
+                        eapPayload = (IkeEapPayload) payload;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                        if (notifyPayload.isErrorNotify()) {
+                            // TODO: Throw IkeExceptions according to error types.
+                            throw new UnsupportedOperationException(
+                                    "Do not support handling error notifications in IKE AUTH"
+                                            + " response.");
+                        } else {
+                            // Unknown and unexpected status notifications are ignored as per
+                            // RFC7296.
+                            logw(
+                                    "Received unknown or unexpected status notifications with"
+                                            + " notify type: "
+                                            + notifyPayload.notifyType);
+                        }
+                        break;
+                    default:
+                        logw(
+                                "Received unexpected payload in IKE AUTH response. Payload"
+                                        + " type: "
+                                        + payload.payloadType);
+                }
+            }
+
+            if (eapPayload == null) {
+                // TODO: Handle missing EAP payload
+            }
+
+            mEapAuthenticator.processEapMessage(eapPayload.eapMessage);
+        }
+
+        private class IkeEapCallback implements IEapCallback {
+            @Override
+            public void onSuccess(byte[] msk, byte[] emsk) {
+                // Extended MSK not used in IKEv2, drop.
+                sendMessage(CMD_EAP_FINISH_EAP_AUTH, msk);
+            }
+
+            @Override
+            public void onFail() {
+                sendMessage(CMD_EAP_FAILED);
+            }
+
+            @Override
+            public void onResponse(byte[] eapMsg) {
+                sendMessage(CMD_EAP_OUTBOUND_MSG_READY, eapMsg);
+            }
+
+            @Override
+            public void onError(Throwable cause) {
+                sendMessage(CMD_EAP_ERRORED, cause);
+            }
+        }
+    }
+
+    /**
+     * CreateIkeLocalIkeAuthPostEap represents the state when the IKE library is performing the
+     * post-EAP PSK-base authentication run.
+     */
+    class CreateIkeLocalIkeAuthPostEap extends CreateIkeLocalIkeAuthBase {
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {}
+    }
 
     private abstract class RekeyIkeHandlerBase extends DeleteResponderBase {
         private void validateIkeRekeyCommon(IkeMessage ikeMessage) throws InvalidSyntaxException {
