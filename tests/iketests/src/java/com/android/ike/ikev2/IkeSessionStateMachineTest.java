@@ -58,6 +58,7 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 
 import com.android.ike.TestUtils;
+import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
@@ -192,6 +193,8 @@ public final class IkeSessionStateMachineTest {
     private static final int DUMMY_UDP_ENCAP_RESOURCE_ID = 0x3234;
     private static final int UDP_ENCAP_PORT = 34567;
 
+    private static final int EAP_SIM_SUB_ID = 1;
+
     private static long sIkeInitResponseSpiBase = 1L;
 
     private MockIpSecTestUtils mMockIpSecTestUtils;
@@ -230,6 +233,7 @@ public final class IkeSessionStateMachineTest {
     private int mExpectedCurrentSaLocalReqMsgId;
     private int mExpectedCurrentSaRemoteReqMsgId;
 
+    private EapSessionConfig mEapSessionConfig;
     private ArgumentCaptor<IkeMessage> mIkeMessageCaptor =
             ArgumentCaptor.forClass(IkeMessage.class);
     private ArgumentCaptor<IkeSaRecordConfig> mIkeSaRecordConfigCaptor =
@@ -411,6 +415,7 @@ public final class IkeSessionStateMachineTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
+        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(EAP_SIM_SUB_ID).build();
 
         mPsk = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
@@ -517,7 +522,9 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeSessionOptions buildIkeSessionOptionsEap() throws Exception {
-        return buildIkeSessionOptionsCommon().setAuthEap(mock(X509Certificate.class)).build();
+        return buildIkeSessionOptionsCommon()
+                .setAuthEap(mock(X509Certificate.class), mEapSessionConfig)
+                .build();
     }
 
     private ChildSessionOptions buildChildSessionOptions() throws Exception {
@@ -1619,7 +1626,7 @@ public final class IkeSessionStateMachineTest {
 
         // Build IKE AUTH response with EAP Payload and ID-Responder Payload.
 
-        // TODO: Also include Auth-Digital-Signature Payload and Cert Payload.
+        // TODO: Also include Cert Payload.
         List<IkePayload> autheRelatedPayloads = new LinkedList<>();
 
         autheRelatedPayloads.add(new IkeEapPayload(null));
