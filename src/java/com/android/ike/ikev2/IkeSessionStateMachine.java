@@ -133,6 +133,13 @@ public class IkeSessionStateMachine extends StateMachine {
 
     private static final String TAG = "IkeSessionStateMachine";
 
+    // TODO: Add SA_HARD_LIFETIME_MS
+
+    // Time after which IKE SA needs to be rekeyed
+    @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(3L);
+
+    // TODO: Allow users to configure IKE lifetime
+
     // Use a value greater than the retransmit-failure timeout.
     static final long REKEY_DELETE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180L);
 
@@ -476,6 +483,13 @@ public class IkeSessionStateMachine extends StateMachine {
         sendMessage(CMD_LOCAL_REQUEST_DELETE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
     }
 
+    private void scheduleRekeySession(LocalRequest rekeyRequest) {
+        // TODO: Make rekey timeout fuzzy
+        sendMessageDelayed(CMD_LOCAL_REQUEST_REKEY_IKE, rekeyRequest, SA_SOFT_LIFETIME_MS);
+    }
+
+    // TODO: Support initiating Delete IKE exchange when IKE SA expires
+
     // TODO: Add interfaces to initiate IKE exchanges.
 
     /**
@@ -579,6 +593,8 @@ public class IkeSessionStateMachine extends StateMachine {
         // IkeSaRecord is created. Calling this method at the end of exchange will double-register
         // the SPI but it is safe because the key and value are not changed.
         mIkeSocket.registerIke(record.getLocalSpi(), this);
+
+        scheduleRekeySession(record.getFutureRekeyEvent());
     }
 
     @VisibleForTesting
@@ -667,6 +683,11 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void onChildSaDeleted(int remoteSpi) {
             mRemoteSpiToChildSessionMap.remove(remoteSpi);
+        }
+
+        @Override
+        public void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime) {
+            sendMessageDelayed(futureRequest.procedureType, futureRequest, delayedTime);
         }
 
         @Override
@@ -980,6 +1001,8 @@ public class IkeSessionStateMachine extends StateMachine {
          * @param req The instance of the LocalRequest to be queued.
          */
         protected void handleLocalRequest(int requestVal, LocalRequest req) {
+            if (req.isCancelled()) return;
+
             switch (requestVal) {
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     mScheduler.addRequestAtFront(req);
@@ -1974,7 +1997,9 @@ public class IkeSessionStateMachine extends StateMachine {
                                 mRemoteIkeSpiResource,
                                 mIkePrf,
                                 mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
-                                mIkeCipher.getKeyLength());
+                                mIkeCipher.getKeyLength(),
+                                new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
+
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
 
@@ -2933,7 +2958,9 @@ public class IkeSessionStateMachine extends StateMachine {
                             newPrf,
                             newIntegrity == null ? 0 : newIntegrity.getKeyLength(),
                             newCipher.getKeyLength(),
-                            isLocalInit);
+                            isLocalInit,
+                            new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
+
             addIkeSaRecord(newSaRecord);
 
             mIkeCipher = newCipher;
@@ -3165,6 +3192,7 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
+        // Rekey timer for old (and losing) SAs will be cancelled as part of the closing of the SA.
         protected void finishRekey() {
             mCurrentIkeSaRecord = mIkeSaRecordSurviving;
             mLocalInitNewIkeSaRecord = null;
