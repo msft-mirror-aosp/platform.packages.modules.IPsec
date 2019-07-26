@@ -181,11 +181,15 @@ public class IkeSessionStateMachine extends StateMachine {
     /** Trigger a retransmission. */
     public static final int CMD_RETRANSMIT = CMD_GENERAL_BASE + 8;
     /** Send EAP request payloads to EapAuthenticator for further processing. */
-    static final int CMD_START_EAP_AUTH = CMD_GENERAL_BASE + 9;
+    static final int CMD_EAP_START_EAP_AUTH = CMD_GENERAL_BASE + 9;
     /** Send the outbound IKE-wrapped EAP-Response message. */
-    static final int CMD_OUTBOUND_EAP_MSG_READY = CMD_GENERAL_BASE + 10;
-    /** Start the post-EAP authentication state for further processing. */
-    static final int CMD_START_POST_EAP_AUTH = CMD_GENERAL_BASE + 11;
+    static final int CMD_EAP_OUTBOUND_MSG_READY = CMD_GENERAL_BASE + 10;
+    /** Proxy to IkeSessionStateMachine handler to notify of errors */
+    static final int CMD_EAP_ERRORED = CMD_GENERAL_BASE + 11;
+    /** Proxy to IkeSessionStateMachine handler to notify of failures */
+    static final int CMD_EAP_FAILED = CMD_GENERAL_BASE + 12;
+    /** Proxy to IkeSessionStateMachine handler to notify of success, to continue to post-auth */
+    static final int CMD_EAP_FINISH_EAP_AUTH = CMD_GENERAL_BASE + 14;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
     // TODO: Add signal for retransmission.
@@ -221,6 +225,7 @@ public class IkeSessionStateMachine extends StateMachine {
     private final IkeLocalRequestScheduler mScheduler;
     private final Executor mUserCbExecutor;
     private final IIkeSessionCallback mIkeSessionCallback;
+    private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
 
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
@@ -297,7 +302,8 @@ public class IkeSessionStateMachine extends StateMachine {
     @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
     // TODO: Add InfoLocal.
 
-    /** Package private constructor */
+    // Testing constructor
+    @VisibleForTesting
     IkeSessionStateMachine(
             Looper looper,
             Context context,
@@ -306,10 +312,12 @@ public class IkeSessionStateMachine extends StateMachine {
             ChildSessionOptions firstChildOptions,
             Executor userCbExecutor,
             IIkeSessionCallback ikeSessionCallback,
-            IChildSessionCallback firstChildSessionCallback) {
+            IChildSessionCallback firstChildSessionCallback,
+            IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
         super(TAG, looper);
 
         mIkeSessionOptions = ikeOptions;
+        mEapAuthenticatorFactory = eapAuthenticatorFactory;
 
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
         mLocalSpiToIkeSaRecordMap = new LongSparseArray<>(3);
@@ -349,6 +357,28 @@ public class IkeSessionStateMachine extends StateMachine {
                         });
 
         start();
+    }
+
+    /** Package private constructor */
+    IkeSessionStateMachine(
+            Looper looper,
+            Context context,
+            IpSecManager ipSecManager,
+            IkeSessionOptions ikeOptions,
+            ChildSessionOptions firstChildOptions,
+            Executor userCbExecutor,
+            IIkeSessionCallback ikeSessionCallback,
+            IChildSessionCallback firstChildSessionCallback) {
+        this(
+                looper,
+                context,
+                ipSecManager,
+                ikeOptions,
+                firstChildOptions,
+                userCbExecutor,
+                ikeSessionCallback,
+                firstChildSessionCallback,
+                new IkeEapAuthenticatorFactory());
     }
 
     private boolean hasChildSessionCallback(IChildSessionCallback callback) {
@@ -2295,7 +2325,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             ikeMessage.getPayloadForType(
                                     IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
 
-                    deferMessage(obtainMessage(CMD_START_EAP_AUTH, ikeEapPayload));
+                    deferMessage(obtainMessage(CMD_EAP_START_EAP_AUTH, ikeEapPayload));
 
                     // TODO(b/137394968): transition to InEap state
                 } else {
