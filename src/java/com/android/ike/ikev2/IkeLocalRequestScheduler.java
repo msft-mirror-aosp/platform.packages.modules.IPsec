@@ -56,10 +56,12 @@ public final class IkeLocalRequestScheduler {
      * <p>Synchronously triggers the call to onNewProcedureReady.
      */
     public void readyForNextProcedure() {
-        if (!mRequestQueue.isEmpty()) {
+        while (!mRequestQueue.isEmpty()) {
             LocalRequest request = mRequestQueue.poll();
-            mConsumer.onNewProcedureReady(request);
-            return;
+            if (!request.isCancelled()) {
+                mConsumer.onNewProcedureReady(request);
+                return;
+            }
         }
     }
 
@@ -70,10 +72,19 @@ public final class IkeLocalRequestScheduler {
     public static class LocalRequest {
         public final int procedureType;
         // TODO: Also store specific payloads for INFO exchange.
-        // TODO: Support cancelling a scheduled rekey request
+        private boolean mIsCancelled;
 
         LocalRequest(int type) {
             procedureType = type;
+            mIsCancelled = false;
+        }
+
+        boolean isCancelled() {
+            return mIsCancelled;
+        }
+
+        void cancel() {
+            mIsCancelled = true;
         }
     }
 
