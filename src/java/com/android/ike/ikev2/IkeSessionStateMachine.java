@@ -347,7 +347,8 @@ public class IkeSessionStateMachine extends StateMachine {
                         localReq -> {
                             sendMessageAtFrontOfQueue(CMD_EXECUTE_LOCAL_REQ, localReq);
                         });
-        // TODO: Start the StateMachine.
+
+        start();
     }
 
     private boolean hasChildSessionCallback(IChildSessionCallback callback) {
