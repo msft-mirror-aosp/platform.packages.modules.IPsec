@@ -106,6 +106,7 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     private static final int APPTYPE_SIM = 1;
     private static final int AUTHTYPE_EAP_SIM = 128;
     private static final int AT_RAND_LEN = 36;
+    private static final int SUB_ID = 1;
     private static final List<Integer> VERSIONS = Arrays.asList(1);
     private static final String VERSIONS_STRING = "0001";
     private static final String SELECTED_VERSION = "0001";

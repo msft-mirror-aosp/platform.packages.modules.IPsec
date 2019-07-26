@@ -37,10 +37,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import android.content.Context;
-
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapSuccess;
+import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.statemachine.EapStateMachine.FailureState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
@@ -54,15 +53,16 @@ import java.security.SecureRandom;
 
 public class MethodStateTest extends EapStateTest {
     private static final int UNSUPPORTED_EAP_TYPE = 0xFF;
+    private static final int SUB_ID = 1;
 
-    private Context mContext;
     private EapStateMachine mEapStateMachine;
 
     @Before
     @Override
     public void setUp() {
         mContext = getInstrumentation().getContext();
-        mEapStateMachine = new EapStateMachine(mContext, new SecureRandom());
+        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(SUB_ID).build();
+        mEapStateMachine = new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom());
         mEapState = mEapStateMachine.new MethodState(EAP_TYPE_SIM);
         mEapStateMachine.transitionTo(mEapState);
     }

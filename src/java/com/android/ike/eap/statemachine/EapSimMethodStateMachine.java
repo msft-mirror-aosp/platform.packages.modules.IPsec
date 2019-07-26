@@ -45,6 +45,7 @@ import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
+import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
@@ -94,24 +95,27 @@ import javax.crypto.spec.SecretKeySpec;
  * @see <a href="https://tools.ietf.org/html/rfc4186">RFC 4186, Extensible Authentication Protocol
  * Method for Subscriber Identity Modules (EAP-SIM)</a>
  */
-public class EapSimMethodStateMachine extends EapMethodStateMachine {
+class EapSimMethodStateMachine extends EapMethodStateMachine {
     private static final String TAG = EapSimMethodStateMachine.class.getSimpleName();
 
     private final TelephonyManager mTelephonyManager;
+    private final EapSimConfig mEapSimConfig;
     private final SecureRandom mSecureRandom;
     private final EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
-    public EapSimMethodStateMachine(Context context, SecureRandom secureRandom) {
-        this.mTelephonyManager = (TelephonyManager)
-                context.getSystemService(Context.TELEPHONY_SERVICE);
-        this.mSecureRandom = secureRandom;
-        this.mEapSimTypeDataDecoder = new EapSimTypeDataDecoder();
-        transitionTo(new CreatedState());
+    EapSimMethodStateMachine(
+            Context context, EapSimConfig eapSimConfig, SecureRandom secureRandom) {
+        this(
+                (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE),
+                eapSimConfig,
+                secureRandom,
+                new EapSimTypeDataDecoder());
     }
 
     @VisibleForTesting
-    public EapSimMethodStateMachine(
+    EapSimMethodStateMachine(
             TelephonyManager telephonyManager,
+            EapSimConfig eapSimConfig,
             SecureRandom secureRandom,
             EapSimTypeDataDecoder eapSimTypeDataDecoder) {
         if (telephonyManager == null) {
@@ -120,7 +124,8 @@ public class EapSimMethodStateMachine extends EapMethodStateMachine {
             throw new IllegalArgumentException("EapSimTypeDataDecoder must be non-null");
         }
 
-        this.mTelephonyManager = telephonyManager;
+        this.mTelephonyManager = telephonyManager.createForSubscriptionId(eapSimConfig.subId);
+        this.mEapSimConfig = eapSimConfig;
         this.mSecureRandom = secureRandom;
         this.mEapSimTypeDataDecoder = eapSimTypeDataDecoder;
         transitionTo(new CreatedState());
