@@ -2136,16 +2136,114 @@ public class IkeSessionStateMachine extends StateMachine {
     }
 
     /**
+     * CreateIkeLocalIkeAuthBase represents the common state and functionality required to perform
+     * IKE AUTH exchanges in both the EAP and non-EAP flows.
+     */
+    abstract class CreateIkeLocalIkeAuthBase extends BusyState {
+        protected Retransmitter mRetransmitter;
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
+        @Override
+        protected final void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            Log.wtf(
+                    TAG,
+                    "State: "
+                            + getCurrentState().getName()
+                            + "received an unsupported request message with IKE exchange subtype: "
+                            + ikeExchangeSubType);
+        }
+
+        protected IkeMessage buildIkeAuthReqMessage(List<IkePayload> payloadList) {
+            // Build IKE header
+            IkeHeader ikeHeader =
+                    new IkeHeader(
+                            mCurrentIkeSaRecord.getInitiatorSpi(),
+                            mCurrentIkeSaRecord.getResponderSpi(),
+                            IkePayload.PAYLOAD_TYPE_SK,
+                            IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                            false /*isResponseMsg*/,
+                            true /*fromIkeInitiator*/,
+                            mCurrentIkeSaRecord.getLocalRequestMessageId());
+
+            return new IkeMessage(ikeHeader, payloadList);
+        }
+
+        protected void authenticatePsk(
+                byte[] psk, IkeAuthPayload authPayload, IkeIdPayload respIdPayload)
+                throws AuthenticationFailedException {
+            if (authPayload.authMethod != IkeAuthPayload.AUTH_METHOD_PRE_SHARED_KEY) {
+                throw new AuthenticationFailedException(
+                        "Expected the remote/server to use PSK-based authentication but"
+                                + " they used: "
+                                + authPayload.authMethod);
+            }
+
+            IkeAuthPskPayload pskPayload = (IkeAuthPskPayload) authPayload;
+            pskPayload.verifyInboundSignature(
+                    psk,
+                    mIkeInitResponseBytes,
+                    mCurrentIkeSaRecord.nonceInitiator,
+                    respIdPayload.getEncodedPayloadBody(),
+                    mIkePrf,
+                    mCurrentIkeSaRecord.getSkPr());
+        }
+
+        protected List<IkePayload> extractChildPayloadsFromMessage(IkeMessage ikeMessage)
+                throws InvalidSyntaxException {
+            IkeSaPayload saPayload =
+                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
+            IkeTsPayload tsInitPayload =
+                    ikeMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class);
+            IkeTsPayload tsRespPayload =
+                    ikeMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class);
+
+            List<IkeNotifyPayload> notifyPayloads =
+                    ikeMessage.getPayloadListForType(
+                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+
+            boolean hasErrorNotify = false;
+            List<IkePayload> list = new LinkedList<>();
+            for (IkeNotifyPayload payload : notifyPayloads) {
+                if (payload.isNewChildSaNotify()) {
+                    list.add(payload);
+                    if (payload.isErrorNotify()) {
+                        hasErrorNotify = true;
+                    }
+                }
+            }
+
+            // If there is no error notification, SA, TS-initiator and TS-responder MUST all be
+            // included in this message.
+            if (!hasErrorNotify
+                    && (saPayload == null || tsInitPayload == null || tsRespPayload == null)) {
+                throw new InvalidSyntaxException(
+                        "SA, TS-Initiator or TS-Responder payload is missing.");
+            }
+
+            list.add(saPayload);
+            list.add(tsInitPayload);
+            list.add(tsRespPayload);
+            return list;
+        }
+    }
+
+    /**
      * CreateIkeLocalIkeAuth represents state when IKE library initiates IKE_AUTH exchange.
      *
      * <p>If using EAP, CreateIkeLocalIkeAuth will transition to CreateIkeLocalIkeAuthInEap state
      * after validating the IKE AUTH response.
      */
-    class CreateIkeLocalIkeAuth extends BusyState {
+    class CreateIkeLocalIkeAuth extends CreateIkeLocalIkeAuthBase {
         private ChildSessionOptions mFirstChildSessionOptions;
         private IChildSessionCallback mFirstChildCallbacks;
 
-        private Retransmitter mRetransmitter;
         private boolean mUseEap;
 
         /** This method set parameters for negotiating first Child SA during IKE AUTH exchange. */
@@ -2153,12 +2251,6 @@ public class IkeSessionStateMachine extends StateMachine {
         void initializeAuthParams(ChildSessionOptions childOptions, IChildSessionCallback childCb) {
             mFirstChildSessionOptions = childOptions;
             mFirstChildCallbacks = childCb;
-            // TODO: Also assign mFirstChildCallback
-        }
-
-        @Override
-        protected void triggerRetransmit() {
-            mRetransmitter.retransmit();
         }
 
         @Override
@@ -2178,17 +2270,6 @@ public class IkeSessionStateMachine extends StateMachine {
                 throw new UnsupportedOperationException(
                         "Do not support handling IPsec SPI assigning failure.");
             }
-        }
-
-        @Override
-        protected void handleRequestIkeMessage(
-                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
-            Log.wtf(
-                    TAG,
-                    "State: "
-                            + getCurrentState().getName()
-                            + "received an unsupported request message with IKE exchange subtype: "
-                            + ikeExchangeSubType);
         }
 
         @Override
@@ -2291,18 +2372,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             mFirstChildSessionOptions,
                             true /*isFirstChild*/));
 
-            // Build IKE header
-            IkeHeader ikeHeader =
-                    new IkeHeader(
-                            mCurrentIkeSaRecord.getInitiatorSpi(),
-                            mCurrentIkeSaRecord.getResponderSpi(),
-                            IkePayload.PAYLOAD_TYPE_SK,
-                            IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
-                            false /*isResponseMsg*/,
-                            true /*fromIkeInitiator*/,
-                            mCurrentIkeSaRecord.getLocalRequestMessageId());
-
-            return new IkeMessage(ikeHeader, payloadList);
+            return buildIkeAuthReqMessage(payloadList);
         }
 
         private void validateIkeAuthRespWithEapPayload(IkeMessage respMsg)
@@ -2389,46 +2459,6 @@ public class IkeSessionStateMachine extends StateMachine {
             authenticate(authPayload, respIdPayload, certPayloads);
         }
 
-        private List<IkePayload> extractChildPayloadsFromMessage(IkeMessage ikeMessage)
-                throws InvalidSyntaxException {
-            IkeSaPayload saPayload =
-                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
-            IkeTsPayload tsInitPayload =
-                    ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class);
-            IkeTsPayload tsRespPayload =
-                    ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class);
-
-            List<IkeNotifyPayload> notifyPayloads =
-                    ikeMessage.getPayloadListForType(
-                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
-
-            boolean hasErrorNotify = false;
-            List<IkePayload> list = new LinkedList<>();
-            for (IkeNotifyPayload payload : notifyPayloads) {
-                if (payload.isNewChildSaNotify()) {
-                    list.add(payload);
-                    if (payload.isErrorNotify()) {
-                        hasErrorNotify = true;
-                    }
-                }
-            }
-
-            // If there is no error notification, SA, TS-initiator and TS-responder MUST all be
-            // included in this message.
-            if (!hasErrorNotify
-                    && (saPayload == null || tsInitPayload == null || tsRespPayload == null)) {
-                throw new InvalidSyntaxException(
-                        "SA, TS-Initiator or TS-Responder payload is missing.");
-            }
-
-            list.add(saPayload);
-            list.add(tsInitPayload);
-            list.add(tsRespPayload);
-            return list;
-        }
-
         private void authenticate(
                 IkeAuthPayload authPayload,
                 IkeIdPayload respIdPayload,
@@ -2436,20 +2466,10 @@ public class IkeSessionStateMachine extends StateMachine {
                 throws AuthenticationFailedException {
             switch (mIkeSessionOptions.getRemoteAuthConfig().mAuthMethod) {
                 case IkeSessionOptions.IKE_AUTH_METHOD_PSK:
-                    if (authPayload.authMethod != IkeAuthPayload.AUTH_METHOD_PRE_SHARED_KEY) {
-                        throw new AuthenticationFailedException(
-                                "Expected the remote server to use PSK-based authentication but"
-                                        + " they used: "
-                                        + authPayload.authMethod);
-                    }
-                    IkeAuthPskPayload pskPayload = (IkeAuthPskPayload) authPayload;
-                    pskPayload.verifyInboundSignature(
+                    authenticatePsk(
                             ((IkeAuthPskConfig) mIkeSessionOptions.getRemoteAuthConfig()).mPsk,
-                            mIkeInitResponseBytes,
-                            mCurrentIkeSaRecord.nonceInitiator,
-                            respIdPayload.getEncodedPayloadBody(),
-                            mIkePrf,
-                            mCurrentIkeSaRecord.getSkPr());
+                            authPayload,
+                            respIdPayload);
                     break;
                 case IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
                     // STOPSHIP: b/122685769 Validate received certificates and digital signature.
