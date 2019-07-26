@@ -58,6 +58,7 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 
 import com.android.ike.TestUtils;
+import com.android.ike.eap.EapAuthenticator;
 import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
@@ -234,6 +235,9 @@ public final class IkeSessionStateMachineTest {
     private int mExpectedCurrentSaRemoteReqMsgId;
 
     private EapSessionConfig mEapSessionConfig;
+    private IkeEapAuthenticatorFactory mMockEapAuthenticatorFactory;
+    private EapAuthenticator mMockEapAuthenticator;
+
     private ArgumentCaptor<IkeMessage> mIkeMessageCaptor =
             ArgumentCaptor.forClass(IkeMessage.class);
     private ArgumentCaptor<IkeSaRecordConfig> mIkeSaRecordConfigCaptor =
@@ -417,6 +421,11 @@ public final class IkeSessionStateMachineTest {
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
         mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(EAP_SIM_SUB_ID).build();
 
+        mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
+        mMockEapAuthenticator = mock(EapAuthenticator.class);
+        when(mMockEapAuthenticatorFactory.newEapAuthenticator(any(), any(), any(), any()))
+                .thenReturn(mMockEapAuthenticator);
+
         mPsk = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
         mChildSessionOptions = buildChildSessionOptions();
@@ -485,7 +494,8 @@ public final class IkeSessionStateMachineTest {
                         mChildSessionOptions,
                         mSpyUserCbExecutor,
                         mMockIkeSessionCallback,
-                        mMockChildSessionCallback);
+                        mMockChildSessionCallback,
+                        mMockEapAuthenticatorFactory);
         ikeSession.setDbg(true);
 
         mLooper.dispatchAll();
