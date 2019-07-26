@@ -234,6 +234,9 @@ public class IkeSessionStateMachine extends StateMachine {
     final HashMap<IChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
 
+    @VisibleForTesting byte[] mLastReceivedIkeReq;
+    @VisibleForTesting byte[] mLastSentIkeResp;
+
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
      * State.
@@ -906,6 +909,8 @@ public class IkeSessionStateMachine extends StateMachine {
     void sendEncryptedIkeMessage(IkeSaRecord ikeSaRecord, IkeMessage msg) {
         byte[] bytes = msg.encryptAndEncode(mIkeIntegrity, mIkeCipher, ikeSaRecord);
         mIkeSocket.sendIkePacket(bytes, mRemoteAddress);
+
+        if (msg.ikeHeader.isResponseMsg) mLastSentIkeResp = bytes;
     }
 
     // Builds and sends IKE-level error notification response on the provided IKE SA record
@@ -1006,7 +1011,12 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    /** Base state defines common behaviours when receiving an IKE packet. */
+    /**
+     * Base state defines common behaviours when receiving an IKE packet.
+     *
+     * <p>State that represents an ongoing IKE procedure MUST extend BusyState to handle received
+     * IKE packet. Idle state will defer the received packet to a BusyState to process it.
+     */
     private abstract class BusyState extends LocalRequestQueuer {
         @Override
         public boolean processMessage(Message message) {
@@ -1059,6 +1069,9 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         protected void handleReceivedIkePacket(Message message) {
+            // TODO: b/138411550 Notify subclasses when discarding a received packet. Receiving MUST
+            // go back to Idle state in this case.
+
             ReceivedIkePacket receivedIkePacket = (ReceivedIkePacket) message.obj;
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
@@ -1099,9 +1112,14 @@ public class IkeSessionStateMachine extends StateMachine {
             } else {
                 int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
                 if (expectedMsgId - ikeHeader.messageId == 1) {
-                    // TODO: Handle retransmitted request.
-                    throw new UnsupportedOperationException(
-                            "Do not support handling retransmitted request.");
+                    if (Arrays.equals(mLastReceivedIkeReq, ikePacketBytes)) {
+                        mIkeSocket.sendIkePacket(mLastSentIkeResp, mRemoteAddress);
+
+                        // Notify state if it is listening for retransmitted request.
+                        handleRetransmittedReq();
+
+                        // TODO:Support resetting remote rekey delete timer.
+                    }
                 } else {
                     DecodeResult decodeResult =
                             IkeMessage.decode(
@@ -1114,6 +1132,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     switch (decodeResult.status) {
                         case DECODE_STATUS_OK:
                             ikeSaRecord.incrementRemoteRequestMessageId();
+                            mLastReceivedIkeReq = ikePacketBytes;
                             IkeMessage ikeMessage = decodeResult.ikeMessage;
 
                             // Handle DPD here.
@@ -1145,6 +1164,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             break;
                         case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
                             ikeSaRecord.incrementRemoteRequestMessageId();
+                            mLastReceivedIkeReq = ikePacketBytes;
                             // TODO: Send back error notification. Close IKE Session if this is
                             // INVALID_SYNTAX error.
                             break;
@@ -1161,6 +1181,10 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         protected void handleDpd() {
+            // Do nothing - Child states should override if they care.
+        }
+
+        protected void handleRetransmittedReq() {
             // Do nothing - Child states should override if they care.
         }
 
@@ -1342,6 +1366,12 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         protected void handleDpd() {
             // Go back to IDLE - the received request was a DPD
+            transitionTo(mIdle);
+        }
+
+        @Override
+        protected void handleRetransmittedReq() {
+            // Go back to IDLE - the received request was retransmitted
             transitionTo(mIdle);
         }
 
