@@ -35,6 +35,7 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.TestUtils;
+import com.android.ike.eap.EapSessionConfig;
 
 import libcore.net.InetAddressUtils;
 
@@ -120,13 +121,14 @@ public final class IkeSessionOptionsTest {
     @Test
     public void testBuildWithEap() throws Exception {
         X509Certificate mockCert = mock(X509Certificate.class);
+        EapSessionConfig eapConfig = mock(EapSessionConfig.class);
 
         IkeSessionOptions sessionOptions =
                 new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
-                        .setAuthEap(mockCert)
+                        .setAuthEap(mockCert, eapConfig)
                         .build();
 
         verifyIkeSessionOptionsCommon(sessionOptions);
@@ -134,7 +136,7 @@ public final class IkeSessionOptionsTest {
         IkeAuthConfig localConfig = sessionOptions.getLocalAuthConfig();
         assertTrue(localConfig instanceof IkeAuthEapConfig);
         assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_EAP, localConfig.mAuthMethod);
-        // TODO: Verify EAP configuration
+        assertEquals(eapConfig, ((IkeAuthEapConfig) localConfig).mEapConfig);
 
         IkeAuthConfig remoteConfig = sessionOptions.getRemoteAuthConfig();
         assertTrue(remoteConfig instanceof IkeAuthDigitalSignRemoteConfig);
