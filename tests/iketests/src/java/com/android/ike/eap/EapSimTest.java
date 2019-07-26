@@ -27,7 +27,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.os.Handler;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
@@ -99,7 +98,6 @@ public class EapSimTest {
     private IEapCallback mMockCallback;
 
     private TestLooper mTestLooper;
-    private Handler mHandler;
     private EapSessionConfig mEapSessionConfig;
     private EapAuthenticator mEapAuthenticator;
 
@@ -111,12 +109,10 @@ public class EapSimTest {
         mMockCallback = mock(IEapCallback.class);
 
         mTestLooper = new TestLooper();
-        mHandler = new Handler(mTestLooper.getLooper());
         mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(SUB_ID).build();
         mEapAuthenticator =
                 new EapAuthenticator(
                         mTestLooper.getLooper(),
-                        mHandler,
                         mMockCallback,
                         new EapStateMachine(mMockContext, mEapSessionConfig, mMockSecureRandom),
                         (runnable) -> runnable.run(),
