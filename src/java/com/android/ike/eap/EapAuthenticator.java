@@ -46,7 +46,6 @@ public class EapAuthenticator extends Handler {
     private final Executor mWorkerPool;
     private final EapStateMachine mStateMachine;
     private final IEapCallback mCb;
-    private final Handler mCbHandler;
     private final long mTimeoutMillis;
     private boolean mCallbackFired = false;
 
@@ -61,13 +60,11 @@ public class EapAuthenticator extends Handler {
      */
     public EapAuthenticator(
             Looper looper,
-            Handler cbHandler,
             IEapCallback cb,
             Context context,
             EapSessionConfig eapSessionConfig) {
         this(
                 looper,
-                cbHandler,
                 cb,
                 new EapStateMachine(context, eapSessionConfig, new SecureRandom()),
                 Executors.newSingleThreadExecutor(),
@@ -77,14 +74,12 @@ public class EapAuthenticator extends Handler {
     @VisibleForTesting
     EapAuthenticator(
             Looper looper,
-            Handler cbHandler,
             IEapCallback cb,
             EapStateMachine eapStateMachine,
             Executor executor,
             long timeoutMillis) {
         super(looper);
 
-        mCbHandler = cbHandler;
         mCb = cb;
         mStateMachine = eapStateMachine;
         mWorkerPool = executor;
@@ -108,48 +103,54 @@ public class EapAuthenticator extends Handler {
         // reset
         mCallbackFired = false;
 
-        mCbHandler.postDelayed(() -> {
-            if (!mCallbackFired) {
-                // Fire failed callback
-                mCallbackFired = true;
-                mCb.onError(new TimeoutException("Timeout while processing message"));
-            }
-        }, EapAuthenticator.this, mTimeoutMillis);
+        postDelayed(
+                () -> {
+                    if (!mCallbackFired) {
+                        // Fire failed callback
+                        mCallbackFired = true;
+                        mCb.onError(new TimeoutException("Timeout while processing message"));
+                    }
+                },
+                EapAuthenticator.this,
+                mTimeoutMillis);
 
         // proxy to worker thread for async processing
-        mWorkerPool.execute(() -> {
-            // Any unhandled exceptions within the state machine are caught here to make sure that
-            // the caller does not wait for the full timeout duration before being notified of a
-            // failure.
-            EapResult processResponse;
-            try {
-                processResponse = mStateMachine.process(msgBytes);
-            } catch (Exception ex) {
-                Log.e(TAG, "Exception thrown while processing message", ex);
-                processResponse = new EapError(ex);
-            }
-
-            final EapResult finalProcessResponse = processResponse;
-            mCbHandler.post(() -> {
-                // No synchronization needed, since Handler serializes
-                if (!mCallbackFired) {
-                    if (finalProcessResponse instanceof EapResponse) {
-                        mCb.onResponse(((EapResponse) finalProcessResponse).packet);
-                    } else if (finalProcessResponse instanceof EapError) {
-                        mCb.onError(((EapError) finalProcessResponse).cause);
-                    } else if (finalProcessResponse instanceof EapSuccess) {
-                        EapSuccess eapSuccess = (EapSuccess) finalProcessResponse;
-                        mCb.onSuccess(eapSuccess.msk, eapSuccess.emsk);
-                    } else { // finalProcessResponse instanceof EapFailure
-                        mCb.onFail();
+        mWorkerPool.execute(
+                () -> {
+                    // Any unhandled exceptions within the state machine are caught here to make
+                    // sure that the caller does not wait for the full timeout duration before being
+                    // notified of a failure.
+                    EapResult processResponse;
+                    try {
+                        processResponse = mStateMachine.process(msgBytes);
+                    } catch (Exception ex) {
+                        Log.e(TAG, "Exception thrown while processing message", ex);
+                        processResponse = new EapError(ex);
                     }
 
-                    mCallbackFired = true;
+                    final EapResult finalProcessResponse = processResponse;
+                    EapAuthenticator.this.post(
+                            () -> {
+                                // No synchronization needed, since Handler serializes
+                                if (!mCallbackFired) {
+                                    if (finalProcessResponse instanceof EapResponse) {
+                                        mCb.onResponse(((EapResponse) finalProcessResponse).packet);
+                                    } else if (finalProcessResponse instanceof EapError) {
+                                        mCb.onError(((EapError) finalProcessResponse).cause);
+                                    } else if (finalProcessResponse instanceof EapSuccess) {
+                                        EapSuccess eapSuccess = (EapSuccess) finalProcessResponse;
+                                        mCb.onSuccess(eapSuccess.msk, eapSuccess.emsk);
+                                    } else { // finalProcessResponse instanceof EapFailure
+                                        mCb.onFail();
+                                    }
 
-                    // Ensure delayed timeout runnable does not fire
-                    mCbHandler.removeCallbacksAndMessages(EapAuthenticator.this);
-                }
-            });
-        });
+                                    mCallbackFired = true;
+
+                                    // Ensure delayed timeout runnable does not fire
+                                    EapAuthenticator.this.removeCallbacksAndMessages(
+                                            EapAuthenticator.this);
+                                }
+                            });
+                });
     }
 }
