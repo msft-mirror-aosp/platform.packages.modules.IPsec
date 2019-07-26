@@ -266,9 +266,16 @@ public class IkeSessionStateMachine extends StateMachine {
     @VisibleForTesting IkeNoncePayload mIkeInitNoncePayload;
     @VisibleForTesting IkeNoncePayload mIkeRespNoncePayload;
 
-    // FIXME: b/131265898 Pass this parameter from CreateIkeLocalIkeAuth to InEap state so the
-    //  child SAs can be negotiated.
+    // FIXME: b/131265898 Pass these parameters from CreateIkeLocalIkeAuth through to
+    // CreateIkeLocalIkeAuthPostEap as entry data when Android StateMachine can support that.
+    @VisibleForTesting IkeIdPayload mInitIdPayload;
+    @VisibleForTesting IkeIdPayload mRespIdPayload;
     @VisibleForTesting List<IkePayload> mFirstChildReqList;
+
+    // FIXME: b/131265898 Move into CreateIkeLocalIkeAuth, and pass through to
+    // CreateIkeLocalIkeAuthPostEap once passing entry data is supported
+    private ChildSessionOptions mFirstChildSessionOptions;
+    private IChildSessionCallback mFirstChildCallbacks;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -336,10 +343,9 @@ public class IkeSessionStateMachine extends StateMachine {
         mUserCbExecutor = userCbExecutor;
         mIkeSessionCallback = ikeSessionCallback;
 
-        ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth)
-                .initializeAuthParams(firstChildOptions, firstChildSessionCallback);
-        registerChildSessionCallback(
-                firstChildOptions, firstChildSessionCallback, true /*isFirstChild*/);
+        mFirstChildSessionOptions = firstChildOptions;
+        mFirstChildCallbacks = firstChildSessionCallback;
+        registerChildSessionCallback(firstChildOptions, firstChildSessionCallback, true);
 
         addState(mInitial);
         addState(mCreateIkeLocalIkeInit);
@@ -2271,6 +2277,27 @@ public class IkeSessionStateMachine extends StateMachine {
             list.add(tsRespPayload);
             return list;
         }
+
+        protected void performFirstChildNegotiation(
+                List<IkePayload> childReqList, List<IkePayload> childRespList) {
+            childReqList.add(mIkeInitNoncePayload);
+            childRespList.add(mIkeRespNoncePayload);
+
+            deferMessage(
+                    obtainMessage(
+                            CMD_HANDLE_FIRST_CHILD_NEGOTIATION,
+                            new FirstChildNegotiationData(
+                                    mFirstChildSessionOptions,
+                                    mFirstChildCallbacks,
+                                    childReqList,
+                                    childRespList)));
+
+            mUserCbExecutor.execute(
+                    () -> {
+                        mIkeSessionCallback.onOpened();
+                    });
+            transitionTo(mChildProcedureOngoing);
+        }
     }
 
     /**
@@ -2280,17 +2307,7 @@ public class IkeSessionStateMachine extends StateMachine {
      * after validating the IKE AUTH response.
      */
     class CreateIkeLocalIkeAuth extends CreateIkeLocalIkeAuthBase {
-        private ChildSessionOptions mFirstChildSessionOptions;
-        private IChildSessionCallback mFirstChildCallbacks;
-
         private boolean mUseEap;
-
-        /** This method set parameters for negotiating first Child SA during IKE AUTH exchange. */
-        @VisibleForTesting
-        void initializeAuthParams(ChildSessionOptions childOptions, IChildSessionCallback childCb) {
-            mFirstChildSessionOptions = childOptions;
-            mFirstChildCallbacks = childCb;
-        }
 
         @Override
         public void enter() {
@@ -2339,24 +2356,8 @@ public class IkeSessionStateMachine extends StateMachine {
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
-                    List<IkePayload> childRespList = extractChildPayloadsFromMessage(ikeMessage);
-                    childReqList.add(mIkeInitNoncePayload);
-                    childRespList.add(mIkeRespNoncePayload);
-
-                    deferMessage(
-                            obtainMessage(
-                                    CMD_HANDLE_FIRST_CHILD_NEGOTIATION,
-                                    new FirstChildNegotiationData(
-                                            mFirstChildSessionOptions,
-                                            mFirstChildCallbacks,
-                                            childReqList,
-                                            childRespList)));
-
-                    mUserCbExecutor.execute(
-                            () -> {
-                                mIkeSessionCallback.onOpened();
-                            });
-                    transitionTo(mChildProcedureOngoing);
+                    performFirstChildNegotiation(
+                            childReqList, extractChildPayloadsFromMessage(ikeMessage));
                 }
             } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
@@ -2368,13 +2369,13 @@ public class IkeSessionStateMachine extends StateMachine {
             List<IkePayload> payloadList = new LinkedList<>();
 
             // Build Identification payloads
-            IkeIdPayload initIdPayload =
+            mInitIdPayload =
                     new IkeIdPayload(
                             true /*isInitiator*/, mIkeSessionOptions.getLocalIdentification());
             IkeIdPayload respIdPayload =
                     new IkeIdPayload(
                             false /*isInitiator*/, mIkeSessionOptions.getRemoteIdentification());
-            payloadList.add(initIdPayload);
+            payloadList.add(mInitIdPayload);
             payloadList.add(respIdPayload);
 
             // Build Authentication payload
@@ -2386,7 +2387,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                     ((IkeAuthPskConfig) authConfig).mPsk,
                                     mIkeInitRequestBytes,
                                     mCurrentIkeSaRecord.nonceResponder,
-                                    initIdPayload.getEncodedPayloadBody(),
+                                    mInitIdPayload.getEncodedPayloadBody(),
                                     mIkePrf,
                                     mCurrentIkeSaRecord.getSkPi());
                     payloadList.add(pskPayload);
@@ -2443,17 +2444,16 @@ public class IkeSessionStateMachine extends StateMachine {
 
         private void validateIkeAuthResp(List<IkePayload> payloadList) throws IkeProtocolException {
             // Validate IKE Authentication
-            IkeIdPayload respIdPayload = null;
             IkeAuthPayload authPayload = null;
             List<IkeCertPayload> certPayloads = new LinkedList<>();
 
             for (IkePayload payload : payloadList) {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
-                        respIdPayload = (IkeIdPayload) payload;
+                        mRespIdPayload = (IkeIdPayload) payload;
                         if (!mIkeSessionOptions
                                 .getRemoteIdentification()
-                                .equals(respIdPayload.ikeId)) {
+                                .equals(mRespIdPayload.ikeId)) {
                             throw new AuthenticationFailedException(
                                     "Unrecognized Responder Identification.");
                         }
@@ -2489,12 +2489,12 @@ public class IkeSessionStateMachine extends StateMachine {
             }
 
             // Verify existence of payloads
-            if (respIdPayload == null || authPayload == null) {
+            if (mRespIdPayload == null || authPayload == null) {
                 throw new AuthenticationFailedException("ID-Responder or Auth payload is missing.");
             }
 
-            // Autheticate the remote peer.
-            authenticate(authPayload, respIdPayload, certPayloads);
+            // Authenticate the remote peer.
+            authenticate(authPayload, mRespIdPayload, certPayloads);
         }
 
         private void authenticate(
@@ -2595,6 +2595,7 @@ public class IkeSessionStateMachine extends StateMachine {
             quitNow();
         }
 
+        @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             mRetransmitter.stopRetransmitting();
 
@@ -2672,8 +2673,96 @@ public class IkeSessionStateMachine extends StateMachine {
      * post-EAP PSK-base authentication run.
      */
     class CreateIkeLocalIkeAuthPostEap extends CreateIkeLocalIkeAuthBase {
+        private byte[] mEapMsk = new byte[0];
+
         @Override
-        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {}
+        public boolean processMessage(Message msg) {
+            switch (msg.what) {
+                case CMD_EAP_FINISH_EAP_AUTH:
+                    mEapMsk = (byte[]) msg.obj;
+
+                    IkeAuthPskPayload pskPayload =
+                            new IkeAuthPskPayload(
+                                    mEapMsk,
+                                    mIkeInitRequestBytes,
+                                    mCurrentIkeSaRecord.nonceResponder,
+                                    mInitIdPayload.getEncodedPayloadBody(),
+                                    mIkePrf,
+                                    mCurrentIkeSaRecord.getSkPi());
+                    IkeMessage postEapAuthMsg = buildIkeAuthReqMessage(Arrays.asList(pskPayload));
+                    mRetransmitter = new EncryptedRetransmitter(postEapAuthMsg);
+
+                    return HANDLED;
+                default:
+                    return super.processMessage(msg);
+            }
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            try {
+                int exchangeType = ikeMessage.ikeHeader.exchangeType;
+                if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_AUTH) {
+                    throw new InvalidSyntaxException(
+                            "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
+                }
+
+                // Extract and validate existence of payloads for first Child SA setup.
+                List<IkePayload> childSaRespPayloads = extractChildPayloadsFromMessage(ikeMessage);
+
+                List<IkePayload> nonChildPayloads = new LinkedList<>();
+                nonChildPayloads.addAll(ikeMessage.ikePayloadList);
+                nonChildPayloads.removeAll(childSaRespPayloads);
+
+                validateIkeAuthRespPostEap(nonChildPayloads);
+
+                performFirstChildNegotiation(childSaRespPayloads, mFirstChildReqList);
+            } catch (IkeProtocolException e) {
+                // TODO: Handle processing errors.
+                throw new UnsupportedOperationException("Do not support handling error.", e);
+            }
+        }
+
+        private void validateIkeAuthRespPostEap(List<IkePayload> payloadList)
+                throws IkeProtocolException {
+            IkeAuthPayload authPayload = null;
+
+            for (IkePayload payload : payloadList) {
+                switch (payload.payloadType) {
+                    case IkePayload.PAYLOAD_TYPE_AUTH:
+                        authPayload = (IkeAuthPayload) payload;
+                        break;
+                    case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                        if (notifyPayload.isErrorNotify()) {
+                            // TODO: Throw IkeExceptions according to error types.
+                            throw new UnsupportedOperationException(
+                                    "Do not support handling error notifications in IKE AUTH"
+                                            + " response.");
+                        } else {
+                            // Unknown and unexpected status notifications are ignored as per
+                            // RFC7296.
+                            logw(
+                                    "Received unknown or unexpected status notifications with"
+                                            + " notify type: "
+                                            + notifyPayload.notifyType);
+                        }
+                        break;
+                    default:
+                        logw(
+                                "Received unexpected payload in IKE AUTH response. Payload"
+                                        + " type: "
+                                        + payload.payloadType);
+                }
+            }
+
+            // Verify existence of payloads
+            if (authPayload == null) {
+                throw new AuthenticationFailedException("Post-EAP Auth payload missing.");
+            }
+
+            authenticatePsk(mEapMsk, authPayload, mRespIdPayload);
+        }
     }
 
     private abstract class RekeyIkeHandlerBase extends DeleteResponderBase {

@@ -165,6 +165,8 @@ public final class IkeSessionStateMachineTest {
             "2b00001c00004005d915368ca036004cb578ae3e3fb268509aeab190";
     private static final String DELETE_IKE_PAYLOAD_HEX_STRING = "0000000801000000";
     private static final String NOTIFY_REKEY_IKE_PAYLOAD_HEX_STRING = "2100000800004009";
+    private static final String ID_PAYLOAD_INITIATOR_HEX_STRING =
+            "290000180200000031313233343536373839414243444546";
     private static final String ID_PAYLOAD_RESPONDER_HEX_STRING = "2700000c010000007f000001";
     private static final String PSK_AUTH_RESP_PAYLOAD_HEX_STRING =
             "2100001c0200000058f36412e9b7b38df817a9f7779b7a008dacdd25";
@@ -1487,7 +1489,7 @@ public final class IkeSessionStateMachineTest {
         verify(childTwo).killSession();
     }
 
-    private IkeMessage verifyAuthReqCommonAndGetMsg() {
+    private IkeMessage verifyAuthReqAndGetMsg() {
         verify(mMockIkeMessageHelper)
                 .encryptAndEncode(
                         anyObject(),
@@ -1500,6 +1502,12 @@ public final class IkeSessionStateMachineTest {
         assertEquals(IkeHeader.EXCHANGE_TYPE_IKE_AUTH, ikeHeader.exchangeType);
         assertFalse(ikeHeader.isResponseMsg);
         assertTrue(ikeHeader.fromIkeInitiator);
+
+        return ikeAuthReqMessage;
+    }
+
+    private IkeMessage verifyAuthReqWithChildPayloadsAndGetMsg() {
+        IkeMessage ikeAuthReqMessage = verifyAuthReqAndGetMsg();
 
         assertNotNull(
                 ikeAuthReqMessage.getPayloadForType(
@@ -1520,41 +1528,25 @@ public final class IkeSessionStateMachineTest {
         return ikeAuthReqMessage;
     }
 
-    @Test
-    public void testCreateIkeLocalIkeAuthPsk() throws Exception {
-        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
-
-        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
-        List<IkePayload> autheRelatedPayloads = new LinkedList<>();
-        IkeAuthPskPayload spyAuthPayload =
-                spy(
-                        (IkeAuthPskPayload)
-                                IkeTestUtils.hexStringToIkePayload(
-                                        IkePayload.PAYLOAD_TYPE_AUTH,
-                                        true /*isResp*/,
-                                        PSK_AUTH_RESP_PAYLOAD_HEX_STRING));
-
-        doNothing()
-                .when(spyAuthPayload)
-                .verifyInboundSignature(any(), any(), any(), any(), any(), any());
-        autheRelatedPayloads.add(spyAuthPayload);
-
-        IkeIdPayload respIdPayload =
-                (IkeIdPayload)
-                        IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
-                                true /*isResp*/,
-                                ID_PAYLOAD_RESPONDER_HEX_STRING);
-        autheRelatedPayloads.add(respIdPayload);
-
+    private void verifySharedKeyAuthentication(
+            IkeAuthPskPayload spyAuthPayload,
+            IkeIdPayload respIdPayload,
+            List<IkePayload> authRelatedPayloads,
+            boolean hasChildPayloads)
+            throws Exception {
         // Send IKE AUTH response to IKE state machine
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
-                makeIkeAuthRespWithChildPayloads(autheRelatedPayloads));
+                makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
         mLooper.dispatchAll();
 
         // Validate outbound IKE AUTH request
-        IkeMessage ikeAuthReqMessage = verifyAuthReqCommonAndGetMsg();
+        IkeMessage ikeAuthReqMessage;
+        if (hasChildPayloads) {
+            ikeAuthReqMessage = verifyAuthReqWithChildPayloadsAndGetMsg();
+        } else {
+            ikeAuthReqMessage = verifyAuthReqAndGetMsg();
+        }
         assertNotNull(
                 ikeAuthReqMessage.getPayloadForType(
                         IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthPskPayload.class));
@@ -1626,6 +1618,36 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testCreateIkeLocalIkeAuthPsk() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+
+        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload =
+                spy(
+                        (IkeAuthPskPayload)
+                                IkeTestUtils.hexStringToIkePayload(
+                                        IkePayload.PAYLOAD_TYPE_AUTH,
+                                        true /*isResp*/,
+                                        PSK_AUTH_RESP_PAYLOAD_HEX_STRING));
+
+        doNothing()
+                .when(spyAuthPayload)
+                .verifyInboundSignature(any(), any(), any(), any(), any(), any());
+        authRelatedPayloads.add(spyAuthPayload);
+
+        IkeIdPayload respIdPayload =
+                (IkeIdPayload)
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
+                                true /*isResp*/,
+                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+        authRelatedPayloads.add(respIdPayload);
+
+        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, true);
+    }
+
+    @Test
     public void testCreateIkeLocalIkeAuthPreEap() throws Exception {
         mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
@@ -1663,7 +1685,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Validate outbound IKE AUTH request
-        IkeMessage ikeAuthReqMessage = verifyAuthReqCommonAndGetMsg();
+        IkeMessage ikeAuthReqMessage = verifyAuthReqWithChildPayloadsAndGetMsg();
         assertNull(
                 ikeAuthReqMessage.getPayloadForType(
                         IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthPayload.class));
@@ -1671,6 +1693,8 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuthInEap);
+        assertNotNull(mIkeSessionStateMachine.mInitIdPayload);
+        assertNotNull(mIkeSessionStateMachine.mRespIdPayload);
 
         // TODO: Verify authentication is done
     }
@@ -1750,6 +1774,11 @@ public final class IkeSessionStateMachineTest {
 
         IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
 
+        // Setup dummy initIdPayload for next state.
+        mIkeSessionStateMachine.mInitIdPayload = mock(IkeIdPayload.class);
+        when(mIkeSessionStateMachine.mInitIdPayload.getEncodedPayloadBody())
+                .thenReturn(new byte[0]);
+
         callback.onSuccess(mPsk, new byte[0]); // use mPsk as MSK, eMSK does not matter
         mLooper.dispatchAll();
 
@@ -1800,6 +1829,68 @@ public final class IkeSessionStateMachineTest {
         // Verify state machine quit properly
         verify(mSpyCurrentIkeSaRecord).close();
         assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthPostEap() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        reset(mMockChildSessionFactoryHelper);
+        setupChildStateMachineFactory(mMockChildSessionStateMachine);
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+
+        // Setup dummy state from IkeAuthPreEap for next state.
+        mIkeSessionStateMachine.mInitIdPayload = mock(IkeIdPayload.class);
+        when(mIkeSessionStateMachine.mInitIdPayload.getEncodedPayloadBody())
+                .thenReturn(new byte[0]);
+        mIkeSessionStateMachine.mRespIdPayload =
+                (IkeIdPayload)
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
+                                true /*isResp*/,
+                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+
+        List<Integer> payloadTypeList = new LinkedList<>();
+        List<String> payloadHexStringList = new LinkedList<>();
+
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_INITIATOR);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_RESPONDER);
+
+        payloadHexStringList.add(CHILD_SA_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(TS_INIT_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(TS_RESP_PAYLOAD_HEX_STRING);
+
+        mIkeSessionStateMachine.mFirstChildReqList =
+                hexStrListToIkePayloadList(payloadTypeList, payloadHexStringList, false /*isResp*/);
+
+        // Setup state and go to IN_EAP state
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_EAP_FINISH_EAP_AUTH, mPsk);
+        mLooper.dispatchAll();
+
+        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload =
+                spy(
+                        (IkeAuthPskPayload)
+                                IkeTestUtils.hexStringToIkePayload(
+                                        IkePayload.PAYLOAD_TYPE_AUTH,
+                                        true /*isResp*/,
+                                        PSK_AUTH_RESP_PAYLOAD_HEX_STRING));
+
+        doNothing()
+                .when(spyAuthPayload)
+                .verifyInboundSignature(any(), any(), any(), any(), any(), any());
+        authRelatedPayloads.add(spyAuthPayload);
+
+        IkeIdPayload respIdPayload =
+                (IkeIdPayload)
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
+                                true /*isResp*/,
+                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+
+        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, false);
     }
 
     @Test
