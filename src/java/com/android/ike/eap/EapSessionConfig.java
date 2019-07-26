@@ -19,6 +19,7 @@ package com.android.ike.eap;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
 import com.android.ike.eap.message.EapData.EapMethod;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -87,10 +88,8 @@ public final class EapSessionConfig {
         }
     }
 
-    /**
-     * EapMethodConfig represents a generic EAP method configuration.
-     */
-    abstract static class EapMethodConfig {
+    /** EapMethodConfig represents a generic EAP method configuration. */
+    public abstract static class EapMethodConfig {
         @EapMethod public final int methodType;
 
         protected EapMethodConfig(@EapMethod int methodType) {
@@ -111,7 +110,8 @@ public final class EapSessionConfig {
      * EapSimConfig represents the configs needed for an EAP SIM session.
      */
     public static class EapSimConfig extends EapUiccConfig {
-        private EapSimConfig(int subId) {
+        @VisibleForTesting
+        public EapSimConfig(int subId) {
             super(EAP_TYPE_SIM, subId);
         }
     }

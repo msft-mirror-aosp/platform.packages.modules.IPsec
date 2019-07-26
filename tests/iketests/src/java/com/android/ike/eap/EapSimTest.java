@@ -49,6 +49,7 @@ public class EapSimTest {
 
     private static final int APPTYPE_SIM = 1;
     private static final int AUTHTYPE_EAP_SIM = 128;
+    private static final int SUB_ID = 1;
 
     // Base 64 of: RAND
     private static final String BASE64_RAND_1 = "ASNFZ4mrze8RI0VniavN7w==";
@@ -99,6 +100,7 @@ public class EapSimTest {
 
     private TestLooper mTestLooper;
     private Handler mHandler;
+    private EapSessionConfig mEapSessionConfig;
     private EapAuthenticator mEapAuthenticator;
 
     @Before
@@ -110,12 +112,13 @@ public class EapSimTest {
 
         mTestLooper = new TestLooper();
         mHandler = new Handler(mTestLooper.getLooper());
+        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(SUB_ID).build();
         mEapAuthenticator =
                 new EapAuthenticator(
                         mTestLooper.getLooper(),
                         mHandler,
                         mMockCallback,
-                        new EapStateMachine(mMockContext, mMockSecureRandom),
+                        new EapStateMachine(mMockContext, mEapSessionConfig, mMockSecureRandom),
                         (runnable) -> runnable.run(),
                         AUTHENTICATOR_TIMEOUT_MILLIS);
     }
@@ -124,6 +127,8 @@ public class EapSimTest {
     public void testEapSimEndToEnd() {
         // EAP-SIM/Start request
         when(mMockContext.getSystemService(Context.TELEPHONY_SERVICE))
+                .thenReturn(mMockTelephonyManager);
+        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
                 .thenReturn(mMockTelephonyManager);
         when(mMockTelephonyManager.getSubscriberId()).thenReturn(UNFORMATTED_IDENTITY);
         doAnswer(invocation -> {
@@ -135,6 +140,7 @@ public class EapSimTest {
         mEapAuthenticator.processEapMessage(EAP_SIM_START_REQUEST);
         mTestLooper.dispatchAll();
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
+        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
         verify(mMockTelephonyManager).getSubscriberId();
         verify(mMockSecureRandom).nextBytes(any(byte[].class));
 
