@@ -20,6 +20,7 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 
+import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.ikev2.message.IkePayload;
 
 import java.lang.annotation.Retention;
@@ -165,10 +166,12 @@ public final class IkeSessionOptions {
      *     Authentication in IKEv2</a>
      */
     static class IkeAuthEapConfig extends IkeAuthConfig {
-        // TODO: Store EAP configuration
+        final EapSessionConfig mEapConfig;
 
-        private IkeAuthEapConfig() {
+        private IkeAuthEapConfig(EapSessionConfig eapConfig) {
             super(IKE_AUTH_METHOD_EAP);
+
+            mEapConfig = eapConfig;
         }
     }
 
@@ -274,8 +277,9 @@ public final class IkeSessionOptions {
          * @param caCert the CA certificate for validating the received server certificate(s).
          * @return Builder this, to facilitate chaining.
          */
-        public Builder setAuthEap(@NonNull X509Certificate caCert) {
-            mLocalAuthConfig = new IkeAuthEapConfig();
+        public Builder setAuthEap(
+                @NonNull X509Certificate caCert, @NonNull EapSessionConfig eapConfig) {
+            mLocalAuthConfig = new IkeAuthEapConfig(eapConfig);
 
             // The name constraints extension, defined in RFC 5280, indicates a name space within
             // which all subject names in subsequent certificates in a certification path MUST be
