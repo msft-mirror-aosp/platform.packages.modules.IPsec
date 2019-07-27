@@ -31,6 +31,7 @@ import android.content.Context;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
@@ -46,14 +47,18 @@ import java.util.List;
 
 public class EapSimMethodStateMachineTest {
     private static final int EAP_SIM_START = 10;
+    private static final int SUB_ID = 1;
 
     private Context mContext;
+    private EapSimConfig mEapSimConfig;
     private EapSimMethodStateMachine mEapSimMethodStateMachine;
 
     @Before
     public void setUp() {
         mContext = getInstrumentation().getContext();
-        mEapSimMethodStateMachine = new EapSimMethodStateMachine(mContext, new SecureRandom());
+        mEapSimConfig = new EapSimConfig(SUB_ID);
+        mEapSimMethodStateMachine =
+                new EapSimMethodStateMachine(mContext, mEapSimConfig, new SecureRandom());
     }
 
     @Test
