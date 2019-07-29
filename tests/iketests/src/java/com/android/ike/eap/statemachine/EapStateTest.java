@@ -18,6 +18,7 @@ package com.android.ike.eap.statemachine;
 
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
+import static com.android.ike.eap.EapTestUtils.getDummyEapSessionConfig;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MD5_CHALLENGE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
@@ -57,7 +58,7 @@ public class EapStateTest {
     @Before
     public void setUp() {
         mContext = getInstrumentation().getContext();
-        mEapSessionConfig = new EapSessionConfig.Builder().build();
+        mEapSessionConfig = getDummyEapSessionConfig();
 
         // this EapState definition is used to make sure all non-Success/Failure EAP states
         // produce the same results for error cases.

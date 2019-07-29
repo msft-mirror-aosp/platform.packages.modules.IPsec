@@ -18,6 +18,7 @@ package com.android.ike.eap.statemachine;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.TestUtils.stringToHexString;
+import static com.android.ike.eap.EapTestUtils.getDummyEapSessionConfig;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
@@ -37,7 +38,6 @@ import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapResponse;
-import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.statemachine.EapStateMachine.IdentityState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
 
@@ -58,7 +58,7 @@ public class IdentityStateTest extends EapStateTest {
     @Override
     public void setUp() {
         mEapStateMachineMock = mock(EapStateMachine.class);
-        mEapSessionConfig = new EapSessionConfig.Builder().build();
+        mEapSessionConfig = getDummyEapSessionConfig();
         mEapState = mEapStateMachineMock.new IdentityState();
     }
 
