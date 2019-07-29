@@ -19,9 +19,9 @@ package com.android.ike.eap.statemachine;
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.TestUtils.stringToHexString;
 import static com.android.ike.eap.EapTestUtils.getDummyEapSessionConfig;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID;
@@ -34,7 +34,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapResponse;
@@ -95,15 +94,12 @@ public class IdentityStateTest extends EapStateTest {
     }
 
     @Test
-    public void testProcessAkaIdentity() {
-        when(mEapStateMachineMock.getEapSessionConfig()).thenReturn(mEapSessionConfig);
-
-        mEapState.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
+    public void testProcessSimStart() {
+        mEapState.process(EAP_REQUEST_SIM_START_PACKET);
 
         // EapStateMachine should change to MethodState for method-type packet
         verify(mEapStateMachineMock).transitionAndProcess(
-                any(MethodState.class), eq(EAP_REQUEST_AKA_IDENTITY_PACKET));
-        verify(mEapStateMachineMock).getEapSessionConfig();
+                any(MethodState.class), eq(EAP_REQUEST_SIM_START_PACKET));
         verifyNoMoreInteractions(mEapStateMachineMock);
     }
 }
