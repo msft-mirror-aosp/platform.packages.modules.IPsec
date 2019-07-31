@@ -18,6 +18,7 @@ package com.android.ike.eap.statemachine;
 
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
+import static com.android.ike.eap.EapTestUtils.getDummyEapSessionConfig;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 
 import static org.junit.Assert.assertTrue;
@@ -44,7 +45,7 @@ public class EapStateMachineTest {
     @Before
     public void setUp() {
         mContext = getInstrumentation().getContext();
-        mEapSessionConfig = new EapSessionConfig.Builder().build();
+        mEapSessionConfig = getDummyEapSessionConfig();
     }
 
     @Test
