@@ -21,6 +21,7 @@ import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.android.ike.eap.EapSessionConfig.EapMethodConfig;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
@@ -43,5 +44,14 @@ public class EapSessionConfigTest {
         EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_SIM);
         assertEquals(EAP_TYPE_SIM, eapMethodConfig.methodType);
         assertTrue(eapMethodConfig instanceof EapSimConfig);
+    }
+
+    @Test
+    public void testBuildWithoutConfigs() {
+        try {
+            new EapSessionConfig.Builder().build();
+            fail("build() should throw an IllegalStateException if no EAP methods are configured");
+        } catch (IllegalStateException expected) {
+        }
     }
 }
