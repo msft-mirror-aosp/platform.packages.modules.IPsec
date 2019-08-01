@@ -37,7 +37,8 @@ public final class EapSessionConfig {
     public final Map<Integer, EapMethodConfig> eapConfigs;
     public final byte[] eapIdentity;
 
-    private EapSessionConfig(Map<Integer, EapMethodConfig> eapConfigs, byte[] eapIdentity) {
+    @VisibleForTesting
+    EapSessionConfig(Map<Integer, EapMethodConfig> eapConfigs, byte[] eapIdentity) {
         this.eapConfigs = Collections.unmodifiableMap(eapConfigs);
         this.eapIdentity = eapIdentity;
     }
@@ -82,8 +83,13 @@ public final class EapSessionConfig {
          * Builder.
          *
          * @return the EapSessionConfig constructed by this Builder
+         * @throws IllegalStateException iff no EAP methods have been configured
          */
         public EapSessionConfig build() {
+            if (mEapConfigs.isEmpty()) {
+                throw new IllegalStateException("Must have at least one EAP method configured");
+            }
+
             return new EapSessionConfig(mEapConfigs, mEapIdentity);
         }
     }
