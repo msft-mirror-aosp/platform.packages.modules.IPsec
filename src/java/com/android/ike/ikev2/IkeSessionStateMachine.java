@@ -2771,7 +2771,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                 validateIkeAuthRespPostEap(nonChildPayloads);
 
-                performFirstChildNegotiation(childSaRespPayloads, mFirstChildReqList);
+                performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
             } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
                 throw new UnsupportedOperationException("Do not support handling error.", e);
