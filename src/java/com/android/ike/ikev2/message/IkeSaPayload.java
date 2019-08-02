@@ -792,6 +792,8 @@ public final class IkeSaPayload extends IkePayload {
 
         /** Package private method for releasing SPI resource in this unselected Proposal. */
         void releaseSpiResourceIfExists() {
+            if (mChildSpiResource ==  null) return;
+
             mChildSpiResource.close();
             mChildSpiResource = null;
         }
