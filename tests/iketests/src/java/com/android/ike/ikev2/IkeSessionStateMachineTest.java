@@ -2084,6 +2084,8 @@ public final class IkeSessionStateMachineTest {
         verify(mSpyIkeSocket, never()).unregisterIke(eq(newSaRecord.getLocalSpi()));
 
         assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, newSaRecord);
+
+        verify(mMockChildSessionStateMachine).setSkD(newSaRecord.getSkD());
     }
 
     @Test
