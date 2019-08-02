@@ -1655,14 +1655,6 @@ public class ChildSessionStateMachine extends StateMachine {
                 ChildSaRecord expectedChildRecord,
                 IpSecManager ipSecManager,
                 InetAddress remoteAddress) {
-            // Verify Notify-Rekey payload
-            if (!hasRemoteChildSpiForRekey(respPayloads, expectedChildRecord)) {
-                return new CreateChildResult(
-                        CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
-                        new InvalidSyntaxException(
-                                "Found no Rekey notification with remotely generated IPsec SPI"));
-            }
-
             // Validate rest of payloads and negotiate Child SA.
             CreateChildResult childResult =
                     validateAndNegotiateChild(
