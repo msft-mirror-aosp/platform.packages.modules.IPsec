@@ -61,6 +61,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
+import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeAuthPayload;
@@ -726,10 +727,115 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    /** Initial state of IkeSessionStateMachine. */
-    class Initial extends State {
+    /**
+     * Top level state for handling uncaught exceptions for all subclasses.
+     *
+     * <p>All other state MUST extend this state.
+     *
+     * <p>Only errors this state should catch are unexpected internal failures. Since this may be
+     * run in critical processes, it must never take down the process if it fails
+     */
+    abstract class ExceptionHandler extends State {
         @Override
-        public void enter() {
+        public final void enter() {
+            try {
+                enterState();
+            } catch (RuntimeException e) {
+                cleanUpAndQuit(e);
+            }
+        }
+
+        @Override
+        public final boolean processMessage(Message message) {
+            try {
+                return processStateMessage(message);
+            } catch (RuntimeException e) {
+                cleanUpAndQuit(e);
+                return HANDLED;
+            }
+        }
+
+        @Override
+        public final void exit() {
+            try {
+                exitState();
+            } catch (RuntimeException e) {
+                cleanUpAndQuit(e);
+            }
+        }
+
+        private void cleanUpAndQuit(RuntimeException e) {
+            // Clean up all SaRecords.
+            closeAllSaRecords(false /*expectSaClosed*/);
+
+            mUserCbExecutor.execute(
+                    () -> {
+                        mIkeSessionCallback.onError(new IkeInternalException(e));
+                    });
+            Log.wtf(TAG, e);
+            quitNow();
+        }
+
+        protected void enterState() {
+            // Do nothing. Subclasses MUST override it if they are.
+        }
+
+        protected boolean processStateMessage(Message message) {
+            return NOT_HANDLED;
+        }
+
+        protected void exitState() {
+            // Do nothing. Subclasses MUST override it if they are.
+        }
+    }
+
+    /** Called when this StateMachine quits. */
+    @Override
+    protected void onQuitting() {
+        // Clean up all SaRecords.
+        closeAllSaRecords(true /*expectSaClosed*/);
+
+        synchronized (mChildCbToSessions) {
+            for (ChildSessionStateMachine child : mChildCbToSessions.values()) {
+                // Fire asynchronous call for Child Sessions to do cleanup and remove itself
+                // from the map.
+                child.killSession();
+            }
+        }
+
+        if (mIkeSocket == null) return;
+        mIkeSocket.releaseReference(this);
+    }
+
+    private void closeAllSaRecords(boolean expectSaClosed) {
+        closeIkeSaRecord(mCurrentIkeSaRecord, expectSaClosed);
+        closeIkeSaRecord(mLocalInitNewIkeSaRecord, expectSaClosed);
+        closeIkeSaRecord(mRemoteInitNewIkeSaRecord, expectSaClosed);
+
+        mCurrentIkeSaRecord = null;
+        mLocalInitNewIkeSaRecord = null;
+        mRemoteInitNewIkeSaRecord = null;
+    }
+
+    private void closeIkeSaRecord(IkeSaRecord ikeSaRecord, boolean expectSaClosed) {
+        if (ikeSaRecord == null) return;
+
+        removeIkeSaRecord(ikeSaRecord);
+        ikeSaRecord.close();
+
+        if (!expectSaClosed) return;
+
+        Log.wtf(
+                TAG,
+                "IkeSaRecord with local SPI: "
+                        + ikeSaRecord.getLocalSpi()
+                        + " is not correctly closed.");
+    }
+
+    /** Initial state of IkeSessionStateMachine. */
+    class Initial extends ExceptionHandler {
+        @Override
+        public void enterState() {
             try {
                 mRemoteAddress = mIkeSessionOptions.getServerAddress();
 
@@ -755,7 +861,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_LOCAL_REQUEST_CREATE_IKE:
                     transitionTo(mCreateIkeLocalIkeInit);
@@ -774,12 +880,12 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     class Idle extends LocalRequestQueuer {
         @Override
-        public void enter() {
+        public void enterState() {
             mScheduler.readyForNextProcedure();
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_IKE_PACKET:
                     deferMessage(message);
@@ -993,7 +1099,7 @@ public class IkeSessionStateMachine extends StateMachine {
         return new IkeMessage(header, Arrays.asList(payloads));
     }
 
-    private abstract class LocalRequestQueuer extends State {
+    private abstract class LocalRequestQueuer extends ExceptionHandler {
         /**
          * Reroutes all local requests to the scheduler
          *
@@ -1042,7 +1148,7 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     private abstract class BusyState extends LocalRequestQueuer {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_IKE_PACKET:
                     handleReceivedIkePacket(message);
@@ -1513,7 +1619,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private EncryptedRetransmitter mRetransmitter;
 
         @Override
-        public void enter() {
+        public void enterState() {
             mChildInLocalProcedure = null;
             mChildInRemoteProcedures = new HashSet<>();
 
@@ -1523,7 +1629,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_REQUEST_FOR_CHILD:
                     // Handle remote request (and do state transition)
@@ -1579,7 +1685,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     executeLocalRequest((ChildLocalRequest) message.obj);
                     return HANDLED;
                 default:
-                    return super.processMessage(message);
+                    return super.processStateMessage(message);
             }
         }
 
@@ -1903,7 +2009,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private Retransmitter mRetransmitter;
 
         @Override
-        public void enter() {
+        public void enterState() {
             IkeMessage request = buildRequest();
 
             // Register local SPI to receive the IKE INIT response.
@@ -1931,14 +2037,14 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_IKE_PACKET:
                     handleReceivedIkePacket(message);
                     return HANDLED;
 
                 default:
-                    return super.processMessage(message);
+                    return super.processStateMessage(message);
             }
         }
 
@@ -2206,8 +2312,8 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
-            super.exit();
+        public void exitState() {
+            super.exitState();
             mRetransmitter.stopRetransmitting();
             // TODO: Store IKE_INIT request and response in mIkeSessionOptions for IKE_AUTH
         }
@@ -2364,8 +2470,8 @@ public class IkeSessionStateMachine extends StateMachine {
         private boolean mUseEap;
 
         @Override
-        public void enter() {
-            super.enter();
+        public void enterState() {
+            super.enterState();
             mRetransmitter = new EncryptedRetransmitter(buildRequest());
             mUseEap =
                     (IkeSessionOptions.IKE_AUTH_METHOD_EAP
@@ -2573,7 +2679,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             mRetransmitter.stopRetransmitting();
         }
     }
@@ -2586,7 +2692,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private EapAuthenticator mEapAuthenticator;
 
         @Override
-        public void enter() {
+        public void enterState() {
             IkeSessionOptions.IkeAuthEapConfig ikeAuthEapConfig =
                     (IkeSessionOptions.IkeAuthEapConfig) mIkeSessionOptions.getLocalAuthConfig();
 
@@ -2599,7 +2705,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public boolean processMessage(Message msg) {
+        public boolean processStateMessage(Message msg) {
             switch (msg.what) {
                 case CMD_EAP_START_EAP_AUTH:
                     IkeEapPayload ikeEapPayload = (IkeEapPayload) msg.obj;
@@ -2632,7 +2738,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     return HANDLED;
                 default:
-                    return super.processMessage(msg);
+                    return super.processStateMessage(msg);
             }
         }
 
@@ -2730,7 +2836,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private byte[] mEapMsk = new byte[0];
 
         @Override
-        public boolean processMessage(Message msg) {
+        public boolean processStateMessage(Message msg) {
             switch (msg.what) {
                 case CMD_EAP_FINISH_EAP_AUTH:
                     mEapMsk = (byte[]) msg.obj;
@@ -2748,7 +2854,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     return HANDLED;
                 default:
-                    return super.processMessage(msg);
+                    return super.processStateMessage(msg);
             }
         }
 
@@ -2819,7 +2925,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             mRetransmitter.stopRetransmitting();
         }
     }
@@ -2980,7 +3086,7 @@ public class IkeSessionStateMachine extends StateMachine {
         protected Retransmitter mRetransmitter;
 
         @Override
-        public void enter() {
+        public void enterState() {
             try {
                 mRetransmitter = new EncryptedRetransmitter(buildIkeRekeyReq());
             } catch (IOException e) {
@@ -3068,7 +3174,7 @@ public class IkeSessionStateMachine extends StateMachine {
      */
     class SimulRekeyIkeLocalCreate extends RekeyIkeLocalCreate {
         @Override
-        public void enter() {
+        public void enterState() {
             mRetransmitter = new EncryptedRetransmitter(null);
             // TODO: Populate super.mRetransmitter from state initialization data
             // Do not send request.
@@ -3080,12 +3186,12 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             // Do nothing.
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_IKE_PACKET:
                     ReceivedIkePacket receivedIkePacket = (ReceivedIkePacket) message.obj;
@@ -3099,7 +3205,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     return HANDLED;
 
                 default:
-                    return super.processMessage(message);
+                    return super.processStateMessage(message);
             }
         }
 
@@ -3136,7 +3242,7 @@ public class IkeSessionStateMachine extends StateMachine {
     /** RekeyIkeDeleteBase represents common behaviours of deleting stage during rekeying IKE SA. */
     private abstract class RekeyIkeDeleteBase extends DeleteBase {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_IKE_PACKET:
                     ReceivedIkePacket receivedIkePacket = (ReceivedIkePacket) message.obj;
@@ -3190,7 +3296,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     return HANDLED;
                 default:
-                    return super.processMessage(message);
+                    return super.processStateMessage(message);
                     // TODO: Add more cases for other packet types.
             }
         }
@@ -3233,7 +3339,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private Retransmitter mRetransmitter;
 
         @Override
-        public void enter() {
+        public void enterState() {
             // Detemine surviving IKE SA. According to RFC 7296: "The new IKE SA containing the
             // lowest nonce SHOULD be deleted by the node that created it, and the other surviving
             // new IKE SA MUST inherit all the Child SAs."
@@ -3299,7 +3405,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             finishRekey();
             mRetransmitter.stopRetransmitting();
             // TODO: Stop awaiting delete request timer.
@@ -3314,7 +3420,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private Retransmitter mRetransmitter;
 
         @Override
-        public void enter() {
+        public void enterState() {
             mRetransmitter = new EncryptedRetransmitter(mIkeSaRecordAwaitingLocalDel, null);
             // TODO: Populate mRetransmitter from state initialization data.
         }
@@ -3400,15 +3506,15 @@ public class IkeSessionStateMachine extends StateMachine {
      * RekeyIkeLocalDelete represents the deleting stage when IKE library is initiating a Rekey
      * procedure.
      *
-     * <p>RekeyIkeLocalDelete and SimulRekeyIkeLocalDelete have same behaviours in processMessage().
-     * While RekeyIkeLocalDelete overrides enter() and exit() methods for initiating and finishing
-     * the deleting stage for IKE rekeying.
+     * <p>RekeyIkeLocalDelete and SimulRekeyIkeLocalDelete have same behaviours in
+     * processStateMessage(). While RekeyIkeLocalDelete overrides enterState() and exitState()
+     * methods for initiating and finishing the deleting stage for IKE rekeying.
      */
     class RekeyIkeLocalDelete extends SimulRekeyIkeLocalDelete {
         private Retransmitter mRetransmitter;
 
         @Override
-        public void enter() {
+        public void enterState() {
             mIkeSaRecordSurviving = mLocalInitNewIkeSaRecord;
             mIkeSaRecordAwaitingLocalDel = mCurrentIkeSaRecord;
             mRetransmitter =
@@ -3423,7 +3529,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             mRetransmitter.stopRetransmitting();
         }
     }
@@ -3432,12 +3538,13 @@ public class IkeSessionStateMachine extends StateMachine {
      * RekeyIkeRemoteDelete represents the deleting stage when responding to a Rekey procedure.
      *
      * <p>RekeyIkeRemoteDelete and SimulRekeyIkeRemoteDelete have same behaviours in
-     * processMessage(). While RekeyIkeLocalDelete overrides enter() and exit() methods for waiting
-     * incoming delete request and for finishing the deleting stage for IKE rekeying.
+     * processStateMessage(). While RekeyIkeLocalDelete overrides enterState() and exitState()
+     * methods for waiting incoming delete request and for finishing the deleting stage for IKE
+     * rekeying.
      */
     class RekeyIkeRemoteDelete extends SimulRekeyIkeRemoteDelete {
         @Override
-        public void enter() {
+        public void enterState() {
             mIkeSaRecordSurviving = mRemoteInitNewIkeSaRecord;
             mIkeSaRecordAwaitingRemoteDel = mCurrentIkeSaRecord;
 
@@ -3445,7 +3552,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             // Intercept rekey delete timeout. Assume rekey succeeded since no retransmissions
             // were received.
             if (message.what == TIMEOUT_REKEY_REMOTE_DELETE_IKE) {
@@ -3454,12 +3561,12 @@ public class IkeSessionStateMachine extends StateMachine {
 
                 return HANDLED;
             } else {
-                return super.processMessage(message);
+                return super.processStateMessage(message);
             }
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             removeMessages(TIMEOUT_REKEY_REMOTE_DELETE_IKE);
         }
     }
@@ -3469,7 +3576,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private Retransmitter mRetransmitter;
 
         @Override
-        public void enter() {
+        public void enterState() {
             mRetransmitter = new EncryptedRetransmitter(buildIkeDeleteReq(mCurrentIkeSaRecord));
         }
 
@@ -3514,7 +3621,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             mRetransmitter.stopRetransmitting();
         }
     }
@@ -3597,41 +3704,5 @@ public class IkeSessionStateMachine extends StateMachine {
 
             return payloadList;
         }
-    }
-
-    /** Called when this StateMachine quits. */
-    @Override
-    protected void onQuitting() {
-        // Clean up all SaRecords.
-        verifyIkeSaRecordIsClosed(mCurrentIkeSaRecord);
-        verifyIkeSaRecordIsClosed(mLocalInitNewIkeSaRecord);
-        verifyIkeSaRecordIsClosed(mRemoteInitNewIkeSaRecord);
-
-        mCurrentIkeSaRecord = null;
-        mLocalInitNewIkeSaRecord = null;
-        mRemoteInitNewIkeSaRecord = null;
-
-        synchronized (mChildCbToSessions) {
-            for (ChildSessionStateMachine child : mChildCbToSessions.values()) {
-                // Fire asynchronous call for Child Sessions to do cleanup and remove itself
-                // from the map.
-                child.killSession();
-            }
-        }
-
-        mIkeSocket.releaseReference(this);
-    }
-
-    private void verifyIkeSaRecordIsClosed(IkeSaRecord ikeSaRecord) {
-        if (ikeSaRecord == null) return;
-
-        Log.wtf(
-                TAG,
-                "IkeSaRecord with local SPI: "
-                        + ikeSaRecord.getLocalSpi()
-                        + " is not correctly closed.");
-
-        removeIkeSaRecord(ikeSaRecord);
-        ikeSaRecord.close();
     }
 }

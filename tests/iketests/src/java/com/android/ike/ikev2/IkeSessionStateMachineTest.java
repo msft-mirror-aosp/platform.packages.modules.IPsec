@@ -81,6 +81,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
+import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
@@ -2979,5 +2980,42 @@ public final class IkeSessionStateMachineTest {
         synchronized (mIkeSessionStateMachine.mChildCbToSessions) {
             assertFalse(mIkeSessionStateMachine.mChildCbToSessions.containsKey(childCb));
         }
+    }
+
+    @Test
+    public void testHandleExceptionInEnterState() throws Exception {
+        IkeSessionOptions mockSessionOptions = mock(IkeSessionOptions.class);
+        when(mockSessionOptions.getSaProposals()).thenThrow(mock(RuntimeException.class));
+
+        IkeSessionStateMachine ikeSession =
+                new IkeSessionStateMachine(
+                        mLooper.getLooper(),
+                        mContext,
+                        mIpSecManager,
+                        mockSessionOptions,
+                        mChildSessionOptions,
+                        mSpyUserCbExecutor,
+                        mMockIkeSessionCallback,
+                        mMockChildSessionCallback,
+                        mMockEapAuthenticatorFactory);
+        // Send IKE INIT request
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        assertNull(ikeSession.getCurrentState());
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+    }
+
+    @Test
+    public void testHandleExceptionInProcessStateMsg() throws Exception {
+        setupIdleStateMachine();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, null /*receivedIkePacket*/);
+        mLooper.dispatchAll();
+
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
     }
 }
