@@ -3212,7 +3212,13 @@ public class IkeSessionStateMachine extends StateMachine {
                 mIkeSaRecordAwaitingRemoteDel = null;
             }
 
-            // TODO: Update sk_D, prf of all child sessions
+            synchronized (mChildCbToSessions) {
+                for (ChildSessionStateMachine child : mChildCbToSessions.values()) {
+                    child.setSkD(mCurrentIkeSaRecord.getSkD());
+                }
+            }
+
+            // TODO: Update prf of all child sessions
         }
     }
 
