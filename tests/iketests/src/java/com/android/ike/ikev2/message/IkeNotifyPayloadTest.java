@@ -32,47 +32,55 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
 public final class IkeNotifyPayloadTest {
-    private static final String NOTIFY_PAYLOAD_GENERIC_HEADER = "2900001c";
-    private static final String NOTIFY_PAYLOAD_BODY_RAW_PACKET =
+    private static final String NOTIFY_NAT_DETECTION_PAYLOAD_HEX_STRING =
+            "2900001c00004004e54f73b7d83f6beb881eab2051d8663f421d10b0";
+    private static final String NOTIFY_NAT_DETECTION_PAYLOAD_BODY_HEX_STRING =
             "00004004e54f73b7d83f6beb881eab2051d8663f421d10b0";
-
-    private static final String NAT_DETECTION_SOURCE_IP_DATA_HEX_STRING =
+    private static final String NAT_DETECTION_DATA_HEX_STRING =
             "e54f73b7d83f6beb881eab2051d8663f421d10b0";
+
+    private static final String NOTIFY_REKEY_PAYLOAD_BODY_HEX_STRING = "030440092ad4c0a2";
+    private static final int REKEY_SPI = 0x2ad4c0a2;
+
     private static final String IKE_INITIATOR_SPI_HEX_STRING = "5f54bf6d8b48e6e1";
     private static final String IKE_RESPODNER_SPI_HEX_STRING = "0000000000000000";
     private static final String IP_ADDR = "10.80.80.13";
     private static final int PORT = 500;
 
-    private static final int EXPECTED_PROTOCOL_ID = IkePayload.PROTOCOL_ID_UNSET;
-    private static final int EXPECTED_SPI_SIZE = IkePayload.SPI_LEN_NOT_INCLUDED;
-
-    @IkePayload.PayloadType
-    private static final int NEXT_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_NOTIFY;
-
-    @IkeNotifyPayload.NotifyType
-    private static final int EXPECTED_NOTIFY_TYPE =
-            IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
-
-    private static final int EXPECTED_NOTIFY_DATA_LEN = 20;
-
-    private static final int POS_PROTOCOL_ID = 0;
+    private static final int PROTOCOL_ID_OFFSET = 0;
 
     @Test
-    public void testDecodeNotifyPayload() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(NOTIFY_PAYLOAD_BODY_RAW_PACKET);
+    public void testDecodeNotifyPayloadSpiUnset() throws Exception {
+        byte[] inputPacket =
+                TestUtils.hexStringToByteArray(NOTIFY_NAT_DETECTION_PAYLOAD_BODY_HEX_STRING);
+        byte[] notifyData = TestUtils.hexStringToByteArray(NAT_DETECTION_DATA_HEX_STRING);
+
         IkeNotifyPayload payload = new IkeNotifyPayload(false, inputPacket);
-        assertEquals(EXPECTED_PROTOCOL_ID, payload.protocolId);
-        assertEquals(EXPECTED_SPI_SIZE, payload.spiSize);
-        assertEquals(EXPECTED_NOTIFY_TYPE, payload.notifyType);
-        assertEquals(EXPECTED_SPI_SIZE, payload.spi);
-        assertEquals(EXPECTED_NOTIFY_DATA_LEN, payload.notifyData.length);
+        assertEquals(IkePayload.PROTOCOL_ID_UNSET, payload.protocolId);
+        assertEquals(IkePayload.SPI_LEN_NOT_INCLUDED, payload.spiSize);
+        assertEquals(IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP, payload.notifyType);
+        assertEquals(IkePayload.SPI_NOT_INCLUDED, payload.spi);
+        assertArrayEquals(notifyData, payload.notifyData);
+    }
+
+    @Test
+    public void testDecodeNotifyPayloadSpiSet() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(NOTIFY_REKEY_PAYLOAD_BODY_HEX_STRING);
+
+        IkeNotifyPayload payload = new IkeNotifyPayload(false, inputPacket);
+        assertEquals(IkePayload.PROTOCOL_ID_ESP, payload.protocolId);
+        assertEquals(IkePayload.SPI_LEN_IPSEC, payload.spiSize);
+        assertEquals(IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA, payload.notifyType);
+        assertEquals(REKEY_SPI, payload.spi);
+        assertArrayEquals(new byte[0], payload.notifyData);
     }
 
     @Test
     public void testDecodeNotifyPayloadThrowException() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(NOTIFY_PAYLOAD_BODY_RAW_PACKET);
+        byte[] inputPacket =
+                TestUtils.hexStringToByteArray(NOTIFY_NAT_DETECTION_PAYLOAD_BODY_HEX_STRING);
         // Change Protocol ID to ESP
-        inputPacket[POS_PROTOCOL_ID] = (byte) (IkePayload.PROTOCOL_ID_ESP & 0xFF);
+        inputPacket[PROTOCOL_ID_OFFSET] = (byte) (IkePayload.PROTOCOL_ID_ESP & 0xFF);
         try {
             IkeNotifyPayload payload = new IkeNotifyPayload(false, inputPacket);
             fail("Expected InvalidSyntaxException: Protocol ID should not be ESP");
@@ -90,8 +98,7 @@ public final class IkeNotifyPayloadTest {
                 IkeNotifyPayload.generateNatDetectionData(
                         initiatorIkeSpi, responderIkespi, inetAddress, PORT);
 
-        byte[] expectedBytes =
-                TestUtils.hexStringToByteArray(NAT_DETECTION_SOURCE_IP_DATA_HEX_STRING);
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(NAT_DETECTION_DATA_HEX_STRING);
         assertArrayEquals(expectedBytes, netDetectionData);
     }
 
@@ -140,15 +147,15 @@ public final class IkeNotifyPayloadTest {
 
     @Test
     public void testEncodeNotifyPayload() throws Exception {
-        byte[] inputPacket = TestUtils.hexStringToByteArray(NOTIFY_PAYLOAD_BODY_RAW_PACKET);
+        byte[] inputPacket =
+                TestUtils.hexStringToByteArray(NOTIFY_NAT_DETECTION_PAYLOAD_BODY_HEX_STRING);
         IkeNotifyPayload payload = new IkeNotifyPayload(false, inputPacket);
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(payload.getPayloadLength());
-        payload.encodeToByteBuffer(NEXT_PAYLOAD_TYPE, byteBuffer);
+        payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_NOTIFY, byteBuffer);
 
         byte[] expectedNoncePayload =
-                TestUtils.hexStringToByteArray(
-                        NOTIFY_PAYLOAD_GENERIC_HEADER + NOTIFY_PAYLOAD_BODY_RAW_PACKET);
+                TestUtils.hexStringToByteArray(NOTIFY_NAT_DETECTION_PAYLOAD_HEX_STRING);
         assertArrayEquals(expectedNoncePayload, byteBuffer.array());
     }
 }
