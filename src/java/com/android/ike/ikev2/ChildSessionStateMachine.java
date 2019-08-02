@@ -443,6 +443,9 @@ public class ChildSessionStateMachine extends StateMachine {
     /**
      * Update SK_d with provided value when IKE SA is rekeyed.
      *
+     * <p>It MUST be only called at the end of Rekey IKE procedure, which guarantees this Child
+     * Session is not in Create Child or Rekey Child procedure.
+     *
      * @param skD the new skD in byte array.
      */
     public void setSkD(byte[] skD) {
