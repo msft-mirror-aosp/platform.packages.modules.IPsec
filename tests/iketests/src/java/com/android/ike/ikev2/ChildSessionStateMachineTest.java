@@ -118,10 +118,10 @@ public final class ChildSessionStateMachineTest {
     private static final String IKE_AUTH_RESP_SA_PAYLOAD =
             "2c00002c0000002801030403cae7019f0300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
-    private static final String REKEY_CHILD_RESP_PAYLOAD =
+    private static final String REKEY_CHILD_RESP_SA_PAYLOAD =
             "2800002c0000002801030403cd1736b30300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
-    private static final String REKEY_CHILD_REQ_PAYLOAD =
+    private static final String REKEY_CHILD_REQ_SA_PAYLOAD =
             "2800002c0000002801030403c88336490300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
 
@@ -749,6 +749,11 @@ public final class ChildSessionStateMachineTest {
         // Build Nonce Payloads
         inboundPayloads.add(new IkeNoncePayload());
 
+        if (isLocalInitRekey) {
+            // Rekey-Create response without Notify-Rekey payload is valid.
+            return inboundPayloads;
+        }
+
         // Build Rekey-Notification
         inboundPayloads.add(
                 new IkeNotifyPayload(
@@ -777,7 +782,7 @@ public final class ChildSessionStateMachineTest {
         List<IkePayload> rekeyRespPayloads =
                 makeInboundRekeyChildPayloads(
                         LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
-                        REKEY_CHILD_RESP_PAYLOAD,
+                        REKEY_CHILD_RESP_SA_PAYLOAD,
                         true /*isLocalInitRekey*/);
         when(mMockSaRecordHelper.makeChildSaRecord(
                         any(List.class), eq(rekeyRespPayloads), any(ChildSaRecordConfig.class)))
@@ -891,7 +896,7 @@ public final class ChildSessionStateMachineTest {
         List<IkePayload> rekeyReqPayloads =
                 makeInboundRekeyChildPayloads(
                         REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
-                        REKEY_CHILD_REQ_PAYLOAD,
+                        REKEY_CHILD_REQ_SA_PAYLOAD,
                         false /*isLocalInitRekey*/);
         when(mMockSaRecordHelper.makeChildSaRecord(
                         eq(rekeyReqPayloads), any(List.class), any(ChildSaRecordConfig.class)))
