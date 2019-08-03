@@ -98,6 +98,10 @@ public final class IkeSaPayloadTest {
                     + "00000804000012000000080400000e";
     private static final String INBOUND_CHILD_PROPOSAL_RAW_PACKET =
             "0000002801030403cae7019f0300000c0100000c800e00800300000803000002000" + "0000805000000";
+    private static final String INBOUND_CHILD_TWO_PROPOSAL_RAW_PACKET =
+            "0200002801030403cae7019f0300000c0100000c800e00800300000803000002000"
+                    + "00008050000000000001802030401cae7019e0000000c01000012800e"
+                    + "0080";
     private static final String ENCR_TRANSFORM_RAW_PACKET = "0300000c0100000c800e0080";
     private static final String PRF_TRANSFORM_RAW_PACKET = "0000000802000002";
     private static final String INTEG_TRANSFORM_RAW_PACKET = "0300000803000002";
@@ -774,7 +778,8 @@ public final class IkeSaPayloadTest {
             IkeSaPayload reqPayload,
             IkeSaPayload respPayload,
             IpSecManager ipSecManager,
-            InetAddress remoteAddress)
+            InetAddress remoteAddress,
+            boolean isLocalInit)
             throws Exception {
         // SA negotiation
         Pair<ChildProposal, ChildProposal> negotiatedProposalPair =
@@ -785,8 +790,11 @@ public final class IkeSaPayloadTest {
 
         // Verify results
         assertEquals(respPayload.proposalList.get(0).saProposal, respProposal.saProposal);
-        assertEquals(CHILD_SPI_LOCAL_ONE, reqProposal.getChildSpiResource().getSpi());
-        assertEquals(CHILD_SPI_REMOTE, respProposal.getChildSpiResource().getSpi());
+
+        int initSpi = isLocalInit ? CHILD_SPI_LOCAL_ONE : CHILD_SPI_REMOTE;
+        int respSpi = isLocalInit ? CHILD_SPI_REMOTE : CHILD_SPI_LOCAL_ONE;
+        assertEquals(initSpi, reqProposal.getChildSpiResource().getSpi());
+        assertEquals(respSpi, respProposal.getChildSpiResource().getSpi());
 
         // Verify SPIs in unselected Proposals have been released.
         for (Proposal proposal : reqPayload.proposalList) {
@@ -812,26 +820,34 @@ public final class IkeSaPayloadTest {
                         true /*isResp*/,
                         TestUtils.hexStringToByteArray(INBOUND_CHILD_PROPOSAL_RAW_PACKET));
 
-        verifyChildSaNegotiation(reqPayload, respPayload, mIpSecManager, REMOTE_ADDRESS);
+        verifyChildSaNegotiation(
+                reqPayload, respPayload, mIpSecManager, REMOTE_ADDRESS, true /*isLocalInit*/);
     }
 
     @Test
     public void testGetVerifiedNegotiatedChildProposalForRemoteCreate() throws Exception {
+        Transform[] transformsOne = mChildSaProposalOne.getAllTransforms();
+        Transform[] transformsTwo = mChildSaProposalTwo.getAllTransforms();
+        Transform[] decodedTransforms = new Transform[transformsOne.length + transformsTwo.length];
+        System.arraycopy(transformsOne, 0, decodedTransforms, 0, transformsOne.length);
+        System.arraycopy(
+                transformsTwo, 0, decodedTransforms, transformsOne.length, transformsTwo.length);
+
         // Build remote request
-        Proposal.sTransformDecoder =
-                getDummyTransformDecoder(mChildSaProposalOne.getAllTransforms());
-        IkeSaPayload respPayload =
+        Proposal.sTransformDecoder = getDummyTransformDecoder(decodedTransforms);
+        IkeSaPayload reqPayload =
                 new IkeSaPayload(
                         false /*critical*/,
                         false /*isResp*/,
-                        TestUtils.hexStringToByteArray(INBOUND_CHILD_PROPOSAL_RAW_PACKET));
+                        TestUtils.hexStringToByteArray(INBOUND_CHILD_TWO_PROPOSAL_RAW_PACKET));
 
         // Build local response
-        IkeSaPayload reqPayload =
+        IkeSaPayload respPayload =
                 IkeSaPayload.createChildSaResponsePayload(
                         (byte) 1, mChildSaProposalOne, mIpSecManager, LOCAL_ADDRESS);
 
-        verifyChildSaNegotiation(reqPayload, respPayload, mIpSecManager, REMOTE_ADDRESS);
+        verifyChildSaNegotiation(
+                reqPayload, respPayload, mIpSecManager, REMOTE_ADDRESS, false /*isLocalInit*/);
     }
 
     // Test throwing when negotiated proposal in SA response payload has unrecognized Transform.

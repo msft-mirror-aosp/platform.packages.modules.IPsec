@@ -293,7 +293,7 @@ public abstract class SaRecord implements AutoCloseable {
             return new IkeSaRecord(
                     initSpi,
                     respSpi,
-                    true /*localInit*/,
+                    ikeSaRecordConfig.isLocalInit,
                     nonceInit,
                     nonceResp,
                     skD,

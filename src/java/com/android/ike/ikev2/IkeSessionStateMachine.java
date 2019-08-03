@@ -2771,7 +2771,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                 validateIkeAuthRespPostEap(nonChildPayloads);
 
-                performFirstChildNegotiation(childSaRespPayloads, mFirstChildReqList);
+                performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
             } catch (IkeProtocolException e) {
                 // TODO: Handle processing errors.
                 throw new UnsupportedOperationException("Do not support handling error.", e);
@@ -3212,7 +3212,13 @@ public class IkeSessionStateMachine extends StateMachine {
                 mIkeSaRecordAwaitingRemoteDel = null;
             }
 
-            // TODO: Update sk_D, prf of all child sessions
+            synchronized (mChildCbToSessions) {
+                for (ChildSessionStateMachine child : mChildCbToSessions.values()) {
+                    child.setSkD(mCurrentIkeSaRecord.getSkD());
+                }
+            }
+
+            // TODO: Update prf of all child sessions
         }
     }
 

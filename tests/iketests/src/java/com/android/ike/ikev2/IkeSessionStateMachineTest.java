@@ -1645,11 +1645,19 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isIkePayloadExist(childReqList, IkePayload.PAYLOAD_TYPE_TS_INITIATOR));
         assertTrue(isIkePayloadExist(childReqList, IkePayload.PAYLOAD_TYPE_TS_RESPONDER));
         assertTrue(isIkePayloadExist(childReqList, IkePayload.PAYLOAD_TYPE_NONCE));
+        IkeSaPayload reqSaPayload =
+                IkePayload.getPayloadForTypeInProvidedList(
+                        IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, childReqList);
+        assertFalse(reqSaPayload.isSaResponse);
 
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_SA));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_INITIATOR));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_RESPONDER));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_NONCE));
+        IkeSaPayload respSaPayload =
+                IkePayload.getPayloadForTypeInProvidedList(
+                        IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, childRespList);
+        assertTrue(respSaPayload.isSaResponse);
 
         // Mock finishing first Child SA negotiation.
         assertTrue(
@@ -2084,6 +2092,8 @@ public final class IkeSessionStateMachineTest {
         verify(mSpyIkeSocket, never()).unregisterIke(eq(newSaRecord.getLocalSpi()));
 
         assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, newSaRecord);
+
+        verify(mMockChildSessionStateMachine).setSkD(newSaRecord.getSkD());
     }
 
     @Test

@@ -443,6 +443,9 @@ public class ChildSessionStateMachine extends StateMachine {
     /**
      * Update SK_d with provided value when IKE SA is rekeyed.
      *
+     * <p>It MUST be only called at the end of Rekey IKE procedure, which guarantees this Child
+     * Session is not in Create Child or Rekey Child procedure.
+     *
      * @param skD the new skD in byte array.
      */
     public void setSkD(byte[] skD) {
@@ -1655,14 +1658,6 @@ public class ChildSessionStateMachine extends StateMachine {
                 ChildSaRecord expectedChildRecord,
                 IpSecManager ipSecManager,
                 InetAddress remoteAddress) {
-            // Verify Notify-Rekey payload
-            if (!hasRemoteChildSpiForRekey(respPayloads, expectedChildRecord)) {
-                return new CreateChildResult(
-                        CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
-                        new InvalidSyntaxException(
-                                "Found no Rekey notification with remotely generated IPsec SPI"));
-            }
-
             // Validate rest of payloads and negotiate Child SA.
             CreateChildResult childResult =
                     validateAndNegotiateChild(
