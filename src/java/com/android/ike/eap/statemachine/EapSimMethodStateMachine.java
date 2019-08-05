@@ -456,9 +456,15 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             List<RandChallengeResult> challengeResults = new ArrayList<>();
 
             for (byte[] rand : randList) {
-                String base64Challenge = Base64.encodeToString(rand, Base64.NO_WRAP);
+                // Rand (pre-Base64 formatting) needs to be formatted as [length][rand data]
+                ByteBuffer formattedRand = ByteBuffer.allocate(rand.length + 1);
+                formattedRand.put((byte) rand.length);
+                formattedRand.put(rand);
+
+                String base64Challenge =
+                        Base64.encodeToString(formattedRand.array(), Base64.NO_WRAP);
                 String challengeResponse = mTelephonyManager.getIccAuthentication(
-                        TelephonyManager.APPTYPE_SIM,
+                        TelephonyManager.APPTYPE_USIM,
                         TelephonyManager.AUTHTYPE_EAP_SIM,
                         base64Challenge);
                 byte[] challengeResponseBytes = Base64.decode(challengeResponse, Base64.DEFAULT);
