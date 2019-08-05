@@ -59,15 +59,16 @@ public class EapTestMessageDefinitions {
 
     // Body of EapData is the list of supported methods
     public static final byte[] EAP_RESPONSE_NAK_PACKET =
-            hexStringToByteArray("02" + ID + "000803173212");
+            hexStringToByteArray("02" + ID + "00060312");
     public static final byte[] EAP_RESPONSE_NOTIFICATION_PACKET =
             hexStringToByteArray("02" + ID + "000502");
     public static final byte[] EAP_REQUEST_MD5_CHALLENGE =
             hexStringToByteArray("01" + ID + "000504");
     public static final byte[] EAP_REQUEST_NAK_PACKET =
             hexStringToByteArray("01" + ID + "000503");
+    public static final String EAP_REQUEST_SIM_TYPE_DATA = "0A00000F02000200010000";
     public static final byte[] EAP_REQUEST_SIM_START_PACKET =
-            hexStringToByteArray("01" + ID + "0010120A00000F02000200010000");
+            hexStringToByteArray("01" + ID + "001012" + EAP_REQUEST_SIM_TYPE_DATA);
 
     public static final byte[] REQUEST_UNSUPPORTED_TYPE_PACKET =
             hexStringToByteArray("01" + ID + "0005FF");
@@ -77,7 +78,6 @@ public class EapTestMessageDefinitions {
     public static final byte[] SHORT_PACKET = hexStringToByteArray("01" + ID + "0005");
     public static final byte[] INCOMPLETE_HEADER_PACKET = hexStringToByteArray("03" + ID);
     public static final byte[] INVALID_CODE_PACKET = hexStringToByteArray("F0" + ID + "0004");
-    public static final byte[] REQUEST_EAP_TYPE_NAK = hexStringToByteArray("01" + ID + "000503");
 
     // Attributes
     public static final String SKIPPABLE_DATA = "112233445566";
