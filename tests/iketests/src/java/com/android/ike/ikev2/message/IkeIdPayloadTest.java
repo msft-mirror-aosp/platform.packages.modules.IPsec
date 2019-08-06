@@ -22,6 +22,7 @@ import static org.junit.Assert.fail;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.IkeIdentification;
+import com.android.ike.ikev2.IkeIdentification.IkeFqdnIdentification;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
 import com.android.ike.ikev2.IkeIdentification.IkeIpv6AddrIdentification;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
@@ -44,6 +45,12 @@ public final class IkeIdPayloadTest {
     private static final String IPV6_ADDR_ID_PAYLOAD_RESPONDER_BODY_HEX_STRING =
             "050000000000200100000db80000000000000001";
     private static final String IPV6_ADDR_STRING = "0:2001:0:db8::1";
+
+    private static final String FQDN_ID_PAYLOAD_HEX_STRING =
+            "2500001702000000696B652E616E64726F69642E6E6574";
+    private static final String FQDN_ID_PAYLOAD_BODY_HEX_STRING =
+            "02000000696B652E616E64726F69642E6E6574";
+    private static final String FQDN = "ike.android.net";
 
     private static final int ID_TYPE_OFFSET = 0;
 
@@ -71,6 +78,19 @@ public final class IkeIdPayloadTest {
         IkeIpv6AddrIdentification ikeId = (IkeIpv6AddrIdentification) payload.ikeId;
         Inet6Address expectedAddr = (Inet6Address) Inet6Address.getByName(IPV6_ADDR_STRING);
         assertEquals(expectedAddr, ikeId.ipv6Address);
+    }
+
+    @Test
+    public void testDecodeFqdnIdPayload() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(FQDN_ID_PAYLOAD_BODY_HEX_STRING);
+        IkeIdPayload payload =
+                new IkeIdPayload(false /*critical*/, inputPacket, false /*isInitiator*/);
+
+        assertEquals(IkePayload.PAYLOAD_TYPE_ID_RESPONDER, payload.payloadType);
+        assertArrayEquals(inputPacket, payload.getEncodedPayloadBody());
+        assertEquals(IkeIdentification.ID_TYPE_FQDN, payload.ikeId.idType);
+        IkeFqdnIdentification ikeId = (IkeFqdnIdentification) payload.ikeId;
+        assertEquals(FQDN, ikeId.fqdn);
     }
 
     @Test
@@ -109,6 +129,18 @@ public final class IkeIdPayloadTest {
 
         byte[] expectedBytes =
                 TestUtils.hexStringToByteArray(IPV6_ADDR_ID_PAYLOAD_RESPONDER_HEX_STRING);
+        assertArrayEquals(expectedBytes, inputBuffer.array());
+    }
+
+    @Test
+    public void testConstructAndEncodeFqdnIdPayload() throws Exception {
+        IkeIdPayload payload =
+                new IkeIdPayload(false /*isInitiator*/, new IkeFqdnIdentification(FQDN));
+
+        ByteBuffer inputBuffer = ByteBuffer.allocate(payload.getPayloadLength());
+        payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_CERT, inputBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(FQDN_ID_PAYLOAD_HEX_STRING);
         assertArrayEquals(expectedBytes, inputBuffer.array());
     }
 }
