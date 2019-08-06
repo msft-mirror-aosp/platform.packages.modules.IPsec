@@ -33,6 +33,8 @@ import java.util.Map;
  * provide configs for several EAP methods.
  */
 public final class EapSessionConfig {
+    private static final byte[] DEFAULT_IDENTITY = new byte[0];
+
     // IANA -> EapMethodConfig for that method
     public final Map<Integer, EapMethodConfig> eapConfigs;
     public final byte[] eapIdentity;
@@ -53,7 +55,7 @@ public final class EapSessionConfig {
          */
         public Builder() {
             mEapConfigs = new HashMap<>();
-            mEapIdentity = new byte[0];
+            mEapIdentity = DEFAULT_IDENTITY;
         }
 
         /**

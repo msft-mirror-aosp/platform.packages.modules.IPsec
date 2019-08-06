@@ -32,6 +32,16 @@ public class EapTestUtils {
     }
 
     /**
+     * Creates and returns a dummy EapSessionConfig instance with the given EAP-Identity.
+     *
+     * @param eapIdentity byte-array representing the EAP-Identity of the client
+     * @return a new, empty EapSessionConfig instance with the given EAP-Identity
+     */
+    public static EapSessionConfig getDummyEapSessionConfig(byte[] eapIdentity) {
+        return new EapSessionConfig(new HashMap<>(), eapIdentity);
+    }
+
+    /**
      * Creates and returns a dummy EapSessionConfig instance with EAP-SIM configured.
      *
      * @return a new EapSessionConfig with EAP-SIM configs set
