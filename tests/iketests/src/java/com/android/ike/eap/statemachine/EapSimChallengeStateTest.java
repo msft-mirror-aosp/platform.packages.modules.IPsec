@@ -17,6 +17,7 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_KC;
@@ -66,12 +67,15 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.crypto.Fips186_2Prf;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimInvalidLengthException;
+import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtMac;
@@ -144,6 +148,16 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
         mChallengeState = mEapSimMethodStateMachine
                 .new ChallengeState(VERSIONS, mAtNonceMt, EAP_SIM_IDENTITY_BYTES);
         mEapSimMethodStateMachine.transitionTo(mChallengeState);
+    }
+
+    @Test
+    public void testProcessIncorrectEapMethodType() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        EapResult result = mChallengeState.process(eapMessage);
+        EapError eapError = (EapError) result;
+        assertTrue(eapError.cause instanceof EapInvalidRequestException);
     }
 
     @Test
