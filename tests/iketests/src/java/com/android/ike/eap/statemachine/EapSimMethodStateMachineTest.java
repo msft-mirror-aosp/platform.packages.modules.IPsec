@@ -18,6 +18,7 @@ package com.android.ike.eap.statemachine;
 
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_RESPONSE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
@@ -25,6 +26,7 @@ import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions
 import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.IDENTITY;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
@@ -64,6 +66,11 @@ public class EapSimMethodStateMachineTest {
     @Test
     public void testEapSimMethodStateMachineStartState() {
         assertTrue(mEapSimMethodStateMachine.getState() instanceof CreatedState);
+    }
+
+    @Test
+    public void testGetMethod() {
+        assertEquals(EAP_TYPE_SIM, mEapSimMethodStateMachine.getEapMethod());
     }
 
     @Test
