@@ -16,6 +16,7 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ENCR_DATA;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IV;
@@ -24,6 +25,7 @@ import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_RE
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.IMSI;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -34,6 +36,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
+import com.android.ike.eap.message.EapData;
+import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtAnyIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
@@ -60,6 +67,16 @@ public class EapSimStartStateTest extends EapSimStateTest {
         mStartState = mEapSimMethodStateMachine.new StartState(null);
 
         mAttributes = new LinkedHashMap<>();
+    }
+
+    @Test
+    public void testProcessIncorrectEapMethodType() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        EapResult result = mStartState.process(eapMessage);
+        EapError eapError = (EapError) result;
+        assertTrue(eapError.cause instanceof EapInvalidRequestException);
     }
 
     @Test
