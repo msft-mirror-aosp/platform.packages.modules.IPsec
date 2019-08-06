@@ -236,6 +236,7 @@ public final class IkeEncryptedPayloadBodyTest {
         IkeEncryptedPayloadBody payloadBody =
                 new IkeEncryptedPayloadBody(
                         mIkeMessage,
+                        IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH,
                         mHmacSha1IntegrityMac,
                         mAesCbcCipher,
                         mHmacSha1IntegrityKey,
@@ -257,6 +258,7 @@ public final class IkeEncryptedPayloadBodyTest {
         IkeEncryptedPayloadBody payloadBody =
                 new IkeEncryptedPayloadBody(
                         message,
+                        IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH,
                         mHmacSha1IntegrityMac,
                         tripleDesCipher,
                         TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_INTE_KEY),
