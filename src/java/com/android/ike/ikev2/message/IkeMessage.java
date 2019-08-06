@@ -492,7 +492,14 @@ public final class IkeMessage {
                 }
                 pair =
                         IkePayloadFactory.getIkeSkPayload(
-                                inputPacket, integrityMac, decryptCipher, integrityKey, decryptKey);
+                                false /*isSkf*/,
+                                inputPacket,
+                                integrityMac,
+                                decryptCipher,
+                                integrityKey,
+                                decryptKey);
+
+                // TODO: Support decoding IkeSkfPayload
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 return new DecodeResult(
                         DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE,
@@ -517,7 +524,7 @@ public final class IkeMessage {
                         decodePayloadList(
                                 firstPayloadType,
                                 header.isResponseMsg,
-                                skPayload.getUnencryptedPayloads());
+                                skPayload.getUnencryptedData());
 
                 header.checkInboundValidOrThrow(inputPacket.length);
                 return new DecodeResult(
