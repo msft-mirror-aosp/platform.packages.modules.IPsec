@@ -47,10 +47,12 @@ import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimInvalidLengthException;
 import com.android.ike.eap.message.EapData;
+import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
 import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
@@ -131,6 +133,12 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         transitionTo(new CreatedState());
     }
 
+    @Override
+    @EapMethod
+    int getEapMethod() {
+        return EAP_TYPE_SIM;
+    }
+
     @VisibleForTesting
     protected SimpleState getState() {
         return mState;
@@ -155,6 +163,12 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         public EapResult process(EapMessage message) {
             if (message.eapData.eapType == EAP_NOTIFICATION) {
                 return handleEapNotification(mTAG, message);
+            }
+
+            if (message.eapData.eapType != getEapMethod()) {
+                return new EapError(new EapInvalidRequestException(
+                        "Expected EAP Type " + getEapMethod()
+                                + ", received " + message.eapData.eapType));
             }
 
             DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
@@ -201,6 +215,12 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         public EapResult process(EapMessage message) {
             if (message.eapData.eapType == EAP_NOTIFICATION) {
                 return handleEapNotification(mTAG, message);
+            }
+
+            if (message.eapData.eapType != getEapMethod()) {
+                return new EapError(new EapInvalidRequestException(
+                        "Expected EAP Type " + getEapMethod()
+                                + ", received " + message.eapData.eapType));
             }
 
             DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
@@ -362,6 +382,12 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 return new EapFailure();
             } else if (message.eapData.eapType == EAP_NOTIFICATION) {
                 return handleEapNotification(mTAG, message);
+            }
+
+            if (message.eapData.eapType != getEapMethod()) {
+                return new EapError(new EapInvalidRequestException(
+                        "Expected EAP Type " + getEapMethod()
+                                + ", received " + message.eapData.eapType));
             }
 
             DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
