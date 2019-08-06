@@ -1510,7 +1510,7 @@ public class IkeSessionStateMachine extends StateMachine {
         private List<IkePayload> mOutboundRespPayloads;
         private Set<ChildSessionStateMachine> mAwaitingChildResponse;
 
-        // TODO: Support retransmitting.
+        private EncryptedRetransmitter mRetransmitter;
 
         @Override
         public void enter() {
@@ -1680,7 +1680,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
-            // TODO: Stop retransimitting
+            mRetransmitter.stopRetransmitting();
 
             List<IkePayload> handledPayloads = new LinkedList<>();
 
@@ -1868,8 +1868,7 @@ public class IkeSessionStateMachine extends StateMachine {
                             mCurrentIkeSaRecord.getLocalRequestMessageId());
             IkeMessage ikeMessage = new IkeMessage(ikeHeader, outboundPayloads);
 
-            sendEncryptedIkeMessage(ikeMessage);
-            // TODO: Start retransmission
+            mRetransmitter = new EncryptedRetransmitter(ikeMessage);
         }
 
         private void handleOutboundResponse(
@@ -2818,6 +2817,11 @@ public class IkeSessionStateMachine extends StateMachine {
 
             authenticatePsk(mEapMsk, authPayload, mRespIdPayload);
         }
+
+        @Override
+        public void exit() {
+            mRetransmitter.stopRetransmitting();
+        }
     }
 
     private abstract class RekeyIkeHandlerBase extends DeleteResponderBase {
@@ -2977,7 +2981,6 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void enter() {
-            // TODO: Give mRetransmitter an actual request once buildIkeRekeyReq is implemented
             try {
                 mRetransmitter = new EncryptedRetransmitter(buildIkeRekeyReq());
             } catch (IOException e) {
