@@ -49,6 +49,7 @@ import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
+import com.android.ike.eap.exceptions.EapSimIdentityUnavailableException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
 import com.android.ike.eap.exceptions.EapSimInvalidLengthException;
 import com.android.ike.eap.message.EapData;
@@ -273,6 +274,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             } catch (EapSimInvalidAttributeException ex) {
                 Log.d(mTAG, "Exception thrown while making AtIdentity attribute", ex);
                 return new EapError(ex);
+            } catch (EapSimIdentityUnavailableException ex) {
+                Log.d(mTAG, "Unable to get IMSI for subId=" + mEapSimConfig.subId);
+                return new EapError(ex);
             }
 
             return buildResponseMessage(EAP_SIM_START, message.eapIdentifier, responseAttributes);
@@ -320,16 +324,21 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         @VisibleForTesting
         @Nullable
         AtIdentity getIdentityResponse(EapSimTypeData eapSimTypeData)
-                throws EapSimInvalidAttributeException {
+                throws EapSimInvalidAttributeException, EapSimIdentityUnavailableException {
             Set<Integer> attributes = eapSimTypeData.attributeMap.keySet();
 
             // TODO(b/136180022): process separate ID requests differently (pseudonym vs permanent)
             if (attributes.contains(EAP_AT_PERMANENT_ID_REQ)
                     || attributes.contains(EAP_AT_FULLAUTH_ID_REQ)
                     || attributes.contains(EAP_AT_ANY_ID_REQ)) {
-                // TODO(b/136482803): handle case where identity unavailable
+                String imsi = mTelephonyManager.getSubscriberId();
+                if (imsi == null) {
+                    throw new EapSimIdentityUnavailableException(
+                            "IMSI for subId (" + mEapSimConfig.subId + ") not available");
+                }
+
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
-                String identity = "1" + mTelephonyManager.getSubscriberId();
+                String identity = "1" + imsi;
                 mIdentity = identity.getBytes();
                 return AtIdentity.getAtIdentity(mIdentity);
             }

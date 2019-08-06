@@ -39,6 +39,7 @@ import static org.mockito.Mockito.when;
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
+import com.android.ike.eap.exceptions.EapSimIdentityUnavailableException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
@@ -48,6 +49,7 @@ import com.android.ike.eap.message.EapSimAttribute.AtMac;
 import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimTypeData;
+import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
 import org.junit.Before;
@@ -133,6 +135,28 @@ public class EapSimStartStateTest extends EapSimStateTest {
         assertArrayEquals(EAP_SIM_IDENTITY.getBytes(), mStartState.mIdentity);
         verify(mMockTelephonyManager).getSubscriberId();
         assertArrayEquals(EAP_SIM_IDENTITY.getBytes(), atIdentity.identity);
+        verifyNoMoreInteractions(mMockTelephonyManager);
+    }
+
+    @Test
+    public void testAddIdentityAttributeToResponseImsiUnavailable() throws Exception {
+        EapMessage eapMessage = new EapMessage(
+                EAP_CODE_REQUEST,
+                ID_INT,
+                new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA));
+        mAttributes.put(EAP_AT_VERSION_LIST, new AtVersionList(8, 1));
+        mAttributes.put(EAP_AT_PERMANENT_ID_REQ, new AtPermanentIdReq());
+        EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, mAttributes);
+        DecodeResult decodeResult = new DecodeResult(eapSimTypeData);
+
+        when(mMockEapSimTypeDataDecoder.decode(DUMMY_EAP_TYPE_DATA)).thenReturn(decodeResult);
+        when(mMockTelephonyManager.getSubscriberId()).thenReturn(null);
+
+        EapResult result = mStartState.process(eapMessage);
+        EapError eapError = (EapError) result;
+        assertTrue(eapError.cause instanceof EapSimIdentityUnavailableException);
+
+        verify(mMockTelephonyManager).getSubscriberId();
         verifyNoMoreInteractions(mMockTelephonyManager);
     }
 
