@@ -61,6 +61,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
+import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -832,6 +833,23 @@ public class IkeSessionStateMachine extends StateMachine {
                         + " is not correctly closed.");
     }
 
+    private void handleIkeFatalError(Exception error) {
+        IkeException ikeException =
+                error instanceof IkeException
+                        ? (IkeException) error
+                        : new IkeInternalException(error);
+
+        // Clean up all SaRecords.
+        closeAllSaRecords(false /*expectSaClosed*/);
+        mUserCbExecutor.execute(
+                () -> {
+                    mIkeSessionCallback.onError(ikeException);
+                });
+        loge("Fatal error", ikeException);
+
+        quitNow();
+    }
+
     /** Initial state of IkeSessionStateMachine. */
     class Initial extends ExceptionHandler {
         @Override
@@ -856,7 +874,7 @@ public class IkeSessionStateMachine extends StateMachine {
                                 mIkeSessionOptions.getUdpEncapsulationSocket(),
                                 IkeSessionStateMachine.this);
             } catch (ErrnoException | SocketException e) {
-                // TODO: handle exception and close IkeSession.
+                handleIkeFatalError(e);
             }
         }
 
@@ -931,8 +949,8 @@ public class IkeSessionStateMachine extends StateMachine {
                     transitionTo(mChildProcedureOngoing);
                     break;
                 default:
-                    Log.wtf(TAG, "Invalid local request procedure type: " + req.procedureType);
-                    break;
+                    throw new IllegalArgumentException(
+                            "Invalid local request procedure type: " + req.procedureType);
             }
         }
     }
@@ -1382,9 +1400,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void handleRetransmissionFailure() {
-            // Fire fatal error callbacks.
-
-            quitNow();
+            handleIkeFatalError(new IOException("Retransmitting failure"));
         }
     }
 
@@ -2010,30 +2026,27 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void enterState() {
-            IkeMessage request = buildRequest();
+            try {
+                IkeMessage request = buildIkeInitReq();
 
-            // Register local SPI to receive the IKE INIT response.
-            mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
+                // Register local SPI to receive the IKE INIT response.
+                mIkeSocket.registerIke(
+                        request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
 
-            mIkeInitRequestBytes = request.encode();
-            mIkeInitNoncePayload =
-                    request.getPayloadForType(IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
-            mRetransmitter = new UnencryptedRetransmitter(request);
+                mIkeInitRequestBytes = request.encode();
+                mIkeInitNoncePayload =
+                        request.getPayloadForType(
+                                IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
+                mRetransmitter = new UnencryptedRetransmitter(request);
+            } catch (IOException e) {
+                // Fail to assign IKE SPI
+                handleIkeFatalError(e);
+            }
         }
 
         @Override
         protected void triggerRetransmit() {
             mRetransmitter.retransmit();
-        }
-
-        private IkeMessage buildRequest() {
-            try {
-                return buildIkeInitReq();
-            } catch (IOException e) {
-                // TODO: Handle SPI assigning failure.
-                throw new UnsupportedOperationException(
-                        "Do not support handling SPI assigning failure.");
-            }
         }
 
         @Override
@@ -2055,6 +2068,7 @@ public class IkeSessionStateMachine extends StateMachine {
             if (ikeHeader.isResponseMsg) {
                 DecodeResult decodeResult = IkeMessage.decode(0, ikeHeader, ikePacketBytes);
 
+                // TODO: Translate decoding status to readable String.
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
                         handleResponseIkeMessage(decodeResult.ikeMessage);
@@ -2062,10 +2076,13 @@ public class IkeSessionStateMachine extends StateMachine {
                         mCurrentIkeSaRecord.incrementLocalRequestMessageId();
                         break;
                     case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
-                        // Fall through to default
+                        // IKE INIT response is not protected. So we should never get this status
+                        throw new IllegalArgumentException(
+                                "Unexpected decoding status: " + decodeResult.status);
                     case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
-                        // TODO:Since IKE_INIT is not protected, log and ignore this message.
-                        throw new UnsupportedOperationException("Cannot handle this error.");
+                        logi(
+                                "Discard unencrypted response with syntax error",
+                                decodeResult.ikeException);
                     default:
                         throw new IllegalArgumentException(
                                 "Invalid decoding status: " + decodeResult.status);
@@ -2073,7 +2090,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
             } else {
                 // TODO: Also prettyprint IKE header in the log.
-                Log.e(TAG, "Received a request while waiting for IKE_INIT response.");
+                logi("Received a request while waiting for IKE_INIT response.");
             }
         }
 
@@ -2109,13 +2126,9 @@ public class IkeSessionStateMachine extends StateMachine {
                 ikeInitSuccess = true;
 
                 transitionTo(mCreateIkeLocalIkeAuth);
-            } catch (IkeProtocolException e) {
-                // TODO: Handle processing errors.
-            } catch (GeneralSecurityException e) {
-                // TODO: Handle DH key exchange failure.
-            } catch (IOException e) {
-                // TODO: Handle the error case when the remote IKE SPI has been reserved with the
-                // remote address.
+            } catch (IkeProtocolException | GeneralSecurityException | IOException e) {
+                // TODO: Try another DH group to buld KE Payload if receiving InvalidKeException
+                handleIkeFatalError(e);
             } finally {
                 if (!ikeInitSuccess) {
                     if (mLocalIkeSpiResource != null) {
@@ -2214,11 +2227,11 @@ public class IkeSessionStateMachine extends StateMachine {
                         break;
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+
                         if (notifyPayload.isErrorNotify()) {
-                            // TODO: Throw IkeExceptions according to error types.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handle error notifications in response.");
+                            throw notifyPayload.validateAndBuildIkeException();
                         }
+
                         switch (notifyPayload.notifyType) {
                             case NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP:
                                 natSourcePayloads.add(notifyPayload);
@@ -2315,7 +2328,6 @@ public class IkeSessionStateMachine extends StateMachine {
         public void exitState() {
             super.exitState();
             mRetransmitter.stopRetransmitting();
-            // TODO: Store IKE_INIT request and response in mIkeSessionOptions for IKE_AUTH
         }
 
         private class UnencryptedRetransmitter extends Retransmitter {
@@ -2333,9 +2345,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
             @Override
             public void handleRetransmissionFailure() {
-                // Fire fatal error callbacks.
-
-                quitNow();
+                handleIkeFatalError(new IOException("Retransmitting IKE INIT request failure"));
             }
         }
     }
@@ -3704,5 +3714,10 @@ public class IkeSessionStateMachine extends StateMachine {
 
             return payloadList;
         }
+    }
+
+    protected void logi(String s, Throwable cause) {
+        // TODO: Use IKE Log class
+        Log.i(TAG, s, cause);
     }
 }
