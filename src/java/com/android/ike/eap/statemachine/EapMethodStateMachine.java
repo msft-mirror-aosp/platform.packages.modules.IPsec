@@ -17,6 +17,7 @@
 package com.android.ike.eap.statemachine;
 
 import com.android.ike.eap.EapResult;
+import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.utils.SimpleStateMachine;
 
@@ -25,4 +26,11 @@ import com.android.ike.utils.SimpleStateMachine;
  * implementations.
  */
 public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessage, EapResult> {
+    /**
+     * Returns the EAP Method type for this EapMethodStateMachine implementation.
+     *
+     * @return the IANA value for the EAP Method represented by this EapMethodStateMachine
+     */
+    @EapMethod
+    abstract int getEapMethod();
 }
