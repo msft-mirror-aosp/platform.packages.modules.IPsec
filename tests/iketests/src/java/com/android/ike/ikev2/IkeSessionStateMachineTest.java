@@ -802,6 +802,20 @@ public final class IkeSessionStateMachineTest {
                 mSpyCurrentIkeSaRecord.getRemoteRequestMessageId());
     }
 
+    private void verifyRetransmissionStarted() {
+        assertTrue(
+                mIkeSessionStateMachine
+                        .getHandler()
+                        .hasMessages(IkeSessionStateMachine.CMD_RETRANSMIT));
+    }
+
+    private void verifyRetransmissionStopped() {
+        assertFalse(
+                mIkeSessionStateMachine
+                        .getHandler()
+                        .hasMessages(IkeSessionStateMachine.CMD_RETRANSMIT));
+    }
+
     @Test
     public void testQuit() {
         mIkeSessionStateMachine.quit();
@@ -844,6 +858,8 @@ public final class IkeSessionStateMachineTest {
 
         // Send IKE INIT request
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         // Receive IKE INIT response
         ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
@@ -876,6 +892,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
 
         // Validate negotiated SA proposal.
         SaProposal negotiatedProposal = mIkeSessionStateMachine.mSaProposal;
@@ -1025,6 +1042,7 @@ public final class IkeSessionStateMachineTest {
                 new LinkedList<>(),
                 childStateMachine);
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         verify(mMockIkeMessageHelper)
                 .encryptAndEncode(
@@ -1069,6 +1087,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        verifyRetransmissionStopped();
     }
 
     @Test
@@ -1683,6 +1702,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCreateIkeLocalIkeAuthPsk() throws Exception {
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
 
         // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
         List<IkePayload> authRelatedPayloads = new LinkedList<>();
@@ -1708,6 +1728,7 @@ public final class IkeSessionStateMachineTest {
         authRelatedPayloads.add(respIdPayload);
 
         verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, true);
+        verifyRetransmissionStopped();
     }
 
     @Test
@@ -1717,6 +1738,7 @@ public final class IkeSessionStateMachineTest {
 
         // Mock IKE INIT
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
 
         // Build IKE AUTH response with EAP Payload and ID-Responder Payload.
 
@@ -1756,6 +1778,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuthInEap);
+        verifyRetransmissionStopped();
         assertNotNull(mIkeSessionStateMachine.mInitIdPayload);
         assertNotNull(mIkeSessionStateMachine.mRespIdPayload);
 
@@ -1806,6 +1829,7 @@ public final class IkeSessionStateMachineTest {
         IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
         callback.onResponse(EAP_DUMMY_MSG);
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         verify(mMockIkeMessageHelper)
                 .encryptAndEncode(
@@ -1930,6 +1954,7 @@ public final class IkeSessionStateMachineTest {
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap);
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_EAP_FINISH_EAP_AUTH, mPsk);
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
         List<IkePayload> authRelatedPayloads = new LinkedList<>();
@@ -1954,6 +1979,7 @@ public final class IkeSessionStateMachineTest {
                                 ID_PAYLOAD_RESPONDER_HEX_STRING);
 
         verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, false);
+        verifyRetransmissionStopped();
     }
 
     @Test
@@ -1974,6 +2000,7 @@ public final class IkeSessionStateMachineTest {
                         anyObject(),
                         eq(mSpyCurrentIkeSaRecord),
                         mIkeMessageCaptor.capture());
+        verifyRetransmissionStarted();
 
         // Verify outbound message
         IkeMessage rekeyMsg = mIkeMessageCaptor.getValue();
@@ -2017,6 +2044,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
                 new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE));
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         // Prepare "rekeyed" SA
         when(mMockSaRecordHelper.makeRekeyedIkeSaRecord(
@@ -2035,6 +2063,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeLocalDelete);
+        verifyRetransmissionStarted();
         assertEquals(mSpyLocalInitIkeSaRecord, mIkeSessionStateMachine.mLocalInitNewIkeSaRecord);
         verify(mSpyIkeSocket)
                 .registerIke(
@@ -2056,6 +2085,8 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeLocalDelete);
+        verifyRetransmissionStarted();
+
         verify(mMockIkeMessageHelper)
                 .encryptAndEncode(
                         anyObject(),
@@ -2106,6 +2137,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                 mIkeSessionStateMachine.mRekeyIkeLocalDelete);
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         // Receive Delete response
         ReceivedIkePacket dummyDeleteIkeRespReceivedPacket =
@@ -2121,6 +2153,7 @@ public final class IkeSessionStateMachineTest {
         verify(mMockIkeSessionCallback, never()).onClosed();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        verifyRetransmissionStopped();
     }
 
     @Test
@@ -2134,6 +2167,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                 mIkeSessionStateMachine.mRekeyIkeLocalDelete);
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         // Receive an empty (DPD) request on the new IKE SA
         mIkeSessionStateMachine.sendMessage(
@@ -2145,6 +2179,7 @@ public final class IkeSessionStateMachineTest {
         verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        verifyRetransmissionStopped();
     }
 
     @Test
@@ -2591,6 +2626,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
                 new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE));
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         verify(mMockIkeMessageHelper)
                 .encryptAndEncode(
@@ -2628,6 +2664,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
                 new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE));
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         ReceivedIkePacket received = makeDeleteIkeResponse(mSpyCurrentIkeSaRecord);
         mIkeSessionStateMachine.sendMessage(
@@ -2649,6 +2686,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
                 new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE));
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
 
         // Verify delete sent out.
         verify(mMockIkeMessageHelper)
@@ -2663,6 +2701,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, received);
 
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
         verifyIncrementRemoteReqMsgId();
 
         verify(mMockIkeMessageHelper)
@@ -2803,6 +2842,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
+        verifyRetransmissionStarted();
     }
 
     @Test

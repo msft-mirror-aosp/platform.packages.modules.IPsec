@@ -21,12 +21,14 @@ import android.annotation.Nullable;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 
 /**
- * IkeSkPayload represents a Encrypted Payload.
+ * IkeSkPayload represents the common information of an Encrypted and Authenticated Payload and an
+ * Encrypted and Authenticated Fragment Payload.
  *
  * <p>It contains other payloads in encrypted form. It is must be the last payload in the message.
  * It should be the only payload in this implementation.
@@ -36,7 +38,7 @@ import java.security.GeneralSecurityException;
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-105">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class IkeSkPayload extends IkePayload {
+public class IkeSkPayload extends IkePayload {
 
     private final IkeEncryptedPayloadBody mIkeEncryptedPayloadBody;
 
@@ -50,6 +52,7 @@ public final class IkeSkPayload extends IkePayload {
      * @param integrityKey the negotiated integrity algorithm key.
      * @param decryptKey the negotiated decryption key.
      */
+    @VisibleForTesting
     IkeSkPayload(
             boolean critical,
             byte[] message,
@@ -58,13 +61,41 @@ public final class IkeSkPayload extends IkePayload {
             byte[] integrityKey,
             byte[] decryptKey)
             throws IkeProtocolException, GeneralSecurityException {
-        super(PAYLOAD_TYPE_SK, critical);
+
+        this(
+                false /*isSkf*/,
+                critical,
+                IkeHeader.IKE_HEADER_LENGTH + GENERIC_HEADER_LENGTH,
+                message,
+                integrityMac,
+                decryptCipher,
+                integrityKey,
+                decryptKey);
+    }
+
+    /** Construct an instance of IkeSkPayload from decrypting an incoming packet. */
+    protected IkeSkPayload(
+            boolean isSkf,
+            boolean critical,
+            int encryptedBodyOffset,
+            byte[] message,
+            @Nullable IkeMacIntegrity integrityMac,
+            IkeCipher decryptCipher,
+            byte[] integrityKey,
+            byte[] decryptKey)
+            throws IkeProtocolException, GeneralSecurityException {
+        super(isSkf ? PAYLOAD_TYPE_SKF : PAYLOAD_TYPE_SK, critical);
 
         // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
         mIkeEncryptedPayloadBody =
                 new IkeEncryptedPayloadBody(
-                        message, integrityMac, decryptCipher, integrityKey, decryptKey);
+                        message,
+                        encryptedBodyOffset,
+                        integrityMac,
+                        decryptCipher,
+                        integrityKey,
+                        decryptKey);
     }
 
     /**
@@ -78,6 +109,7 @@ public final class IkeSkPayload extends IkePayload {
      * @param integrityKey the negotiated integrity algorithm key.
      * @param encryptKey the negotiated encryption key.
      */
+    @VisibleForTesting
     IkeSkPayload(
             IkeHeader ikeHeader,
             @PayloadType int firstPayloadType,
@@ -102,11 +134,11 @@ public final class IkeSkPayload extends IkePayload {
     }
 
     /**
-     * Return unencrypted payload list
+     * Return unencrypted data.
      *
-     * @return unencrypted payload list in a byte array.
+     * @return unencrypted data in a byte array.
      */
-    public byte[] getUnencryptedPayloads() {
+    public byte[] getUnencryptedData() {
         return mIkeEncryptedPayloadBody.getUnencryptedData();
     }
 
