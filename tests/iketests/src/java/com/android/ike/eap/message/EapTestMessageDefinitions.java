@@ -95,6 +95,8 @@ public class EapTestMessageDefinitions {
     public static final byte[] SHORT_TYPE_DATA = hexStringToByteArray("0A");
     public static final byte[] TYPE_DATA_INVALID_ATTRIBUTE =
             hexStringToByteArray("0A00007F01");
+    public static final byte[] EAP_SIM_START_DUPLICATE_ATTRIBUTES =
+            hexStringToByteArray("0A00000F02" + "0A010000" + "0A010000");
 
     // RAND Challenge Results
     public static final String SRES_1 = "11223344";
