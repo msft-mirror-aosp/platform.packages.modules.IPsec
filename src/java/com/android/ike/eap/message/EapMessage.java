@@ -16,7 +16,7 @@
 
 package com.android.ike.eap.message;
 
-import static com.android.ike.eap.message.EapData.NAK_DATA;
+import static com.android.ike.eap.message.EapData.EAP_NAK;
 import static com.android.ike.eap.message.EapData.NOTIFICATION_DATA;
 
 import android.annotation.IntDef;
@@ -36,6 +36,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 
 /**
  * EapMessage represents an EAP Message.
@@ -187,13 +188,22 @@ public class EapMessage {
      * EapResponse object.
      *
      * @param eapIdentifier the identifier for the message being responded to
+     * @param supportedEapTypes Collection of EAP Method types supported by the EAP Session
      * @return an EapResponse object containing an EAP-Response/Nak message with an identifier
      *         matching the given identifier, or an EapError if an exception was thrown
      */
-    public static EapResult getNakResponse(int eapIdentifier) {
+    public static EapResult getNakResponse(
+            int eapIdentifier,
+            Collection<Integer> supportedEapTypes) {
         try {
+            ByteBuffer buffer = ByteBuffer.allocate(supportedEapTypes.size());
+            for (int eapMethodType : supportedEapTypes) {
+                buffer.put((byte) eapMethodType);
+            }
+            EapData nakData = new EapData(EAP_NAK, buffer.array());
+
             return EapResponse.getEapResponse(
-                    new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NAK_DATA));
+                    new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, nakData));
         } catch (EapSilentException ex) {
             // this should never happen - the only variable value is the identifier
             Log.wtf(TAG,  "Failed to create Nak for message with identifier="

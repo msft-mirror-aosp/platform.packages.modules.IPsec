@@ -17,13 +17,13 @@
 package com.android.ike.eap.message;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
-import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
-import static com.android.ike.eap.message.EapData.NAK_DATA;
+import static com.android.ike.eap.message.EapData.EAP_NAK;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_TYPE_DATA;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_TYPE_DATA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
@@ -49,6 +49,8 @@ import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
 
 import org.junit.Test;
 
+import java.util.Arrays;
+
 public class EapMessageTest {
     @Test
     public void testConstructorRequestWithoutType() throws Exception {
@@ -67,12 +69,12 @@ public class EapMessageTest {
         assertEquals(EAP_SUCCESS_PACKET.length, result.eapLength);
         assertNull(result.eapData);
 
-        EapData expectedEapData = new EapData(EAP_TYPE_AKA,
-                hexStringToByteArray(EAP_REQUEST_TYPE_DATA));
-        result = EapMessage.decode(EAP_REQUEST_AKA_IDENTITY_PACKET);
+        EapData expectedEapData = new EapData(EAP_TYPE_SIM,
+                hexStringToByteArray(EAP_REQUEST_SIM_TYPE_DATA));
+        result = EapMessage.decode(EAP_REQUEST_SIM_START_PACKET);
         assertEquals(EAP_CODE_REQUEST, result.eapCode);
         assertEquals(ID_INT, result.eapIdentifier);
-        assertEquals(EAP_REQUEST_AKA_IDENTITY_PACKET.length, result.eapLength);
+        assertEquals(EAP_REQUEST_SIM_START_PACKET.length, result.eapLength);
         assertEquals(expectedEapData, result.eapData);
     }
 
@@ -137,7 +139,8 @@ public class EapMessageTest {
         byte[] actualPacket = eapMessage.encode();
         assertArrayEquals(EAP_SUCCESS_PACKET, actualPacket);
 
-        eapMessage = new EapMessage(EAP_CODE_RESPONSE, ID_INT, NAK_DATA);
+        EapData nakData = new EapData(EAP_NAK, new byte[] {EAP_TYPE_SIM});
+        eapMessage = new EapMessage(EAP_CODE_RESPONSE, ID_INT, nakData);
         actualPacket = eapMessage.encode();
         assertArrayEquals(EAP_RESPONSE_NAK_PACKET, actualPacket);
     }
@@ -155,13 +158,13 @@ public class EapMessageTest {
 
     @Test
     public void testDecodeEncode() throws Exception {
-        byte[] result = EapMessage.decode(EAP_REQUEST_AKA_IDENTITY_PACKET).encode();
-        assertArrayEquals(EAP_REQUEST_AKA_IDENTITY_PACKET, result);
+        byte[] result = EapMessage.decode(EAP_REQUEST_SIM_START_PACKET).encode();
+        assertArrayEquals(EAP_REQUEST_SIM_START_PACKET, result);
     }
 
     @Test
     public void testGetNakResponse() {
-        EapResult nakResponse = EapMessage.getNakResponse(ID_INT);
+        EapResult nakResponse = EapMessage.getNakResponse(ID_INT, Arrays.asList(EAP_TYPE_SIM));
 
         assertTrue(nakResponse instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) nakResponse;

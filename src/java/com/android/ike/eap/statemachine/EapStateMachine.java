@@ -114,7 +114,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 return new DecodeResult(eapMessage);
             } catch (UnsupportedEapTypeException ex) {
-                return new DecodeResult(EapMessage.getNakResponse(ex.eapIdentifier));
+                return new DecodeResult(
+                        EapMessage.getNakResponse(
+                                ex.eapIdentifier,
+                                mEapSessionConfig.eapConfigs.keySet()));
             } catch (EapSilentException ex) {
                 return new DecodeResult(new EapError(ex));
             }
@@ -237,7 +240,9 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 mEapMethodStateMachine = buildEapMethodStateMachine(eapType);
 
                 if (mEapMethodStateMachine == null) {
-                    return EapMessage.getNakResponse(eapMessage.eapIdentifier);
+                    return EapMessage.getNakResponse(
+                            eapMessage.eapIdentifier,
+                            mEapSessionConfig.eapConfigs.keySet());
                 }
             }
 
