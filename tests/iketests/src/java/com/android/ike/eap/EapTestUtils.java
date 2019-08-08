@@ -30,4 +30,13 @@ public class EapTestUtils {
     public static EapSessionConfig getDummyEapSessionConfig() {
         return new EapSessionConfig(new HashMap<>(), new byte[0]);
     }
+
+    /**
+     * Creates and returns a dummy EapSessionConfig instance with EAP-SIM configured.
+     *
+     * @return a new EapSessionConfig with EAP-SIM configs set
+     */
+    public static EapSessionConfig getDummyEapSimSessionConfig() {
+        return new EapSessionConfig.Builder().setEapSimConfig(0).build();
+    }
 }
