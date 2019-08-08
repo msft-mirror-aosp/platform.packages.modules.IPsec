@@ -54,6 +54,13 @@ import java.util.List;
  * ChildSessionStateMachine, where they use same cryptographic algorithms but with different keys.
  * We store cryptographic algorithms and unchanged SA configurations in IkeSessionOptions or
  * ChildSessionOptions and store changed information including keys, SPIs, and nonces in SaRecord.
+ *
+ * <p>All keys are named by the key type plus the source of the traffic this key is protecting. For
+ * example, "mSkAi" represents the integrity key that protects traffic from the SA initiator to the
+ * SA responder.
+ *
+ * <p>Except for keys, all other paramters (SPIs, nonces and messages) are named by the creator. For
+ * example, "initSPI" represents a SPI that is created by the SA initiator.
  */
 public abstract class SaRecord implements AutoCloseable {
     private static ISaRecordHelper sSaRecordHelper = new SaRecordHelper();
@@ -387,16 +394,18 @@ public abstract class SaRecord implements AutoCloseable {
             ByteBuffer keyMatBuffer = ByteBuffer.wrap(keyMat);
             keyMatBuffer.get(skEi).get(skAi).get(skEr).get(skAr);
 
+            // IpSecTransform for traffic from the initiator
             IpSecTransform initTransform = null;
+            // IpSecTransform for traffic from the responder
             IpSecTransform respTransform = null;
             try {
                 // Build IpSecTransform
                 initTransform =
                         sIpSecTransformHelper.makeIpSecTransform(
                                 childSaRecordConfig.context,
-                                childSaRecordConfig.initAddress,
+                                childSaRecordConfig.initAddress /*source address*/,
                                 childSaRecordConfig.udpEncapSocket,
-                                childSaRecordConfig.initSpi,
+                                childSaRecordConfig.respSpi /*destination SPI*/,
                                 childSaRecordConfig.integrityAlgo,
                                 childSaRecordConfig.encryptionAlgo,
                                 skAi,
@@ -405,9 +414,9 @@ public abstract class SaRecord implements AutoCloseable {
                 respTransform =
                         sIpSecTransformHelper.makeIpSecTransform(
                                 childSaRecordConfig.context,
-                                childSaRecordConfig.respAddress,
+                                childSaRecordConfig.respAddress /*source address*/,
                                 childSaRecordConfig.udpEncapSocket,
-                                childSaRecordConfig.respSpi,
+                                childSaRecordConfig.initSpi /*destination SPI*/,
                                 childSaRecordConfig.integrityAlgo,
                                 childSaRecordConfig.encryptionAlgo,
                                 skAr,
@@ -420,8 +429,8 @@ public abstract class SaRecord implements AutoCloseable {
                 boolean isLocalInit = childSaRecordConfig.isLocalInit;
                 int inSpi = isLocalInit ? initSpi : respSpi;
                 int outSpi = isLocalInit ? respSpi : initSpi;
-                IpSecTransform inTransform = isLocalInit ? initTransform : respTransform;
-                IpSecTransform outTransform = isLocalInit ? respTransform : initTransform;
+                IpSecTransform inTransform = isLocalInit ? respTransform : initTransform;
+                IpSecTransform outTransform = isLocalInit ? initTransform : respTransform;
 
                 return new ChildSaRecord(
                         inSpi,
@@ -439,7 +448,7 @@ public abstract class SaRecord implements AutoCloseable {
 
             } catch (Exception e) {
                 if (initTransform != null) initTransform.close();
-                if (respTransform != null) initTransform.close();
+                if (respTransform != null) respTransform.close();
                 throw e;
             }
         }
@@ -480,7 +489,7 @@ public abstract class SaRecord implements AutoCloseable {
                 Log.wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
             }
             if (udpEncapSocket != null && sourceAddress instanceof Inet4Address) {
-                builder.setIpv4Encapsulation(udpEncapSocket, udpEncapSocket.getPort());
+                builder.setIpv4Encapsulation(udpEncapSocket, IkeSocket.IKE_SERVER_PORT);
             }
 
             if (isTransport) {
@@ -803,15 +812,7 @@ public abstract class SaRecord implements AutoCloseable {
                 IpSecTransform inTransform,
                 IpSecTransform outTransform,
                 ChildLocalRequest futureRekeyEvent) {
-            super(
-                    localInit,
-                    nonceInit,
-                    nonceResp,
-                    skAi,
-                    skAr,
-                    skEi,
-                    skEr,
-                    futureRekeyEvent);
+            super(localInit, nonceInit, nonceResp, skAi, skAr, skEi, skEr, futureRekeyEvent);
 
             mInboundSpi = inSpi;
             mOutboundSpi = outSpi;
