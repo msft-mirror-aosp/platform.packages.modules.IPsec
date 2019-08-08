@@ -16,15 +16,14 @@
 
 package com.android.ike.eap.statemachine;
 
-import static com.android.ike.TestUtils.hexStringToByteArray;
-import static com.android.ike.TestUtils.stringToHexString;
+import static com.android.ike.eap.EapTestUtils.getDummyEapSessionConfig;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_IDENTITY_DEFAULT_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.ID;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
@@ -36,20 +35,14 @@ import static org.mockito.Mockito.verify;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapResponse;
-import com.android.ike.eap.statemachine.EapStateMachine.IdentityState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
 
 import org.junit.Before;
 import org.junit.Test;
 
-public class IdentityStateTest extends EapStateTest {
-    private static final String IDENTITY_STRING = "identity";
-    private static final String IDENTITY_HEX_STRING =
-            stringToHexString(IDENTITY_STRING);
-    private static final byte[] EXPECTED_IDENTITY = IDENTITY_STRING.getBytes();
-    private static final byte[] EXPECTED_IDENTITY_RESPONSE =
-            hexStringToByteArray("02" + ID + "000D01" + IDENTITY_HEX_STRING);
+import java.security.SecureRandom;
 
+public class IdentityStateTest extends EapStateTest {
     private EapStateMachine mEapStateMachineSpy;
 
     @Before
@@ -62,23 +55,27 @@ public class IdentityStateTest extends EapStateTest {
     }
 
     @Test
-    public void testGetIdentityMessage() {
-        EapResult result = ((IdentityState) mEapState)
-                .getIdentityResponse(ID_INT, EXPECTED_IDENTITY);
-
-        assertTrue(result instanceof EapResponse);
-        EapResponse eapResponse = (EapResponse) result;
-        assertArrayEquals(EXPECTED_IDENTITY_RESPONSE, eapResponse.packet);
-        verify(mEapStateMachineSpy, never()).transitionAndProcess(any(), any());
-    }
-
-    @Test
     public void testProcess() {
+        mEapSessionConfig = getDummyEapSessionConfig(EAP_IDENTITY);
+        mEapStateMachineSpy = spy(
+                new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom()));
+        mEapState = mEapStateMachineSpy.new IdentityState();
+
         EapResult eapResult = mEapState.process(EAP_REQUEST_IDENTITY_PACKET);
 
         assertTrue(eapResult instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) eapResult;
         assertArrayEquals(EAP_RESPONSE_IDENTITY_PACKET, eapResponse.packet);
+        verify(mEapStateMachineSpy, never()).transitionAndProcess(any(), any());
+    }
+
+    @Test
+    public void testProcessDefaultIdentity() {
+        EapResult eapResult = mEapState.process(EAP_REQUEST_IDENTITY_PACKET);
+
+        assertTrue(eapResult instanceof EapResponse);
+        EapResponse eapResponse = (EapResponse) eapResult;
+        assertArrayEquals(EAP_RESPONSE_IDENTITY_DEFAULT_PACKET, eapResponse.packet);
         verify(mEapStateMachineSpy, never()).transitionAndProcess(any(), any());
     }
 
