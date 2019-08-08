@@ -746,7 +746,7 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtClientErrorCode reprents the AT_CLIENT_ERROR_CODE attribute defined in RFC 4186 Section
+     * AtClientErrorCode represents the AT_CLIENT_ERROR_CODE attribute defined in RFC 4186 Section
      * 10.19
      */
     public static class AtClientErrorCode extends EapSimAttribute {
