@@ -134,9 +134,15 @@ public class EapSimTypeData {
                 // read attributes
                 LinkedHashMap<Integer, EapSimAttribute> attributeMap = new LinkedHashMap<>();
                 while (byteBuffer.hasRemaining()) {
-                    // TODO(b/135637161): check for duplicate attributes
                     EapSimAttribute attribute = EapSimAttributeFactory.getInstance()
                             .getEapSimAttribute(byteBuffer);
+
+                    if (attributeMap.containsKey(attribute.attributeType)) {
+                        // Duplicate attributes are not allowed (RFC 4186#6.3.1)
+                        Log.d(TAG, "Duplicate attribute in parsed EAP-Message");
+                        return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
+                    }
+
                     if (attribute instanceof EapSimUnsupportedAttribute) {
                         Log.d(TAG, "Unsupported EAP-SIM attribute during decoding: "
                                 + attribute.attributeType);
