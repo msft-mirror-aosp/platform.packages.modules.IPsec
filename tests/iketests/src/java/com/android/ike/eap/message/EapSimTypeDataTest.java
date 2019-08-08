@@ -19,6 +19,7 @@ package com.android.ike.eap.message;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
 import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_START_DUPLICATE_ATTRIBUTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_START_SUBTYPE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.INVALID_SUBTYPE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_TYPE_DATA;
@@ -142,5 +143,12 @@ public class EapSimTypeDataTest {
 
         byte[] result = eapSimTypeData.encode();
         assertArrayEquals(EAP_SIM_START_SUBTYPE, result);
+    }
+
+    @Test
+    public void testDecodeDuplicateAttributes() {
+        DecodeResult result = mEapSimTypeDataDecoder.decode(EAP_SIM_START_DUPLICATE_ATTRIBUTES);
+        assertFalse(result.isSuccessfulDecode());
+        assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
     }
 }
