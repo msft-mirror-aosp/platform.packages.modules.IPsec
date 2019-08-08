@@ -259,33 +259,33 @@ public final class SaRecordTest {
         mockIpSecHelper = mock(IIpSecTransformHelper.class);
         SaRecord.setIpSecTransformHelper(mockIpSecHelper);
 
-        IpSecTransform mockInitTransform = mock(IpSecTransform.class);
-        IpSecTransform mockRespTransform = mock(IpSecTransform.class);
+        IpSecTransform mockInTransform = mock(IpSecTransform.class);
+        IpSecTransform mockOutTransform = mock(IpSecTransform.class);
         UdpEncapsulationSocket mockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
 
         when(mockIpSecHelper.makeIpSecTransform(
                         eq(context),
                         eq(LOCAL_ADDRESS),
                         eq(mockUdpEncapSocket),
-                        eq(childInitSpi),
+                        eq(childRespSpi),
                         eq(mHmacSha1IntegrityMac),
                         eq(mAesCbcCipher),
                         aryEq(initAuthKey),
                         aryEq(initEncryptKey),
                         eq(false)))
-                .thenReturn(mockInitTransform);
+                .thenReturn(mockOutTransform);
 
         when(mockIpSecHelper.makeIpSecTransform(
                         eq(context),
                         eq(REMOTE_ADDRESS),
                         eq(mockUdpEncapSocket),
-                        eq(childRespSpi),
+                        eq(childInitSpi),
                         eq(mHmacSha1IntegrityMac),
                         eq(mAesCbcCipher),
                         aryEq(respAuthKey),
                         aryEq(respEncryptKey),
                         eq(false)))
-                .thenReturn(mockRespTransform);
+                .thenReturn(mockInTransform);
 
         ChildSaRecordConfig childSaRecordConfig =
                 new ChildSaRecordConfig(
@@ -310,8 +310,8 @@ public final class SaRecordTest {
         assertTrue(childSaRecord.isLocalInit);
         assertEquals(FIRST_CHILD_INIT_SPI, childSaRecord.getLocalSpi());
         assertEquals(FIRST_CHILD_RESP_SPI, childSaRecord.getRemoteSpi());
-        assertEquals(mockInitTransform, childSaRecord.getInboundIpSecTransform());
-        assertEquals(mockRespTransform, childSaRecord.getOutboundIpSecTransform());
+        assertEquals(mockInTransform, childSaRecord.getInboundIpSecTransform());
+        assertEquals(mockOutTransform, childSaRecord.getOutboundIpSecTransform());
 
         assertArrayEquals(
                 TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_INIT_HEX_STRING),
