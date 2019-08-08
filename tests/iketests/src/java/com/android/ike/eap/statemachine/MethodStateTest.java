@@ -16,13 +16,11 @@
 
 package com.android.ike.eap.statemachine;
 
-import static androidx.test.InstrumentationRegistry.getInstrumentation;
-
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapMessage.EAP_HEADER_LENGTH;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
@@ -42,7 +40,6 @@ import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
-import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.statemachine.EapStateMachine.FailureState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
@@ -52,26 +49,19 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentMatcher;
 
-import java.security.SecureRandom;
-
 public class MethodStateTest extends EapStateTest {
-    private static final int SUB_ID = 1;
-
-    private EapStateMachine mEapStateMachine;
-
     @Before
     @Override
     public void setUp() {
-        mContext = getInstrumentation().getContext();
-        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(SUB_ID).build();
-        mEapStateMachine = new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom());
+        super.setUp();
         mEapState = mEapStateMachine.new MethodState();
+        mEapStateMachine.transitionTo(mEapState);
     }
 
     @Test
     public void testProcessUnsupportedEapType() {
         mEapState = mEapStateMachine.new MethodState();
-        EapResult result = mEapState.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
+        EapResult result = mEapState.process(EAP_REQUEST_IDENTITY_PACKET);
 
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);

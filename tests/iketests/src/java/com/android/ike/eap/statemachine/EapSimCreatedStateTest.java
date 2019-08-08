@@ -16,7 +16,7 @@
 
 package com.android.ike.eap.statemachine;
 
-import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertTrue;
@@ -67,7 +67,7 @@ public class EapSimCreatedStateTest extends EapSimStateTest {
 
     @Test
     public void testProcessIncorrectEapMethodType() throws Exception {
-        EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
+        EapData eapData = new EapData(EAP_IDENTITY, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
         EapResult result = mEapSimMethodStateMachine.process(eapMessage);
