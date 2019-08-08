@@ -28,7 +28,6 @@ import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
-import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
@@ -58,9 +57,8 @@ public class EapSimCreatedStateTest extends EapSimStateTest {
         DecodeResult decodeResult = new DecodeResult(new EapSimTypeData(EAP_SIM_START, attributes));
         when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
 
-        EapResult result = mEapSimMethodStateMachine.process(eapMessage);
+        mEapSimMethodStateMachine.process(eapMessage);
         assertTrue(mEapSimMethodStateMachine.getState() instanceof StartState);
-        assertTrue(result instanceof EapResponse);
 
         // decoded in CreatedState and StartState
         verify(mMockEapSimTypeDataDecoder, times(2)).decode(eq(DUMMY_EAP_TYPE_DATA));
