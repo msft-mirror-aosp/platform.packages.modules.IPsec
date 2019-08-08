@@ -16,13 +16,13 @@
 
 package com.android.ike.eap.message;
 
+import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_NAK;
 import static com.android.ike.eap.message.EapData.NOTIFICATION_DATA;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.util.Log;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
@@ -37,6 +37,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * EapMessage represents an EAP Message.
@@ -85,6 +87,14 @@ public class EapMessage {
     public static final int EAP_CODE_SUCCESS = 3;
     public static final int EAP_CODE_FAILURE = 4;
 
+    public static final Map<Integer, String> EAP_CODE_STRING = new HashMap<>();
+    static {
+        EAP_CODE_STRING.put(EAP_CODE_REQUEST, "REQUEST");
+        EAP_CODE_STRING.put(EAP_CODE_RESPONSE, "RESPONSE");
+        EAP_CODE_STRING.put(EAP_CODE_SUCCESS, "SUCCESS");
+        EAP_CODE_STRING.put(EAP_CODE_FAILURE, "FAILURE");
+    }
+
     public static final int EAP_HEADER_LENGTH = 4;
 
     @EapCode public final int eapCode;
@@ -123,6 +133,7 @@ public class EapMessage {
             if (eapCode == EAP_CODE_REQUEST || eapCode == EAP_CODE_RESPONSE) {
                 int eapType = Byte.toUnsignedInt(buffer.get());
                 if (!EapData.isSupportedEapType(eapType)) {
+                    LOG.e(TAG, "Decoding EAP packet with unsupported EAP-Type: " + eapType);
                     throw new UnsupportedEapTypeException(eapIdentifier,
                             "Unsupported eapType=" + eapType);
                 }
@@ -134,12 +145,16 @@ public class EapMessage {
                 eapData = null;
             }
         } catch (BufferUnderflowException ex) {
-            throw new EapInvalidPacketLengthException("Packet is missing required values", ex);
+            String msg = "EAP packet is missing required values";
+            LOG.e(TAG, msg, ex);
+            throw new EapInvalidPacketLengthException(msg, ex);
         }
 
         int eapDataLength = (eapData == null) ? 0 : eapData.getLength();
         if (eapLength > EAP_HEADER_LENGTH + eapDataLength) {
-            throw new EapInvalidPacketLengthException("Packet is shorter than specified length");
+            String msg = "Packet is shorter than specified length";
+            LOG.e(TAG, msg);
+            throw new EapInvalidPacketLengthException(msg);
         }
 
         return new EapMessage(eapCode, eapIdentifier, eapData);
@@ -177,7 +192,7 @@ public class EapMessage {
                     new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, NOTIFICATION_DATA));
         } catch (EapSilentException ex) {
             // this should never happen - the only variable value is the identifier
-            Log.wtf(TAG, "Failed to create Notification Response for message with identifier="
+            LOG.wtf(TAG, "Failed to create Notification Response for message with identifier="
                     + eapIdentifier);
             return new EapError(ex);
         }
@@ -206,7 +221,7 @@ public class EapMessage {
                     new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, nakData));
         } catch (EapSilentException ex) {
             // this should never happen - the only variable value is the identifier
-            Log.wtf(TAG,  "Failed to create Nak for message with identifier="
+            LOG.wtf(TAG,  "Failed to create Nak for message with identifier="
                     + eapIdentifier);
             return new EapError(ex);
         }
@@ -217,16 +232,19 @@ public class EapMessage {
                 && eapCode != EAP_CODE_RESPONSE
                 && eapCode != EAP_CODE_SUCCESS
                 && eapCode != EAP_CODE_FAILURE) {
+            LOG.e(TAG, "Invalid EAP Code: " + eapCode);
             throw new InvalidEapCodeException(eapCode);
         }
 
         if ((eapCode == EAP_CODE_SUCCESS || eapCode == EAP_CODE_FAILURE)
                 && eapLength != EAP_HEADER_LENGTH) {
+            LOG.e(TAG, "Invalid length for EAP-Success/EAP-Failure. Length: " + eapLength);
             throw new EapInvalidPacketLengthException(
                     "EAP Success/Failure packets must be length 4");
         }
 
         if ((eapCode == EAP_CODE_REQUEST || eapCode == EAP_CODE_RESPONSE) && eapData == null) {
+            LOG.e(TAG, "No Type value included for EAP-Request/EAP-Response");
             throw new EapInvalidPacketLengthException(
                     "EAP Request/Response packets must include a Type value");
         }
