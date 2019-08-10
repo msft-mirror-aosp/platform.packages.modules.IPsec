@@ -18,11 +18,11 @@ package com.android.ike.eap.statemachine;
 
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
-import static com.android.ike.eap.EapTestUtils.getDummyEapSessionConfig;
+import static com.android.ike.eap.EapTestUtils.getDummyEapSimSessionConfig;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MD5_CHALLENGE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_EAP_TYPE_NAK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.REQUEST_UNSUPPORTED_TYPE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_PACKET;
 
@@ -53,23 +53,23 @@ import java.security.SecureRandom;
 public class EapStateTest {
     protected Context mContext;
     protected EapSessionConfig mEapSessionConfig;
+    protected EapStateMachine mEapStateMachine;
     protected EapState mEapState;
 
     @Before
     public void setUp() {
         mContext = getInstrumentation().getContext();
-        mEapSessionConfig = getDummyEapSessionConfig();
+        mEapSessionConfig = getDummyEapSimSessionConfig();
+        mEapStateMachine = new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom());
 
         // this EapState definition is used to make sure all non-Success/Failure EAP states
         // produce the same results for error cases.
-        mEapState =
-                new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom())
-                .new EapState() {
-                    @Override
-                    public EapResult process(byte[] msg) {
-                        return decode(msg).eapResult;
-                    }
-                };
+        mEapState = mEapStateMachine.new EapState() {
+            @Override
+            public EapResult process(byte[] msg) {
+                return decode(msg).eapResult;
+            }
+        };
     }
 
     @Test
@@ -110,7 +110,7 @@ public class EapStateTest {
 
     @Test
     public void testProcessNakRequest() {
-        EapResult result = mEapState.process(REQUEST_EAP_TYPE_NAK);
+        EapResult result = mEapState.process(EAP_REQUEST_NAK_PACKET);
         assertTrue(result instanceof EapError);
 
         EapError eapError = (EapError) result;

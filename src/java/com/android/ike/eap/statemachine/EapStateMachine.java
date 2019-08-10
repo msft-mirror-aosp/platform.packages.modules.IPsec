@@ -59,9 +59,6 @@ import java.security.SecureRandom;
  *
  */
 public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
-    @VisibleForTesting
-    protected static final byte[] DEFAULT_IDENTITY = new byte[0];
-
     private final Context mContext;
     private final EapSessionConfig mEapSessionConfig;
     private final SecureRandom mSecureRandom;
@@ -114,7 +111,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 return new DecodeResult(eapMessage);
             } catch (UnsupportedEapTypeException ex) {
-                return new DecodeResult(EapMessage.getNakResponse(ex.eapIdentifier));
+                return new DecodeResult(
+                        EapMessage.getNakResponse(
+                                ex.eapIdentifier,
+                                mEapSessionConfig.eapConfigs.keySet()));
             } catch (EapSilentException ex) {
                 return new DecodeResult(new EapError(ex));
             }
@@ -193,8 +193,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                     return handleNotification(mTAG, message);
 
                 case EAP_IDENTITY:
-                    // TODO(b/133794339): identity placeholder should be replaced with a real value
-                    return getIdentityResponse(message.eapIdentifier, DEFAULT_IDENTITY);
+                    return getIdentityResponse(message.eapIdentifier);
 
                 // all EAP methods should be handled by MethodState
                 default:
@@ -203,9 +202,9 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         }
 
         @VisibleForTesting
-        EapResult getIdentityResponse(int eapIdentifier, byte[] identity) {
+        EapResult getIdentityResponse(int eapIdentifier) {
             try {
-                EapData identityData = new EapData(EAP_IDENTITY, identity);
+                EapData identityData = new EapData(EAP_IDENTITY, mEapSessionConfig.eapIdentity);
                 return EapResponse.getEapResponse(
                         new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, identityData));
             } catch (EapSilentException ex) {
@@ -237,7 +236,9 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 mEapMethodStateMachine = buildEapMethodStateMachine(eapType);
 
                 if (mEapMethodStateMachine == null) {
-                    return EapMessage.getNakResponse(eapMessage.eapIdentifier);
+                    return EapMessage.getNakResponse(
+                            eapMessage.eapIdentifier,
+                            mEapSessionConfig.eapConfigs.keySet());
                 }
             }
 
