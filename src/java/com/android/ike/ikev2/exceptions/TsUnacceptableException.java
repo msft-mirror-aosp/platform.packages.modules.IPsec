@@ -23,9 +23,24 @@ package com.android.ike.ikev2.exceptions;
  * Delete IKE exchange and close the IKE Session.
  */
 public final class TsUnacceptableException extends IkeProtocolException {
+    private static final int EXPECTED_ERROR_DATA_LEN = 0;
 
     /** Construct an instance of TsUnacceptableException. */
     public TsUnacceptableException() {
         super(ERROR_TYPE_TS_UNACCEPTABLE);
+    }
+
+    /**
+     * Construct a instance of TsUnacceptableException from a notify payload.
+     *
+     * @param notifyData the notify data included in the payload.
+     */
+    public TsUnacceptableException(byte[] notifyData) {
+        super(ERROR_TYPE_TS_UNACCEPTABLE, notifyData);
+    }
+
+    @Override
+    protected boolean isValidDataLength(int dataLen) {
+        return EXPECTED_ERROR_DATA_LEN == dataLen;
     }
 }
