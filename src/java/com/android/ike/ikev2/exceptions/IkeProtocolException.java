@@ -92,6 +92,13 @@ public abstract class IkeProtocolException extends IkeException {
         mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
+    protected IkeProtocolException(@ErrorType int code, String message, Throwable cause) {
+        super(message, cause);
+        mErrorType = code;
+        mErrorData = ERROR_DATA_NOT_INCLUDED;
+    }
+
+    // Construct an instance from a notify Payload.
     protected IkeProtocolException(@ErrorType int code, byte[] notifyData) {
         super();
 
