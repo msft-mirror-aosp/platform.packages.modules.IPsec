@@ -57,10 +57,14 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("02" + ID + "000C120E000016010001");
     public static final byte[] EAP_SIM_CLIENT_ERROR_INSUFFICIENT_CHALLENGES =
             hexStringToByteArray("02" + ID + "000C120E000016010002");
+    public static final byte[] EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS =
+            hexStringToByteArray("02" + ID + "000C120E000016010000");
 
     // EAP-SIM response containing SELECTED_VERSION (1) and IDENTITY attributes
     public static final byte[] EAP_SIM_RESPONSE_PACKET = hexStringToByteArray(
             "02" + ID + "0024120A0000100100010E060011" + IDENTITY_STRING + "000000");
+    public static final byte[] EAP_SIM_NOTIFICATION_RESPONSE = hexStringToByteArray(
+            "02" + ID + "0008120C0000");
 
     // Body of EapData is the list of supported methods
     public static final byte[] EAP_RESPONSE_NAK_PACKET =
@@ -108,6 +112,7 @@ public class EapTestMessageDefinitions {
     public static final byte[] SRES_1_BYTES = hexStringToByteArray(SRES_1);
     public static final String SRES_2 = "44332211";
     public static final byte[] SRES_2_BYTES = hexStringToByteArray(SRES_2);
+    public static final byte[] SRES_BYTES = hexStringToByteArray(SRES_1 + SRES_2);
     public static final String KC_1 = "0102030405060708";
     public static final byte[] KC_1_BYTES = hexStringToByteArray(KC_1);
     public static final String KC_2 = "0807060504030201";
@@ -167,4 +172,18 @@ public class EapTestMessageDefinitions {
             "02" + ID + "001C" // EAP-Response | ID | length in bytes
             + "120b0000" // EAP-SIM | Challenge | 2B padding
             + "0B050000" + COMPUTED_MAC_STRING); // AT_MAC attribute
+    public static final byte[] EAP_SIM_NOTIFICATION_REQUEST_WITH_EMPTY_MAC = hexStringToByteArray(
+            "01" + ID + "0020" // EAP-Request | ID | length in bytes
+                    + "120C0000" // EAP-SIM | Notification | 2B padding
+                    + "0C010000" // AT_NOTIFICATION attribute
+                    + "0B05000000000000000000000000000000000000"); // empty AT_MAC attribute
+    public static final byte[] EAP_SIM_NOTIFICATION_RESPONSE_WITH_EMPTY_MAC = hexStringToByteArray(
+            "02" + ID + "001C" // EAP-Response | ID | length in bytes
+                    + "120C0000" // EAP-SIM | Notification | 2B padding
+                    + "0B05000000000000000000000000000000000000"); // empty AT_MAC attribute
+    public static final byte[] EAP_SIM_NOTIFICATION_RESPONSE_WITH_MAC = hexStringToByteArray(
+            "02" + ID + "001C" // EAP-Response | ID | length in bytes
+            + "120C0000" // EAP-SIM | Notification | 2B padding
+            + "0B050000" + COMPUTED_MAC_STRING); // AT_MAC attribute
+
 }
