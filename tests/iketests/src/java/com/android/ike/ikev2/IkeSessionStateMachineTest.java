@@ -81,6 +81,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
+import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
@@ -199,8 +200,8 @@ public final class IkeSessionStateMachineTest {
     private static final int KEY_LEN_IKE_PRF = 20;
     private static final int KEY_LEN_IKE_SKD = KEY_LEN_IKE_PRF;
 
-    private static final int DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL = 0x1234;
     private static final int CHILD_SPI_LOCAL = 0x2ad4c0a2;
+    private static final int CHILD_SPI_REMOTE = 0xcae7019f;
 
     private static final int DUMMY_UDP_ENCAP_RESOURCE_ID = 0x3234;
     private static final int UDP_ENCAP_PORT = 34567;
@@ -237,6 +238,7 @@ public final class IkeSessionStateMachineTest {
 
     private ChildSessionStateMachine mMockChildSessionStateMachine;
     private IChildSessionFactoryHelper mMockChildSessionFactoryHelper;
+    private IChildSessionSmCallback mDummyChildSmCallback;
 
     private IkeSaRecord mSpyCurrentIkeSaRecord;
     private IkeSaRecord mSpyLocalInitIkeSaRecord;
@@ -945,6 +947,10 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
         mLooper.dispatchAll();
 
+        mDummyChildSmCallback =
+                createChildAndGetChildSessionSmCallback(
+                        mMockChildSessionStateMachine, CHILD_SPI_REMOTE, mMockChildSessionCallback);
+
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
@@ -1137,20 +1143,14 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testScheduleAndTriggerRekeyChildLocal() throws Exception {
         setupIdleStateMachine();
-        int dummySpi = 1;
         long dummyRekeyTimeout = 10000L;
-
-        IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
-        ChildSessionStateMachine childStateMachine = mock(ChildSessionStateMachine.class);
-        IChildSessionSmCallback childSmCallback =
-                createChildAndGetChildSessionSmCallback(childStateMachine, dummySpi, childCallback);
 
         ChildLocalRequest rekeyRequest =
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
-                        childCallback,
+                        mMockChildSessionCallback,
                         null /*childOptions*/);
-        childSmCallback.scheduleLocalRequest(rekeyRequest, dummyRekeyTimeout);
+        mDummyChildSmCallback.scheduleLocalRequest(rekeyRequest, dummyRekeyTimeout);
 
         mLooper.moveTimeForward(dummyRekeyTimeout);
         mLooper.dispatchAll();
@@ -1158,7 +1158,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
-        verify(childStateMachine).rekeyChildSession();
+        verify(mMockChildSessionStateMachine).rekeyChildSession();
     }
 
     private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
@@ -1240,15 +1240,10 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testDeferChildRequestToChildProcedureOngoing() throws Exception {
-        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
-        int dummyChildSpi = 1;
-
         setupIdleStateMachine();
-        IChildSessionSmCallback childSmCb =
-                createChildAndGetChildSessionSmCallback(child, dummyChildSpi);
 
         IkeDeletePayload[] inboundDelPayloads =
-                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {dummyChildSpi})};
+                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {CHILD_SPI_REMOTE})};
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
                 makeDeleteChildPacket(inboundDelPayloads, false /*isResp*/));
@@ -1257,35 +1252,32 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
-        verifyChildReceiveDeleteRequest(child, inboundDelPayloads);
+        verifyChildReceiveDeleteRequest(mMockChildSessionStateMachine, inboundDelPayloads);
     }
 
     @Test
     public void testRemoteDeleteOneChild() throws Exception {
-        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
-        int childRemoteSpi = 11;
-        int childLocalSpi = 12;
-
         setupIdleStateMachine();
-        IChildSessionSmCallback childSmCb =
-                createChildAndGetChildSessionSmCallback(child, childRemoteSpi);
-
         transitionToChildProcedureOngoing();
 
         // Receive Delete Child Request
         IkeDeletePayload[] inboundDelPayloads =
-                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {childRemoteSpi})};
+                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {CHILD_SPI_REMOTE})};
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
                 makeDeleteChildPacket(inboundDelPayloads, false /*isResp*/));
         mLooper.dispatchAll();
 
         // Verify received payloads
-        verifyChildReceiveDeleteRequest(child, inboundDelPayloads);
+        verifyChildReceiveDeleteRequest(mMockChildSessionStateMachine, inboundDelPayloads);
 
         // Outbound payload list ready
-        IkeDeletePayload outDelPayload = new IkeDeletePayload(new int[] {childLocalSpi});
-        outboundDeleteChildPayloadsReady(childSmCb, outDelPayload, true /*isResp*/, child);
+        IkeDeletePayload outDelPayload = new IkeDeletePayload(new int[] {CHILD_SPI_LOCAL});
+        outboundDeleteChildPayloadsReady(
+                mDummyChildSmCallback,
+                outDelPayload,
+                true /*isResp*/,
+                mMockChildSessionStateMachine);
 
         // Verify outbound response
         List<IkePayload> payloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
@@ -1352,25 +1344,19 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testRemoteDeleteMultipleChildSaInSameSession() throws Exception {
-        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
-        int childOneRemoteSpi = 11;
-        int childOneLocalSpi = 12;
-
-        int childTwoRemoteSpi = 21;
-        int childTwoLocalSpi = 22;
+        int newChildRemoteSpi = 21;
+        int newChildLocalSpi = 22;
 
         setupIdleStateMachine();
-        IChildSessionSmCallback childSmCb =
-                createChildAndGetChildSessionSmCallback(child, childOneRemoteSpi);
-        childSmCb.onChildSaCreated(childTwoRemoteSpi, child);
+        mDummyChildSmCallback.onChildSaCreated(newChildRemoteSpi, mMockChildSessionStateMachine);
 
         transitionToChildProcedureOngoing();
 
         // Receive Delete Child Request
         IkeDeletePayload[] inboundDelPayloads =
                 new IkeDeletePayload[] {
-                    new IkeDeletePayload(new int[] {childOneRemoteSpi}),
-                    new IkeDeletePayload(new int[] {childTwoRemoteSpi})
+                    new IkeDeletePayload(new int[] {CHILD_SPI_REMOTE}),
+                    new IkeDeletePayload(new int[] {newChildRemoteSpi})
                 };
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
@@ -1378,12 +1364,16 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify received payloads
-        verifyChildReceiveDeleteRequest(child, inboundDelPayloads);
+        verifyChildReceiveDeleteRequest(mMockChildSessionStateMachine, inboundDelPayloads);
 
         // child outbound payload list ready
         IkeDeletePayload outDelPayload =
-                new IkeDeletePayload(new int[] {childOneLocalSpi, childTwoLocalSpi});
-        outboundDeleteChildPayloadsReady(childSmCb, outDelPayload, true /*isResp*/, child);
+                new IkeDeletePayload(new int[] {CHILD_SPI_LOCAL, newChildLocalSpi});
+        outboundDeleteChildPayloadsReady(
+                mDummyChildSmCallback,
+                outDelPayload,
+                true /*isResp*/,
+                mMockChildSessionStateMachine);
         mLooper.dispatchAll();
 
         // Verify outbound response
@@ -1394,22 +1384,15 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testIgnoreUnrecognizedChildSpi() throws Exception {
-        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
-        int childRemoteSpi = 11;
-        int childLocalSpi = 12;
-
         int unrecognizedSpi = 2;
 
         setupIdleStateMachine();
-        IChildSessionSmCallback childSmCb =
-                createChildAndGetChildSessionSmCallback(child, childRemoteSpi);
-
         transitionToChildProcedureOngoing();
 
         // Receive Delete Child Request
         IkeDeletePayload[] inboundDelPayloads =
                 new IkeDeletePayload[] {
-                    new IkeDeletePayload(new int[] {unrecognizedSpi, childRemoteSpi})
+                    new IkeDeletePayload(new int[] {unrecognizedSpi, CHILD_SPI_REMOTE})
                 };
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
@@ -1417,11 +1400,12 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify received payloads
-        verifyChildReceiveDeleteRequest(child, inboundDelPayloads);
+        verifyChildReceiveDeleteRequest(mMockChildSessionStateMachine, inboundDelPayloads);
 
         // child outbound payload list ready
-        IkeDeletePayload outPayload = new IkeDeletePayload(new int[] {childLocalSpi});
-        outboundDeleteChildPayloadsReady(childSmCb, outPayload, true /*isResp*/, child);
+        IkeDeletePayload outPayload = new IkeDeletePayload(new int[] {CHILD_SPI_LOCAL});
+        outboundDeleteChildPayloadsReady(
+                mDummyChildSmCallback, outPayload, true /*isResp*/, mMockChildSessionStateMachine);
         mLooper.dispatchAll();
 
         // Verify outbound response
@@ -1451,19 +1435,14 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testTriggerRemoteRekeyChild() throws Exception {
-        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
-        int childRemoteSpi = 1;
-
         setupIdleStateMachine();
-        IChildSessionSmCallback childSmCb =
-                createChildAndGetChildSessionSmCallback(child, childRemoteSpi);
 
         mIkeSessionStateMachine.sendMessage(
                 CMD_RECEIVE_IKE_PACKET,
-                makeRekeyChildCreateMessage(false /*isResp*/, childRemoteSpi));
+                makeRekeyChildCreateMessage(false /*isResp*/, CHILD_SPI_REMOTE));
         mLooper.dispatchAll();
 
-        verify(child)
+        verify(mMockChildSessionStateMachine)
                 .receiveRequest(
                         eq(IKE_EXCHANGE_SUBTYPE_REKEY_CHILD),
                         eq(EXCHANGE_TYPE_CREATE_CHILD_SA),
@@ -1475,20 +1454,16 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testHandleRekeyChildReqWithUnrecognizedSpi() throws Exception {
-        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
-        int childRemoteSpi = 1;
         int unrecognizedSpi = 2;
 
         setupIdleStateMachine();
-        IChildSessionSmCallback childSmCb =
-                createChildAndGetChildSessionSmCallback(child, childRemoteSpi);
 
         mIkeSessionStateMachine.sendMessage(
                 CMD_RECEIVE_IKE_PACKET,
                 makeRekeyChildCreateMessage(false /*isResp*/, unrecognizedSpi));
         mLooper.dispatchAll();
 
-        verify(child, never()).receiveRequest(anyInt(), anyInt(), any());
+        verify(mMockChildSessionStateMachine, never()).receiveRequest(anyInt(), anyInt(), any());
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
 
@@ -2969,15 +2944,49 @@ public final class IkeSessionStateMachineTest {
     public void testOnChildSessionClosed() throws Exception {
         setupIdleStateMachine();
 
-        ChildSessionStateMachine child = mock(ChildSessionStateMachine.class);
-        IChildSessionCallback childCb = mock(IChildSessionCallback.class);
-        IChildSessionSmCallback smCb =
-                createChildAndGetChildSessionSmCallback(child, 0 /* placeholder */, childCb);
-
-        smCb.onChildSessionClosed(childCb);
+        mDummyChildSmCallback.onChildSessionClosed(mMockChildSessionCallback);
 
         synchronized (mIkeSessionStateMachine.mChildCbToSessions) {
-            assertFalse(mIkeSessionStateMachine.mChildCbToSessions.containsKey(childCb));
+            assertFalse(
+                    mIkeSessionStateMachine.mChildCbToSessions.containsKey(
+                            mMockChildSessionCallback));
         }
+    }
+
+    @Test
+    public void testHandleExceptionInEnterState() throws Exception {
+        IkeSessionOptions mockSessionOptions = mock(IkeSessionOptions.class);
+        when(mockSessionOptions.getSaProposals()).thenThrow(mock(RuntimeException.class));
+
+        IkeSessionStateMachine ikeSession =
+                new IkeSessionStateMachine(
+                        mLooper.getLooper(),
+                        mContext,
+                        mIpSecManager,
+                        mockSessionOptions,
+                        mChildSessionOptions,
+                        mSpyUserCbExecutor,
+                        mMockIkeSessionCallback,
+                        mMockChildSessionCallback,
+                        mMockEapAuthenticatorFactory);
+        // Send IKE INIT request
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        assertNull(ikeSession.getCurrentState());
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+    }
+
+    @Test
+    public void testHandleExceptionInProcessStateMsg() throws Exception {
+        setupIdleStateMachine();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, null /*receivedIkePacket*/);
+        mLooper.dispatchAll();
+
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
     }
 }
