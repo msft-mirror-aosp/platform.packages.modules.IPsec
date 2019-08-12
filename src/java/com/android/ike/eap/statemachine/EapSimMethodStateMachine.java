@@ -163,7 +163,16 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
-            if (message.eapData.eapType == EAP_NOTIFICATION) {
+            if (message.eapCode == EAP_CODE_SUCCESS) {
+                // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
+                // so receiving a premature SUCCESS message is an unrecoverable error.
+                return new EapError(
+                        new EapInvalidRequestException(
+                                "Received an EAP-Success in the CreatedState"));
+            } else if (message.eapCode == EAP_CODE_FAILURE) {
+                transitionTo(new FinalState());
+                return new EapFailure();
+            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
                 return handleEapNotification(mTAG, message);
             }
 
@@ -218,7 +227,16 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         }
 
         public EapResult process(EapMessage message) {
-            if (message.eapData.eapType == EAP_NOTIFICATION) {
+            if (message.eapCode == EAP_CODE_SUCCESS) {
+                // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
+                // so receiving a premature SUCCESS message is an unrecoverable error.
+                return new EapError(
+                        new EapInvalidRequestException(
+                                "Received an EAP-Success in the StartState"));
+            } else if (message.eapCode == EAP_CODE_FAILURE) {
+                transitionTo(new FinalState());
+                return new EapFailure();
+            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
                 return handleEapNotification(mTAG, message);
             }
 
