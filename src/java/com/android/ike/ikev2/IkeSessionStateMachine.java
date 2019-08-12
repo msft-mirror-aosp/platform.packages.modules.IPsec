@@ -449,6 +449,10 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
+    void openSession() {
+        sendMessage(CMD_LOCAL_REQUEST_CREATE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
+    }
+
     void openChildSession(
             ChildSessionOptions childSessionOptions, IChildSessionCallback childSessionCallback) {
         if (childSessionCallback == null) {
