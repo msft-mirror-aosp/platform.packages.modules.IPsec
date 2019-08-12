@@ -17,6 +17,8 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapSimAttribute.AtNotification.GENERAL_FAILURE_POST_CHALLENGE;
 import static com.android.ike.eap.message.EapSimAttribute.AtNotification.GENERAL_FAILURE_PRE_CHALLENGE;
 import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
@@ -44,6 +46,7 @@ import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSimIdentityUnavailableException;
@@ -58,6 +61,7 @@ import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimTypeData;
 import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
+import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
 import org.junit.Before;
@@ -79,6 +83,24 @@ public class EapSimStartStateTest extends EapSimStateTest {
         mEapSimMethodStateMachine.transitionTo(mStartState);
 
         mAttributes = new LinkedHashMap<>();
+    }
+
+    @Test
+    public void testProcessSuccess() throws Exception {
+        EapMessage input = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
+        EapResult result = mStartState.process(input);
+
+        EapError eapError = (EapError) result;
+        assertTrue(eapError.cause instanceof EapInvalidRequestException);
+    }
+
+    @Test
+    public void testProcessFailure() throws Exception {
+        EapMessage input = new EapMessage(EAP_CODE_FAILURE, ID_INT, null);
+        EapResult result = mStartState.process(input);
+        assertTrue(mEapSimMethodStateMachine.getState() instanceof FinalState);
+
+        assertTrue(result instanceof EapFailure);
     }
 
     @Test
