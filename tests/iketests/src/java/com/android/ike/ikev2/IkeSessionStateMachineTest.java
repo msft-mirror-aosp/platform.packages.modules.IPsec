@@ -27,6 +27,7 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_C
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
@@ -90,6 +91,7 @@ import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
@@ -214,6 +216,8 @@ public final class IkeSessionStateMachineTest {
     private static final int UDP_ENCAP_PORT = 34567;
 
     private static final int EAP_SIM_SUB_ID = 1;
+
+    private static final int PAYLOAD_TYPE_UNSUPPORTED = 127;
 
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private Context mContext;
@@ -382,6 +386,12 @@ public final class IkeSessionStateMachineTest {
 
     private ReceivedIkePacket makeDummyReceivedIkePacketWithInvalidSyntax(
             IkeSaRecord ikeSaRecord, boolean isResp, int eType) {
+        return makeDummyReceivedIkePacketWithDecodingError(
+                ikeSaRecord, isResp, eType, new InvalidSyntaxException("IkeStateMachineTest"));
+    }
+
+    private ReceivedIkePacket makeDummyReceivedIkePacketWithDecodingError(
+            IkeSaRecord ikeSaRecord, boolean isResp, int eType, IkeProtocolException exception) {
         IkeHeader header =
                 new IkeHeader(
                         ikeSaRecord.getInitiatorSpi(),
@@ -396,10 +406,7 @@ public final class IkeSessionStateMachineTest {
         when(mMockIkeMessageHelper.decode(
                         anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any()))
                 .thenReturn(
-                        new DecodeResult(
-                                DECODE_STATUS_PROTECTED_ERROR_MESSAGE,
-                                null,
-                                new InvalidSyntaxException("IkeStateMachineTest")));
+                        new DecodeResult(DECODE_STATUS_PROTECTED_ERROR_MESSAGE, null, exception));
 
         return new ReceivedIkePacket(header, new byte[0]);
     }
@@ -2235,6 +2242,49 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testRekeyIkeLocalCreateHandleReqWithNonFatalError() throws Exception {
+        setupIdleStateMachine();
+
+        // Send Rekey-Create request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE));
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+        reset(mMockIkeMessageHelper);
+
+        // Build protocol exception
+        List<Integer> unsupportedPayloads = new LinkedList<>();
+        unsupportedPayloads.add(PAYLOAD_TYPE_UNSUPPORTED);
+        UnsupportedCriticalPayloadException exception =
+                new UnsupportedCriticalPayloadException(unsupportedPayloads);
+
+        // Mock receiving packet with unsupported critical payload
+        ReceivedIkePacket mockInvalidPacket =
+                makeDummyReceivedIkePacketWithDecodingError(
+                        mSpyCurrentIkeSaRecord,
+                        false /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                        exception);
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockInvalidPacket);
+        mLooper.dispatchAll();
+
+        // Verify error notification was sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertEquals(1, payloads.size());
+
+        IkePayload payload = payloads.get(0);
+        assertEquals(IkePayload.PAYLOAD_TYPE_NOTIFY, payload.payloadType);
+        assertEquals(
+                ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD, ((IkeNotifyPayload) payload).notifyType);
+
+        // Verify IKE Session stays in the same state
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
+    }
+
+    @Test
     public void testRekeyIkeLocalDeleteSendsRequest() throws Exception {
         setupIdleStateMachine();
 
@@ -3420,5 +3470,31 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
         // Validate no more retry
         verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
+    }
+
+    @Test
+    public void testIdleReceiveRequestWithFatalError() throws Exception {
+        setupIdleStateMachine();
+
+        // Mock receiving packet with syntax error
+        ReceivedIkePacket mockInvalidPacket =
+                makeDummyReceivedIkePacketWithInvalidSyntax(
+                        mSpyCurrentIkeSaRecord,
+                        false /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA);
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockInvalidPacket);
+        mLooper.dispatchAll();
+
+        // Verify Delete request was sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertEquals(1, payloads.size());
+
+        IkePayload payload = payloads.get(0);
+        assertEquals(IkePayload.PAYLOAD_TYPE_NOTIFY, payload.payloadType);
+        assertEquals(ERROR_TYPE_INVALID_SYNTAX, ((IkeNotifyPayload) payload).notifyType);
+
+        // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
     }
 }
