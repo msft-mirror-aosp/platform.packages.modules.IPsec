@@ -16,30 +16,29 @@
 
 package com.android.ike.eap.statemachine;
 
-import static androidx.test.InstrumentationRegistry.getInstrumentation;
-
-import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapMessage.EAP_HEADER_LENGTH;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EMSK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import android.content.Context;
-
+import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapFailure;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.statemachine.EapStateMachine.FailureState;
@@ -50,30 +49,22 @@ import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentMatcher;
 
-import java.security.SecureRandom;
-
 public class MethodStateTest extends EapStateTest {
-    private static final int UNSUPPORTED_EAP_TYPE = 0xFF;
-
-    private Context mContext;
-    private EapStateMachine mEapStateMachine;
-
     @Before
     @Override
     public void setUp() {
-        mContext = getInstrumentation().getContext();
-        mEapStateMachine = new EapStateMachine(mContext, new SecureRandom());
-        mEapState = mEapStateMachine.new MethodState(EAP_TYPE_SIM);
+        super.setUp();
+        mEapState = mEapStateMachine.new MethodState();
         mEapStateMachine.transitionTo(mEapState);
     }
 
     @Test
     public void testProcessUnsupportedEapType() {
-        try {
-            mEapState = mEapStateMachine.new MethodState(UNSUPPORTED_EAP_TYPE);
-            fail("Expected IllegalArgumentException for making MethodState with invalid type");
-        } catch (IllegalArgumentException expected) {
-        }
+        mEapState = mEapStateMachine.new MethodState();
+        EapResult result = mEapState.process(EAP_REQUEST_IDENTITY_PACKET);
+
+        EapResponse eapResponse = (EapResponse) result;
+        assertArrayEquals(EAP_RESPONSE_NAK_PACKET, eapResponse.packet);
     }
 
     @Test
@@ -97,9 +88,9 @@ public class MethodStateTest extends EapStateTest {
 
         EapMethodStateMachine mockEapMethodStateMachine = mock(EapMethodStateMachine.class);
         when(mockEapMethodStateMachine.process(argThat(eapSuccessMatcher))).thenReturn(eapSuccess);
-        mEapStateMachine.transitionTo(mEapStateMachine.new MethodState(mockEapMethodStateMachine));
+        ((MethodState) mEapState).mEapMethodStateMachine = mockEapMethodStateMachine;
 
-        mEapStateMachine.process(EAP_SUCCESS_PACKET);
+        mEapState.process(EAP_SUCCESS_PACKET);
         verify(mockEapMethodStateMachine).process(argThat(eapSuccessMatcher));
         assertTrue(mEapStateMachine.getState() instanceof SuccessState);
         verifyNoMoreInteractions(mockEapMethodStateMachine);
@@ -117,9 +108,9 @@ public class MethodStateTest extends EapStateTest {
 
         EapMethodStateMachine mockEapMethodStateMachine = mock(EapMethodStateMachine.class);
         when(mockEapMethodStateMachine.process(argThat(eapSuccessMatcher))).thenReturn(eapFailure);
-        mEapStateMachine.transitionTo(mEapStateMachine.new MethodState(mockEapMethodStateMachine));
+        ((MethodState) mEapState).mEapMethodStateMachine = mockEapMethodStateMachine;
 
-        mEapStateMachine.process(EAP_FAILURE_PACKET);
+        mEapState.process(EAP_FAILURE_PACKET);
         verify(mockEapMethodStateMachine).process(argThat(eapSuccessMatcher));
         assertTrue(mEapStateMachine.getState() instanceof FailureState);
         verifyNoMoreInteractions(mockEapMethodStateMachine);

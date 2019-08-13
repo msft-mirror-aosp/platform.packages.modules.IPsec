@@ -16,6 +16,9 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertTrue;
@@ -26,7 +29,9 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
-import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapFailure;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.EapSimAttribute;
@@ -34,8 +39,11 @@ import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
 import com.android.ike.eap.message.EapSimTypeData;
 import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
+import com.android.ike.eap.statemachine.EapSimMethodStateMachine.CreatedState;
+import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -44,6 +52,32 @@ import java.util.List;
 
 public class EapSimCreatedStateTest extends EapSimStateTest {
     private static final int EAP_SIM_START = 10;
+
+    private CreatedState mCreatedState;
+
+    @Before
+    public void setUp() {
+        super.setUp();
+        mCreatedState = mEapSimMethodStateMachine.new CreatedState();
+    }
+
+    @Test
+    public void testProcessSuccess() throws Exception {
+        EapMessage input = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
+        EapResult result = mCreatedState.process(input);
+
+        EapError eapError = (EapError) result;
+        assertTrue(eapError.cause instanceof EapInvalidRequestException);
+    }
+
+    @Test
+    public void testProcessFailure() throws Exception {
+        EapMessage input = new EapMessage(EAP_CODE_FAILURE, ID_INT, null);
+        EapResult result = mCreatedState.process(input);
+        assertTrue(mEapSimMethodStateMachine.getState() instanceof FinalState);
+
+        assertTrue(result instanceof EapFailure);
+    }
 
     @Test
     public void testTransitionToStartState() throws Exception {
@@ -55,12 +89,21 @@ public class EapSimCreatedStateTest extends EapSimStateTest {
         DecodeResult decodeResult = new DecodeResult(new EapSimTypeData(EAP_SIM_START, attributes));
         when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
 
-        EapResult result = mEapSimMethodStateMachine.process(eapMessage);
+        mEapSimMethodStateMachine.process(eapMessage);
         assertTrue(mEapSimMethodStateMachine.getState() instanceof StartState);
-        assertTrue(result instanceof EapResponse);
 
         // decoded in CreatedState and StartState
         verify(mMockEapSimTypeDataDecoder, times(2)).decode(eq(DUMMY_EAP_TYPE_DATA));
         verifyNoMoreInteractions(mMockEapSimTypeDataDecoder);
+    }
+
+    @Test
+    public void testProcessIncorrectEapMethodType() throws Exception {
+        EapData eapData = new EapData(EAP_IDENTITY, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        EapResult result = mEapSimMethodStateMachine.process(eapMessage);
+        EapError eapError = (EapError) result;
+        assertTrue(eapError.cause instanceof EapInvalidRequestException);
     }
 }

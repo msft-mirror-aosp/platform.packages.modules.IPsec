@@ -16,24 +16,21 @@
 
 package com.android.ike.eap.statemachine;
 
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import com.android.ike.eap.EapResult;
-import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapResponse;
-import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.statemachine.EapStateMachine.IdentityState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
 
@@ -41,22 +38,23 @@ import org.junit.Before;
 import org.junit.Test;
 
 public class CreatedStateTest extends EapStateTest {
-    private EapStateMachine mEapStateMachineMock;
+    private EapStateMachine mEapStateMachineSpy;
 
     @Before
     @Override
     public void setUp() {
-        mEapStateMachineMock = mock(EapStateMachine.class);
-        mEapState = mEapStateMachineMock.new CreatedState();
+        super.setUp();
+
+        mEapStateMachineSpy = spy(mEapStateMachine);
+        mEapState = mEapStateMachineSpy.new CreatedState();
     }
 
     @Test
     public void testProcessIdentityRequest() {
         mEapState.process(EAP_REQUEST_IDENTITY_PACKET);
 
-        verify(mEapStateMachineMock).transitionAndProcess(
+        verify(mEapStateMachineSpy).transitionAndProcess(
                 any(IdentityState.class), eq(EAP_REQUEST_IDENTITY_PACKET));
-        verifyNoMoreInteractions(mEapStateMachineMock);
     }
 
     @Test
@@ -67,36 +65,15 @@ public class CreatedStateTest extends EapStateTest {
         assertTrue(eapResult instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) eapResult;
         assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
-        verifyNoMoreInteractions(mEapStateMachineMock);
+        verify(mEapStateMachineSpy, never()).transitionAndProcess(any(), any());
     }
 
     @Test
-    public void testProcessNakRequest() {
-        EapResult eapResult = mEapState.process(EAP_REQUEST_NAK_PACKET);
-
-        assertTrue(eapResult instanceof EapError);
-        EapError eapError = (EapError) eapResult;
-        assertTrue(eapError.cause instanceof EapInvalidRequestException);
-        verifyNoMoreInteractions(mEapStateMachineMock);
-    }
-
-    @Test
-    public void testProcessAkaIdentity() {
-        mEapState.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
+    public void testProcessSimStart() {
+        mEapState.process(EAP_REQUEST_SIM_START_PACKET);
 
         // EapStateMachine should change to MethodState for method-type packet
-        verify(mEapStateMachineMock).transitionAndProcess(
-                any(MethodState.class), eq(EAP_REQUEST_AKA_IDENTITY_PACKET));
-        verifyNoMoreInteractions(mEapStateMachineMock);
-    }
-
-    @Test
-    public void testProcessNonRequestMessage() {
-        EapResult eapResult = mEapState.process(EAP_RESPONSE_NOTIFICATION_PACKET);
-
-        assertTrue(eapResult instanceof EapError);
-        EapError eapError = (EapError) eapResult;
-        assertTrue(eapError.cause instanceof EapInvalidRequestException);
-        verifyNoMoreInteractions(mEapStateMachineMock);
+        verify(mEapStateMachineSpy).transitionAndProcess(
+                any(MethodState.class), eq(EAP_REQUEST_SIM_START_PACKET));
     }
 }

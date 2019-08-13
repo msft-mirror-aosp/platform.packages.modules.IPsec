@@ -16,7 +16,10 @@
 
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
+
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -102,5 +105,26 @@ public final class IkeLocalRequestSchedulerTest {
         for (LocalRequest r : mMockRequestArray) {
             inOrder.verify(mMockConsumer).onNewProcedureReady(r);
         }
+    }
+
+    @Test
+    public void testDoNotProcessCanceledRequest() {
+        LocalRequest[] requestArray = new LocalRequest[4];
+
+        for (int i = 0; i < requestArray.length; i++) {
+            requestArray[i] = new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE);
+            mScheduler.addRequest(requestArray[i]);
+        }
+
+        mScheduler.readyForNextProcedure();
+        verify(mMockConsumer).onNewProcedureReady(eq(requestArray[0]));
+
+        requestArray[1].cancel();
+        mScheduler.readyForNextProcedure();
+        verify(mMockConsumer, never()).onNewProcedureReady(eq(requestArray[1]));
+        verify(mMockConsumer).onNewProcedureReady(eq(requestArray[2]));
+
+        mScheduler.readyForNextProcedure();
+        verify(mMockConsumer).onNewProcedureReady(eq(requestArray[3]));
     }
 }

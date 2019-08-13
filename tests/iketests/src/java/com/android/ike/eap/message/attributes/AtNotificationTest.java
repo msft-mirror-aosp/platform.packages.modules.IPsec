@@ -64,7 +64,7 @@ public class AtNotificationTest {
         assertEquals(EAP_AT_NOTIFICATION, atNotification.attributeType);
         assertEquals(EXPECTED_LENGTH, atNotification.lengthInBytes);
         assertTrue(atNotification.isSuccessCode);
-        assertFalse(atNotification.isPreChallenge);
+        assertFalse(atNotification.isPreSuccessfulChallenge);
         assertEquals(hexStringToInt(NOTIFICATION_CODE), atNotification.notificationCode);
     }
 

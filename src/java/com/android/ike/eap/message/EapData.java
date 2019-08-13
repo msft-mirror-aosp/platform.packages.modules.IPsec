@@ -50,11 +50,19 @@ public class EapData {
             EAP_IDENTITY,
             EAP_NOTIFICATION,
             EAP_NAK,
+            EAP_TYPE_SIM,
             EAP_TYPE_AKA,
-            EAP_TYPE_AKA_PRIME,
-            EAP_TYPE_SIM
+            EAP_TYPE_AKA_PRIME
     })
     public @interface EapType {}
+
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            EAP_TYPE_SIM,
+            EAP_TYPE_AKA,
+            EAP_TYPE_AKA_PRIME
+    })
+    public @interface EapMethod {}
 
     // EAP Type values defined by IANA
     // https://www.iana.org/assignments/eap-numbers/eap-numbers.xhtml
@@ -66,27 +74,19 @@ public class EapData {
     public static final int EAP_TYPE_AKA = 23;
     public static final int EAP_TYPE_AKA_PRIME = 50;
 
-    private static final byte[] VALID_AUTH_TYPES = {
-            (byte) EAP_TYPE_AKA,
-            (byte) EAP_TYPE_AKA_PRIME,
-            (byte) EAP_TYPE_SIM
-    };
-
     private static final Set<Integer> SUPPORTED_TYPES = new HashSet<>();
     static {
         SUPPORTED_TYPES.add(EAP_IDENTITY);
         SUPPORTED_TYPES.add(EAP_NOTIFICATION);
         SUPPORTED_TYPES.add(EAP_NAK);
 
-        for (int eapMethodType : VALID_AUTH_TYPES) {
-            SUPPORTED_TYPES.add(eapMethodType);
-        }
+        // supported EAP Method types
+        SUPPORTED_TYPES.add(EAP_TYPE_SIM);
     }
 
     @EapType public final int eapType;
     public final byte[] eapTypeData;
 
-    public static final EapData NAK_DATA = new EapData(EAP_NAK, VALID_AUTH_TYPES);
     public static final EapData NOTIFICATION_DATA = new EapData(EAP_NOTIFICATION, new byte[0]);
 
     /**

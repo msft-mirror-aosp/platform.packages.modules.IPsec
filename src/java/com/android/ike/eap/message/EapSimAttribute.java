@@ -661,7 +661,7 @@ public abstract class EapSimAttribute {
     public static class AtNotification extends EapSimAttribute {
         private static final int ATTR_LENGTH = 4;
         private static final int SUCCESS_MASK = 0x8000;
-        private static final int PRE_CHALLENGE_MASK = 0x4000;
+        private static final int PRE_SUCCESSFUL_CHALLENGE_MASK = 0x4000;
 
         // Notification codes defined in RFC 4186 Section 10.18
         public static final int GENERAL_FAILURE_POST_CHALLENGE = 0;
@@ -673,7 +673,7 @@ public abstract class EapSimAttribute {
         private static final Map<Integer, String> CODE_DEFS = loadCodeDefs();
 
         public final boolean isSuccessCode;
-        public final boolean isPreChallenge;
+        public final boolean isPreSuccessfulChallenge;
         public final int notificationCode;
 
         public AtNotification(int lengthInBytes, ByteBuffer byteBuffer)
@@ -690,9 +690,11 @@ public abstract class EapSimAttribute {
             isSuccessCode = (notificationCode & SUCCESS_MASK) == SUCCESS_MASK;
 
             // if Phase bit == 0, notification code can only be used after a successful
-            isPreChallenge = (notificationCode & PRE_CHALLENGE_MASK) == PRE_CHALLENGE_MASK;
+            isPreSuccessfulChallenge =
+                    (notificationCode & PRE_SUCCESSFUL_CHALLENGE_MASK)
+                            == PRE_SUCCESSFUL_CHALLENGE_MASK;
 
-            if (isSuccessCode && isPreChallenge) {
+            if (isSuccessCode && isPreSuccessfulChallenge) {
                 throw new EapSimInvalidAttributeException("Invalid state specified");
             }
         }
@@ -705,10 +707,10 @@ public abstract class EapSimAttribute {
             // If Success bit == 0, failure is implied
             isSuccessCode = (notificationCode & SUCCESS_MASK) != 0;
 
-            // if Phase bit == 0, notification code can only be used after a successful
-            isPreChallenge = (notificationCode & PRE_CHALLENGE_MASK) != 0;
+            // if Phase bit == 0, notification code can only be used after a successful challenge
+            isPreSuccessfulChallenge = (notificationCode & PRE_SUCCESSFUL_CHALLENGE_MASK) != 0;
 
-            if (isSuccessCode && isPreChallenge) {
+            if (isSuccessCode && isPreSuccessfulChallenge) {
                 throw new EapSimInvalidAttributeException("Invalid state specified");
             }
         }
@@ -746,7 +748,7 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtClientErrorCode reprents the AT_CLIENT_ERROR_CODE attribute defined in RFC 4186 Section
+     * AtClientErrorCode represents the AT_CLIENT_ERROR_CODE attribute defined in RFC 4186 Section
      * 10.19
      */
     public static class AtClientErrorCode extends EapSimAttribute {

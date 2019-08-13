@@ -18,6 +18,7 @@ package com.android.ike.eap.statemachine;
 
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
+import static com.android.ike.eap.EapTestUtils.getDummyEapSessionConfig;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 
 import static org.junit.Assert.assertTrue;
@@ -26,6 +27,7 @@ import android.content.Context;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.statemachine.EapStateMachine.CreatedState;
 import com.android.ike.eap.statemachine.EapStateMachine.FailureState;
@@ -38,22 +40,26 @@ import java.security.SecureRandom;
 
 public class EapStateMachineTest {
     private Context mContext;
+    private EapSessionConfig mEapSessionConfig;
 
     @Before
     public void setUp() {
         mContext = getInstrumentation().getContext();
+        mEapSessionConfig = getDummyEapSessionConfig();
     }
 
     @Test
     public void testEapStateMachineStartState() {
-        EapStateMachine eapStateMachine = new EapStateMachine(mContext, new SecureRandom());
+        EapStateMachine eapStateMachine =
+                new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom());
         assertTrue(eapStateMachine.getState() instanceof CreatedState);
     }
 
     @Test
     public void testSuccessStateProcessFails() {
         SuccessState successState =
-                new EapStateMachine(mContext, new SecureRandom()).new SuccessState();
+                new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom())
+                .new SuccessState();
         EapResult result = successState.process(EAP_SUCCESS_PACKET);
         assertTrue(result instanceof EapError);
 
@@ -64,7 +70,8 @@ public class EapStateMachineTest {
     @Test
     public void testFailureStateProcessFails() {
         FailureState failureState =
-                new EapStateMachine(mContext, new SecureRandom()).new FailureState();
+                new EapStateMachine(mContext, mEapSessionConfig, new SecureRandom())
+                .new FailureState();
         EapResult result = failureState.process(EAP_SUCCESS_PACKET);
         assertTrue(result instanceof EapError);
 

@@ -17,6 +17,7 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
+import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
@@ -40,9 +41,11 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -57,6 +60,7 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.IpSecTransform;
 import android.os.Looper;
 import android.os.test.TestLooper;
 
@@ -65,6 +69,7 @@ import androidx.test.InstrumentationRegistry;
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
+import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.SaRecord.ChildSaRecordConfig;
 import com.android.ike.ikev2.SaRecord.ISaRecordHelper;
@@ -95,14 +100,14 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatcher;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.Executor;
 
 public final class ChildSessionStateMachineTest {
     private static final Inet4Address LOCAL_ADDRESS =
@@ -113,10 +118,10 @@ public final class ChildSessionStateMachineTest {
     private static final String IKE_AUTH_RESP_SA_PAYLOAD =
             "2c00002c0000002801030403cae7019f0300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
-    private static final String REKEY_CHILD_RESP_PAYLOAD =
+    private static final String REKEY_CHILD_RESP_SA_PAYLOAD =
             "2800002c0000002801030403cd1736b30300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
-    private static final String REKEY_CHILD_REQ_PAYLOAD =
+    private static final String REKEY_CHILD_REQ_SA_PAYLOAD =
             "2800002c0000002801030403c88336490300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
 
@@ -160,7 +165,7 @@ public final class ChildSessionStateMachineTest {
 
     private SaProposal mMockNegotiatedProposal;
 
-    private ExecutorService mUserCbExecutor;
+    private Executor mSpyUserCbExecutor;
     private IChildSessionCallback mMockChildSessionCallback;
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
@@ -168,6 +173,11 @@ public final class ChildSessionStateMachineTest {
             ArgumentCaptor.forClass(ChildSaRecordConfig.class);
     private ArgumentCaptor<List<IkePayload>> mPayloadListCaptor =
             ArgumentCaptor.forClass(List.class);
+    private ArgumentMatcher<ChildLocalRequest> mRekeyChildLocalReqMatcher =
+            (argument) -> {
+                return CMD_LOCAL_REQUEST_REKEY_CHILD == argument.procedureType
+                        && mMockChildSessionCallback == argument.childSessionCallback;
+            };
 
     public ChildSessionStateMachineTest() {
         mMockSaRecordHelper = mock(SaRecord.ISaRecordHelper.class);
@@ -198,7 +208,12 @@ public final class ChildSessionStateMachineTest {
 
         mMockNegotiatedProposal = mock(SaProposal.class);
 
-        mUserCbExecutor = Executors.newSingleThreadExecutor();
+        mSpyUserCbExecutor =
+                spy(
+                        (command) -> {
+                            command.run();
+                        });
+
         mMockChildSessionCallback = mock(IChildSessionCallback.class);
         mChildSessionOptions = buildChildSessionOptions();
 
@@ -210,7 +225,7 @@ public final class ChildSessionStateMachineTest {
                         mContext,
                         mMockIpSecManager,
                         mChildSessionOptions,
-                        mUserCbExecutor,
+                        mSpyUserCbExecutor,
                         mMockChildSessionCallback,
                         mMockChildSessionSmCallback);
         mChildSessionStateMachine.setDbg(true);
@@ -226,8 +241,6 @@ public final class ChildSessionStateMachineTest {
     public void tearDown() {
         mChildSessionStateMachine.setDbg(false);
         SaRecord.setSaRecordHelper(new SaRecordHelper());
-
-        mUserCbExecutor.shutdown();
     }
 
     private SaProposal buildSaProposal() throws Exception {
@@ -306,13 +319,18 @@ public final class ChildSessionStateMachineTest {
                                 null,
                                 null,
                                 null,
-                                null,
-                                null));
+                                mock(IpSecTransform.class),
+                                mock(IpSecTransform.class),
+                                mock(ChildLocalRequest.class)));
         doNothing().when(child).close();
         return child;
     }
 
     private void quitAndVerify() {
+        mChildSessionStateMachine.mCurrentChildSaRecord = null;
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = null;
+        mChildSessionStateMachine.mRemoteInitNewChildSaRecord = null;
+
         reset(mMockChildSessionSmCallback);
         mChildSessionStateMachine.quit();
         mLooper.dispatchAll();
@@ -344,6 +362,22 @@ public final class ChildSessionStateMachineTest {
         assertFalse(childSaRecordConfig.isTransport);
         assertEquals(isLocalInit, childSaRecordConfig.isLocalInit);
         assertTrue(childSaRecordConfig.hasIntegrityAlgo);
+        assertEquals(
+                CMD_LOCAL_REQUEST_REKEY_CHILD, childSaRecordConfig.futureRekeyEvent.procedureType);
+        assertEquals(
+                mMockChildSessionCallback,
+                childSaRecordConfig.futureRekeyEvent.childSessionCallback);
+    }
+
+    private void verifyNotifyUsersCreateIpSecSa(
+            ChildSaRecord childSaRecord, boolean expectInbound) {
+        IpSecTransform transform =
+                expectInbound
+                        ? childSaRecord.getInboundIpSecTransform()
+                        : childSaRecord.getOutboundIpSecTransform();
+        int direction = expectInbound ? IpSecManager.DIRECTION_IN : IpSecManager.DIRECTION_OUT;
+
+        verify(mMockChildSessionCallback).onIpSecTransformCreated(eq(transform), eq(direction));
     }
 
     private void verifyInitCreateChildResp(
@@ -382,10 +416,18 @@ public final class ChildSessionStateMachineTest {
 
         verify(mMockChildSessionSmCallback)
                 .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
+        verify(mMockChildSessionSmCallback)
+                .scheduleLocalRequest(argThat(mRekeyChildLocalReqMatcher), anyLong());
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
+
+        // Verify users have been notified
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verifyNotifyUsersCreateIpSecSa(mSpyCurrentChildSaRecord, true /*expectInbound*/);
+        verifyNotifyUsersCreateIpSecSa(mSpyCurrentChildSaRecord, false /*expectInbound*/);
+        verify(mMockChildSessionCallback).onOpened();
     }
 
     @Test
@@ -508,6 +550,23 @@ public final class ChildSessionStateMachineTest {
         assertEquals(expectedSpi, deletePayload.spisToDelete[0]);
     }
 
+    private void verifyNotifyUserDeleteChildSa(ChildSaRecord childSaRecord) {
+        verify(mMockChildSessionCallback)
+                .onIpSecTransformDeleted(
+                        eq(childSaRecord.getInboundIpSecTransform()),
+                        eq(IpSecManager.DIRECTION_IN));
+        verify(mMockChildSessionCallback)
+                .onIpSecTransformDeleted(
+                        eq(childSaRecord.getOutboundIpSecTransform()),
+                        eq(IpSecManager.DIRECTION_OUT));
+    }
+
+    private void verifyNotifyUsersDeleteSession() {
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockChildSessionCallback).onClosed();
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+    }
+
     @Test
     public void testDeleteChildLocal() throws Exception {
         setupIdleStateMachine();
@@ -527,9 +586,9 @@ public final class ChildSessionStateMachineTest {
                 makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
         mLooper.dispatchAll();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verifyNotifyUsersDeleteSession();
     }
 
     @Test
@@ -555,9 +614,9 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
         mLooper.dispatchAll();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verifyNotifyUsersDeleteSession();
     }
 
     @Test
@@ -598,9 +657,7 @@ public final class ChildSessionStateMachineTest {
                 makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
         mLooper.dispatchAll();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
         // Verify response
         verify(mMockChildSessionSmCallback)
                 .onOutboundPayloadsReady(
@@ -614,6 +671,8 @@ public final class ChildSessionStateMachineTest {
         assertArrayEquals(
                 new int[] {mSpyCurrentChildSaRecord.getLocalSpi()},
                 ((IkeDeletePayload) respPayloadList.get(0)).spisToDelete);
+
+        verifyNotifyUsersDeleteSession();
     }
 
     private void verifyOutboundRekeySaPayload(List<IkePayload> outboundPayloads, boolean isResp) {
@@ -690,6 +749,11 @@ public final class ChildSessionStateMachineTest {
         // Build Nonce Payloads
         inboundPayloads.add(new IkeNoncePayload());
 
+        if (isLocalInitRekey) {
+            // Rekey-Create response without Notify-Rekey payload is valid.
+            return inboundPayloads;
+        }
+
         // Build Rekey-Notification
         inboundPayloads.add(
                 new IkeNotifyPayload(
@@ -718,7 +782,7 @@ public final class ChildSessionStateMachineTest {
         List<IkePayload> rekeyRespPayloads =
                 makeInboundRekeyChildPayloads(
                         LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
-                        REKEY_CHILD_RESP_PAYLOAD,
+                        REKEY_CHILD_RESP_SA_PAYLOAD,
                         true /*isLocalInitRekey*/);
         when(mMockSaRecordHelper.makeChildSaRecord(
                         any(List.class), eq(rekeyRespPayloads), any(ChildSaRecordConfig.class)))
@@ -740,6 +804,8 @@ public final class ChildSessionStateMachineTest {
                 .onChildSaCreated(
                         eq(mSpyLocalInitNewChildSaRecord.getRemoteSpi()),
                         eq(mChildSessionStateMachine));
+        verify(mMockChildSessionSmCallback)
+                .scheduleLocalRequest(argThat(mRekeyChildLocalReqMatcher), anyLong());
 
         verify(mMockSaRecordHelper)
                 .makeChildSaRecord(
@@ -752,6 +818,11 @@ public final class ChildSessionStateMachineTest {
                 LOCAL_INIT_NEW_CHILD_SA_SPI_IN,
                 LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
                 true /*isLocalInit*/);
+
+        // Verify users have been notified
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verifyNotifyUsersCreateIpSecSa(mSpyLocalInitNewChildSaRecord, true /*expectInbound*/);
+        verifyNotifyUsersCreateIpSecSa(mSpyLocalInitNewChildSaRecord, false /*expectInbound*/);
     }
 
     @Test
@@ -808,6 +879,10 @@ public final class ChildSessionStateMachineTest {
                 .onProcedureFinished(mChildSessionStateMachine);
 
         verifyChildSaUpdated(mSpyCurrentChildSaRecord, mSpyLocalInitNewChildSaRecord);
+
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockChildSessionCallback, never()).onClosed();
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
     }
 
     @Test
@@ -821,7 +896,7 @@ public final class ChildSessionStateMachineTest {
         List<IkePayload> rekeyReqPayloads =
                 makeInboundRekeyChildPayloads(
                         REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
-                        REKEY_CHILD_REQ_PAYLOAD,
+                        REKEY_CHILD_REQ_SA_PAYLOAD,
                         false /*isLocalInitRekey*/);
         when(mMockSaRecordHelper.makeChildSaRecord(
                         eq(rekeyReqPayloads), any(List.class), any(ChildSaRecordConfig.class)))
@@ -858,6 +933,8 @@ public final class ChildSessionStateMachineTest {
                 .onChildSaCreated(
                         eq(mSpyRemoteInitNewChildSaRecord.getRemoteSpi()),
                         eq(mChildSessionStateMachine));
+        verify(mMockChildSessionSmCallback)
+                .scheduleLocalRequest(argThat(mRekeyChildLocalReqMatcher), anyLong());
 
         verify(mMockSaRecordHelper)
                 .makeChildSaRecord(
@@ -870,6 +947,10 @@ public final class ChildSessionStateMachineTest {
                 REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
                 REMOTE_INIT_NEW_CHILD_SA_SPI_IN,
                 false /*isLocalInit*/);
+
+        // Verify that users are notified the creation of new inbound IpSecTransform
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, true /*expectInbound*/);
     }
 
     @Test
@@ -901,6 +982,12 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
+
+        verify(mSpyUserCbExecutor, times(2)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
+        verify(mMockChildSessionCallback, never()).onClosed();
     }
 
     @Test
@@ -926,9 +1013,14 @@ public final class ChildSessionStateMachineTest {
                 .onChildSaDeleted(mSpyLocalInitNewChildSaRecord.getRemoteSpi());
         verify(mSpyLocalInitNewChildSaRecord).close();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verify(mSpyUserCbExecutor, times(2)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUserDeleteChildSa(mSpyLocalInitNewChildSaRecord);
+
+        verify(mMockChildSessionCallback).onClosed();
     }
 
     @Test
@@ -954,9 +1046,15 @@ public final class ChildSessionStateMachineTest {
                 .onChildSaDeleted(mSpyRemoteInitNewChildSaRecord.getRemoteSpi());
         verify(mSpyRemoteInitNewChildSaRecord).close();
 
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.Closed);
+        assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verify(mSpyUserCbExecutor, times(3)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUserDeleteChildSa(mSpyRemoteInitNewChildSaRecord);
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
+
+        verify(mMockChildSessionCallback).onClosed();
     }
 
     @Test
@@ -986,6 +1084,13 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
+
+        verify(mSpyUserCbExecutor, times(2)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
+
+        verify(mMockChildSessionCallback, never()).onClosed();
     }
 
     @Test
@@ -1013,6 +1118,35 @@ public final class ChildSessionStateMachineTest {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.RekeyChildRemoteDelete);
+
+        verify(mSpyUserCbExecutor, times(2)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
+
+        verify(mMockChildSessionCallback, never()).onClosed();
+    }
+
+    @Test
+    public void testCloseSessionNow() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildLocalDelete
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = mSpyLocalInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildLocalDelete);
+
+        mChildSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        assertNull(mChildSessionStateMachine.getCurrentState());
+
+        verify(mSpyUserCbExecutor, times(3)).execute(any(Runnable.class));
+
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+        verifyNotifyUserDeleteChildSa(mSpyLocalInitNewChildSaRecord);
+
+        verify(mMockChildSessionCallback).onClosed();
     }
 
     @Test

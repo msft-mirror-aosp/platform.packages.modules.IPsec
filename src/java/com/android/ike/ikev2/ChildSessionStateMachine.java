@@ -52,6 +52,7 @@ import android.os.Message;
 import android.util.Log;
 import android.util.Pair;
 
+import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeExchangeSubType;
 import com.android.ike.ikev2.SaRecord.ChildSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -89,13 +90,14 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 /**
  * ChildSessionStateMachine tracks states and manages exchanges of this Child Session.
  *
  * <p>ChildSessionStateMachine has two types of states. One type are states where there is no
- * ongoing procedure affecting Child Session (non-procedure state), including Initial, Closed, Idle
- * and Receiving. All other states are "procedure" states which are named as follows:
+ * ongoing procedure affecting Child Session (non-procedure state), including Initial, Idle and
+ * Receiving. All other states are "procedure" states which are named as follows:
  *
  * <pre>
  * State Name = [Procedure Type] + [Exchange Initiator] + [Exchange Type].
@@ -110,14 +112,19 @@ import java.util.concurrent.Executor;
 public class ChildSessionStateMachine extends StateMachine {
     private static final String TAG = "ChildSessionStateMachine";
 
+    // Time after which Child SA needs to be rekeyed
+    @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(2L);
+
     /** Receive request for negotiating first Child SA. */
     private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = 1;
     /** Receive a request from the remote. */
     private static final int CMD_HANDLE_RECEIVED_REQUEST = 2;
     /** Receive a reponse from the remote. */
     private static final int CMD_HANDLE_RECEIVED_RESPONSE = 3;
+    /** Kill Session and close all alive Child SAs immediately. */
+    private static final int CMD_KILL_SESSION = 4;
     /** Timeout when the remote side fails to send a Rekey-Delete request. */
-    @VisibleForTesting static final int TIMEOUT_REKEY_REMOTE_DELETE = 4;
+    @VisibleForTesting static final int TIMEOUT_REKEY_REMOTE_DELETE = 5;
     /** Force state machine to a target state for testing purposes. */
     @VisibleForTesting static final int CMD_FORCE_TRANSITION = 99;
 
@@ -172,9 +179,10 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Package private */
     @VisibleForTesting ChildSaRecord mChildSaRecordSurviving;
 
+    @VisibleForTesting final State mKillChildSessionParent = new KillChildSessionParent();
+
     @VisibleForTesting final State mInitial = new Initial();
     @VisibleForTesting final State mCreateChildLocalCreate = new CreateChildLocalCreate();
-    @VisibleForTesting final State mClosed = new Closed();
     @VisibleForTesting final State mIdle = new Idle();
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
     @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
@@ -213,16 +221,17 @@ public class ChildSessionStateMachine extends StateMachine {
         mUserCallback = userCallback;
         mChildSmCallback = childSmCallback;
 
-        addState(mInitial);
-        addState(mCreateChildLocalCreate);
-        addState(mClosed);
-        addState(mIdle);
-        addState(mDeleteChildLocalDelete);
-        addState(mDeleteChildRemoteDelete);
-        addState(mRekeyChildLocalCreate);
-        addState(mRekeyChildRemoteCreate);
-        addState(mRekeyChildLocalDelete);
-        addState(mRekeyChildRemoteDelete);
+        addState(mKillChildSessionParent);
+
+        addState(mInitial, mKillChildSessionParent);
+        addState(mCreateChildLocalCreate, mKillChildSessionParent);
+        addState(mIdle, mKillChildSessionParent);
+        addState(mDeleteChildLocalDelete, mKillChildSessionParent);
+        addState(mDeleteChildRemoteDelete, mKillChildSessionParent);
+        addState(mRekeyChildLocalCreate, mKillChildSessionParent);
+        addState(mRekeyChildRemoteCreate, mKillChildSessionParent);
+        addState(mRekeyChildLocalDelete, mKillChildSessionParent);
+        addState(mRekeyChildRemoteDelete, mKillChildSessionParent);
 
         setInitialState(mInitial);
     }
@@ -251,6 +260,9 @@ public class ChildSessionStateMachine extends StateMachine {
 
         /** Notify that a Child SA is deleted. */
         void onChildSaDeleted(int remoteSpi);
+
+        /** Schedule a future Child Rekey Request on the LocalRequestScheduler. */
+        void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime);
 
         /** Notify the IKE Session to send out IKE message for this Child Session. */
         void onOutboundPayloadsReady(
@@ -362,6 +374,25 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
+     * Kill Child Session and all alive Child SAs without doing IKE exchange.
+     *
+     * <p>It is usually called when IKE Session is being closed.
+     */
+    public void killSession() {
+        sendMessage(CMD_KILL_SESSION);
+    }
+
+    private ChildLocalRequest makeRekeyLocalRequest() {
+        return new ChildLocalRequest(
+                CMD_LOCAL_REQUEST_REKEY_CHILD, mUserCallback, null /*childOptions*/);
+    }
+
+    private long getRekeyTimeout() {
+        // TODO: Make rekey timout fuzzy
+        return SA_SOFT_LIFETIME_MS;
+    }
+
+    /**
      * Receive a request
      *
      * <p>This method is called synchronously from IkeStateMachine. It proxies the synchronous call
@@ -412,6 +443,9 @@ public class ChildSessionStateMachine extends StateMachine {
     /**
      * Update SK_d with provided value when IKE SA is rekeyed.
      *
+     * <p>It MUST be only called at the end of Rekey IKE procedure, which guarantees this Child
+     * Session is not in Create Child or Rekey Child procedure.
+     *
      * @param skD the new skD in byte array.
      */
     public void setSkD(byte[] skD) {
@@ -456,6 +490,14 @@ public class ChildSessionStateMachine extends StateMachine {
 
         mChildSmCallback.onOutboundPayloadsReady(
                 EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, outPayloads, this);
+    }
+
+    /** Notify users the deletion of a Child SA. MUST be called through mUserCbExecutor */
+    private void onIpSecTransformPairDeleted(ChildSaRecord childSaRecord) {
+        mUserCallback.onIpSecTransformDeleted(
+                childSaRecord.getOutboundIpSecTransform(), IpSecManager.DIRECTION_OUT);
+        mUserCallback.onIpSecTransformDeleted(
+                childSaRecord.getInboundIpSecTransform(), IpSecManager.DIRECTION_IN);
     }
 
     /**
@@ -507,6 +549,52 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
+     * This state handles the request to close Child Session immediately without initiating any
+     * exchange.
+     *
+     * <p>Request for closing Child Session immediately is usually caused by the closing of IKE
+     * Session. All states MUST be a child state of KillChildSessionParent to handle the closing
+     * request.
+     */
+    private class KillChildSessionParent extends State {
+        @Override
+        public boolean processMessage(Message message) {
+            switch (message.what) {
+                case CMD_KILL_SESSION:
+                    mUserCbExecutor.execute(
+                            () -> {
+                                mUserCallback.onClosed();
+                            });
+
+                    closeChildSaRecordIfExist(mCurrentChildSaRecord);
+                    closeChildSaRecordIfExist(mLocalInitNewChildSaRecord);
+                    closeChildSaRecordIfExist(mRemoteInitNewChildSaRecord);
+
+                    mCurrentChildSaRecord = null;
+                    mLocalInitNewChildSaRecord = null;
+                    mRemoteInitNewChildSaRecord = null;
+
+                    quitNow();
+                    return HANDLED;
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+
+        private void closeChildSaRecordIfExist(ChildSaRecord childSaRecord) {
+            if (childSaRecord == null) return;
+
+            mUserCbExecutor.execute(
+                    () -> {
+                        onIpSecTransformPairDeleted(childSaRecord);
+                    });
+
+            mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
+            childSaRecord.close();
+        }
+    }
+
+    /**
      * CreateChildLocalCreateBase represents the common information for a locally-initiated initial
      * Child SA negotiation for setting up this Child Session.
      */
@@ -529,6 +617,9 @@ public class ChildSessionStateMachine extends StateMachine {
                 case CREATE_STATUS_OK:
                     try {
                         setUpNegotiatedResult(createChildResult);
+
+                        ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
+
                         mCurrentChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
                                         mContext,
@@ -544,8 +635,22 @@ public class ChildSessionStateMachine extends StateMachine {
                                         mChildCipher,
                                         mSkD,
                                         mChildSessionOptions.isTransportMode(),
-                                        true /*isLocalInit*/);
-                        // TODO: Add mCurrentChildSaRecord in mSpiToSaRecordMap.
+                                        true /*isLocalInit*/,
+                                        rekeyLocalRequest);
+
+                        mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
+
+                        mUserCbExecutor.execute(
+                                () -> {
+                                    mUserCallback.onIpSecTransformCreated(
+                                            mCurrentChildSaRecord.getInboundIpSecTransform(),
+                                            IpSecManager.DIRECTION_IN);
+                                    mUserCallback.onIpSecTransformCreated(
+                                            mCurrentChildSaRecord.getOutboundIpSecTransform(),
+                                            IpSecManager.DIRECTION_OUT);
+                                    mUserCallback.onOpened();
+                                });
+
                         transitionTo(mIdle);
                     } catch (GeneralSecurityException
                             | ResourceUnavailableException
@@ -673,14 +778,6 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
-     * Closed represents the state when this ChildSessionStateMachine is closed, and no further
-     * actions can be performed on it.
-     */
-    class Closed extends State {
-        // TODO: Implement it.
-    }
-
-    /**
      * Idle represents a state when there is no ongoing IKE exchange affecting established Child SA.
      */
     class Idle extends State {
@@ -771,7 +868,7 @@ public class ChildSessionStateMachine extends StateMachine {
          * As such, this should not be used in rekey cases where there is any ambiguity as to which
          * Child SA the session is reliant upon.
          *
-         * <p>Note that this method will also move the state machine to the closed state.
+         * <p>Note that this method will also quit the state machine
          */
         protected void handleDeleteSessionRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
@@ -780,13 +877,20 @@ public class ChildSessionStateMachine extends StateMachine {
                 mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
 
             } else {
+
+                mUserCbExecutor.execute(
+                        () -> {
+                            mUserCallback.onClosed();
+                            onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                        });
+
                 sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
 
                 mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
                 mCurrentChildSaRecord.close();
                 mCurrentChildSaRecord = null;
 
-                transitionTo(mClosed);
+                quitNow();
             }
         }
     }
@@ -877,11 +981,17 @@ public class ChildSessionStateMachine extends StateMachine {
                                             + " deletion case");
                         }
 
+                        mUserCbExecutor.execute(
+                                () -> {
+                                    mUserCallback.onClosed();
+                                    onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                                });
+
                         mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
                         mCurrentChildSaRecord.close();
                         mCurrentChildSaRecord = null;
 
-                        transitionTo(mClosed);
+                        quitNow();
                     } catch (InvalidSyntaxException e) {
                         mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
                     }
@@ -998,6 +1108,9 @@ public class ChildSessionStateMachine extends StateMachine {
                             try {
                                 // Do not need to update the negotiated proposal and TS because they
                                 // are not changed.
+
+                                ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
+
                                 mLocalInitNewChildSaRecord =
                                         ChildSaRecord.makeChildSaRecord(
                                                 mContext,
@@ -1013,7 +1126,23 @@ public class ChildSessionStateMachine extends StateMachine {
                                                 mChildCipher,
                                                 mSkD,
                                                 mChildSessionOptions.isTransportMode(),
-                                                true /*isLocalInit*/);
+                                                true /*isLocalInit*/,
+                                                rekeyLocalRequest);
+
+                                mChildSmCallback.scheduleLocalRequest(
+                                        rekeyLocalRequest, getRekeyTimeout());
+
+                                mUserCbExecutor.execute(
+                                        () -> {
+                                            mUserCallback.onIpSecTransformCreated(
+                                                    mLocalInitNewChildSaRecord
+                                                            .getInboundIpSecTransform(),
+                                                    IpSecManager.DIRECTION_IN);
+                                            mUserCallback.onIpSecTransformCreated(
+                                                    mLocalInitNewChildSaRecord
+                                                            .getOutboundIpSecTransform(),
+                                                    IpSecManager.DIRECTION_OUT);
+                                        });
 
                                 transitionTo(mRekeyChildLocalDelete);
                             } catch (GeneralSecurityException
@@ -1113,6 +1242,9 @@ public class ChildSessionStateMachine extends StateMachine {
                         try {
                             // Do not need to update the negotiated proposal and TS
                             // because they are not changed.
+
+                            ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
+
                             mRemoteInitNewChildSaRecord =
                                     ChildSaRecord.makeChildSaRecord(
                                             mContext,
@@ -1128,11 +1260,27 @@ public class ChildSessionStateMachine extends StateMachine {
                                             mChildCipher,
                                             mSkD,
                                             mChildSessionOptions.isTransportMode(),
-                                            false /*isLocalInit*/);
+                                            false /*isLocalInit*/,
+                                            rekeyLocalRequest);
+
+                            mChildSmCallback.scheduleLocalRequest(
+                                    rekeyLocalRequest, getRekeyTimeout());
 
                             mChildSmCallback.onChildSaCreated(
                                     mRemoteInitNewChildSaRecord.getRemoteSpi(),
                                     ChildSessionStateMachine.this);
+
+                            // To avoid traffic loss, outbound transform should only be applied once
+                            // the remote has (implicitly) acknowledged our response via the
+                            // delete-old-SA request. This will be performed in the finishRekey()
+                            // method.
+                            mUserCbExecutor.execute(
+                                    () -> {
+                                        mUserCallback.onIpSecTransformCreated(
+                                                mRemoteInitNewChildSaRecord
+                                                        .getInboundIpSecTransform(),
+                                                IpSecManager.DIRECTION_IN);
+                                    });
 
                             mChildSmCallback.onOutboundPayloadsReady(
                                     EXCHANGE_TYPE_CREATE_CHILD_SA,
@@ -1199,7 +1347,13 @@ public class ChildSessionStateMachine extends StateMachine {
             }
         }
 
+        // Rekey timer for old SA will be cancelled as part of the closing of the SA.
         protected void finishRekey() {
+            mUserCbExecutor.execute(
+                    () -> {
+                        onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                    });
+
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
             mCurrentChildSaRecord.close();
 
@@ -1317,6 +1471,18 @@ public class ChildSessionStateMachine extends StateMachine {
                 finishRekey();
                 transitionTo(mIdle);
             }
+        }
+
+        @Override
+        protected void finishRekey() {
+            mUserCbExecutor.execute(
+                    () -> {
+                        mUserCallback.onIpSecTransformCreated(
+                                mRemoteInitNewChildSaRecord.getOutboundIpSecTransform(),
+                                IpSecManager.DIRECTION_OUT);
+                    });
+
+            super.finishRekey();
         }
 
         @Override
@@ -1492,14 +1658,6 @@ public class ChildSessionStateMachine extends StateMachine {
                 ChildSaRecord expectedChildRecord,
                 IpSecManager ipSecManager,
                 InetAddress remoteAddress) {
-            // Verify Notify-Rekey payload
-            if (!hasRemoteChildSpiForRekey(respPayloads, expectedChildRecord)) {
-                return new CreateChildResult(
-                        CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
-                        new InvalidSyntaxException(
-                                "Found no Rekey notification with remotely generated IPsec SPI"));
-            }
-
             // Validate rest of payloads and negotiate Child SA.
             CreateChildResult childResult =
                     validateAndNegotiateChild(
@@ -1873,8 +2031,34 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Called when this StateMachine quits. */
     @Override
     protected void onQuitting() {
-        mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
+        verifyChildSaRecordIsClosed(mCurrentChildSaRecord);
+        verifyChildSaRecordIsClosed(mLocalInitNewChildSaRecord);
+        verifyChildSaRecordIsClosed(mRemoteInitNewChildSaRecord);
+
+        mCurrentChildSaRecord = null;
+        mLocalInitNewChildSaRecord = null;
+        mRemoteInitNewChildSaRecord = null;
+
+        mChildSmCallback.onProcedureFinished(this);
         mChildSmCallback.onChildSessionClosed(mUserCallback);
+    }
+
+    private void verifyChildSaRecordIsClosed(ChildSaRecord childSaRecord) {
+        if (childSaRecord == null) return;
+
+        Log.wtf(
+                TAG,
+                "ChildSaRecord with local SPI: "
+                        + childSaRecord.getLocalSpi()
+                        + " is not correctly closed.");
+
+        mUserCbExecutor.execute(
+                () -> {
+                    onIpSecTransformPairDeleted(childSaRecord);
+                });
+
+        mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
+        childSaRecord.close();
     }
 
     // TODO: Add states to support deleting Child SA and rekeying Child SA.

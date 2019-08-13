@@ -17,13 +17,17 @@
 package com.android.ike.ikev2;
 
 import android.annotation.IntDef;
+import android.annotation.NonNull;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 
+import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.ikev2.message.IkePayload;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.InetAddress;
+import java.security.cert.TrustAnchor;
+import java.security.cert.X509Certificate;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -37,7 +41,7 @@ public final class IkeSessionOptions {
     @IntDef({IKE_AUTH_METHOD_PSK, IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, IKE_AUTH_METHOD_EAP})
     public @interface IkeAuthMethod {}
 
-    /** Package private constants to describe user configured authentication methods. */
+    // Package private constants to describe user configured authentication methods.
     static final int IKE_AUTH_METHOD_PSK = 1;
     static final int IKE_AUTH_METHOD_PUB_KEY_SIGNATURE = 2;
     static final int IKE_AUTH_METHOD_EAP = 3;
@@ -109,9 +113,48 @@ public final class IkeSessionOptions {
         return mIsIkeFragmentationSupported;
     }
     /**
-     * Package private class that contains user configured authentication method type and related
-     * data and tools that need to be used for IKE authentication, including pre-shared key,
-     * certificates and EAP Authenticator.
+     * Package private class that contains common information of an IKEv2 authentication
+     * configuration.
+     */
+    abstract static class IkeAuthConfig {
+        @IkeAuthMethod final int mAuthMethod;
+
+        protected IkeAuthConfig(@IkeAuthMethod int authMethod) {
+            mAuthMethod = authMethod;
+        }
+    }
+
+    /**
+     * Package private class that contains configuration to do IKEv2 pre-shared-key-based
+     * authentication of local or remote side.
+     */
+    static class IkeAuthPskConfig extends IkeAuthConfig {
+        final byte[] mPsk;
+
+        private IkeAuthPskConfig(byte[] psk) {
+            super(IKE_AUTH_METHOD_PSK);
+            mPsk = psk;
+        }
+    }
+
+    /**
+     * Package private class that contains configuration to do IKEv2 public-key-based authentication
+     * of the remote side.
+     */
+    static class IkeAuthDigitalSignRemoteConfig extends IkeAuthConfig {
+        final TrustAnchor mTrustAnchor;
+
+        private IkeAuthDigitalSignRemoteConfig(TrustAnchor trustAnchor) {
+            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
+            mTrustAnchor = trustAnchor;
+        }
+    }
+
+    // TODO: Create IkeAuthDigitalSignLocalConfig to store signature hash algorithm and
+    // certificates to do authentication of local side to the remote.
+
+    /**
+     * Package private class that contains configuration to do EAP authentication of the local side.
      *
      * <p>EAP MUST be used with IKEv2 public-key-based authentication of the responder to the
      * initiator. Currently IKE library does not support the IKEv2 protocol extension(RFC 5998)
@@ -122,15 +165,13 @@ public final class IkeSessionOptions {
      * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
      *     Authentication in IKEv2</a>
      */
-    static class IkeAuthConfig {
-        @IkeAuthMethod final int mAuthMethod;
-        final byte[] mPsk;
-        // TODO: Add memeber fields to store EapAuthenticator, signature hash algorithms and
-        // certificates
+    static class IkeAuthEapConfig extends IkeAuthConfig {
+        final EapSessionConfig mEapConfig;
 
-        IkeAuthConfig(@IkeAuthMethod int authMethod, byte[] psk) {
-            mAuthMethod = authMethod;
-            mPsk = psk;
+        private IkeAuthEapConfig(EapSessionConfig eapConfig) {
+            super(IKE_AUTH_METHOD_EAP);
+
+            mEapConfig = eapConfig;
         }
     }
 
@@ -200,35 +241,52 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Sets local authentication method to Pre-shared Key.
+         * Uses pre-shared key to do IKE authentication.
          *
-         * <p>Uses the pre-shared key to authenticate IKE library to the remote sever.
+         * <p>Both client and server MUST be authenticated using the provided shared key. IKE
+         * authentication will fail if the remote peer tries to use other authentication methods.
          *
-         * <p>Users MUST declare only one local authentication method. This method will override the
-         * previously set local authentication method.
+         * <p>Users MUST declare only one authentication method. Calling this function will override
+         * the previously set authentication configuration.
          *
          * @param sharedKey the shared key.
          * @return Builder this, to facilitate chaining.
          */
-        public Builder setLocalAuthPsk(byte[] sharedKey) {
-            mLocalAuthConfig = new IkeAuthConfig(IKE_AUTH_METHOD_PSK, sharedKey);
+        public Builder setAuthPsk(@NonNull byte[] sharedKey) {
+            mLocalAuthConfig = new IkeAuthPskConfig(sharedKey);
+            mRemoteAuthConfig = new IkeAuthPskConfig(sharedKey);
             return this;
         }
 
         /**
-         * Sets remote authentication method to Pre-shared Key.
+         * Uses EAP to do IKE authentication.
          *
-         * <p>Requires the remote server to use the pre-shared key to authenticate itself. IKE
-         * authentication will fail if the remote peer uses other authentication methods.
+         * <p>EAP are typically used to authenticate the IKE client to the server. It MUST be used
+         * in conjunction with a public-key-signature-based authentication of the server to the
+         * client.
          *
-         * <p>Users MUST declare only one remote authentication method. This method will override
-         * the previously set remote authentication method.
+         * <p>Users MUST declare only one authentication method. Calling this function will override
+         * the previously set authentication configuration.
          *
-         * @param sharedKey the shared key.
+         * <p>TODO: Add input to take EAP configucations.
+         *
+         * <p>TODO: Investigate if we need to support the name constraints extension.
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc5280">RFC 5280, Internet X.509 Public Key
+         *     Infrastructure Certificate and Certificate Revocation List (CRL) Profile</a>
+         * @param caCert the CA certificate for validating the received server certificate(s).
          * @return Builder this, to facilitate chaining.
          */
-        public Builder setRemoteAuthPsk(byte[] sharedKey) {
-            mRemoteAuthConfig = new IkeAuthConfig(IKE_AUTH_METHOD_PSK, sharedKey);
+        public Builder setAuthEap(
+                @NonNull X509Certificate caCert, @NonNull EapSessionConfig eapConfig) {
+            mLocalAuthConfig = new IkeAuthEapConfig(eapConfig);
+
+            // The name constraints extension, defined in RFC 5280, indicates a name space within
+            // which all subject names in subsequent certificates in a certification path MUST be
+            // located.
+            mRemoteAuthConfig =
+                    new IkeAuthDigitalSignRemoteConfig(
+                            new TrustAnchor(caCert, null /*nameConstraints*/));
             return this;
         }
 

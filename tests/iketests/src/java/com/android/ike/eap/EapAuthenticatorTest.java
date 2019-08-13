@@ -32,7 +32,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import android.os.Handler;
 import android.os.Looper;
 import android.os.test.TestLooper;
 
@@ -64,7 +63,6 @@ public class EapAuthenticatorTest {
 
     private EapStateMachine mMockEapStateMachine;
 
-    private Handler mCallbackHandler;
     private TestLooper mTestLooper;
     private boolean mCallbackFired;
 
@@ -75,7 +73,6 @@ public class EapAuthenticatorTest {
         mMockEapStateMachine = mock(EapStateMachine.class);
 
         mTestLooper = new TestLooper();
-        mCallbackHandler = new Handler(mTestLooper.getLooper());
         mCallbackFired = false;
     }
 
@@ -225,7 +222,6 @@ public class EapAuthenticatorTest {
     private EapAuthenticator getEapAuthenticatorWithCallback(EapCallback eapCallback) {
         return new EapAuthenticator(
                 mTestLooper.getLooper(),
-                mCallbackHandler,
                 eapCallback,
                 mMockEapStateMachine,
                 (runnable) -> runnable.run(),

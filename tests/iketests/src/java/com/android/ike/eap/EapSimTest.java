@@ -27,7 +27,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.os.Handler;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
@@ -47,13 +46,12 @@ public class EapSimTest {
     private static final byte[] NONCE = hexStringToByteArray("37f3ddd3954c4831a5ee08c574844398");
     private static final String UNFORMATTED_IDENTITY = "123456789ABCDEF"; // IMSI
 
-    private static final int APPTYPE_SIM = 1;
-    private static final int AUTHTYPE_EAP_SIM = 128;
+    private static final int SUB_ID = 1;
 
     // Base 64 of: RAND
-    private static final String BASE64_RAND_1 = "ASNFZ4mrze8RI0VniavN7w==";
-    private static final String BASE64_RAND_2 = "ESNFZ4mrze8RI0VniavN7w==";
-    private static final String BASE64_RAND_3 = "ISNFZ4mrze8RI0VniavN7w==";
+    private static final String BASE64_RAND_1 = "EAEjRWeJq83vESNFZ4mrze8=";
+    private static final String BASE64_RAND_2 = "EBEjRWeJq83vESNFZ4mrze8=";
+    private static final String BASE64_RAND_3 = "ECEjRWeJq83vESNFZ4mrze8=";
 
     // BASE 64 of: "04" + SRES + "08" + KC
     private static final String BASE64_RESP_1 = "BAq83vAI/ty6mHZUMhA=";
@@ -98,7 +96,7 @@ public class EapSimTest {
     private IEapCallback mMockCallback;
 
     private TestLooper mTestLooper;
-    private Handler mHandler;
+    private EapSessionConfig mEapSessionConfig;
     private EapAuthenticator mEapAuthenticator;
 
     @Before
@@ -109,13 +107,12 @@ public class EapSimTest {
         mMockCallback = mock(IEapCallback.class);
 
         mTestLooper = new TestLooper();
-        mHandler = new Handler(mTestLooper.getLooper());
+        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(SUB_ID).build();
         mEapAuthenticator =
                 new EapAuthenticator(
                         mTestLooper.getLooper(),
-                        mHandler,
                         mMockCallback,
-                        new EapStateMachine(mMockContext, mMockSecureRandom),
+                        new EapStateMachine(mMockContext, mEapSessionConfig, mMockSecureRandom),
                         (runnable) -> runnable.run(),
                         AUTHENTICATOR_TIMEOUT_MILLIS);
     }
@@ -124,6 +121,8 @@ public class EapSimTest {
     public void testEapSimEndToEnd() {
         // EAP-SIM/Start request
         when(mMockContext.getSystemService(Context.TELEPHONY_SERVICE))
+                .thenReturn(mMockTelephonyManager);
+        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
                 .thenReturn(mMockTelephonyManager);
         when(mMockTelephonyManager.getSubscriberId()).thenReturn(UNFORMATTED_IDENTITY);
         doAnswer(invocation -> {
@@ -135,6 +134,7 @@ public class EapSimTest {
         mEapAuthenticator.processEapMessage(EAP_SIM_START_REQUEST);
         mTestLooper.dispatchAll();
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
+        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
         verify(mMockTelephonyManager).getSubscriberId();
         verify(mMockSecureRandom).nextBytes(any(byte[].class));
 
@@ -148,13 +148,22 @@ public class EapSimTest {
 
         // EAP-SIM/Challenge request
         when(mMockTelephonyManager
-                .getIccAuthentication(APPTYPE_SIM, AUTHTYPE_EAP_SIM, BASE64_RAND_1))
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_SIM,
+                        BASE64_RAND_1))
                 .thenReturn(BASE64_RESP_1);
         when(mMockTelephonyManager
-                .getIccAuthentication(APPTYPE_SIM, AUTHTYPE_EAP_SIM, BASE64_RAND_2))
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_SIM,
+                        BASE64_RAND_2))
                 .thenReturn(BASE64_RESP_2);
         when(mMockTelephonyManager
-                .getIccAuthentication(APPTYPE_SIM, AUTHTYPE_EAP_SIM, BASE64_RAND_3))
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_SIM,
+                        BASE64_RAND_3))
                 .thenReturn(BASE64_RESP_3);
 
         mEapAuthenticator.processEapMessage(EAP_SIM_CHALLENGE_REQUEST);
@@ -162,11 +171,20 @@ public class EapSimTest {
 
         // verify EAP-SIM/Challenge response
         verify(mMockTelephonyManager)
-                .getIccAuthentication(eq(APPTYPE_SIM), eq(AUTHTYPE_EAP_SIM), eq(BASE64_RAND_1));
+                .getIccAuthentication(
+                        eq(TelephonyManager.APPTYPE_USIM),
+                        eq(TelephonyManager.AUTHTYPE_EAP_SIM),
+                        eq(BASE64_RAND_1));
         verify(mMockTelephonyManager)
-                .getIccAuthentication(eq(APPTYPE_SIM), eq(AUTHTYPE_EAP_SIM), eq(BASE64_RAND_2));
+                .getIccAuthentication(
+                        eq(TelephonyManager.APPTYPE_USIM),
+                        eq(TelephonyManager.AUTHTYPE_EAP_SIM),
+                        eq(BASE64_RAND_2));
         verify(mMockTelephonyManager)
-                .getIccAuthentication(eq(APPTYPE_SIM), eq(AUTHTYPE_EAP_SIM), eq(BASE64_RAND_3));
+                .getIccAuthentication(
+                        eq(TelephonyManager.APPTYPE_USIM),
+                        eq(TelephonyManager.AUTHTYPE_EAP_SIM),
+                        eq(BASE64_RAND_3));
         verify(mMockCallback).onResponse(eq(EAP_SIM_CHALLENGE_RESPONSE));
         verifyNoMoreInteractions(
                 mMockContext,

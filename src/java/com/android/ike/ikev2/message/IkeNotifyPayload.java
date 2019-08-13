@@ -172,7 +172,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
             throw new InvalidSyntaxException("Invalid SPI Size: " + spiSize);
         }
 
-        notifyData = new byte[payloadBody.length - NOTIFY_HEADER_LEN];
+        notifyData = new byte[payloadBody.length - NOTIFY_HEADER_LEN - spiSize];
         inputBuffer.get(notifyData);
     }
 

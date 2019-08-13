@@ -19,13 +19,12 @@ package com.android.ike.eap.statemachine;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapData.EAP_NAK;
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
-import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
-import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.content.Context;
 import android.util.Log;
 
@@ -34,10 +33,14 @@ import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
+import com.android.ike.eap.EapSessionConfig;
+import com.android.ike.eap.EapSessionConfig.EapMethodConfig;
+import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.UnsupportedEapTypeException;
 import com.android.ike.eap.message.EapData;
+import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.utils.SimpleStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
@@ -56,14 +59,16 @@ import java.security.SecureRandom;
  *
  */
 public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
-    @VisibleForTesting
-    protected static final byte[] DEFAULT_IDENTITY = new byte[0];
-
     private final Context mContext;
+    private final EapSessionConfig mEapSessionConfig;
     private final SecureRandom mSecureRandom;
 
-    public EapStateMachine(@NonNull Context context, @NonNull SecureRandom secureRandom) {
+    public EapStateMachine(
+            @NonNull Context context,
+            @NonNull EapSessionConfig eapSessionConfig,
+            @NonNull SecureRandom secureRandom) {
         this.mContext = context;
+        this.mEapSessionConfig = eapSessionConfig;
         this.mSecureRandom = secureRandom;
         transitionTo(new CreatedState());
     }
@@ -106,7 +111,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 return new DecodeResult(eapMessage);
             } catch (UnsupportedEapTypeException ex) {
-                return new DecodeResult(EapMessage.getNakResponse(ex.eapIdentifier));
+                return new DecodeResult(
+                        EapMessage.getNakResponse(
+                                ex.eapIdentifier,
+                                mEapSessionConfig.eapConfigs.keySet()));
             } catch (EapSilentException ex) {
                 return new DecodeResult(new EapError(ex));
             }
@@ -158,7 +166,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 // all EAP methods should be handled by MethodState
                 default:
-                    return transitionAndProcess(new MethodState(message.eapData.eapType), packet);
+                    return transitionAndProcess(new MethodState(), packet);
             }
         }
     }
@@ -185,19 +193,18 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                     return handleNotification(mTAG, message);
 
                 case EAP_IDENTITY:
-                    // TODO(b/133794339): identity placeholder should be replaced with a real value
-                    return getIdentityResponse(message.eapIdentifier, DEFAULT_IDENTITY);
+                    return getIdentityResponse(message.eapIdentifier);
 
                 // all EAP methods should be handled by MethodState
                 default:
-                    return transitionAndProcess(new MethodState(message.eapData.eapType), packet);
+                    return transitionAndProcess(new MethodState(), packet);
             }
         }
 
         @VisibleForTesting
-        EapResult getIdentityResponse(int eapIdentifier, byte[] identity) {
+        EapResult getIdentityResponse(int eapIdentifier) {
             try {
-                EapData identityData = new EapData(EAP_IDENTITY, identity);
+                EapData identityData = new EapData(EAP_IDENTITY, mEapSessionConfig.eapIdentity);
                 return EapResponse.getEapResponse(
                         new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, identityData));
             } catch (EapSilentException ex) {
@@ -213,34 +220,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         private final String mTAG = MethodState.class.getSimpleName();
 
         @VisibleForTesting
-        final EapMethodStateMachine mEapMethodStateMachine;
-
-        protected MethodState(int eapType) {
-            switch (eapType) {
-                case EAP_TYPE_AKA:
-                    // TODO(b/133878992): implement and use EapAkaStateMachine
-                    mEapMethodStateMachine = new EapMethodStateMachine() {};
-                    break;
-                case EAP_TYPE_AKA_PRIME:
-                    // TODO(b/133878093): implement EapAkaPrimeStateMachine
-                    mEapMethodStateMachine = new EapMethodStateMachine() {};
-                    break;
-                case EAP_TYPE_SIM:
-                    mEapMethodStateMachine = new EapSimMethodStateMachine(mContext, mSecureRandom);
-                    break;
-
-                default:
-                    // received unsupported EAP Type. This should never happen.
-                    Log.e(mTAG, "Received unsupported EAP Type=" + eapType);
-                    throw new IllegalArgumentException(
-                            "Received unsupported EAP Type in MethodState constructor");
-            }
-        }
-
-        @VisibleForTesting
-        MethodState(EapMethodStateMachine eapMethodStateMachine) {
-            this.mEapMethodStateMachine = eapMethodStateMachine;
-        }
+        EapMethodStateMachine mEapMethodStateMachine;
 
         // Not all EAP Method implementations may support EAP-Notifications, so allow the EAP-Method
         // to handle any EAP-REQUEST/Notification messages (RFC 3748 Section 5.2)
@@ -248,6 +228,18 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
                 return decodeResult.eapResult;
+            }
+            EapMessage eapMessage = decodeResult.eapMessage;
+
+            if (mEapMethodStateMachine == null) {
+                int eapType = eapMessage.eapData.eapType;
+                mEapMethodStateMachine = buildEapMethodStateMachine(eapType);
+
+                if (mEapMethodStateMachine == null) {
+                    return EapMessage.getNakResponse(
+                            eapMessage.eapIdentifier,
+                            mEapSessionConfig.eapConfigs.keySet());
+                }
             }
 
             EapResult result = mEapMethodStateMachine.process(decodeResult.eapMessage);
@@ -257,6 +249,30 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 transitionTo(new FailureState());
             }
             return result;
+        }
+
+        @Nullable
+        private EapMethodStateMachine buildEapMethodStateMachine(@EapMethod int eapType) {
+            EapMethodConfig eapMethodConfig = mEapSessionConfig.eapConfigs.get(eapType);
+            if (eapMethodConfig == null) {
+                // no configs available for selected method
+                return null;
+            }
+
+            switch (eapType) {
+                // TODO(b/133878992): implement and use EapAkaStateMachine
+                // TODO(b/133878093): implement EapAkaPrimeStateMachine
+
+                case EAP_TYPE_SIM:
+                    EapSimConfig eapSimConfig = (EapSimConfig) eapMethodConfig;
+                    return new EapSimMethodStateMachine(mContext, eapSimConfig, mSecureRandom);
+
+                default:
+                    // received unsupported EAP Type. This should never happen.
+                    Log.e(mTAG, "Received unsupported EAP Type=" + eapType);
+                    throw new IllegalArgumentException(
+                            "Received unsupported EAP Type in MethodState constructor");
+            }
         }
     }
 
