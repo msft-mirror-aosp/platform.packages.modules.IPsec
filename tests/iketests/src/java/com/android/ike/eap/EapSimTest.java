@@ -16,6 +16,8 @@
 
 package com.android.ike.eap;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
 import static com.android.ike.TestUtils.hexStringToByteArray;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -107,7 +109,9 @@ public class EapSimTest {
         mMockCallback = mock(IEapCallback.class);
 
         mTestLooper = new TestLooper();
-        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(SUB_ID).build();
+        mEapSessionConfig = new EapSessionConfig.Builder()
+                .setEapSimConfig(SUB_ID, APPTYPE_USIM)
+                .build();
         mEapAuthenticator =
                 new EapAuthenticator(
                         mTestLooper.getLooper(),
