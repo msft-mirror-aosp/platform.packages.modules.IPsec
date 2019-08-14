@@ -725,6 +725,14 @@ public class ChildSessionStateMachine extends StateMachine {
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
                     transitionTo(mCreateChildLocalCreate);
                     return HANDLED;
+                case CMD_LOCAL_REQUEST_DELETE_CHILD:
+                    // This may happen when creation has been rescheduled to be after deletion.
+                    mUserCbExecutor.execute(
+                            () -> {
+                                mUserCallback.onClosed();
+                            });
+                    quitNow();
+                    return HANDLED;
                 case CMD_FORCE_TRANSITION:
                     transitionTo((State) message.obj);
                     return HANDLED;

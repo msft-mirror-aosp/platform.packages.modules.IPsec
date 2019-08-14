@@ -1710,12 +1710,15 @@ public class IkeSessionStateMachine extends StateMachine {
         private void executeLocalRequest(ChildLocalRequest req) {
             mChildInLocalProcedure = getChildSession(req.childSessionCallback);
             if (mChildInLocalProcedure == null) {
-                Log.wtf(
-                        TAG,
-                        "Child state machine not found for local request: " + req.procedureType);
+                // This request has been validated to have a recognized target Child Session when
+                // it was sent to IKE Session at the begginnig. Failing to find this Child Session
+                // now means the Child creation has failed.
+                logd(
+                        "Child state machine not found for local request: "
+                                + req.procedureType
+                                + " Creation of Child Session may have been failed.");
 
-                // TODO: Fire child creation failed callback or child fatal error callback, and
-                // recover.
+                transitionToIdleIfAllProceduresDone();
                 return;
             }
             switch (req.procedureType) {
