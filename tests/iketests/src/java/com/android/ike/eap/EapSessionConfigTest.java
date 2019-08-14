@@ -16,11 +16,12 @@
 
 package com.android.ike.eap;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.eap.EapSessionConfig.EapMethodConfig;
@@ -36,14 +37,15 @@ public class EapSessionConfigTest {
     public void testBuild() {
         EapSessionConfig result = new EapSessionConfig.Builder()
                 .setEapIdentity(EAP_IDENTITY)
-                .setEapSimConfig(SUB_ID)
+                .setEapSimConfig(SUB_ID, APPTYPE_USIM)
                 .build();
 
         assertArrayEquals(EAP_IDENTITY, result.eapIdentity);
 
         EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_SIM);
         assertEquals(EAP_TYPE_SIM, eapMethodConfig.methodType);
-        assertTrue(eapMethodConfig instanceof EapSimConfig);
+        EapSimConfig eapSimConfig = (EapSimConfig) eapMethodConfig;
+        assertEquals(APPTYPE_USIM, eapSimConfig.apptype);
     }
 
     @Test

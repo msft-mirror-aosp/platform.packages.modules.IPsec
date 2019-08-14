@@ -18,6 +18,8 @@ package com.android.ike.eap;
 
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
+import android.telephony.TelephonyManager.UiccAppType;
+
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -73,10 +75,11 @@ public final class EapSessionConfig {
          * Sets the configuration for EAP SIM.
          *
          * @param subId int the client's subId to be authenticated
+         * @param apptype the {@link UiccAppType} apptype to be used for authentication
          * @return Builder this, to facilitate chaining.
          */
-        public Builder setEapSimConfig(int subId) {
-            mEapConfigs.put(EAP_TYPE_SIM, new EapSimConfig(subId));
+        public Builder setEapSimConfig(int subId, @UiccAppType int apptype) {
+            mEapConfigs.put(EAP_TYPE_SIM, new EapSimConfig(subId, apptype));
             return this;
         }
 
@@ -107,10 +110,12 @@ public final class EapSessionConfig {
 
     private abstract static class EapUiccConfig extends EapMethodConfig {
         public final int subId;
+        public final int apptype;
 
-        private EapUiccConfig(@EapMethod int methodType, int subId) {
+        private EapUiccConfig(@EapMethod int methodType, int subId, @UiccAppType int apptype) {
             super(methodType);
             this.subId = subId;
+            this.apptype = apptype;
         }
     }
 
@@ -119,8 +124,8 @@ public final class EapSessionConfig {
      */
     public static class EapSimConfig extends EapUiccConfig {
         @VisibleForTesting
-        public EapSimConfig(int subId) {
-            super(EAP_TYPE_SIM, subId);
+        public EapSimConfig(int subId, @UiccAppType int apptype) {
+            super(EAP_TYPE_SIM, subId, apptype);
         }
     }
 }
