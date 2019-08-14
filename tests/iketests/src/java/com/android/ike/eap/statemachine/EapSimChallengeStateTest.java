@@ -20,9 +20,6 @@ import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_RAND;
-import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CHALLENGE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_KC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_SRES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
@@ -45,10 +42,13 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK_STRING;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_1_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_2_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.VALID_CHALLENGE_RESPONSE;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.NONCE_MT;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_1;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_2;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CHALLENGE;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -70,14 +70,14 @@ import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
-import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
-import com.android.ike.eap.exceptions.EapSimInvalidLengthException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
+import com.android.ike.eap.exceptions.simaka.EapSimInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
-import com.android.ike.eap.message.EapSimAttribute.AtRand;
-import com.android.ike.eap.message.EapSimTypeData;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNonceMt;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
+import com.android.ike.eap.message.simaka.EapSimTypeData;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState.RandChallengeResult;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
@@ -131,7 +131,7 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
 
         try {
             mAtNonceMt = new AtNonceMt(NONCE_MT);
-        } catch (EapSimInvalidAttributeException ex) {
+        } catch (EapSimAkaInvalidAttributeException ex) {
             // this will never happen
         }
         mChallengeState = mEapSimMethodStateMachine
@@ -174,7 +174,7 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
 
     @Test
     public void testIsValidChallengeAttributes() {
-        LinkedHashMap<Integer, EapSimAttribute> attributeMap = new LinkedHashMap<>();
+        LinkedHashMap<Integer, EapSimAkaAttribute> attributeMap = new LinkedHashMap<>();
         EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_CHALLENGE, attributeMap);
         assertFalse(mChallengeState.isValidChallengeAttributes(eapSimTypeData));
 
@@ -261,7 +261,7 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     public void testGetRandChallengeResults() throws Exception {
         EapSimTypeData eapSimTypeData =
                 new EapSimTypeData(EAP_SIM_CHALLENGE, Arrays.asList(
-                        new AtRand(AT_RAND_LENGTH,
+                        new AtRandSim(AT_RAND_LENGTH,
                                 hexStringToByteArray(RAND_1),
                                 hexStringToByteArray(RAND_2))));
 
@@ -303,7 +303,7 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     public void testGetRandChallengeResultsBufferUnderflow() throws Exception {
         EapSimTypeData eapSimTypeData =
                 new EapSimTypeData(EAP_SIM_CHALLENGE, Arrays.asList(
-                        new AtRand(AT_RAND_LENGTH,
+                        new AtRandSim(AT_RAND_LENGTH,
                                 hexStringToByteArray(RAND_1),
                                 hexStringToByteArray(RAND_2))));
 

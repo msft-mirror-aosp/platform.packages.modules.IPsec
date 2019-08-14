@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message.attributes;
+package com.android.ike.eap.message.simaka.attributes;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_RAND;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_RAND;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_RAND_DUPLICATE_RANDS;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_RAND_INVALID_NUM_RANDS;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_1;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_2;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND_DUPLICATE_RANDS;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND_INVALID_NUM_RANDS;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -30,18 +30,18 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
-import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtRand;
-import com.android.ike.eap.message.EapSimAttributeFactory;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
+import com.android.ike.eap.exceptions.simaka.EapSimInvalidAtRandException;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
+import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
-public class AtRandTest {
+public class AtRandSimTest {
     private static final int EXPECTED_NUM_RANDS = 2;
 
     private EapSimAttributeFactory mEapSimAttributeFactory;
@@ -54,16 +54,16 @@ public class AtRandTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RAND);
-        EapSimAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
 
         assertFalse(input.hasRemaining());
-        assertTrue(result instanceof AtRand);
-        AtRand atRand = (AtRand) result;
-        assertEquals(EAP_AT_RAND, atRand.attributeType);
-        assertEquals(AT_RAND.length, atRand.lengthInBytes);
-        assertEquals(EXPECTED_NUM_RANDS, atRand.rands.size());
-        assertArrayEquals(hexStringToByteArray(RAND_1), atRand.rands.get(0));
-        assertArrayEquals(hexStringToByteArray(RAND_2), atRand.rands.get(1));
+        assertTrue(result instanceof AtRandSim);
+        AtRandSim atRandSim = (AtRandSim) result;
+        assertEquals(EAP_AT_RAND, atRandSim.attributeType);
+        assertEquals(AT_RAND.length, atRandSim.lengthInBytes);
+        assertEquals(EXPECTED_NUM_RANDS, atRandSim.rands.size());
+        assertArrayEquals(hexStringToByteArray(RAND_1), atRandSim.rands.get(0));
+        assertArrayEquals(hexStringToByteArray(RAND_2), atRandSim.rands.get(1));
     }
 
     @Test
@@ -81,8 +81,8 @@ public class AtRandTest {
         ByteBuffer input = ByteBuffer.wrap(AT_RAND_DUPLICATE_RANDS);
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
-            fail("Expected EapSimInvalidAttributeException for duplicate RANDs");
-        } catch (EapSimInvalidAttributeException expected) {
+            fail("Expected EapSimAkaInvalidAttributeException for duplicate RANDs");
+        } catch (EapSimAkaInvalidAttributeException expected) {
         }
     }
 
@@ -92,10 +92,10 @@ public class AtRandTest {
                 hexStringToByteArray(RAND_1),
                 hexStringToByteArray(RAND_2)
         };
-        AtRand atRand = new AtRand(AT_RAND.length, expectedRands);
+        AtRandSim atRandSim = new AtRandSim(AT_RAND.length, expectedRands);
 
         ByteBuffer result = ByteBuffer.allocate(AT_RAND.length);
-        atRand.encode(result);
+        atRandSim.encode(result);
         assertArrayEquals(AT_RAND, result.array());
     }
 }

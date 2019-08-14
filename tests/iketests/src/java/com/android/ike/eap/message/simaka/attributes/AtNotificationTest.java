@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message.attributes;
+package com.android.ike.eap.message.simaka.attributes;
 
 import static com.android.ike.TestUtils.hexStringToInt;
-import static com.android.ike.eap.message.EapSimAttribute.AtNotification.GENERAL_FAILURE_POST_CHALLENGE;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NOTIFICATION;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION_INVALID_LENGTH;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION_INVALID_STATE;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.NOTIFICATION_CODE;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification.GENERAL_FAILURE_POST_CHALLENGE;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_NOTIFICATION;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION_INVALID_LENGTH;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_NOTIFICATION_INVALID_STATE;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NOTIFICATION_CODE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -32,10 +32,10 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtNotification;
-import com.android.ike.eap.message.EapSimAttributeFactory;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
+import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -56,7 +56,7 @@ public class AtNotificationTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_NOTIFICATION);
-        EapSimAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtNotification);
@@ -73,8 +73,8 @@ public class AtNotificationTest {
         ByteBuffer input = ByteBuffer.wrap(AT_NOTIFICATION_INVALID_LENGTH);
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
-            fail("Expected EapSimInvalidAttributeException for invalid attribute length");
-        } catch (EapSimInvalidAttributeException expected) {
+            fail("Expected EapSimAkaInvalidAttributeException for invalid attribute length");
+        } catch (EapSimAkaInvalidAttributeException expected) {
         }
     }
 
@@ -83,8 +83,8 @@ public class AtNotificationTest {
         ByteBuffer input = ByteBuffer.wrap(AT_NOTIFICATION_INVALID_STATE);
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
-            fail("Expected EapSimInvalidAttributeException for invalid state");
-        } catch (EapSimInvalidAttributeException expected) {
+            fail("Expected EapSimAkaInvalidAttributeException for invalid state");
+        } catch (EapSimAkaInvalidAttributeException expected) {
         }
     }
 
