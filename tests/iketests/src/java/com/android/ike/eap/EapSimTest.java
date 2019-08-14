@@ -17,11 +17,16 @@
 package com.android.ike.eap;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -60,34 +65,34 @@ public class EapSimTest {
 
     private static final byte[] MSK = hexStringToByteArray(
             "9B1E2B6892BC113F6B6D0B5789DD8ADD"
-            + "B83BE2A84AA50FCAECD0003F92D8DA16"
-            + "4BF983C923695C309F1D7D68DB6992B0"
-            + "76EA8CE7129647A6F198F3A6AA8ADED9");
+                    + "B83BE2A84AA50FCAECD0003F92D8DA16"
+                    + "4BF983C923695C309F1D7D68DB6992B0"
+                    + "76EA8CE7129647A6F198F3A6AA8ADED9");
     private static final byte[] EMSK = hexStringToByteArray(
             "88210b6724400313539c740f417076b0"
-            + "41da7e64658ec365bd2901a7cd7c2763"
-            + "dad1a0508b92a42fdf85ac53c6f7e756"
-            + "7f99b62bcaf467441b567f19b58d86ae");
+                    + "41da7e64658ec365bd2901a7cd7c2763"
+                    + "dad1a0508b92a42fdf85ac53c6f7e756"
+                    + "7f99b62bcaf467441b567f19b58d86ae");
 
     private static final byte[] EAP_SIM_START_REQUEST = hexStringToByteArray(
             "01850014120a0000" // EAP header
-            + "0f02000200010000" // AT_VERSION_LIST attribute
-            + "0d010000"); // AT_ANY_ID_REQ attribute
+                    + "0f02000200010000" // AT_VERSION_LIST attribute
+                    + "0d010000"); // AT_ANY_ID_REQ attribute
     private static final byte[] EAP_SIM_START_RESPONSE = hexStringToByteArray(
             "02850034120a0000" // EAP header
-            + "0705000037f3ddd3954c4831a5ee08c574844398" // AT_NONCE_MT attribute
-            + "10010001" // AT_SELECTED_VERSION attribute
-            + "0e05001031313233343536373839414243444546"); // AT_IDENTITY attribute
+                    + "0705000037f3ddd3954c4831a5ee08c574844398" // AT_NONCE_MT attribute
+                    + "10010001" // AT_SELECTED_VERSION attribute
+                    + "0e05001031313233343536373839414243444546"); // AT_IDENTITY attribute
     private static final byte[] EAP_SIM_CHALLENGE_REQUEST = hexStringToByteArray(
             "01860050120b0000" // EAP header
-            + "010d0000" // AT_RAND attribute
+                    + "010d0000" // AT_RAND attribute
                     + "0123456789abcdef1123456789abcdef" // Rand 1
                     + "1123456789abcdef1123456789abcdef" // Rand 2
                     + "2123456789abcdef1123456789abcdef" // Rand 3
-            + "0b050000e4675b17fa7ba4d93db48d1af9ecbb01"); // AT_MAC attribute
+                    + "0b050000e4675b17fa7ba4d93db48d1af9ecbb01"); // AT_MAC attribute
     private static final byte[] EAP_SIM_CHALLENGE_RESPONSE = hexStringToByteArray(
             "0286001c120b0000" // EAP header
-            + "0b050000e5df9cb1d935ea5f54d449a038bed061"); // AT_NAC attribute
+                    + "0b050000e5df9cb1d935ea5f54d449a038bed061"); // AT_NAC attribute
     private static final byte[] EAP_SUCCESS = hexStringToByteArray("03860004");
 
     private Context mMockContext;
@@ -119,6 +124,44 @@ public class EapSimTest {
 
     @Test
     public void testEapSimEndToEnd() {
+        verifyEapSimStart();
+        verifyEapSimChallenge();
+        verifyEapSuccess();
+    }
+
+    @Test
+    public void testEapSimUnsupportedType() {
+        // EAP-Request/AKA-Identity (unsupported type)
+        mEapAuthenticator.processEapMessage(EAP_REQUEST_AKA_IDENTITY_PACKET);
+        mTestLooper.dispatchAll();
+
+        // verify EAP-Response/Nak returned
+        verify(mMockCallback).onResponse(eq(EAP_RESPONSE_NAK_PACKET));
+        verifyNoMoreInteractions(
+                mMockContext,
+                mMockTelephonyManager,
+                mMockSecureRandom,
+                mMockCallback);
+
+        // Switch to EAP-SIM and go through protocol
+        verifyEapSimStart();
+        verifyEapSimChallenge();
+        verifyEapSuccess();
+    }
+
+    @Test
+    public void verifyEapSimWithEapNotifications() {
+        verifyEapNotification();
+        verifyEapSimStart();
+
+        verifyEapNotification();
+        verifyEapSimChallenge();
+
+        verifyEapNotification();
+        verifyEapSuccess();
+    }
+
+    private void verifyEapSimStart() {
         // EAP-SIM/Start request
         when(mMockContext.getSystemService(Context.TELEPHONY_SERVICE))
                 .thenReturn(mMockTelephonyManager);
@@ -145,7 +188,9 @@ public class EapSimTest {
                 mMockTelephonyManager,
                 mMockSecureRandom,
                 mMockCallback);
+    }
 
+    private void verifyEapSimChallenge() {
         // EAP-SIM/Challenge request
         when(mMockTelephonyManager
                 .getIccAuthentication(
@@ -191,7 +236,9 @@ public class EapSimTest {
                 mMockTelephonyManager,
                 mMockSecureRandom,
                 mMockCallback);
+    }
 
+    private void verifyEapSuccess() {
         // EAP-Success
         mEapAuthenticator.processEapMessage(EAP_SUCCESS);
         mTestLooper.dispatchAll();
@@ -203,5 +250,18 @@ public class EapSimTest {
                 mMockTelephonyManager,
                 mMockSecureRandom,
                 mMockCallback);
+    }
+
+    private void verifyEapNotification() {
+        mEapAuthenticator.processEapMessage(EAP_REQUEST_NOTIFICATION_PACKET);
+        mTestLooper.dispatchAll();
+
+        verify(mMockCallback).onResponse(eq(EAP_RESPONSE_NOTIFICATION_PACKET));
+        verifyNoMoreInteractions(
+                mMockContext,
+                mMockTelephonyManager,
+                mMockSecureRandom,
+                mMockCallback);
+        reset(mMockCallback);
     }
 }
