@@ -16,6 +16,8 @@
 
 package com.android.ike.eap.statemachine;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_INSUFFICIENT_CHALLENGES;
@@ -58,7 +60,7 @@ public class EapSimStateTest {
     protected TelephonyManager mMockTelephonyManager;
     protected EapSimTypeDataDecoder mMockEapSimTypeDataDecoder;
 
-    protected EapSimConfig mEapSimConfig = new EapSimConfig(SUB_ID);
+    protected EapSimConfig mEapSimConfig = new EapSimConfig(SUB_ID, APPTYPE_USIM);
     protected EapSimMethodStateMachine mEapSimMethodStateMachine;
 
     @Before
