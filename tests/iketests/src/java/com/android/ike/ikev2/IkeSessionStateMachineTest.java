@@ -60,6 +60,7 @@ import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 import android.os.test.TestLooper;
+import android.telephony.TelephonyManager;
 
 import com.android.ike.TestUtils;
 import com.android.ike.eap.EapAuthenticator;
@@ -437,7 +438,9 @@ public final class IkeSessionStateMachineTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
-        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(EAP_SIM_SUB_ID).build();
+        mEapSessionConfig = new EapSessionConfig.Builder()
+                .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
+                .build();
 
         mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
         mMockEapAuthenticator = mock(EapAuthenticator.class);

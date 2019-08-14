@@ -16,6 +16,8 @@
 
 package com.android.ike.eap;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
@@ -112,7 +114,9 @@ public class EapSimTest {
         mMockCallback = mock(IEapCallback.class);
 
         mTestLooper = new TestLooper();
-        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(SUB_ID).build();
+        mEapSessionConfig = new EapSessionConfig.Builder()
+                .setEapSimConfig(SUB_ID, APPTYPE_USIM)
+                .build();
         mEapAuthenticator =
                 new EapAuthenticator(
                         mTestLooper.getLooper(),
