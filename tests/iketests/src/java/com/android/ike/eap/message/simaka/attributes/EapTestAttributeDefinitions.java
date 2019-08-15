@@ -66,6 +66,9 @@ public class EapTestAttributeDefinitions {
     public static final String AUTN = "0123456789ABCDEFFEDCBA9876543210";
     public static final byte[] AUTN_BYTES = hexStringToByteArray(AUTN);
     public static final byte[] AT_AUTN = hexStringToByteArray("02050000" + AUTN);
+    public static final String RES = "1122334455";
+    public static final byte[] RES_BYTES = hexStringToByteArray(RES);
+    public static final byte[] AT_RES = hexStringToByteArray("03030028" + RES + "000000");
 
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
@@ -89,4 +92,10 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_NOTIFICATION_INVALID_STATE = hexStringToByteArray("0C01C000");
     public static final byte[] AT_CLIENT_ERROR_CODE_INVALID_LENGTH = hexStringToByteArray("1602");
     public static final byte[] AT_AUTN_INVALID_LENGTH = hexStringToByteArray("02010000");
+    public static final byte[] AT_RES_INVALID_RES_LENGTH =
+            hexStringToByteArray("030300241122334450000000");
+    public static final byte[] AT_RES_SHORT_RES =
+            hexStringToByteArray("0302000811000000");
+    public static final byte[] AT_RES_LONG_RES =
+            hexStringToByteArray("0306008800112233445566778899AABBCCDDEEFF11000000");
 }
