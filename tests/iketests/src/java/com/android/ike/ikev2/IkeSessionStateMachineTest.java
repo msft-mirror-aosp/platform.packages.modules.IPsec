@@ -48,6 +48,7 @@ import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -1759,6 +1760,51 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testCreateIkeLocalIkeAuthPskVerifyFail() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+        reset(mMockIkeMessageHelper);
+
+        // Build IKE AUTH response with invalid Auth-PSK Payload and ID-Responder Payload.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload =
+                spy(
+                        (IkeAuthPskPayload)
+                                IkeTestUtils.hexStringToIkePayload(
+                                        IkePayload.PAYLOAD_TYPE_AUTH,
+                                        true /*isResp*/,
+                                        PSK_AUTH_RESP_PAYLOAD_HEX_STRING));
+
+        doThrow(new AuthenticationFailedException("DummyAuthFailException"))
+                .when(spyAuthPayload)
+                .verifyInboundSignature(any(), any(), any(), any(), any(), any());
+        authRelatedPayloads.add(spyAuthPayload);
+
+        IkeIdPayload respIdPayload =
+                (IkeIdPayload)
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
+                                true /*isResp*/,
+                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+        authRelatedPayloads.add(respIdPayload);
+
+        // Send response to IKE state machine
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+        mLooper.dispatchAll();
+
+        // Verify Delete request was sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(false /*isResp*/);
+        assertEquals(1, payloads.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, payloads.get(0).payloadType);
+
+        // Verify IKE Session was closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(AuthenticationFailedException.class));
+    }
+
+    @Test
     public void testAuthPskHandleRespWithParsingError() throws Exception {
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
         verifyRetransmissionStarted();
@@ -1898,6 +1944,32 @@ public final class IkeSessionStateMachineTest {
 
         assertEquals(1, resp.ikePayloadList.size());
         assertArrayEquals(EAP_DUMMY_MSG, ((IkeEapPayload) resp.ikePayloadList.get(0)).eapMessage);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthInEapHandlesMissingEapPacket() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+
+        // Setup state and go to IN_EAP state
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
+        mLooper.dispatchAll();
+
+        // Mock sending IKE_AUTH{EAP} request
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+        callback.onResponse(EAP_DUMMY_MSG);
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+
+        // Send IKE AUTH response with no EAP Payload to IKE state machine
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeIkeAuthRespWithoutChildPayloads(new LinkedList<>()));
+        mLooper.dispatchAll();
+
+        // Verify state machine quit properly
+        verify(mMockIkeSessionCallback).onError(any(AuthenticationFailedException.class));
+        assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
     @Test

@@ -845,7 +845,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 () -> {
                     mIkeSessionCallback.onError(ikeException);
                 });
-        loge("Fatal error", ikeException);
+        loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
         quitNow();
     }
@@ -2501,20 +2501,15 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void enterState() {
-            super.enterState();
-            mRetransmitter = new EncryptedRetransmitter(buildRequest());
-            mUseEap =
-                    (IkeSessionOptions.IKE_AUTH_METHOD_EAP
-                            == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
-        }
-
-        private IkeMessage buildRequest() {
             try {
-                return buildIkeAuthReq();
+                super.enterState();
+                mRetransmitter = new EncryptedRetransmitter(buildIkeAuthReq());
+                mUseEap =
+                        (IkeSessionOptions.IKE_AUTH_METHOD_EAP
+                                == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
             } catch (ResourceUnavailableException e) {
-                // TODO:Handle IPsec SPI assigning failure.
-                throw new UnsupportedOperationException(
-                        "Do not support handling IPsec SPI assigning failure.");
+                // Handle IPsec SPI assigning failure.
+                handleIkeFatalError(e);
             }
         }
 
@@ -2550,8 +2545,11 @@ public class IkeSessionStateMachine extends StateMachine {
                             childReqList, extractChildPayloadsFromMessage(ikeMessage));
                 }
             } catch (IkeProtocolException e) {
-                // TODO: Handle processing errors.
-                throw new UnsupportedOperationException("Do not support handling error.", e);
+                if (!mUseEap) {
+                    // Notify the remote because they may have set up the IKE SA.
+                    sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+                }
+                handleIkeFatalError(e);
             }
         }
 
@@ -2564,7 +2562,6 @@ public class IkeSessionStateMachine extends StateMachine {
                 // Notify the remote because they may have set up the IKE SA.
                 sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
             }
-
             handleIkeFatalError(ikeException);
         }
 
@@ -2603,8 +2600,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     // Do not include AUTH payload when using EAP.
                     break;
                 default:
-                    throw new IllegalArgumentException(
-                            "Unrecognized authentication method: " + authConfig.mAuthMethod);
+                    cleanUpAndQuit(
+                            new IllegalArgumentException(
+                                    "Unrecognized authentication method: "
+                                            + authConfig.mAuthMethod));
             }
 
             payloadList.addAll(
@@ -2670,10 +2669,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
                         if (notifyPayload.isErrorNotify()) {
-                            // TODO: Throw IkeExceptions according to error types.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handling error notifications in IKE AUTH"
-                                            + " response.");
+                            throw notifyPayload.validateAndBuildIkeException();
                         } else {
                             // Unknown and unexpected status notifications are ignored as per
                             // RFC7296.
@@ -2716,8 +2712,9 @@ public class IkeSessionStateMachine extends StateMachine {
                     // STOPSHIP: b/122685769 Validate received certificates and digital signature.
                     break;
                 default:
-                    throw new IllegalArgumentException(
-                            "Unrecognized auth method: " + authPayload.authMethod);
+                    cleanUpAndQuit(
+                            new IllegalArgumentException(
+                                    "Unrecognized auth method: " + authPayload.authMethod));
             }
         }
 
@@ -2766,14 +2763,13 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     return HANDLED;
                 case CMD_EAP_ERRORED:
-                    handleAuthenticationFailureAndShutdown(
-                            new AuthenticationFailedException((Throwable) msg.obj));
+                    handleIkeFatalError(new AuthenticationFailedException((Throwable) msg.obj));
                     return HANDLED;
                 case CMD_EAP_FAILED:
                     AuthenticationFailedException exception =
                             new AuthenticationFailedException("EAP Authentication Failed");
 
-                    handleAuthenticationFailureAndShutdown(exception);
+                    handleIkeFatalError(exception);
                     return HANDLED;
                 case CMD_EAP_FINISH_EAP_AUTH:
                     deferMessage(msg);
@@ -2785,66 +2781,52 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
-        private void handleAuthenticationFailureAndShutdown(AuthenticationFailedException cause) {
-            mUserCbExecutor.execute(
-                    () -> {
-                        mIkeSessionCallback.onError(cause);
-                    });
-
-            removeIkeSaRecord(mCurrentIkeSaRecord);
-            mCurrentIkeSaRecord.close();
-            mCurrentIkeSaRecord = null;
-
-            quitNow();
-        }
-
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
-            mRetransmitter.stopRetransmitting();
+            try {
+                mRetransmitter.stopRetransmitting();
 
-            int exchangeType = ikeMessage.ikeHeader.exchangeType;
-            if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_AUTH) {
-                // Invalid, but authenticated response.
-
-                // TODO: Clear state and exit
-                return;
-            }
-
-            IkeEapPayload eapPayload = null;
-            for (IkePayload payload : ikeMessage.ikePayloadList) {
-                switch (payload.payloadType) {
-                    case IkePayload.PAYLOAD_TYPE_EAP:
-                        eapPayload = (IkeEapPayload) payload;
-                        break;
-                    case IkePayload.PAYLOAD_TYPE_NOTIFY:
-                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
-                        if (notifyPayload.isErrorNotify()) {
-                            // TODO: Throw IkeExceptions according to error types.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handling error notifications in IKE AUTH"
-                                            + " response.");
-                        } else {
-                            // Unknown and unexpected status notifications are ignored as per
-                            // RFC7296.
-                            logw(
-                                    "Received unknown or unexpected status notifications with"
-                                            + " notify type: "
-                                            + notifyPayload.notifyType);
-                        }
-                        break;
-                    default:
-                        logw(
-                                "Received unexpected payload in IKE AUTH response. Payload"
-                                        + " type: "
-                                        + payload.payloadType);
+                int exchangeType = ikeMessage.ikeHeader.exchangeType;
+                if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_AUTH) {
+                    throw new InvalidSyntaxException(
+                            "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
                 }
-            }
 
-            if (eapPayload == null) {
-                // TODO: Handle missing EAP payload
-            }
+                IkeEapPayload eapPayload = null;
+                for (IkePayload payload : ikeMessage.ikePayloadList) {
+                    switch (payload.payloadType) {
+                        case IkePayload.PAYLOAD_TYPE_EAP:
+                            eapPayload = (IkeEapPayload) payload;
+                            break;
+                        case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                            IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                            if (notifyPayload.isErrorNotify()) {
+                                throw notifyPayload.validateAndBuildIkeException();
+                            } else {
+                                // Unknown and unexpected status notifications are ignored as per
+                                // RFC7296.
+                                logw(
+                                        "Received unknown or unexpected status notifications with"
+                                                + " notify type: "
+                                                + notifyPayload.notifyType);
+                            }
+                            break;
+                        default:
+                            logw(
+                                    "Received unexpected payload in IKE AUTH response. Payload"
+                                            + " type: "
+                                            + payload.payloadType);
+                    }
+                }
 
-            mEapAuthenticator.processEapMessage(eapPayload.eapMessage);
+                if (eapPayload == null) {
+                    throw new AuthenticationFailedException("EAP Payload is missing.");
+                }
+
+                mEapAuthenticator.processEapMessage(eapPayload.eapMessage);
+            } catch (IkeProtocolException exception) {
+                handleIkeFatalError(exception);
+            }
         }
 
         @Override
@@ -2928,8 +2910,9 @@ public class IkeSessionStateMachine extends StateMachine {
 
                 performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
             } catch (IkeProtocolException e) {
-                // TODO: Handle processing errors.
-                throw new UnsupportedOperationException("Do not support handling error.", e);
+                // Notify the remote because they may have set up the IKE SA.
+                sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+                handleIkeFatalError(e);
             }
         }
 
@@ -2954,10 +2937,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
                         if (notifyPayload.isErrorNotify()) {
-                            // TODO: Throw IkeExceptions according to error types.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handling error notifications in IKE AUTH"
-                                            + " response.");
+                            throw notifyPayload.validateAndBuildIkeException();
                         } else {
                             // Unknown and unexpected status notifications are ignored as per
                             // RFC7296.
