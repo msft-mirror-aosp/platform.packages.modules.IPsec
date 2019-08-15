@@ -531,7 +531,7 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 String base64Challenge =
                         Base64.encodeToString(formattedRand.array(), Base64.NO_WRAP);
                 String challengeResponse = mTelephonyManager.getIccAuthentication(
-                        TelephonyManager.APPTYPE_USIM,
+                        mEapSimConfig.apptype,
                         TelephonyManager.AUTHTYPE_EAP_SIM,
                         base64Challenge);
                 byte[] challengeResponseBytes = Base64.decode(challengeResponse, Base64.DEFAULT);

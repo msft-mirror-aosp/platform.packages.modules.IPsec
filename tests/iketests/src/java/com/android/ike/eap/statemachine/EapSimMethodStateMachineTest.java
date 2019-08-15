@@ -16,6 +16,8 @@
 
 package com.android.ike.eap.statemachine;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
@@ -101,7 +103,7 @@ public class EapSimMethodStateMachineTest {
     @Before
     public void setUp() {
         mContext = getInstrumentation().getContext();
-        mEapSimConfig = new EapSimConfig(SUB_ID);
+        mEapSimConfig = new EapSimConfig(SUB_ID, APPTYPE_USIM);
         mEapSimMethodStateMachine =
                 spy(new EapSimMethodStateMachine(mContext, mEapSimConfig, new SecureRandom()));
     }
