@@ -657,6 +657,23 @@ public class ChildSessionStateMachine extends StateMachine {
                         + " is not correctly closed.");
     }
 
+    private void handleChildFatalError(Exception error) {
+        IkeException ikeException =
+                error instanceof IkeException
+                        ? (IkeException) error
+                        : new IkeInternalException(error);
+
+        mUserCbExecutor.execute(
+                () -> {
+                    mUserCallback.onError(ikeException);
+                });
+        loge("Child Session fatal error", ikeException);
+
+        // Clean up all SaRecords and quit
+        closeAllSaRecords(false /*expectSaClosed*/);
+        quitNow();
+    }
+
     /**
      * This state handles the request to close Child Session immediately without initiating any
      * exchange.
@@ -694,7 +711,8 @@ public class ChildSessionStateMachine extends StateMachine {
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
                 @ExchangeType int exchangeType,
-                @ExchangeType int expectedExchangeType) {
+                @ExchangeType int expectedExchangeType,
+                int registeredSpi) {
             CreateChildResult createChildResult =
                     CreateChildSaHelper.validateAndNegotiateInitChild(
                             reqPayloads,
@@ -748,24 +766,25 @@ public class ChildSessionStateMachine extends StateMachine {
                             | SpiUnavailableException
                             | IOException e) {
                         // #makeChildSaRecord failed.
+
+                        // TODO: Initiate deletion
+                        mChildSmCallback.onChildSaDeleted(createChildResult.respSpi.getSpi());
                         createChildResult.initSpi.close();
                         createChildResult.respSpi.close();
-                        // TODO: Initiate deletion and close this Child Session
-                        throw new UnsupportedOperationException("Cannot handle this error");
+                        handleChildFatalError(e);
                     }
                     break;
                 case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
-                    // TODO: Initiate deletion and close this Child Session
-                    throw new UnsupportedOperationException("Cannot handle this error");
+                    // TODO: Initiate deletion
+                    handleCreationFailAndQuit(registeredSpi, createChildResult.exception);
+                    break;
                 case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
-                    // TODO: Unregister remotely generated SPI and locally close the Child Session.
-                    throw new UnsupportedOperationException("Cannot handle this error");
-                case CREATE_STATUS_IKE_ERROR:
-                    // TODO: Unregister remotely generated SPI and locally close the Child Session.
-                    mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                    handleCreationFailAndQuit(registeredSpi, createChildResult.exception);
                     break;
                 default:
-                    throw new IllegalArgumentException("Unrecognized status");
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Unrecognized status: " + createChildResult.status));
             }
         }
 
@@ -791,6 +810,13 @@ public class ChildSessionStateMachine extends StateMachine {
             mLocalTs = createChildResult.initTs;
             mRemoteTs = createChildResult.respTs;
         }
+
+        private void handleCreationFailAndQuit(int registeredSpi, IkeException exception) {
+            if (registeredSpi != SPI_NOT_REGISTERED) {
+                mChildSmCallback.onChildSaDeleted(registeredSpi);
+            }
+            handleChildFatalError(exception);
+        }
     }
 
     /** Initial state of ChildSessionStateMachine. */
@@ -810,7 +836,8 @@ public class ChildSessionStateMachine extends StateMachine {
                             reqPayloads,
                             respPayloads,
                             EXCHANGE_TYPE_IKE_AUTH,
-                            EXCHANGE_TYPE_IKE_AUTH);
+                            EXCHANGE_TYPE_IKE_AUTH,
+                            childNegotiationData.registeredSpi);
 
                     return HANDLED;
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
@@ -855,7 +882,8 @@ public class ChildSessionStateMachine extends StateMachine {
                         mRequestPayloads,
                         ChildSessionStateMachine.this);
             } catch (ResourceUnavailableException e) {
-                // TODO: Notify users and close the Child Session.
+                // Fail to assign SPI
+                handleChildFatalError(e);
             }
         }
 
@@ -868,7 +896,8 @@ public class ChildSessionStateMachine extends StateMachine {
                             mRequestPayloads,
                             rcvResp.responsePayloads,
                             rcvResp.exchangeType,
-                            EXCHANGE_TYPE_CREATE_CHILD_SA);
+                            EXCHANGE_TYPE_CREATE_CHILD_SA,
+                            rcvResp.registeredSpi);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1259,10 +1288,6 @@ public class ChildSessionStateMachine extends StateMachine {
                         case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
                             // TODO: Locally delete newly created Child SA and retry rekey
                             throw new UnsupportedOperationException("Cannot handle this error");
-                        case CREATE_STATUS_IKE_ERROR:
-                            // TODO: Locally delete newly created Child SA
-                            mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
-                            break;
                         default:
                             throw new IllegalArgumentException(
                                     "Unrecognized status: " + createChildResult.status);
@@ -1813,7 +1838,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         exchangeType,
                         expectedExchangeType);
             } catch (InvalidSyntaxException e) {
-                return new CreateChildResult(CREATE_STATUS_IKE_ERROR, e);
+                return new CreateChildResult(CREATE_STATUS_CHILD_ERROR_INVALID_MSG, e);
             }
 
             List<IkeNotifyPayload> notifyPayloads =
@@ -1825,10 +1850,19 @@ public class ChildSessionStateMachine extends StateMachine {
             boolean hasTransportNotify = false;
             for (IkeNotifyPayload notify : notifyPayloads) {
                 if (notify.isErrorNotify()) {
-                    // TODO: Return CreateChildResult with CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY and
-                    // IkeProtocolException if inboundPayloads is a response. Otherwise, ignore
-                    // error notifications.
-                    throw new UnsupportedOperationException("Cannot handle this error");
+                    try {
+                        IkeProtocolException exception = notify.validateAndBuildIkeException();
+                        if (isLocalInit) {
+                            return new CreateChildResult(
+                                    CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY, exception);
+                        } else {
+                            Log.w(
+                                    TAG,
+                                    "Received unexpected error notification: " + notify.notifyType);
+                        }
+                    } catch (InvalidSyntaxException e) {
+                        return new CreateChildResult(CREATE_STATUS_CHILD_ERROR_INVALID_MSG, e);
+                    }
                 }
 
                 switch (notify.notifyType) {
@@ -1896,12 +1930,14 @@ public class ChildSessionStateMachine extends StateMachine {
                     childProposalPair.second.getChildSpiResource().close();
                 }
 
-                if (e instanceof IkeProtocolException) {
-                    int errorStatus =
-                            (e instanceof InvalidSyntaxException)
-                                    ? CREATE_STATUS_IKE_ERROR
-                                    : CREATE_STATUS_CHILD_ERROR_INVALID_MSG;
-                    return new CreateChildResult(errorStatus, (IkeProtocolException) e);
+                if (e instanceof InvalidSyntaxException) {
+                    return new CreateChildResult(
+                            CREATE_STATUS_CHILD_ERROR_INVALID_MSG, (InvalidSyntaxException) e);
+                } else if (e instanceof IkeProtocolException) {
+                    return new CreateChildResult(
+                            CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
+                            new InvalidSyntaxException(
+                                    "Processing error in received Create Child response", e));
                 } else {
                     return new CreateChildResult(
                             CREATE_STATUS_CHILD_ERROR_INVALID_MSG, new IkeInternalException(e));
@@ -1909,6 +1945,7 @@ public class ChildSessionStateMachine extends StateMachine {
             }
         }
 
+        // Validate syntax to make sure all necessary payloads exist and exchange type is correct.
         private static void validatePayloadAndExchangeType(
                 List<IkePayload> inboundPayloads,
                 boolean isResp,
@@ -1920,6 +1957,7 @@ public class ChildSessionStateMachine extends StateMachine {
             boolean hasNoncePayload = false;
             boolean hasTsInitPayload = false;
             boolean hasTsRespPayload = false;
+            boolean hasErrorNotify = false;
 
             for (IkePayload payload : inboundPayloads) {
                 switch (payload.payloadType) {
@@ -1941,14 +1979,9 @@ public class ChildSessionStateMachine extends StateMachine {
                         hasTsRespPayload = true;
                         break;
                     case PAYLOAD_TYPE_NOTIFY:
-                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
-
-                        if (notifyPayload.isErrorNotify() && !isResp) {
-                            Log.w(
-                                    TAG,
-                                    "Received error notification in a Create Child SA request: "
-                                            + notifyPayload.notifyType);
-                        }
+                        if (((IkeNotifyPayload) payload).isErrorNotify()) hasErrorNotify = true;
+                        // Do not have enough context to handle all notifications. Handle them
+                        // together in higher layer.
                         break;
                     default:
                         Log.w(
@@ -1979,7 +2012,12 @@ public class ChildSessionStateMachine extends StateMachine {
                                 + " TS-Initiator or TS-Responder");
             }
 
-            if (!hasSaPayload || !hasNoncePayload || !hasTsInitPayload || !hasTsRespPayload) {
+            if (isResp
+                    && !hasErrorNotify
+                    && (!hasSaPayload
+                            || !hasNoncePayload
+                            || !hasTsInitPayload
+                            || !hasTsRespPayload)) {
                 throw new InvalidSyntaxException(
                         "SA, Nonce, TS-Initiator or TS-Responder missing.");
             }
@@ -2055,8 +2093,7 @@ public class ChildSessionStateMachine extends StateMachine {
     @IntDef({
         CREATE_STATUS_OK,
         CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
-        CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY,
-        CREATE_STATUS_IKE_ERROR
+        CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY
     })
     @interface CreateStatus {}
 
@@ -2066,8 +2103,6 @@ public class ChildSessionStateMachine extends StateMachine {
     private static final int CREATE_STATUS_CHILD_ERROR_INVALID_MSG = 1;
     /** The inbound message includes error notification that failed the Child negotiation. */
     private static final int CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY = 2;
-    /** The inbound message has fatal error that causes IKE library to close the IKE Session. */
-    private static final int CREATE_STATUS_IKE_ERROR = 3;
 
     private static class CreateChildResult {
         @CreateStatus public final int status;
