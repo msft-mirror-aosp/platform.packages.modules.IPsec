@@ -24,6 +24,8 @@ package com.android.ike.ikev2.exceptions;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class AuthenticationFailedException extends IkeProtocolException {
+    private static final int EXPECTED_ERROR_DATA_LEN = 0;
+
     /**
      * Construct a instance of AuthenticationFailedException.
      *
@@ -40,5 +42,19 @@ public final class AuthenticationFailedException extends IkeProtocolException {
      */
     public AuthenticationFailedException(Throwable cause) {
         super(ERROR_TYPE_AUTHENTICATION_FAILED, cause);
+    }
+
+    /**
+     * Construct a instance of AuthenticationFailedExcepion from a notify payload.
+     *
+     * @param notifyData the notify data included in the payload.
+     */
+    public AuthenticationFailedException(byte[] notifyData) {
+        super(ERROR_TYPE_AUTHENTICATION_FAILED, notifyData);
+    }
+
+    @Override
+    protected boolean isValidDataLength(int dataLen) {
+        return EXPECTED_ERROR_DATA_LEN == dataLen;
     }
 }
