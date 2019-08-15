@@ -84,6 +84,7 @@ import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
@@ -209,8 +210,6 @@ public final class IkeSessionStateMachineTest {
 
     private static final int EAP_SIM_SUB_ID = 1;
 
-    private static long sIkeInitResponseSpiBase = 1L;
-
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private Context mContext;
     private IpSecManager mIpSecManager;
@@ -284,7 +283,18 @@ public final class IkeSessionStateMachineTest {
                                 REMOTE_ADDRESS,
                                 IkeSocket.IKE_SERVER_PORT));
         payloadList.add(sourceNatPayload);
+        return makeDummyUnencryptedReceivedIkePacket(
+                initiatorSpi, responderSpi, eType, isResp, fromIkeInit, payloadList);
+    }
 
+    private ReceivedIkePacket makeDummyUnencryptedReceivedIkePacket(
+            long initiatorSpi,
+            long responderSpi,
+            @IkeHeader.ExchangeType int eType,
+            boolean isResp,
+            boolean fromIkeInit,
+            List<IkePayload> payloadList)
+            throws Exception {
         IkeMessage dummyIkeMessage =
                 makeDummyIkeMessageForTest(
                         initiatorSpi,
@@ -598,8 +608,8 @@ public final class IkeSessionStateMachineTest {
         // STOPSHIP: b/131617794 allow #mockIkeSetup to be independent in each test after we can
         // support IkeSession cleanup.
         return makeDummyReceivedIkeInitRespPacket(
-                1L /*initiatorSpi*/,
-                ++sIkeInitResponseSpiBase,
+                1L /*initiator SPI*/,
+                2L /*responder SPI*/,
                 IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
                 true /*isResp*/,
                 false /*fromIkeInit*/,
@@ -856,10 +866,23 @@ public final class IkeSessionStateMachineTest {
         ikeSpiThree.close();
     }
 
+    private void setupMakeFirstIkeSa() throws Exception {
+        // Inject IkeSaRecord and release IKE SPI resource since we will lose their references
+        // later.
+        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any()))
+                .thenAnswer(
+                        (invocation) -> {
+                            IkeSaRecordConfig config =
+                                    (IkeSaRecordConfig) invocation.getArguments()[2];
+                            config.initSpi.close();
+                            config.respSpi.close();
+                            return mSpyCurrentIkeSaRecord;
+                        });
+    }
+
     @Test
     public void testCreateIkeLocalIkeInit() throws Exception {
-        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any()))
-                .thenReturn(mSpyCurrentIkeSaRecord);
+        setupMakeFirstIkeSa();
 
         // Send IKE INIT request
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
@@ -2398,12 +2421,10 @@ public final class IkeSessionStateMachineTest {
 
     @Test
     public void testIkeInitSchedulesRekey() throws Exception {
-        when(mMockSaRecordHelper.makeFirstIkeSaRecord(any(), any(), any()))
-                .thenReturn(mSpyCurrentIkeSaRecord);
+        setupMakeFirstIkeSa();
 
         // Send IKE INIT request
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
-
         // Receive IKE INIT response
         ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
         mIkeSessionStateMachine.sendMessage(
@@ -2991,5 +3012,34 @@ public final class IkeSessionStateMachineTest {
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeInitRcvErrorNotify() throws Exception {
+        // Send IKE INIT request
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+
+        // Receive IKE INIT response with erro notification.
+        List<IkePayload> payloads = new LinkedList<>();
+        payloads.add(new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN));
+        ReceivedIkePacket resp =
+                makeDummyUnencryptedReceivedIkePacket(
+                        1L /*initiator SPI*/,
+                        2L /*respodner SPI*/,
+                        IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                        true /*isResp*/,
+                        false /*fromIkeInit*/,
+                        payloads);
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mLooper.dispatchAll();
+
+        // Fires user error callbacks
+        verify(mMockIkeSessionCallback)
+                .onError(argThat(err -> err instanceof NoValidProposalChosenException));
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 }

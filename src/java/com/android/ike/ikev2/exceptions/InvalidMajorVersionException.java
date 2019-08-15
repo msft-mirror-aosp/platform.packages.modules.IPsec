@@ -25,7 +25,7 @@ package com.android.ike.ikev2.exceptions;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class InvalidMajorVersionException extends IkeProtocolException {
-    public final byte receivedMajorVersion;
+    private static final int EXPECTED_ERROR_DATA_LEN = 1;
 
     /**
      * Construct a instance of InvalidMajorVersionException
@@ -33,7 +33,29 @@ public final class InvalidMajorVersionException extends IkeProtocolException {
      * @param version the major version in received packet
      */
     public InvalidMajorVersionException(byte version) {
-        super(ERROR_TYPE_INVALID_MAJOR_VERSION, Byte.toUnsignedInt(version));
-        receivedMajorVersion = version;
+        super(ERROR_TYPE_INVALID_MAJOR_VERSION, new byte[] {version});
+    }
+
+    /**
+     * Construct a instance of InvalidMajorVersionException from a notify payload.
+     *
+     * @param notifyData the notify data included in the payload.
+     */
+    public InvalidMajorVersionException(byte[] notifyData) {
+        super(ERROR_TYPE_INVALID_MAJOR_VERSION, notifyData);
+    }
+
+    /**
+     * Return the major verion included in this exception.
+     *
+     * @return the major verion
+     */
+    public int getMajorVerion() {
+        return byteArrayToInteger(getErrorData());
+    }
+
+    @Override
+    protected boolean isValidDataLength(int dataLen) {
+        return EXPECTED_ERROR_DATA_LEN == dataLen;
     }
 }
