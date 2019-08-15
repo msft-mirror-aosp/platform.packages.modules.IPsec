@@ -27,6 +27,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
+import com.android.ike.eap.message.simaka.EapSimAkaAttributeFactory;
 import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
 
 import org.junit.Before;
@@ -35,17 +36,17 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 
 public class AtIdentityTest {
-    private EapSimAttributeFactory mEapSimAttributeFactory;
+    private EapSimAkaAttributeFactory mAttributeFactory;
 
     @Before
     public void setUp() {
-        mEapSimAttributeFactory = EapSimAttributeFactory.getInstance();
+        mAttributeFactory = new EapSimAkaAttributeFactory() {};
     }
 
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_IDENTITY);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtIdentity);
@@ -75,7 +76,7 @@ public class AtIdentityTest {
         buffer.rewind();
 
         EapSimAkaAttribute eapSimAkaAttribute =
-                EapSimAttributeFactory.getInstance().getEapSimAttribute(buffer);
+                EapSimAttributeFactory.getInstance().getAttribute(buffer);
         assertTrue(eapSimAkaAttribute instanceof AtIdentity);
         AtIdentity newAtIdentity = (AtIdentity) eapSimAkaAttribute;
         assertEquals(atIdentity.lengthInBytes, newAtIdentity.lengthInBytes);
