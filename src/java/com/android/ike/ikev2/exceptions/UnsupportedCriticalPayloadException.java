@@ -15,6 +15,7 @@
  */
 package com.android.ike.ikev2.exceptions;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -27,6 +28,7 @@ import java.util.List;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class UnsupportedCriticalPayloadException extends IkeProtocolException {
+    private static final int EXPECTED_ERROR_DATA_LEN = 1;
 
     public final List<Integer> payloadTypeList;
 
@@ -39,7 +41,34 @@ public final class UnsupportedCriticalPayloadException extends IkeProtocolExcept
      * @param payloadList the list of all unsupported critical payload types.
      */
     public UnsupportedCriticalPayloadException(List<Integer> payloadList) {
-        super(ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD, payloadList.get(0));
+        super(
+                ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD,
+                integerToByteArray(payloadList.get(0), EXPECTED_ERROR_DATA_LEN));
         payloadTypeList = payloadList;
+    }
+
+    /**
+     * Construct a instance of UnsupportedCriticalPayloadException from a notify payload.
+     *
+     * @param notifyData the notify data included in the payload.
+     */
+    public UnsupportedCriticalPayloadException(byte[] notifyData) {
+        super(ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD, notifyData);
+        payloadTypeList = new ArrayList<>(1);
+        payloadTypeList.add(byteArrayToInteger(notifyData));
+    }
+
+    /**
+     * Return the all the unsupported critical payloads included in this exception.
+     *
+     * @return the unsupported critical payload list.
+     */
+    public List<Integer> getUnsupportedCriticalPayloadList() {
+        return payloadTypeList;
+    }
+
+    @Override
+    protected boolean isValidDataLength(int dataLen) {
+        return EXPECTED_ERROR_DATA_LEN == dataLen;
     }
 }
