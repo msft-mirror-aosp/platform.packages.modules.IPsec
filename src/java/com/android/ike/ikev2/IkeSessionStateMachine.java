@@ -43,7 +43,6 @@ import android.os.Message;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
-import android.util.Log;
 import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -87,7 +86,6 @@ import com.android.ike.ikev2.utils.Retransmitter;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
-import com.android.internal.util.StateMachine;
 
 import dalvik.system.CloseGuard;
 
@@ -130,7 +128,7 @@ import java.util.concurrent.TimeUnit;
  *      Exchange Type = {IkeInit | IkeAuth | Create | Delete | Info}
  * </pre>
  */
-public class IkeSessionStateMachine extends StateMachine {
+public class IkeSessionStateMachine extends SessionStateMachineBase {
 
     private static final String TAG = "IkeSessionStateMachine";
 
@@ -544,7 +542,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 closeAllSaRecords(false /*expectSaClosed*/);
                 quitNow();
             } else {
-                Log.wtf(TAG, "Unknown message.what: " + msg.what);
+                logWtf("Unknown message.what: " + msg.what);
             }
         }
 
@@ -852,7 +850,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     () -> {
                         mIkeSessionCallback.onError(new IkeInternalException(e));
                     });
-            Log.wtf(TAG, "Unexpected exception in " + getCurrentState().getName(), e);
+            logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
         }
 
@@ -905,8 +903,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
         if (!expectSaClosed) return;
 
-        Log.wtf(
-                TAG,
+        logWtf(
                 "IkeSaRecord with local SPI: "
                         + ikeSaRecord.getLocalSpi()
                         + " is not correctly closed.");
@@ -1256,7 +1253,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     return HANDLED;
 
                 case CMD_EXECUTE_LOCAL_REQ:
-                    Log.wtf(TAG, "Invalid execute local request command in non-idle state");
+                    logWtf("Invalid execute local request command in non-idle state");
                     return NOT_HANDLED;
 
                 case CMD_RETRANSMIT:
@@ -1281,9 +1278,7 @@ public class IkeSessionStateMachine extends StateMachine {
          * override this function, and proxy the call to Retransmitter.retransmit()
          */
         protected void triggerRetransmit() {
-            Log.wtf(
-                    TAG,
-                    "Retransmission trigger dropped in state: " + this.getClass().getSimpleName());
+            logWtf("Retransmission trigger dropped in state: " + this.getClass().getSimpleName());
         }
 
         protected IkeSaRecord getIkeSaRecordForPacket(IkeHeader ikeHeader) {
@@ -1614,7 +1609,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                 quitNow();
             } catch (InvalidSyntaxException e) {
-                Log.wtf(TAG, "Got deletion of a non-Current IKE SA - rekey error?", e);
+                logWtf("Got deletion of a non-Current IKE SA - rekey error?", e);
                 // TODO: Send the INVALID_SYNTAX error
             }
         }
@@ -1717,13 +1712,13 @@ public class IkeSessionStateMachine extends StateMachine {
                         transitionTo(mRekeyIkeRemoteDelete);
                     } catch (IkeProtocolException e) {
                         // TODO: Handle processing errors.
-                        Log.e(TAG, "IkeProtocolException: ", e);
+                        loge("IkeProtocolException: ", e);
                     } catch (GeneralSecurityException e) {
                         // TODO: Fatal - kill session.
-                        Log.e(TAG, "GeneralSecurityException: ", e);
+                        loge("GeneralSecurityException: ", e);
                     } catch (IOException e) {
                         // TODO: SPI allocation collided - they reused an SPI. Terminate session.
-                        Log.e(TAG, "IOException: ", e);
+                        loge("IOException: ", e);
                     }
                     return;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
@@ -1840,7 +1835,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     mChildInLocalProcedure = getChildSession(childData.childSessionCallback);
                     if (mChildInLocalProcedure == null) {
-                        Log.wtf(TAG, "First child not found.");
+                        logWtf("First child not found.");
 
                         // TODO: Kill session, fire callbacks, and exit state machine.
                         return HANDLED;
@@ -1918,7 +1913,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     mChildInLocalProcedure.deleteChildSession();
                     break;
                 default:
-                    Log.wtf(TAG, "Invalid Child procedure type: " + req.procedureType);
+                    logWtf("Invalid Child procedure type: " + req.procedureType);
                     transitionToIdleIfAllProceduresDone();
                     break;
             }
@@ -2250,6 +2245,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     case DECODE_STATUS_OK:
                         handleResponseIkeMessage(decodeResult.ikeMessage);
                         mIkeInitResponseBytes = ikePacketBytes;
+
+                        // SA negotiation failed
+                        if (mCurrentIkeSaRecord == null) break;
+
                         mCurrentIkeSaRecord.incrementLocalRequestMessageId();
                         break;
                     case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
@@ -3571,7 +3570,7 @@ public class IkeSessionStateMachine extends StateMachine {
                         // TODO: Stop timer awating delete request.
                         transitionTo(mSimulRekeyIkeLocalDelete);
                     } catch (InvalidSyntaxException e) {
-                        Log.d(TAG, "Validation failed for delete request", e);
+                        logd("Validation failed for delete request", e);
                         // TODO: Shutdown - fatal error
                     }
                     return;
@@ -3929,15 +3928,5 @@ public class IkeSessionStateMachine extends StateMachine {
 
             return payloadList;
         }
-    }
-
-    protected void logd(String s, Throwable cause) {
-        // TODO: Use IKE Log class
-        Log.d(TAG, s, cause);
-    }
-
-    protected void logi(String s, Throwable cause) {
-        // TODO: Use IKE Log class
-        Log.i(TAG, s, cause);
     }
 }

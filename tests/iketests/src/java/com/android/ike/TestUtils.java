@@ -16,9 +16,16 @@
 
 package com.android.ike;
 
+import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
+
+import com.android.ike.utils.Log;
+
 import java.nio.ByteBuffer;
 
-/** TestUtils provides utility methods for parsing Hex String */
+/** TestUtils provides utility methods for parsing Hex String and constructing testing Logger. */
 public class TestUtils {
     public static byte[] hexStringToByteArray(String hexString) {
         int len = hexString.length();
@@ -55,5 +62,52 @@ public class TestUtils {
             sb.append(Integer.toHexString(c));
         }
         return sb.toString();
+    }
+
+    public static Log makeSpyLogThrowExceptionForWtf(String tag) {
+        Log spyLog = spy(new Log(tag, true /*logSensitive*/));
+
+        doAnswer(
+                (invocation) -> {
+                    throw new IllegalStateException((String) invocation.getArguments()[1]);
+                })
+                .when(spyLog)
+                .wtf(anyString(), anyString());
+
+        doAnswer(
+                (invocation) -> {
+                    throw (Throwable) invocation.getArguments()[2];
+                })
+                .when(spyLog)
+                .wtf(anyString(), anyString(), anyObject());
+
+        return spyLog;
+    }
+
+    public static Log makeSpyLogDoLogErrorForWtf(String tag) {
+        Log spyLog = spy(new Log(tag, true /*logSensitive*/));
+
+        doAnswer(
+                (invocation) -> {
+                    spyLog.e(
+                            "Mock logging WTF: " + invocation.getArguments()[0],
+                            (String) invocation.getArguments()[1]);
+                    return null;
+                })
+                .when(spyLog)
+                .wtf(anyString(), anyString());
+
+        doAnswer(
+                (invocation) -> {
+                    spyLog.e(
+                            "Mock logging WTF: " + invocation.getArguments()[0],
+                            (String) invocation.getArguments()[1],
+                            (Throwable) invocation.getArguments()[2]);
+                    return null;
+                })
+                .when(spyLog)
+                .wtf(anyString(), anyString(), anyObject());
+
+        return spyLog;
     }
 }

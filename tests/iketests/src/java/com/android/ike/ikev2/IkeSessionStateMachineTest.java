@@ -47,6 +47,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
@@ -63,7 +64,6 @@ import static org.mockito.Mockito.when;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.os.Looper;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
@@ -116,6 +116,7 @@ import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.utils.Log;
 import com.android.internal.util.State;
 
 import libcore.net.InetAddressUtils;
@@ -134,6 +135,8 @@ import java.util.List;
 import java.util.concurrent.Executor;
 
 public final class IkeSessionStateMachineTest {
+    private static final String TAG = "IkeSessionStateMachineTest";
+
     private static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
@@ -252,6 +255,8 @@ public final class IkeSessionStateMachineTest {
     private IkeSaRecord mSpyCurrentIkeSaRecord;
     private IkeSaRecord mSpyLocalInitIkeSaRecord;
     private IkeSaRecord mSpyRemoteInitIkeSaRecord;
+
+    private Log mSpyIkeLog;
 
     private int mExpectedCurrentSaLocalReqMsgId;
     private int mExpectedCurrentSaRemoteReqMsgId;
@@ -478,7 +483,8 @@ public final class IkeSessionStateMachineTest {
 
     @Before
     public void setUp() throws Exception {
-        if (Looper.myLooper() == null) Looper.prepare();
+        mSpyIkeLog = TestUtils.makeSpyLogThrowExceptionForWtf(TAG);
+        IkeManager.setIkeLog(mSpyIkeLog);
 
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
@@ -553,6 +559,7 @@ public final class IkeSessionStateMachineTest {
         mSpyLocalInitIkeSaRecord.close();
         mSpyRemoteInitIkeSaRecord.close();
 
+        IkeManager.resetIkeLog();
         IkeMessage.setIkeMessageHelper(new IkeMessageHelper());
         SaRecord.setSaRecordHelper(new SaRecordHelper());
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
@@ -3301,7 +3308,10 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
-    public void testHandleExceptionInEnterState() throws Exception {
+    public void testHandleUnexpectedExceptionInEnterState() throws Exception {
+        Log spyIkeLog = TestUtils.makeSpyLogDoLogErrorForWtf(TAG);
+        IkeManager.setIkeLog(spyIkeLog);
+
         IkeSessionOptions mockSessionOptions = mock(IkeSessionOptions.class);
         when(mockSessionOptions.getSaProposals()).thenThrow(mock(RuntimeException.class));
 
@@ -3323,10 +3333,14 @@ public final class IkeSessionStateMachineTest {
         assertNull(ikeSession.getCurrentState());
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+        verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 
     @Test
-    public void testHandleExceptionInProcessStateMsg() throws Exception {
+    public void testHandleUnexpectedExceptionInProcessStateMsg() throws Exception {
+        Log spyIkeLog = TestUtils.makeSpyLogDoLogErrorForWtf(TAG);
+        IkeManager.setIkeLog(spyIkeLog);
+
         setupIdleStateMachine();
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, null /*receivedIkePacket*/);
@@ -3335,6 +3349,7 @@ public final class IkeSessionStateMachineTest {
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+        verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 
     @Test
