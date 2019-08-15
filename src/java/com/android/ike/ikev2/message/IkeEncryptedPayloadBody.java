@@ -56,6 +56,7 @@ final class IkeEncryptedPayloadBody {
      */
     IkeEncryptedPayloadBody(
             byte[] message,
+            int encryptedBodyOffset,
             IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             byte[] integrityKey,
@@ -63,21 +64,15 @@ final class IkeEncryptedPayloadBody {
             throws IkeProtocolException, GeneralSecurityException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(message);
 
-        // Skip IKE header and SK payload header
-        byte[] tempArray = new byte[IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH];
-        inputBuffer.get(tempArray);
+        // Skip IKE header and generic payload header (and SKF header)
+        inputBuffer.get(new byte[encryptedBodyOffset]);
 
         // Extract bytes for authentication and decryption.
-        int expectedIvLen = decryptCipher.getBlockSize();
+        int expectedIvLen = decryptCipher.getIvLen();
         mIv = new byte[expectedIvLen];
 
         int checksumLen = integrityMac.getChecksumLen();
-        int encryptedDataLen =
-                message.length
-                        - (IkeHeader.IKE_HEADER_LENGTH
-                                + IkePayload.GENERIC_HEADER_LENGTH
-                                + expectedIvLen
-                                + checksumLen);
+        int encryptedDataLen = message.length - (encryptedBodyOffset + expectedIvLen + checksumLen);
         // IkeMessage will catch exception if encryptedDataLen is negative.
         mEncryptedAndPaddedData = new byte[encryptedDataLen];
 

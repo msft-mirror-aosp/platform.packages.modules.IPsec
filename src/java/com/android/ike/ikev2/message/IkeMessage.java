@@ -18,18 +18,24 @@ package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkePayload.PayloadType;
 
+import android.annotation.IntDef;
 import android.annotation.Nullable;
 import android.util.Pair;
 
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.org.bouncycastle.jce.provider.BouncyCastleProvider;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -96,37 +102,35 @@ public final class IkeMessage {
      *
      * <p>This method catches all RuntimeException during decoding incoming IKE packet.
      *
+     * @param expectedMsgId the expected message ID to validate against.
      * @param header the IKE header that is decoded but not validated.
      * @param inputPacket the byte array contains the whole IKE message.
-     * @return the IkeMessage instance.
-     * @throws IkeProtocolException if there is any protocol error.
+     * @return the decoding result.
      */
-    public static IkeMessage decode(IkeHeader header, byte[] inputPacket)
-            throws IkeProtocolException {
-        return sIkeMessageHelper.decode(header, inputPacket);
+    public static DecodeResult decode(int expectedMsgId, IkeHeader header, byte[] inputPacket) {
+        return sIkeMessageHelper.decode(expectedMsgId, header, inputPacket);
     }
 
     /**
      * Decrypt and decode encrypted IKE message body and create an instance of IkeMessage.
      *
+     * @param expectedMsgId the expected message ID to validate against.
      * @param integrityMac the negotiated integrity algorithm.
      * @param decryptCipher the negotiated encryption algorithm.
      * @param ikeSaRecord ikeSaRecord where this packet is sent on.
      * @param ikeHeader header of IKE packet.
      * @param packet IKE packet as a byte array.
-     * @return decoded IKE message.
-     * @throws IkeProtocolException for decoding errors.
-     * @throws GeneralSecurityException if there is any error during integrity check or decryption.
+     * @return the decoding result.
      */
-    public static IkeMessage decode(
+    public static DecodeResult decode(
+            int expectedMsgId,
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             IkeSaRecord ikeSaRecord,
             IkeHeader ikeHeader,
-            byte[] packet)
-            throws IkeProtocolException, GeneralSecurityException {
+            byte[] packet) {
         return sIkeMessageHelper.decode(
-                integrityMac, decryptCipher, ikeSaRecord, ikeHeader, packet);
+                expectedMsgId, integrityMac, decryptCipher, ikeSaRecord, ikeHeader, packet);
     }
 
     private static List<IkePayload> decodePayloadList(
@@ -293,6 +297,18 @@ public final class IkeMessage {
     }
 
     /**
+     * Checks if this Request IkeMessage was a DPD message
+     *
+     * <p>An IKE message is a DPD request iff the message was encrypted (has a SK payload) and there
+     * were no payloads within the SK payload (or outside the SK payload).
+     */
+    public boolean isDpdRequest() {
+        return !ikeHeader.isResponseMsg
+                && ikePayloadList.isEmpty()
+                && ikeHeader.nextPayloadType == IkePayload.PAYLOAD_TYPE_SK;
+    }
+
+    /**
      * IIkeMessageHelper provides interface for decoding, encoding and processing IKE packet.
      *
      * <p>IkeMessageHelper exists so that the interface is injectable for testing.
@@ -322,34 +338,35 @@ public final class IkeMessage {
                 IkeSaRecord ikeSaRecord,
                 IkeMessage ikeMessage);
 
+        // TODO: Return DecodeResult when decoding unencrypted message
         /**
          * Decode unencrypted packet.
          *
+         * @param expectedMsgId the expected message ID to validate against.
          * @param ikeHeader header of IKE packet.
          * @param packet IKE packet as a byte array.
-         * @return decoded IKE message.
-         * @throws IkeProtocolException for decoding errors.
+         * @return the decoding result.
          */
-        IkeMessage decode(IkeHeader ikeHeader, byte[] packet) throws IkeProtocolException;
+        DecodeResult decode(int expectedMsgId, IkeHeader ikeHeader, byte[] packet);
 
         /**
          * Decrypt and decode packet.
          *
+         * @param expectedMsgId the expected message ID to validate against.
          * @param integrityMac the negotiated integrity algorithm.
          * @param decryptCipher the negotiated encryption algorithm.
          * @param ikeSaRecord ikeSaRecord where this packet is sent on.
          * @param ikeHeader header of IKE packet.
          * @param packet IKE packet as a byte array.
-         * @return decoded IKE message.
-         * @throws IkeProtocolException for decoding errors.
+         * @return the decoding result.
          */
-        IkeMessage decode(
+        DecodeResult decode(
+                int expectedMsgId,
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher decryptCipher,
                 IkeSaRecord ikeSaRecord,
                 IkeHeader ikeHeader,
-                byte[] packet)
-                throws IkeProtocolException, GeneralSecurityException;
+                byte[] packet);
     }
 
     /** IkeMessageHelper provides methods for decoding, encoding and processing IKE packet. */
@@ -368,7 +385,9 @@ public final class IkeMessage {
                 IkeMessage ikeMessage) {
             return encryptAndEncode(
                     ikeMessage.ikeHeader,
-                    ikeMessage.ikePayloadList.get(0).payloadType,
+                    ikeMessage.ikePayloadList.isEmpty()
+                            ? IkePayload.PAYLOAD_TYPE_NO_NEXT
+                            : ikeMessage.ikePayloadList.get(0).payloadType,
                     ikeMessage.encodePayloads(),
                     integrityMac,
                     encryptCipher,
@@ -403,33 +422,46 @@ public final class IkeMessage {
         }
 
         @Override
-        public IkeMessage decode(IkeHeader header, byte[] inputPacket) throws IkeProtocolException {
-            header.checkInboundValidOrThrow(inputPacket.length);
-
-            byte[] unencryptedPayloads =
-                    Arrays.copyOfRange(
-                            inputPacket, IkeHeader.IKE_HEADER_LENGTH, inputPacket.length);
-
+        public DecodeResult decode(int expectedMsgId, IkeHeader header, byte[] inputPacket) {
             try {
+                if (header.messageId != expectedMsgId) {
+                    throw new InvalidMessageIdException(header.messageId);
+                }
+
+                header.checkInboundValidOrThrow(inputPacket.length);
+
+                byte[] unencryptedPayloads =
+                        Arrays.copyOfRange(
+                                inputPacket, IkeHeader.IKE_HEADER_LENGTH, inputPacket.length);
                 List<IkePayload> supportedPayloadList =
                         decodePayloadList(
                                 header.nextPayloadType, header.isResponseMsg, unencryptedPayloads);
-                return new IkeMessage(header, supportedPayloadList);
+                return new DecodeResult(
+                        DECODE_STATUS_OK,
+                        new IkeMessage(header, supportedPayloadList),
+                        null /*ikeException*/);
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 // Invalid length error when parsing payload bodies.
-                throw new InvalidSyntaxException("Malformed IKE Payload");
+                return new DecodeResult(
+                        DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE,
+                        null /*ikeMessage*/,
+                        new InvalidSyntaxException("Malformed IKE Payload"));
+            } catch (IkeProtocolException e) {
+                return new DecodeResult(
+                        DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, null /*ikeMessage*/, e);
             }
         }
 
         @Override
-        public IkeMessage decode(
+        public DecodeResult decode(
+                int expectedMsgId,
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher decryptCipher,
                 IkeSaRecord ikeSaRecord,
                 IkeHeader ikeHeader,
-                byte[] packet)
-                throws IkeProtocolException, GeneralSecurityException {
+                byte[] packet) {
             return decode(
+                    expectedMsgId,
                     ikeHeader,
                     packet,
                     integrityMac,
@@ -438,26 +470,53 @@ public final class IkeMessage {
                     ikeSaRecord.getInboundDecryptionKey());
         }
 
-        private IkeMessage decode(
+        private DecodeResult decode(
+                int expectedMsgId,
                 IkeHeader header,
                 byte[] inputPacket,
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher decryptCipher,
                 byte[] integrityKey,
-                byte[] decryptKey)
-                throws IkeProtocolException, GeneralSecurityException {
-
-            header.checkInboundValidOrThrow(inputPacket.length);
+                byte[] decryptKey) {
 
             if (header.nextPayloadType != IkePayload.PAYLOAD_TYPE_SK) {
                 // TODO: b/123372339 Handle message containing unprotected payloads.
                 throw new UnsupportedOperationException("Message contains unprotected payloads");
             }
 
+            // Validate security parameters.
+            Pair<IkeSkPayload, Integer> pair;
             try {
-                Pair<IkeSkPayload, Integer> pair =
+                if (header.messageId != expectedMsgId) {
+                    throw new InvalidMessageIdException(header.messageId);
+                }
+                pair =
                         IkePayloadFactory.getIkeSkPayload(
-                                inputPacket, integrityMac, decryptCipher, integrityKey, decryptKey);
+                                false /*isSkf*/,
+                                inputPacket,
+                                integrityMac,
+                                decryptCipher,
+                                integrityKey,
+                                decryptKey);
+
+                // TODO: Support decoding IkeSkfPayload
+            } catch (NegativeArraySizeException | BufferUnderflowException e) {
+                return new DecodeResult(
+                        DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE,
+                        null /*ikeMessage*/,
+                        new InvalidSyntaxException("Malformed IKE Payload"));
+            } catch (GeneralSecurityException e) {
+                return new DecodeResult(
+                        DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE,
+                        null /*ikeMessage*/,
+                        new IkeInternalException(e));
+            } catch (IkeException e) {
+                return new DecodeResult(
+                        DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, null /*ikeMessage*/, e);
+            }
+
+            // Check is there is protocol error in this IKE message.
+            try {
                 IkeSkPayload skPayload = pair.first;
                 int firstPayloadType = pair.second;
 
@@ -465,13 +524,58 @@ public final class IkeMessage {
                         decodePayloadList(
                                 firstPayloadType,
                                 header.isResponseMsg,
-                                skPayload.getUnencryptedPayloads());
+                                skPayload.getUnencryptedData());
 
-                return new IkeMessage(header, supportedPayloadList);
+                header.checkInboundValidOrThrow(inputPacket.length);
+                return new DecodeResult(
+                        DECODE_STATUS_OK,
+                        new IkeMessage(header, supportedPayloadList),
+                        null /*ikeException*/);
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 // Invalid length error when parsing payload bodies.
-                throw new InvalidSyntaxException("Malformed IKE Payload");
+                return new DecodeResult(
+                        DECODE_STATUS_PROTECTED_ERROR_MESSAGE,
+                        null /*ikeMessage*/,
+                        new InvalidSyntaxException("Malformed IKE Payload"));
+            } catch (IkeProtocolException e) {
+                return new DecodeResult(
+                        DECODE_STATUS_PROTECTED_ERROR_MESSAGE, null /*ikeMessage*/, e);
             }
+        }
+    }
+
+    /** Status to describe the result of decoding an inbound IKE message. */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+        DECODE_STATUS_OK,
+        DECODE_STATUS_PROTECTED_ERROR_MESSAGE,
+        DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE
+    })
+    public @interface DecodeStatus {}
+
+    /** Represents a message that has been successfuly (decrypted and) decoded. */
+    public static final int DECODE_STATUS_OK = 0;
+    /** Represents a crypto protected message with correct message ID but has parsing error. */
+    public static final int DECODE_STATUS_PROTECTED_ERROR_MESSAGE = 1;
+    /**
+     * Represents an unencrypted message with parsing error, an encrypted message with
+     * authentication or decryption error, or any message with wrong message ID.
+     */
+    public static final int DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE = 2;
+
+    /** This class represents a result of decoding an IKE message. */
+    public static class DecodeResult {
+        // TODO: Extend this class to support IKE fragmentation.
+
+        public final int status;
+        public final IkeMessage ikeMessage;
+        public final IkeException ikeException;
+
+        /** Construct an instance of DecodeResult. */
+        public DecodeResult(int status, IkeMessage ikeMessage, IkeException ikeException) {
+            this.status = status;
+            this.ikeMessage = ikeMessage;
+            this.ikeException = ikeException;
         }
     }
 

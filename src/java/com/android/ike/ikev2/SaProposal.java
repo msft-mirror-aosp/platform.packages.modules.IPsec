@@ -227,9 +227,8 @@ public final class SaProposal {
         return Arrays.asList(selectFrom).contains(selected[0]);
     }
 
-    /*Package private*/
     @IkePayload.ProtocolId
-    int getProtocolId() {
+    public int getProtocolId() {
         return mProtocolId;
     }
 
@@ -256,6 +255,17 @@ public final class SaProposal {
     /*Package private*/
     EsnTransform[] getEsnTransforms() {
         return mEsns;
+    }
+
+    /** Package private method to avoid negotiating DH Group for negotiating first Child SA. */
+    SaProposal getCopyWithoutDhTransform() {
+        return new SaProposal(
+                mProtocolId,
+                mEncryptionAlgorithms,
+                mPseudorandomFunctions,
+                mIntegrityAlgorithms,
+                new DhGroupTransform[0],
+                mEsns);
     }
 
     /**
@@ -295,11 +305,6 @@ public final class SaProposal {
 
         /** Indicate if Builder is for building IKE SA proposal or Child SA proposal. */
         private final boolean mIsIkeProposal;
-        /**
-         * Indicate if Builder is for building first Child SA proposal or addtional Child SA
-         * proposal. Only valid if mIsIkeProposal is false.
-         */
-        private final boolean mIsFirstChild;
 
         // Use set to avoid adding repeated algorithms.
         private final Set<EncryptionTransform> mProposedEncryptAlgos = new ArraySet<>();
@@ -309,9 +314,8 @@ public final class SaProposal {
 
         private boolean mHasAead = false;
 
-        private Builder(boolean isIke, boolean isFirstChild) {
+        private Builder(boolean isIke) {
             mIsIkeProposal = isIke;
-            mIsFirstChild = isFirstChild;
         }
 
         private static boolean isAead(@EncryptionAlgorithm int algorithm) {
@@ -412,30 +416,25 @@ public final class SaProposal {
         }
 
         private DhGroupTransform[] buildDhGroupsForChildOrThrow() {
-            for (DhGroupTransform transform : mProposedDhGroups) {
-                if (transform.id != DH_GROUP_NONE && mIsFirstChild) {
-                    throw new IllegalArgumentException(
-                            ERROR_TAG
-                                    + "Only DH_GROUP_NONE can be"
-                                    + " proposed in first Child SA proposal.");
-                }
-            }
             return mProposedDhGroups.toArray(new DhGroupTransform[mProposedDhGroups.size()]);
         }
 
         /** Returns a new Builder for a IKE SA Proposal. */
         public static Builder newIkeSaProposalBuilder() {
-            return new Builder(true, false);
+            return new Builder(true);
         }
 
         /**
          * Returns a new Builder for a Child SA Proposal.
          *
-         * @param isFirstChildSaProposal indicates if this SA proposal for first Child SA.
+         * <p>If this proposal is for negotiating the first Child Session of the IKE Session, DH
+         * Group will not be negotiated during the initial creation but will be negotiated during
+         * future rekey creation.
+         *
          * @return Builder for a Child SA Proposal.
          */
-        public static Builder newChildSaProposalBuilder(boolean isFirstChildSaProposal) {
-            return new Builder(false, isFirstChildSaProposal);
+        public static Builder newChildSaProposalBuilder() {
+            return new Builder(false);
         }
 
         /**

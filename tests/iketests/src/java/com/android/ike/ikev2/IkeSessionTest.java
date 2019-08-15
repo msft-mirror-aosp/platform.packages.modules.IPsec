@@ -16,6 +16,8 @@
 
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -23,11 +25,15 @@ import static org.mockito.Mockito.mock;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.os.Looper;
 import android.util.Log;
+
+import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import java.net.Inet4Address;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -35,27 +41,45 @@ import java.util.concurrent.TimeUnit;
 public final class IkeSessionTest {
     private static final int TIMEOUT_MS = 100;
 
+    private static final Inet4Address LOCAL_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+    private static final Inet4Address REMOTE_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("127.0.0.1"));
+
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private IpSecManager mIpSecManager;
     private Context mContext;
 
-    private IkeSessionOptions mMockIkeSessionOptions;
+    private IkeSessionOptions mIkeSessionOptions;
     private ChildSessionOptions mMockChildSessionOptions;
-    private Executor mMockExecutor;
+    private Executor mUserCbExecutor;
     private IIkeSessionCallback mMockIkeSessionCb;
     private IChildSessionCallback mMockChildSessionCb;
 
     @Before
     public void setUp() throws Exception {
+        if (Looper.myLooper() == null) Looper.prepare();
+
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
 
-        mMockIkeSessionOptions = mock(IkeSessionOptions.class);
+        mIkeSessionOptions = buildIkeSessionOptions();
         mMockChildSessionOptions = mock(ChildSessionOptions.class);
-        mMockExecutor = mock(Executor.class);
+        mUserCbExecutor = (r) -> r.run(); // Inline executor for testing purposes.
         mMockIkeSessionCb = mock(IIkeSessionCallback.class);
         mMockChildSessionCb = mock(IChildSessionCallback.class);
+    }
+
+    private IkeSessionOptions buildIkeSessionOptions() throws Exception {
+        return new IkeSessionOptions.Builder(
+                        REMOTE_ADDRESS, mIpSecManager.openUdpEncapsulationSocket())
+                .addSaProposal(IkeSessionStateMachineTest.buildSaProposal())
+                .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
+                .setRemoteIdentification(
+                        new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
+                .setAuthPsk(new byte[0] /* psk, unused */)
+                .build();
     }
 
     @Test
@@ -63,12 +87,12 @@ public final class IkeSessionTest {
         IkeSession ikeSession =
                 new IkeSession(
                         mContext,
-                        mMockIkeSessionOptions,
+                        mIkeSessionOptions,
                         mMockChildSessionOptions,
-                        mMockExecutor,
+                        mUserCbExecutor,
                         mMockIkeSessionCb,
                         mMockChildSessionCb);
-        assertNotNull(ikeSession.getHandler().getLooper());
+        assertNotNull(ikeSession.mIkeSessionStateMachine.getHandler().getLooper());
     }
 
     /**
@@ -91,9 +115,9 @@ public final class IkeSessionTest {
                         sessions[index] =
                                 new IkeSession(
                                         mContext,
-                                        mMockIkeSessionOptions,
+                                        mIkeSessionOptions,
                                         mMockChildSessionOptions,
-                                        mMockExecutor,
+                                        mUserCbExecutor,
                                         mMockIkeSessionCb,
                                         mMockChildSessionCb);
                         cntLatch.countDown();
@@ -107,6 +131,8 @@ public final class IkeSessionTest {
         assertTrue(cntLatch.await(TIMEOUT_MS, TimeUnit.MILLISECONDS));
 
         // Verify that two sessions use the same looper.
-        assertEquals(sessions[0].getHandler().getLooper(), sessions[1].getHandler().getLooper());
+        assertEquals(
+                sessions[0].mIkeSessionStateMachine.getHandler().getLooper(),
+                sessions[1].mIkeSessionStateMachine.getHandler().getLooper());
     }
 }

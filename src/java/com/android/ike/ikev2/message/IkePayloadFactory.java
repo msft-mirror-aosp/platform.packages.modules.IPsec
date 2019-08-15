@@ -84,6 +84,8 @@ final class IkePayloadFactory {
                     return new IkeTsPayload(isCritical, payloadBody, true);
                 case IkePayload.PAYLOAD_TYPE_TS_RESPONDER:
                     return new IkeTsPayload(isCritical, payloadBody, false);
+                case IkePayload.PAYLOAD_TYPE_EAP:
+                    return new IkeEapPayload(isCritical, payloadBody);
                 default:
                     return new IkeUnsupportedPayload(payloadType, isCritical);
             }
@@ -127,6 +129,7 @@ final class IkePayloadFactory {
     /**
      * Construct an instance of IkeSkPayload by decrypting the received message.
      *
+     * @param isSkf indicates if this is a SKF Payload.
      * @param message the byte array contains the whole IKE message.
      * @param integrityMac the negotiated integrity algorithm.
      * @param decryptCipher the negotiated encryption algorithm.
@@ -137,6 +140,7 @@ final class IkePayloadFactory {
      * @throws GeneralSecurityException if there is any error during integrity check or decryption.
      */
     protected static Pair<IkeSkPayload, Integer> getIkeSkPayload(
+            boolean isSkf,
             byte[] message,
             IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
@@ -170,9 +174,27 @@ final class IkePayloadFactory {
                             + " or SK Payload is not the only payload.");
         }
 
-        IkeSkPayload payload =
-                new IkeSkPayload(
-                        isCritical, message, integrityMac, decryptCipher, integrityKey, decryptKey);
+        IkeSkPayload payload = null;
+        if (isSkf) {
+            payload =
+                    new IkeSkfPayload(
+                            isCritical,
+                            message,
+                            integrityMac,
+                            decryptCipher,
+                            integrityKey,
+                            decryptKey);
+        } else {
+            payload =
+                    new IkeSkPayload(
+                            isCritical,
+                            message,
+                            integrityMac,
+                            decryptCipher,
+                            integrityKey,
+                            decryptKey);
+        }
+
         return new Pair(payload, nextPayloadType);
     }
 

@@ -26,6 +26,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.UnknownHostException;
+import java.nio.charset.Charset;
 import java.util.Objects;
 import java.util.Set;
 
@@ -191,6 +192,62 @@ public abstract class IkeIdentification {
         @Override
         public byte[] getEncodedIdData() {
             return ipv6Address.getAddress();
+        }
+    }
+
+    /**
+     * IkeFqdnIdentification represents ID information using a fully-qualified domain name (FQDN)
+     */
+    public static class IkeFqdnIdentification extends IkeIdentification {
+        private static final Charset ASCII = Charset.forName("US-ASCII");
+
+        public final String fqdn;
+
+        /**
+         * Construct an instance of IkeFqdnIdentification from a decoded inbound packet.
+         *
+         * <p>All characters in the FQDN are ASCII.
+         *
+         * @param fqdnBytes FQDN in byte array.
+         */
+        public IkeFqdnIdentification(byte[] fqdnBytes) {
+            super(ID_TYPE_FQDN);
+            fqdn = new String(fqdnBytes, ASCII);
+        }
+
+        /**
+         * Construct an instance of IkeFqdnIdentification with user provided fully-qualified domain
+         * name (FQDN) for building outbound packet.
+         *
+         * <p>FQDN will be formatted as US-ASCII.
+         *
+         * @param fqdn user provided fully-qualified domain name (FQDN)
+         */
+        public IkeFqdnIdentification(String fqdn) {
+            super(ID_TYPE_FQDN);
+            this.fqdn = fqdn;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(idType, fqdn);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof IkeFqdnIdentification)) return false;
+
+            return fqdn.equals(((IkeFqdnIdentification) o).fqdn);
+        }
+
+        /**
+         * Retrieve the byte-representation of the FQDN.
+         *
+         * @return the byte-representation of the FQDN.
+         */
+        @Override
+        public byte[] getEncodedIdData() {
+            return fqdn.getBytes(ASCII);
         }
     }
 }

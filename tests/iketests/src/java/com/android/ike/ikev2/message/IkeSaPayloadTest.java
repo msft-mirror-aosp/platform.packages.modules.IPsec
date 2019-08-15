@@ -64,6 +64,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -97,6 +98,10 @@ public final class IkeSaPayloadTest {
                     + "00000804000012000000080400000e";
     private static final String INBOUND_CHILD_PROPOSAL_RAW_PACKET =
             "0000002801030403cae7019f0300000c0100000c800e00800300000803000002000" + "0000805000000";
+    private static final String INBOUND_CHILD_TWO_PROPOSAL_RAW_PACKET =
+            "0200002801030403cae7019f0300000c0100000c800e00800300000803000002000"
+                    + "00008050000000000001802030401cae7019e0000000c01000012800e"
+                    + "0080";
     private static final String ENCR_TRANSFORM_RAW_PACKET = "0300000c0100000c800e0080";
     private static final String PRF_TRANSFORM_RAW_PACKET = "0000000802000002";
     private static final String INTEG_TRANSFORM_RAW_PACKET = "0300000803000002";
@@ -207,13 +212,13 @@ public final class IkeSaPayloadTest {
         mTwoIkeSaProposalsArray = new SaProposal[] {mIkeSaProposalOne, mIkeSaProposalTwo};
 
         mChildSaProposalOne =
-                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                SaProposal.Builder.newChildSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .build();
         mChildSaProposalTwo =
-                SaProposal.Builder.newChildSaProposalBuilder(true /*isFirstChildSaProposal*/)
+                SaProposal.Builder.newChildSaProposalBuilder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
                                 SaProposal.KEY_LEN_AES_128)
@@ -671,12 +676,12 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testBuildOutboundIkeRekeySaResponsePayload() throws Exception {
-        final SaProposal[] saProposals = new SaProposal[] {mIkeSaProposalOne};
         IkeSaPayload saPayload =
-                IkeSaPayload.createRekeyIkeSaPayload(true /*isResp*/, saProposals, LOCAL_ADDRESS);
+                IkeSaPayload.createRekeyIkeSaResponsePayload(
+                        (byte) 1, mIkeSaProposalOne, LOCAL_ADDRESS);
 
         assertTrue(saPayload.isSaResponse);
-        assertEquals(saProposals.length, saPayload.proposalList.size());
+        assertEquals(1, saPayload.proposalList.size());
 
         IkeProposal proposal = (IkeProposal) saPayload.proposalList.get(0);
         assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.protocolId);
@@ -708,8 +713,8 @@ public final class IkeSaPayloadTest {
     @Test
     public void testBuildOutboundChildSaRequest() throws Exception {
         IkeSaPayload saPayload =
-                IkeSaPayload.createChildSaPayload(
-                        false /*isResp*/, mTwoChildSaProposalsArray, mIpSecManager, LOCAL_ADDRESS);
+                IkeSaPayload.createChildSaRequestPayload(
+                        mTwoChildSaProposalsArray, mIpSecManager, LOCAL_ADDRESS);
 
         assertFalse(saPayload.isSaResponse);
         assertEquals(PROPOSAL_NUMBER_LIST.length, saPayload.proposalList.size());
@@ -750,7 +755,8 @@ public final class IkeSaPayloadTest {
         IkeSaPayload reqPayload = IkeSaPayload.createInitialIkeSaPayload(mTwoIkeSaProposalsArray);
 
         Pair<IkeProposal, IkeProposal> negotiatedProposalPair =
-                respPayload.getVerifiedNegotiatedIkeProposalPair(reqPayload, REMOTE_ADDRESS);
+                IkeSaPayload.getVerifiedNegotiatedIkeProposalPair(
+                        reqPayload, respPayload, REMOTE_ADDRESS);
         IkeProposal reqProposal = negotiatedProposalPair.first;
         IkeProposal respProposal = negotiatedProposalPair.second;
 
@@ -768,14 +774,44 @@ public final class IkeSaPayloadTest {
         buildAndVerifyIkeSaRespProposal(inputPacket, mValidNegotiatedTransformSet);
     }
 
-    @Test
-    public void testGetVerifiedNegotiatedChildProposal() throws Exception {
-        // Build request
-        IkeSaPayload reqPayload =
-                IkeSaPayload.createChildSaPayload(
-                        false /*isResp*/, mTwoChildSaProposalsArray, mIpSecManager, LOCAL_ADDRESS);
+    private void verifyChildSaNegotiation(
+            IkeSaPayload reqPayload,
+            IkeSaPayload respPayload,
+            IpSecManager ipSecManager,
+            InetAddress remoteAddress,
+            boolean isLocalInit)
+            throws Exception {
+        // SA negotiation
+        Pair<ChildProposal, ChildProposal> negotiatedProposalPair =
+                IkeSaPayload.getVerifiedNegotiatedChildProposalPair(
+                        reqPayload, respPayload, ipSecManager, remoteAddress);
+        ChildProposal reqProposal = negotiatedProposalPair.first;
+        ChildProposal respProposal = negotiatedProposalPair.second;
 
-        // Build response
+        // Verify results
+        assertEquals(respPayload.proposalList.get(0).saProposal, respProposal.saProposal);
+
+        int initSpi = isLocalInit ? CHILD_SPI_LOCAL_ONE : CHILD_SPI_REMOTE;
+        int respSpi = isLocalInit ? CHILD_SPI_REMOTE : CHILD_SPI_LOCAL_ONE;
+        assertEquals(initSpi, reqProposal.getChildSpiResource().getSpi());
+        assertEquals(respSpi, respProposal.getChildSpiResource().getSpi());
+
+        // Verify SPIs in unselected Proposals have been released.
+        for (Proposal proposal : reqPayload.proposalList) {
+            if (proposal != reqProposal) {
+                assertNull(((ChildProposal) proposal).getChildSpiResource());
+            }
+        }
+    }
+
+    @Test
+    public void testGetVerifiedNegotiatedChildProposalForLocalCreate() throws Exception {
+        // Build local request
+        IkeSaPayload reqPayload =
+                IkeSaPayload.createChildSaRequestPayload(
+                        mTwoChildSaProposalsArray, mIpSecManager, LOCAL_ADDRESS);
+
+        // Build remote response
         Proposal.sTransformDecoder =
                 getDummyTransformDecoder(mChildSaProposalOne.getAllTransforms());
         IkeSaPayload respPayload =
@@ -784,24 +820,34 @@ public final class IkeSaPayloadTest {
                         true /*isResp*/,
                         TestUtils.hexStringToByteArray(INBOUND_CHILD_PROPOSAL_RAW_PACKET));
 
-        // SA negotiation
-        Pair<ChildProposal, ChildProposal> negotiatedProposalPair =
-                respPayload.getVerifiedNegotiatedChildProposalPair(
-                        reqPayload, mIpSecManager, REMOTE_ADDRESS);
-        ChildProposal reqProposal = negotiatedProposalPair.first;
-        ChildProposal respProposal = negotiatedProposalPair.second;
+        verifyChildSaNegotiation(
+                reqPayload, respPayload, mIpSecManager, REMOTE_ADDRESS, true /*isLocalInit*/);
+    }
 
-        // Verify results
-        assertEquals(respPayload.proposalList.get(0).saProposal, respProposal.saProposal);
-        assertEquals(CHILD_SPI_LOCAL_ONE, reqProposal.getChildSpiResource().getSpi());
-        assertEquals(CHILD_SPI_REMOTE, respProposal.getChildSpiResource().getSpi());
+    @Test
+    public void testGetVerifiedNegotiatedChildProposalForRemoteCreate() throws Exception {
+        Transform[] transformsOne = mChildSaProposalOne.getAllTransforms();
+        Transform[] transformsTwo = mChildSaProposalTwo.getAllTransforms();
+        Transform[] decodedTransforms = new Transform[transformsOne.length + transformsTwo.length];
+        System.arraycopy(transformsOne, 0, decodedTransforms, 0, transformsOne.length);
+        System.arraycopy(
+                transformsTwo, 0, decodedTransforms, transformsOne.length, transformsTwo.length);
 
-        // Verify SPIs in unselected Proposals have been released.
-        for (Proposal proposal : reqPayload.proposalList) {
-            if (proposal != reqProposal) {
-                assertNull(((ChildProposal) proposal).getChildSpiResource());
-            }
-        }
+        // Build remote request
+        Proposal.sTransformDecoder = getDummyTransformDecoder(decodedTransforms);
+        IkeSaPayload reqPayload =
+                new IkeSaPayload(
+                        false /*critical*/,
+                        false /*isResp*/,
+                        TestUtils.hexStringToByteArray(INBOUND_CHILD_TWO_PROPOSAL_RAW_PACKET));
+
+        // Build local response
+        IkeSaPayload respPayload =
+                IkeSaPayload.createChildSaResponsePayload(
+                        (byte) 1, mChildSaProposalOne, mIpSecManager, LOCAL_ADDRESS);
+
+        verifyChildSaNegotiation(
+                reqPayload, respPayload, mIpSecManager, REMOTE_ADDRESS, false /*isLocalInit*/);
     }
 
     // Test throwing when negotiated proposal in SA response payload has unrecognized Transform.

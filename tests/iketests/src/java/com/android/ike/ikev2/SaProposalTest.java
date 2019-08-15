@@ -102,29 +102,8 @@ public final class SaProposalTest {
     }
 
     @Test
-    public void testBuildFirstChildSaProposalWithCombinedCipher() throws Exception {
-        Builder builder = Builder.newChildSaProposalBuilder(true);
-        SaProposal proposal =
-                builder.addEncryptionAlgorithm(
-                                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
-                                SaProposal.KEY_LEN_AES_128)
-                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
-                        .build();
-
-        assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.getProtocolId());
-        assertArrayEquals(
-                new EncryptionTransform[] {mEncryptionAesGcm8Transform},
-                proposal.getEncryptionTransforms());
-        assertArrayEquals(
-                new IntegrityTransform[] {mIntegrityNoneTransform},
-                proposal.getIntegrityTransforms());
-        assertTrue(proposal.getPrfTransforms().length == 0);
-        assertTrue(proposal.getDhGroupTransforms().length == 0);
-    }
-
-    @Test
-    public void testBuildAdditionalChildSaProposalWithNormalCipher() throws Exception {
-        Builder builder = Builder.newChildSaProposalBuilder(false);
+    public void testBuildChildSaProposalWithNormalCipher() throws Exception {
+        Builder builder = Builder.newChildSaProposalBuilder();
 
         SaProposal proposal =
                 builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
@@ -142,6 +121,25 @@ public final class SaProposalTest {
         assertArrayEquals(
                 new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
         assertTrue(proposal.getPrfTransforms().length == 0);
+    }
+
+    @Test
+    public void testGetCopyWithoutDhGroup() throws Exception {
+        SaProposal proposal =
+                Builder.newChildSaProposalBuilder()
+                        .addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
+                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
+                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
+                        .build();
+        SaProposal proposalWithoutDh = proposal.getCopyWithoutDhTransform();
+
+        assertArrayEquals(
+                proposal.getEncryptionTransforms(), proposalWithoutDh.getEncryptionTransforms());
+        assertArrayEquals(
+                proposal.getIntegrityTransforms(), proposalWithoutDh.getIntegrityTransforms());
+        assertArrayEquals(proposal.getPrfTransforms(), proposalWithoutDh.getPrfTransforms());
+        assertTrue(proposal.getDhGroupTransforms().length == 1);
+        assertTrue(proposalWithoutDh.getDhGroupTransforms().length == 0);
     }
 
     @Test
@@ -193,7 +191,7 @@ public final class SaProposalTest {
 
     @Test
     public void testBuildChildProposalWithPrf() throws Exception {
-        Builder builder = Builder.newChildSaProposalBuilder(false);
+        Builder builder = Builder.newChildSaProposalBuilder();
         try {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
                     .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
@@ -209,7 +207,7 @@ public final class SaProposalTest {
     // algorithm.
     @Test
     public void testBuildAeadWithIntegrityAlgo() throws Exception {
-        Builder builder = Builder.newChildSaProposalBuilder(false);
+        Builder builder = Builder.newChildSaProposalBuilder();
         try {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12)
                     .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
@@ -226,7 +224,7 @@ public final class SaProposalTest {
     // integrity algorithm.
     @Test
     public void testBuildIkeProposalNormalCipherWithoutIntegrityAlgo() throws Exception {
-        Builder builder = Builder.newChildSaProposalBuilder(false);
+        Builder builder = Builder.newChildSaProposalBuilder();
         try {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
                     .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
@@ -244,7 +242,7 @@ public final class SaProposalTest {
     // integrity algorithm.
     @Test
     public void testBuildIkeProposalNormalCipherWithNoneValueIntegrityAlgo() throws Exception {
-        Builder builder = Builder.newChildSaProposalBuilder(false);
+        Builder builder = Builder.newChildSaProposalBuilder();
         try {
             builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
                     .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
@@ -287,24 +285,6 @@ public final class SaProposalTest {
                     .build();
 
             fail("Expected to fail when none-value DH Group is proposed in IKE SA proposal.");
-        } catch (IllegalArgumentException expected) {
-
-        }
-    }
-
-    // Test throwing exception when building first Child SA Proposal with not-none-value DH Group.
-    @Test
-    public void testBuildFirstChildProposalWithNotNoneValueDhGroup() throws Exception {
-        Builder builder = Builder.newChildSaProposalBuilder(true);
-        try {
-            builder.addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES)
-                    .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
-                    .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                    .build();
-
-            fail(
-                    "Expected to fail when"
-                            + " not-none-value DH Group is proposed in first Child SA proposal.");
         } catch (IllegalArgumentException expected) {
 
         }

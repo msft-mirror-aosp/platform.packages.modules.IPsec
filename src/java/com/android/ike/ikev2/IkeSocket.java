@@ -29,7 +29,7 @@ import android.util.LongSparseArray;
 
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeHeader;
-import com.android.ike.ikev2.utils.PacketReader;
+import com.android.ike.utils.PacketReader;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
@@ -38,7 +38,9 @@ import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * IkeSocket sends and receives IKE packets via the user provided {@link UdpEncapsulationSocket}.
@@ -81,15 +83,15 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
     // Package private map from locally generated IKE SPI to IkeSessionStateMachine instances.
     @VisibleForTesting
     final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession = new LongSparseArray<>();
+
+    // Package private set to store all running IKE Sessions that are using this IkeSocket instance.
+    @VisibleForTesting final Set<IkeSessionStateMachine> mAliveIkeSessions = new HashSet<>();
+
     // UdpEncapsulationSocket for sending and receving IKE packet.
     private final UdpEncapsulationSocket mUdpEncapSocket;
 
-    /** Package private */
-    @VisibleForTesting int mRefCount;
-
     private IkeSocket(UdpEncapsulationSocket udpEncapSocket, Handler handler) {
         super(handler);
-        mRefCount = 1;
         mUdpEncapSocket = udpEncapSocket;
     }
 
@@ -100,27 +102,31 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
      * udpEncapSocket. Otherwise, create and return a new IkeSocket instance.
      *
      * @param udpEncapSocket user provided UdpEncapsulationSocket
-     * @return an IkSocket instance
+     * @param ikeSession the IkeSessionStateMachine that is requesting an IkeSocket.
+     * @return an IkeSocket instance
      */
-    public static IkeSocket getIkeSocket(UdpEncapsulationSocket udpEncapSocket)
+    public static IkeSocket getIkeSocket(
+            UdpEncapsulationSocket udpEncapSocket, IkeSessionStateMachine ikeSession)
             throws ErrnoException {
         FileDescriptor fd = udpEncapSocket.getFileDescriptor();
         // All created IkeSocket has modified its FileDescriptor to non-blocking type for handling
         // read events in a non-blocking way.
         Os.fcntlInt(fd, F_SETFL, SOCK_DGRAM | SOCK_NONBLOCK);
 
+        IkeSocket ikeSocket = null;
         if (sFdToIkeSocketMap.containsKey(udpEncapSocket)) {
-            IkeSocket ikeSocket = sFdToIkeSocketMap.get(udpEncapSocket);
-            ikeSocket.mRefCount++;
-            return ikeSocket;
+            ikeSocket = sFdToIkeSocketMap.get(udpEncapSocket);
+
         } else {
-            IkeSocket ikeSocket = new IkeSocket(udpEncapSocket, new Handler());
+            ikeSocket = new IkeSocket(udpEncapSocket, new Handler());
             // Create and register FileDescriptor for receiving IKE packet on current thread.
             ikeSocket.start();
 
             sFdToIkeSocketMap.put(udpEncapSocket, ikeSocket);
-            return ikeSocket;
         }
+
+        ikeSocket.mAliveIkeSessions.add(ikeSession);
+        return ikeSocket;
     }
 
     /**
@@ -250,9 +256,9 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
     }
 
     /** Release reference of current IkeSocket when the IKE session is closed. */
-    public void releaseReference() {
-        mRefCount--;
-        if (mRefCount == 0) close();
+    public void releaseReference(IkeSessionStateMachine ikeSession) {
+        mAliveIkeSessions.remove(ikeSession);
+        if (mAliveIkeSessions.isEmpty()) close();
     }
 
     /** Implement {@link AutoCloseable#close()} */

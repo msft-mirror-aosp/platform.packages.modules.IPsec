@@ -21,6 +21,7 @@ import android.annotation.NonNull;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Objects;
@@ -49,19 +50,26 @@ public class EapData {
             EAP_IDENTITY,
             EAP_NOTIFICATION,
             EAP_NAK,
-            EAP_MD5_CHALLENGE,
+            EAP_TYPE_SIM,
             EAP_TYPE_AKA,
-            EAP_TYPE_AKA_PRIME,
-            EAP_TYPE_SIM
+            EAP_TYPE_AKA_PRIME
     })
     public @interface EapType {}
+
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            EAP_TYPE_SIM,
+            EAP_TYPE_AKA,
+            EAP_TYPE_AKA_PRIME
+    })
+    public @interface EapMethod {}
 
     // EAP Type values defined by IANA
     // https://www.iana.org/assignments/eap-numbers/eap-numbers.xhtml
     public static final int EAP_IDENTITY = 1;
     public static final int EAP_NOTIFICATION = 2;
     public static final int EAP_NAK = 3;
-    public static final int EAP_MD5_CHALLENGE = 4;
+    // EAP_MD5_CHALLENGE unsupported, allowable based on RFC 3748, Section 5.4
     public static final int EAP_TYPE_SIM = 18;
     public static final int EAP_TYPE_AKA = 23;
     public static final int EAP_TYPE_AKA_PRIME = 50;
@@ -71,14 +79,15 @@ public class EapData {
         SUPPORTED_TYPES.add(EAP_IDENTITY);
         SUPPORTED_TYPES.add(EAP_NOTIFICATION);
         SUPPORTED_TYPES.add(EAP_NAK);
-        SUPPORTED_TYPES.add(EAP_MD5_CHALLENGE);
-        SUPPORTED_TYPES.add(EAP_TYPE_AKA);
-        SUPPORTED_TYPES.add(EAP_TYPE_AKA_PRIME);
+
+        // supported EAP Method types
         SUPPORTED_TYPES.add(EAP_TYPE_SIM);
     }
 
     @EapType public final int eapType;
     public final byte[] eapTypeData;
+
+    public static final EapData NOTIFICATION_DATA = new EapData(EAP_NOTIFICATION, new byte[0]);
 
     /**
      * Constructs a new EapData instance.
@@ -132,6 +141,16 @@ public class EapData {
     @Override
     public int hashCode() {
         return Objects.hash(eapType, Arrays.hashCode(eapTypeData));
+    }
+
+    /**
+     * Puts the byte-encoding for this EapData instance into the given ByteBuffer.
+     *
+     * @param b the ByteBuffer to write this EapData instance to
+     */
+    public void encodeToByteBuffer(ByteBuffer b) {
+        b.put((byte) eapType);
+        b.put(eapTypeData);
     }
 
     /**
