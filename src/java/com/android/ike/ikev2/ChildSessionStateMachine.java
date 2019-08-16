@@ -112,6 +112,8 @@ import java.util.concurrent.TimeUnit;
 public class ChildSessionStateMachine extends StateMachine {
     private static final String TAG = "ChildSessionStateMachine";
 
+    private static final int SPI_NOT_REGISTERED = 0;
+
     // Time after which Child SA needs to be rekeyed
     @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(2L);
 
@@ -314,16 +316,17 @@ public class ChildSessionStateMachine extends StateMachine {
             UdpEncapsulationSocket udpEncapSocket,
             IkeMacPrf ikePrf,
             byte[] skD) {
-        registerProvisionalChildSession(respPayloads);
+
         this.mLocalAddress = localAddress;
         this.mRemoteAddress = remoteAddress;
         this.mUdpEncapSocket = udpEncapSocket;
         this.mIkePrf = ikePrf;
         this.mSkD = skD;
 
+        int spi = registerProvisionalChildAndGetSpi(respPayloads);
         sendMessage(
                 CMD_HANDLE_FIRST_CHILD_EXCHANGE,
-                new FirstChildNegotiationData(reqPayloads, respPayloads));
+                new FirstChildNegotiationData(reqPayloads, respPayloads, spi));
     }
 
     /**
@@ -423,16 +426,17 @@ public class ChildSessionStateMachine extends StateMachine {
      *     needs validation.
      */
     public void receiveResponse(@ExchangeType int exchangeType, List<IkePayload> payloadList) {
+        if (!isAwaitingCreateResp()) {
+            sendMessage(
+                    CMD_HANDLE_RECEIVED_RESPONSE, new ReceivedResponse(exchangeType, payloadList));
+        }
+
         // If we are waiting for a Create/RekeyCreate response and the received message contains SA
         // payload we need to register for this provisional Child.
-
-        if (isAwaitingCreateResp()
-                && IkePayload.getPayloadForTypeInProvidedList(
-                                PAYLOAD_TYPE_SA, IkeSaPayload.class, payloadList)
-                        != null) {
-            registerProvisionalChildSession(payloadList);
-        }
-        sendMessage(CMD_HANDLE_RECEIVED_RESPONSE, new ReceivedResponse(exchangeType, payloadList));
+        int spi = registerProvisionalChildAndGetSpi(payloadList);
+        sendMessage(
+                CMD_HANDLE_RECEIVED_RESPONSE,
+                new ReceivedCreateResponse(exchangeType, payloadList, spi));
     }
 
     private boolean isAwaitingCreateResp() {
@@ -457,26 +461,20 @@ public class ChildSessionStateMachine extends StateMachine {
      *
      * <p>This method is for avoiding CHILD_SA_NOT_FOUND error in IkeSessionStateMachine when remote
      * peer sends request for delete/rekey this Child SA before ChildSessionStateMachine sends
-     * FirstChildNegotiationData to itself.
+     * FirstChildNegotiationData or Create response to itself.
      */
-    private void registerProvisionalChildSession(List<IkePayload> respPayloads) {
-        // When decoding responding IkeSaPayload in IkeSessionStateMachine, it is validated that
-        // IkeSaPayload has exactly one IkeSaPayload.Proposal.
-        IkeSaPayload saPayload = null;
-        for (IkePayload payload : respPayloads) {
-            if (payload.payloadType == IkePayload.PAYLOAD_TYPE_SA) {
-                saPayload = (IkeSaPayload) payload;
-                break;
-            }
-        }
-        if (saPayload == null) {
-            throw new IllegalArgumentException(
-                    "Receive no SA payload for first Child SA negotiation.");
-        }
+    private int registerProvisionalChildAndGetSpi(List<IkePayload> respPayloads) {
+        IkeSaPayload saPayload =
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_SA, IkeSaPayload.class, respPayloads);
+
+        if (saPayload == null) return SPI_NOT_REGISTERED;
+
         // IkeSaPayload.Proposal stores SPI in long type so as to be applied to both 8-byte IKE SPI
         // and 4-byte Child SPI. Here we cast the stored SPI to int to represent a Child SPI.
         int remoteGenSpi = (int) (saPayload.proposalList.get(0).spi);
         mChildSmCallback.onChildSaCreated(remoteGenSpi, this);
+        return remoteGenSpi;
     }
 
     private void replyErrorNotification(@NotifyType int notifyType) {
@@ -498,21 +496,6 @@ public class ChildSessionStateMachine extends StateMachine {
                 childSaRecord.getOutboundIpSecTransform(), IpSecManager.DIRECTION_OUT);
         mUserCallback.onIpSecTransformDeleted(
                 childSaRecord.getInboundIpSecTransform(), IpSecManager.DIRECTION_IN);
-    }
-
-    /**
-     * FirstChildNegotiationData contains payloads for negotiating first Child SA in IKE_AUTH
-     * request and IKE_AUTH response and callback to notify IkeSessionStateMachine the SA
-     * negotiation result.
-     */
-    private static class FirstChildNegotiationData {
-        public final List<IkePayload> requestPayloads;
-        public final List<IkePayload> responsePayloads;
-
-        FirstChildNegotiationData(List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
-            requestPayloads = reqPayloads;
-            responsePayloads = respPayloads;
-        }
     }
 
     /**
@@ -545,6 +528,30 @@ public class ChildSessionStateMachine extends StateMachine {
         ReceivedResponse(@ExchangeType int eType, List<IkePayload> respPayloads) {
             exchangeType = eType;
             responsePayloads = respPayloads;
+        }
+    }
+
+    private static class ReceivedCreateResponse extends ReceivedResponse {
+        public final int registeredSpi;
+
+        ReceivedCreateResponse(@ExchangeType int eType, List<IkePayload> respPayloads, int spi) {
+            super(eType, respPayloads);
+            registeredSpi = spi;
+        }
+    }
+
+    /**
+     * FirstChildNegotiationData contains payloads for negotiating first Child SA in IKE_AUTH
+     * request and IKE_AUTH response and callback to notify IkeSessionStateMachine the SA
+     * negotiation result.
+     */
+    private static class FirstChildNegotiationData extends ReceivedCreateResponse {
+        public final List<IkePayload> requestPayloads;
+
+        FirstChildNegotiationData(
+                List<IkePayload> reqPayloads, List<IkePayload> respPayloads, int spi) {
+            super(EXCHANGE_TYPE_IKE_AUTH, respPayloads, spi);
+            requestPayloads = reqPayloads;
         }
     }
 
@@ -593,7 +600,7 @@ public class ChildSessionStateMachine extends StateMachine {
                     () -> {
                         mUserCallback.onError(new IkeInternalException(e));
                     });
-            Log.wtf(TAG, "Unexpected error in " + getCurrentState().getName(), e);
+            Log.wtf(TAG, "Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
         }
 
@@ -856,7 +863,7 @@ public class ChildSessionStateMachine extends StateMachine {
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
-                    ReceivedResponse rcvResp = (ReceivedResponse) message.obj;
+                    ReceivedCreateResponse rcvResp = (ReceivedCreateResponse) message.obj;
                     validateAndBuildChild(
                             mRequestPayloads,
                             rcvResp.responsePayloads,
