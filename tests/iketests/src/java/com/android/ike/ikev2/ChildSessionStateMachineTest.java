@@ -592,6 +592,16 @@ public final class ChildSessionStateMachineTest {
     }
 
     @Test
+    public void testDeleteChildLocalInInitial() throws Exception {
+        mChildSessionStateMachine.deleteChildSession();
+        mLooper.dispatchAll();
+
+        assertNull(mChildSessionStateMachine.getCurrentState());
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockChildSessionCallback).onClosed();
+    }
+
+    @Test
     public void testSimultaneousDeleteChild() throws Exception {
         setupIdleStateMachine();
 
