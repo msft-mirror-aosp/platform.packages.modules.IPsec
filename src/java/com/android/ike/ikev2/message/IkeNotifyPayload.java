@@ -16,14 +16,30 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MESSAGE_ID;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SELECTORS;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
 import android.annotation.IntDef;
 import android.util.ArraySet;
 
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.InvalidKeException;
+import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
+import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.exceptions.TsUnacceptableException;
+import com.android.ike.ikev2.exceptions.UnrecognizedIkeProtocolException;
+import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -340,6 +356,47 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      */
     public boolean isNewChildSaNotify() {
         return VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.contains(notifyType);
+    }
+
+    /**
+     * Validate error data and build IkeProtocolException for this error notification.
+     *
+     * @return the IkeProtocolException that represents this error.
+     * @throws InvalidSyntaxException if error data has invalid size.
+     */
+    public IkeProtocolException validateAndBuildIkeException() throws InvalidSyntaxException {
+        if (!isErrorNotify()) {
+            throw new IllegalArgumentException(
+                    "Do not support building IkeException for a non-error notificaton. Notify"
+                            + " type: "
+                            + notifyType);
+        }
+
+        try {
+            switch (notifyType) {
+                case ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD:
+                    return new UnsupportedCriticalPayloadException(notifyData);
+                case ERROR_TYPE_INVALID_MAJOR_VERSION:
+                    return new InvalidMajorVersionException(notifyData);
+                case ERROR_TYPE_INVALID_SYNTAX:
+                    return new InvalidSyntaxException(notifyData);
+                case ERROR_TYPE_INVALID_MESSAGE_ID:
+                    return new InvalidMessageIdException(notifyData);
+                case ERROR_TYPE_NO_PROPOSAL_CHOSEN:
+                    return new NoValidProposalChosenException(notifyData);
+                case ERROR_TYPE_INVALID_KE_PAYLOAD:
+                    return new InvalidKeException(notifyData);
+                case ERROR_TYPE_AUTHENTICATION_FAILED:
+                    return new AuthenticationFailedException(notifyData);
+                case ERROR_TYPE_TS_UNACCEPTABLE:
+                    return new TsUnacceptableException(notifyData);
+                default:
+                    return new UnrecognizedIkeProtocolException(notifyType, notifyData);
+            }
+        } catch (IllegalArgumentException e) {
+            // Notification data length is invalid.
+            throw new InvalidSyntaxException(e);
+        }
     }
 
     /**
