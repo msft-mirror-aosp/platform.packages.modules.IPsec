@@ -1232,9 +1232,15 @@ public class IkeSessionStateMachine extends StateMachine {
             }
 
             if (ikeHeader.isResponseMsg) {
+                int expectedMsgId = ikeSaRecord.getLocalRequestMessageId();
+                if (expectedMsgId - 1 == ikeHeader.messageId) {
+                    logw("Received re-transmitted response. Discard it.");
+                    return;
+                }
+
                 DecodeResult decodeResult =
                         IkeMessage.decode(
-                                ikeSaRecord.getLocalRequestMessageId(),
+                                expectedMsgId,
                                 mIkeIntegrity,
                                 mIkeCipher,
                                 ikeSaRecord,
@@ -1268,7 +1274,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
             } else {
                 int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
-                if (expectedMsgId - ikeHeader.messageId == 1) {
+                if (expectedMsgId - 1 == ikeHeader.messageId) {
                     if (Arrays.equals(mLastReceivedIkeReq, ikePacketBytes)) {
                         mIkeSocket.sendIkePacket(mLastSentIkeResp, mRemoteAddress);
 

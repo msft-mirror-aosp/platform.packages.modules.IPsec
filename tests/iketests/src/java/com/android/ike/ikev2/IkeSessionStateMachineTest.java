@@ -475,9 +475,10 @@ public final class IkeSessionStateMachineTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
-        mEapSessionConfig = new EapSessionConfig.Builder()
-                .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
-                .build();
+        mEapSessionConfig =
+                new EapSessionConfig.Builder()
+                        .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
+                        .build();
 
         mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
         mMockEapAuthenticator = mock(EapAuthenticator.class);
@@ -2812,6 +2813,31 @@ public final class IkeSessionStateMachineTest {
 
         assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
         verify(mSpyIkeSocket, never()).sendIkePacket(any(), any());
+    }
+
+    @Test
+    public void testDiscardRetransmittedResponse() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+
+        // Build and send fake response with last validated message ID to IKE state machine
+        ReceivedIkePacket resp =
+                makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                        mSpyCurrentIkeSaRecord,
+                        IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                        true /*isResp*/,
+                        mSpyCurrentIkeSaRecord.getLocalRequestMessageId() - 1,
+                        new LinkedList<>(),
+                        new byte[0]);
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mLooper.dispatchAll();
+
+        // Verify current state does not change
+        verifyRetransmissionStarted();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
     }
 
     @Test
