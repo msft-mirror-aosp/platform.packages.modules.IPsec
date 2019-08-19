@@ -77,6 +77,7 @@ import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.InvalidKeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeDeletePayload;
@@ -1243,5 +1244,19 @@ public final class ChildSessionStateMachineTest {
 
         CreateChildSaHelper.validateKePayloads(
                 payloadList, false /*isResp*/, mMockNegotiatedProposal);
+    }
+
+    @Test
+    public void testHandleExpectedException() throws Exception {
+        mChildSessionStateMachine.createChildSession(
+                null /*localAddress*/, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
+        mLooper.dispatchAll();
+
+        assertNull(mChildSessionStateMachine.getCurrentState());
+        verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
+
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockChildSessionCallback).onError(any(IkeInternalException.class));
     }
 }
