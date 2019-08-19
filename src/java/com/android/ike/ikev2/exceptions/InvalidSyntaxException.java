@@ -46,6 +46,16 @@ public final class InvalidSyntaxException extends IkeProtocolException {
     }
 
     /**
+     * Construct a instance of InvalidSyntaxException.
+     *
+     * @param message the descriptive message.
+     * @param cause the reason of exception.
+     */
+    public InvalidSyntaxException(String message, Throwable cause) {
+        super(ERROR_TYPE_INVALID_SYNTAX, message, cause);
+    }
+
+    /**
      * Construct a instance of InvalidSyntaxException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
