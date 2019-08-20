@@ -71,6 +71,7 @@ public abstract class EapSimAkaAttribute {
     public static final int EAP_AT_ENCR_DATA = 130;
     public static final int EAP_AT_NEXT_PSEUDONYM = 132;
     public static final int EAP_AT_NEXT_REAUTH_ID = 133;
+    public static final int EAP_AT_CHECKCODE = 134;
     public static final int EAP_AT_RESULT_IND = 135;
 
     public static final Map<Integer, String> EAP_ATTRIBUTE_STRING = new HashMap<>();
@@ -90,10 +91,12 @@ public abstract class EapSimAkaAttribute {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_COUNTER_TOO_SMALL, "AT_COUNTER_TOO_SMALL");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_S, "AT_NONCE_S");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_CLIENT_ERROR_CODE, "AT_CLIENT_ERROR_CODE");
+
         EAP_ATTRIBUTE_STRING.put(EAP_AT_IV, "AT_IV");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_ENCR_DATA, "AT_ENCR_DATA");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NEXT_PSEUDONYM, "AT_NEXT_PSEUDONYM");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NEXT_REAUTH_ID, "AT_NEXT_REAUTH_ID");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_CHECKCODE, "AT_CHECKCODE");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_RESULT_IND, "AT_RESULT_IND");
     }
 
@@ -499,6 +502,52 @@ public abstract class EapSimAkaAttribute {
             for (byte[] rand : rands) {
                 byteBuffer.put(rand);
             }
+        }
+    }
+
+    /**
+     * AtRandAka represents the AT_RAND attribute for EAP-AKA defined in RFC 4187#10.6
+     */
+    public static class AtRandAka extends EapSimAkaAttribute {
+        private static final int ATTR_LENGTH = 5 * LENGTH_SCALING;
+        private static final int RAND_LENGTH = 16;
+        private static final int RESERVED_BYTES = 2;
+
+        public final byte[] rand = new byte[RAND_LENGTH];
+
+        public AtRandAka(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_RAND, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Length must be 20B");
+            }
+
+            // next two bytes are reserved (RFC 4187#10.6)
+            byteBuffer.get(new byte[RESERVED_BYTES]);
+
+            byteBuffer.get(rand);
+        }
+
+        @VisibleForTesting
+        public AtRandAka(int lengthInBytes, byte[] rand)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_RAND, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Length must be 20B");
+            } else if (rand.length != RAND_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Rand must be 16B");
+            }
+
+            System.arraycopy(rand, 0, this.rand, 0, RAND_LENGTH);
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.put(new byte[RESERVED_BYTES]);
+            byteBuffer.put(rand);
         }
     }
 
