@@ -48,7 +48,8 @@ public class EapTestAttributeDefinitions {
     public static final byte[] RAND_1_BYTES = hexStringToByteArray(RAND_1);
     public static final String RAND_2 = "FFEEDDCCBBAA99887766554433221100";
     public static final byte[] RAND_2_BYTES = hexStringToByteArray(RAND_2);
-    public static final byte[] AT_RAND = hexStringToByteArray("01090000" + RAND_1 + RAND_2);
+    public static final byte[] AT_RAND_SIM = hexStringToByteArray("01090000" + RAND_1 + RAND_2);
+    public static final byte[] AT_RAND_AKA = hexStringToByteArray("01050000" + RAND_1);
     public static final byte[] AT_PADDING = hexStringToByteArray("0602000000000000");
     public static final String MAC = "112233445566778899AABBCCDDEEFF11";
     public static final byte[] AT_MAC = hexStringToByteArray("0B050000" + MAC);
@@ -71,10 +72,11 @@ public class EapTestAttributeDefinitions {
     public static final byte[] PERMANENT_ID_INVALID_LENGTH = hexStringToByteArray("0A020000");
     public static final byte[] ANY_ID_INVALID_LENGTH = hexStringToByteArray("0D020000");
     public static final byte[] FULL_AUTH_ID_INVALID_LENGTH = hexStringToByteArray("11020000");
-    public static final byte[] AT_RAND_INVALID_NUM_RANDS =
+    public static final byte[] AT_RAND_SIM_INVALID_NUM_RANDS =
             hexStringToByteArray("01050000" + RAND_1);
-    public static final byte[] AT_RAND_DUPLICATE_RANDS =
+    public static final byte[] AT_RAND_SIM_DUPLICATE_RANDS =
             hexStringToByteArray("01090000" + RAND_1 + RAND_1);
+    public static final byte[] AT_RAND_AKA_INVALID_LENGTH = hexStringToByteArray("01010000");
     public static final byte[] AT_PADDING_INVALID_PADDING = hexStringToByteArray("0601FFFF");
     public static final byte[] AT_MAC_INVALID_LENGTH = hexStringToByteArray("0B06");
     public static final byte[] AT_COUNTER_INVALID_LENGTH = hexStringToByteArray("1302");
