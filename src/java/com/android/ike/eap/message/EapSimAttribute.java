@@ -16,7 +16,7 @@
 
 package com.android.ike.eap.message;
 
-import android.util.Log;
+import static com.android.ike.eap.EapAuthenticator.LOG;
 
 import com.android.ike.eap.exceptions.EapSimInvalidAtPaddingException;
 import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
@@ -68,6 +68,30 @@ public abstract class EapSimAttribute {
     public static final int EAP_AT_NEXT_PSEUDONYM = 132;
     public static final int EAP_AT_NEXT_REAUTH_ID = 133;
     public static final int EAP_AT_RESULT_IND = 135;
+
+    public static final Map<Integer, String> EAP_ATTRIBUTE_STRING = new HashMap<>();
+    static {
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_RAND, "AT_RAND");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_PADDING, "AT_PADDING");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_MT, "AT_NONCE_MT");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_PERMANENT_ID_REQ, "AT_PERMANENT_ID_REQ");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_MAC, "AT_MAC");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_NOTIFICATION, "AT_NOTIFICATION");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_ANY_ID_REQ, "AT_ANY_ID_REQ");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_IDENTITY, "AT_IDENTITY");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_VERSION_LIST, "AT_VERSION_LIST");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_SELECTED_VERSION, "AT_SELECTED_VERSION");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_FULLAUTH_ID_REQ, "AT_FULLAUTH_ID_REQ");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_COUNTER, "AT_COUNTER");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_COUNTER_TOO_SMALL, "AT_COUNTER_TOO_SMALL");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_S, "AT_NONCE_S");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_CLIENT_ERROR_CODE, "AT_CLIENT_ERROR_CODE");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_IV, "AT_IV");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_ENCR_DATA, "AT_ENCR_DATA");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_NEXT_PSEUDONYM, "AT_NEXT_PSEUDONYM");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_NEXT_REAUTH_ID, "AT_NEXT_REAUTH_ID");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_RESULT_IND, "AT_RESULT_IND");
+    }
 
     public final int attributeType;
     public final int lengthInBytes;
@@ -231,7 +255,8 @@ public abstract class EapSimAttribute {
             try {
                 return new AtSelectedVersion(LENGTH, SUPPORTED_VERSION);
             } catch (EapSimInvalidAttributeException ex) {
-                Log.wtf(TAG,
+                // this should never happen
+                LOG.wtf(TAG,
                         "Error thrown while creating AtSelectedVersion with correct length", ex);
                 throw new AssertionError("Impossible exception encountered", ex);
             }
@@ -784,7 +809,7 @@ public abstract class EapSimAttribute {
             try {
                 return new AtClientErrorCode(ATTR_LENGTH, errorCode);
             } catch (EapSimInvalidAttributeException exception) {
-                Log.wtf(TAG, "Exception thrown while making AtClientErrorCodeConstants");
+                LOG.wtf(TAG, "Exception thrown while making AtClientErrorCodeConstants");
                 return null;
             }
         }

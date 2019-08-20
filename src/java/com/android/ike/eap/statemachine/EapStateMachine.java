@@ -16,17 +16,19 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapData.EAP_NAK;
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_STRING;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_STRING;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.content.Context;
-import android.util.Log;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
@@ -90,6 +92,9 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
     protected abstract class EapState extends SimpleState {
         protected DecodeResult decode(@NonNull byte[] packet) {
+            LOG.d(getClass().getSimpleName(),
+                    "Received packet=[" + LOG.pii(packet) + "]");
+
             if (packet == null) {
                 return new DecodeResult(new EapError(
                         new IllegalArgumentException("Attempting to decode null packet")));
@@ -97,6 +102,15 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
             try {
                 EapMessage eapMessage = EapMessage.decode(packet);
+
+                // Log inbound message in the format "EAP-<Code>/<Type>"
+                String eapDataString = (eapMessage.eapData == null) ? "" :
+                        "/" + EAP_TYPE_STRING.getOrDefault(eapMessage.eapData.eapType, "UNKNOWN");
+                String msg = "Decoded message: EAP-"
+                        + EAP_CODE_STRING.getOrDefault(eapMessage.eapCode, "UNKNOWN")
+                        + eapDataString;
+                LOG.i(getClass().getSimpleName(), msg);
+
                 if (eapMessage.eapCode == EAP_CODE_RESPONSE) {
                     EapInvalidRequestException cause =
                             new EapInvalidRequestException("Received an EAP-Response message");
@@ -146,7 +160,9 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
-                return decodeResult.eapResult;
+                EapResult result = decodeResult.eapResult;
+                LOG.i(mTAG, "Returning " + result.getClass().getSimpleName());
+                return result;
             }
             EapMessage message = decodeResult.eapMessage;
 
@@ -177,7 +193,9 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
-                return decodeResult.eapResult;
+                EapResult result = decodeResult.eapResult;
+                LOG.i(mTAG, "Returning " + result.getClass().getSimpleName());
+                return result;
             }
             EapMessage message = decodeResult.eapMessage;
 
@@ -204,13 +222,14 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         @VisibleForTesting
         EapResult getIdentityResponse(int eapIdentifier) {
             try {
+                LOG.d(mTAG, "Returning EAP-Identity: " + LOG.pii(mEapSessionConfig.eapIdentity));
                 EapData identityData = new EapData(EAP_IDENTITY, mEapSessionConfig.eapIdentity);
                 return EapResponse.getEapResponse(
                         new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, identityData));
             } catch (EapSilentException ex) {
                 // this should never happen - only identifier and identity bytes are variable
-                Log.wtf(mTAG,  "Failed to create Identity response for message with identifier="
-                        + eapIdentifier);
+                LOG.wtf(mTAG,  "Failed to create Identity response for message with identifier="
+                        + LOG.pii(eapIdentifier));
                 return new EapError(ex);
             }
         }
@@ -227,7 +246,9 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
-                return decodeResult.eapResult;
+                EapResult result = decodeResult.eapResult;
+                LOG.i(mTAG, "Returning " + result.getClass().getSimpleName());
+                return result;
             }
             EapMessage eapMessage = decodeResult.eapMessage;
 
@@ -269,7 +290,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 default:
                     // received unsupported EAP Type. This should never happen.
-                    Log.e(mTAG, "Received unsupported EAP Type=" + eapType);
+                    LOG.e(mTAG, "Received unsupported EAP Type=" + eapType);
                     throw new IllegalArgumentException(
                             "Received unsupported EAP Type in MethodState constructor");
             }
@@ -293,7 +314,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
     private EapResult handleNotification(String tag, EapMessage message) {
         // Type-Data will be UTF-8 encoded ISO 10646 characters (RFC 3748 Section 5.2)
         String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
-        Log.i(tag, "Received EAP-Request/Notification: [" + content + "]");
+        LOG.i(tag, "Received EAP-Request/Notification: [" + content + "]");
         return EapMessage.getNotificationResponse(message.eapIdentifier);
     }
 }
