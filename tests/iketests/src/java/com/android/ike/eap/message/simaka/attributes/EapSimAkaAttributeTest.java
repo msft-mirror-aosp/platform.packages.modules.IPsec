@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message;
+package com.android.ike.eap.message.simaka.attributes;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
+
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
-public class EapSimAttributeTest {
+public class EapSimAkaAttributeTest {
     private static final int EXPECTED_ATTRIBUTE_TYPE = 1;
     private static final int EXPECTED_LENGTH_IN_BYTES = 4;
     private static final int BUFFER_LENGTH = 2;
@@ -35,15 +37,16 @@ public class EapSimAttributeTest {
 
     @Test
     public void testEncode() throws Exception {
-        EapSimAttribute eapSimAttribute = new EapSimAttribute(
-                EXPECTED_ATTRIBUTE_TYPE, EXPECTED_LENGTH_IN_BYTES) {
+        EapSimAkaAttribute eapSimAkaAttribute = new EapSimAkaAttribute(
+                EXPECTED_ATTRIBUTE_TYPE,
+                EXPECTED_LENGTH_IN_BYTES) {
             public void encode(ByteBuffer byteBuffer) {
                 encodeAttributeHeader(byteBuffer);
             }
         };
 
         ByteBuffer result = ByteBuffer.allocate(BUFFER_LENGTH);
-        eapSimAttribute.encode(result);
+        eapSimAkaAttribute.encode(result);
         assertArrayEquals(EXPECTED_ENCODING, result.array());
         assertFalse(result.hasRemaining());
     }

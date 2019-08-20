@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message.attributes;
+package com.android.ike.eap.message.simaka.attributes;
 
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PADDING;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_PADDING;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_PADDING_INVALID_PADDING;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PADDING;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_PADDING;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_PADDING_INVALID_PADDING;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -26,10 +26,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.android.ike.eap.exceptions.EapSimInvalidAtPaddingException;
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtPadding;
-import com.android.ike.eap.message.EapSimAttributeFactory;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAtPaddingException;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPadding;
+import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -49,7 +49,7 @@ public class AtPaddingTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_PADDING);
-        EapSimAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtPadding);
@@ -63,8 +63,8 @@ public class AtPaddingTest {
         ByteBuffer input = ByteBuffer.wrap(AT_PADDING_INVALID_PADDING);
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
-            fail("Expected EapSimInvalidAtPaddingException for nonzero padding bytes");
-        } catch (EapSimInvalidAtPaddingException expected) {
+            fail("Expected EapSimAkaInvalidAtPaddingException for nonzero padding bytes");
+        } catch (EapSimAkaInvalidAtPaddingException expected) {
         }
     }
 

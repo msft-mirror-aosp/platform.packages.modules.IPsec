@@ -17,11 +17,11 @@
 package com.android.ike.eap.message;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_VERSION_LIST_DATA;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.IDENTITY_STRING;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_1;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.RAND_2;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_VERSION_LIST_DATA;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.IDENTITY_STRING;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
 
 import java.util.Arrays;
 
@@ -90,6 +90,7 @@ public class EapTestMessageDefinitions {
 
     // Attributes
     public static final String SKIPPABLE_DATA = "112233445566";
+    public static final byte[] SKIPPABLE_DATA_BYTES = hexStringToByteArray(SKIPPABLE_DATA);
     public static final byte[] SKIPPABLE_INVALID_ATTRIBUTE =
             hexStringToByteArray("FF02" + SKIPPABLE_DATA);
     public static final byte[] NON_SKIPPABLE_INVALID_ATTRIBUTE =
