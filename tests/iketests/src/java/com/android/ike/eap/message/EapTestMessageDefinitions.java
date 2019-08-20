@@ -157,7 +157,7 @@ public class EapTestMessageDefinitions {
     public static final String EAP_SIM_CHALLENGE_REQUEST_STRING =
             "01" + ID + "0040" // EAP-Request | ID | length in bytes
             + "120b0000" // EAP-SIM | Challenge | 2B padding
-            + "01090000" + RAND_1 + RAND_2 // AT_RAND attribute
+            + "01090000" + RAND_1 + RAND_2 // EAP-SIM AT_RAND attribute
             + "0B05000000000000000000000000000000000000"; // AT_MAC attribute with no MAC
     public static final byte[] MAC_INPUT =
             hexStringToByteArray(EAP_SIM_CHALLENGE_REQUEST_STRING + NONCE_MT_STRING);
