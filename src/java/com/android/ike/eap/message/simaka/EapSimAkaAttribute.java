@@ -50,6 +50,7 @@ public abstract class EapSimAkaAttribute {
     // EAP non-Skippable Attribute values defined by IANA
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
     public static final int EAP_AT_RAND = 1;
+    public static final int EAP_AT_AUTN = 2;
     public static final int EAP_AT_PADDING = 6;
     public static final int EAP_AT_NONCE_MT = 7;
     public static final int EAP_AT_PERMANENT_ID_REQ = 10;
@@ -77,6 +78,7 @@ public abstract class EapSimAkaAttribute {
     public static final Map<Integer, String> EAP_ATTRIBUTE_STRING = new HashMap<>();
     static {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_RAND, "AT_RAND");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_AUTN, "AT_AUTN");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_PADDING, "AT_PADDING");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_MT, "AT_NONCE_MT");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_PERMANENT_ID_REQ, "AT_PERMANENT_ID_REQ");
@@ -869,6 +871,51 @@ public abstract class EapSimAkaAttribute {
                 LOG.wtf(TAG, "Exception thrown while making AtClientErrorCodeConstants");
                 return null;
             }
+        }
+    }
+
+    /**
+     * AtAutn represents the AT_AUTN attribute defined in RFC 4187#10.7
+     */
+    public static class AtAutn extends EapSimAkaAttribute {
+        private static final int ATTR_LENGTH = 5 * LENGTH_SCALING;
+        private static final int AUTN_LENGTH = 16;
+        private static final int RESERVED_BYTES = 2;
+
+        public final byte[] autn = new byte[AUTN_LENGTH];
+
+        public AtAutn(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_AUTN, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Length must be 20B");
+            }
+
+            // next two bytes are reserved (RFC 4187#10.7)
+            byteBuffer.get(new byte[RESERVED_BYTES]);
+
+            byteBuffer.get(autn);
+        }
+
+        @VisibleForTesting
+        public AtAutn(int lengthInBytes, byte[] autn) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_AUTN, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Length must be 20B");
+            } else if (autn.length != AUTN_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Autn must be 16B");
+            }
+
+            System.arraycopy(autn, 0, this.autn, 0, AUTN_LENGTH);
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.put(new byte[RESERVED_BYTES]);
+            byteBuffer.put(autn);
         }
     }
 }
