@@ -18,9 +18,9 @@ package com.android.ike.eap.message.simaka.attributes;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
-import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND;
-import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND_DUPLICATE_RANDS;
-import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND_INVALID_NUM_RANDS;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND_SIM;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND_SIM_DUPLICATE_RANDS;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_RAND_SIM_INVALID_NUM_RANDS;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
 
@@ -53,14 +53,14 @@ public class AtRandSimTest {
 
     @Test
     public void testDecode() throws Exception {
-        ByteBuffer input = ByteBuffer.wrap(AT_RAND);
+        ByteBuffer input = ByteBuffer.wrap(AT_RAND_SIM);
         EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtRandSim);
         AtRandSim atRandSim = (AtRandSim) result;
         assertEquals(EAP_AT_RAND, atRandSim.attributeType);
-        assertEquals(AT_RAND.length, atRandSim.lengthInBytes);
+        assertEquals(AT_RAND_SIM.length, atRandSim.lengthInBytes);
         assertEquals(EXPECTED_NUM_RANDS, atRandSim.rands.size());
         assertArrayEquals(hexStringToByteArray(RAND_1), atRandSim.rands.get(0));
         assertArrayEquals(hexStringToByteArray(RAND_2), atRandSim.rands.get(1));
@@ -68,7 +68,7 @@ public class AtRandSimTest {
 
     @Test
     public void testDecodeInvalidNumRands() throws Exception {
-        ByteBuffer input = ByteBuffer.wrap(AT_RAND_INVALID_NUM_RANDS);
+        ByteBuffer input = ByteBuffer.wrap(AT_RAND_SIM_INVALID_NUM_RANDS);
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
             fail("Expected EapSimInvalidAtRandException for invalid number of RANDs");
@@ -78,7 +78,7 @@ public class AtRandSimTest {
 
     @Test
     public void testDecodeDuplicateRands() throws Exception {
-        ByteBuffer input = ByteBuffer.wrap(AT_RAND_DUPLICATE_RANDS);
+        ByteBuffer input = ByteBuffer.wrap(AT_RAND_SIM_DUPLICATE_RANDS);
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for duplicate RANDs");
@@ -92,10 +92,10 @@ public class AtRandSimTest {
                 hexStringToByteArray(RAND_1),
                 hexStringToByteArray(RAND_2)
         };
-        AtRandSim atRandSim = new AtRandSim(AT_RAND.length, expectedRands);
+        AtRandSim atRandSim = new AtRandSim(AT_RAND_SIM.length, expectedRands);
 
-        ByteBuffer result = ByteBuffer.allocate(AT_RAND.length);
+        ByteBuffer result = ByteBuffer.allocate(AT_RAND_SIM.length);
         atRandSim.encode(result);
-        assertArrayEquals(AT_RAND, result.array());
+        assertArrayEquals(AT_RAND_SIM, result.array());
     }
 }
