@@ -69,6 +69,9 @@ public class EapTestAttributeDefinitions {
     public static final String RES = "1122334455";
     public static final byte[] RES_BYTES = hexStringToByteArray(RES);
     public static final byte[] AT_RES = hexStringToByteArray("03030028" + RES + "000000");
+    public static final String AUTS = "112233445566778899AABBCCDDEE";
+    public static final byte[] AUTS_BYTES = hexStringToByteArray(AUTS);
+    public static final byte[] AT_AUTS = hexStringToByteArray("0404" + AUTS);
 
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
@@ -98,4 +101,5 @@ public class EapTestAttributeDefinitions {
             hexStringToByteArray("0302000811000000");
     public static final byte[] AT_RES_LONG_RES =
             hexStringToByteArray("0306008800112233445566778899AABBCCDDEEFF11000000");
+    public static final byte[] AT_AUTS_INVALID_LENGTH = hexStringToByteArray("03010000");
 }
