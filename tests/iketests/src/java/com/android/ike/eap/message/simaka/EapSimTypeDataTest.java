@@ -14,27 +14,26 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message;
+package com.android.ike.eap.message.simaka;
 
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
-import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_START_DUPLICATE_ATTRIBUTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_START_SUBTYPE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.INVALID_SUBTYPE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SHORT_TYPE_DATA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_ATTRIBUTE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_AT_RAND;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
-import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
+import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -59,16 +58,16 @@ public class EapSimTypeDataTest {
 
     @Test
     public void testConstructor() throws Exception {
-        List<EapSimAttribute> attributes = Arrays.asList(
+        List<EapSimAkaAttribute> attributes = Arrays.asList(
                 new AtVersionList(8, 1), new AtPermanentIdReq());
 
         EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, attributes);
         assertEquals(EAP_SIM_START, eapSimTypeData.eapSubtype);
 
         // check order of entries in EapSimTypeData.attributeMap
-        Iterator<Entry<Integer, EapSimAttribute>> itr =
+        Iterator<Entry<Integer, EapSimAkaAttribute>> itr =
                 eapSimTypeData.attributeMap.entrySet().iterator();
-        Entry<Integer, EapSimAttribute> pair = itr.next();
+        Entry<Integer, EapSimAkaAttribute> pair = itr.next();
         assertEquals(EAP_AT_VERSION_LIST, (int) pair.getKey());
         assertEquals(Arrays.asList(1), ((AtVersionList) pair.getValue()).versions);
 
@@ -136,7 +135,7 @@ public class EapSimTypeDataTest {
 
     @Test
     public void testEncode() throws Exception {
-        LinkedHashMap<Integer, EapSimAttribute> attributes = new LinkedHashMap<>();
+        LinkedHashMap<Integer, EapSimAkaAttribute> attributes = new LinkedHashMap<>();
         attributes.put(EAP_AT_VERSION_LIST, new AtVersionList(8, 1));
         attributes.put(EAP_AT_PERMANENT_ID_REQ, new AtPermanentIdReq());
         EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, attributes);
