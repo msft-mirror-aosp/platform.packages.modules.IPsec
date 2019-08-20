@@ -39,6 +39,7 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.system.ErrnoException;
@@ -140,6 +141,14 @@ public class IkeSessionStateMachine extends StateMachine {
     // Time after which IKE SA needs to be rekeyed
     @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(3L);
 
+    // Default delay time for retrying a request
+    @VisibleForTesting static final long RETRY_INTERVAL_MS = TimeUnit.SECONDS.toMillis(15L);
+
+    // Close IKE Session when all responses during this time were TEMPORARY_FAILURE(s). This
+    // indicates that something has gone wrong, and we are out of sync.
+    @VisibleForTesting
+    static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
+
     // TODO: Allow users to configure IKE lifetime
 
     // Use a value greater than the retransmit-failure timeout.
@@ -237,6 +246,7 @@ public class IkeSessionStateMachine extends StateMachine {
     private final Executor mUserCbExecutor;
     private final IIkeSessionCallback mIkeSessionCallback;
     private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
+    private final TempFailureHandler mTempFailHandler;
 
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
@@ -344,6 +354,8 @@ public class IkeSessionStateMachine extends StateMachine {
 
         mIkeSessionOptions = ikeOptions;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
+
+        mTempFailHandler = new TempFailureHandler(looper);
 
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
         mLocalSpiToIkeSaRecordMap = new LongSparseArray<>(3);
@@ -490,10 +502,70 @@ public class IkeSessionStateMachine extends StateMachine {
         sendMessageDelayed(CMD_LOCAL_REQUEST_REKEY_IKE, rekeyRequest, SA_SOFT_LIFETIME_MS);
     }
 
+    private void scheduleRetry(LocalRequest localRequest) {
+        sendMessageDelayed(localRequest.procedureType, localRequest, RETRY_INTERVAL_MS);
+    }
+
     // TODO: Support initiating Delete IKE exchange when IKE SA expires
 
     // TODO: Add interfaces to initiate IKE exchanges.
 
+    /**
+     * This class is for handling temporary failure.
+     *
+     * <p>Receiving a TEMPORARY_FAILURE is caused by a temporary condition. IKE Session should be
+     * closed if it continues to receive this error after several minutes.
+     */
+    @VisibleForTesting
+    class TempFailureHandler extends Handler {
+        private static final int TEMP_FAILURE_RETRY_TIMEOUT = 1;
+
+        private boolean mTempFailureReceived = false;
+
+        TempFailureHandler(Looper looper) {
+            super(looper);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            if (msg.what == TEMP_FAILURE_RETRY_TIMEOUT) {
+                IOException error =
+                        new IOException(
+                                "Kept receiving TEMPORARY_FAILURE error. State information is out"
+                                        + " of sync.");
+                mUserCbExecutor.execute(
+                        () -> {
+                            mIkeSessionCallback.onError(new IkeInternalException(error));
+                        });
+                loge("Fatal error", error);
+
+                closeAllSaRecords(false /*expectSaClosed*/);
+                quitNow();
+            } else {
+                Log.wtf(TAG, "Unknown message.what: " + msg.what);
+            }
+        }
+
+        /** Schedule retry when a request got rejected by TEMPORARY_FAILURE. */
+        public void handleTempFailure(LocalRequest localRequest) {
+            logd("Receive TEMPORARY FAILURE. Reschedule request: " + localRequest.procedureType);
+
+            // TODO: Support customized delay time when this is a rekey request and SA is going to
+            // expire soon.
+            scheduleRetry(localRequest);
+
+            if (!mTempFailureReceived) {
+                sendEmptyMessageDelayed(TEMP_FAILURE_RETRY_TIMEOUT, TEMP_FAILURE_RETRY_TIMEOUT_MS);
+                mTempFailureReceived = true;
+            }
+        }
+
+        /** Stop tracking temporary condition when request was not rejected by TEMPORARY_FAILURE. */
+        public void reset() {
+            removeMessages(TEMP_FAILURE_RETRY_TIMEOUT);
+            mTempFailureReceived = false;
+        }
+    }
     /**
      * This class represents a reserved IKE SPI.
      *
@@ -1249,6 +1321,13 @@ public class IkeSessionStateMachine extends StateMachine {
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
                         ikeSaRecord.incrementLocalRequestMessageId();
+
+                        if (isTempFailure(decodeResult.ikeMessage)) {
+                            handleTempFailure();
+                        } else {
+                            mTempFailHandler.reset();
+                        }
+
                         handleResponseIkeMessage(decodeResult.ikeMessage);
                         break;
                     case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
@@ -1349,12 +1428,33 @@ public class IkeSessionStateMachine extends StateMachine {
             // TODO: Handle fatal error notifications.
         }
 
+        private boolean isTempFailure(IkeMessage message) {
+            List<IkeNotifyPayload> notifyPayloads =
+                    message.getPayloadListForType(PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+
+            for (IkeNotifyPayload notify : notifyPayloads) {
+                if (notify.notifyType == ERROR_TYPE_TEMPORARY_FAILURE) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         protected void handleDpd() {
             // Do nothing - Child states should override if they care.
         }
 
         protected void handleRetransmittedReq() {
             // Do nothing - Child states should override if they care.
+        }
+
+        protected void handleTempFailure() {
+            // Log and close IKE Session due to unexpected TEMPORARY_FAILURE. This error should
+            // only occur during CREATE_CHILD_SA exchange.
+            handleIkeFatalError(
+                    new InvalidSyntaxException("Received unexpected TEMPORARY_FAILURE"));
+
+            // States that accept a TEMPORARY MUST override this method to schedule a retry.
         }
 
         // Default handler for decode errors in encrypted request.
@@ -1664,6 +1764,8 @@ public class IkeSessionStateMachine extends StateMachine {
         private ChildSessionStateMachine mChildInLocalProcedure;
         private Set<ChildSessionStateMachine> mChildInRemoteProcedures;
 
+        private ChildLocalRequest mLocalRequestOngoing;
+
         private int mLastInboundRequestMsgId;
         private List<IkePayload> mOutboundRespPayloads;
         private Set<ChildSessionStateMachine> mAwaitingChildResponse;
@@ -1674,6 +1776,8 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enterState() {
             mChildInLocalProcedure = null;
             mChildInRemoteProcedures = new HashSet<>();
+
+            mLocalRequestOngoing = null;
 
             mLastInboundRequestMsgId = 0;
             mOutboundRespPayloads = new LinkedList<>();
@@ -1708,6 +1812,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     if (mChildInLocalProcedure == childSession) {
                         mChildInLocalProcedure = null;
+                        mLocalRequestOngoing = null;
                     }
                     mChildInRemoteProcedures.remove(childSession);
 
@@ -1741,6 +1846,11 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
+        @Override
+        protected void handleTempFailure() {
+            mTempFailHandler.handleTempFailure(mLocalRequestOngoing);
+        }
+
         private void transitionToIdleIfAllProceduresDone() {
             if (mChildInLocalProcedure == null && mChildInRemoteProcedures.isEmpty()) {
                 transitionTo(mIdle);
@@ -1761,6 +1871,8 @@ public class IkeSessionStateMachine extends StateMachine {
 
         private void executeLocalRequest(ChildLocalRequest req) {
             mChildInLocalProcedure = getChildSession(req.childSessionCallback);
+            mLocalRequestOngoing = req;
+
             if (mChildInLocalProcedure == null) {
                 // This request has been validated to have a recognized target Child Session when
                 // it was sent to IKE Session at the begginnig. Failing to find this Child Session
@@ -3143,6 +3255,11 @@ public class IkeSessionStateMachine extends StateMachine {
                 // Attempt to recover by retrying (until hard lifetime).
                 transitionTo(mIdle);
             }
+        }
+
+        @Override
+        protected void handleTempFailure() {
+            mTempFailHandler.handleTempFailure(mCurrentIkeSaRecord.getFutureRekeyEvent());
         }
 
         /**

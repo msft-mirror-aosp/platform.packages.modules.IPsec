@@ -20,7 +20,9 @@ import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REK
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.ike.ikev2.IkeSessionStateMachine.SA_SOFT_LIFETIME_MS;
+import static com.android.ike.ikev2.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -3297,5 +3299,126 @@ public final class IkeSessionStateMachineTest {
                 .onError(argThat(err -> err instanceof NoValidProposalChosenException));
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    private void mockSendRekeyChildReq() throws Exception {
+        setupIdleStateMachine();
+
+        ChildLocalRequest childLocalRequest =
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
+                        mMockChildSessionCallback,
+                        null /*childOptions*/);
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ, childLocalRequest);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(mMockChildSessionStateMachine).rekeyChildSession();
+
+        // Mocking sending request
+        mDummyChildSmCallback.onOutboundPayloadsReady(
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                false /*isResp*/,
+                new LinkedList<>(),
+                mMockChildSessionStateMachine);
+        mLooper.dispatchAll();
+    }
+
+    private void mockRcvTempFail() throws Exception {
+        List<IkePayload> payloads = new LinkedList<>();
+        payloads.add(new IkeNotifyPayload(ERROR_TYPE_TEMPORARY_FAILURE));
+        ReceivedIkePacket resp =
+                makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                        mSpyCurrentIkeSaRecord,
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        true /*isResp*/,
+                        payloads);
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+    }
+
+    @Test
+    public void testTempFailureHandlerScheduleRetry() throws Exception {
+        mockSendRekeyChildReq();
+
+        // Mock sending TEMPORARY_FAILURE response
+        mockRcvTempFail();
+
+        // Move time forward to trigger retry
+        mLooper.moveTimeForward(IkeSessionStateMachine.RETRY_INTERVAL_MS);
+        mLooper.dispatchAll();
+
+        // Verify that rekey is triggered again
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
+    }
+
+    @Test
+    public void testTempFailureHandlerTimeout() throws Exception {
+        long currentTime = 0;
+        int retryCnt = 0;
+
+        mockSendRekeyChildReq();
+
+        while (currentTime + RETRY_INTERVAL_MS < TEMP_FAILURE_RETRY_TIMEOUT_MS) {
+            mockRcvTempFail();
+
+            mLooper.moveTimeForward(RETRY_INTERVAL_MS);
+            currentTime += RETRY_INTERVAL_MS;
+            mLooper.dispatchAll();
+
+            retryCnt++;
+            verify(mMockChildSessionStateMachine, times(1 + retryCnt)).rekeyChildSession();
+        }
+
+        mLooper.moveTimeForward(RETRY_INTERVAL_MS);
+        mLooper.dispatchAll();
+
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+    }
+
+    @Test
+    public void testTempFailureHandlerCancelTimer() throws Exception {
+        mockSendRekeyChildReq();
+
+        // Mock sending TEMPORARY_FAILURE response
+        mockRcvTempFail();
+
+        // Move time forward to trigger retry
+        mLooper.moveTimeForward(IkeSessionStateMachine.RETRY_INTERVAL_MS);
+        mLooper.dispatchAll();
+        verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
+
+        // Mock sending a valid response
+        ReceivedIkePacket resp =
+                makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                        mSpyCurrentIkeSaRecord,
+                        EXCHANGE_TYPE_CREATE_CHILD_SA,
+                        true /*isResp*/,
+                        new LinkedList<>());
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+
+        // Move time forward
+        mLooper.moveTimeForward(IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS);
+        mLooper.dispatchAll();
+
+        // Validate IKE Session is not closed
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        // Validate no more retry
+        verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
     }
 }
