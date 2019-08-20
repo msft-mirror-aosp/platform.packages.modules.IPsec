@@ -14,20 +14,20 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message.attributes;
+package com.android.ike.eap.message.simaka.attributes;
 
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IDENTITY;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_IDENTITY;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.IDENTITY;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IDENTITY;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_IDENTITY;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.IDENTITY;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
-import com.android.ike.eap.message.EapSimAttributeFactory;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
+import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -45,7 +45,7 @@ public class AtIdentityTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_IDENTITY);
-        EapSimAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtIdentity);
@@ -74,10 +74,10 @@ public class AtIdentityTest {
         atIdentity.encode(buffer);
         buffer.rewind();
 
-        EapSimAttribute eapSimAttribute =
+        EapSimAkaAttribute eapSimAkaAttribute =
                 EapSimAttributeFactory.getInstance().getEapSimAttribute(buffer);
-        assertTrue(eapSimAttribute instanceof AtIdentity);
-        AtIdentity newAtIdentity = (AtIdentity) eapSimAttribute;
+        assertTrue(eapSimAkaAttribute instanceof AtIdentity);
+        AtIdentity newAtIdentity = (AtIdentity) eapSimAkaAttribute;
         assertEquals(atIdentity.lengthInBytes, newAtIdentity.lengthInBytes);
         assertArrayEquals(atIdentity.identity, newAtIdentity.identity);
     }

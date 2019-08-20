@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message.attributes;
+package com.android.ike.eap.message.simaka.attributes;
 
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_COUNTER;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_COUNTER_TOO_SMALL;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_COUNTER;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_COUNTER_INVALID_LENGTH;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_COUNTER_TOO_SMALL;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_COUNTER_TOO_SMALL_INVALID_LENGTH;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.COUNTER_INT;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_COUNTER;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_COUNTER_TOO_SMALL;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_COUNTER;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_COUNTER_INVALID_LENGTH;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_COUNTER_TOO_SMALL;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_COUNTER_TOO_SMALL_INVALID_LENGTH;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.COUNTER_INT;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -30,11 +30,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtCounter;
-import com.android.ike.eap.message.EapSimAttribute.AtCounterTooSmall;
-import com.android.ike.eap.message.EapSimAttributeFactory;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtCounter;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtCounterTooSmall;
+import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -54,7 +54,7 @@ public class AtCounterTest {
     @Test
     public void testDecodeAtCounter() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_COUNTER);
-        EapSimAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtCounter);
@@ -69,8 +69,8 @@ public class AtCounterTest {
         ByteBuffer input = ByteBuffer.wrap(AT_COUNTER_INVALID_LENGTH);
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
-            fail("Expected EapSimInvalidAttributeException for invalid length");
-        } catch (EapSimInvalidAttributeException expected) {
+            fail("Expected EapSimAkaInvalidAttributeException for invalid length");
+        } catch (EapSimAkaInvalidAttributeException expected) {
         }
     }
 
@@ -93,7 +93,7 @@ public class AtCounterTest {
     @Test
     public void testDecodeAtCounterTooSmall() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_COUNTER_TOO_SMALL);
-        EapSimAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtCounterTooSmall);
@@ -107,8 +107,8 @@ public class AtCounterTest {
         ByteBuffer input = ByteBuffer.wrap(AT_COUNTER_TOO_SMALL_INVALID_LENGTH);
         try {
             mEapSimAttributeFactory.getEapSimAttribute(input);
-            fail("Expected EapSimInvalidAttributeException for invalid length");
-        } catch (EapSimInvalidAttributeException expected) {
+            fail("Expected EapSimAkaInvalidAttributeException for invalid length");
+        } catch (EapSimAkaInvalidAttributeException expected) {
         }
     }
 

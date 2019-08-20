@@ -14,18 +14,19 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message;
+package com.android.ike.eap.message.simaka;
 
 import static com.android.ike.eap.EapAuthenticator.LOG;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_ATTRIBUTE_STRING;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_ATTRIBUTE_STRING;
 
 import android.annotation.NonNull;
 
-import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
-import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
-import com.android.ike.eap.exceptions.EapSimUnsupportedAttributeException;
-import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
-import com.android.ike.eap.message.EapSimAttribute.EapSimUnsupportedAttribute;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaUnsupportedAttributeException;
+import com.android.ike.eap.exceptions.simaka.EapSimInvalidAtRandException;
+import com.android.ike.eap.message.EapMessage;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.EapSimAkaUnsupportedAttribute;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
@@ -74,18 +75,18 @@ public class EapSimTypeData {
 
     // LinkedHashMap used to preserve encoded ordering of attributes. This is necessary for checking
     // the MAC value for the message
-    public final LinkedHashMap<Integer, EapSimAttribute> attributeMap;
+    public final LinkedHashMap<Integer, EapSimAkaAttribute> attributeMap;
 
     @VisibleForTesting
-    public EapSimTypeData(int eapSubType, LinkedHashMap<Integer, EapSimAttribute> attributeMap) {
+    public EapSimTypeData(int eapSubType, LinkedHashMap<Integer, EapSimAkaAttribute> attributeMap) {
         this.eapSubtype = eapSubType;
         this.attributeMap = attributeMap;
     }
 
-    public EapSimTypeData(int eapSubtype, List<EapSimAttribute> attributes) {
+    public EapSimTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
         this.eapSubtype = eapSubtype;
         attributeMap = new LinkedHashMap<>();
-        for (EapSimAttribute attribute : attributes) {
+        for (EapSimAkaAttribute attribute : attributes) {
             // TODO(b/135637161): check for duplicate attributes
             attributeMap.put(attribute.attributeType, attribute);
         }
@@ -98,7 +99,7 @@ public class EapSimTypeData {
      */
     public byte[] encode() {
         int lengthInBytes = MIN_LEN_BYTES;
-        for (EapSimAttribute attribute : attributeMap.values()) {
+        for (EapSimAkaAttribute attribute : attributeMap.values()) {
             lengthInBytes += attribute.lengthInBytes;
         }
 
@@ -108,7 +109,7 @@ public class EapSimTypeData {
         // two reserved bytes (RFC 4186 Section 8.1)
         output.put(new byte[2]);
 
-        for (EapSimAttribute attribute : attributeMap.values()) {
+        for (EapSimAkaAttribute attribute : attributeMap.values()) {
             attribute.encode(output);
         }
 
@@ -145,9 +146,9 @@ public class EapSimTypeData {
                 byteBuffer.get(new byte[2]);
 
                 // read attributes
-                LinkedHashMap<Integer, EapSimAttribute> attributeMap = new LinkedHashMap<>();
+                LinkedHashMap<Integer, EapSimAkaAttribute> attributeMap = new LinkedHashMap<>();
                 while (byteBuffer.hasRemaining()) {
-                    EapSimAttribute attribute = EapSimAttributeFactory.getInstance()
+                    EapSimAkaAttribute attribute = EapSimAttributeFactory.getInstance()
                             .getEapSimAttribute(byteBuffer);
 
                     if (attributeMap.containsKey(attribute.attributeType)) {
@@ -156,7 +157,7 @@ public class EapSimTypeData {
                         return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
                     }
 
-                    if (attribute instanceof EapSimUnsupportedAttribute) {
+                    if (attribute instanceof EapSimAkaUnsupportedAttribute) {
                         LOG.d(TAG, "Unsupported EAP-SIM attribute during decoding: "
                                 + attribute.attributeType);
                     }
@@ -170,10 +171,10 @@ public class EapSimTypeData {
             } catch (EapSimInvalidAtRandException ex) {
                 LOG.e(TAG, "Invalid AtRand attribute", ex);
                 return new DecodeResult(AtClientErrorCode.INSUFFICIENT_CHALLENGES);
-            } catch (EapSimInvalidAttributeException | BufferUnderflowException ex) {
+            } catch (EapSimAkaInvalidAttributeException | BufferUnderflowException ex) {
                 LOG.e(TAG, "Incorrectly formatted attribute", ex);
                 return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
-            } catch (EapSimUnsupportedAttributeException ex) {
+            } catch (EapSimAkaUnsupportedAttributeException ex) {
                 LOG.e(TAG, "Unrecognized, non-skippable attribute encountered", ex);
                 return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
             }
