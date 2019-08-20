@@ -52,6 +52,7 @@ public abstract class EapSimAkaAttribute {
     public static final int EAP_AT_RAND = 1;
     public static final int EAP_AT_AUTN = 2;
     public static final int EAP_AT_RES = 3;
+    public static final int EAP_AT_AUTS = 4;
     public static final int EAP_AT_PADDING = 6;
     public static final int EAP_AT_NONCE_MT = 7;
     public static final int EAP_AT_PERMANENT_ID_REQ = 10;
@@ -81,6 +82,7 @@ public abstract class EapSimAkaAttribute {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_RAND, "AT_RAND");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_AUTN, "AT_AUTN");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_RES, "AT_RES");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_AUTS, "AT_AUTS");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_PADDING, "AT_PADDING");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_MT, "AT_NONCE_MT");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_PERMANENT_ID_REQ, "AT_PERMANENT_ID_REQ");
@@ -976,6 +978,46 @@ public abstract class EapSimAkaAttribute {
 
             int bytesUsed = MIN_ATTR_LENGTH + res.length;
             addPadding(bytesUsed, byteBuffer);
+        }
+    }
+
+    /**
+     * AtAuts represents the AT_AUTS attribute defined in RFC 4187#10.9
+     */
+    public static class AtAuts extends EapSimAkaAttribute {
+        private static final int ATTR_LENGTH = 4 * LENGTH_SCALING;
+        private static final int AUTS_LENGTH = 14;
+
+        public final byte[] auts = new byte[AUTS_LENGTH];
+
+        public AtAuts(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_AUTS, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Length must be 16B");
+            }
+
+            byteBuffer.get(auts);
+        }
+
+        public AtAuts(int lengthInBytes, byte[] auts) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_AUTS, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Length must be 16B");
+            } else if (auts.length != AUTS_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("Auts must be 14B");
+            }
+
+            System.arraycopy(auts, 0, this.auts, 0, AUTS_LENGTH);
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            byteBuffer.put(auts);
         }
     }
 }
