@@ -64,6 +64,7 @@ import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidKeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.exceptions.TemporaryFailureException;
 import com.android.ike.ikev2.exceptions.TsUnacceptableException;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeKePayload;
@@ -265,6 +266,9 @@ public class ChildSessionStateMachine extends StateMachine {
 
         /** Schedule a future Child Rekey Request on the LocalRequestScheduler. */
         void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime);
+
+        /** Schedule retry for a Child Rekey Request on the LocalRequestScheduler. */
+        void scheduleRetryLocalRequest(ChildLocalRequest futureRequest);
 
         /** Notify the IKE Session to send out IKE message for this Child Session. */
         void onOutboundPayloadsReady(
@@ -1209,7 +1213,10 @@ public class ChildSessionStateMachine extends StateMachine {
                         mRequestPayloads,
                         ChildSessionStateMachine.this);
             } catch (ResourceUnavailableException e) {
-                // TODO: Notify users and close the Child Session.
+                loge("Fail to assign Child SPI. Schedule a retry for rekey Child");
+                mChildSmCallback.scheduleRetryLocalRequest(
+                        (ChildLocalRequest) mCurrentChildSaRecord.getFutureRekeyEvent());
+                transitionTo(mIdle);
             }
         }
 
@@ -1217,7 +1224,7 @@ public class ChildSessionStateMachine extends StateMachine {
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
-                    ReceivedResponse resp = (ReceivedResponse) message.obj;
+                    ReceivedCreateResponse resp = (ReceivedCreateResponse) message.obj;
                     CreateChildResult createChildResult =
                             CreateChildSaHelper.validateAndNegotiateRekeyChildResp(
                                     mRequestPayloads,
@@ -1275,28 +1282,56 @@ public class ChildSessionStateMachine extends StateMachine {
                                     | ResourceUnavailableException
                                     | SpiUnavailableException
                                     | IOException e) {
-                                // #makeChildSaRecord failed.
+                                // #makeChildSaRecord failed
+                                handleProcessRespOrSaCreationFailAndQuit(resp.registeredSpi, e);
                                 createChildResult.initSpi.close();
                                 createChildResult.respSpi.close();
-                                // TODO: Initiate deletion on newly created SA and retry rekey
-                                throw new UnsupportedOperationException("Cannot handle this error");
                             }
                             break;
                         case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
-                            // TODO: Initiate deletion on newly created SA and retry rekey
-                            throw new UnsupportedOperationException("Cannot handle this error");
+                            handleProcessRespOrSaCreationFailAndQuit(
+                                    resp.registeredSpi, createChildResult.exception);
+                            break;
                         case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
-                            // TODO: Locally delete newly created Child SA and retry rekey
-                            throw new UnsupportedOperationException("Cannot handle this error");
+                            if (createChildResult.exception instanceof TemporaryFailureException) {
+                                loge(
+                                        "Received TEMPORARY_FAILURE for rekey Child. Retry has"
+                                                + "already been scheduled by IKE Session.");
+                            } else {
+                                loge(
+                                        "Received error notification for rekey Child. Schedule a"
+                                                + " retry");
+                                mChildSmCallback.scheduleRetryLocalRequest(
+                                        (ChildLocalRequest)
+                                                mCurrentChildSaRecord.getFutureRekeyEvent());
+                            }
+
+                            transitionTo(mIdle);
+                            break;
                         default:
-                            throw new IllegalArgumentException(
-                                    "Unrecognized status: " + createChildResult.status);
+                            cleanUpAndQuit(
+                                    new IllegalStateException(
+                                            "Unrecognized status: " + createChildResult.status));
                     }
                     return HANDLED;
                 default:
                     // TODO: Handle rekey and delete request
                     return NOT_HANDLED;
             }
+        }
+
+        private void handleProcessRespOrSaCreationFailAndQuit(
+                int registeredSpi, Exception exception) {
+            // We don't retry rekey if failure was caused by invalid response or SA creation error.
+            // Reason is there is no way to notify the remote side the old SA is still alive but the
+            // new one has failed. Sending delete request for new SA indicates the rekey has
+            // finished and the new SA has died.
+
+            // TODO: Initiate deletion on newly created SA
+            if (registeredSpi != SPI_NOT_REGISTERED) {
+                mChildSmCallback.onChildSaDeleted(registeredSpi);
+            }
+            handleChildFatalError(exception);
         }
     }
 

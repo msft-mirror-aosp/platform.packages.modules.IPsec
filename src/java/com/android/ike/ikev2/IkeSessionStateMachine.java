@@ -765,6 +765,11 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
+        public void scheduleRetryLocalRequest(ChildLocalRequest childRequest) {
+            scheduleRetry(childRequest);
+        }
+
+        @Override
         public void onOutboundPayloadsReady(
                 @ExchangeType int exchangeType,
                 boolean isResp,
