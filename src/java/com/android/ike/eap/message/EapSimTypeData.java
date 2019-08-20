@@ -16,8 +16,10 @@
 
 package com.android.ike.eap.message;
 
+import static com.android.ike.eap.EapAuthenticator.LOG;
+import static com.android.ike.eap.message.EapSimAttribute.EAP_ATTRIBUTE_STRING;
+
 import android.annotation.NonNull;
-import android.util.Log;
 
 import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
 import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
@@ -28,9 +30,11 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -47,6 +51,15 @@ public class EapSimTypeData {
     public static final int EAP_SIM_NOTIFICATION = 12;
     public static final int EAP_SIM_REAUTHENTICATION = 13;
     public static final int EAP_SIM_CLIENT_ERROR = 14;
+
+    public static final Map<Integer, String> EAP_SIM_SUBTYPE_STRING = new HashMap<>();
+    static {
+        EAP_SIM_SUBTYPE_STRING.put(EAP_SIM_START, "Start");
+        EAP_SIM_SUBTYPE_STRING.put(EAP_SIM_CHALLENGE, "Challenge");
+        EAP_SIM_SUBTYPE_STRING.put(EAP_SIM_NOTIFICATION, "Notification");
+        EAP_SIM_SUBTYPE_STRING.put(EAP_SIM_REAUTHENTICATION, "Re-authentication");
+        EAP_SIM_SUBTYPE_STRING.put(EAP_SIM_CLIENT_ERROR, "Client-Error");
+    }
 
     private static final Set<Integer> SUPPORTED_SUBTYPES = new HashSet<>();
     static {
@@ -116,7 +129,7 @@ public class EapSimTypeData {
          */
         public DecodeResult decode(@NonNull byte[] typeData) {
             if (typeData == null) {
-                Log.d(TAG, "Invalid EAP Type-Data");
+                LOG.d(TAG, "Invalid EAP Type-Data");
                 return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -124,7 +137,7 @@ public class EapSimTypeData {
             try {
                 int eapSubType = Byte.toUnsignedInt(byteBuffer.get());
                 if (!SUPPORTED_SUBTYPES.contains(eapSubType)) {
-                    Log.d(TAG, "Invalid EAP Type-Data");
+                    LOG.d(TAG, "Invalid EAP Type-Data");
                     return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
                 }
 
@@ -139,27 +152,45 @@ public class EapSimTypeData {
 
                     if (attributeMap.containsKey(attribute.attributeType)) {
                         // Duplicate attributes are not allowed (RFC 4186#6.3.1)
-                        Log.d(TAG, "Duplicate attribute in parsed EAP-Message");
+                        LOG.e(TAG, "Duplicate attribute in parsed EAP-Message");
                         return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
                     }
 
                     if (attribute instanceof EapSimUnsupportedAttribute) {
-                        Log.d(TAG, "Unsupported EAP-SIM attribute during decoding: "
+                        LOG.d(TAG, "Unsupported EAP-SIM attribute during decoding: "
                                 + attribute.attributeType);
                     }
                     attributeMap.put(attribute.attributeType, attribute);
                 }
-                return new DecodeResult(new EapSimTypeData(eapSubType, attributeMap));
+
+                EapSimTypeData eapSimTypeData = new EapSimTypeData(eapSubType, attributeMap);
+                logDecodedEapSimTypeData(eapSimTypeData);
+
+                return new DecodeResult(eapSimTypeData);
             } catch (EapSimInvalidAtRandException ex) {
-                Log.d(TAG, "Invalid AtRand attribute", ex);
+                LOG.e(TAG, "Invalid AtRand attribute", ex);
                 return new DecodeResult(AtClientErrorCode.INSUFFICIENT_CHALLENGES);
             } catch (EapSimInvalidAttributeException | BufferUnderflowException ex) {
-                Log.d(TAG, "Incorrectly formatted attribute", ex);
+                LOG.e(TAG, "Incorrectly formatted attribute", ex);
                 return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
             } catch (EapSimUnsupportedAttributeException ex) {
-                Log.d(TAG, "Unrecognized, non-skippable attribute encountered", ex);
+                LOG.e(TAG, "Unrecognized, non-skippable attribute encountered", ex);
                 return new DecodeResult(AtClientErrorCode.UNABLE_TO_PROCESS);
             }
+        }
+
+        private void logDecodedEapSimTypeData(EapSimTypeData eapSimTypeData) {
+            StringBuilder msg = new StringBuilder();
+            msg.append("Decoded EAP-SIM type data: ");
+            msg.append(EAP_SIM_SUBTYPE_STRING.getOrDefault(eapSimTypeData.eapSubtype, "UNKNOWN"));
+            msg.append(" attributes=[ ");
+            for (int attributeType : eapSimTypeData.attributeMap.keySet()) {
+                msg.append(
+                        EAP_ATTRIBUTE_STRING.getOrDefault(attributeType, "" + attributeType));
+                msg.append(" ");
+            }
+            msg.append("]");
+            LOG.i(TAG, msg.toString());
         }
 
         /**
