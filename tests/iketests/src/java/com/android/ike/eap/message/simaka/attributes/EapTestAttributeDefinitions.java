@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message.attributes;
+package com.android.ike.eap.message.simaka.attributes;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 

@@ -39,9 +39,9 @@ import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
-import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
+import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.EapSimState;
 
 import org.junit.Before;

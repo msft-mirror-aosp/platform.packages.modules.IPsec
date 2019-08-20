@@ -14,32 +14,33 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.exceptions;
+package com.android.ike.eap.exceptions.simaka;
 
 import android.telephony.TelephonyManager;
 
 /**
- * EapSimInvalidLengthException is thrown when
- * {@link TelephonyManager#getIccAuthentication(int, int, String)} returns responses with the wrong
- * lengths.
+ * EapSimIdentityUnavailableException is thrown when the client's IMSI is unavailable from
+ * {@link TelephonyManager#getSubscriberId()}.
  */
-public class EapSimInvalidLengthException extends Exception {
+public class EapSimIdentityUnavailableException extends Exception {
     /**
-     * Construct an instance of EapSimInvalidLengthException with the specified detail message.
+     * Construct an instance of EapSimIdentityUnavailableException with the specified detail
+     * message.
      *
      * @param message the detail message.
      */
-    public EapSimInvalidLengthException(String message) {
+    public EapSimIdentityUnavailableException(String message) {
         super(message);
     }
 
     /**
-     * Construct an instance of EapSimInvalidLengthException with the specified message and cause.
+     * Construct an instance of EapSimIdentityUnavailableException with the specified message and
+     * cause.
      *
      * @param message the detail message.
      * @param cause the cause.
      */
-    public EapSimInvalidLengthException(String message, Throwable cause) {
+    public EapSimIdentityUnavailableException(String message, Throwable cause) {
         super(message, cause);
     }
 }
