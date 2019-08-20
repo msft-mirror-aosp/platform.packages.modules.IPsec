@@ -17,6 +17,8 @@ package com.android.ike.ikev2.exceptions;
 
 import android.annotation.IntDef;
 
+import com.android.ike.ikev2.message.IkeNotifyPayload;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
@@ -92,6 +94,13 @@ public abstract class IkeProtocolException extends IkeException {
         mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
+    protected IkeProtocolException(@ErrorType int code, String message, Throwable cause) {
+        super(message, cause);
+        mErrorType = code;
+        mErrorData = ERROR_DATA_NOT_INCLUDED;
+    }
+
+    // Construct an instance from a notify Payload.
     protected IkeProtocolException(@ErrorType int code, byte[] notifyData) {
         super();
 
@@ -160,5 +169,14 @@ public abstract class IkeProtocolException extends IkeException {
      */
     public byte[] getErrorData() {
         return mErrorData;
+    }
+
+    /**
+     * Build an IKE Notification Payload for this {@link IkeProtocolException} instance.
+     *
+     * @return the notification payload.
+     */
+    public IkeNotifyPayload buildNotifyPayload() {
+        return new IkeNotifyPayload(mErrorType, mErrorData);
     }
 }

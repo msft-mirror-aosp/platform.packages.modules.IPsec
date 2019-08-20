@@ -20,7 +20,9 @@ import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REK
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.ike.ikev2.IkeSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.ike.ikev2.IkeSessionStateMachine.SA_SOFT_LIFETIME_MS;
+import static com.android.ike.ikev2.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -28,6 +30,7 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR_MESSAGE;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
@@ -47,6 +50,7 @@ import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -84,6 +88,7 @@ import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
@@ -375,6 +380,30 @@ public final class IkeSessionStateMachineTest {
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
 
+    private ReceivedIkePacket makeDummyReceivedIkePacketWithInvalidSyntax(
+            IkeSaRecord ikeSaRecord, boolean isResp, int eType) {
+        IkeHeader header =
+                new IkeHeader(
+                        ikeSaRecord.getInitiatorSpi(),
+                        ikeSaRecord.getResponderSpi(),
+                        IkePayload.PAYLOAD_TYPE_SK,
+                        eType,
+                        isResp,
+                        !ikeSaRecord.isLocalInit,
+                        isResp
+                                ? ikeSaRecord.getLocalRequestMessageId()
+                                : ikeSaRecord.getRemoteRequestMessageId());
+        when(mMockIkeMessageHelper.decode(
+                        anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any()))
+                .thenReturn(
+                        new DecodeResult(
+                                DECODE_STATUS_PROTECTED_ERROR_MESSAGE,
+                                null,
+                                new InvalidSyntaxException("IkeStateMachineTest")));
+
+        return new ReceivedIkePacket(header, new byte[0]);
+    }
+
     private IkeMessage makeDummyIkeMessageForTest(
             long initSpi,
             long respSpi,
@@ -448,9 +477,10 @@ public final class IkeSessionStateMachineTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
-        mEapSessionConfig = new EapSessionConfig.Builder()
-                .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
-                .build();
+        mEapSessionConfig =
+                new EapSessionConfig.Builder()
+                        .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
+                        .build();
 
         mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
         mMockEapAuthenticator = mock(EapAuthenticator.class);
@@ -1741,6 +1771,74 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testCreateIkeLocalIkeAuthPskVerifyFail() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+        reset(mMockIkeMessageHelper);
+
+        // Build IKE AUTH response with invalid Auth-PSK Payload and ID-Responder Payload.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload =
+                spy(
+                        (IkeAuthPskPayload)
+                                IkeTestUtils.hexStringToIkePayload(
+                                        IkePayload.PAYLOAD_TYPE_AUTH,
+                                        true /*isResp*/,
+                                        PSK_AUTH_RESP_PAYLOAD_HEX_STRING));
+
+        doThrow(new AuthenticationFailedException("DummyAuthFailException"))
+                .when(spyAuthPayload)
+                .verifyInboundSignature(any(), any(), any(), any(), any(), any());
+        authRelatedPayloads.add(spyAuthPayload);
+
+        IkeIdPayload respIdPayload =
+                (IkeIdPayload)
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
+                                true /*isResp*/,
+                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+        authRelatedPayloads.add(respIdPayload);
+
+        // Send response to IKE state machine
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+        mLooper.dispatchAll();
+
+        // Verify Delete request was sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(false /*isResp*/);
+        assertEquals(1, payloads.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, payloads.get(0).payloadType);
+
+        // Verify IKE Session was closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(AuthenticationFailedException.class));
+    }
+
+    @Test
+    public void testAuthPskHandleRespWithParsingError() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+        reset(mMockIkeMessageHelper);
+
+        // Mock receiving packet with syntax error
+        ReceivedIkePacket mockInvalidPacket =
+                makeDummyReceivedIkePacketWithInvalidSyntax(
+                        mSpyCurrentIkeSaRecord, true /*isResp*/, IkeHeader.EXCHANGE_TYPE_IKE_AUTH);
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockInvalidPacket);
+        mLooper.dispatchAll();
+
+        // Verify Delete request was sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(false /*isResp*/);
+        assertEquals(1, payloads.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, payloads.get(0).payloadType);
+
+        // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+    }
+
+    @Test
     public void testCreateIkeLocalIkeAuthPreEap() throws Exception {
         mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
@@ -1857,6 +1955,32 @@ public final class IkeSessionStateMachineTest {
 
         assertEquals(1, resp.ikePayloadList.size());
         assertArrayEquals(EAP_DUMMY_MSG, ((IkeEapPayload) resp.ikePayloadList.get(0)).eapMessage);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthInEapHandlesMissingEapPacket() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+
+        // Setup state and go to IN_EAP state
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
+        mLooper.dispatchAll();
+
+        // Mock sending IKE_AUTH{EAP} request
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+        callback.onResponse(EAP_DUMMY_MSG);
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+
+        // Send IKE AUTH response with no EAP Payload to IKE state machine
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeIkeAuthRespWithoutChildPayloads(new LinkedList<>()));
+        mLooper.dispatchAll();
+
+        // Verify state machine quit properly
+        verify(mMockIkeSessionCallback).onError(any(AuthenticationFailedException.class));
+        assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
     @Test
@@ -2080,6 +2204,37 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testRekeyIkeLocalCreateHandleRespWithParsingError() throws Exception {
+        setupIdleStateMachine();
+
+        // Send Rekey-Create request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE));
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+        reset(mMockIkeMessageHelper);
+
+        // Mock receiving packet with syntax error
+        ReceivedIkePacket mockInvalidPacket =
+                makeDummyReceivedIkePacketWithInvalidSyntax(
+                        mSpyCurrentIkeSaRecord,
+                        true /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA);
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockInvalidPacket);
+        mLooper.dispatchAll();
+
+        // Verify Delete request was sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(false /*isResp*/);
+        assertEquals(1, payloads.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, payloads.get(0).payloadType);
+
+        // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+    }
+
+    @Test
     public void testRekeyIkeLocalDeleteSendsRequest() throws Exception {
         setupIdleStateMachine();
 
@@ -2160,6 +2315,43 @@ public final class IkeSessionStateMachineTest {
         // Verify final state - Idle, with new SA, and old SA closed.
         verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
         verify(mMockIkeSessionCallback, never()).onClosed();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        verifyRetransmissionStopped();
+    }
+
+    @Test
+    public void testRekeyIkeLocalDeleteHandlesRespWithParsingError() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
+        mIkeSessionStateMachine.mLocalInitNewIkeSaRecord = mSpyLocalInitIkeSaRecord;
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeLocalDelete);
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+        reset(mMockIkeMessageHelper);
+
+        // Mock receiving packet with syntax error
+        ReceivedIkePacket mockInvalidPacket =
+                makeDummyReceivedIkePacketWithInvalidSyntax(
+                        mSpyCurrentIkeSaRecord,
+                        true /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_INFORMATIONAL);
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockInvalidPacket);
+        mLooper.dispatchAll();
+
+        // Verify no more request out
+        verify(mMockIkeMessageHelper, never())
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        any(IkeMessage.class));
+
+        // Verify final state - Idle, with new SA, and old SA closed.
+        verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
         verifyRetransmissionStopped();
@@ -2626,6 +2818,31 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testDiscardRetransmittedResponse() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+
+        // Build and send fake response with last validated message ID to IKE state machine
+        ReceivedIkePacket resp =
+                makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                        mSpyCurrentIkeSaRecord,
+                        IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                        true /*isResp*/,
+                        mSpyCurrentIkeSaRecord.getLocalRequestMessageId() - 1,
+                        new LinkedList<>(),
+                        new byte[0]);
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mLooper.dispatchAll();
+
+        // Verify current state does not change
+        verifyRetransmissionStarted();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
+    }
+
+    @Test
     public void testDeleteIkeLocalDeleteRequest() throws Exception {
         setupIdleStateMachine();
 
@@ -2682,6 +2899,39 @@ public final class IkeSessionStateMachineTest {
         verifyNotifyUserCloseSession();
 
         // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
+    public void testDeleteIkeLocalDeleteResponseWithParsingError() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE));
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+        reset(mMockIkeMessageHelper);
+
+        // Mock receiving response with syntax error
+        ReceivedIkePacket mockInvalidPacket =
+                makeDummyReceivedIkePacketWithInvalidSyntax(
+                        mSpyCurrentIkeSaRecord,
+                        true /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_INFORMATIONAL);
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockInvalidPacket);
+        mLooper.dispatchAll();
+
+        // Verify no more request out
+        verify(mMockIkeMessageHelper, never())
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        any(IkeMessage.class));
+
+        // Verify state machine quit properly
+        verifyNotifyUserCloseSession();
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -3049,5 +3299,126 @@ public final class IkeSessionStateMachineTest {
                 .onError(argThat(err -> err instanceof NoValidProposalChosenException));
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    private void mockSendRekeyChildReq() throws Exception {
+        setupIdleStateMachine();
+
+        ChildLocalRequest childLocalRequest =
+                new ChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
+                        mMockChildSessionCallback,
+                        null /*childOptions*/);
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ, childLocalRequest);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(mMockChildSessionStateMachine).rekeyChildSession();
+
+        // Mocking sending request
+        mDummyChildSmCallback.onOutboundPayloadsReady(
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                false /*isResp*/,
+                new LinkedList<>(),
+                mMockChildSessionStateMachine);
+        mLooper.dispatchAll();
+    }
+
+    private void mockRcvTempFail() throws Exception {
+        List<IkePayload> payloads = new LinkedList<>();
+        payloads.add(new IkeNotifyPayload(ERROR_TYPE_TEMPORARY_FAILURE));
+        ReceivedIkePacket resp =
+                makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                        mSpyCurrentIkeSaRecord,
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        true /*isResp*/,
+                        payloads);
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+    }
+
+    @Test
+    public void testTempFailureHandlerScheduleRetry() throws Exception {
+        mockSendRekeyChildReq();
+
+        // Mock sending TEMPORARY_FAILURE response
+        mockRcvTempFail();
+
+        // Move time forward to trigger retry
+        mLooper.moveTimeForward(IkeSessionStateMachine.RETRY_INTERVAL_MS);
+        mLooper.dispatchAll();
+
+        // Verify that rekey is triggered again
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
+    }
+
+    @Test
+    public void testTempFailureHandlerTimeout() throws Exception {
+        long currentTime = 0;
+        int retryCnt = 0;
+
+        mockSendRekeyChildReq();
+
+        while (currentTime + RETRY_INTERVAL_MS < TEMP_FAILURE_RETRY_TIMEOUT_MS) {
+            mockRcvTempFail();
+
+            mLooper.moveTimeForward(RETRY_INTERVAL_MS);
+            currentTime += RETRY_INTERVAL_MS;
+            mLooper.dispatchAll();
+
+            retryCnt++;
+            verify(mMockChildSessionStateMachine, times(1 + retryCnt)).rekeyChildSession();
+        }
+
+        mLooper.moveTimeForward(RETRY_INTERVAL_MS);
+        mLooper.dispatchAll();
+
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+    }
+
+    @Test
+    public void testTempFailureHandlerCancelTimer() throws Exception {
+        mockSendRekeyChildReq();
+
+        // Mock sending TEMPORARY_FAILURE response
+        mockRcvTempFail();
+
+        // Move time forward to trigger retry
+        mLooper.moveTimeForward(IkeSessionStateMachine.RETRY_INTERVAL_MS);
+        mLooper.dispatchAll();
+        verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
+
+        // Mock sending a valid response
+        ReceivedIkePacket resp =
+                makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                        mSpyCurrentIkeSaRecord,
+                        EXCHANGE_TYPE_CREATE_CHILD_SA,
+                        true /*isResp*/,
+                        new LinkedList<>());
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+
+        // Move time forward
+        mLooper.moveTimeForward(IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS);
+        mLooper.dispatchAll();
+
+        // Validate IKE Session is not closed
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        // Validate no more retry
+        verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
     }
 }

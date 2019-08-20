@@ -549,6 +549,108 @@ public class ChildSessionStateMachine extends StateMachine {
     }
 
     /**
+     * Top level state for handling uncaught exceptions for all subclasses.
+     *
+     * <p>All other state MUST extend this state.
+     *
+     * <p>Only errors this state should catch are unexpected internal failures. Since this may be
+     * run in critical processes, it must never take down the process if it fails
+     */
+    abstract class ExceptionHandler extends State {
+        @Override
+        public final void enter() {
+            try {
+                enterState();
+            } catch (RuntimeException e) {
+                cleanUpAndQuit(e);
+            }
+        }
+
+        @Override
+        public final boolean processMessage(Message message) {
+            try {
+                return processStateMessage(message);
+            } catch (RuntimeException e) {
+                cleanUpAndQuit(e);
+                return HANDLED;
+            }
+        }
+
+        @Override
+        public final void exit() {
+            try {
+                exitState();
+            } catch (RuntimeException e) {
+                cleanUpAndQuit(e);
+            }
+        }
+
+        protected void cleanUpAndQuit(RuntimeException e) {
+            // Clean up all SaRecords.
+            closeAllSaRecords(false /*expectSaClosed*/);
+
+            mUserCbExecutor.execute(
+                    () -> {
+                        mUserCallback.onError(new IkeInternalException(e));
+                    });
+            Log.wtf(TAG, "Unexpected error in " + getCurrentState().getName(), e);
+            quitNow();
+        }
+
+        protected void enterState() {
+            // Do nothing. Subclasses MUST override it if they are.
+        }
+
+        protected boolean processStateMessage(Message message) {
+            return NOT_HANDLED;
+        }
+
+        protected void exitState() {
+            // Do nothing. Subclasses MUST override it if they are.
+        }
+    }
+
+    /** Called when this StateMachine quits. */
+    @Override
+    protected void onQuitting() {
+        // Clean up all SaRecords.
+        closeAllSaRecords(true /*expectSaClosed*/);
+
+        mChildSmCallback.onProcedureFinished(this);
+        mChildSmCallback.onChildSessionClosed(mUserCallback);
+    }
+
+    private void closeAllSaRecords(boolean expectSaClosed) {
+        closeChildSaRecord(mCurrentChildSaRecord, expectSaClosed);
+        closeChildSaRecord(mLocalInitNewChildSaRecord, expectSaClosed);
+        closeChildSaRecord(mRemoteInitNewChildSaRecord, expectSaClosed);
+
+        mCurrentChildSaRecord = null;
+        mLocalInitNewChildSaRecord = null;
+        mRemoteInitNewChildSaRecord = null;
+    }
+
+    private void closeChildSaRecord(ChildSaRecord childSaRecord, boolean expectSaClosed) {
+        if (childSaRecord == null) return;
+
+        mUserCbExecutor.execute(
+                () -> {
+                    onIpSecTransformPairDeleted(childSaRecord);
+                });
+
+        mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
+        childSaRecord.close();
+
+        if (!expectSaClosed) return;
+
+        Log.wtf(
+                TAG,
+                "ChildSaRecord with local SPI: "
+                        + childSaRecord.getLocalSpi()
+                        + " is not correctly closed.");
+    }
+
+    /**
      * This state handles the request to close Child Session immediately without initiating any
      * exchange.
      *
@@ -556,9 +658,9 @@ public class ChildSessionStateMachine extends StateMachine {
      * Session. All states MUST be a child state of KillChildSessionParent to handle the closing
      * request.
      */
-    private class KillChildSessionParent extends State {
+    private class KillChildSessionParent extends ExceptionHandler {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_KILL_SESSION:
                     mUserCbExecutor.execute(
@@ -566,13 +668,7 @@ public class ChildSessionStateMachine extends StateMachine {
                                 mUserCallback.onClosed();
                             });
 
-                    closeChildSaRecordIfExist(mCurrentChildSaRecord);
-                    closeChildSaRecordIfExist(mLocalInitNewChildSaRecord);
-                    closeChildSaRecordIfExist(mRemoteInitNewChildSaRecord);
-
-                    mCurrentChildSaRecord = null;
-                    mLocalInitNewChildSaRecord = null;
-                    mRemoteInitNewChildSaRecord = null;
+                    closeAllSaRecords(false /*expectSaClosed*/);
 
                     quitNow();
                     return HANDLED;
@@ -580,25 +676,13 @@ public class ChildSessionStateMachine extends StateMachine {
                     return NOT_HANDLED;
             }
         }
-
-        private void closeChildSaRecordIfExist(ChildSaRecord childSaRecord) {
-            if (childSaRecord == null) return;
-
-            mUserCbExecutor.execute(
-                    () -> {
-                        onIpSecTransformPairDeleted(childSaRecord);
-                    });
-
-            mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
-            childSaRecord.close();
-        }
     }
 
     /**
      * CreateChildLocalCreateBase represents the common information for a locally-initiated initial
      * Child SA negotiation for setting up this Child Session.
      */
-    private abstract class CreateChildLocalCreateBase extends State {
+    private abstract class CreateChildLocalCreateBase extends ExceptionHandler {
         protected void validateAndBuildChild(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
@@ -705,7 +789,7 @@ public class ChildSessionStateMachine extends StateMachine {
     /** Initial state of ChildSessionStateMachine. */
     class Initial extends CreateChildLocalCreateBase {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_FIRST_CHILD_EXCHANGE:
                     FirstChildNegotiationData childNegotiationData =
@@ -750,7 +834,7 @@ public class ChildSessionStateMachine extends StateMachine {
         private List<IkePayload> mRequestPayloads;
 
         @Override
-        public void enter() {
+        public void enterState() {
             try {
                 mRequestPayloads =
                         CreateChildSaHelper.getInitChildCreateReqPayloads(
@@ -769,7 +853,7 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     ReceivedResponse rcvResp = (ReceivedResponse) message.obj;
@@ -788,14 +872,14 @@ public class ChildSessionStateMachine extends StateMachine {
     /**
      * Idle represents a state when there is no ongoing IKE exchange affecting established Child SA.
      */
-    class Idle extends State {
+    class Idle extends ExceptionHandler {
         @Override
-        public void enter() {
+        public void enterState() {
             mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     transitionTo(mDeleteChildLocalDelete);
@@ -824,8 +908,6 @@ public class ChildSessionStateMachine extends StateMachine {
                     return NOT_HANDLED;
             }
         }
-
-        // TODO: Support local rekey request,  remote rekey request and remote delete request.
     }
 
     /**
@@ -834,7 +916,7 @@ public class ChildSessionStateMachine extends StateMachine {
      * <p>All post-init states share common functionality of being able to respond to Delete Child
      * requests.
      */
-    private abstract class DeleteResponderBase extends State {
+    private abstract class DeleteResponderBase extends ExceptionHandler {
         /**
          * Check if the payload list has a Delete Payload that includes the remote SPI of the input
          * ChildSaRecord.
@@ -959,13 +1041,13 @@ public class ChildSessionStateMachine extends StateMachine {
         private boolean mSimulDeleteDetected = false;
 
         @Override
-        public void enter() {
+        public void enterState() {
             mSimulDeleteDetected = false;
             sendDeleteChild(mCurrentChildSaRecord, false /*isResp*/);
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     try {
@@ -1047,7 +1129,7 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     class DeleteChildRemoteDelete extends DeleteResponderBase {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_REQUEST:
                     ReceivedRequest req = (ReceivedRequest) message.obj;
@@ -1073,7 +1155,7 @@ public class ChildSessionStateMachine extends StateMachine {
         private List<IkePayload> mRequestPayloads;
 
         @Override
-        public void enter() {
+        public void enterState() {
             try {
                 // Build request with negotiated proposal and TS.
                 mRequestPayloads =
@@ -1096,7 +1178,7 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     ReceivedResponse resp = (ReceivedResponse) message.obj;
@@ -1193,9 +1275,9 @@ public class ChildSessionStateMachine extends StateMachine {
      * <p>As indicated in RFC 7296 section 2.8, "when rekeying, the new Child SA SHOULD NOT have
      * different Traffic Selectors and algorithms than the old one."
      */
-    class RekeyChildRemoteCreate extends State {
+    class RekeyChildRemoteCreate extends ExceptionHandler {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_REQUEST:
                     ReceivedRequest req = (ReceivedRequest) message.obj;
@@ -1327,7 +1409,7 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     abstract class RekeyChildDeleteBase extends DeleteBase {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_REQUEST:
                     if (isOnNewSa((ReceivedRequest) message.obj)) {
@@ -1379,14 +1461,14 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     class RekeyChildLocalDelete extends RekeyChildDeleteBase {
         @Override
-        public void enter() {
+        public void enterState() {
             mChildSaRecordSurviving = mLocalInitNewChildSaRecord;
             sendDeleteChild(mCurrentChildSaRecord, false /*isResp*/);
         }
 
         @Override
-        public boolean processMessage(Message message) {
-            if (super.processMessage(message) == HANDLED) {
+        public boolean processStateMessage(Message message) {
+            if (super.processStateMessage(message) == HANDLED) {
                 return HANDLED;
             }
 
@@ -1427,14 +1509,14 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     class RekeyChildRemoteDelete extends RekeyChildDeleteBase {
         @Override
-        public void enter() {
+        public void enterState() {
             mChildSaRecordSurviving = mRemoteInitNewChildSaRecord;
             sendMessageDelayed(TIMEOUT_REKEY_REMOTE_DELETE, REKEY_DELETE_TIMEOUT_MS);
         }
 
         @Override
-        public boolean processMessage(Message message) {
-            if (super.processMessage(message) == HANDLED) {
+        public boolean processStateMessage(Message message) {
+            if (super.processStateMessage(message) == HANDLED) {
                 return HANDLED;
             }
 
@@ -1494,7 +1576,7 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             removeMessages(TIMEOUT_REKEY_REMOTE_DELETE);
         }
     }
@@ -2035,39 +2117,4 @@ public class ChildSessionStateMachine extends StateMachine {
                     exception);
         }
     }
-
-    /** Called when this StateMachine quits. */
-    @Override
-    protected void onQuitting() {
-        verifyChildSaRecordIsClosed(mCurrentChildSaRecord);
-        verifyChildSaRecordIsClosed(mLocalInitNewChildSaRecord);
-        verifyChildSaRecordIsClosed(mRemoteInitNewChildSaRecord);
-
-        mCurrentChildSaRecord = null;
-        mLocalInitNewChildSaRecord = null;
-        mRemoteInitNewChildSaRecord = null;
-
-        mChildSmCallback.onProcedureFinished(this);
-        mChildSmCallback.onChildSessionClosed(mUserCallback);
-    }
-
-    private void verifyChildSaRecordIsClosed(ChildSaRecord childSaRecord) {
-        if (childSaRecord == null) return;
-
-        Log.wtf(
-                TAG,
-                "ChildSaRecord with local SPI: "
-                        + childSaRecord.getLocalSpi()
-                        + " is not correctly closed.");
-
-        mUserCbExecutor.execute(
-                () -> {
-                    onIpSecTransformPairDeleted(childSaRecord);
-                });
-
-        mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
-        childSaRecord.close();
-    }
-
-    // TODO: Add states to support deleting Child SA and rekeying Child SA.
 }
