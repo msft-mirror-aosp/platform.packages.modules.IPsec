@@ -14,33 +14,33 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.exceptions;
+package com.android.ike.eap.exceptions.simaka;
 
-import android.telephony.TelephonyManager;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 
 /**
- * EapSimIdentityUnavailableException is thrown when the client's IMSI is unavailable from
- * {@link TelephonyManager#getSubscriberId()}.
+ * EapSimAkaInvalidAttributeException is thrown when an invalid {@link EapSimAkaAttribute} is
+ * attempted to be parsed.
  */
-public class EapSimIdentityUnavailableException extends Exception {
+public class EapSimAkaInvalidAttributeException extends Exception {
     /**
-     * Construct an instance of EapSimIdentityUnavailableException with the specified detail
+     * Construct an instance of EapSimAkaInvalidAttributeException with the specified detail
      * message.
      *
      * @param message the detail message.
      */
-    public EapSimIdentityUnavailableException(String message) {
+    public EapSimAkaInvalidAttributeException(String message) {
         super(message);
     }
 
     /**
-     * Construct an instance of EapSimIdentityUnavailableException with the specified message and
+     * Construct an instance of EapSimAkaInvalidAttributeException with the specified message and
      * cause.
      *
      * @param message the detail message.
      * @param cause the cause.
      */
-    public EapSimIdentityUnavailableException(String message, Throwable cause) {
+    public EapSimAkaInvalidAttributeException(String message, Throwable cause) {
         super(message, cause);
     }
 }

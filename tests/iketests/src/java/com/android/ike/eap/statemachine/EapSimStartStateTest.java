@@ -19,21 +19,21 @@ package com.android.ike.eap.statemachine;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
-import static com.android.ike.eap.message.EapSimAttribute.AtNotification.GENERAL_FAILURE_POST_CHALLENGE;
-import static com.android.ike.eap.message.EapSimAttribute.AtNotification.GENERAL_FAILURE_PRE_CHALLENGE;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ENCR_DATA;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IV;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
-import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_NOTIFICATION;
-import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_NOTIFICATION_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.IMSI;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification.GENERAL_FAILURE_POST_CHALLENGE;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification.GENERAL_FAILURE_PRE_CHALLENGE;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IV;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_NOTIFICATION;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -49,18 +49,18 @@ import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
-import com.android.ike.eap.exceptions.EapSimIdentityUnavailableException;
+import com.android.ike.eap.exceptions.simaka.EapSimIdentityUnavailableException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtAnyIdReq;
-import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
-import com.android.ike.eap.message.EapSimAttribute.AtMac;
-import com.android.ike.eap.message.EapSimAttribute.AtNotification;
-import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
-import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
-import com.android.ike.eap.message.EapSimTypeData;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAnyIdReq;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.ike.eap.message.simaka.EapSimTypeData;
+import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
@@ -74,7 +74,7 @@ import java.util.List;
 public class EapSimStartStateTest extends EapSimStateTest {
 
     private StartState mStartState;
-    private LinkedHashMap<Integer, EapSimAttribute> mAttributes;
+    private LinkedHashMap<Integer, EapSimAkaAttribute> mAttributes;
 
     @Before
     public void setUp() {
@@ -206,7 +206,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
         EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
-        List<EapSimAttribute> attributes = Arrays.asList(
+        List<EapSimAkaAttribute> attributes = Arrays.asList(
                 new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE));
         DecodeResult decodeResult =
                 new DecodeResult(new EapSimTypeData(EAP_SIM_NOTIFICATION, attributes));
@@ -224,7 +224,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
         EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
-        List<EapSimAttribute> attributes = Arrays.asList(
+        List<EapSimAkaAttribute> attributes = Arrays.asList(
                 new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE));
         DecodeResult decodeResult =
                 new DecodeResult(new EapSimTypeData(EAP_SIM_NOTIFICATION, attributes));
@@ -243,7 +243,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
         EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
-        List<EapSimAttribute> attributes = Arrays.asList(
+        List<EapSimAkaAttribute> attributes = Arrays.asList(
                 new AtNotification(GENERAL_FAILURE_POST_CHALLENGE));
         DecodeResult decodeResult =
                 new DecodeResult(new EapSimTypeData(EAP_SIM_NOTIFICATION, attributes));
@@ -261,7 +261,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
         EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
-        List<EapSimAttribute> attributes = Arrays.asList(
+        List<EapSimAkaAttribute> attributes = Arrays.asList(
                 new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE), new AtMac());
         DecodeResult decodeResult =
                 new DecodeResult(new EapSimTypeData(EAP_SIM_NOTIFICATION, attributes));

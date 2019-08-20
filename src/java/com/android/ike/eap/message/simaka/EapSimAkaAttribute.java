@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message;
+package com.android.ike.eap.message.simaka;
 
 import static com.android.ike.eap.EapAuthenticator.LOG;
 
-import com.android.ike.eap.exceptions.EapSimInvalidAtPaddingException;
-import com.android.ike.eap.exceptions.EapSimInvalidAtRandException;
-import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAtPaddingException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
+import com.android.ike.eap.exceptions.simaka.EapSimInvalidAtRandException;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
@@ -31,12 +31,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * EapSimAttribute represents a single EAP-SIM Attribute.
+ * EapSimAkaAttribute represents a single EAP SIM/AKA Attribute.
  *
- * @see <a href="https://tools.ietf.org/html/rfc4186#section-10">RFC 4186, EAP-SIM Authentication,
- * Section 10</a>
+ * @see <a href="https://tools.ietf.org/html/rfc4186">RFC 4186, Extensible Authentication
+ * Protocol for Subscriber Identity Modules (EAP-SIM)</a>
+ * @see <a href="https://tools.ietf.org/html/rfc4187">RFC 4187, Extensible Authentication
+ * Protocol for Authentication and Key Agreement (EAP-AKA)</a>
+ * @see <a href="https://www.iana.org/assignments/eap-numbers/eap-numbers.xhtml">EAP SIM/AKA
+ * Attributes</a>
  */
-public abstract class EapSimAttribute {
+public abstract class EapSimAkaAttribute {
     static final int LENGTH_SCALING = 4;
 
     private static final int MIN_ATTR_LENGTH = 4;
@@ -96,18 +100,18 @@ public abstract class EapSimAttribute {
     public final int attributeType;
     public final int lengthInBytes;
 
-    protected EapSimAttribute(int attributeType, int lengthInBytes)
-            throws EapSimInvalidAttributeException {
+    protected EapSimAkaAttribute(int attributeType, int lengthInBytes)
+            throws EapSimAkaInvalidAttributeException {
         this.attributeType = attributeType;
         this.lengthInBytes = lengthInBytes;
 
         if (lengthInBytes % LENGTH_SCALING != 0) {
-            throw new EapSimInvalidAttributeException("Attribute length must be multiple of 4");
+            throw new EapSimAkaInvalidAttributeException("Attribute length must be multiple of 4");
         }
     }
 
     /**
-     * Encodes this EapSimAttribute into the given ByteBuffer
+     * Encodes this EapSimAkaAttribute into the given ByteBuffer
      *
      * @param byteBuffer the ByteBuffer that this instance will be written to
      */
@@ -129,16 +133,18 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * EapSimUnsupportedAttribute represents any unsupported, skippable EAP-SIM attribute.
+     * EapSimAkaUnsupportedAttribute represents any unsupported, skippable EAP-SIM attribute.
      */
-    public static class EapSimUnsupportedAttribute extends EapSimAttribute {
+    public static class EapSimAkaUnsupportedAttribute extends EapSimAkaAttribute {
         // Attribute Type (1B) + Attribute Length (1B) = 2B Header
         private static final int HEADER_BYTES = 2;
 
         public final byte[] data;
 
-        public EapSimUnsupportedAttribute(int attributeType, int lengthInBytes,
-                ByteBuffer byteBuffer) throws EapSimInvalidAttributeException {
+        public EapSimAkaUnsupportedAttribute(
+                int attributeType,
+                int lengthInBytes,
+                ByteBuffer byteBuffer) throws EapSimAkaInvalidAttributeException {
             super(attributeType, lengthInBytes);
 
             // Attribute not supported, but remaining attribute still needs to be saved
@@ -148,8 +154,8 @@ public abstract class EapSimAttribute {
         }
 
         @VisibleForTesting
-        public EapSimUnsupportedAttribute(int attributeType, int lengthInBytes, byte[] data)
-                throws EapSimInvalidAttributeException {
+        public EapSimAkaUnsupportedAttribute(int attributeType, int lengthInBytes, byte[] data)
+                throws EapSimAkaInvalidAttributeException {
             super(attributeType, lengthInBytes);
             this.data = data;
         }
@@ -162,21 +168,21 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtVersionList represents the AT_VERSION_LIST attribute defined in RFC 4186 Section 10.2
+     * AtVersionList represents the AT_VERSION_LIST attribute defined in RFC 4186#10.2
      */
-    public static class AtVersionList extends EapSimAttribute {
+    public static class AtVersionList extends EapSimAkaAttribute {
         private static final int BYTES_PER_VERSION = 2;
 
         public final List<Integer> versions = new ArrayList<>();
 
         public AtVersionList(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_VERSION_LIST, lengthInBytes);
 
             // number of bytes used to represent list (RFC 4186 Section 10.2)
             int bytesInList = Short.toUnsignedInt(byteBuffer.getShort());
             if (bytesInList % BYTES_PER_VERSION != 0) {
-                throw new EapSimInvalidAttributeException(
+                throw new EapSimAkaInvalidAttributeException(
                         "Actual Version List Length must be multiple of 2");
             }
 
@@ -191,7 +197,7 @@ public abstract class EapSimAttribute {
 
         @VisibleForTesting
         public AtVersionList(int lengthInBytes, int... versions)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_VERSION_LIST, lengthInBytes);
             for (int version : versions) {
                 this.versions.add(version);
@@ -213,10 +219,9 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtSelectedVersion represents the AT_SELECTED_VERSION attribute defined in RFC 4186 Section
-     * 10.3
+     * AtSelectedVersion represents the AT_SELECTED_VERSION attribute defined in RFC 4186#10.3
      */
-    public static class AtSelectedVersion extends EapSimAttribute {
+    public static class AtSelectedVersion extends EapSimAkaAttribute {
         private static final String TAG = AtSelectedVersion.class.getSimpleName();
         private static final int LENGTH = LENGTH_SCALING;
 
@@ -225,17 +230,17 @@ public abstract class EapSimAttribute {
         public final int selectedVersion;
 
         public AtSelectedVersion(int lengthInBytes, int selectedVersion)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_SELECTED_VERSION, LENGTH);
             this.selectedVersion = selectedVersion;
 
             if (lengthInBytes != LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
         }
 
         @VisibleForTesting
-        public AtSelectedVersion(int selectedVersion) throws EapSimInvalidAttributeException {
+        public AtSelectedVersion(int selectedVersion) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_SELECTED_VERSION, LENGTH);
             this.selectedVersion = selectedVersion;
         }
@@ -254,7 +259,7 @@ public abstract class EapSimAttribute {
         public static AtSelectedVersion getSelectedVersion() {
             try {
                 return new AtSelectedVersion(LENGTH, SUPPORTED_VERSION);
-            } catch (EapSimInvalidAttributeException ex) {
+            } catch (EapSimAkaInvalidAttributeException ex) {
                 // this should never happen
                 LOG.wtf(TAG,
                         "Error thrown while creating AtSelectedVersion with correct length", ex);
@@ -264,9 +269,9 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtNonceMt represents the AT_NONCE_MT attribute defined in RFC 4186 Section 10.4
+     * AtNonceMt represents the AT_NONCE_MT attribute defined in RFC 4186#10.4
      */
-    public static class AtNonceMt extends EapSimAttribute {
+    public static class AtNonceMt extends EapSimAkaAttribute {
         private static final int LENGTH = 5 * LENGTH_SCALING;
         private static final int RESERVED_BYTES = 2;
 
@@ -275,10 +280,10 @@ public abstract class EapSimAttribute {
         public final byte[] nonceMt = new byte[NONCE_MT_LENGTH];
 
         public AtNonceMt(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_NONCE_MT, LENGTH);
             if (lengthInBytes != LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
 
             // next two bytes are reserved (RFC 4186 Section 10.4)
@@ -287,7 +292,7 @@ public abstract class EapSimAttribute {
         }
 
         @VisibleForTesting
-        public AtNonceMt(byte[] nonceMt) throws EapSimInvalidAttributeException {
+        public AtNonceMt(byte[] nonceMt) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_NONCE_MT, LENGTH);
             for (int i = 0; i < nonceMt.length; i++) {
                 this.nonceMt[i] = nonceMt[i];
@@ -302,16 +307,16 @@ public abstract class EapSimAttribute {
         }
     }
 
-    private abstract static class AtIdReq extends EapSimAttribute {
+    private abstract static class AtIdReq extends EapSimAkaAttribute {
         private static final int ATTR_LENGTH = LENGTH_SCALING;
         private static final int RESERVED_BYTES = 2;
 
         protected AtIdReq(int lengthInBytes, int attributeType, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(attributeType, ATTR_LENGTH);
 
             if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
 
             // next two bytes are reserved (RFC 4186 Section 10.5-10.7)
@@ -319,7 +324,7 @@ public abstract class EapSimAttribute {
         }
 
         @VisibleForTesting
-        protected AtIdReq(int attributeType) throws EapSimInvalidAttributeException {
+        protected AtIdReq(int attributeType) throws EapSimAkaInvalidAttributeException {
             super(attributeType, ATTR_LENGTH);
         }
 
@@ -331,59 +336,60 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtPermanentIdReq represents the AT_PERMANENT_ID_REQ attribute defined in RFC 4186 Section
-     * 10.5
+     * AtPermanentIdReq represents the AT_PERMANENT_ID_REQ attribute defined in RFC 4186#10.5 and
+     * RFC 4187#10.2
      */
     public static class AtPermanentIdReq extends AtIdReq {
         public AtPermanentIdReq(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(lengthInBytes, EAP_AT_PERMANENT_ID_REQ, byteBuffer);
         }
 
         @VisibleForTesting
-        public AtPermanentIdReq() throws EapSimInvalidAttributeException {
+        public AtPermanentIdReq() throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_PERMANENT_ID_REQ);
         }
     }
 
     /**
-     * AtAnyIdReq represents the AT_ANY_ID_REQ attribute defined in RFC 4186 Section 10.6
+     * AtAnyIdReq represents the AT_ANY_ID_REQ attribute defined in RFC 4186#10.6 and RFC 4187#10.3
      */
     public static class AtAnyIdReq extends AtIdReq {
         public AtAnyIdReq(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(lengthInBytes, EAP_AT_ANY_ID_REQ, byteBuffer);
         }
 
         @VisibleForTesting
-        public AtAnyIdReq() throws EapSimInvalidAttributeException {
+        public AtAnyIdReq() throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_ANY_ID_REQ);
         }
     }
 
     /**
-     * AtFullauthIdReq represents the AT_FULLAUTH_ID_REQ attribute defined in RFC 4186 Section 10.7
+     * AtFullauthIdReq represents the AT_FULLAUTH_ID_REQ attribute defined in RFC 4186#10.7 and RFC
+     * 4187#10.4
      */
     public static class AtFullauthIdReq extends AtIdReq {
         public AtFullauthIdReq(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(lengthInBytes, EAP_AT_FULLAUTH_ID_REQ, byteBuffer);
         }
 
         @VisibleForTesting
-        public AtFullauthIdReq() throws EapSimInvalidAttributeException {
+        public AtFullauthIdReq() throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_FULLAUTH_ID_REQ);
         }
     }
 
     /**
-     * AtIdentity represents the AT_IDENTITY attribute defined in RFC 4186 Section 10.8
+     * AtIdentity represents the AT_IDENTITY attribute defined in RFC 4186#10.8 and RFC 4187#10.5
      */
-    public static class AtIdentity extends EapSimAttribute {
+    public static class AtIdentity extends EapSimAkaAttribute {
         public final byte[] identity;
 
         public AtIdentity(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_IDENTITY, lengthInBytes);
 
             int identityLength = Short.toUnsignedInt(byteBuffer.getShort());
@@ -396,7 +402,7 @@ public abstract class EapSimAttribute {
 
         @VisibleForTesting
         public AtIdentity(int lengthInBytes, byte[] identity)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_IDENTITY, lengthInBytes);
             this.identity = identity;
         }
@@ -418,7 +424,7 @@ public abstract class EapSimAttribute {
          * @return AtIdentity instance for the given identity byte-array
          */
         public static AtIdentity getAtIdentity(byte[] identity)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             int lengthInBytes = MIN_ATTR_LENGTH + identity.length;
             if (lengthInBytes % LENGTH_SCALING != 0) {
                 lengthInBytes += LENGTH_SCALING - (lengthInBytes % LENGTH_SCALING);
@@ -429,9 +435,9 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtRand represents the AT_RAND attribute defined in RFC 4186 Section 10.9
+     * AtRandSim represents the AT_RAND attribute for EAP-SIM defined in RFC 4186#10.9
      */
-    public static class AtRand extends EapSimAttribute {
+    public static class AtRandSim extends EapSimAkaAttribute {
         private static final int RAND_LENGTH = 16;
         private static final int RESERVED_BYTES = 2;
         private static final int MIN_RANDS = 2;
@@ -439,8 +445,8 @@ public abstract class EapSimAttribute {
 
         public final List<byte[]> rands = new ArrayList<>(MAX_RANDS);
 
-        public AtRand(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+        public AtRandSim(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_RAND, lengthInBytes);
 
             // next two bytes are reserved (RFC 4186 Section 10.9)
@@ -459,7 +465,7 @@ public abstract class EapSimAttribute {
                 for (int j = 0; j < i; j++) {
                     byte[] otherRand = rands.get(j);
                     if (Arrays.equals(rand, otherRand)) {
-                        throw new EapSimInvalidAttributeException("Received two identical RANDs");
+                        throw new EapSimAkaInvalidAttributeException("Received identical RANDs");
                     }
                 }
                 rands.add(rand);
@@ -467,7 +473,8 @@ public abstract class EapSimAttribute {
         }
 
         @VisibleForTesting
-        public AtRand(int lengthInBytes, byte[]... rands) throws EapSimInvalidAttributeException {
+        public AtRandSim(int lengthInBytes, byte[]... rands)
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_RAND, lengthInBytes);
 
             if (!isValidNumRands(rands.length)) {
@@ -496,26 +503,26 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtPadding represents the AT_PADDING attribute defined in RFC 4186 Section 10.12
+     * AtPadding represents the AT_PADDING attribute defined in RFC 4186#10.12 and RFC 4187#10.12
      */
-    public static class AtPadding extends EapSimAttribute {
+    public static class AtPadding extends EapSimAkaAttribute {
         private static final int ATTR_HEADER = 2;
 
         public AtPadding(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_PADDING, lengthInBytes);
 
             int remainingBytes = lengthInBytes - ATTR_HEADER;
             for (int i = 0; i < remainingBytes; i++) {
                 // Padding must be checked to all be 0x00 bytes (RFC 4186 Section 10.12)
                 if (byteBuffer.get() != 0) {
-                    throw new EapSimInvalidAtPaddingException("Padding bytes must all be 0x00");
+                    throw new EapSimAkaInvalidAtPaddingException("Padding bytes must all be 0x00");
                 }
             }
         }
 
         @VisibleForTesting
-        public AtPadding(int lengthInBytes) throws EapSimInvalidAttributeException {
+        public AtPadding(int lengthInBytes) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_PADDING, lengthInBytes);
         }
 
@@ -528,9 +535,9 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtMac represents the AT_MAC attribute defined in RFC 4186 Section 10.14
+     * AtMac represents the AT_MAC attribute defined in RFC 4186#10.14 and RFC 4187#10.15
      */
-    public static class AtMac extends EapSimAttribute {
+    public static class AtMac extends EapSimAkaAttribute {
         private static final int ATTR_LENGTH = 5 * LENGTH_SCALING;
         private static final int RESERVED_BYTES = 2;
 
@@ -539,11 +546,11 @@ public abstract class EapSimAttribute {
         public final byte[] mac;
 
         public AtMac(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_MAC, lengthInBytes);
 
             if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
 
             // next two bytes are reserved (RFC 4186 Section 10.14)
@@ -555,17 +562,17 @@ public abstract class EapSimAttribute {
 
         // Used for calculating MACs. Per RFC 4186 Section 10.14, the MAC should be calculated over
         // the entire packet, with the value field of the MAC attribute set to zero.
-        public AtMac() throws EapSimInvalidAttributeException {
+        public AtMac() throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_MAC, ATTR_LENGTH);
             mac = new byte[MAC_LENGTH];
         }
 
-        public AtMac(byte[] mac) throws EapSimInvalidAttributeException {
+        public AtMac(byte[] mac) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_MAC, ATTR_LENGTH);
             this.mac = mac;
 
             if (mac.length != MAC_LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid length for MAC");
+                throw new EapSimAkaInvalidAttributeException("Invalid length for MAC");
             }
         }
 
@@ -578,26 +585,26 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtCounter represents the AT_COUNTER attribute defined in RFC 4186 Section 10.15
+     * AtCounter represents the AT_COUNTER attribute defined in RFC 4186#10.15 and RFC 4187#10.16
      */
-    public static class AtCounter extends EapSimAttribute {
+    public static class AtCounter extends EapSimAkaAttribute {
         private static final int ATTR_LENGTH = LENGTH_SCALING;
 
         public final int counter;
 
         public AtCounter(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_COUNTER, lengthInBytes);
 
             if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
 
             this.counter = Short.toUnsignedInt(byteBuffer.getShort());
         }
 
         @VisibleForTesting
-        public AtCounter(int counter) throws EapSimInvalidAttributeException {
+        public AtCounter(int counter) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_COUNTER, ATTR_LENGTH);
             this.counter = counter;
         }
@@ -611,24 +618,24 @@ public abstract class EapSimAttribute {
 
 
     /**
-     * AtCounterTooSmall represents the AT_COUNTER_TOO_SMALL attribute defined in RFC 4186 Section
-     * 10.16
+     * AtCounterTooSmall represents the AT_COUNTER_TOO_SMALL attribute defined in RFC 4186#10.16 and
+     * RFC 4187#10.17
      */
-    public static class AtCounterTooSmall extends EapSimAttribute {
+    public static class AtCounterTooSmall extends EapSimAkaAttribute {
         private static final int ATTR_LENGTH = LENGTH_SCALING;
         private static final int ATTR_HEADER = 2;
 
         public AtCounterTooSmall(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_COUNTER_TOO_SMALL, lengthInBytes);
 
             if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
             consumePadding(ATTR_HEADER, byteBuffer);
         }
 
-        public AtCounterTooSmall() throws EapSimInvalidAttributeException {
+        public AtCounterTooSmall() throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_COUNTER_TOO_SMALL, ATTR_LENGTH);
         }
 
@@ -640,11 +647,11 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtNonceS represents the AT_NONCE_S attribute defined in RFC 4186 Section 10.17
+     * AtNonceS represents the AT_NONCE_S attribute defined in RFC 4186#10.17 and RFC 4187#10.18
      *
      * <p>This Nonce is generated by the server and used for fast re-authentication only.
      */
-    public static class AtNonceS extends EapSimAttribute {
+    public static class AtNonceS extends EapSimAkaAttribute {
         private static final int ATTR_LENGTH = 5 * LENGTH_SCALING;
         private static final int NONCE_S_LENGTH = 4 * LENGTH_SCALING;
         private static final int RESERVED_BYTES = 2;
@@ -652,11 +659,11 @@ public abstract class EapSimAttribute {
         public final byte[] nonceS;
 
         public AtNonceS(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_NONCE_S, lengthInBytes);
 
             if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
 
             // next two bytes are reserved (RFC 4186 Section 10.17)
@@ -667,7 +674,7 @@ public abstract class EapSimAttribute {
         }
 
         @VisibleForTesting
-        public AtNonceS(byte[] nonceS) throws EapSimInvalidAttributeException {
+        public AtNonceS(byte[] nonceS) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_NONCE_S, ATTR_LENGTH);
             this.nonceS = nonceS;
         }
@@ -681,9 +688,10 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtNotification represents the AT_NOTIFICATION attribute defined in RFC 4186 Section 10.18
+     * AtNotification represents the AT_NOTIFICATION attribute defined in RFC 4186#10.18 and RFC
+     * 4187#10.19
      */
-    public static class AtNotification extends EapSimAttribute {
+    public static class AtNotification extends EapSimAkaAttribute {
         private static final int ATTR_LENGTH = 4;
         private static final int SUCCESS_MASK = 0x8000;
         private static final int PRE_SUCCESSFUL_CHALLENGE_MASK = 0x4000;
@@ -702,11 +710,11 @@ public abstract class EapSimAttribute {
         public final int notificationCode;
 
         public AtNotification(int lengthInBytes, ByteBuffer byteBuffer)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_NOTIFICATION, lengthInBytes);
 
             if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
 
             notificationCode = Short.toUnsignedInt(byteBuffer.getShort());
@@ -720,12 +728,12 @@ public abstract class EapSimAttribute {
                             == PRE_SUCCESSFUL_CHALLENGE_MASK;
 
             if (isSuccessCode && isPreSuccessfulChallenge) {
-                throw new EapSimInvalidAttributeException("Invalid state specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid state specified");
             }
         }
 
         @VisibleForTesting
-        public AtNotification(int notificationCode) throws EapSimInvalidAttributeException {
+        public AtNotification(int notificationCode) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_NOTIFICATION, ATTR_LENGTH);
             this.notificationCode = notificationCode;
 
@@ -736,7 +744,7 @@ public abstract class EapSimAttribute {
             isPreSuccessfulChallenge = (notificationCode & PRE_SUCCESSFUL_CHALLENGE_MASK) != 0;
 
             if (isSuccessCode && isPreSuccessfulChallenge) {
-                throw new EapSimInvalidAttributeException("Invalid state specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid state specified");
             }
         }
 
@@ -773,10 +781,10 @@ public abstract class EapSimAttribute {
     }
 
     /**
-     * AtClientErrorCode represents the AT_CLIENT_ERROR_CODE attribute defined in RFC 4186 Section
-     * 10.19
+     * AtClientErrorCode represents the AT_CLIENT_ERROR_CODE attribute defined in RFC 4186#10.19 and
+     * RFC 4187#10.20
      */
-    public static class AtClientErrorCode extends EapSimAttribute {
+    public static class AtClientErrorCode extends EapSimAkaAttribute {
         private static final String TAG = AtClientErrorCode.class.getSimpleName();
         private static final int ATTR_LENGTH = 4;
 
@@ -789,11 +797,11 @@ public abstract class EapSimAttribute {
         public final int errorCode;
 
         public AtClientErrorCode(int lengthInBytes, int errorCode)
-                throws EapSimInvalidAttributeException {
+                throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_CLIENT_ERROR_CODE, lengthInBytes);
 
             if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimInvalidAttributeException("Invalid Length specified");
+                throw new EapSimAkaInvalidAttributeException("Invalid Length specified");
             }
 
             this.errorCode = errorCode;
@@ -808,7 +816,7 @@ public abstract class EapSimAttribute {
         private static AtClientErrorCode getClientErrorCode(int errorCode) {
             try {
                 return new AtClientErrorCode(ATTR_LENGTH, errorCode);
-            } catch (EapSimInvalidAttributeException exception) {
+            } catch (EapSimAkaInvalidAttributeException exception) {
                 LOG.wtf(TAG, "Exception thrown while making AtClientErrorCodeConstants");
                 return null;
             }

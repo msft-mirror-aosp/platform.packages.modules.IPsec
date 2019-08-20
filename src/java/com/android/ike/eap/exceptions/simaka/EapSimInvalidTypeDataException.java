@@ -14,35 +14,31 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.exceptions;
+package com.android.ike.eap.exceptions.simaka;
 
-import com.android.ike.eap.message.EapSimAttribute.AtPadding;
+import com.android.ike.eap.message.simaka.EapSimTypeData;
 
 /**
- * EapSimInvalidAtPaddingException is thrown when an {@link AtPadding} with invalid padding is
- * parsed. Per RFC 4186 Section 10.12, all padding bytes must be 0x00.
- *
- * @see <a href="https://tools.ietf.org/html/rfc4186#section-10.9">RFC 4186, EAP-SIM Authentication,
- * Section 10.12</a>
+ * EapSimInvalidTypeDataException is thrown when invalid {@link EapSimTypeData} are attempted to be
+ * parsed.
  */
-public class EapSimInvalidAtPaddingException extends EapSimInvalidAttributeException {
+public class EapSimInvalidTypeDataException extends Exception {
     /**
-     * Construct an instance of EapSimInvalidAtPaddingException with the specified detail message.
+     * Construct an instance of EapSimInvalidTypeDataException with the specified detail message.
      *
      * @param message the detail message.
      */
-    public EapSimInvalidAtPaddingException(String message) {
+    public EapSimInvalidTypeDataException(String message) {
         super(message);
     }
 
     /**
-     * Construct an instance of EapSimInvalidAtPaddingException with the specified message and
-     * cause.
+     * Construct an instance of EapSimInvalidTypeDataException with the specified message and cause.
      *
      * @param message the detail message.
      * @param cause the cause.
      */
-    public EapSimInvalidAtPaddingException(String message, Throwable cause) {
+    public EapSimInvalidTypeDataException(String message, Throwable cause) {
         super(message, cause);
     }
 }
