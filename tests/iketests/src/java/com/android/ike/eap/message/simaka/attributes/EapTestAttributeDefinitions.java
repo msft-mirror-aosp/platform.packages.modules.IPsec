@@ -63,6 +63,9 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_NOTIFICATION = hexStringToByteArray("0C01" + NOTIFICATION_CODE);
     public static final String ERROR_CODE = "0001";
     public static final byte[] AT_CLIENT_ERROR_CODE = hexStringToByteArray("1601" + ERROR_CODE);
+    public static final String AUTN = "0123456789ABCDEFFEDCBA9876543210";
+    public static final byte[] AUTN_BYTES = hexStringToByteArray(AUTN);
+    public static final byte[] AT_AUTN = hexStringToByteArray("02050000" + AUTN);
 
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
@@ -85,4 +88,5 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_NOTIFICATION_INVALID_LENGTH = hexStringToByteArray("0C02");
     public static final byte[] AT_NOTIFICATION_INVALID_STATE = hexStringToByteArray("0C01C000");
     public static final byte[] AT_CLIENT_ERROR_CODE_INVALID_LENGTH = hexStringToByteArray("1602");
+    public static final byte[] AT_AUTN_INVALID_LENGTH = hexStringToByteArray("02010000");
 }
