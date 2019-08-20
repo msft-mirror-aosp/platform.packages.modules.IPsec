@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.exceptions;
+package com.android.ike.eap.exceptions.simaka;
 
-import com.android.ike.eap.message.EapSimAttribute.AtRand;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
 
 /**
- * EapSimInvalidAtRandException is thrown when an {@link AtRand} with an invalid number of RAND
+ * EapSimInvalidAtRandException is thrown when an {@link AtRandSim} with an invalid number of RAND
  * values is parsed. When this error is encountered, an EAP-Response/SIM/Client-Error response must
- * be used. Note that there MUST BE 2 or 3 RAND values for the AtRand to be considered valid.
+ * be used. Note that there MUST BE 2 or 3 RAND values for the AtRandSim to be considered valid.
  *
- * @see <a href="https://tools.ietf.org/html/rfc4186#section-10.9">RFC 4186, EAP-SIM Authentication,
- * Section 10.9</a>
+ * @see <a href="https://tools.ietf.org/html/rfc4186#section-10.9">RFC 4186, EAP-SIM, Section
+ * 10.9</a>
  */
-public class EapSimInvalidAtRandException extends EapSimInvalidAttributeException {
+public class EapSimInvalidAtRandException extends EapSimAkaInvalidAttributeException {
     /**
      * Construct an instance of EapSimInvalidAtRandException with the specified detail message.
      *

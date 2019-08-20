@@ -14,31 +14,32 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.exceptions;
+package com.android.ike.eap.exceptions.simaka;
 
-import com.android.ike.eap.message.EapSimTypeData;
+import android.telephony.TelephonyManager;
 
 /**
- * EapSimInvalidTypeDataException is thrown when invalid {@link EapSimTypeData} are attempted to be
- * parsed.
+ * EapSimInvalidLengthException is thrown when
+ * {@link TelephonyManager#getIccAuthentication(int, int, String)} returns responses with the wrong
+ * lengths.
  */
-public class EapSimInvalidTypeDataException extends Exception {
+public class EapSimInvalidLengthException extends Exception {
     /**
-     * Construct an instance of EapSimInvalidTypeDataException with the specified detail message.
+     * Construct an instance of EapSimInvalidLengthException with the specified detail message.
      *
      * @param message the detail message.
      */
-    public EapSimInvalidTypeDataException(String message) {
+    public EapSimInvalidLengthException(String message) {
         super(message);
     }
 
     /**
-     * Construct an instance of EapSimInvalidTypeDataException with the specified message and cause.
+     * Construct an instance of EapSimInvalidLengthException with the specified message and cause.
      *
      * @param message the detail message.
      * @param cause the cause.
      */
-    public EapSimInvalidTypeDataException(String message, Throwable cause) {
+    public EapSimInvalidLengthException(String message, Throwable cause) {
         super(message, cause);
     }
 }

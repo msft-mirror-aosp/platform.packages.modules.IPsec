@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.message.attributes;
+package com.android.ike.eap.message.simaka.attributes;
 
 import static com.android.ike.TestUtils.hexStringToInt;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_CLIENT_ERROR_CODE;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_CLIENT_ERROR_CODE;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.AT_CLIENT_ERROR_CODE_INVALID_LENGTH;
-import static com.android.ike.eap.message.attributes.EapTestAttributeDefinitions.ERROR_CODE;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_CLIENT_ERROR_CODE;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_CLIENT_ERROR_CODE;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_CLIENT_ERROR_CODE_INVALID_LENGTH;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.ERROR_CODE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -28,9 +28,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
-import com.android.ike.eap.message.EapSimAttributeFactory;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -51,7 +51,7 @@ public class AtClientErrorCodeTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_CLIENT_ERROR_CODE);
-        EapSimAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtClientErrorCode);
