@@ -51,6 +51,7 @@ public abstract class EapSimAkaAttribute {
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
     public static final int EAP_AT_RAND = 1;
     public static final int EAP_AT_AUTN = 2;
+    public static final int EAP_AT_RES = 3;
     public static final int EAP_AT_PADDING = 6;
     public static final int EAP_AT_NONCE_MT = 7;
     public static final int EAP_AT_PERMANENT_ID_REQ = 10;
@@ -79,6 +80,7 @@ public abstract class EapSimAkaAttribute {
     static {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_RAND, "AT_RAND");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_AUTN, "AT_AUTN");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_RES, "AT_RES");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_PADDING, "AT_PADDING");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_MT, "AT_NONCE_MT");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_PERMANENT_ID_REQ, "AT_PERMANENT_ID_REQ");
@@ -916,6 +918,64 @@ public abstract class EapSimAkaAttribute {
             encodeAttributeHeader(byteBuffer);
             byteBuffer.put(new byte[RESERVED_BYTES]);
             byteBuffer.put(autn);
+        }
+    }
+
+    /**
+     * AtRes respresents the AT_RES attribute defined in RFC 4187#10.8
+     */
+    public static class AtRes extends EapSimAkaAttribute {
+        private static final int BITS_PER_BYTE = 8;
+        private static final int MIN_RES_LEN_BYTES = 4;
+        private static final int MAX_RES_LEN_BYTES = 16;
+
+        public final byte[] res;
+
+        public AtRes(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_RES, lengthInBytes);
+
+            // RES length is in bits (RFC 4187#10.8).
+            // RES length should be a multiple of 8 bits (TS 133 105#5.1.7.8)
+            int resLength = Short.toUnsignedInt(byteBuffer.getShort());
+            if (resLength % BITS_PER_BYTE != 0) {
+                throw new EapSimAkaInvalidAttributeException("RES length must be multiple of 8");
+            }
+            int resLengthBytes = resLength / BITS_PER_BYTE;
+            if (resLengthBytes < MIN_RES_LEN_BYTES || resLengthBytes > MAX_RES_LEN_BYTES) {
+                throw new EapSimAkaInvalidAttributeException(
+                        "RES length must be: 4B <= len <= 16B");
+            }
+
+            res = new byte[resLengthBytes];
+            byteBuffer.get(res);
+
+            int bytesUsed = MIN_ATTR_LENGTH + resLengthBytes;
+            consumePadding(bytesUsed, byteBuffer);
+        }
+
+        @VisibleForTesting
+        public AtRes(int lengthInBytes, byte[] res) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_RES, lengthInBytes);
+
+            if (res.length < MIN_RES_LEN_BYTES || res.length > MAX_RES_LEN_BYTES) {
+                throw new EapSimAkaInvalidAttributeException(
+                        "RES length must be: 4B <= len <= 16B");
+            }
+
+            this.res = res;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            int resLenBits = res.length * BITS_PER_BYTE;
+            byteBuffer.putShort((short) resLenBits);
+            byteBuffer.put(res);
+
+            int bytesUsed = MIN_ATTR_LENGTH + res.length;
+            addPadding(bytesUsed, byteBuffer);
         }
     }
 }
