@@ -130,6 +130,9 @@ public final class ChildSessionStateMachineTest {
     private static final String REKEY_CHILD_REQ_SA_PAYLOAD =
             "2800002c0000002801030403c88336490300000c0100000c800e0080"
                     + "03000008030000020000000805000000";
+    private static final String REKEY_CHILD_UNACCEPTABLE_REQ_SA_PAYLOAD =
+            "2800002c0000002801030403c88336490300000c0100000c800e00c0"
+                    + "03000008030000020000000805000000";
 
     private static final int CURRENT_CHILD_SA_SPI_IN = 0x2ad4c0a2;
     private static final int CURRENT_CHILD_SA_SPI_OUT = 0xcae7019f;
@@ -1154,6 +1157,72 @@ public final class ChildSessionStateMachineTest {
         // Verify that users are notified the creation of new inbound IpSecTransform
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, true /*expectInbound*/);
+    }
+
+    private void verifyOutboundErrorNotify(int exchangeType, int errorCode) {
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(exchangeType),
+                        eq(true),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
+
+        assertEquals(1, respPayloadList.size());
+        IkePayload payload = respPayloadList.get(0);
+        assertEquals(IkePayload.PAYLOAD_TYPE_NOTIFY, payload.payloadType);
+        assertEquals(errorCode, ((IkeNotifyPayload) payload).notifyType);
+    }
+
+    @Test
+    public void testRekeyChildRemoteCreateHandlesInvalidReq() throws Exception {
+        setupIdleStateMachine();
+
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_UNACCEPTABLE_REQ_SA_PAYLOAD,
+                        false /*isLocalInitRekey*/);
+
+        // Receive rekey Child request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
+        mLooper.dispatchAll();
+
+        // Verify error notification was sent and state machind was back to Idle
+        verifyOutboundErrorNotify(EXCHANGE_TYPE_CREATE_CHILD_SA, ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+    }
+
+    @Test
+    public void testRekeyChildRemoteCreateSaCreationFail() throws Exception {
+        // Throw exception when building ChildSaRecord
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
+                .thenThrow(
+                        new GeneralSecurityException("testRekeyChildRemoteCreateSaCreationFail"));
+
+        setupIdleStateMachine();
+
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_REQ_SA_PAYLOAD,
+                        false /*isLocalInitRekey*/);
+
+        // Receive rekey Child request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
+        mLooper.dispatchAll();
+
+        // Verify error notification was sent and state machind was back to Idle
+        verifyOutboundErrorNotify(EXCHANGE_TYPE_CREATE_CHILD_SA, ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
     }
 
     @Test

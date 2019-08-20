@@ -1341,6 +1341,11 @@ public class ChildSessionStateMachine extends StateMachine {
      *
      * <p>As indicated in RFC 7296 section 2.8, "when rekeying, the new Child SA SHOULD NOT have
      * different Traffic Selectors and algorithms than the old one."
+     *
+     * <p>Errors in this exchange with no specific protocol error code will all be classified to use
+     * NO_PROPOSAL_CHOSEN. The reason that we don't use NO_ADDITIONAL_SAS is because it indicates
+     * "responder is unwilling to accept any more Child SAs on this IKE SA.", according to RFC 7296.
+     * Sending this error may mislead the remote peer.
      */
     class RekeyChildRemoteCreate extends ExceptionHandler {
         @Override
@@ -1361,8 +1366,10 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         private void handleCreateChildRequest(ReceivedRequest req) {
+            List<IkePayload> reqPayloads = null;
+            List<IkePayload> respPayloads = null;
             try {
-                List<IkePayload> reqPayloads = req.requestPayloads;
+                reqPayloads = req.requestPayloads;
 
                 // Build a rekey response payload list with our previously selected proposal,
                 // against which we will validate the received request. It is guaranteed in
@@ -1373,7 +1380,7 @@ public class ChildSessionStateMachine extends StateMachine {
                                 PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
                 byte respProposalNumber = reqSaPayload.getNegotiatedProposalNumber(mSaProposal);
 
-                List<IkePayload> respPayloads =
+                respPayloads =
                         CreateChildSaHelper.getRekeyChildCreateRespPayloads(
                                 mIpSecManager,
                                 mLocalAddress,
@@ -1383,91 +1390,123 @@ public class ChildSessionStateMachine extends StateMachine {
                                 mRemoteTs,
                                 mCurrentChildSaRecord.getLocalSpi(),
                                 mChildSessionOptions.isTransportMode());
-
-                CreateChildResult createChildResult =
-                        CreateChildSaHelper.validateAndNegotiateRekeyChildRequest(
-                                reqPayloads,
-                                respPayloads,
-                                req.exchangeType /*exchangeType*/,
-                                EXCHANGE_TYPE_CREATE_CHILD_SA /*expectedExchangeType*/,
-                                mChildSessionOptions.isTransportMode(),
-                                mIpSecManager,
-                                mRemoteAddress);
-
-                switch (createChildResult.status) {
-                    case CREATE_STATUS_OK:
-                        try {
-                            // Do not need to update the negotiated proposal and TS
-                            // because they are not changed.
-
-                            ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
-
-                            mRemoteInitNewChildSaRecord =
-                                    ChildSaRecord.makeChildSaRecord(
-                                            mContext,
-                                            reqPayloads,
-                                            respPayloads,
-                                            createChildResult.initSpi,
-                                            createChildResult.respSpi,
-                                            mLocalAddress,
-                                            mRemoteAddress,
-                                            mUdpEncapSocket,
-                                            mIkePrf,
-                                            mChildIntegrity,
-                                            mChildCipher,
-                                            mSkD,
-                                            mChildSessionOptions.isTransportMode(),
-                                            false /*isLocalInit*/,
-                                            rekeyLocalRequest);
-
-                            mChildSmCallback.scheduleLocalRequest(
-                                    rekeyLocalRequest, getRekeyTimeout());
-
-                            mChildSmCallback.onChildSaCreated(
-                                    mRemoteInitNewChildSaRecord.getRemoteSpi(),
-                                    ChildSessionStateMachine.this);
-
-                            // To avoid traffic loss, outbound transform should only be applied once
-                            // the remote has (implicitly) acknowledged our response via the
-                            // delete-old-SA request. This will be performed in the finishRekey()
-                            // method.
-                            mUserCbExecutor.execute(
-                                    () -> {
-                                        mUserCallback.onIpSecTransformCreated(
-                                                mRemoteInitNewChildSaRecord
-                                                        .getInboundIpSecTransform(),
-                                                IpSecManager.DIRECTION_IN);
-                                    });
-
-                            mChildSmCallback.onOutboundPayloadsReady(
-                                    EXCHANGE_TYPE_CREATE_CHILD_SA,
-                                    true /*isResp*/,
-                                    respPayloads,
-                                    ChildSessionStateMachine.this);
-
-                            transitionTo(mRekeyChildRemoteDelete);
-                        } catch (GeneralSecurityException
-                                | ResourceUnavailableException
-                                | SpiUnavailableException
-                                | IOException e) {
-                            // #makeChildSaRecord failed.
-                            createChildResult.initSpi.close();
-                            createChildResult.respSpi.close();
-
-                            // TODO: Reply with error notification and transition to
-                            // Idle state.
-                            throw new UnsupportedOperationException("Cannot handle this error");
-                        }
-                        break;
-                    default:
-                        // TODO: Handle error status
-                        throw new IllegalArgumentException(
-                                "Unrecognized status: " + createChildResult.status);
-                }
-
-            } catch (NoValidProposalChosenException | ResourceUnavailableException e) {
-                // TODO: Reply with error notification and transition to Idle state.
+            } catch (NoValidProposalChosenException e) {
+                handleCreationFailureAndBackToIdle(e);
+                return;
+            } catch (ResourceUnavailableException e) {
+                handleCreationFailureAndBackToIdle(
+                        new NoValidProposalChosenException("Fail to assign inbound SPI", e));
+                return;
             }
+
+            CreateChildResult createChildResult =
+                    CreateChildSaHelper.validateAndNegotiateRekeyChildRequest(
+                            reqPayloads,
+                            respPayloads,
+                            req.exchangeType /*exchangeType*/,
+                            EXCHANGE_TYPE_CREATE_CHILD_SA /*expectedExchangeType*/,
+                            mChildSessionOptions.isTransportMode(),
+                            mIpSecManager,
+                            mRemoteAddress);
+
+            switch (createChildResult.status) {
+                case CREATE_STATUS_OK:
+                    try {
+                        // Do not need to update the negotiated proposal and TS
+                        // because they are not changed.
+
+                        ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
+
+                        mRemoteInitNewChildSaRecord =
+                                ChildSaRecord.makeChildSaRecord(
+                                        mContext,
+                                        reqPayloads,
+                                        respPayloads,
+                                        createChildResult.initSpi,
+                                        createChildResult.respSpi,
+                                        mLocalAddress,
+                                        mRemoteAddress,
+                                        mUdpEncapSocket,
+                                        mIkePrf,
+                                        mChildIntegrity,
+                                        mChildCipher,
+                                        mSkD,
+                                        mChildSessionOptions.isTransportMode(),
+                                        false /*isLocalInit*/,
+                                        rekeyLocalRequest);
+
+                        mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
+
+                        mChildSmCallback.onChildSaCreated(
+                                mRemoteInitNewChildSaRecord.getRemoteSpi(),
+                                ChildSessionStateMachine.this);
+
+                        // To avoid traffic loss, outbound transform should only be applied once
+                        // the remote has (implicitly) acknowledged our response via the
+                        // delete-old-SA request. This will be performed in the finishRekey()
+                        // method.
+                        mUserCbExecutor.execute(
+                                () -> {
+                                    mUserCallback.onIpSecTransformCreated(
+                                            mRemoteInitNewChildSaRecord.getInboundIpSecTransform(),
+                                            IpSecManager.DIRECTION_IN);
+                                });
+
+                        mChildSmCallback.onOutboundPayloadsReady(
+                                EXCHANGE_TYPE_CREATE_CHILD_SA,
+                                true /*isResp*/,
+                                respPayloads,
+                                ChildSessionStateMachine.this);
+
+                        transitionTo(mRekeyChildRemoteDelete);
+                    } catch (GeneralSecurityException
+                            | ResourceUnavailableException
+                            | SpiUnavailableException
+                            | IOException e) {
+                        // #makeChildSaRecord failed.
+                        createChildResult.initSpi.close();
+                        createChildResult.respSpi.close();
+
+                        handleCreationFailureAndBackToIdle(
+                                new NoValidProposalChosenException(
+                                        "Error in Child SA creation", e));
+                    }
+                    break;
+                case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
+                    IkeException error = createChildResult.exception;
+                    if (error instanceof IkeProtocolException) {
+                        handleCreationFailureAndBackToIdle((IkeProtocolException) error);
+                    } else {
+                        handleCreationFailureAndBackToIdle(
+                                new NoValidProposalChosenException(
+                                        "Error in validating Create Child request", error));
+                    }
+                    break;
+                case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Unexpected processing status in Create Child request: "
+                                            + createChildResult.status));
+                    break;
+                default:
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Unrecognized status: " + createChildResult.status));
+            }
+        }
+
+        private void handleCreationFailureAndBackToIdle(IkeProtocolException e) {
+            loge("Received invalid Rekey Child request. Reject with error notification", e);
+
+            ArrayList<IkePayload> payloads = new ArrayList<>(1);
+            payloads.add(e.buildNotifyPayload());
+            mChildSmCallback.onOutboundPayloadsReady(
+                    EXCHANGE_TYPE_CREATE_CHILD_SA,
+                    true /*isResp*/,
+                    payloads,
+                    ChildSessionStateMachine.this);
+
+            transitionTo(mIdle);
         }
     }
 
