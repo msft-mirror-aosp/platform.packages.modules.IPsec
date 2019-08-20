@@ -17,6 +17,7 @@
 package com.android.ike.eap.message.simaka;
 
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_AUTN;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_AUTS;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RES;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.LENGTH_SCALING;
@@ -24,6 +25,7 @@ import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.LENGTH_SCALI
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaUnsupportedAttributeException;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAutn;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAuts;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandAka;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRes;
 
@@ -74,6 +76,8 @@ public class EapAkaAttributeFactory extends EapSimAkaAttributeFactory {
                 return new AtAutn(lengthInBytes, byteBuffer);
             case EAP_AT_RES:
                 return new AtRes(lengthInBytes, byteBuffer);
+            case EAP_AT_AUTS:
+                return new AtAuts(lengthInBytes, byteBuffer);
             default:
                 return super.getEapAttribute(attributeType, lengthInBytes, byteBuffer);
         }
