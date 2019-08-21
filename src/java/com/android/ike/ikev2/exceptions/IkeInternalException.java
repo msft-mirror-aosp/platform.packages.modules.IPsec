@@ -29,4 +29,15 @@ public final class IkeInternalException extends IkeException {
     public IkeInternalException(Throwable cause) {
         super(cause);
     }
+
+    /**
+     * Constructs a new exception with the specified cause.
+     *
+     * @param message the descriptive message.
+     * @param cause the cause (which is saved for later retrieval by the {@link #getCause()}
+     *     method).
+     */
+    public IkeInternalException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }
