@@ -59,8 +59,8 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
-import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
