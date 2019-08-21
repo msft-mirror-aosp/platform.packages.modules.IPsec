@@ -54,7 +54,7 @@ public class AtVersionListTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_VERSION_LIST);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtVersionList);
@@ -68,7 +68,7 @@ public class AtVersionListTest {
     public void testDecodeInvalidActualLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_VERSION_LIST_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mEapSimAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid actual list length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
