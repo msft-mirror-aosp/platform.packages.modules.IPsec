@@ -22,10 +22,10 @@ import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.COMPUTED_MAC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CHALLENGE_RESPONSE_WITH_MAC;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_NOTIFICATION_REQUEST_WITH_EMPTY_MAC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_NOTIFICATION_RESPONSE;
@@ -48,7 +48,6 @@ import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefi
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1_BYTES;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2_BYTES;
-import static com.android.ike.eap.statemachine.EapSimStateTest.EAP_CODE_REQUEST;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -71,15 +70,14 @@ import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
+import com.android.ike.eap.statemachine.EapMethodStateMachine.EapState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.CreatedState;
-import com.android.ike.eap.statemachine.EapSimMethodStateMachine.EapSimState;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -130,18 +128,6 @@ public class EapSimMethodStateMachineTest {
         assertTrue(result instanceof EapResult);
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_SIM_RESPONSE_PACKET, eapResponse.packet);
-    }
-
-    @Test
-    public void testBuildClientErrorResponse() {
-        AtClientErrorCode errorCode = AtClientErrorCode.UNSUPPORTED_VERSION;
-        int identifier = ID_INT;
-
-        EapResult result = mEapSimMethodStateMachine
-                .buildClientErrorResponse(identifier, errorCode);
-        assertTrue(result instanceof EapResponse);
-        EapResponse eapResponse = (EapResponse) result;
-        assertArrayEquals(EAP_SIM_CLIENT_ERROR_RESPONSE, eapResponse.packet);
     }
 
     @Test
@@ -214,7 +200,7 @@ public class EapSimMethodStateMachineTest {
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_SIM_NOTIFICATION_RESPONSE, eapResponse.packet);
         assertTrue(mEapSimMethodStateMachine.mHasReceivedSimNotification);
-        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapSimState.class));
+        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapState.class));
     }
 
     @Test
@@ -231,7 +217,7 @@ public class EapSimMethodStateMachineTest {
                         eapSimTypeData);
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
-        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapSimState.class));
+        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapState.class));
     }
 
     @Test
@@ -253,7 +239,7 @@ public class EapSimMethodStateMachineTest {
         EapError eapError = (EapError) result;
         assertTrue(eapError.cause instanceof EapInvalidRequestException);
         assertTrue(mEapSimMethodStateMachine.mHasReceivedSimNotification);
-        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapSimState.class));
+        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapState.class));
     }
 
     @Test
@@ -272,7 +258,7 @@ public class EapSimMethodStateMachineTest {
 
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
-        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapSimState.class));
+        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapState.class));
     }
 
     @Test
@@ -299,7 +285,7 @@ public class EapSimMethodStateMachineTest {
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_SIM_NOTIFICATION_RESPONSE_WITH_MAC, eapResponse.packet);
         assertTrue(mEapSimMethodStateMachine.mHasReceivedSimNotification);
-        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapSimState.class));
+        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapState.class));
 
         verify(mockMac).doFinal(eq(EAP_SIM_NOTIFICATION_REQUEST_WITH_EMPTY_MAC));
         verify(mockMac).doFinal(eq(EAP_SIM_NOTIFICATION_RESPONSE_WITH_EMPTY_MAC));
@@ -320,6 +306,6 @@ public class EapSimMethodStateMachineTest {
 
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
-        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapSimState.class));
+        verify(mEapSimMethodStateMachine, never()).transitionTo(any(EapState.class));
     }
 }
