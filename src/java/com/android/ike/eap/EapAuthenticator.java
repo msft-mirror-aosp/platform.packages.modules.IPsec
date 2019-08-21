@@ -20,12 +20,12 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
-import android.util.Log;
 
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.statemachine.EapStateMachine;
+import com.android.ike.utils.Log;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.security.SecureRandom;
@@ -40,6 +40,10 @@ import java.util.concurrent.TimeoutException;
  * Protocol (EAP)</a>
  */
 public class EapAuthenticator extends Handler {
+    private static final String EAP_TAG = "EAP";
+    private static final boolean LOG_SENSITIVE = false;
+    public static final Log LOG = new Log(EAP_TAG, LOG_SENSITIVE);
+
     private static final String TAG = EapAuthenticator.class.getSimpleName();
     private static final long DEFAULT_TIMEOUT_MILLIS = 7000L;
 
@@ -53,7 +57,6 @@ public class EapAuthenticator extends Handler {
      * Constructor for EapAuthenticator
      *
      * @param looper Looper for running a message loop
-     * @param cbHandler Handler for posting callbacks to the given IEapCallback
      * @param cb IEapCallback for callbacks to the client
      * @param context Context for this EapAuthenticator
      * @param eapSessionConfig Configuration for an EapAuthenticator
@@ -108,6 +111,7 @@ public class EapAuthenticator extends Handler {
                     if (!mCallbackFired) {
                         // Fire failed callback
                         mCallbackFired = true;
+                        LOG.e(TAG, "Timeout occurred in EapStateMachine");
                         mCb.onError(new TimeoutException("Timeout while processing message"));
                     }
                 },
@@ -124,7 +128,7 @@ public class EapAuthenticator extends Handler {
                     try {
                         processResponse = mStateMachine.process(msgBytes);
                     } catch (Exception ex) {
-                        Log.e(TAG, "Exception thrown while processing message", ex);
+                        LOG.e(TAG, "Exception thrown while processing message", ex);
                         processResponse = new EapError(ex);
                     }
 
@@ -133,6 +137,9 @@ public class EapAuthenticator extends Handler {
                             () -> {
                                 // No synchronization needed, since Handler serializes
                                 if (!mCallbackFired) {
+                                    LOG.i(TAG, "EapSateMachine returned "
+                                            + finalProcessResponse.getClass().getSimpleName());
+
                                     if (finalProcessResponse instanceof EapResponse) {
                                         mCb.onResponse(((EapResponse) finalProcessResponse).packet);
                                     } else if (finalProcessResponse instanceof EapError) {

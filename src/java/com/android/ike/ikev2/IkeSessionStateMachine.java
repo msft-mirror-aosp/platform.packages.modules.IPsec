@@ -39,6 +39,7 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.system.ErrnoException;
@@ -140,6 +141,14 @@ public class IkeSessionStateMachine extends StateMachine {
     // Time after which IKE SA needs to be rekeyed
     @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(3L);
 
+    // Default delay time for retrying a request
+    @VisibleForTesting static final long RETRY_INTERVAL_MS = TimeUnit.SECONDS.toMillis(15L);
+
+    // Close IKE Session when all responses during this time were TEMPORARY_FAILURE(s). This
+    // indicates that something has gone wrong, and we are out of sync.
+    @VisibleForTesting
+    static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
+
     // TODO: Allow users to configure IKE lifetime
 
     // Use a value greater than the retransmit-failure timeout.
@@ -237,6 +246,7 @@ public class IkeSessionStateMachine extends StateMachine {
     private final Executor mUserCbExecutor;
     private final IIkeSessionCallback mIkeSessionCallback;
     private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
+    private final TempFailureHandler mTempFailHandler;
 
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
@@ -344,6 +354,8 @@ public class IkeSessionStateMachine extends StateMachine {
 
         mIkeSessionOptions = ikeOptions;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
+
+        mTempFailHandler = new TempFailureHandler(looper);
 
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
         mLocalSpiToIkeSaRecordMap = new LongSparseArray<>(3);
@@ -490,10 +502,70 @@ public class IkeSessionStateMachine extends StateMachine {
         sendMessageDelayed(CMD_LOCAL_REQUEST_REKEY_IKE, rekeyRequest, SA_SOFT_LIFETIME_MS);
     }
 
+    private void scheduleRetry(LocalRequest localRequest) {
+        sendMessageDelayed(localRequest.procedureType, localRequest, RETRY_INTERVAL_MS);
+    }
+
     // TODO: Support initiating Delete IKE exchange when IKE SA expires
 
     // TODO: Add interfaces to initiate IKE exchanges.
 
+    /**
+     * This class is for handling temporary failure.
+     *
+     * <p>Receiving a TEMPORARY_FAILURE is caused by a temporary condition. IKE Session should be
+     * closed if it continues to receive this error after several minutes.
+     */
+    @VisibleForTesting
+    class TempFailureHandler extends Handler {
+        private static final int TEMP_FAILURE_RETRY_TIMEOUT = 1;
+
+        private boolean mTempFailureReceived = false;
+
+        TempFailureHandler(Looper looper) {
+            super(looper);
+        }
+
+        @Override
+        public void handleMessage(Message msg) {
+            if (msg.what == TEMP_FAILURE_RETRY_TIMEOUT) {
+                IOException error =
+                        new IOException(
+                                "Kept receiving TEMPORARY_FAILURE error. State information is out"
+                                        + " of sync.");
+                mUserCbExecutor.execute(
+                        () -> {
+                            mIkeSessionCallback.onError(new IkeInternalException(error));
+                        });
+                loge("Fatal error", error);
+
+                closeAllSaRecords(false /*expectSaClosed*/);
+                quitNow();
+            } else {
+                Log.wtf(TAG, "Unknown message.what: " + msg.what);
+            }
+        }
+
+        /** Schedule retry when a request got rejected by TEMPORARY_FAILURE. */
+        public void handleTempFailure(LocalRequest localRequest) {
+            logd("Receive TEMPORARY FAILURE. Reschedule request: " + localRequest.procedureType);
+
+            // TODO: Support customized delay time when this is a rekey request and SA is going to
+            // expire soon.
+            scheduleRetry(localRequest);
+
+            if (!mTempFailureReceived) {
+                sendEmptyMessageDelayed(TEMP_FAILURE_RETRY_TIMEOUT, TEMP_FAILURE_RETRY_TIMEOUT_MS);
+                mTempFailureReceived = true;
+            }
+        }
+
+        /** Stop tracking temporary condition when request was not rejected by TEMPORARY_FAILURE. */
+        public void reset() {
+            removeMessages(TEMP_FAILURE_RETRY_TIMEOUT);
+            mTempFailureReceived = false;
+        }
+    }
     /**
      * This class represents a reserved IKE SPI.
      *
@@ -765,7 +837,7 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
-        private void cleanUpAndQuit(RuntimeException e) {
+        protected void cleanUpAndQuit(RuntimeException e) {
             // Clean up all SaRecords.
             closeAllSaRecords(false /*expectSaClosed*/);
 
@@ -773,7 +845,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     () -> {
                         mIkeSessionCallback.onError(new IkeInternalException(e));
                     });
-            Log.wtf(TAG, e);
+            Log.wtf(TAG, "Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
         }
 
@@ -845,7 +917,7 @@ public class IkeSessionStateMachine extends StateMachine {
                 () -> {
                     mIkeSessionCallback.onError(ikeException);
                 });
-        loge("Fatal error", ikeException);
+        loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
         quitNow();
     }
@@ -1227,14 +1299,20 @@ public class IkeSessionStateMachine extends StateMachine {
             // Drop packets that we don't have an SA for:
             if (ikeSaRecord == null) {
                 // TODO: Print a summary of the IKE message (perhaps the IKE header)
-                Log.v(TAG, "No matching SA for packet");
+                cleanUpAndQuit(new IllegalStateException("No matching SA for packet"));
                 return;
             }
 
             if (ikeHeader.isResponseMsg) {
+                int expectedMsgId = ikeSaRecord.getLocalRequestMessageId();
+                if (expectedMsgId - 1 == ikeHeader.messageId) {
+                    logw("Received re-transmitted response. Discard it.");
+                    return;
+                }
+
                 DecodeResult decodeResult =
                         IkeMessage.decode(
-                                ikeSaRecord.getLocalRequestMessageId(),
+                                expectedMsgId,
                                 mIkeIntegrity,
                                 mIkeCipher,
                                 ikeSaRecord,
@@ -1243,22 +1321,39 @@ public class IkeSessionStateMachine extends StateMachine {
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
                         ikeSaRecord.incrementLocalRequestMessageId();
+
+                        if (isTempFailure(decodeResult.ikeMessage)) {
+                            handleTempFailure();
+                        } else {
+                            mTempFailHandler.reset();
+                        }
+
                         handleResponseIkeMessage(decodeResult.ikeMessage);
                         break;
                     case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
                         ikeSaRecord.incrementLocalRequestMessageId();
-                        // TODO: Send Delete request on all IKE SAs and close IKE Session.
-                        throw new UnsupportedOperationException("Cannot handle this error.");
+
+                        handleResponseGenericProcessError(
+                                ikeSaRecord,
+                                new InvalidSyntaxException(
+                                        "Generic processing error in the received response",
+                                        decodeResult.ikeException));
+                        break;
                     case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
-                        // TODO: Log and ignore this message
-                        throw new UnsupportedOperationException("Cannot handle this error.");
+                        logi(
+                                "Message authentication or decryption failed on received response."
+                                        + " Discard it",
+                                decodeResult.ikeException);
+                        break;
                     default:
-                        throw new IllegalArgumentException("Unrecognized decoding status.");
+                        cleanUpAndQuit(
+                                new IllegalStateException(
+                                        "Unrecognized decoding status: " + decodeResult.status));
                 }
 
             } else {
                 int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
-                if (expectedMsgId - ikeHeader.messageId == 1) {
+                if (expectedMsgId - 1 == ikeHeader.messageId) {
                     if (Arrays.equals(mLastReceivedIkeReq, ikePacketBytes)) {
                         mIkeSocket.sendIkePacket(mLastSentIkeResp, mRemoteAddress);
 
@@ -1316,15 +1411,33 @@ public class IkeSessionStateMachine extends StateMachine {
                             // INVALID_SYNTAX error.
                             break;
                         case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
-                            // TODO: Log and ignore this message.
+                            logi(
+                                    "Message authentication or decryption failed on received"
+                                            + " request. Discard it",
+                                    decodeResult.ikeException);
                             break;
                         default:
-                            throw new IllegalArgumentException("Unrecognized decoding status.");
+                            cleanUpAndQuit(
+                                    new IllegalStateException(
+                                            "Unrecognized decoding status: "
+                                                    + decodeResult.status));
                     }
                 }
             }
 
             // TODO: Handle fatal error notifications.
+        }
+
+        private boolean isTempFailure(IkeMessage message) {
+            List<IkeNotifyPayload> notifyPayloads =
+                    message.getPayloadListForType(PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+
+            for (IkeNotifyPayload notify : notifyPayloads) {
+                if (notify.notifyType == ERROR_TYPE_TEMPORARY_FAILURE) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         protected void handleDpd() {
@@ -1333,6 +1446,15 @@ public class IkeSessionStateMachine extends StateMachine {
 
         protected void handleRetransmittedReq() {
             // Do nothing - Child states should override if they care.
+        }
+
+        protected void handleTempFailure() {
+            // Log and close IKE Session due to unexpected TEMPORARY_FAILURE. This error should
+            // only occur during CREATE_CHILD_SA exchange.
+            handleIkeFatalError(
+                    new InvalidSyntaxException("Received unexpected TEMPORARY_FAILURE"));
+
+            // States that accept a TEMPORARY MUST override this method to schedule a retry.
         }
 
         // Default handler for decode errors in encrypted request.
@@ -1354,21 +1476,35 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
-        // Default handler for decode errors in encrypted responses.
-        // NOTE: The DeleteIkeLocal state MUST override this state to avoid the possibility of an
-        // infinite loop.
-        protected void handleDecodingErrorInEncryptedResponse(
-                IkeProtocolException exception, IkeSaRecord ikeSaRecord) {
-            // All errors in parsing or processing reponse packets should cause the IKE library to
-            // initiate a Delete IKE Exchange.
-
-            // TODO: Initiate Delete IKE Exchange
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            // Subclasses MUST override it if they care
+            cleanUpAndQuit(
+                    new IllegalStateException(
+                            "Do not support handling an encrypted request: " + ikeExchangeSubType));
         }
 
-        protected abstract void handleRequestIkeMessage(
-                IkeMessage ikeMessage, int ikeExchangeSubType, Message message);
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            // Subclasses MUST override it if they care
+            cleanUpAndQuit(
+                    new IllegalStateException("Do not support handling an encrypted response"));
+        }
 
-        protected abstract void handleResponseIkeMessage(IkeMessage ikeMessage);
+        /**
+         * Method for handling generic processing error of a response.
+         *
+         * <p>Detailed error is wrapped in the InvalidSyntaxException, which is usally syntax error,
+         * unsupported critical payload error and major version error. IKE SA that receives a
+         * response with these errors should be closed.
+         */
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException ikeException) {
+            // Subclasses MUST override it if they care
+            cleanUpAndQuit(
+                    new IllegalStateException(
+                            "Do not support handling generic processing error of encrypted"
+                                    + " response"));
+        }
     }
 
     /**
@@ -1488,7 +1624,7 @@ public class IkeSessionStateMachine extends StateMachine {
         protected void validateIkeDeleteResp(IkeMessage resp, IkeSaRecord expectedSaRecord)
                 throws InvalidSyntaxException {
             if (expectedSaRecord != getIkeSaRecordForPacket(resp.ikeHeader)) {
-                throw new InvalidSyntaxException("Response received on incorrect SA");
+                throw new IllegalStateException("Response received on incorrect SA");
             }
 
             if (resp.ikeHeader.exchangeType != IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
@@ -1628,6 +1764,8 @@ public class IkeSessionStateMachine extends StateMachine {
         private ChildSessionStateMachine mChildInLocalProcedure;
         private Set<ChildSessionStateMachine> mChildInRemoteProcedures;
 
+        private ChildLocalRequest mLocalRequestOngoing;
+
         private int mLastInboundRequestMsgId;
         private List<IkePayload> mOutboundRespPayloads;
         private Set<ChildSessionStateMachine> mAwaitingChildResponse;
@@ -1638,6 +1776,8 @@ public class IkeSessionStateMachine extends StateMachine {
         public void enterState() {
             mChildInLocalProcedure = null;
             mChildInRemoteProcedures = new HashSet<>();
+
+            mLocalRequestOngoing = null;
 
             mLastInboundRequestMsgId = 0;
             mOutboundRespPayloads = new LinkedList<>();
@@ -1672,6 +1812,7 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     if (mChildInLocalProcedure == childSession) {
                         mChildInLocalProcedure = null;
+                        mLocalRequestOngoing = null;
                     }
                     mChildInRemoteProcedures.remove(childSession);
 
@@ -1705,6 +1846,11 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
+        @Override
+        protected void handleTempFailure() {
+            mTempFailHandler.handleTempFailure(mLocalRequestOngoing);
+        }
+
         private void transitionToIdleIfAllProceduresDone() {
             if (mChildInLocalProcedure == null && mChildInRemoteProcedures.isEmpty()) {
                 transitionTo(mIdle);
@@ -1725,6 +1871,8 @@ public class IkeSessionStateMachine extends StateMachine {
 
         private void executeLocalRequest(ChildLocalRequest req) {
             mChildInLocalProcedure = getChildSession(req.childSessionCallback);
+            mLocalRequestOngoing = req;
+
             if (mChildInLocalProcedure == null) {
                 // This request has been validated to have a recognized target Child Session when
                 // it was sent to IKE Session at the begginnig. Failing to find this Child Session
@@ -1832,6 +1980,15 @@ public class IkeSessionStateMachine extends StateMachine {
             payloads.removeAll(handledPayloads);
 
             mChildInLocalProcedure.receiveResponse(ikeMessage.ikeHeader.exchangeType, payloads);
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException ikeException) {
+            mRetransmitter.stopRetransmitting();
+
+            sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+            handleIkeFatalError(ikeException);
         }
 
         private void handleInboundDeleteChildRequest(IkeMessage ikeMessage) {
@@ -2098,17 +2255,6 @@ public class IkeSessionStateMachine extends StateMachine {
         }
 
         @Override
-        protected void handleRequestIkeMessage(
-                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
-            Log.wtf(
-                    TAG,
-                    "State: "
-                            + getCurrentState().getName()
-                            + " received an unsupported request message with IKE exchange subtype: "
-                            + ikeExchangeSubType);
-        }
-
-        @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             boolean ikeInitSuccess = false;
             try {
@@ -2357,7 +2503,7 @@ public class IkeSessionStateMachine extends StateMachine {
      * CreateIkeLocalIkeAuthBase represents the common state and functionality required to perform
      * IKE AUTH exchanges in both the EAP and non-EAP flows.
      */
-    abstract class CreateIkeLocalIkeAuthBase extends BusyState {
+    abstract class CreateIkeLocalIkeAuthBase extends DeleteBase {
         protected Retransmitter mRetransmitter;
 
         @Override
@@ -2365,16 +2511,8 @@ public class IkeSessionStateMachine extends StateMachine {
             mRetransmitter.retransmit();
         }
 
-        @Override
-        protected final void handleRequestIkeMessage(
-                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
-            Log.wtf(
-                    TAG,
-                    "State: "
-                            + getCurrentState().getName()
-                            + "received an unsupported request message with IKE exchange subtype: "
-                            + ikeExchangeSubType);
-        }
+        // TODO: If receiving a remote request while waiting for the last IKE AUTH response, defer
+        // it to next state.
 
         protected IkeMessage buildIkeAuthReqMessage(List<IkePayload> payloadList) {
             // Build IKE header
@@ -2484,20 +2622,15 @@ public class IkeSessionStateMachine extends StateMachine {
 
         @Override
         public void enterState() {
-            super.enterState();
-            mRetransmitter = new EncryptedRetransmitter(buildRequest());
-            mUseEap =
-                    (IkeSessionOptions.IKE_AUTH_METHOD_EAP
-                            == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
-        }
-
-        private IkeMessage buildRequest() {
             try {
-                return buildIkeAuthReq();
+                super.enterState();
+                mRetransmitter = new EncryptedRetransmitter(buildIkeAuthReq());
+                mUseEap =
+                        (IkeSessionOptions.IKE_AUTH_METHOD_EAP
+                                == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
             } catch (ResourceUnavailableException e) {
-                // TODO:Handle IPsec SPI assigning failure.
-                throw new UnsupportedOperationException(
-                        "Do not support handling IPsec SPI assigning failure.");
+                // Handle IPsec SPI assigning failure.
+                handleIkeFatalError(e);
             }
         }
 
@@ -2533,9 +2666,24 @@ public class IkeSessionStateMachine extends StateMachine {
                             childReqList, extractChildPayloadsFromMessage(ikeMessage));
                 }
             } catch (IkeProtocolException e) {
-                // TODO: Handle processing errors.
-                throw new UnsupportedOperationException("Do not support handling error.", e);
+                if (!mUseEap) {
+                    // Notify the remote because they may have set up the IKE SA.
+                    sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+                }
+                handleIkeFatalError(e);
             }
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException ikeException) {
+            mRetransmitter.stopRetransmitting();
+
+            if (!mUseEap) {
+                // Notify the remote because they may have set up the IKE SA.
+                sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+            }
+            handleIkeFatalError(ikeException);
         }
 
         private IkeMessage buildIkeAuthReq() throws ResourceUnavailableException {
@@ -2573,8 +2721,10 @@ public class IkeSessionStateMachine extends StateMachine {
                     // Do not include AUTH payload when using EAP.
                     break;
                 default:
-                    throw new IllegalArgumentException(
-                            "Unrecognized authentication method: " + authConfig.mAuthMethod);
+                    cleanUpAndQuit(
+                            new IllegalArgumentException(
+                                    "Unrecognized authentication method: "
+                                            + authConfig.mAuthMethod));
             }
 
             payloadList.addAll(
@@ -2640,10 +2790,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
                         if (notifyPayload.isErrorNotify()) {
-                            // TODO: Throw IkeExceptions according to error types.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handling error notifications in IKE AUTH"
-                                            + " response.");
+                            throw notifyPayload.validateAndBuildIkeException();
                         } else {
                             // Unknown and unexpected status notifications are ignored as per
                             // RFC7296.
@@ -2686,8 +2833,9 @@ public class IkeSessionStateMachine extends StateMachine {
                     // STOPSHIP: b/122685769 Validate received certificates and digital signature.
                     break;
                 default:
-                    throw new IllegalArgumentException(
-                            "Unrecognized auth method: " + authPayload.authMethod);
+                    cleanUpAndQuit(
+                            new IllegalArgumentException(
+                                    "Unrecognized auth method: " + authPayload.authMethod));
             }
         }
 
@@ -2736,14 +2884,13 @@ public class IkeSessionStateMachine extends StateMachine {
 
                     return HANDLED;
                 case CMD_EAP_ERRORED:
-                    handleAuthenticationFailureAndShutdown(
-                            new AuthenticationFailedException((Throwable) msg.obj));
+                    handleIkeFatalError(new AuthenticationFailedException((Throwable) msg.obj));
                     return HANDLED;
                 case CMD_EAP_FAILED:
                     AuthenticationFailedException exception =
                             new AuthenticationFailedException("EAP Authentication Failed");
 
-                    handleAuthenticationFailureAndShutdown(exception);
+                    handleIkeFatalError(exception);
                     return HANDLED;
                 case CMD_EAP_FINISH_EAP_AUTH:
                     deferMessage(msg);
@@ -2755,66 +2902,59 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
-        private void handleAuthenticationFailureAndShutdown(AuthenticationFailedException cause) {
-            mUserCbExecutor.execute(
-                    () -> {
-                        mIkeSessionCallback.onError(cause);
-                    });
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            try {
+                mRetransmitter.stopRetransmitting();
 
-            removeIkeSaRecord(mCurrentIkeSaRecord);
-            mCurrentIkeSaRecord.close();
-            mCurrentIkeSaRecord = null;
+                int exchangeType = ikeMessage.ikeHeader.exchangeType;
+                if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_AUTH) {
+                    throw new InvalidSyntaxException(
+                            "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
+                }
 
-            quitNow();
+                IkeEapPayload eapPayload = null;
+                for (IkePayload payload : ikeMessage.ikePayloadList) {
+                    switch (payload.payloadType) {
+                        case IkePayload.PAYLOAD_TYPE_EAP:
+                            eapPayload = (IkeEapPayload) payload;
+                            break;
+                        case IkePayload.PAYLOAD_TYPE_NOTIFY:
+                            IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                            if (notifyPayload.isErrorNotify()) {
+                                throw notifyPayload.validateAndBuildIkeException();
+                            } else {
+                                // Unknown and unexpected status notifications are ignored as per
+                                // RFC7296.
+                                logw(
+                                        "Received unknown or unexpected status notifications with"
+                                                + " notify type: "
+                                                + notifyPayload.notifyType);
+                            }
+                            break;
+                        default:
+                            logw(
+                                    "Received unexpected payload in IKE AUTH response. Payload"
+                                            + " type: "
+                                            + payload.payloadType);
+                    }
+                }
+
+                if (eapPayload == null) {
+                    throw new AuthenticationFailedException("EAP Payload is missing.");
+                }
+
+                mEapAuthenticator.processEapMessage(eapPayload.eapMessage);
+            } catch (IkeProtocolException exception) {
+                handleIkeFatalError(exception);
+            }
         }
 
         @Override
-        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException ikeException) {
             mRetransmitter.stopRetransmitting();
-
-            int exchangeType = ikeMessage.ikeHeader.exchangeType;
-            if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_AUTH) {
-                // Invalid, but authenticated response.
-
-                // TODO: Clear state and exit
-                return;
-            }
-
-            IkeEapPayload eapPayload = null;
-            for (IkePayload payload : ikeMessage.ikePayloadList) {
-                switch (payload.payloadType) {
-                    case IkePayload.PAYLOAD_TYPE_EAP:
-                        eapPayload = (IkeEapPayload) payload;
-                        break;
-                    case IkePayload.PAYLOAD_TYPE_NOTIFY:
-                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
-                        if (notifyPayload.isErrorNotify()) {
-                            // TODO: Throw IkeExceptions according to error types.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handling error notifications in IKE AUTH"
-                                            + " response.");
-                        } else {
-                            // Unknown and unexpected status notifications are ignored as per
-                            // RFC7296.
-                            logw(
-                                    "Received unknown or unexpected status notifications with"
-                                            + " notify type: "
-                                            + notifyPayload.notifyType);
-                        }
-                        break;
-                    default:
-                        logw(
-                                "Received unexpected payload in IKE AUTH response. Payload"
-                                        + " type: "
-                                        + payload.payloadType);
-                }
-            }
-
-            if (eapPayload == null) {
-                // TODO: Handle missing EAP payload
-            }
-
-            mEapAuthenticator.processEapMessage(eapPayload.eapMessage);
+            handleIkeFatalError(ikeException);
         }
 
         private class IkeEapCallback implements IEapCallback {
@@ -2891,9 +3031,19 @@ public class IkeSessionStateMachine extends StateMachine {
 
                 performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
             } catch (IkeProtocolException e) {
-                // TODO: Handle processing errors.
-                throw new UnsupportedOperationException("Do not support handling error.", e);
+                // Notify the remote because they may have set up the IKE SA.
+                sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+                handleIkeFatalError(e);
             }
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException ikeException) {
+            mRetransmitter.stopRetransmitting();
+            // Notify the remote because they may have set up the IKE SA.
+            sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+            handleIkeFatalError(ikeException);
         }
 
         private void validateIkeAuthRespPostEap(List<IkePayload> payloadList)
@@ -2908,10 +3058,7 @@ public class IkeSessionStateMachine extends StateMachine {
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
                         if (notifyPayload.isErrorNotify()) {
-                            // TODO: Throw IkeExceptions according to error types.
-                            throw new UnsupportedOperationException(
-                                    "Do not support handling error notifications in IKE AUTH"
-                                            + " response.");
+                            throw notifyPayload.validateAndBuildIkeException();
                         } else {
                             // Unknown and unexpected status notifications are ignored as per
                             // RFC7296.
@@ -2943,7 +3090,7 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
-    private abstract class RekeyIkeHandlerBase extends DeleteResponderBase {
+    private abstract class RekeyIkeHandlerBase extends DeleteBase {
         private void validateIkeRekeyCommon(IkeMessage ikeMessage) throws InvalidSyntaxException {
             boolean hasSaPayload = false;
             boolean hasKePayload = false;
@@ -3110,6 +3257,11 @@ public class IkeSessionStateMachine extends StateMachine {
             }
         }
 
+        @Override
+        protected void handleTempFailure() {
+            mTempFailHandler.handleTempFailure(mCurrentIkeSaRecord.getFutureRekeyEvent());
+        }
+
         /**
          * Builds a IKE Rekey request, reusing the current proposal
          *
@@ -3174,6 +3326,15 @@ public class IkeSessionStateMachine extends StateMachine {
             } catch (IOException e) {
                 // TODO: SPI allocation collided - delete new IKE SA, retry rekey.
             }
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException ikeException) {
+            mRetransmitter.stopRetransmitting();
+
+            sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+            handleIkeFatalError(ikeException);
         }
     }
 
@@ -3406,15 +3567,36 @@ public class IkeSessionStateMachine extends StateMachine {
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
                 validateIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingLocalDel);
-
-                transitionTo(mSimulRekeyIkeRemoteDelete);
-                removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
-                // TODO: Close mIkeSaRecordAwaitingLocalDel
-                mRetransmitter.stopRetransmitting();
+                finishDeleteIkeSaAwaitingLocalDel();
             } catch (InvalidSyntaxException e) {
-                Log.d(TAG, "Validation failed for delete response", e);
-                // TODO: Shutdown - fatal error
+                loge("Invalid syntax on IKE Delete response. Shutting down anyways", e);
+                finishDeleteIkeSaAwaitingLocalDel();
+            } catch (IllegalStateException e) {
+                // Response received on incorrect SA
+                cleanUpAndQuit(e);
             }
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
+            if (mIkeSaRecordAwaitingLocalDel == ikeSaRecord) {
+                loge("Invalid syntax on IKE Delete response. Shutting down anyways", exception);
+                finishDeleteIkeSaAwaitingLocalDel();
+            } else {
+                cleanUpAndQuit(
+                        new IllegalStateException("Delete response received on incorrect SA"));
+            }
+        }
+
+        private void finishDeleteIkeSaAwaitingLocalDel() {
+            mRetransmitter.stopRetransmitting();
+
+            removeIkeSaRecord(mIkeSaRecordAwaitingLocalDel);
+            mIkeSaRecordAwaitingLocalDel.close();
+            mIkeSaRecordAwaitingLocalDel = null;
+
+            transitionTo(mSimulRekeyIkeRemoteDelete);
         }
 
         @Override
@@ -3458,12 +3640,28 @@ public class IkeSessionStateMachine extends StateMachine {
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
                 validateIkeDeleteResp(ikeMessage, mIkeSaRecordAwaitingLocalDel);
-
                 finishRekey();
                 transitionTo(mIdle);
             } catch (InvalidSyntaxException e) {
-                Log.d(TAG, "Validation failed for delete response", e);
-                // TODO: Shutdown
+                loge("Invalid syntax on IKE Delete response. Shutting down anyways", e);
+                finishRekey();
+                transitionTo(mIdle);
+            } catch (IllegalStateException e) {
+                // Response received on incorrect SA
+                cleanUpAndQuit(e);
+            }
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
+            if (mIkeSaRecordAwaitingLocalDel == ikeSaRecord) {
+                loge("Invalid syntax on IKE Delete response. Shutting down anyways", exception);
+                finishRekey();
+                transitionTo(mIdle);
+            } else {
+                cleanUpAndQuit(
+                        new IllegalStateException("Delete response received on incorrect SA"));
             }
         }
     }
@@ -3503,15 +3701,6 @@ public class IkeSessionStateMachine extends StateMachine {
                             ikeMessage.ikeHeader.messageId,
                             ERROR_TYPE_TEMPORARY_FAILURE);
             }
-        }
-
-        @Override
-        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
-            Log.wtf(
-                    TAG,
-                    "State: "
-                            + getCurrentState().getName()
-                            + "received an unsupported response message.");
         }
     }
 
@@ -3617,10 +3806,21 @@ public class IkeSessionStateMachine extends StateMachine {
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
                 validateIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
+                quitNow();
             } catch (InvalidSyntaxException e) {
-                Log.d(TAG, "Invalid syntax on IKE Delete response. Shutting down anyways", e);
+                handleResponseGenericProcessError(mCurrentIkeSaRecord, e);
             }
+        }
 
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
+            loge("Invalid syntax on IKE Delete response. Shutting down anyways", exception);
+            quitNow();
+        }
+
+        @Override
+        public void exitState() {
             mUserCbExecutor.execute(
                     () -> {
                         mIkeSessionCallback.onClosed();
@@ -3630,11 +3830,6 @@ public class IkeSessionStateMachine extends StateMachine {
             mCurrentIkeSaRecord.close();
             mCurrentIkeSaRecord = null;
 
-            quitNow();
-        }
-
-        @Override
-        public void exitState() {
             mRetransmitter.stopRetransmitting();
         }
     }
@@ -3717,6 +3912,11 @@ public class IkeSessionStateMachine extends StateMachine {
 
             return payloadList;
         }
+    }
+
+    protected void logd(String s, Throwable cause) {
+        // TODO: Use IKE Log class
+        Log.d(TAG, s, cause);
     }
 
     protected void logi(String s, Throwable cause) {
