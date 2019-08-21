@@ -50,7 +50,7 @@ public class AtNonceMtTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_NONCE_MT);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtNonceMt);
@@ -64,7 +64,7 @@ public class AtNonceMtTest {
     public void testDecodeInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_NONCE_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mEapSimAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid attribute length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }

@@ -27,6 +27,7 @@ import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_NONCE
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_NOTIFICATION;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PADDING;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.LENGTH_SCALING;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.SKIPPABLE_ATTRIBUTE_RANGE_START;
 
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
@@ -43,6 +44,7 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPadding;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.EapSimAkaUnsupportedAttribute;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 
@@ -72,7 +74,7 @@ public abstract class EapSimAkaAttributeFactory {
      * @throws EapSimAkaUnsupportedAttributeException when an unsupported, unskippable Attribute is
      *         attempted to be decoded
      */
-    protected EapSimAkaAttribute getEapAttribute(
+    protected EapSimAkaAttribute getAttribute(
             int attributeType,
             int lengthInBytes,
             ByteBuffer byteBuffer) throws EapSimAkaInvalidAttributeException,
@@ -111,5 +113,21 @@ public abstract class EapSimAkaAttributeFactory {
                 throw new EapSimAkaUnsupportedAttributeException(
                         "Unexpected EAP Attribute=" + attributeType);
         }
+    }
+
+    /**
+     * This method exists only for testing.
+     *
+     * <p>It follows the attributeFactory.getAttribute(ByteBuffer) pattern used by
+     * EapSimAttributeFactory and EapAkaAttributeFactory.
+     */
+    @VisibleForTesting
+    public EapSimAkaAttribute getAttribute(ByteBuffer byteBuffer)
+            throws EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
+        int attributeType = Byte.toUnsignedInt(byteBuffer.get());
+
+        // Length is given as a multiple of 4x bytes (RFC 4186 Section 8.1)
+        int lengthInBytes = Byte.toUnsignedInt(byteBuffer.get()) * LENGTH_SCALING;
+        return getAttribute(attributeType, lengthInBytes, byteBuffer);
     }
 }

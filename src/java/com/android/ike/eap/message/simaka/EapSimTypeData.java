@@ -149,7 +149,7 @@ public class EapSimTypeData {
                 LinkedHashMap<Integer, EapSimAkaAttribute> attributeMap = new LinkedHashMap<>();
                 while (byteBuffer.hasRemaining()) {
                     EapSimAkaAttribute attribute = EapSimAttributeFactory.getInstance()
-                            .getEapSimAttribute(byteBuffer);
+                            .getAttribute(byteBuffer);
 
                     if (attributeMap.containsKey(attribute.attributeType)) {
                         // Duplicate attributes are not allowed (RFC 4186#6.3.1)
