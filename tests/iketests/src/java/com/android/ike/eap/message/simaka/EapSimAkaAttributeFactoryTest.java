@@ -52,7 +52,7 @@ public class EapSimAkaAttributeFactoryTest {
     public void testDecodeInvalidSkippable() throws Exception {
         ByteBuffer byteBuffer = ByteBuffer.wrap(SKIPPABLE_DATA_BYTES);
 
-        EapSimAkaAttribute result = mAttributeFactory.getEapAttribute(
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(
                 SKIPPABLE_ATTRIBUTE_TYPE,
                 SKIPPABLE_EXPECTED_LENGTH,
                 byteBuffer);
@@ -81,7 +81,7 @@ public class EapSimAkaAttributeFactoryTest {
         ByteBuffer byteBuffer = ByteBuffer.wrap(new byte[2]);
 
         try {
-            mAttributeFactory.getEapAttribute(
+            mAttributeFactory.getAttribute(
                     NON_SKIPPABLE_ATTRIBUTE_TYPE,
                     NON_SKIPPABLE_ATTRIBUTE_LENGTH,
                     byteBuffer);

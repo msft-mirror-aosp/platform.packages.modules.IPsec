@@ -47,7 +47,7 @@ public class AtRandAkaTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RAND_AKA);
-        EapSimAkaAttribute result = mEapAkaAttributeFactory.getEapAkaAttribute(input);
+        EapSimAkaAttribute result = mEapAkaAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         AtRandAka atRandAka = (AtRandAka) result;
@@ -60,7 +60,7 @@ public class AtRandAkaTest {
     public void testDecodeInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RAND_AKA_INVALID_LENGTH);
         try {
-            mEapAkaAttributeFactory.getEapAkaAttribute(input);
+            mEapAkaAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
