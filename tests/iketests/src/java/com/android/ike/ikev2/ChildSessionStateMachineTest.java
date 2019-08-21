@@ -1092,6 +1092,34 @@ public final class ChildSessionStateMachineTest {
     }
 
     @Test
+    public void testRekeyChildLocalDeleteHandlesInvalidResp() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildLocalDelete
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = mSpyLocalInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildLocalDelete);
+        mLooper.dispatchAll();
+
+        // Test receiving Delete response with missing Delete payload
+        mChildSessionStateMachine.receiveResponse(
+                EXCHANGE_TYPE_INFORMATIONAL,
+                new ArrayList<IkePayload>());
+        mLooper.dispatchAll();
+
+        // Verify rekey has finished
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+        verifyChildSaUpdated(mSpyCurrentChildSaRecord, mSpyLocalInitNewChildSaRecord);
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+
+        // First invoked in #setupIdleStateMachine
+        verify(mMockChildSessionSmCallback, times(2))
+                .onProcedureFinished(mChildSessionStateMachine);
+    }
+
+    @Test
     public void testRekeyChildRemoteCreate() throws Exception {
         setupIdleStateMachine();
 

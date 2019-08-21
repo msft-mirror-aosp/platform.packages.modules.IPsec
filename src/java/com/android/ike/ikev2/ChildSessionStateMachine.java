@@ -1036,7 +1036,7 @@ public class ChildSessionStateMachine extends StateMachine {
         /** Validate payload types in Delete Child response. */
         protected void validateDeleteRespPayloadAndExchangeType(
                 List<IkePayload> respPayloads, @ExchangeType int exchangeType)
-                throws InvalidSyntaxException {
+                throws IkeProtocolException {
 
             if (exchangeType != EXCHANGE_TYPE_INFORMATIONAL) {
                 throw new InvalidSyntaxException(
@@ -1061,9 +1061,7 @@ public class ChildSessionStateMachine extends StateMachine {
                             break handlePayload;
                         }
 
-                        // TODO: Handle error notifications.
-                        throw new UnsupportedOperationException(
-                                "Cannot handle error notifications in a Delete Child response");
+                        throw notify.validateAndBuildIkeException();
                     default:
                         logw(
                                 "Unexpected payload type in Delete Child response: "
@@ -1122,8 +1120,9 @@ public class ChildSessionStateMachine extends StateMachine {
                         mCurrentChildSaRecord = null;
 
                         quitNow();
-                    } catch (InvalidSyntaxException e) {
-                        mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                    } catch (IkeProtocolException e) {
+                        // Shut down Child Session and notify users the error.
+                        handleChildFatalError(e);
                     }
                     return HANDLED;
                 case CMD_HANDLE_RECEIVED_REQUEST:
@@ -1518,13 +1517,18 @@ public class ChildSessionStateMachine extends StateMachine {
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_REQUEST:
-                    if (isOnNewSa((ReceivedRequest) message.obj)) {
-                        finishRekey();
-                        deferMessage(message);
-                        transitionTo(mIdle);
+                    try {
+                        if (isOnNewSa((ReceivedRequest) message.obj)) {
+                            finishRekey();
+                            deferMessage(message);
+                            transitionTo(mIdle);
+                            return HANDLED;
+                        }
+                        return NOT_HANDLED;
+                    } catch (IllegalStateException e) {
+                        cleanUpAndQuit(e);
                         return HANDLED;
                     }
-                    return NOT_HANDLED;
                 default:
                     return NOT_HANDLED;
             }
@@ -1538,7 +1542,7 @@ public class ChildSessionStateMachine extends StateMachine {
                     return CreateChildSaHelper.hasRemoteChildSpiForRekey(
                             req.requestPayloads, mChildSaRecordSurviving);
                 default:
-                    throw new IllegalArgumentException(
+                    throw new IllegalStateException(
                             "Invalid exchange subtype for Child Session: " + req.exchangeSubtype);
             }
         }
@@ -1589,17 +1593,18 @@ public class ChildSessionStateMachine extends StateMachine {
                                 hasRemoteChildSpiForDelete(
                                         resp.responsePayloads, mCurrentChildSaRecord);
                         if (!currentSaSpiFound) {
-                            throw new InvalidSyntaxException(
-                                    "Found no remote SPI in received Delete response.");
+                            loge(
+                                    "Found no remote SPI for current SA in received Delete"
+                                        + " response. Shutting down old SA and finishing rekey.");
                         }
-
-                        finishRekey();
-
-                        transitionTo(mIdle);
-                    } catch (InvalidSyntaxException e) {
-                        // Handle validation error and absence of remotely generated SPI.
-                        mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                    } catch (IkeProtocolException e) {
+                        loge(
+                                "Received Delete response with invalid syntax or error"
+                                    + " notifications. Shutting down old SA and finishing rekey.",
+                                e);
                     }
+                    finishRekey();
+                    transitionTo(mIdle);
                     return HANDLED;
                 default:
                     // TODO: Handle requests on mCurrentChildSaRecord: Reply TEMPORARY_FAILURE to
@@ -1659,9 +1664,11 @@ public class ChildSessionStateMachine extends StateMachine {
 
         private void handleDeleteRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
-                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
-                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
-                mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
+                // Response received on incorrect SA
+                cleanUpAndQuit(
+                        new IllegalStateException(
+                                "Found no remote SPI for current SA in received Delete"
+                                        + " response."));
             } else {
                 sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
                 finishRekey();
