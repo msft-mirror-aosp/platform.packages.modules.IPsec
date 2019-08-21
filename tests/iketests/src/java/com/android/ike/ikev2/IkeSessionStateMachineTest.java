@@ -2620,11 +2620,26 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testOpenIkeSession() throws Exception {
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.Initial);
+
+        mIkeSessionStateMachine.openSession();
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeInit);
+    }
+
+    @Test
     public void testIkeInitSchedulesRekey() throws Exception {
         setupMakeFirstIkeSa();
 
         // Send IKE INIT request
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+
         // Receive IKE INIT response
         ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
         mIkeSessionStateMachine.sendMessage(
