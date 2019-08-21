@@ -31,7 +31,7 @@ import static org.junit.Assert.fail;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNonceS;
-import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
+import com.android.ike.eap.message.simaka.EapSimAkaAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -41,17 +41,17 @@ import java.nio.ByteBuffer;
 public class AtNonceSTest {
     private static final int EXPECTED_LENGTH = 20;
 
-    private EapSimAttributeFactory mEapSimAttributeFactory;
+    private EapSimAkaAttributeFactory mAttributeFactory;
 
     @Before
     public void setUp() {
-        mEapSimAttributeFactory = EapSimAttributeFactory.getInstance();
+        mAttributeFactory = new EapSimAkaAttributeFactory() {};
     }
 
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_NONCE_S);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtNonceS);
@@ -65,7 +65,7 @@ public class AtNonceSTest {
     public void testDecodeInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_NONCE_S_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }

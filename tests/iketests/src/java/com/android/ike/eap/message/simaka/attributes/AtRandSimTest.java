@@ -54,7 +54,7 @@ public class AtRandSimTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RAND_SIM);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mEapSimAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtRandSim);
@@ -70,7 +70,7 @@ public class AtRandSimTest {
     public void testDecodeInvalidNumRands() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RAND_SIM_INVALID_NUM_RANDS);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mEapSimAttributeFactory.getAttribute(input);
             fail("Expected EapSimInvalidAtRandException for invalid number of RANDs");
         } catch (EapSimInvalidAtRandException expected) {
         }
@@ -80,7 +80,7 @@ public class AtRandSimTest {
     public void testDecodeDuplicateRands() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RAND_SIM_DUPLICATE_RANDS);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mEapSimAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for duplicate RANDs");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }

@@ -37,8 +37,7 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAnyIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtFullauthIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
-import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
-
+import com.android.ike.eap.message.simaka.EapSimAkaAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -48,17 +47,17 @@ import java.nio.ByteBuffer;
 public class AtIdReqTest {
     private static final int EXPECTED_LENGTH = 4;
 
-    private EapSimAttributeFactory mEapSimAttributeFactory;
+    private EapSimAkaAttributeFactory mAttributeFactory;
 
     @Before
     public void setUp() {
-        mEapSimAttributeFactory = EapSimAttributeFactory.getInstance();
+        mAttributeFactory = new EapSimAkaAttributeFactory() {};
     }
 
     @Test
     public void testDecodeAtPermanentIdReq() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_PERMANENT_ID_REQ);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtPermanentIdReq);
@@ -71,7 +70,7 @@ public class AtIdReqTest {
     public void testDecodeAtPermanentIdReqInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(PERMANENT_ID_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid attribute length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
@@ -89,7 +88,7 @@ public class AtIdReqTest {
     @Test
     public void testDecodeAtAnyIdReq() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_ANY_ID_REQ);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtAnyIdReq);
@@ -102,7 +101,7 @@ public class AtIdReqTest {
     public void testDecodeAtAnyIdReqInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(ANY_ID_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid attribute length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
@@ -120,7 +119,7 @@ public class AtIdReqTest {
     @Test
     public void testDecodeAtFullauthIdReq() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_FULL_AUTH_ID_REQ);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtFullauthIdReq);
@@ -133,7 +132,7 @@ public class AtIdReqTest {
     public void testDecodeAtFullauthIdReqInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(FULL_AUTH_ID_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid attribute length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
