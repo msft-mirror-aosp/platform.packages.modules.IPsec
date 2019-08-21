@@ -47,7 +47,7 @@ public class AtAutsTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_AUTS);
-        EapSimAkaAttribute result = mEapAkaAttributeFactory.getEapAkaAttribute(input);
+        EapSimAkaAttribute result = mEapAkaAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         AtAuts atAuts = (AtAuts) result;
@@ -60,7 +60,7 @@ public class AtAutsTest {
     public void testDecodeInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_AUTS_INVALID_LENGTH);
         try {
-            mEapAkaAttributeFactory.getEapAkaAttribute(input);
+            mEapAkaAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
