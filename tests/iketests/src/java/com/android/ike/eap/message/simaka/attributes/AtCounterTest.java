@@ -34,7 +34,7 @@ import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtCounter;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtCounterTooSmall;
-import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
+import com.android.ike.eap.message.simaka.EapSimAkaAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -44,17 +44,17 @@ import java.nio.ByteBuffer;
 public class AtCounterTest {
     private static final int EXPECTED_LENGTH = 4;
 
-    private EapSimAttributeFactory mEapSimAttributeFactory;
+    private EapSimAkaAttributeFactory mAttributeFactory;
 
     @Before
     public void setUp() {
-        mEapSimAttributeFactory = EapSimAttributeFactory.getInstance();
+        mAttributeFactory = new EapSimAkaAttributeFactory() {};
     }
 
     @Test
     public void testDecodeAtCounter() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_COUNTER);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtCounter);
@@ -68,7 +68,7 @@ public class AtCounterTest {
     public void testDecodeAtCounterInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_COUNTER_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
@@ -93,7 +93,7 @@ public class AtCounterTest {
     @Test
     public void testDecodeAtCounterTooSmall() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_COUNTER_TOO_SMALL);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtCounterTooSmall);
@@ -106,7 +106,7 @@ public class AtCounterTest {
     public void testDecodeAtCounterTooSmallInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_COUNTER_TOO_SMALL_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }

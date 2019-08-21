@@ -31,7 +31,7 @@ import static org.junit.Assert.fail;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
-import com.android.ike.eap.message.simaka.EapSimAttributeFactory;
+import com.android.ike.eap.message.simaka.EapSimAkaAttributeFactory;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -44,11 +44,11 @@ public class AtMacTest {
     private static final byte[] MAC_BYTES = hexStringToByteArray(MAC);
     private static final byte[] INVALID_MAC = {(byte) 1, (byte) 2, (byte) 3};
 
-    private EapSimAttributeFactory mEapSimAttributeFactory;
+    private EapSimAkaAttributeFactory mAttributeFactory;
 
     @Before
     public void setUp() {
-        mEapSimAttributeFactory = EapSimAttributeFactory.getInstance();
+        mAttributeFactory = new EapSimAkaAttributeFactory() {};
     }
 
     @Test
@@ -79,7 +79,7 @@ public class AtMacTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_MAC);
-        EapSimAkaAttribute result = mEapSimAttributeFactory.getEapSimAttribute(input);
+        EapSimAkaAttribute result = mAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         assertTrue(result instanceof AtMac);
@@ -93,7 +93,7 @@ public class AtMacTest {
     public void testDecodeInvalidLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_MAC_INVALID_LENGTH);
         try {
-            mEapSimAttributeFactory.getEapSimAttribute(input);
+            mAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
