@@ -18,6 +18,7 @@ package com.android.ike.ikev2;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.os.HandlerThread;
+import android.os.Looper;
 
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -40,7 +41,7 @@ public final class IkeSession implements AutoCloseable {
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
         this(
-                IkeThreadHolder.IKE_WORKER_THREAD,
+                IkeThreadHolder.IKE_WORKER_THREAD.getLooper(),
                 context,
                 (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                 ikeSessionOptions,
@@ -53,7 +54,7 @@ public final class IkeSession implements AutoCloseable {
     /** Package private */
     @VisibleForTesting
     IkeSession(
-            HandlerThread handlerThread,
+            Looper looper,
             Context context,
             IpSecManager ipSecManager,
             IkeSessionOptions ikeSessionOptions,
@@ -63,7 +64,7 @@ public final class IkeSession implements AutoCloseable {
             IChildSessionCallback firstChildSessionCallback) {
         mIkeSessionStateMachine =
                 new IkeSessionStateMachine(
-                        handlerThread.getLooper(),
+                        looper,
                         context,
                         ipSecManager,
                         ikeSessionOptions,
@@ -71,6 +72,7 @@ public final class IkeSession implements AutoCloseable {
                         userCbExecutor,
                         ikeSessionCallback,
                         firstChildSessionCallback);
+        mIkeSessionStateMachine.openSession();
 
         mCloseGuard.open("open");
     }
