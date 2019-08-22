@@ -16,6 +16,7 @@
 
 package com.android.ike.eap;
 
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
 import android.telephony.TelephonyManager.UiccAppType;
@@ -35,7 +36,8 @@ import java.util.Map;
  * provide configs for several EAP methods.
  */
 public final class EapSessionConfig {
-    private static final byte[] DEFAULT_IDENTITY = new byte[0];
+    @VisibleForTesting
+    static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     // IANA -> EapMethodConfig for that method
     public final Map<Integer, EapMethodConfig> eapConfigs;
@@ -84,6 +86,18 @@ public final class EapSessionConfig {
         }
 
         /**
+         * Sets the configuration for EAP AKA.
+         *
+         * @param subId int the client's subId to be authenticated
+         * @param apptype the {@link UiccAppType} apptype to be used for authentication
+         * @return Builder this, to facilitate chaining
+         */
+        public Builder setEapAkaConfig(int subId, @UiccAppType int apptype) {
+            mEapConfigs.put(EAP_TYPE_AKA, new EapAkaConfig(subId, apptype));
+            return this;
+        }
+
+        /**
          * Constructs and returns an EapSessionConfig with the configurations applied to this
          * Builder.
          *
@@ -126,6 +140,15 @@ public final class EapSessionConfig {
         @VisibleForTesting
         public EapSimConfig(int subId, @UiccAppType int apptype) {
             super(EAP_TYPE_SIM, subId, apptype);
+        }
+    }
+
+    /**
+     * EapAkaConfig represents the configs needed for an EAP AKA session.
+     */
+    public static class EapAkaConfig extends EapUiccConfig {
+        private EapAkaConfig(int subId, @UiccAppType int apptype) {
+            super(EAP_TYPE_AKA, subId, apptype);
         }
     }
 }

@@ -49,7 +49,7 @@ public class AtResTest {
     @Test
     public void testDecode() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RES);
-        EapSimAkaAttribute result = mEapAkaAttributeFactory.getEapAkaAttribute(input);
+        EapSimAkaAttribute result = mEapAkaAttributeFactory.getAttribute(input);
 
         assertFalse(input.hasRemaining());
         AtRes atRes = (AtRes) result;
@@ -62,7 +62,7 @@ public class AtResTest {
     public void testDecodeInvalidResLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RES_INVALID_RES_LENGTH);
         try {
-            mEapAkaAttributeFactory.getEapAkaAttribute(input);
+            mEapAkaAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for invalid RES length");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
@@ -72,7 +72,7 @@ public class AtResTest {
     public void testDecodeShortResLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RES_SHORT_RES);
         try {
-            mEapAkaAttributeFactory.getEapAkaAttribute(input);
+            mEapAkaAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for too short RES");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
@@ -82,7 +82,7 @@ public class AtResTest {
     public void testDecodeLongResLength() throws Exception {
         ByteBuffer input = ByteBuffer.wrap(AT_RES_LONG_RES);
         try {
-            mEapAkaAttributeFactory.getEapAkaAttribute(input);
+            mEapAkaAttributeFactory.getAttribute(input);
             fail("Expected EapSimAkaInvalidAttributeException for too long RES");
         } catch (EapSimAkaInvalidAttributeException expected) {
         }
