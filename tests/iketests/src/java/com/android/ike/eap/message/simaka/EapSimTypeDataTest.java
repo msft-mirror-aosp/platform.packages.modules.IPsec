@@ -108,7 +108,6 @@ public class EapSimTypeDataTest {
         DecodeResult<EapSimTypeData> result = mEapSimTypeDataDecoder.decode(INVALID_SUBTYPE);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
-
     }
 
     @Test
@@ -124,7 +123,6 @@ public class EapSimTypeDataTest {
         DecodeResult<EapSimTypeData> result = mEapSimTypeDataDecoder.decode(SHORT_TYPE_DATA);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
-
     }
 
     @Test
