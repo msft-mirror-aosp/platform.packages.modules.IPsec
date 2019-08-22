@@ -147,7 +147,8 @@ public final class EapSessionConfig {
      * EapAkaConfig represents the configs needed for an EAP AKA session.
      */
     public static class EapAkaConfig extends EapUiccConfig {
-        private EapAkaConfig(int subId, @UiccAppType int apptype) {
+        @VisibleForTesting
+        public EapAkaConfig(int subId, @UiccAppType int apptype) {
             super(EAP_TYPE_AKA, subId, apptype);
         }
     }
