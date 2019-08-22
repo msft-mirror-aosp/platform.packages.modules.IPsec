@@ -26,6 +26,7 @@ import static org.mockito.Mockito.mock;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.os.Looper;
+import android.os.test.TestLooper;
 import android.util.Log;
 
 import libcore.net.InetAddressUtils;
@@ -134,5 +135,25 @@ public final class IkeSessionTest {
         assertEquals(
                 sessions[0].mIkeSessionStateMachine.getHandler().getLooper(),
                 sessions[1].mIkeSessionStateMachine.getHandler().getLooper());
+    }
+
+    @Test
+    public void testOpensIkeSession() throws Exception {
+        TestLooper testLooper = new TestLooper();
+        IkeSession ikeSession =
+                new IkeSession(
+                        testLooper.getLooper(),
+                        mContext,
+                        mIpSecManager,
+                        mIkeSessionOptions,
+                        mMockChildSessionOptions,
+                        mUserCbExecutor,
+                        mMockIkeSessionCb,
+                        mMockChildSessionCb);
+        testLooper.dispatchAll();
+
+        assertTrue(
+                ikeSession.mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeInit);
     }
 }

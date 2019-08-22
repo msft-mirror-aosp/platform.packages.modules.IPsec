@@ -16,11 +16,9 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
-import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
-import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ErrorType;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
@@ -461,6 +459,10 @@ public class IkeSessionStateMachine extends StateMachine {
         }
     }
 
+    void openSession() {
+        sendMessage(CMD_LOCAL_REQUEST_CREATE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
+    }
+
     void openChildSession(
             ChildSessionOptions childSessionOptions, IChildSessionCallback childSessionCallback) {
         if (childSessionCallback == null) {
@@ -762,6 +764,11 @@ public class IkeSessionStateMachine extends StateMachine {
         @Override
         public void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime) {
             sendMessageDelayed(futureRequest.procedureType, futureRequest, delayedTime);
+        }
+
+        @Override
+        public void scheduleRetryLocalRequest(ChildLocalRequest childRequest) {
+            scheduleRetry(childRequest);
         }
 
         @Override
@@ -1407,8 +1414,12 @@ public class IkeSessionStateMachine extends StateMachine {
                         case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             mLastReceivedIkeReq = ikePacketBytes;
-                            // TODO: Send back error notification. Close IKE Session if this is
-                            // INVALID_SYNTAX error.
+
+                            // IkeException MUST be already wrapped into an IkeProtocolException
+                            handleRequestGenericProcessError(
+                                    ikeSaRecord,
+                                    ikeHeader.messageId,
+                                    (IkeProtocolException) decodeResult.ikeException);
                             break;
                         case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
                             logi(
@@ -1457,25 +1468,6 @@ public class IkeSessionStateMachine extends StateMachine {
             // States that accept a TEMPORARY MUST override this method to schedule a retry.
         }
 
-        // Default handler for decode errors in encrypted request.
-        protected void handleDecodingErrorInEncryptedRequest(
-                IkeProtocolException exception, IkeSaRecord ikeSaRecord) {
-            switch (exception.getErrorType()) {
-                case ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD:
-                    // TODO: Send encrypted error notification.
-                    return;
-                case ERROR_TYPE_INVALID_MAJOR_VERSION:
-                    // TODO: Send unencrypted error notification.
-                    return;
-                case ERROR_TYPE_INVALID_SYNTAX:
-                    // TODO: Send encrypted error notification and close IKE session if Message ID
-                    // and cryptogtaphic checksum were invalid.
-                    return;
-                default:
-                    Log.wtf(TAG, "Unknown error decoding IKE Message.");
-            }
-        }
-
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             // Subclasses MUST override it if they care
@@ -1488,6 +1480,31 @@ public class IkeSessionStateMachine extends StateMachine {
             // Subclasses MUST override it if they care
             cleanUpAndQuit(
                     new IllegalStateException("Do not support handling an encrypted response"));
+        }
+
+        /**
+         * Method for handling generic processing error of a request.
+         *
+         * <p>A generic processing error is usally syntax error, unsupported critical payload error
+         * and major version error. IKE SA that should reply with corresponding error notifications
+         */
+        protected void handleRequestGenericProcessError(
+                IkeSaRecord ikeSaRecord, int messageId, IkeProtocolException exception) {
+            logd("Receive request with protocol error", exception);
+
+            IkeNotifyPayload errNotify = exception.buildNotifyPayload();
+            sendEncryptedIkeMessage(
+                    ikeSaRecord,
+                    buildEncryptedInformationalMessage(
+                            ikeSaRecord,
+                            new IkeInformationalPayload[] {errNotify},
+                            true /*isResponse*/,
+                            messageId));
+
+            // Receiver of INVALID_SYNTAX error notification should delete the IKE SA
+            if (exception.getErrorType() == ERROR_TYPE_INVALID_SYNTAX) {
+                handleIkeFatalError(exception);
+            }
         }
 
         /**

@@ -62,7 +62,7 @@ public class EapSimAttributeFactory extends EapSimAkaAttributeFactory {
      * @throws EapSimAkaUnsupportedAttributeException when an unsupported, unskippable Attribute is
      *         attempted to be decoded
      */
-    public EapSimAkaAttribute getEapSimAttribute(ByteBuffer byteBuffer) throws
+    public EapSimAkaAttribute getAttribute(ByteBuffer byteBuffer) throws
             EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
         int attributeType = Byte.toUnsignedInt(byteBuffer.get());
 
@@ -81,7 +81,7 @@ public class EapSimAttributeFactory extends EapSimAkaAttributeFactory {
             case EAP_AT_RAND:
                 return new AtRandSim(lengthInBytes, byteBuffer);
             default:
-                return super.getEapAttribute(attributeType, lengthInBytes, byteBuffer);
+                return super.getAttribute(attributeType, lengthInBytes, byteBuffer);
         }
     }
 }

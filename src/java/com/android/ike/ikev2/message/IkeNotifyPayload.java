@@ -24,6 +24,7 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_I
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SELECTORS;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
@@ -37,6 +38,7 @@ import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
 import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.exceptions.TemporaryFailureException;
 import com.android.ike.ikev2.exceptions.TsUnacceptableException;
 import com.android.ike.ikev2.exceptions.UnrecognizedIkeProtocolException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
@@ -390,6 +392,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
                     return new AuthenticationFailedException(notifyData);
                 case ERROR_TYPE_TS_UNACCEPTABLE:
                     return new TsUnacceptableException(notifyData);
+                case ERROR_TYPE_TEMPORARY_FAILURE:
+                    return new TemporaryFailureException(notifyData);
                 default:
                     return new UnrecognizedIkeProtocolException(notifyType, notifyData);
             }
