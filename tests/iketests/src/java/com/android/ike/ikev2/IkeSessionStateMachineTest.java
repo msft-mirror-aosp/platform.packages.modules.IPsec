@@ -3185,7 +3185,31 @@ public final class IkeSessionStateMachineTest {
                         any(IkeMessage.class));
 
         // Verify state machine quit properly
-        verifyNotifyUserCloseSession();
+        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
+    public void testDeleteIkeLocalDeleteHandlesInvalidResp() throws Exception {
+        setupIdleStateMachine();
+
+        // Send delete request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                new LocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE));
+        mLooper.dispatchAll();
+
+        // Receive response with wrong exchange type
+        ReceivedIkePacket resp =
+                makeDummyReceivedIkePacketWithInvalidSyntax(
+                        mSpyCurrentIkeSaRecord,
+                        true /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA);
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, resp);
+        mLooper.dispatchAll();
+
+        // Verify state machine quit properly
+        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 

@@ -1587,7 +1587,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         protected void validateIkeDeleteReq(IkeMessage req, IkeSaRecord expectedRecord)
                 throws InvalidSyntaxException {
             if (expectedRecord != getIkeSaRecordForPacket(req.ikeHeader)) {
-                throw new InvalidSyntaxException("Unexpected delete request for SA");
+                throw new InvalidSyntaxException("Delete request received in wrong SA");
             }
         }
 
@@ -1621,8 +1621,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
                 quitNow();
             } catch (InvalidSyntaxException e) {
-                logWtf("Got deletion of a non-Current IKE SA - rekey error?", e);
-                // TODO: Send the INVALID_SYNTAX error
+                // Got deletion of a non-Current IKE SA. Program error.
+                cleanUpAndQuit(new IllegalStateException(e));
             }
         }
     }
@@ -3771,7 +3771,10 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                 finishRekey();
                 transitionTo(mIdle);
             } catch (InvalidSyntaxException e) {
-                loge("Invalid syntax on IKE Delete response. Shutting down anyways", e);
+                loge(
+                        "Invalid syntax on IKE Delete response. Shutting down old IKE SA and"
+                                + " finishing rekey",
+                        e);
                 finishRekey();
                 transitionTo(mIdle);
             } catch (IllegalStateException e) {
@@ -3784,7 +3787,10 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         protected void handleResponseGenericProcessError(
                 IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
             if (mIkeSaRecordAwaitingLocalDel == ikeSaRecord) {
-                loge("Invalid syntax on IKE Delete response. Shutting down anyways", exception);
+                loge(
+                        "Invalid syntax on IKE Delete response. Shutting down old IKE SA and"
+                                + " finishing rekey",
+                        exception);
                 finishRekey();
                 transitionTo(mIdle);
             } else {
@@ -3802,6 +3808,10 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         @Override
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            // At this point, the incoming request can ONLY be on mIkeSaRecordAwaitingRemoteDel - if
+            // it was on the surviving SA, it is deferred and the rekey is finished. It is likewise
+            // impossible to have this on the local-deleted SA, since the delete has already been
+            // acknowledged in the SimulRekeyIkeLocalDeleteRemoteDelete state.
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     try {
@@ -3814,16 +3824,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                         finishRekey();
                         transitionTo(mIdle);
                     } catch (InvalidSyntaxException e) {
-                        // TODO: The other side deleted the wrong IKE SA and we should close the
-                        // whole IKE session.
+                        // Program error.
+                        cleanUpAndQuit(new IllegalStateException(e));
                     }
                     return;
                 default:
-                    // At this point, the incoming request can ONLY be on
-                    // mIkeSaRecordAwaitingRemoteDel - if it was on the surviving SA, it is defered
-                    // and the rekey is finished. It is likewise impossible to have this on the
-                    // local-deleted SA, since the delete has already been acknowledged in the
-                    // SimulRekeyIkeLocalDeleteRemoteDelete state.
                     buildAndSendErrorNotificationResponse(
                             mIkeSaRecordAwaitingRemoteDel,
                             ikeMessage.ikeHeader.messageId,
@@ -3934,6 +3939,14 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
                 validateIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
+                mUserCbExecutor.execute(
+                        () -> {
+                            mIkeSessionCallback.onClosed();
+                        });
+
+                removeIkeSaRecord(mCurrentIkeSaRecord);
+                mCurrentIkeSaRecord.close();
+                mCurrentIkeSaRecord = null;
                 quitNow();
             } catch (InvalidSyntaxException e) {
                 handleResponseGenericProcessError(mCurrentIkeSaRecord, e);
@@ -3944,20 +3957,12 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         protected void handleResponseGenericProcessError(
                 IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
             loge("Invalid syntax on IKE Delete response. Shutting down anyways", exception);
+            handleIkeFatalError(exception);
             quitNow();
         }
 
         @Override
         public void exitState() {
-            mUserCbExecutor.execute(
-                    () -> {
-                        mIkeSessionCallback.onClosed();
-                    });
-
-            removeIkeSaRecord(mCurrentIkeSaRecord);
-            mCurrentIkeSaRecord.close();
-            mCurrentIkeSaRecord = null;
-
             mRetransmitter.stopRetransmitting();
         }
     }
