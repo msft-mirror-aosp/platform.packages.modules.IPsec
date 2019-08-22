@@ -94,6 +94,7 @@ public class EapData {
 
         // supported EAP Method types
         SUPPORTED_TYPES.add(EAP_TYPE_SIM);
+        SUPPORTED_TYPES.add(EAP_TYPE_AKA);
     }
 
     @EapType public final int eapType;
