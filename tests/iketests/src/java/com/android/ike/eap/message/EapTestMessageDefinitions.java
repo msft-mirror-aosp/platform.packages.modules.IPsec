@@ -36,11 +36,13 @@ public class EapTestMessageDefinitions {
     public static final int ID_INT = Integer.parseInt(ID, 16 /* radix */);
 
     // EAP-AKA Identity request
-    public static final String EAP_REQUEST_TYPE_DATA = "050C010000";
+    public static final String EAP_REQUEST_TYPE_DATA = "0500000D010000";
+    public static final byte[] EAP_AKA_IDENTITY_REQUEST =
+            hexStringToByteArray(EAP_REQUEST_TYPE_DATA);
     public static final byte[] EAP_REQUEST_AKA_IDENTITY_PACKET =
             hexStringToByteArray("01" + ID + "000A17" + EAP_REQUEST_TYPE_DATA);
     public static final byte[] EAP_REQUEST_IDENTITY_PACKET =
-            hexStringToByteArray(("01" + ID + "000501"));
+            hexStringToByteArray("01" + ID + "000501");
 
     // EAP-Identity: hex for ASCII in "test@android.net"
     public static final String EAP_IDENTITY_STRING = "7465737440616E64726F69642E6E6574";
