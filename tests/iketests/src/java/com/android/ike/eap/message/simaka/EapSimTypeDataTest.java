@@ -32,8 +32,8 @@ import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
-import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -53,7 +53,7 @@ public class EapSimTypeDataTest {
 
     @Before
     public void setUp() {
-        mEapSimTypeDataDecoder = new EapSimTypeDataDecoder();
+        mEapSimTypeDataDecoder = EapSimTypeData.getEapSimTypeDataDecoder();
     }
 
     @Test
@@ -78,10 +78,10 @@ public class EapSimTypeDataTest {
 
     @Test
     public void testDecode() {
-        DecodeResult result = mEapSimTypeDataDecoder.decode(EAP_SIM_START_SUBTYPE);
+        DecodeResult<EapSimTypeData> result = mEapSimTypeDataDecoder.decode(EAP_SIM_START_SUBTYPE);
 
         assertTrue(result.isSuccessfulDecode());
-        EapSimTypeData eapSimTypeData = result.eapSimTypeData;
+        EapSimTypeData eapSimTypeData = result.eapTypeData;
         assertEquals(EAP_SIM_START, eapSimTypeData.eapSubtype);
         assertTrue(eapSimTypeData.attributeMap.containsKey(EAP_AT_VERSION_LIST));
         AtVersionList atVersionList = (AtVersionList)
@@ -98,14 +98,14 @@ public class EapSimTypeDataTest {
 
     @Test
     public void testDecodeNullTypeData() {
-        DecodeResult result = mEapSimTypeDataDecoder.decode(null);
+        DecodeResult<EapSimTypeData> result = mEapSimTypeDataDecoder.decode(null);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
     }
 
     @Test
     public void testDecodeInvalidSubtype() {
-        DecodeResult result = mEapSimTypeDataDecoder.decode(INVALID_SUBTYPE);
+        DecodeResult<EapSimTypeData> result = mEapSimTypeDataDecoder.decode(INVALID_SUBTYPE);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
 
@@ -113,14 +113,15 @@ public class EapSimTypeDataTest {
 
     @Test
     public void testDecodeInvalidAtRand() {
-        DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_AT_RAND);
+        DecodeResult<EapSimTypeData> result =
+                mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_AT_RAND);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(INSUFFICIENT_CHALLENGES_CODE, result.atClientErrorCode.errorCode);
     }
 
     @Test
     public void testDecodeShortPacket() {
-        DecodeResult result = mEapSimTypeDataDecoder.decode(SHORT_TYPE_DATA);
+        DecodeResult<EapSimTypeData> result = mEapSimTypeDataDecoder.decode(SHORT_TYPE_DATA);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
 
@@ -128,7 +129,8 @@ public class EapSimTypeDataTest {
 
     @Test
     public void testDecodeInvalidEapAttribute() {
-        DecodeResult result = mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_ATTRIBUTE);
+        DecodeResult<EapSimTypeData> result =
+                mEapSimTypeDataDecoder.decode(TYPE_DATA_INVALID_ATTRIBUTE);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
     }
@@ -146,7 +148,8 @@ public class EapSimTypeDataTest {
 
     @Test
     public void testDecodeDuplicateAttributes() {
-        DecodeResult result = mEapSimTypeDataDecoder.decode(EAP_SIM_START_DUPLICATE_ATTRIBUTES);
+        DecodeResult<EapSimTypeData> result =
+                mEapSimTypeDataDecoder.decode(EAP_SIM_START_DUPLICATE_ATTRIBUTES);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
     }
