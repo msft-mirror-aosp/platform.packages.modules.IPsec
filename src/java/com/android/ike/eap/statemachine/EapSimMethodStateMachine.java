@@ -66,9 +66,9 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
 import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
-import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
@@ -102,8 +102,6 @@ import javax.crypto.spec.SecretKeySpec;
  * Method for Subscriber Identity Modules (EAP-SIM)</a>
  */
 class EapSimMethodStateMachine extends EapMethodStateMachine {
-    private static final String TAG = EapSimMethodStateMachine.class.getSimpleName();
-
     private final TelephonyManager mTelephonyManager;
     private final EapSimConfig mEapSimConfig;
     private final SecureRandom mSecureRandom;
@@ -118,7 +116,7 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE),
                 eapSimConfig,
                 secureRandom,
-                new EapSimTypeDataDecoder());
+                EapSimTypeData.getEapSimTypeDataDecoder());
     }
 
     @VisibleForTesting
@@ -182,13 +180,14 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                                 + ", received " + message.eapData.eapType));
             }
 
-            DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<EapSimTypeData> decodeResult =
+                    mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(message.eapIdentifier,
                         decodeResult.atClientErrorCode);
             }
 
-            EapSimTypeData eapSimTypeData = decodeResult.eapSimTypeData;
+            EapSimTypeData eapSimTypeData = decodeResult.eapTypeData;
             switch (eapSimTypeData.eapSubtype) {
                 case EAP_SIM_START:
                     break;
@@ -246,13 +245,14 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                                 + ", received " + message.eapData.eapType));
             }
 
-            DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<EapSimTypeData> decodeResult =
+                    mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(message.eapIdentifier,
                         decodeResult.atClientErrorCode);
             }
 
-            EapSimTypeData eapSimTypeData = decodeResult.eapSimTypeData;
+            EapSimTypeData eapSimTypeData = decodeResult.eapTypeData;
             switch (eapSimTypeData.eapSubtype) {
                 case EAP_SIM_START:
                     break;
@@ -428,13 +428,14 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                                 + ", received " + message.eapData.eapType));
             }
 
-            DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<EapSimTypeData> decodeResult =
+                    mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(message.eapIdentifier,
                         decodeResult.atClientErrorCode);
             }
 
-            EapSimTypeData eapSimTypeData = decodeResult.eapSimTypeData;
+            EapSimTypeData eapSimTypeData = decodeResult.eapTypeData;
             switch (eapSimTypeData.eapSubtype) {
                 case EAP_SIM_NOTIFICATION:
                     return handleEapSimNotification(
