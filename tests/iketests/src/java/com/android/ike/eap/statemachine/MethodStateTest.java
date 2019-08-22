@@ -16,10 +16,13 @@
 
 package com.android.ike.eap.statemachine;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapMessage.EAP_HEADER_LENGTH;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
@@ -40,6 +43,7 @@ import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
+import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.statemachine.EapStateMachine.FailureState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
@@ -48,6 +52,8 @@ import com.android.ike.eap.statemachine.EapStateMachine.SuccessState;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentMatcher;
+
+import java.security.SecureRandom;
 
 public class MethodStateTest extends EapStateTest {
     @Before
@@ -74,6 +80,25 @@ public class MethodStateTest extends EapStateTest {
         assertTrue(mEapStateMachine.getState() instanceof MethodState);
         MethodState methodState = (MethodState) mEapStateMachine.getState();
         assertTrue(methodState.mEapMethodStateMachine instanceof EapSimMethodStateMachine);
+    }
+
+    @Test
+    public void testProcessTransitionToEapAka() {
+        // make EapStateMachine with EAP-AKA configurations
+        EapSessionConfig eapSessionConfig = new EapSessionConfig.Builder()
+                .setEapAkaConfig(0, APPTYPE_USIM).build();
+        mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
+
+        try {
+            mEapStateMachine.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
+        } catch (UnsupportedOperationException ex) {
+            // TODO(b/133878992): remove once EAP-AKA is fully implemented.
+            // Could be thrown while all EapAkaMethodStateMachine states aren't fully implemented
+        }
+
+        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+        MethodState methodState = (MethodState) mEapStateMachine.getState();
+        assertTrue(methodState.mEapMethodStateMachine instanceof EapAkaMethodStateMachine);
     }
 
     @Test
