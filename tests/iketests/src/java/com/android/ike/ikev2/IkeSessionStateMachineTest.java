@@ -162,6 +162,9 @@ public final class IkeSessionStateMachineTest {
     private static final String IKE_REKEY_SA_PAYLOAD_HEX_STRING =
             "22000038000000340101080400000000000000FF0300000c0100000c800e0080030"
                     + "000080300000203000008020000020000000804000002";
+    private static final String IKE_REKEY_UNACCEPTABLE_SA_PAYLOAD_HEX_STRING =
+            "22000038000000340101080400000000000000FF0300000c0100000c800e0080030"
+                    + "00008030000020300000802000002000000080400000e";
     private static final int IKE_REKEY_SA_INITIATOR_SPI = 0xff;
     private static final String KE_PAYLOAD_HEX_STRING =
             "2800008800020000b4a2faf4bb54878ae21d638512ece55d9236fc50"
@@ -800,22 +803,44 @@ public final class IkeSessionStateMachineTest {
     }
 
     private ReceivedIkePacket makeRekeyIkeRequest() throws Exception {
+        IkeSaPayload saPayload =
+                (IkeSaPayload)
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_SA,
+                                false /*isResp*/,
+                                IKE_REKEY_SA_PAYLOAD_HEX_STRING);
+        return makeRekeyIkeRequest(saPayload);
+    }
+
+    private ReceivedIkePacket makeRekeyIkeRequestWithUnacceptableProposal() throws Exception {
+        IkeSaPayload saPayload =
+                (IkeSaPayload)
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_SA,
+                                false /*isResp*/,
+                                IKE_REKEY_UNACCEPTABLE_SA_PAYLOAD_HEX_STRING);
+        return makeRekeyIkeRequest(saPayload);
+    }
+
+    private ReceivedIkePacket makeRekeyIkeRequest(IkeSaPayload saPayload) throws Exception {
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
 
-        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
 
-        payloadHexStringList.add(IKE_REKEY_SA_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NONCE_INIT_PAYLOAD_HEX_STRING);
-        return makeDummyEncryptedReceivedIkePacket(
+
+        List<IkePayload> payloadList =
+                hexStrListToIkePayloadList(payloadTypeList, payloadHexStringList, false /*isResp*/);
+        payloadList.add(saPayload);
+
+        return makeDummyEncryptedReceivedIkePacketWithPayloadList(
                 mSpyCurrentIkeSaRecord,
                 IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
                 false /*isResp*/,
-                payloadTypeList,
-                payloadHexStringList);
+                payloadList);
     }
 
     private ReceivedIkePacket makeDeleteIkeRequest(IkeSaRecord saRecord) throws Exception {
@@ -2638,6 +2663,45 @@ public final class IkeSessionStateMachineTest {
         verify(mSpyIkeSocket)
                 .registerIke(
                         eq(mSpyRemoteInitIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
+    }
+
+    @Test
+    public void testRekeyIkeRemoteCreateHandlesInvalidReq() throws Exception {
+        setupIdleStateMachine();
+
+        // Receive Rekey request
+        ReceivedIkePacket request = makeRekeyIkeRequestWithUnacceptableProposal();
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
+        mLooper.dispatchAll();
+
+        verifyProcessRekeyReqFailure(ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+    }
+
+    @Test
+    public void testRekeyIkeRemoteCreateSaCreationFailure() throws Exception {
+        // Throw error when building new IKE SA
+        throwExceptionWhenMakeRekeyIkeSa(
+                new GeneralSecurityException("testRekeyIkeRemoteCreateSaCreationFailure"));
+        setupIdleStateMachine();
+
+        // Receive Rekey request
+        ReceivedIkePacket request = makeRekeyIkeRequest();
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
+        mLooper.dispatchAll();
+
+        verifyProcessRekeyReqFailure(ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+    }
+
+    private void verifyProcessRekeyReqFailure(int expectedErrorCode) {
+        // Verify IKE Session is back to Idle
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        // Verify error notification was sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertEquals(1, payloads.size());
+        IkeNotifyPayload notify = (IkeNotifyPayload) payloads.get(0);
+        assertEquals(expectedErrorCode, notify.notifyType);
     }
 
     @Test

@@ -63,6 +63,7 @@ import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeCertPayload;
@@ -1142,11 +1143,18 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     @VisibleForTesting
     void buildAndSendErrorNotificationResponse(
             IkeSaRecord ikeSaRecord, int messageId, @ErrorType int errorType) {
-        IkeInformationalPayload error = new IkeNotifyPayload(errorType);
+        IkeNotifyPayload error = new IkeNotifyPayload(errorType);
+        buildAndSendNotificationResponse(ikeSaRecord, messageId, error);
+    }
+
+    // Builds and sends error notification response on the provided IKE SA record
+    @VisibleForTesting
+    void buildAndSendNotificationResponse(
+            IkeSaRecord ikeSaRecord, int messageId, IkeNotifyPayload notifyPayload) {
         IkeMessage msg =
                 buildEncryptedNotificationMessage(
                         ikeSaRecord,
-                        new IkeInformationalPayload[] {error},
+                        new IkeInformationalPayload[] {notifyPayload},
                         EXCHANGE_TYPE_INFORMATIONAL,
                         true /*isResponse*/,
                         messageId);
@@ -1677,6 +1685,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_REKEY_IKE:
+                    // Errors in this exchange with no specific protocol error code will all be
+                    // classified to use NO_PROPOSAL_CHOSEN. The reason that we don't use
+                    // NO_ADDITIONAL_SAS is because it indicates "responder is unwilling to accept
+                    // any more Child SAs on this IKE SA.", according to RFC 7296. Sending this
+                    // error may mislead the remote peer.
                     try {
                         validateIkeRekeyReq(ikeMessage);
 
@@ -1715,14 +1728,17 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                         sendEncryptedIkeMessage(responseIkeMessage);
                         transitionTo(mRekeyIkeRemoteDelete);
                     } catch (IkeProtocolException e) {
-                        // TODO: Handle processing errors.
-                        loge("IkeProtocolException: ", e);
+                        handleRekeyCreationFailureAndBackToIdle(ikeMessage.ikeHeader.messageId, e);
                     } catch (GeneralSecurityException e) {
-                        // TODO: Fatal - kill session.
-                        loge("GeneralSecurityException: ", e);
+                        handleRekeyCreationFailureAndBackToIdle(
+                                ikeMessage.ikeHeader.messageId,
+                                new NoValidProposalChosenException(
+                                        "Error in building new IKE SA", e));
                     } catch (IOException e) {
-                        // TODO: SPI allocation collided - they reused an SPI. Terminate session.
-                        loge("IOException: ", e);
+                        handleRekeyCreationFailureAndBackToIdle(
+                                ikeMessage.ikeHeader.messageId,
+                                new NoValidProposalChosenException(
+                                        "IKE SPI allocation collided - they reused an SPI.", e));
                     }
                     return;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
@@ -1747,6 +1763,16 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             // TODO: Extract payloads and re-direct to awaiting ChildSessionStateMachines.
+        }
+
+        private void handleRekeyCreationFailureAndBackToIdle(
+                int messageId, IkeProtocolException e) {
+            loge("Received invalid Rekey IKE request. Reject with error notification", e);
+
+            buildAndSendNotificationResponse(
+                    mCurrentIkeSaRecord, messageId, e.buildNotifyPayload());
+
+            transitionTo(mIdle);
         }
     }
 
@@ -3146,16 +3172,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
         @VisibleForTesting
         void validateIkeRekeyReq(IkeMessage ikeMessage) throws InvalidSyntaxException {
-            // TODO: Validate it against mIkeSessionOptions.
-
-            int exchangeType = ikeMessage.ikeHeader.exchangeType;
-            if (exchangeType != IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA) {
-                throw new InvalidSyntaxException(
-                        "Expected EXCHANGE_TYPE_CREATE_CHILD_SA but received: " + exchangeType);
-            }
-            if (ikeMessage.ikeHeader.isResponseMsg) {
-                throw new IllegalArgumentException("Invalid IKE Rekey request - was a response.");
-            }
+            // Skip validation of exchange type since it has been done during decoding request.
 
             List<IkeNotifyPayload> notificationPayloads =
                     ikeMessage.getPayloadListForType(
