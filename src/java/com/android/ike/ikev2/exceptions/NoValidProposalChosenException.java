@@ -38,6 +38,16 @@ public final class NoValidProposalChosenException extends IkeProtocolException {
     }
 
     /**
+     * Construct an instance of NoValidProposalChosenException.
+     *
+     * @param message the descriptive message.
+     * @param cause the reason of exception.
+     */
+    public NoValidProposalChosenException(String message, Throwable cause) {
+        super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, cause);
+    }
+
+    /**
      * Construct a instance of NoValidProposalChosenException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
