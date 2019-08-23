@@ -143,7 +143,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         return EAP_TYPE_SIM;
     }
 
-    protected class CreatedState extends EapState {
+    protected class CreatedState extends EapMethodState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -190,7 +190,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         }
     }
 
-    protected class StartState extends EapState {
+    protected class StartState extends EapMethodState {
         private final String mTAG = StartState.class.getSimpleName();
         private final AtNonceMt mAtNonceMt;
 
@@ -350,7 +350,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         }
     }
 
-    protected class ChallengeState extends EapState {
+    protected class ChallengeState extends EapMethodState {
         private final String mTAG = ChallengeState.class.getSimpleName();
         private final int mBytesPerShort = 2;
         private final int mVersionLenBytes = 2;
