@@ -68,7 +68,7 @@ public class AtAutnTest {
 
     @Test
     public void testEncode() throws Exception {
-        AtAutn atAutn = new AtAutn(AT_AUTN.length, AUTN_BYTES);
+        AtAutn atAutn = new AtAutn(AUTN_BYTES);
 
         ByteBuffer result = ByteBuffer.allocate(AT_AUTN.length);
         atAutn.encode(result);
