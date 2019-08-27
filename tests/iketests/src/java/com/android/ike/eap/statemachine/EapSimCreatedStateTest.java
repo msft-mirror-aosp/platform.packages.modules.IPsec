@@ -37,8 +37,8 @@ import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
-import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.CreatedState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
@@ -86,7 +86,8 @@ public class EapSimCreatedStateTest extends EapSimStateTest {
 
         List<EapSimAkaAttribute> attributes = Arrays.asList(
                 new AtVersionList(8, 1), new AtPermanentIdReq());
-        DecodeResult decodeResult = new DecodeResult(new EapSimTypeData(EAP_SIM_START, attributes));
+        DecodeResult<EapSimTypeData> decodeResult =
+                new DecodeResult<>(new EapSimTypeData(EAP_SIM_START, attributes));
         when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
 
         mEapSimMethodStateMachine.process(eapMessage);

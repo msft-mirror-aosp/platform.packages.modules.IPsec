@@ -40,8 +40,9 @@ import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
+import com.android.ike.eap.message.simaka.EapSimTypeData;
 import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
-import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.EapSimState;
 
 import org.junit.Before;
@@ -103,7 +104,7 @@ public class EapSimStateTest {
         EapSimState preProcess = (EapSimState) mEapSimMethodStateMachine.getState();
 
         AtClientErrorCode atClientErrorCode = AtClientErrorCode.INSUFFICIENT_CHALLENGES;
-        DecodeResult decodeResult = new DecodeResult(atClientErrorCode);
+        DecodeResult<EapSimTypeData> decodeResult = new DecodeResult<>(atClientErrorCode);
         when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
 
         EapResult result = mEapSimMethodStateMachine.process(eapMessage);
