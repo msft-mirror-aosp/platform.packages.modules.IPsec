@@ -73,7 +73,6 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -101,7 +100,7 @@ import javax.crypto.spec.SecretKeySpec;
  * @see <a href="https://tools.ietf.org/html/rfc4186">RFC 4186, Extensible Authentication Protocol
  * Method for Subscriber Identity Modules (EAP-SIM)</a>
  */
-class EapSimMethodStateMachine extends EapMethodStateMachine {
+class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
     private final TelephonyManager mTelephonyManager;
     private final EapSimConfig mEapSimConfig;
     private final SecureRandom mSecureRandom;
@@ -144,20 +143,7 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         return EAP_TYPE_SIM;
     }
 
-    @VisibleForTesting
-    protected SimpleState getState() {
-        return mState;
-    }
-
-    @VisibleForTesting
-    protected void transitionTo(EapSimState newState) {
-        super.transitionTo(newState);
-    }
-
-    protected abstract class EapSimState extends SimpleState {
-    }
-
-    protected class CreatedState extends EapSimState {
+    protected class CreatedState extends EapState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -183,7 +169,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             DecodeResult<EapSimTypeData> decodeResult =
                     mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         decodeResult.atClientErrorCode);
             }
 
@@ -197,7 +185,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                             message.eapIdentifier,
                             eapSimTypeData);
                 default:
-                    return buildClientErrorResponse(message.eapIdentifier,
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_SIM,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -214,7 +204,7 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class StartState extends EapSimState {
+    protected class StartState extends EapState {
         private final String mTAG = StartState.class.getSimpleName();
         private final AtNonceMt mAtNonceMt;
 
@@ -248,7 +238,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             DecodeResult<EapSimTypeData> decodeResult =
                     mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         decodeResult.atClientErrorCode);
             }
 
@@ -269,12 +261,16 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                     return transitionAndProcess(
                             new ChallengeState(mVersions, mAtNonceMt, mIdentity), message);
                 default:
-                    return buildClientErrorResponse(message.eapIdentifier,
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_SIM,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
             if (!isValidStartAttributes(eapSimTypeData)) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -286,7 +282,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                     eapSimTypeData.attributeMap.get(EAP_AT_VERSION_LIST);
             mVersions = atVersionList.versions;
             if (!mVersions.contains(AtSelectedVersion.SUPPORTED_VERSION)) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNSUPPORTED_VERSION);
             }
             responseAttributes.add(AtSelectedVersion.getSelectedVersion());
@@ -376,7 +374,7 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class ChallengeState extends EapSimState {
+    protected class ChallengeState extends EapState {
         private final String mTAG = ChallengeState.class.getSimpleName();
         private final int mBytesPerShort = 2;
         private final int mVersionLenBytes = 2;
@@ -431,7 +429,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             DecodeResult<EapSimTypeData> decodeResult =
                     mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         decodeResult.atClientErrorCode);
             }
 
@@ -445,12 +445,16 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 case EAP_SIM_CHALLENGE:
                     break;
                 default:
-                    return buildClientErrorResponse(message.eapIdentifier,
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_SIM,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
             if (!isValidChallengeAttributes(eapSimTypeData)) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -459,7 +463,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 randChallengeResults = getRandChallengeResults(eapSimTypeData);
             } catch (EapSimInvalidLengthException | BufferUnderflowException ex) {
                 LOG.e(mTAG, "Invalid SRES/Kc tuple returned from SIM", ex);
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -468,7 +474,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 generateAndPersistKeys(sha1, new Fips186_2Prf(), randChallengeResults);
             } catch (NoSuchAlgorithmException | BufferUnderflowException ex) {
                 LOG.e(mTAG, "Error while creating keys", ex);
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -488,7 +496,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                     LOG.e(mTAG, "Received message with invalid Mac."
                             + " expected=" + Arrays.toString(mac)
                             + ", actual=" + Arrays.toString(atMac.mac));
-                    return buildClientErrorResponse(message.eapIdentifier,
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_SIM,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
                 }
             } catch (GeneralSecurityException | EapSilentException
@@ -658,19 +668,12 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class FinalState extends EapSimState {
+    protected class FinalState extends EapState {
         @Override
         public EapResult process(EapMessage msg) {
             return new EapError(
                     new IllegalStateException("Attempting to process from a FinalState"));
         }
-    }
-
-    private EapResult handleEapNotification(String tag, EapMessage message) {
-        // Type-Data will be UTF-8 encoded ISO 10646 characters (RFC 3748 Section 5.2)
-        String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
-        LOG.i(tag, "Received EAP-Request/Notification: [" + content + "]");
-        return EapMessage.getNotificationResponse(message.eapIdentifier);
     }
 
     @VisibleForTesting
@@ -687,19 +690,8 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    @VisibleForTesting
-    EapResult buildClientErrorResponse(int identifier, AtClientErrorCode clientErrorCode) {
-        EapSimTypeData eapSimTypeData = new EapSimTypeData(
-                EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
-        byte[] encodedTypeData = eapSimTypeData.encode();
-
-        EapData eapData = new EapData(EAP_TYPE_SIM, encodedTypeData);
-        try {
-            EapMessage response = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
-            return EapResponse.getEapResponse(response);
-        } catch (EapSilentException ex) {
-            return new EapError(ex);
-        }
+    EapSimTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
+        return new EapSimTypeData(EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
     }
 
     @VisibleForTesting
@@ -777,13 +769,19 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         // P bit of notification code is only allowed after a successful challenge round. This is
         // only possible in the ChallengeState (RFC 4186#6.1)
         if (isPreChallengeState && !atNotification.isPreSuccessfulChallenge) {
-            return buildClientErrorResponse(identifier, AtClientErrorCode.UNABLE_TO_PROCESS);
+            return buildClientErrorResponse(
+                    identifier,
+                    EAP_TYPE_SIM,
+                    AtClientErrorCode.UNABLE_TO_PROCESS);
         }
 
         if (atNotification.isPreSuccessfulChallenge) {
             // AT_MAC attribute must not be included when the P bit is set (RFC 4186#9.8)
             if (eapSimTypeData.attributeMap.containsKey(EAP_AT_MAC)) {
-                return buildClientErrorResponse(identifier, AtClientErrorCode.UNABLE_TO_PROCESS);
+                return buildClientErrorResponse(
+                        identifier,
+                        EAP_TYPE_SIM,
+                        AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
             return buildResponseMessage(EAP_SIM_NOTIFICATION, identifier, Arrays.asList());
@@ -791,6 +789,7 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             // MAC must be included for messages with their P bit not set (RFC 4186#9.8)
             return buildClientErrorResponse(
                     identifier,
+                    EAP_TYPE_SIM,
                     AtClientErrorCode.UNABLE_TO_PROCESS);
         }
 
@@ -804,7 +803,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             AtMac atMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
             if (!Arrays.equals(mac, atMac.mac)) {
                 // MAC in message != calculated mac
-                return buildClientErrorResponse(identifier,
+                return buildClientErrorResponse(
+                        identifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
         } catch (EapSilentException | EapSimAkaInvalidAttributeException ex) {

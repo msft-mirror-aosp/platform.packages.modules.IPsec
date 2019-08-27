@@ -26,7 +26,6 @@ import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
-import com.android.internal.annotations.VisibleForTesting;
 
 /**
  * EapAkaMethodStateMachine represents the valid paths possible for the EAP-AKA protocol.
@@ -68,15 +67,7 @@ class EapAkaMethodStateMachine extends EapMethodStateMachine {
         return EAP_TYPE_AKA;
     }
 
-    @VisibleForTesting
-    protected SimpleState getState() {
-        return mState;
-    }
-
-    protected abstract class EapAkaState extends SimpleState {
-    }
-
-    protected class CreatedState extends EapAkaState {
+    protected class CreatedState extends EapState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -85,7 +76,7 @@ class EapAkaMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class IdentityState extends EapAkaState {
+    protected class IdentityState extends EapState {
         private final String mTAG = IdentityState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -94,7 +85,7 @@ class EapAkaMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class ChallengeState extends EapAkaState {
+    protected class ChallengeState extends EapState {
         private final String mTAG = ChallengeState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -103,7 +94,7 @@ class EapAkaMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class FinalState extends EapAkaState {
+    protected class FinalState extends EapState {
         @Override
         public EapResult process(EapMessage msg) {
             return new EapError(
