@@ -16,10 +16,15 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.EapAuthenticator.LOG;
+
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.utils.SimpleStateMachine;
+import com.android.internal.annotations.VisibleForTesting;
+
+import java.nio.charset.StandardCharsets;
 
 /**
  * EapMethodStateMachine is an abstract class representing a state machine for EAP Method
@@ -33,4 +38,28 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
      */
     @EapMethod
     abstract int getEapMethod();
+
+    protected EapResult handleEapNotification(String tag, EapMessage message) {
+        // Type-Data will be UTF-8 encoded ISO 10646 characters (RFC 3748 Section 5.2)
+        String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
+        LOG.i(tag, "Received EAP-Request/Notification: [" + content + "]");
+        return EapMessage.getNotificationResponse(message.eapIdentifier);
+    }
+
+    @VisibleForTesting
+    protected SimpleState getState() {
+        return mState;
+    }
+
+    @VisibleForTesting
+    protected void transitionTo(EapState newState) {
+        LOG.d(
+                this.getClass().getSimpleName(),
+                "Transitioning from " + mState.getClass().getSimpleName()
+                        + " to " + newState.getClass().getSimpleName());
+        super.transitionTo(newState);
+    }
+
+    protected abstract class EapState extends SimpleState {
+    }
 }

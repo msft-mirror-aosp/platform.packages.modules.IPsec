@@ -19,6 +19,7 @@ package com.android.ike.eap.statemachine;
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_KC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_SRES;

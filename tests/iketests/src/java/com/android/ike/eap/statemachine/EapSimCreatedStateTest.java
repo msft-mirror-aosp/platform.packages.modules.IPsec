@@ -17,7 +17,9 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 
