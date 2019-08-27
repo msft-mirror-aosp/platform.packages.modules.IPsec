@@ -36,6 +36,11 @@ import com.android.internal.annotations.VisibleForTesting;
  * Protocol for Authentication and Key Agreement (EAP-AKA)</a>
  */
 public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine {
+    @Override
+    EapResult handleEapNotification(String tag, EapMessage message) {
+        return EapStateMachine.handleNotification(tag, message);
+    }
+
     @VisibleForTesting
     EapResult buildClientErrorResponse(
             int eapIdentifier,
