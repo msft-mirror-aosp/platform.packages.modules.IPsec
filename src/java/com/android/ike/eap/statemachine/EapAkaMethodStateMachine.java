@@ -25,6 +25,7 @@ import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENG
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_ERROR;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_NOTIFICATION;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_SYNCHRONIZATION_FAILURE;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_AUTN;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
@@ -43,6 +44,7 @@ import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
@@ -51,13 +53,17 @@ import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAutn;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAuts;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandAka;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRes;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -244,6 +250,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final int mIkLenBytes = 16;
         private final int mCkLenBytes = 16;
 
+        // Tags for Successful and Synchronization responses
+        private final byte mSuccess = (byte) 0xDB;
+        private final byte mSynchronization = (byte) 0xDC;
+
         public EapResult process(EapMessage message) {
             if (message.eapCode == EAP_CODE_SUCCESS) {
                 if (!mHadSuccessfulChallenge) {
@@ -298,6 +308,32 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
+            RandChallengeResult result;
+            try {
+                result = getRandChallengeResult(eapAkaTypeData);
+            } catch (EapSimAkaInvalidLengthException | BufferUnderflowException ex) {
+                LOG.e(mTAG, "Invalid response returned from SIM", ex);
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_AKA,
+                        AtClientErrorCode.UNABLE_TO_PROCESS);
+            } catch (EapSimAkaAuthenticationFailureException ex) {
+                return new EapError(ex);
+            }
+
+            if (!result.isSuccessfulResult()) {
+                try {
+                    return buildResponseMessage(
+                            EAP_TYPE_AKA,
+                            EAP_AKA_SYNCHRONIZATION_FAILURE,
+                            message.eapIdentifier,
+                            Arrays.asList(new AtAuts(result.auts)));
+                } catch (EapSimAkaInvalidAttributeException ex) {
+                    LOG.wtf(mTAG, "Error creating an AtAuts attr", ex);
+                    return new EapError(ex);
+                }
+            }
+
             // TODO(b/133879622): implement ChallengeState#process with EapAkaTypeData decoding
             return null;
         }
@@ -335,6 +371,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 this.ck = null;
                 this.auts = auts;
             }
+
+            private boolean isSuccessfulResult() {
+                return res != null && ik != null && ck != null;
+            }
         }
 
         private boolean isValidChallengeAttributes(EapAkaTypeData eapAkaTypeData) {
@@ -344,6 +384,54 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             return attrs.contains(EAP_AT_RAND)
                     && attrs.contains(EAP_AT_AUTN)
                     && attrs.contains(EAP_AT_MAC);
+        }
+
+        private RandChallengeResult getRandChallengeResult(EapAkaTypeData eapAkaTypeData)
+                throws EapSimAkaAuthenticationFailureException, EapSimAkaInvalidLengthException {
+            AtRandAka atRandAka = (AtRandAka) eapAkaTypeData.attributeMap.get(EAP_AT_RAND);
+            AtAutn atAutn = (AtAutn) eapAkaTypeData.attributeMap.get(EAP_AT_AUTN);
+
+            // pre-Base64 formatting needs to be: [Length][RAND][Length][AUTN]
+            int randLen = atRandAka.rand.length;
+            int autnLen = atAutn.autn.length;
+            ByteBuffer formattedChallenge = ByteBuffer.allocate(1 + randLen + 1 + autnLen);
+            formattedChallenge.put((byte) randLen);
+            formattedChallenge.put(atRandAka.rand);
+            formattedChallenge.put((byte) autnLen);
+            formattedChallenge.put(atAutn.autn);
+
+            byte[] challengeResponse =
+                    processUiccAuthentication(
+                            mTAG,
+                            TelephonyManager.AUTHTYPE_EAP_AKA,
+                            formattedChallenge.array());
+            ByteBuffer buffer = ByteBuffer.wrap(challengeResponse);
+            byte tag = buffer.get();
+
+            switch (tag) {
+                case mSuccess:
+                    // response format: [tag][RES length][RES][IK length][IK][CK length][CK]
+                    break;
+                case mSynchronization:
+                    // response format: [tag][AUTS length][AUTS]
+                    byte[] auts = new byte[Byte.toUnsignedInt(buffer.get())];
+                    buffer.get(auts);
+                    return new RandChallengeResult(auts);
+                default:
+                    throw new EapSimAkaAuthenticationFailureException(
+                            "Invalid tag for UICC response: " + String.format("%02X", tag));
+            }
+
+            byte[] res = new byte[Byte.toUnsignedInt(buffer.get())];
+            buffer.get(res);
+
+            byte[] ik = new byte[Byte.toUnsignedInt(buffer.get())];
+            buffer.get(ik);
+
+            byte[] ck = new byte[Byte.toUnsignedInt(buffer.get())];
+            buffer.get(ck);
+
+            return new RandChallengeResult(res, ik, ck);
         }
     }
 
