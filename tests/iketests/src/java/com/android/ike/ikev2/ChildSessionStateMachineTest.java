@@ -49,6 +49,7 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -63,7 +64,6 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
-import android.os.Looper;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -97,6 +97,7 @@ import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.utils.Log;
 import com.android.server.IpSecService;
 
 import libcore.net.InetAddressUtils;
@@ -116,6 +117,8 @@ import java.util.List;
 import java.util.concurrent.Executor;
 
 public final class ChildSessionStateMachineTest {
+    private static final String TAG = "ChildSessionStateMachineTest";
+
     private static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
@@ -165,6 +168,8 @@ public final class ChildSessionStateMachineTest {
     private ChildSaRecord mSpyLocalInitNewChildSaRecord;
     private ChildSaRecord mSpyRemoteInitNewChildSaRecord;
 
+    private Log mSpyIkeLog;
+
     private ISaRecordHelper mMockSaRecordHelper;
 
     private ChildSessionOptions mChildSessionOptions;
@@ -203,7 +208,8 @@ public final class ChildSessionStateMachineTest {
 
     @Before
     public void setup() throws Exception {
-        if (Looper.myLooper() == null) Looper.prepare();
+        mSpyIkeLog = TestUtils.makeSpyLogThrowExceptionForWtf(TAG);
+        IkeManager.setIkeLog(mSpyIkeLog);
 
         mIkePrf =
                 IkeMacPrf.create(
@@ -249,6 +255,7 @@ public final class ChildSessionStateMachineTest {
     @After
     public void tearDown() {
         mChildSessionStateMachine.setDbg(false);
+        IkeManager.resetIkeLog();
         SaRecord.setSaRecordHelper(new SaRecordHelper());
     }
 
@@ -1103,8 +1110,7 @@ public final class ChildSessionStateMachineTest {
 
         // Test receiving Delete response with missing Delete payload
         mChildSessionStateMachine.receiveResponse(
-                EXCHANGE_TYPE_INFORMATIONAL,
-                new ArrayList<IkePayload>());
+                EXCHANGE_TYPE_INFORMATIONAL, new ArrayList<IkePayload>());
         mLooper.dispatchAll();
 
         // Verify rekey has finished
@@ -1537,10 +1543,14 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testHandleUnexpectedException() throws Exception {
+        Log spyIkeLog = TestUtils.makeSpyLogDoLogErrorForWtf(TAG);
+        IkeManager.setIkeLog(spyIkeLog);
+
         mChildSessionStateMachine.createChildSession(
                 null /*localAddress*/, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
         mLooper.dispatchAll();
 
         verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 }
