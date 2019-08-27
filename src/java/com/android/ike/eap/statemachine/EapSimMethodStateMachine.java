@@ -147,23 +147,9 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
-            if (message.eapCode == EAP_CODE_SUCCESS) {
-                // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
-                // so receiving a premature SUCCESS message is an unrecoverable error.
-                return new EapError(
-                        new EapInvalidRequestException(
-                                "Received an EAP-Success in the CreatedState"));
-            } else if (message.eapCode == EAP_CODE_FAILURE) {
-                transitionTo(new FinalState());
-                return new EapFailure();
-            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
-                return handleEapNotification(mTAG, message);
-            }
-
-            if (message.eapData.eapType != getEapMethod()) {
-                return new EapError(new EapInvalidRequestException(
-                        "Expected EAP Type " + getEapMethod()
-                                + ", received " + message.eapData.eapType));
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
             }
 
             DecodeResult<EapSimTypeData> decodeResult =
@@ -216,23 +202,9 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         }
 
         public EapResult process(EapMessage message) {
-            if (message.eapCode == EAP_CODE_SUCCESS) {
-                // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
-                // so receiving a premature SUCCESS message is an unrecoverable error.
-                return new EapError(
-                        new EapInvalidRequestException(
-                                "Received an EAP-Success in the StartState"));
-            } else if (message.eapCode == EAP_CODE_FAILURE) {
-                transitionTo(new FinalState());
-                return new EapFailure();
-            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
-                return handleEapNotification(mTAG, message);
-            }
-
-            if (message.eapData.eapType != getEapMethod()) {
-                return new EapError(new EapInvalidRequestException(
-                        "Expected EAP Type " + getEapMethod()
-                                + ", received " + message.eapData.eapType));
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
             }
 
             DecodeResult<EapSimTypeData> decodeResult =
@@ -665,14 +637,6 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             LOG.d(mTAG, "K_aut=" + LOG.pii(mKAut));
             LOG.d(mTAG, "MSK=" + LOG.pii(mMsk));
             LOG.d(mTAG, "EMSK=" + LOG.pii(mEmsk));
-        }
-    }
-
-    protected class FinalState extends EapState {
-        @Override
-        public EapResult process(EapMessage msg) {
-            return new EapError(
-                    new IllegalStateException("Attempting to process from a FinalState"));
         }
     }
 

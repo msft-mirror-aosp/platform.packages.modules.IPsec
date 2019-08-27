@@ -79,9 +79,9 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNonceMt;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
+import com.android.ike.eap.statemachine.EapMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState.RandChallengeResult;
-import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 
 import org.junit.Test;
 
