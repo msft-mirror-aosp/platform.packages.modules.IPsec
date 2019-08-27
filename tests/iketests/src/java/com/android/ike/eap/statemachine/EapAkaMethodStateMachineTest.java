@@ -20,6 +20,9 @@ import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import android.content.Context;
@@ -47,5 +50,10 @@ public class EapAkaMethodStateMachineTest {
     @Test
     public void testEapAkaMethodStateMachineStartState() {
         assertTrue(mEapAkaMethodStateMachine.getState() instanceof CreatedState);
+    }
+
+    @Test
+    public void testGetEapMethod() {
+        assertEquals(EAP_TYPE_AKA, mEapAkaMethodStateMachine.getEapMethod());
     }
 }
