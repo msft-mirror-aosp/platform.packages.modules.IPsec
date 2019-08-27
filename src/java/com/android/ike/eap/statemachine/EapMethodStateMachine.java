@@ -17,14 +17,20 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.EapAuthenticator.LOG;
+import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
+
+import android.annotation.Nullable;
 
 import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapFailure;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.utils.SimpleStateMachine;
 import com.android.internal.annotations.VisibleForTesting;
-
-import java.nio.charset.StandardCharsets;
 
 /**
  * EapMethodStateMachine is an abstract class representing a state machine for EAP Method
@@ -38,13 +44,6 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
      */
     @EapMethod
     abstract int getEapMethod();
-
-    protected EapResult handleEapNotification(String tag, EapMessage message) {
-        // Type-Data will be UTF-8 encoded ISO 10646 characters (RFC 3748 Section 5.2)
-        String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
-        LOG.i(tag, "Received EAP-Request/Notification: [" + content + "]");
-        return EapMessage.getNotificationResponse(message.eapIdentifier);
-    }
 
     @VisibleForTesting
     protected SimpleState getState() {
@@ -60,6 +59,47 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
         super.transitionTo(newState);
     }
 
+    abstract EapResult handleEapNotification(String tag, EapMessage message);
+
     protected abstract class EapState extends SimpleState {
+        /**
+         * Handles premature EAP-Success and EAP-Failure messages, as well as EAP-Notification
+         * messages.
+         *
+         * @param tag the String logging tag to be used while handing message
+         * @param message the EapMessage to be checked for early Success/Failure/Notification
+         *                messages
+         * @return the EapResult generated from handling the give EapMessage, or null if the message
+         * Type matches that of the current EAP method
+         */
+        @Nullable
+        EapResult handleEapSuccessFailureNotification(String tag, EapMessage message) {
+            if (message.eapCode == EAP_CODE_SUCCESS) {
+                // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
+                // so receiving a premature SUCCESS message is an unrecoverable error.
+                return new EapError(
+                        new EapInvalidRequestException(
+                                "Received an EAP-Success in the CreatedState"));
+            } else if (message.eapCode == EAP_CODE_FAILURE) {
+                transitionTo(new EapAkaMethodStateMachine.FinalState());
+                return new EapFailure();
+            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
+                return handleEapNotification(tag, message);
+            } else if (message.eapData.eapType != getEapMethod()) {
+                return new EapError(new EapInvalidRequestException(
+                        "Expected EAP Type " + getEapMethod()
+                                + ", received " + message.eapData.eapType));
+            }
+
+            return null;
+        }
+    }
+
+    protected class FinalState extends EapState {
+        @Override
+        public EapResult process(EapMessage msg) {
+            return new EapError(
+                    new IllegalStateException("Attempting to process from a FinalState"));
+        }
     }
 }
