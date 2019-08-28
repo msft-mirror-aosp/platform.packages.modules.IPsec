@@ -274,7 +274,11 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 return new EapError(ex);
             }
 
-            return buildResponseMessage(EAP_SIM_START, message.eapIdentifier, responseAttributes);
+            return buildResponseMessage(
+                    EAP_TYPE_SIM,
+                    EAP_SIM_START,
+                    message.eapIdentifier,
+                    responseAttributes);
         }
 
         /**
@@ -640,22 +644,12 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         }
     }
 
-    @VisibleForTesting
-    EapResult buildResponseMessage(int subtype, int identifier,
-            List<EapSimAkaAttribute> eapSimAkaAttributes) {
-        EapSimTypeData eapSimTypeData = new EapSimTypeData(subtype, eapSimAkaAttributes);
-        EapData eapData = new EapData(EAP_TYPE_SIM, eapSimTypeData.encode());
-
-        try {
-            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
-            return EapResponse.getEapResponse(eapMessage);
-        } catch (EapSilentException ex) {
-            return new EapError(ex);
-        }
-    }
-
     EapSimTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
         return new EapSimTypeData(EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
+    }
+
+    EapSimTypeData getEapSimAkaTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
+        return new EapSimTypeData(eapSubtype, attributes);
     }
 
     @VisibleForTesting
@@ -748,7 +742,11 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
-            return buildResponseMessage(EAP_SIM_NOTIFICATION, identifier, Arrays.asList());
+            return buildResponseMessage(
+                    EAP_TYPE_SIM,
+                    EAP_SIM_NOTIFICATION,
+                    identifier,
+                    Arrays.asList());
         } else if (!eapSimTypeData.attributeMap.containsKey(EAP_AT_MAC)) {
             // MAC must be included for messages with their P bit not set (RFC 4186#9.8)
             return buildClientErrorResponse(
