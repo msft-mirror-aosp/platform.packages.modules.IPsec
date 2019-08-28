@@ -15,6 +15,7 @@
  */
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.IkeManager.getIkeLog;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
@@ -49,7 +50,6 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 import android.os.Message;
-import android.util.Log;
 import android.util.Pair;
 
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
@@ -79,7 +79,6 @@ import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
-import com.android.internal.util.StateMachine;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -110,7 +109,7 @@ import java.util.concurrent.TimeUnit;
  *      Exchange Type = {Create | Delete}
  * </pre>
  */
-public class ChildSessionStateMachine extends StateMachine {
+public class ChildSessionStateMachine extends SessionStateMachineBase {
     private static final String TAG = "ChildSessionStateMachine";
 
     private static final int SPI_NOT_REGISTERED = 0;
@@ -604,7 +603,7 @@ public class ChildSessionStateMachine extends StateMachine {
                     () -> {
                         mUserCallback.onError(new IkeInternalException(e));
                     });
-            Log.wtf(TAG, "Unexpected exception in " + getCurrentState().getName(), e);
+            logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
         }
 
@@ -654,8 +653,7 @@ public class ChildSessionStateMachine extends StateMachine {
 
         if (!expectSaClosed) return;
 
-        Log.wtf(
-                TAG,
+        logWtf(
                 "ChildSaRecord with local SPI: "
                         + childSaRecord.getLocalSpi()
                         + " is not correctly closed.");
@@ -1002,7 +1000,7 @@ public class ChildSessionStateMachine extends StateMachine {
          */
         protected void handleDeleteSessionRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
-                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
+                logWtf("Found no remote SPI for mCurrentChildSaRecord");
                 replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
                 mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
 
@@ -1133,7 +1131,7 @@ public class ChildSessionStateMachine extends StateMachine {
                             // request can be ONLY for mCurrentChildSaRecord at this point.
                             if (!hasRemoteChildSpiForDelete(
                                     req.requestPayloads, mCurrentChildSaRecord)) {
-                                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
+                                logWtf("Found no remote SPI for mCurrentChildSaRecord");
 
                                 replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
                                 mChildSmCallback.onFatalIkeSessionError(
@@ -1664,7 +1662,7 @@ public class ChildSessionStateMachine extends StateMachine {
 
         private void handleDeleteRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
-                // Response received on incorrect SA
+                // Request received on incorrect SA
                 cleanUpAndQuit(
                         new IllegalStateException(
                                 "Found no remote SPI for current SA in received Delete"
@@ -1937,9 +1935,7 @@ public class ChildSessionStateMachine extends StateMachine {
                             return new CreateChildResult(
                                     CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY, exception);
                         } else {
-                            Log.w(
-                                    TAG,
-                                    "Received unexpected error notification: " + notify.notifyType);
+                            logw("Received unexpected error notification: " + notify.notifyType);
                         }
                     } catch (InvalidSyntaxException e) {
                         return new CreateChildResult(CREATE_STATUS_CHILD_ERROR_INVALID_MSG, e);
@@ -1962,8 +1958,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         break;
                     default:
                         // Unknown and unexpected status notifications are ignored as per RFC7296.
-                        Log.w(
-                                TAG,
+                        logw(
                                 "Received unknown or unexpected status notifications with notify"
                                         + " type: "
                                         + notify.notifyType);
@@ -2065,8 +2060,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         // together in higher layer.
                         break;
                     default:
-                        Log.w(
-                                TAG,
+                        logw(
                                 "Received unexpected payload in Create Child SA message. Payload"
                                         + " type: "
                                         + payload.payloadType);
@@ -2087,8 +2081,7 @@ public class ChildSessionStateMachine extends StateMachine {
                             || hasNoncePayload
                             || hasTsInitPayload
                             || hasTsRespPayload)) {
-                Log.w(
-                        TAG,
+                logw(
                         "Unexpected payload found in an INFORMATIONAL message: SA, KE, Nonce,"
                                 + " TS-Initiator or TS-Responder");
             }
@@ -2167,6 +2160,10 @@ public class ChildSessionStateMachine extends StateMachine {
                 // payload, and the responder chose DH_GROUP_NONE.
                 throw new InvalidSyntaxException("Received unexpected KE Payload.");
             }
+        }
+
+        private static void logw(String s) {
+            getIkeLog().w(TAG, s);
         }
     }
 
