@@ -687,6 +687,23 @@ public final class ChildSessionStateMachineTest {
     }
 
     @Test
+    public void testDeleteChildLocalHandlesInvalidResp() throws Exception {
+        setupIdleStateMachine();
+
+        // Test initiating Delete request
+        mChildSessionStateMachine.deleteChildSession();
+        mLooper.dispatchAll();
+
+        // Test receiving response with no Delete Payload
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
+        mLooper.dispatchAll();
+
+        assertNull(mChildSessionStateMachine.getCurrentState());
+        verify(mMockChildSessionCallback).onError(any(InvalidSyntaxException.class));
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+    }
+
+    @Test
     public void testDeleteChildLocalInInitial() throws Exception {
         mChildSessionStateMachine.deleteChildSession();
         mLooper.dispatchAll();
