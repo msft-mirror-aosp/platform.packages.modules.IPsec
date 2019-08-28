@@ -19,28 +19,28 @@ package com.android.ike.eap.exceptions.simaka;
 import android.telephony.TelephonyManager;
 
 /**
- * EapSimIdentityUnavailableException is thrown when the client's IMSI is unavailable from
+ * EapSimAkaIdentityUnavailableException is thrown when the client's IMSI is unavailable from
  * {@link TelephonyManager#getSubscriberId()}.
  */
-public class EapSimIdentityUnavailableException extends Exception {
+public class EapSimAkaIdentityUnavailableException extends Exception {
     /**
-     * Construct an instance of EapSimIdentityUnavailableException with the specified detail
+     * Construct an instance of EapSimAkaIdentityUnavailableException with the specified detail
      * message.
      *
      * @param message the detail message.
      */
-    public EapSimIdentityUnavailableException(String message) {
+    public EapSimAkaIdentityUnavailableException(String message) {
         super(message);
     }
 
     /**
-     * Construct an instance of EapSimIdentityUnavailableException with the specified message and
+     * Construct an instance of EapSimAkaIdentityUnavailableException with the specified message and
      * cause.
      *
      * @param message the detail message.
      * @param cause the cause.
      */
-    public EapSimIdentityUnavailableException(String message, Throwable cause) {
+    public EapSimAkaIdentityUnavailableException(String message, Throwable cause) {
         super(message, cause);
     }
 }

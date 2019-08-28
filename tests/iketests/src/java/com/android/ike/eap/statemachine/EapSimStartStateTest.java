@@ -51,7 +51,7 @@ import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
-import com.android.ike.eap.exceptions.simaka.EapSimIdentityUnavailableException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
@@ -188,7 +188,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
 
         EapResult result = mStartState.process(eapMessage);
         EapError eapError = (EapError) result;
-        assertTrue(eapError.cause instanceof EapSimIdentityUnavailableException);
+        assertTrue(eapError.cause instanceof EapSimAkaIdentityUnavailableException);
 
         verify(mMockTelephonyManager).getSubscriberId();
         verifyNoMoreInteractions(mMockTelephonyManager);
