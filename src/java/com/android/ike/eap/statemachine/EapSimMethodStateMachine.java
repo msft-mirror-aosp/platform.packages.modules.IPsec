@@ -51,8 +51,8 @@ import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
-import com.android.ike.eap.exceptions.simaka.EapSimIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapData.EapMethod;
@@ -269,7 +269,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             } catch (EapSimAkaInvalidAttributeException ex) {
                 LOG.wtf(mTAG, "Exception thrown while making AtIdentity attribute", ex);
                 return new EapError(ex);
-            } catch (EapSimIdentityUnavailableException ex) {
+            } catch (EapSimAkaIdentityUnavailableException ex) {
                 LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapSimConfig.subId);
                 return new EapError(ex);
             }
@@ -323,7 +323,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         @VisibleForTesting
         @Nullable
         AtIdentity getIdentityResponse(EapSimTypeData eapSimTypeData)
-                throws EapSimAkaInvalidAttributeException, EapSimIdentityUnavailableException {
+                throws EapSimAkaInvalidAttributeException, EapSimAkaIdentityUnavailableException {
             Set<Integer> attributes = eapSimTypeData.attributeMap.keySet();
 
             // TODO(b/136180022): process separate ID requests differently (pseudonym vs permanent)
@@ -332,7 +332,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                     || attributes.contains(EAP_AT_ANY_ID_REQ)) {
                 String imsi = mTelephonyManager.getSubscriberId();
                 if (imsi == null) {
-                    throw new EapSimIdentityUnavailableException(
+                    throw new EapSimAkaIdentityUnavailableException(
                             "IMSI for subId (" + mEapSimConfig.subId + ") not available");
                 }
 
