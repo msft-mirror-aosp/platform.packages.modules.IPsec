@@ -536,13 +536,11 @@ public abstract class EapSimAkaAttribute {
         }
 
         @VisibleForTesting
-        public AtRandAka(int lengthInBytes, byte[] rand)
+        public AtRandAka(byte[] rand)
                 throws EapSimAkaInvalidAttributeException {
-            super(EAP_AT_RAND, lengthInBytes);
+            super(EAP_AT_RAND, ATTR_LENGTH);
 
-            if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimAkaInvalidAttributeException("Length must be 20B");
-            } else if (rand.length != RAND_LENGTH) {
+            if (rand.length != RAND_LENGTH) {
                 throw new EapSimAkaInvalidAttributeException("Rand must be 16B");
             }
 
@@ -903,12 +901,10 @@ public abstract class EapSimAkaAttribute {
         }
 
         @VisibleForTesting
-        public AtAutn(int lengthInBytes, byte[] autn) throws EapSimAkaInvalidAttributeException {
-            super(EAP_AT_AUTN, lengthInBytes);
+        public AtAutn(byte[] autn) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_AUTN, ATTR_LENGTH);
 
-            if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimAkaInvalidAttributeException("Length must be 20B");
-            } else if (autn.length != AUTN_LENGTH) {
+            if (autn.length != AUTN_LENGTH) {
                 throw new EapSimAkaInvalidAttributeException("Autn must be 16B");
             }
 
