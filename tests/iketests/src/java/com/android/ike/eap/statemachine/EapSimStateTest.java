@@ -46,7 +46,7 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
 import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
-import com.android.ike.eap.statemachine.EapMethodStateMachine.EapState;
+import com.android.ike.eap.statemachine.EapMethodStateMachine.EapMethodState;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -86,7 +86,7 @@ public class EapSimStateTest {
     public void testProcessNotification() throws Exception {
         EapData eapData = new EapData(EAP_NOTIFICATION, NOTIFICATION_MESSAGE.getBytes());
         EapMessage notification = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
-        EapState preNotification = (EapState) mEapSimMethodStateMachine.getState();
+        EapMethodState preNotification = (EapMethodState) mEapSimMethodStateMachine.getState();
 
         EapResult result = mEapSimMethodStateMachine.process(notification);
         assertEquals(preNotification, mEapSimMethodStateMachine.getState());
@@ -101,7 +101,7 @@ public class EapSimStateTest {
     public void testProcessInvalidDecodeResult() throws Exception {
         EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
-        EapState preProcess = (EapState) mEapSimMethodStateMachine.getState();
+        EapMethodState preProcess = (EapMethodState) mEapSimMethodStateMachine.getState();
 
         AtClientErrorCode atClientErrorCode = AtClientErrorCode.INSUFFICIENT_CHALLENGES;
         DecodeResult<EapSimTypeData> decodeResult = new DecodeResult<>(atClientErrorCode);
