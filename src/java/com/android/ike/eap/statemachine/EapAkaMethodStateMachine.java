@@ -31,11 +31,13 @@ import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * EapAkaMethodStateMachine represents the valid paths possible for the EAP-AKA protocol.
@@ -145,5 +147,9 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
     EapAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
         return new EapAkaTypeData(EAP_AKA_CLIENT_ERROR, Arrays.asList(clientErrorCode));
+    }
+
+    EapAkaTypeData getEapSimAkaTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
+        return new EapAkaTypeData(eapSubtype, attributes);
     }
 }
