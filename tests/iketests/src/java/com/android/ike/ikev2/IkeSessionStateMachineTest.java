@@ -389,7 +389,8 @@ public final class IkeSessionStateMachineTest {
                         any(),
                         eq(ikeSaRecord),
                         eq(dummyIkeMessage.ikeHeader),
-                        eq(dummyIkePacketBytes)))
+                        eq(dummyIkePacketBytes),
+                        eq(null)))
                 .thenReturn(new DecodeResultOk(dummyIkeMessage));
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
@@ -415,8 +416,9 @@ public final class IkeSessionStateMachineTest {
                                 ? ikeSaRecord.getLocalRequestMessageId()
                                 : ikeSaRecord.getRemoteRequestMessageId());
         when(mMockIkeMessageHelper.decode(
-                        anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any()))
-                .thenReturn(new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
+                        anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
+                .thenReturn(
+                        new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
 
         return new ReceivedIkePacket(header, new byte[0]);
     }
@@ -462,7 +464,8 @@ public final class IkeSessionStateMachineTest {
                         any(),
                         eq(record),
                         eq(rcvPacket.ikeHeader),
-                        eq(rcvPacket.ikePacketBytes));
+                        eq(rcvPacket.ikePacketBytes),
+                        eq(null));
     }
 
     private static IkeSaRecord makeDummyIkeSaRecord(long initSpi, long respSpi, boolean isLocalInit)
@@ -1747,9 +1750,9 @@ public final class IkeSessionStateMachineTest {
             boolean hasChildPayloads)
             throws Exception {
         // Send IKE AUTH response to IKE state machine
+        ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
         mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
-                makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, authResp);
         mLooper.dispatchAll();
 
         // Validate outbound IKE AUTH request
@@ -1765,7 +1768,7 @@ public final class IkeSessionStateMachineTest {
 
         // Validate inbound IKE AUTH response
         verifyIncrementLocaReqMsgId();
-        verify(mMockIkeMessageHelper).decode(anyInt(), any(), any(), any(), any(), any());
+        verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, authResp);
 
         // Validate authentication is done. Cannot use matchers because IkeAuthPskPayload is final.
         verify(spyAuthPayload)

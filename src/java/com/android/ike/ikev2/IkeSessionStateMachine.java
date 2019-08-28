@@ -1364,7 +1364,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                 mIkeCipher,
                                 ikeSaRecord,
                                 ikeHeader,
-                                ikePacketBytes);
+                                ikePacketBytes,
+                                null /*collectedFragments*/);
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
                         ikeSaRecord.incrementLocalRequestMessageId();
@@ -1425,7 +1426,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                     mIkeCipher,
                                     ikeSaRecord,
                                     ikeHeader,
-                                    ikePacketBytes);
+                                    ikePacketBytes,
+                                    null /*collectedFragments*/);
                     switch (decodeResult.status) {
                         case DECODE_STATUS_OK:
                             ikeSaRecord.incrementRemoteRequestMessageId();
@@ -3636,7 +3638,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                         mIkeCipher,
                                         ikeSaRecord,
                                         ikeHeader,
-                                        receivedIkePacket.ikePacketBytes);
+                                        receivedIkePacket.ikePacketBytes,
+                                        null /*collectedFragments*/);
                         isMessageOnNewSa =
                                 (decodeResult.status == DECODE_STATUS_PROTECTED_ERROR)
                                         || (decodeResult.status == DECODE_STATUS_OK);

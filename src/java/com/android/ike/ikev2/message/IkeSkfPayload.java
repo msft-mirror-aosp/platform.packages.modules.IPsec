@@ -52,7 +52,7 @@ public final class IkeSkfPayload extends IkeSkPayload {
      * @param integrityMac the negotiated integrity algorithm.
      * @param decryptCipher the negotiated encryption algorithm.
      * @param integrityKey the negotiated integrity algorithm key.
-     * @param decryptKey the negotiated decryption key.
+     * @param decryptionKey the negotiated decryption key.
      */
     IkeSkfPayload(
             boolean critical,
@@ -60,7 +60,7 @@ public final class IkeSkfPayload extends IkeSkPayload {
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             byte[] integrityKey,
-            byte[] decryptKey)
+            byte[] decryptionKey)
             throws IkeProtocolException, GeneralSecurityException {
         super(
                 true /*isSkf*/,
@@ -70,7 +70,7 @@ public final class IkeSkfPayload extends IkeSkPayload {
                 integrityMac,
                 decryptCipher,
                 integrityKey,
-                decryptKey);
+                decryptionKey);
 
         // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
