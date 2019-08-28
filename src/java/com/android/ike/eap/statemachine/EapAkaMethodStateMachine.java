@@ -16,28 +16,40 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_ERROR;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_NOTIFICATION;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_FULLAUTH_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IV;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
 
 import android.content.Context;
 import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 
 /**
  * EapAkaMethodStateMachine represents the valid paths possible for the EAP-AKA protocol.
@@ -131,8 +143,87 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final String mTAG = IdentityState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
-            // TODO(b/133880036): implement IdentityState#process with EapAkaTypeData decoding
-            return null;
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            DecodeResult<EapAkaTypeData> decodeResult =
+                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_AKA,
+                        decodeResult.atClientErrorCode);
+            }
+
+            EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
+            switch (eapAkaTypeData.eapSubtype) {
+                case EAP_AKA_IDENTITY:
+                    break;
+                case EAP_AKA_CHALLENGE:
+                    return transitionAndProcess(new ChallengeState(), message);
+                case EAP_AKA_NOTIFICATION:
+                    // TODO(b/139808612): move EAP-SIM/AKA notification handling to superclass
+                    throw new UnsupportedOperationException(
+                            "EAP-AKA notifications not supported yet");
+                default:
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_AKA,
+                            AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
+
+            if (!isValidIdentityAttributes(eapAkaTypeData)) {
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_AKA,
+                        AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
+
+            String imsi = mTelephonyManager.getSubscriberId();
+            if (imsi == null) {
+                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapAkaConfig.subId);
+                return new EapError(
+                        new EapSimAkaIdentityUnavailableException(
+                                "IMSI for subId (" + mEapAkaConfig.subId + ") not available"));
+            }
+            String identity = "0" + imsi;
+            AtIdentity atIdentity;
+            try {
+                atIdentity = AtIdentity.getAtIdentity(identity.getBytes());
+            } catch (EapSimAkaInvalidAttributeException ex) {
+                LOG.wtf(mTAG, "Exception thrown while making AtIdentity attribute", ex);
+                return new EapError(ex);
+            }
+
+            return buildResponseMessage(
+                    EAP_TYPE_AKA,
+                    EAP_AKA_IDENTITY,
+                    message.eapIdentifier,
+                    Arrays.asList(atIdentity));
+        }
+
+        private boolean isValidIdentityAttributes(EapAkaTypeData eapAkaTypeData) {
+            Set<Integer> attrs = eapAkaTypeData.attributeMap.keySet();
+
+            // exactly one ID request type required
+            int idRequests = 0;
+            idRequests += attrs.contains(EAP_AT_PERMANENT_ID_REQ) ? 1 : 0;
+            idRequests += attrs.contains(EAP_AT_ANY_ID_REQ) ? 1 : 0;
+            idRequests += attrs.contains(EAP_AT_FULLAUTH_ID_REQ) ? 1 : 0;
+
+            if (idRequests != 1) {
+                return false;
+            }
+
+            // can't contain mac, iv, encr data
+            if (attrs.contains(EAP_AT_MAC)
+                    || attrs.contains(EAP_AT_IV)
+                    || attrs.contains(EAP_AT_ENCR_DATA)) {
+                return false;
+            }
+            return true;
         }
     }
 

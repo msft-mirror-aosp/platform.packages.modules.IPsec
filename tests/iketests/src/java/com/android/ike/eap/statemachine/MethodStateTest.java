@@ -22,7 +22,7 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapMessage.EAP_HEADER_LENGTH;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
@@ -89,7 +89,7 @@ public class MethodStateTest extends EapStateTest {
                 .setEapAkaConfig(0, APPTYPE_USIM).build();
         mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
 
-        mEapStateMachine.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
+        mEapStateMachine.process(EAP_REQUEST_AKA);
 
         assertTrue(mEapStateMachine.getState() instanceof MethodState);
         MethodState methodState = (MethodState) mEapStateMachine.getState();
