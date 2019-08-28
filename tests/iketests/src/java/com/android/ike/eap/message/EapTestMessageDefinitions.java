@@ -61,6 +61,8 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("02" + ID + "000C120E000016010002");
     public static final byte[] EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS =
             hexStringToByteArray("02" + ID + "000C120E000016010000");
+    public static final byte[] EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS =
+            hexStringToByteArray("02" + ID + "000C170E000016010000");
 
     // EAP-SIM response containing SELECTED_VERSION (1) and IDENTITY attributes
     public static final byte[] EAP_SIM_RESPONSE_PACKET = hexStringToByteArray(
