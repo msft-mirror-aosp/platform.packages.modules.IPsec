@@ -73,6 +73,13 @@ public class IkeSkPayload extends IkePayload {
                 decryptKey);
     }
 
+    /** Construct an instance of IkeSkPayload for testing.*/
+    @VisibleForTesting
+    IkeSkPayload(boolean isSkf, IkeEncryptedPayloadBody encryptedPayloadBody) {
+        super(isSkf ? PAYLOAD_TYPE_SKF : PAYLOAD_TYPE_SK, false/*critical*/);
+        mIkeEncryptedPayloadBody = encryptedPayloadBody;
+    }
+
     /** Construct an instance of IkeSkPayload from decrypting an incoming packet. */
     protected IkeSkPayload(
             boolean isSkf,

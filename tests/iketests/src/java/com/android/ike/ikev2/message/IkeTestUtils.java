@@ -16,11 +16,10 @@
 
 package com.android.ike.ikev2.message;
 
-import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import android.util.Pair;
@@ -28,6 +27,7 @@ import android.util.Pair;
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultError;
 
 import java.nio.ByteBuffer;
 
@@ -52,11 +52,11 @@ public final class IkeTestUtils {
         IkeHeader header = new IkeHeader(inputPacket);
         DecodeResult decodeResult = IkeMessage.decode(0, header, inputPacket);
 
-        assertEquals(DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, decodeResult.status);
-        assertNull(decodeResult.ikeMessage);
-        assertNotNull(decodeResult.ikeException);
-        assertTrue(expectedException.isInstance(decodeResult.ikeException));
+        assertEquals(DECODE_STATUS_UNPROTECTED_ERROR, decodeResult.status);
+        DecodeResultError resultError = (DecodeResultError) decodeResult;
+        assertNotNull(resultError.ikeException);
+        assertTrue(expectedException.isInstance(resultError.ikeException));
 
-        return (T) decodeResult.ikeException;
+        return (T) resultError.ikeException;
     }
 }

@@ -22,6 +22,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -86,6 +87,14 @@ public final class IkeSkfPayload extends IkeSkPayload {
                             + "  Total Fragments: "
                             + totalFragments);
         }
+    }
+
+    /** Construct an instance of IkeSkfPayload for testing. */
+    @VisibleForTesting
+    IkeSkfPayload(IkeEncryptedPayloadBody encryptedPayloadBody, int fragNum, int totalFrags) {
+        super(true /*isSkf*/, encryptedPayloadBody);
+        fragmentNum = fragNum;
+        totalFragments = totalFrags;
     }
 
     // TODO: Support constructing outbound SKF Payload.
