@@ -89,12 +89,7 @@ public class MethodStateTest extends EapStateTest {
                 .setEapAkaConfig(0, APPTYPE_USIM).build();
         mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
 
-        try {
-            mEapStateMachine.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
-        } catch (UnsupportedOperationException ex) {
-            // TODO(b/133878992): remove once EAP-AKA is fully implemented.
-            // Could be thrown while all EapAkaMethodStateMachine states aren't fully implemented
-        }
+        mEapStateMachine.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
 
         assertTrue(mEapStateMachine.getState() instanceof MethodState);
         MethodState methodState = (MethodState) mEapStateMachine.getState();
