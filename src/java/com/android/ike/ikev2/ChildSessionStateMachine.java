@@ -23,7 +23,6 @@ import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
-import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
@@ -596,6 +595,8 @@ public class ChildSessionStateMachine extends SessionStateMachineBase {
         }
 
         protected void cleanUpAndQuit(RuntimeException e) {
+            // TODO: b/140123526 Send a response if exception was caught when processing a request.
+
             // Clean up all SaRecords.
             closeAllSaRecords(false /*expectSaClosed*/);
 
@@ -1000,10 +1001,10 @@ public class ChildSessionStateMachine extends SessionStateMachineBase {
          */
         protected void handleDeleteSessionRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
-                logWtf("Found no remote SPI for mCurrentChildSaRecord");
-                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
-                mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
-
+                cleanUpAndQuit(
+                        new IllegalStateException(
+                                "Found no remote SPI for mCurrentChildSaRecord in a Delete Child"
+                                        + " request."));
             } else {
 
                 mUserCbExecutor.execute(
@@ -1131,11 +1132,11 @@ public class ChildSessionStateMachine extends SessionStateMachineBase {
                             // request can be ONLY for mCurrentChildSaRecord at this point.
                             if (!hasRemoteChildSpiForDelete(
                                     req.requestPayloads, mCurrentChildSaRecord)) {
-                                logWtf("Found no remote SPI for mCurrentChildSaRecord");
-
-                                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
-                                mChildSmCallback.onFatalIkeSessionError(
-                                        false /*needsNotifyRemote*/);
+                                // Program error
+                                cleanUpAndQuit(
+                                        new IllegalStateException(
+                                                "Found no remote SPI for mCurrentChildSaRecord in"
+                                                        + " a Delete request"));
 
                             } else {
                                 mChildSmCallback.onOutboundPayloadsReady(
@@ -1150,9 +1151,11 @@ public class ChildSessionStateMachine extends SessionStateMachineBase {
                             replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
                             return HANDLED;
                         default:
-                            throw new IllegalArgumentException(
-                                    "Invalid exchange subtype for Child Session: "
-                                            + req.exchangeSubtype);
+                            cleanUpAndQuit(
+                                    new IllegalStateException(
+                                            "Invalid exchange subtype for Child Session: "
+                                                    + req.exchangeSubtype));
+                            return HANDLED;
                     }
                 default:
                     return NOT_HANDLED;
