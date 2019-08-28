@@ -31,7 +31,6 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_NOTI
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_NOTIFICATION_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_NOTIFICATION_RESPONSE_WITH_EMPTY_MAC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_NOTIFICATION_RESPONSE_WITH_MAC;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_RESPONSE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MAC_INPUT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ORIGINAL_MAC;
@@ -42,9 +41,6 @@ import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotificati
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_NOTIFICATION;
-import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
-import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_IDENTITY;
-import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.IDENTITY;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1_BYTES;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2_BYTES;
@@ -69,12 +65,9 @@ import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
 import com.android.ike.eap.statemachine.EapMethodStateMachine.EapState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.CreatedState;
@@ -83,9 +76,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.security.SecureRandom;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 import javax.crypto.Mac;
 
@@ -114,20 +105,6 @@ public class EapSimMethodStateMachineTest {
     @Test
     public void testGetMethod() {
         assertEquals(EAP_TYPE_SIM, mEapSimMethodStateMachine.getEapMethod());
-    }
-
-    @Test
-    public void testBuildResponseMessage() throws Exception {
-        List<EapSimAkaAttribute> attributes = new ArrayList<>();
-        attributes.add(new AtSelectedVersion(1));
-        attributes.add(new AtIdentity(AT_IDENTITY.length, IDENTITY));
-        int identifier = ID_INT;
-
-        EapResult result = mEapSimMethodStateMachine
-                .buildResponseMessage(EAP_SIM_START, identifier, attributes);
-        assertTrue(result instanceof EapResult);
-        EapResponse eapResponse = (EapResponse) result;
-        assertArrayEquals(EAP_SIM_RESPONSE_PACKET, eapResponse.packet);
     }
 
     @Test
