@@ -18,21 +18,31 @@ package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_RESPONSE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_RESPONSE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_IDENTITY;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.IDENTITY;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 public class EapSimAkaMethodStateMachineTest {
     private EapSimAkaMethodStateMachine mStateMachine;
@@ -43,6 +53,13 @@ public class EapSimAkaMethodStateMachineTest {
             @Override
             EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
                 return new EapSimTypeData(EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
+            }
+
+            @Override
+            EapSimAkaTypeData getEapSimAkaTypeData(
+                    int eapSubtype,
+                    List<EapSimAkaAttribute> attributes) {
+                return new EapSimTypeData(eapSubtype, attributes);
             }
 
             @Override
@@ -61,5 +78,23 @@ public class EapSimAkaMethodStateMachineTest {
         assertTrue(result instanceof EapResult.EapResponse);
         EapResult.EapResponse eapResponse = (EapResult.EapResponse) result;
         assertArrayEquals(EAP_SIM_CLIENT_ERROR_RESPONSE, eapResponse.packet);
+    }
+
+    @Test
+    public void testBuildResponseMessage() throws Exception {
+        List<EapSimAkaAttribute> attributes = new ArrayList<>();
+        attributes.add(new AtSelectedVersion(1));
+        attributes.add(new AtIdentity(AT_IDENTITY.length, IDENTITY));
+        int identifier = ID_INT;
+
+        EapResult result =
+                mStateMachine.buildResponseMessage(
+                        EAP_TYPE_SIM,
+                        EAP_SIM_START,
+                        identifier,
+                        attributes);
+        assertTrue(result instanceof EapResult);
+        EapResponse eapResponse = (EapResponse) result;
+        assertArrayEquals(EAP_SIM_RESPONSE_PACKET, eapResponse.packet);
     }
 }
