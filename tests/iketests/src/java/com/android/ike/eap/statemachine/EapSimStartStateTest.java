@@ -17,7 +17,9 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
@@ -61,7 +63,7 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
-import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
+import com.android.ike.eap.statemachine.EapMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
 import org.junit.Before;

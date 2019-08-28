@@ -17,16 +17,19 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_ERROR;
 
 import android.content.Context;
 import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.EapResult;
-import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
-import com.android.internal.annotations.VisibleForTesting;
+import com.android.ike.eap.message.simaka.EapAkaTypeData;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+
+import java.util.Arrays;
 
 /**
  * EapAkaMethodStateMachine represents the valid paths possible for the EAP-AKA protocol.
@@ -47,7 +50,7 @@ import com.android.internal.annotations.VisibleForTesting;
  * @see <a href="https://tools.ietf.org/html/rfc4187">RFC 4187, Extensible Authentication
  * Protocol for Authentication and Key Agreement (EAP-AKA)</a>
  */
-class EapAkaMethodStateMachine extends EapMethodStateMachine {
+class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
     private static final String TAG = EapAkaMethodStateMachine.class.getSimpleName();
 
     private final TelephonyManager mTelephonyManager;
@@ -68,15 +71,7 @@ class EapAkaMethodStateMachine extends EapMethodStateMachine {
         return EAP_TYPE_AKA;
     }
 
-    @VisibleForTesting
-    protected SimpleState getState() {
-        return mState;
-    }
-
-    protected abstract class EapAkaState extends SimpleState {
-    }
-
-    protected class CreatedState extends EapAkaState {
+    protected class CreatedState extends EapState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -85,7 +80,7 @@ class EapAkaMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class IdentityState extends EapAkaState {
+    protected class IdentityState extends EapState {
         private final String mTAG = IdentityState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -94,7 +89,7 @@ class EapAkaMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class ChallengeState extends EapAkaState {
+    protected class ChallengeState extends EapState {
         private final String mTAG = ChallengeState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -103,11 +98,7 @@ class EapAkaMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class FinalState extends EapAkaState {
-        @Override
-        public EapResult process(EapMessage msg) {
-            return new EapError(
-                    new IllegalStateException("Attempting to process from a FinalState"));
-        }
+    EapAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
+        return new EapAkaTypeData(EAP_AKA_CLIENT_ERROR, Arrays.asList(clientErrorCode));
     }
 }

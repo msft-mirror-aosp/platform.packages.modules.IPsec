@@ -19,6 +19,7 @@ package com.android.ike.eap.statemachine;
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_KC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_SRES;
@@ -78,9 +79,9 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNonceMt;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
+import com.android.ike.eap.statemachine.EapMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState.RandChallengeResult;
-import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 
 import org.junit.Test;
 
