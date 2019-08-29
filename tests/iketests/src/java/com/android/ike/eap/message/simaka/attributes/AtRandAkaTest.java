@@ -68,7 +68,7 @@ public class AtRandAkaTest {
 
     @Test
     public void testEncode() throws Exception {
-        AtRandAka atRandAka = new AtRandAka(AT_RAND_AKA.length, RAND_1_BYTES);
+        AtRandAka atRandAka = new AtRandAka(RAND_1_BYTES);
 
         ByteBuffer result = ByteBuffer.allocate(AT_RAND_AKA.length);
         atRandAka.encode(result);
