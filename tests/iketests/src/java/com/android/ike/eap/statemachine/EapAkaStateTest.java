@@ -46,7 +46,7 @@ import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
-import com.android.ike.eap.statemachine.EapMethodStateMachine.EapState;
+import com.android.ike.eap.statemachine.EapMethodStateMachine.EapMethodState;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -83,7 +83,7 @@ public class EapAkaStateTest {
     public void testProcessNotification() throws Exception {
         EapData eapData = new EapData(EAP_NOTIFICATION, NOTIFICATION_MESSAGE.getBytes());
         EapMessage notification = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
-        EapState preNotification = (EapState) mEapAkaMethodStateMachine.getState();
+        EapMethodState preNotification = (EapMethodState) mEapAkaMethodStateMachine.getState();
 
         EapResult result = mEapAkaMethodStateMachine.process(notification);
         assertEquals(preNotification, mEapAkaMethodStateMachine.getState());
@@ -98,7 +98,7 @@ public class EapAkaStateTest {
     public void testProcessInvalidDecodeResult() throws Exception {
         EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
-        EapState preProcess = (EapState) mEapAkaMethodStateMachine.getState();
+        EapMethodState preProcess = (EapMethodState) mEapAkaMethodStateMachine.getState();
 
         AtClientErrorCode atClientErrorCode = AtClientErrorCode.UNABLE_TO_PROCESS;
         DecodeResult<EapAkaTypeData> decodeResult = new DecodeResult<>(atClientErrorCode);
