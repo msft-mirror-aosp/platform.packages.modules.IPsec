@@ -39,6 +39,9 @@ public class EapTestMessageDefinitions {
     public static final String EAP_REQUEST_TYPE_DATA = "0500000D010000";
     public static final byte[] EAP_AKA_IDENTITY_REQUEST =
             hexStringToByteArray(EAP_REQUEST_TYPE_DATA);
+
+    // EAP-AKA/Identity request with no attributes
+    public static final byte[] EAP_REQUEST_AKA = hexStringToByteArray("01" + ID + "000817050000");
     public static final byte[] EAP_REQUEST_AKA_IDENTITY_PACKET =
             hexStringToByteArray("01" + ID + "000A17" + EAP_REQUEST_TYPE_DATA);
     public static final byte[] EAP_REQUEST_IDENTITY_PACKET =
@@ -132,6 +135,9 @@ public class EapTestMessageDefinitions {
     public static final String EAP_SIM_IDENTITY = "1" + IMSI;
     public static final byte[] EAP_SIM_IDENTITY_BYTES = hexStringToByteArray(EAP_SIM_IDENTITY);
 
+    // ASCII hex for "0" + IMSI (EAP-AKA identity format)
+    public static final String EAP_AKA_IDENTITY_BYTES = "30313233343536373839303132333435";
+
     // Master Key generation
     public static final String MK_STRING = "0123456789ABCDEF0123456789ABCDEF01234567";
     public static final byte[] MK = hexStringToByteArray(MK_STRING);
@@ -191,4 +197,8 @@ public class EapTestMessageDefinitions {
             + "120C0000" // EAP-SIM | Notification | 2B padding
             + "0B050000" + COMPUTED_MAC_STRING); // AT_MAC attribute
 
+    public static final byte[] EAP_AKA_IDENTITY_RESPONSE =
+            hexStringToByteArray("02" + ID + "001C" // EAP-Response | ID | length in bytes
+                    + "17050000" // EAP-AKA | Identity | 2B padding
+                    + "0E050010" + EAP_AKA_IDENTITY_BYTES); // AT_IDENTITY ("0" + IMSI)
 }
