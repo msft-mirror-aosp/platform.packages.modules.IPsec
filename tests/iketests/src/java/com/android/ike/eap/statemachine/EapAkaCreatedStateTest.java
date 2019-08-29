@@ -82,7 +82,9 @@ public class EapAkaCreatedStateTest extends EapAkaStateTest {
         mEapAkaMethodStateMachine.process(eapMessage);
 
         assertTrue(mEapAkaMethodStateMachine.getState() instanceof ChallengeState);
-        verify(mMockEapAkaTypeDataDecoder).decode(DUMMY_EAP_TYPE_DATA);
+
+        // decoded in CreatedState and ChallengeState
+        verify(mMockEapAkaTypeDataDecoder, times(2)).decode(DUMMY_EAP_TYPE_DATA);
         verifyNoMoreInteractions(mMockTelephonyManager, mMockEapAkaTypeDataDecoder);
     }
 
