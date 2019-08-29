@@ -355,29 +355,17 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final int mBytesPerShort = 2;
         private final int mVersionLenBytes = 2;
 
-        // K_encr and K_aut lengths are 16 bytes (RFC 4186 Section 7)
-        private final int mKeyLen = 16;
-
-        // Session Key lengths are 64 bytes (RFC 4186 Section 7)
-        private final int mSessionKeyLength = 64;
-
         // Lengths defined by TS 31.102 Section 7.1.2.1 (case 3)
         // SRES stands for "SIM response"
         // Kc stands for "cipher key"
         private final int mSresLenBytes = 4;
         private final int mKcLenBytes = 8;
 
-        @VisibleForTesting final String mMasterKeyGenerationAlg = "SHA-1";
         @VisibleForTesting final String mMacAlgorithmString = "HmacSHA1";
 
         private final List<Integer> mVersions;
         private final byte[] mNonce;
         private final byte[] mIdentity;
-
-        @VisibleForTesting final byte[] mKEncr = new byte[mKeyLen];
-        @VisibleForTesting final byte[] mKAut = new byte[mKeyLen];
-        @VisibleForTesting final byte[] mMsk = new byte[mSessionKeyLength];
-        @VisibleForTesting final byte[] mEmsk = new byte[mSessionKeyLength];
 
         protected ChallengeState(List<Integer> versions, AtNonceMt atNonceMt, byte[] identity) {
             mVersions = versions;
@@ -446,8 +434,9 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             try {
-                MessageDigest sha1 = MessageDigest.getInstance(mMasterKeyGenerationAlg);
-                generateAndPersistKeys(sha1, new Fips186_2Prf(), randChallengeResults);
+                MessageDigest sha1 = MessageDigest.getInstance(MASTER_KEY_GENERATION_ALG);
+                byte[] mkInputData = getMkInputData(randChallengeResults);
+                generateAndPersistKeys(mTAG, sha1, new Fips186_2Prf(), mkInputData);
             } catch (NoSuchAlgorithmException | BufferUnderflowException ex) {
                 LOG.e(mTAG, "Error while creating keys", ex);
                 return buildClientErrorResponse(
@@ -601,17 +590,13 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
         }
 
-        @VisibleForTesting
-        void generateAndPersistKeys(
-                MessageDigest messageDigest,
-                Fips186_2Prf prf,
-                List<RandChallengeResult> randChallengeResults) {
+        private byte[] getMkInputData(List<RandChallengeResult> randChallengeResults) {
             int numInputBytes =
                     mIdentity.length
-                    + (randChallengeResults.size() * mKcLenBytes)
-                    + mNonce.length
-                    + (mVersions.size() * mBytesPerShort) // 2B per version
-                    + mVersionLenBytes;
+                            + (randChallengeResults.size() * mKcLenBytes)
+                            + mNonce.length
+                            + (mVersions.size() * mBytesPerShort) // 2B per version
+                            + mVersionLenBytes;
 
             ByteBuffer mkInputBuffer = ByteBuffer.allocate(numInputBytes);
             mkInputBuffer.put(mIdentity);
@@ -623,24 +608,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 mkInputBuffer.putShort((short) i);
             }
             mkInputBuffer.putShort((short) AtSelectedVersion.SUPPORTED_VERSION);
-
-            byte[] mk = messageDigest.digest(mkInputBuffer.array());
-
-            // run mk through FIPS 186-2
-            int outputBytes = mKEncr.length + mKAut.length + mMsk.length + mEmsk.length;
-            byte[] prfResult = prf.getRandom(mk, outputBytes);
-
-            ByteBuffer mkResultBuffer = ByteBuffer.wrap(prfResult);
-            mkResultBuffer.get(mKEncr);
-            mkResultBuffer.get(mKAut);
-            mkResultBuffer.get(mMsk);
-            mkResultBuffer.get(mEmsk);
-
-            // Log keys as PII
-            LOG.d(mTAG, "K_encr=" + LOG.pii(mKEncr));
-            LOG.d(mTAG, "K_aut=" + LOG.pii(mKAut));
-            LOG.d(mTAG, "MSK=" + LOG.pii(mMsk));
-            LOG.d(mTAG, "EMSK=" + LOG.pii(mEmsk));
+            return mkInputBuffer.array();
         }
     }
 
