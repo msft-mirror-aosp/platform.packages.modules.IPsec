@@ -79,7 +79,7 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
                 // so receiving a premature SUCCESS message is an unrecoverable error.
                 return new EapError(
                         new EapInvalidRequestException(
-                                "Received an EAP-Success in the CreatedState"));
+                                "Received an EAP-Success in the " + tag));
             } else if (message.eapCode == EAP_CODE_FAILURE) {
                 transitionTo(new EapAkaMethodStateMachine.FinalState());
                 return new EapFailure();
