@@ -22,9 +22,12 @@ import com.android.ike.eap.EapResult;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData;
 import com.android.internal.annotations.VisibleForTesting;
+
+import java.util.List;
 
 /**
  * EapSimAkaMethodStateMachine represents an abstract state machine for managing EAP-SIM and EAP-AKA
@@ -58,5 +61,24 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
         }
     }
 
+    @VisibleForTesting
+    EapResult buildResponseMessage(
+            int eapType,
+            int eapSubtype,
+            int identifier,
+            List<EapSimAkaAttribute> attributes) {
+        EapSimAkaTypeData eapSimTypeData = getEapSimAkaTypeData(eapSubtype, attributes);
+        EapData eapData = new EapData(eapType, eapSimTypeData.encode());
+
+        try {
+            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
+            return EapResult.EapResponse.getEapResponse(eapMessage);
+        } catch (EapSilentException ex) {
+            return new EapResult.EapError(ex);
+        }
+    }
+
     abstract EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode);
+    abstract EapSimAkaTypeData getEapSimAkaTypeData(
+            int eapSubtype, List<EapSimAkaAttribute> attributes);
 }

@@ -17,7 +17,10 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_ERROR;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_NOTIFICATION;
 
 import android.content.Context;
 import android.telephony.TelephonyManager;
@@ -27,9 +30,14 @@ import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
+import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * EapAkaMethodStateMachine represents the valid paths possible for the EAP-AKA protocol.
@@ -55,12 +63,23 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
     private final TelephonyManager mTelephonyManager;
     private final EapAkaConfig mEapAkaConfig;
+    private final EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
 
     EapAkaMethodStateMachine(Context context, EapAkaConfig eapAkaConfig) {
-        TelephonyManager telephonyManager =
-                (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+        this(
+                (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE),
+                eapAkaConfig,
+                EapAkaTypeData.getEapAkaTypeDataDecoder());
+    }
+
+    @VisibleForTesting
+    protected EapAkaMethodStateMachine(
+            TelephonyManager telephonyManager,
+            EapAkaConfig eapAkaConfig,
+            EapAkaTypeDataDecoder eapAkaTypeDataDecoder) {
         mTelephonyManager = telephonyManager.createForSubscriptionId(eapAkaConfig.subId);
         mEapAkaConfig = eapAkaConfig;
+        mEapAkaTypeDataDecoder = eapAkaTypeDataDecoder;
 
         transitionTo(new CreatedState());
     }
@@ -75,8 +94,36 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
-            // TODO(b/139541513): implement CreatedState#process with EapAkaTypeData decoding
-            throw new UnsupportedOperationException();
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            DecodeResult<EapAkaTypeData> decodeResult =
+                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_AKA,
+                        decodeResult.atClientErrorCode);
+            }
+
+            EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
+            switch (eapAkaTypeData.eapSubtype) {
+                case EAP_AKA_IDENTITY:
+                    return transitionAndProcess(new IdentityState(), message);
+                case EAP_AKA_CHALLENGE:
+                    return transitionAndProcess(new ChallengeState(), message);
+                case EAP_AKA_NOTIFICATION:
+                    // TODO(b/139808612): move EAP-SIM/AKA notification handling to superclass
+                    throw new UnsupportedOperationException(
+                            "EAP-AKA notifications not supported yet");
+                default:
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_AKA,
+                            AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
         }
     }
 
@@ -85,7 +132,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         public EapResult process(EapMessage message) {
             // TODO(b/133880036): implement IdentityState#process with EapAkaTypeData decoding
-            throw new UnsupportedOperationException();
+            return null;
         }
     }
 
@@ -94,11 +141,15 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         public EapResult process(EapMessage message) {
             // TODO(b/133879622): implement ChallengeState#process with EapAkaTypeData decoding
-            throw new UnsupportedOperationException();
+            return null;
         }
     }
 
     EapAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
         return new EapAkaTypeData(EAP_AKA_CLIENT_ERROR, Arrays.asList(clientErrorCode));
+    }
+
+    EapAkaTypeData getEapSimAkaTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
+        return new EapAkaTypeData(eapSubtype, attributes);
     }
 }
