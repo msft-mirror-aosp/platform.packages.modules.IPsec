@@ -22,6 +22,7 @@ import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_AUTH;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_ID_INITIATOR;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NO_NEXT;
+import static com.android.ike.ikev2.message.IkeTestUtils.makeDummySkfPayload;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -258,13 +259,6 @@ public final class IkeMessageTest {
         mDummySkfPayloadTwo =
                 makeDummySkfPayload(
                         FRAGMENT_TWO_UNENCRYPTED_DATA, FRAGMENT_NUM_TWO, TOTAL_FRAGMENTS);
-    }
-
-    private IkeSkfPayload makeDummySkfPayload(byte[] unencryptedData, int fragNum, int totalFrags)
-            throws Exception {
-        IkeEncryptedPayloadBody mockEncryptedBody = mock(IkeEncryptedPayloadBody.class);
-        when(mockEncryptedBody.getUnencryptedData()).thenReturn(unencryptedData);
-        return new IkeSkfPayload(mockEncryptedBody, fragNum, totalFrags);
     }
 
     @After
@@ -532,7 +526,6 @@ public final class IkeMessageTest {
     public void testConstructDecodePartialFirstFragArriveFirst() throws Exception {
         DecodeResultPartial resultPartial = makeDecodeResultForFragOne(null /*collectedFragments*/);
 
-        assertEquals(PAYLOAD_TYPE_AUTH, resultPartial.firstPayloadType);
         assertEquals(mFragOneHeader, resultPartial.ikeHeader);
 
         assertEquals(TOTAL_FRAGMENTS, resultPartial.collectedFragsList.length);
@@ -582,7 +575,6 @@ public final class IkeMessageTest {
 
         assertEquals(TOTAL_FRAGMENTS, resultPartialIncomplete.collectedFragsList.length);
         assertTrue(resultPartialIncomplete.isAllFragmentsReceived());
-
 
         // Verify reassembly result
         ByteBuffer expectedBuffer =

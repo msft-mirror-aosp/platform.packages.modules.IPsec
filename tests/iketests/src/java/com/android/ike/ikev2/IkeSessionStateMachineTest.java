@@ -34,7 +34,9 @@ import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONA
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_AUTH;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_SA;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -87,6 +89,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
+import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -102,8 +105,10 @@ import com.android.ike.ikev2.message.IkeIdPayload;
 import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultError;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultOk;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -115,6 +120,7 @@ import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
+import com.android.ike.ikev2.message.IkeSkfPayload;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.ike.utils.Log;
@@ -383,15 +389,11 @@ public final class IkeSessionStateMachineTest {
                         true /*isEncyprted*/,
                         payloadList);
 
-        when(mMockIkeMessageHelper.decode(
-                        anyInt(),
-                        any(),
-                        any(),
-                        eq(ikeSaRecord),
-                        eq(dummyIkeMessage.ikeHeader),
-                        eq(dummyIkePacketBytes),
-                        eq(null)))
-                .thenReturn(new DecodeResultOk(dummyIkeMessage));
+        setDecodeEncryptedPacketResult(
+                ikeSaRecord,
+                dummyIkeMessage.ikeHeader,
+                null /*collectedFrags*/,
+                new DecodeResultOk(dummyIkeMessage));
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
@@ -405,22 +407,93 @@ public final class IkeSessionStateMachineTest {
     private ReceivedIkePacket makeDummyReceivedIkePacketWithDecodingError(
             IkeSaRecord ikeSaRecord, boolean isResp, int eType, IkeProtocolException exception) {
         IkeHeader header =
-                new IkeHeader(
-                        ikeSaRecord.getInitiatorSpi(),
-                        ikeSaRecord.getResponderSpi(),
-                        IkePayload.PAYLOAD_TYPE_SK,
-                        eType,
-                        isResp,
-                        !ikeSaRecord.isLocalInit,
-                        isResp
-                                ? ikeSaRecord.getLocalRequestMessageId()
-                                : ikeSaRecord.getRemoteRequestMessageId());
+                makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SK);
         when(mMockIkeMessageHelper.decode(
                         anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
-                .thenReturn(
-                        new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
+                .thenReturn(new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
 
         return new ReceivedIkePacket(header, new byte[0]);
+    }
+
+    private ReceivedIkePacket makeDummyReceivedIkeFragmentPacket(
+            IkeSaRecord ikeSaRecord,
+            boolean isResp,
+            int eType,
+            IkeSkfPayload skfPayload,
+            int nextPayloadType,
+            DecodeResultPartial collectedFrags) {
+        IkeHeader header =
+                makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SKF);
+        DecodeResultPartial resultFrags =
+                new DecodeResultPartial(header, skfPayload, nextPayloadType, collectedFrags);
+        setDecodeEncryptedPacketResult(ikeSaRecord, header, collectedFrags, resultFrags);
+
+        return new ReceivedIkePacket(header, new byte[0]);
+    }
+
+    private ReceivedIkePacket makeDummyReceivedLastIkeFragmentPacketOk(
+            IkeSaRecord ikeSaRecord,
+            boolean isResp,
+            int eType,
+            DecodeResultPartial collectedFrags,
+            List<IkePayload> payloadList) {
+        IkeHeader header =
+                makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SKF);
+
+        IkeMessage completeMessage = new IkeMessage(header, payloadList);
+
+        setDecodeEncryptedPacketResult(
+                ikeSaRecord, header, collectedFrags, new DecodeResultOk(completeMessage));
+
+        return new ReceivedIkePacket(header, new byte[0] /*dummyIkePacketBytes*/);
+    }
+
+    private ReceivedIkePacket makeDummyReceivedLastIkeFragmentPacketError(
+            IkeSaRecord ikeSaRecord,
+            boolean isResp,
+            int eType,
+            DecodeResultPartial collectedFrags,
+            IkeException exception) {
+        IkeHeader header =
+                makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SKF);
+
+        setDecodeEncryptedPacketResult(
+                ikeSaRecord,
+                header,
+                collectedFrags,
+                new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
+
+        return new ReceivedIkePacket(header, new byte[0] /*dummyIkePacketBytes*/);
+    }
+
+    private IkeHeader makeDummyIkeHeader(
+            IkeSaRecord ikeSaRecord, boolean isResp, int eType, int firstPayloadType) {
+        return new IkeHeader(
+                ikeSaRecord.getInitiatorSpi(),
+                ikeSaRecord.getResponderSpi(),
+                firstPayloadType,
+                eType,
+                isResp,
+                !ikeSaRecord.isLocalInit,
+                isResp
+                        ? ikeSaRecord.getLocalRequestMessageId()
+                        : ikeSaRecord.getRemoteRequestMessageId());
+    }
+
+    private void setDecodeEncryptedPacketResult(
+            IkeSaRecord ikeSaRecord,
+            IkeHeader header,
+            DecodeResultPartial collectedFrags,
+            DecodeResult result) {
+        when(mMockIkeMessageHelper.decode(
+                        anyInt(),
+                        any(),
+                        any(),
+                        eq(ikeSaRecord),
+                        eq(header),
+                        any(),
+                        eq(collectedFrags)))
+                .thenReturn(result);
     }
 
     private IkeMessage makeDummyIkeMessageForTest(
@@ -669,8 +742,8 @@ public final class IkeSessionStateMachineTest {
                 payloadHexStringList);
     }
 
-    private ReceivedIkePacket makeIkeAuthRespWithChildPayloads(List<IkePayload> authRelatedPayloads)
-            throws Exception {
+    private List<IkePayload> getIkeAuthPayloadListWithChildPayloads(
+            List<IkePayload> authRelatedPayloads) throws Exception {
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
 
@@ -685,6 +758,13 @@ public final class IkeSessionStateMachineTest {
         List<IkePayload> payloadList =
                 hexStrListToIkePayloadList(payloadTypeList, payloadHexStringList, true /*isResp*/);
         payloadList.addAll(authRelatedPayloads);
+
+        return payloadList;
+    }
+
+    private ReceivedIkePacket makeIkeAuthRespWithChildPayloads(List<IkePayload> authRelatedPayloads)
+            throws Exception {
+        List<IkePayload> payloadList = getIkeAuthPayloadListWithChildPayloads(authRelatedPayloads);
 
         return makeDummyEncryptedReceivedIkePacketWithPayloadList(
                 mSpyCurrentIkeSaRecord,
@@ -1840,13 +1920,7 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
-    @Test
-    public void testCreateIkeLocalIkeAuthPsk() throws Exception {
-        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
-        verifyRetransmissionStarted();
-
-        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+    private IkeAuthPskPayload makeSpyRespPskPayload() throws Exception {
         IkeAuthPskPayload spyAuthPayload =
                 spy(
                         (IkeAuthPskPayload)
@@ -1858,14 +1932,28 @@ public final class IkeSessionStateMachineTest {
         doNothing()
                 .when(spyAuthPayload)
                 .verifyInboundSignature(any(), any(), any(), any(), any(), any());
+        return spyAuthPayload;
+    }
+
+    private IkeIdPayload makeRespIdPayload() throws Exception {
+        return (IkeIdPayload)
+                IkeTestUtils.hexStringToIkePayload(
+                        IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
+                        true /*isResp*/,
+                        ID_PAYLOAD_RESPONDER_HEX_STRING);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthPsk() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+
+        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
-        IkeIdPayload respIdPayload =
-                (IkeIdPayload)
-                        IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
-                                true /*isResp*/,
-                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+        IkeIdPayload respIdPayload = makeRespIdPayload();
         authRelatedPayloads.add(respIdPayload);
 
         verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, true);
@@ -1880,25 +1968,13 @@ public final class IkeSessionStateMachineTest {
 
         // Build IKE AUTH response with invalid Auth-PSK Payload and ID-Responder Payload.
         List<IkePayload> authRelatedPayloads = new LinkedList<>();
-        IkeAuthPskPayload spyAuthPayload =
-                spy(
-                        (IkeAuthPskPayload)
-                                IkeTestUtils.hexStringToIkePayload(
-                                        IkePayload.PAYLOAD_TYPE_AUTH,
-                                        true /*isResp*/,
-                                        PSK_AUTH_RESP_PAYLOAD_HEX_STRING));
-
+        IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         doThrow(new AuthenticationFailedException("DummyAuthFailException"))
                 .when(spyAuthPayload)
                 .verifyInboundSignature(any(), any(), any(), any(), any(), any());
         authRelatedPayloads.add(spyAuthPayload);
 
-        IkeIdPayload respIdPayload =
-                (IkeIdPayload)
-                        IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
-                                true /*isResp*/,
-                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+        IkeIdPayload respIdPayload = makeRespIdPayload();
         authRelatedPayloads.add(respIdPayload);
 
         // Send response to IKE state machine
@@ -2193,28 +2269,128 @@ public final class IkeSessionStateMachineTest {
 
         // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
         List<IkePayload> authRelatedPayloads = new LinkedList<>();
-        IkeAuthPskPayload spyAuthPayload =
-                spy(
-                        (IkeAuthPskPayload)
-                                IkeTestUtils.hexStringToIkePayload(
-                                        IkePayload.PAYLOAD_TYPE_AUTH,
-                                        true /*isResp*/,
-                                        PSK_AUTH_RESP_PAYLOAD_HEX_STRING));
-
-        doNothing()
-                .when(spyAuthPayload)
-                .verifyInboundSignature(any(), any(), any(), any(), any(), any());
+        IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
-        IkeIdPayload respIdPayload =
-                (IkeIdPayload)
-                        IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
-                                true /*isResp*/,
-                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+        IkeIdPayload respIdPayload = makeRespIdPayload();
 
         verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, false);
         verifyRetransmissionStopped();
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthHandlesFirstFrag() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+
+        // Received IKE fragment
+        byte[] unencryptedData = "testCreateIkeLocalIkeAuthHandlesFrag".getBytes();
+        int fragNum = 1;
+        int totalFragments = 2;
+        IkeSkfPayload skfPayload =
+                IkeTestUtils.makeDummySkfPayload(unencryptedData, fragNum, totalFragments);
+
+        ReceivedIkePacket packet =
+                makeDummyReceivedIkeFragmentPacket(
+                        mSpyCurrentIkeSaRecord,
+                        true /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                        skfPayload,
+                        PAYLOAD_TYPE_AUTH,
+                        null /* collectedFrags*/);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, packet);
+        mLooper.dispatchAll();
+
+        // Verify state doesn't change
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
+
+        // Verify the IkeSaRecord has stored the fragment.
+        DecodeResultPartial resultPartial =
+                mSpyCurrentIkeSaRecord.getCollectedFragments(true /*isResp*/);
+        assertEquals(PAYLOAD_TYPE_AUTH, resultPartial.firstPayloadType);
+        assertEquals(totalFragments, resultPartial.collectedFragsList.length);
+        assertArrayEquals(unencryptedData, resultPartial.collectedFragsList[fragNum - 1]);
+        assertFalse(resultPartial.isAllFragmentsReceived());
+
+        assertNull(mSpyCurrentIkeSaRecord.getCollectedFragments(false /*isResp*/));
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthHandlesLastFragOk() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+
+        // Set previously collected IKE fragments
+        DecodeResultPartial mockCollectedFrags = mock(DecodeResultPartial.class);
+        mSpyCurrentIkeSaRecord.updateCollectedFragments(mockCollectedFrags, true /*isResp*/);
+
+        // Build reassembled IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
+        authRelatedPayloads.add(spyAuthPayload);
+
+        IkeIdPayload respIdPayload = makeRespIdPayload();
+        authRelatedPayloads.add(respIdPayload);
+
+        List<IkePayload> authPayloadList =
+                getIkeAuthPayloadListWithChildPayloads(authRelatedPayloads);
+
+        // Receive last auth response and do IKE_AUTH
+        ReceivedIkePacket packet =
+                makeDummyReceivedLastIkeFragmentPacketOk(
+                        mSpyCurrentIkeSaRecord,
+                        true /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                        mockCollectedFrags,
+                        authPayloadList);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, packet);
+        mLooper.dispatchAll();
+
+        // Verify IKE AUTH is done
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+
+        // Verify collected response fragments are cleared.
+        assertNull(mSpyCurrentIkeSaRecord.getCollectedFragments(true /*isResp*/));
+        verify(mSpyCurrentIkeSaRecord).resetCollectedFragments(true /*isResp*/);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthHandlesLastFragError() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+        reset(mMockIkeMessageHelper);
+
+        // Set previously collected IKE fragments
+        DecodeResultPartial mockCollectedFrags = mock(DecodeResultPartial.class);
+        mSpyCurrentIkeSaRecord.updateCollectedFragments(mockCollectedFrags, true /*isResp*/);
+
+        // Receive last auth response with syntax error
+        ReceivedIkePacket packet =
+                makeDummyReceivedLastIkeFragmentPacketError(
+                        mSpyCurrentIkeSaRecord,
+                        true /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                        mockCollectedFrags,
+                        new InvalidSyntaxException("IkeStateMachineTest"));
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, packet);
+        mLooper.dispatchAll();
+
+        // Verify Delete request is sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(false /*isResp*/);
+        assertEquals(1, payloads.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, payloads.get(0).payloadType);
+
+        // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+
+        // Collected response fragments are cleared
+        assertNull(mSpyCurrentIkeSaRecord.getCollectedFragments(true /*isResp*/));
+        verify(mSpyCurrentIkeSaRecord).resetCollectedFragments(true /*isResp*/);
     }
 
     @Test
@@ -2464,16 +2640,21 @@ public final class IkeSessionStateMachineTest {
                         instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
     }
 
-    @Test
-    public void testRekeyIkeLocalDeleteSendsRequest() throws Exception {
-        setupIdleStateMachine();
-
+    private void mockCreateAndTransitionToRekeyDeleteLocal() {
         // Seed fake rekey data and force transition to RekeyIkeLocalDelete
         mIkeSessionStateMachine.mLocalInitNewIkeSaRecord = mSpyLocalInitIkeSaRecord;
+        mIkeSessionStateMachine.addIkeSaRecord(mSpyLocalInitIkeSaRecord);
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                 mIkeSessionStateMachine.mRekeyIkeLocalDelete);
         mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+    }
+
+    @Test
+    public void testRekeyIkeLocalDeleteSendsRequest() throws Exception {
+        setupIdleStateMachine();
+        mockCreateAndTransitionToRekeyDeleteLocal();
 
         // Verify Rekey-Delete request
         assertTrue(
@@ -2524,14 +2705,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testRekeyIkeLocalDeleteHandlesResponse() throws Exception {
         setupIdleStateMachine();
-
-        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
-        mIkeSessionStateMachine.mLocalInitNewIkeSaRecord = mSpyLocalInitIkeSaRecord;
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
-                mIkeSessionStateMachine.mRekeyIkeLocalDelete);
-        mLooper.dispatchAll();
-        verifyRetransmissionStarted();
+        mockCreateAndTransitionToRekeyDeleteLocal();
 
         // Receive Delete response
         ReceivedIkePacket dummyDeleteIkeRespReceivedPacket =
@@ -2553,14 +2727,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testRekeyIkeLocalDeleteHandlesRespWithParsingError() throws Exception {
         setupIdleStateMachine();
-
-        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
-        mIkeSessionStateMachine.mLocalInitNewIkeSaRecord = mSpyLocalInitIkeSaRecord;
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
-                mIkeSessionStateMachine.mRekeyIkeLocalDelete);
-        mLooper.dispatchAll();
-        verifyRetransmissionStarted();
+        mockCreateAndTransitionToRekeyDeleteLocal();
         reset(mMockIkeMessageHelper);
 
         // Mock receiving packet with syntax error
@@ -2590,15 +2757,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testRekeyIkeLocalDeleteWithRequestOnNewSa() throws Exception {
         setupIdleStateMachine();
-
-        // Seed fake rekey data and force transition to RekeyIkeLocalDelete
-        mIkeSessionStateMachine.mLocalInitNewIkeSaRecord = mSpyLocalInitIkeSaRecord;
-        mIkeSessionStateMachine.addIkeSaRecord(mSpyLocalInitIkeSaRecord);
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
-                mIkeSessionStateMachine.mRekeyIkeLocalDelete);
-        mLooper.dispatchAll();
-        verifyRetransmissionStarted();
+        mockCreateAndTransitionToRekeyDeleteLocal();
 
         // Receive an empty (DPD) request on the new IKE SA
         mIkeSessionStateMachine.sendMessage(
@@ -2611,6 +2770,42 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
         verifyRetransmissionStopped();
+    }
+
+    @Test
+    public void testRekeyIkeLocalDeleteWithRequestFragOnNewSa() throws Exception {
+        setupIdleStateMachine();
+        mockCreateAndTransitionToRekeyDeleteLocal();
+
+        // Received IKE fragment
+        byte[] unencryptedData = "testRekeyIkeLocalDeleteWithRequestFragOnNewSa".getBytes();
+        int fragNum = 1;
+        int totalFragments = 2;
+        IkeSkfPayload skfPayload =
+                IkeTestUtils.makeDummySkfPayload(unencryptedData, fragNum, totalFragments);
+
+        ReceivedIkePacket packet =
+                makeDummyReceivedIkeFragmentPacket(
+                        mSpyLocalInitIkeSaRecord,
+                        false /*isResp*/,
+                        IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                        skfPayload,
+                        PAYLOAD_TYPE_SA,
+                        null /* collectedFrags*/);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, packet);
+        mLooper.dispatchAll();
+
+        // Verify rekey is done.
+        verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
+        verifyRetransmissionStopped();
+
+        // Verify the IkeSaRecord has stored the new fragment.
+        DecodeResultPartial resultPartial =
+                mSpyLocalInitIkeSaRecord.getCollectedFragments(false /*isResp*/);
+        assertEquals(PAYLOAD_TYPE_SA, resultPartial.firstPayloadType);
+        assertEquals(totalFragments, resultPartial.collectedFragsList.length);
+        assertArrayEquals(unencryptedData, resultPartial.collectedFragsList[fragNum - 1]);
+        assertFalse(resultPartial.isAllFragmentsReceived());
     }
 
     @Test

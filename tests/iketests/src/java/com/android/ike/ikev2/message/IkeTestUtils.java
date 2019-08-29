@@ -21,6 +21,8 @@ import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import android.util.Pair;
 
@@ -58,5 +60,12 @@ public final class IkeTestUtils {
         assertTrue(expectedException.isInstance(resultError.ikeException));
 
         return (T) resultError.ikeException;
+    }
+
+    public static IkeSkfPayload makeDummySkfPayload(
+            byte[] unencryptedData, int fragNum, int totalFrags) throws Exception {
+        IkeEncryptedPayloadBody mockEncryptedBody = mock(IkeEncryptedPayloadBody.class);
+        when(mockEncryptedBody.getUnencryptedData()).thenReturn(unencryptedData);
+        return new IkeSkfPayload(mockEncryptedBody, fragNum, totalFrags);
     }
 }
