@@ -17,24 +17,32 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.EapAuthenticator.LOG;
+import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_ERROR;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_NOTIFICATION;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_AUTN;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_FULLAUTH_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IV;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
 
 import android.content.Context;
 import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapFailure;
+import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.message.EapData.EapMethod;
@@ -230,9 +238,73 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
     protected class ChallengeState extends EapMethodState {
         private final String mTAG = ChallengeState.class.getSimpleName();
 
+        @VisibleForTesting boolean mHadSuccessfulChallenge = false;
+
         public EapResult process(EapMessage message) {
+            if (message.eapCode == EAP_CODE_SUCCESS) {
+                if (!mHadSuccessfulChallenge) {
+                    LOG.e(mTAG, "Received unexpected EAP-Success");
+                    return new EapError(
+                            new EapInvalidRequestException(
+                                    "Received an EAP-Success in the ChallengeState"));
+                }
+                transitionTo(new FinalState());
+                return new EapSuccess(mMsk, mEmsk);
+            } else if (message.eapCode == EAP_CODE_FAILURE) {
+                transitionTo(new FinalState());
+                return new EapFailure();
+            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
+                return handleEapNotification(mTAG, message);
+            }
+
+            if (message.eapData.eapType != getEapMethod()) {
+                return new EapError(new EapInvalidRequestException(
+                        "Expected EAP Type " + getEapMethod()
+                                + ", received " + message.eapData.eapType));
+            }
+
+            DecodeResult<EapAkaTypeData> decodeResult =
+                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_AKA,
+                        decodeResult.atClientErrorCode);
+            }
+
+            EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
+            switch (eapAkaTypeData.eapSubtype) {
+                case EAP_AKA_CHALLENGE:
+                    break;
+                case EAP_AKA_NOTIFICATION:
+                    // TODO(b/139808612): move EAP-SIM/AKA notification handling to superclass
+                    throw new UnsupportedOperationException(
+                            "EAP-AKA notifications not supported yet");
+                default:
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_AKA,
+                            AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
+
+            if (!isValidChallengeAttributes(eapAkaTypeData)) {
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_AKA,
+                        AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
+
             // TODO(b/133879622): implement ChallengeState#process with EapAkaTypeData decoding
             return null;
+        }
+
+        private boolean isValidChallengeAttributes(EapAkaTypeData eapAkaTypeData) {
+            Set<Integer> attrs = eapAkaTypeData.attributeMap.keySet();
+
+            // must contain: AT_RAND, AT_AUTN, AT_MAC
+            return attrs.contains(EAP_AT_RAND)
+                    && attrs.contains(EAP_AT_AUTN)
+                    && attrs.contains(EAP_AT_MAC);
         }
     }
 
