@@ -177,6 +177,21 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     static final int IKE_EXCHANGE_SUBTYPE_REKEY_CHILD = 7;
     static final int IKE_EXCHANGE_SUBTYPE_GENERIC_INFO = 8;
 
+    private static final SparseArray<String> EXCHANGE_SUBTYPE_TO_STRING;
+
+    static {
+        EXCHANGE_SUBTYPE_TO_STRING = new SparseArray<>();
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_INVALID, "Invalid");
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_IKE_INIT, "IKE INIT");
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_IKE_AUTH, "IKE AUTH");
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_CREATE_CHILD, "Create Child");
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_DELETE_IKE, "Delete IKE");
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_DELETE_CHILD, "Delete Child");
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_REKEY_IKE, "Rekey IKE");
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, "Rekey Child");
+        EXCHANGE_SUBTYPE_TO_STRING.put(IKE_EXCHANGE_SUBTYPE_GENERIC_INFO, "Generic Info");
+    }
+
     /** Package private signals accessible for testing code. */
     private static final int CMD_GENERAL_BASE = 0;
 
@@ -549,7 +564,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
         /** Schedule retry when a request got rejected by TEMPORARY_FAILURE. */
         public void handleTempFailure(LocalRequest localRequest) {
-            logd("Receive TEMPORARY FAILURE. Reschedule request: " + localRequest.procedureType);
+            logd(
+                    "TempFailureHandler: Receive TEMPORARY FAILURE. Reschedule request: "
+                            + localRequest.procedureType);
 
             // TODO: Support customized delay time when this is a rekey request and SA is going to
             // expire soon.
@@ -563,6 +580,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
         /** Stop tracking temporary condition when request was not rejected by TEMPORARY_FAILURE. */
         public void reset() {
+            logd("TempFailureHandler: Reset Temporary failure retry timeout");
             removeMessages(TEMP_FAILURE_RETRY_TIMEOUT);
             mTempFailureReceived = false;
         }
@@ -1305,22 +1323,39 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             // TODO: b/138411550 Notify subclasses when discarding a received packet. Receiving MUST
             // go back to Idle state in this case.
 
+            String methodTag = "handleReceivedIkePacket: ";
+
             ReceivedIkePacket receivedIkePacket = (ReceivedIkePacket) message.obj;
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
             IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeHeader);
 
+            String msgDirection = ikeHeader.isResponseMsg ? "response" : "request";
+
             // Drop packets that we don't have an SA for:
             if (ikeSaRecord == null) {
                 // TODO: Print a summary of the IKE message (perhaps the IKE header)
-                cleanUpAndQuit(new IllegalStateException("No matching SA for packet"));
+                cleanUpAndQuit(
+                        new IllegalStateException(
+                                "Received an IKE "
+                                        + msgDirection
+                                        + "but found no matching SA for it"));
                 return;
             }
+
+            logd(
+                    methodTag
+                            + "Received an IKE "
+                            + msgDirection
+                            + " on IKE SA with local SPI: "
+                            + ikeSaRecord.getLocalSpi()
+                            + ". IKE message size: "
+                            + ikePacketBytes.length);
 
             if (ikeHeader.isResponseMsg) {
                 int expectedMsgId = ikeSaRecord.getLocalRequestMessageId();
                 if (expectedMsgId - 1 == ikeHeader.messageId) {
-                    logw("Received re-transmitted response. Discard it.");
+                    logd(methodTag + "Received re-transmitted response. Discard it.");
                     return;
                 }
 
@@ -1345,6 +1380,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                         handleResponseIkeMessage(decodeResult.ikeMessage);
                         break;
                     case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
+                        loge(methodTag + "Protected error", decodeResult.ikeException);
+
                         ikeSaRecord.incrementLocalRequestMessageId();
 
                         handleResponseGenericProcessError(
@@ -1355,8 +1392,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                         break;
                     case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
                         logi(
-                                "Message authentication or decryption failed on received response."
-                                        + " Discard it",
+                                methodTag
+                                        + "Message authentication or decryption failed on received"
+                                        + " response. Discard it",
                                 decodeResult.ikeException);
                         break;
                     default:
@@ -1369,6 +1407,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                 int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
                 if (expectedMsgId - 1 == ikeHeader.messageId) {
                     if (Arrays.equals(mLastReceivedIkeReq, ikePacketBytes)) {
+                        logd("Received re-transmitted request. Retransmitting response");
+
                         mIkeSocket.sendIkePacket(mLastSentIkeResp, mRemoteAddress);
 
                         // Notify state if it is listening for retransmitted request.
@@ -1376,6 +1416,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
                         // TODO:Support resetting remote rekey delete timer.
                     }
+                    logi(methodTag + "Received response with invalid message ID. Discard it.");
                 } else {
                     DecodeResult decodeResult =
                             IkeMessage.decode(
@@ -1393,6 +1434,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
                             // Handle DPD here.
                             if (ikeMessage.isDpdRequest()) {
+                                logd(methodTag + "Received DPD request");
                                 IkeMessage dpdResponse =
                                         buildEncryptedInformationalMessage(
                                                 ikeSaRecord,
@@ -1407,6 +1449,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             }
 
                             int ikeExchangeSubType = getIkeExchangeSubType(ikeMessage);
+                            logd(
+                                    methodTag
+                                            + "Request exchange subtype: "
+                                            + EXCHANGE_SUBTYPE_TO_STRING.get(ikeExchangeSubType));
+
                             if (ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_INVALID
                                     || ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_IKE_INIT
                                     || ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_IKE_AUTH) {
@@ -1419,6 +1466,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             handleRequestIkeMessage(ikeMessage, ikeExchangeSubType, message);
                             break;
                         case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
+                            loge(methodTag + "Protected error", decodeResult.ikeException);
+
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             mLastReceivedIkeReq = ikePacketBytes;
 
@@ -1430,8 +1479,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             break;
                         case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
                             logi(
-                                    "Message authentication or decryption failed on received"
-                                            + " request. Discard it",
+                                    methodTag
+                                            + "Message authentication or decryption failed on"
+                                            + " received request. Discard it",
                                     decodeResult.ikeException);
                             break;
                         default:
@@ -1497,8 +1547,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
          */
         protected void handleRequestGenericProcessError(
                 IkeSaRecord ikeSaRecord, int messageId, IkeProtocolException exception) {
-            logd("Receive request with protocol error", exception);
-
             IkeNotifyPayload errNotify = exception.buildNotifyPayload();
             sendEncryptedIkeMessage(
                     ikeSaRecord,
@@ -2264,13 +2312,23 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         }
 
         protected void handleReceivedIkePacket(Message message) {
+            String methodTag = "handleReceivedIkePacket: ";
+
             ReceivedIkePacket receivedIkePacket = (ReceivedIkePacket) message.obj;
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
+
+            String msgDirection = ikeHeader.isResponseMsg ? "response" : "request";
+            logd(
+                    methodTag
+                            + "Received an IKE "
+                            + msgDirection
+                            + ". IKE message size: "
+                            + ikePacketBytes.length);
+
             if (ikeHeader.isResponseMsg) {
                 DecodeResult decodeResult = IkeMessage.decode(0, ikeHeader, ikePacketBytes);
 
-                // TODO: Translate decoding status to readable String.
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
                         handleResponseIkeMessage(decodeResult.ikeMessage);
@@ -2296,7 +2354,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
             } else {
                 // TODO: Also prettyprint IKE header in the log.
-                logi("Received a request while waiting for IKE_INIT response.");
+                logi("Received a request while waiting for IKE_INIT response. Discard it.");
             }
         }
 
