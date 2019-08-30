@@ -416,7 +416,7 @@ public final class IkeMessage {
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher encryptCipher,
                 byte[] integrityKey,
-                byte[] encryptKey) {
+                byte[] encryptionKey) {
             IkeSkPayload skPayload =
                     new IkeSkPayload(
                             ikeHeader,
@@ -425,7 +425,7 @@ public final class IkeMessage {
                             integrityMac,
                             encryptCipher,
                             integrityKey,
-                            encryptKey);
+                            encryptionKey);
 
             ByteBuffer outputBuffer =
                     ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + skPayload.getPayloadLength());
