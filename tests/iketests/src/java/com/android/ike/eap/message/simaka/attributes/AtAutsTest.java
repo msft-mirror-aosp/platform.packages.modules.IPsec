@@ -68,7 +68,7 @@ public class AtAutsTest {
 
     @Test
     public void testEncode() throws Exception {
-        AtAuts atAuts = new AtAuts(AT_AUTS.length, AUTS_BYTES);
+        AtAuts atAuts = new AtAuts(AUTS_BYTES);
 
         ByteBuffer result = ByteBuffer.allocate(AT_AUTS.length);
         atAuts.encode(result);

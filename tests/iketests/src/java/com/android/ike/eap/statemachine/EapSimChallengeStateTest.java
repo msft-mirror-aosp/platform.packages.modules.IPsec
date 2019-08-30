@@ -59,7 +59,7 @@ import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
-import com.android.ike.eap.exceptions.simaka.EapSimInvalidLengthException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
@@ -173,15 +173,15 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
         try {
             mChallengeState.new RandChallengeResult(
                     new byte[VALID_SRES_LENGTH], new byte[INVALID_KC_LENGTH]);
-            fail("EapSimInvalidLengthException expected for invalid SRES lengths");
-        } catch (EapSimInvalidLengthException expected) {
+            fail("EapSimAkaInvalidLengthException expected for invalid SRES lengths");
+        } catch (EapSimAkaInvalidLengthException expected) {
         }
 
         try {
             mChallengeState.new RandChallengeResult(
                     new byte[INVALID_SRES_LENGTH], new byte[VALID_KC_LENGTH]);
-            fail("EapSimInvalidLengthException expected for invalid Kc lengths");
-        } catch (EapSimInvalidLengthException expected) {
+            fail("EapSimAkaInvalidLengthException expected for invalid Kc lengths");
+        } catch (EapSimAkaInvalidLengthException expected) {
         }
     }
 
@@ -224,8 +224,8 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     public void testGetRandChallengeResultFromResponseInvalidSres() {
         try {
             mChallengeState.getRandChallengeResultFromResponse(CHALLENGE_RESPONSE_INVALID_SRES);
-            fail("EapSimInvalidLengthException expected for invalid SRES_1 length");
-        } catch (EapSimInvalidLengthException expected) {
+            fail("EapSimAkaInvalidLengthException expected for invalid SRES_1 length");
+        } catch (EapSimAkaInvalidLengthException expected) {
         }
     }
 
@@ -233,8 +233,8 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     public void testGetRandChallengeResultFromResponseInvalidKc() {
         try {
             mChallengeState.getRandChallengeResultFromResponse(CHALLENGE_RESPONSE_INVALID_KC);
-            fail("EapSimInvalidLengthException expected for invalid KC length");
-        } catch (EapSimInvalidLengthException expected) {
+            fail("EapSimAkaInvalidLengthException expected for invalid KC length");
+        } catch (EapSimAkaInvalidLengthException expected) {
         }
     }
 
