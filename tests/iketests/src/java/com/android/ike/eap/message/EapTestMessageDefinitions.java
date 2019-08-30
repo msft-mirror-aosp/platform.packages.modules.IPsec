@@ -201,4 +201,15 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("02" + ID + "001C" // EAP-Response | ID | length in bytes
                     + "17050000" // EAP-AKA | Identity | 2B padding
                     + "0E050010" + EAP_AKA_IDENTITY_BYTES); // AT_IDENTITY ("0" + IMSI)
+
+    // Base64 of: FF0111
+    public static final String EAP_AKA_UICC_RESP_INVALID_TAG = "/wER";
+
+    // Base64 of: DC0E112233445566778899AABBCCDDEE
+    public static final String EAP_AKA_UICC_RESP_SYNCHRONIZE_BASE_64 = "3A4RIjNEVWZ3iJmqu8zd7g==";
+
+    public static final byte[] EAP_AKA_SYNCHRONIZATION_FAILURE =
+            hexStringToByteArray("02" + ID + "0018" // EAP-Response | ID | length in bytes
+                    + "17040000" // EAP-SIM | Synchronization-Failure | 2B padding
+                    + "0404112233445566778899AABBCCDDEE"); // AT_AUTS attribute
 }
