@@ -102,7 +102,7 @@ public class EapAkaTypeData extends EapSimAkaTypeData {
                     TAG,
                     EAP_METHOD,
                     SUPPORTED_SUBTYPES,
-                    EapSimAttributeFactory.getInstance(),
+                    EapAkaAttributeFactory.getInstance(),
                     EAP_AKA_SUBTYPE_STRING);
         }
 
