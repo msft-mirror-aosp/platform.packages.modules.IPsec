@@ -23,6 +23,9 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_SYNCHRONIZATION_FAILURE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_UICC_RESP_INVALID_TAG;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_UICC_RESP_SYNCHRONIZE_BASE_64;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EMSK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK;
@@ -42,12 +45,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import android.telephony.TelephonyManager;
+
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
@@ -70,6 +76,10 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
 
     private static final byte[] IK = hexStringToByteArray("00112233445566778899AABBCCDDEEFF");
     private static final byte[] CK = hexStringToByteArray("FFEEDDCCBBAA99887766554433221100");
+
+    // '10' + RAND_1_BYTES + '10' + AUTN_BYTES
+    private static final String BASE_64_CHALLENGE =
+            "EAARIjNEVWZ3iJmqu8zd7v8QASNFZ4mrze/+3LqYdlQyEA==";
 
     @Before
     public void setUp() {
@@ -217,5 +227,107 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
             fail("Expected EapSimAkaInvalidLengthException for invalid AUTS length");
         } catch (EapSimAkaInvalidLengthException ex) {
         }
+    }
+
+    @Test
+    public void testProcessIccAuthenticationNullResponse() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        AtRandAka atRandAka = new AtRandAka(RAND_1_BYTES);
+        AtAutn atAutn = new AtAutn(AUTN_BYTES);
+        AtMac atMac = new AtMac(MAC_BYTES);
+
+        DecodeResult<EapAkaTypeData> decodeResult =
+                new DecodeResult<>(
+                        new EapAkaTypeData(
+                                EAP_AKA_CHALLENGE,
+                                Arrays.asList(atRandAka, atAutn, atMac)));
+        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        when(mMockTelephonyManager
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE))
+                .thenReturn(null);
+
+        EapError eapError = (EapError) mEapAkaMethodStateMachine.process(eapMessage);
+        assertTrue(eapError.cause instanceof EapSimAkaAuthenticationFailureException);
+
+        verify(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        verify(mMockTelephonyManager)
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE);
+        verifyNoMoreInteractions(mMockEapAkaTypeDataDecoder, mMockTelephonyManager);
+    }
+
+    @Test
+    public void testProcessIccAuthenticationInvalidTag() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        AtRandAka atRandAka = new AtRandAka(RAND_1_BYTES);
+        AtAutn atAutn = new AtAutn(AUTN_BYTES);
+        AtMac atMac = new AtMac(MAC_BYTES);
+
+        DecodeResult<EapAkaTypeData> decodeResult =
+                new DecodeResult<>(
+                        new EapAkaTypeData(
+                                EAP_AKA_CHALLENGE,
+                                Arrays.asList(atRandAka, atAutn, atMac)));
+        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        when(mMockTelephonyManager
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE))
+                .thenReturn(EAP_AKA_UICC_RESP_INVALID_TAG);
+
+        EapError eapError = (EapError) mEapAkaMethodStateMachine.process(eapMessage);
+        assertTrue(eapError.cause instanceof EapSimAkaAuthenticationFailureException);
+
+        verify(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        verify(mMockTelephonyManager)
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE);
+        verifyNoMoreInteractions(mMockEapAkaTypeDataDecoder, mMockTelephonyManager);
+    }
+
+    @Test
+    public void testProcessIccAuthenticationSynchronizeTag() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        AtRandAka atRandAka = new AtRandAka(RAND_1_BYTES);
+        AtAutn atAutn = new AtAutn(AUTN_BYTES);
+        AtMac atMac = new AtMac(MAC_BYTES);
+
+        DecodeResult<EapAkaTypeData> decodeResult =
+                new DecodeResult<>(
+                        new EapAkaTypeData(
+                                EAP_AKA_CHALLENGE,
+                                Arrays.asList(atRandAka, atAutn, atMac)));
+        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        when(mMockTelephonyManager
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE))
+                .thenReturn(EAP_AKA_UICC_RESP_SYNCHRONIZE_BASE_64);
+
+        EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
+        assertArrayEquals(EAP_AKA_SYNCHRONIZATION_FAILURE, eapResponse.packet);
+
+        verify(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        verify(mMockTelephonyManager)
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE);
+        verifyNoMoreInteractions(mMockEapAkaTypeDataDecoder, mMockTelephonyManager);
     }
 }
