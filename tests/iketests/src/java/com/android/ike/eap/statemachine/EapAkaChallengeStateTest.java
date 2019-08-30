@@ -16,6 +16,7 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
@@ -27,11 +28,15 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AUTN_BYTES;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AUTS_BYTES;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.MAC_BYTES;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1_BYTES;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RES_BYTES;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -43,6 +48,7 @@ import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
@@ -51,6 +57,7 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandAka;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.statemachine.EapAkaMethodStateMachine.ChallengeState;
+import com.android.ike.eap.statemachine.EapAkaMethodStateMachine.ChallengeState.RandChallengeResult;
 import com.android.ike.eap.statemachine.EapMethodStateMachine.FinalState;
 
 import org.junit.Before;
@@ -60,6 +67,9 @@ import java.util.Arrays;
 
 public class EapAkaChallengeStateTest extends EapAkaStateTest {
     private ChallengeState mChallengeState;
+
+    private static final byte[] IK = hexStringToByteArray("00112233445566778899AABBCCDDEEFF");
+    private static final byte[] CK = hexStringToByteArray("FFEEDDCCBBAA99887766554433221100");
 
     @Before
     public void setUp() {
@@ -168,5 +178,44 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
 
         verify(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         verifyNoMoreInteractions(mMockEapAkaTypeDataDecoder, mMockTelephonyManager);
+    }
+
+    @Test
+    public void testRandChallengeResultConstructor() throws Exception {
+        RandChallengeResult result = mChallengeState.new RandChallengeResult(RES_BYTES, IK, CK);
+        assertArrayEquals(RES_BYTES, result.res);
+        assertArrayEquals(IK, result.ik);
+        assertArrayEquals(CK, result.ck);
+        assertNull(result.auts);
+
+        result = mChallengeState.new RandChallengeResult(AUTS_BYTES);
+        assertArrayEquals(AUTS_BYTES, result.auts);
+        assertNull(result.res);
+        assertNull(result.ik);
+        assertNull(result.ck);
+
+        try {
+            mChallengeState.new RandChallengeResult(new byte[0], IK, CK);
+            fail("Expected EapSimAkaInvalidLengthException for invalid RES length");
+        } catch (EapSimAkaInvalidLengthException ex) {
+        }
+
+        try {
+            mChallengeState.new RandChallengeResult(RES_BYTES, new byte[0], CK);
+            fail("Expected EapSimAkaInvalidLengthException for invalid IK length");
+        } catch (EapSimAkaInvalidLengthException ex) {
+        }
+
+        try {
+            mChallengeState.new RandChallengeResult(RES_BYTES, IK, new byte[0]);
+            fail("Expected EapSimAkaInvalidLengthException for invalid CK length");
+        } catch (EapSimAkaInvalidLengthException ex) {
+        }
+
+        try {
+            mChallengeState.new RandChallengeResult(new byte[0]);
+            fail("Expected EapSimAkaInvalidLengthException for invalid AUTS length");
+        } catch (EapSimAkaInvalidLengthException ex) {
+        }
     }
 }
