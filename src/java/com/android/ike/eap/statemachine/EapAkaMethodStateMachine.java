@@ -45,13 +45,16 @@ import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAuts;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRes;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -240,6 +243,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         @VisibleForTesting boolean mHadSuccessfulChallenge = false;
 
+        // IK and CK lengths defined as 16B (RFC 4187#1)
+        private final int mIkLenBytes = 16;
+        private final int mCkLenBytes = 16;
+
         public EapResult process(EapMessage message) {
             if (message.eapCode == EAP_CODE_SUCCESS) {
                 if (!mHadSuccessfulChallenge) {
@@ -296,6 +303,41 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
             // TODO(b/133879622): implement ChallengeState#process with EapAkaTypeData decoding
             return null;
+        }
+
+        @VisibleForTesting
+        class RandChallengeResult {
+            public final byte[] res;
+            public final byte[] ik;
+            public final byte[] ck;
+            public final byte[] auts;
+
+            RandChallengeResult(byte[] res, byte[] ik, byte[] ck)
+                    throws EapSimAkaInvalidLengthException {
+                if (!AtRes.isValidResLen(res.length)) {
+                    throw new EapSimAkaInvalidLengthException("Invalid RES length");
+                } else if (ik.length != mIkLenBytes) {
+                    throw new EapSimAkaInvalidLengthException("Invalid IK length");
+                } else if (ck.length != mCkLenBytes) {
+                    throw new EapSimAkaInvalidLengthException("Invalid CK length");
+                }
+
+                this.res = res;
+                this.ik = ik;
+                this.ck = ck;
+                this.auts = null;
+            }
+
+            RandChallengeResult(byte[] auts) throws EapSimAkaInvalidLengthException {
+                if (auts.length != AtAuts.AUTS_LENGTH) {
+                    throw new EapSimAkaInvalidLengthException("Invalid AUTS length");
+                }
+
+                this.res = null;
+                this.ik = null;
+                this.ck = null;
+                this.auts = auts;
+            }
         }
 
         private boolean isValidChallengeAttributes(EapAkaTypeData eapAkaTypeData) {

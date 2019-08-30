@@ -53,7 +53,7 @@ import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
-import com.android.ike.eap.exceptions.simaka.EapSimInvalidLengthException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
@@ -425,7 +425,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             List<RandChallengeResult> randChallengeResults;
             try {
                 randChallengeResults = getRandChallengeResults(eapSimTypeData);
-            } catch (EapSimInvalidLengthException | BufferUnderflowException ex) {
+            } catch (EapSimAkaInvalidLengthException | BufferUnderflowException ex) {
                 LOG.e(mTAG, "Invalid SRES/Kc tuple returned from SIM", ex);
                 return buildClientErrorResponse(
                         message.eapIdentifier,
@@ -497,7 +497,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         @VisibleForTesting
         List<RandChallengeResult> getRandChallengeResults(EapSimTypeData eapSimTypeData)
-                throws EapSimInvalidLengthException {
+                throws EapSimAkaInvalidLengthException {
             AtRandSim atRand = (AtRandSim) eapSimTypeData.attributeMap.get(EAP_AT_RAND);
             List<byte[]> randList = atRand.rands;
             List<RandChallengeResult> challengeResults = new ArrayList<>();
@@ -537,18 +537,18 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
          */
         @VisibleForTesting
         RandChallengeResult getRandChallengeResultFromResponse(byte[] challengeResponse)
-                throws EapSimInvalidLengthException {
+                throws EapSimAkaInvalidLengthException {
             ByteBuffer buffer = ByteBuffer.wrap(challengeResponse);
             int lenSres = Byte.toUnsignedInt(buffer.get());
             if (lenSres != mSresLenBytes) {
-                throw new EapSimInvalidLengthException("Invalid SRES length specified");
+                throw new EapSimAkaInvalidLengthException("Invalid SRES length specified");
             }
             byte[] sres = new byte[mSresLenBytes];
             buffer.get(sres);
 
             int lenKc = Byte.toUnsignedInt(buffer.get());
             if (lenKc != mKcLenBytes) {
-                throw new EapSimInvalidLengthException("Invalid Kc length specified");
+                throw new EapSimAkaInvalidLengthException("Invalid Kc length specified");
             }
             byte[] kc = new byte[mKcLenBytes];
             buffer.get(kc);
@@ -561,15 +561,15 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             public final byte[] sres;
             public final byte[] kc;
 
-            RandChallengeResult(byte[] sres, byte[] kc) throws EapSimInvalidLengthException {
+            RandChallengeResult(byte[] sres, byte[] kc) throws EapSimAkaInvalidLengthException {
                 this.sres = sres;
                 this.kc = kc;
 
                 if (sres.length != mSresLenBytes) {
-                    throw new EapSimInvalidLengthException("Invalid SRES length");
+                    throw new EapSimAkaInvalidLengthException("Invalid SRES length");
                 }
                 if (kc.length != mKcLenBytes) {
-                    throw new EapSimInvalidLengthException("Invalid Kc length");
+                    throw new EapSimAkaInvalidLengthException("Invalid Kc length");
                 }
             }
 
