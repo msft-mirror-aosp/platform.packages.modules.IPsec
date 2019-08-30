@@ -993,6 +993,24 @@ public final class IkeSessionStateMachineTest {
                         .hasMessages(IkeSessionStateMachine.CMD_RETRANSMIT));
     }
 
+    private IkeMessage verifyEncryptAndEncodeAndGetMessage(IkeSaRecord ikeSaRecord) {
+        verify(mMockIkeMessageHelper)
+                .encryptAndEncode(
+                        anyObject(), anyObject(), eq(ikeSaRecord), mIkeMessageCaptor.capture());
+        return mIkeMessageCaptor.getValue();
+    }
+
+    private void verifyEncryptAndEncodeNeverCalled(IkeSaRecord ikeSaRecord) {
+        verify(mMockIkeMessageHelper, never())
+                .encryptAndEncode(anyObject(), anyObject(), eq(ikeSaRecord), any(IkeMessage.class));
+    }
+
+    private void verifyEncryptAndEncodeNeverCalled() {
+        verify(mMockIkeMessageHelper, never())
+                .encryptAndEncode(
+                        anyObject(), anyObject(), any(IkeSaRecord.class), any(IkeMessage.class));
+    }
+
     @Test
     public void testQuit() {
         mIkeSessionStateMachine.quit();
@@ -1265,13 +1283,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
 
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-        IkeMessage createChildRequest = mIkeMessageCaptor.getValue();
+        IkeMessage createChildRequest = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = createChildRequest.ikeHeader;
         assertEquals(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, ikeHeader.exchangeType);
@@ -1442,13 +1454,7 @@ public final class IkeSessionStateMachineTest {
     }
 
     private List<IkePayload> verifyOutInfoMsgHeaderAndGetPayloads(boolean isResp) {
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-        IkeMessage deleteChildMessage = mIkeMessageCaptor.getValue();
+        IkeMessage deleteChildMessage = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = deleteChildMessage.ikeHeader;
         assertEquals(mSpyCurrentIkeSaRecord.getInitiatorSpi(), ikeHeader.ikeInitiatorSpi);
@@ -1546,12 +1552,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify that no response is sent
-        verify(mMockIkeMessageHelper, never())
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        any(IkeMessage.class));
+        verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // childTwo outbound payload list ready
         IkeDeletePayload outDelPayloadTwo = new IkeDeletePayload(new int[] {childTwoLocalSpi});
@@ -1785,13 +1786,7 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeMessage verifyAuthReqAndGetMsg() {
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-        IkeMessage ikeAuthReqMessage = mIkeMessageCaptor.getValue();
+        IkeMessage ikeAuthReqMessage = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = ikeAuthReqMessage.ikeHeader;
         assertEquals(IkeHeader.EXCHANGE_TYPE_IKE_AUTH, ikeHeader.exchangeType);
@@ -2116,15 +2111,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
 
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-
         // Verify EAP response
-        IkeMessage resp = mIkeMessageCaptor.getValue();
+        IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
         IkeHeader ikeHeader = resp.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
         assertEquals(IkeHeader.EXCHANGE_TYPE_IKE_AUTH, ikeHeader.exchangeType);
@@ -2405,16 +2393,10 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
         verifyRetransmissionStarted();
 
         // Verify outbound message
-        IkeMessage rekeyMsg = mIkeMessageCaptor.getValue();
+        IkeMessage rekeyMsg = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = rekeyMsg.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
@@ -2557,9 +2539,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify no message was sent because a fatal error notification was received
-        verify(mMockIkeMessageHelper, never())
-                .encryptAndEncode(
-                        anyObject(), anyObject(), eq(mSpyCurrentIkeSaRecord), anyObject());
+        verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -2662,15 +2642,8 @@ public final class IkeSessionStateMachineTest {
                         instanceof IkeSessionStateMachine.RekeyIkeLocalDelete);
         verifyRetransmissionStarted();
 
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-
         // Verify outbound message
-        IkeMessage delMsg = mIkeMessageCaptor.getValue();
+        IkeMessage delMsg = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = delMsg.ikeHeader;
         assertEquals(mSpyCurrentIkeSaRecord.getInitiatorSpi(), ikeHeader.ikeInitiatorSpi);
@@ -2740,12 +2713,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify no more request out
-        verify(mMockIkeMessageHelper, never())
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        any(IkeMessage.class));
+        verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // Verify final state - Idle, with new SA, and old SA closed.
         verifyRekeyReplaceSa(mSpyLocalInitIkeSaRecord);
@@ -2854,13 +2822,7 @@ public final class IkeSessionStateMachineTest {
         assertEquals(IKE_REKEY_SA_INITIATOR_SPI, recordConfigCaptor.getValue().initSpi.getSpi());
 
         // Verify outbound CREATE_CHILD_SA message
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-        IkeMessage rekeyCreateResp = mIkeMessageCaptor.getValue();
+        IkeMessage rekeyCreateResp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
         IkeHeader rekeyCreateRespHeader = rekeyCreateResp.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, rekeyCreateRespHeader.nextPayloadType);
         assertEquals(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyCreateRespHeader.exchangeType);
@@ -2945,13 +2907,7 @@ public final class IkeSessionStateMachineTest {
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDeleteIkeRequestReceivedPacket);
 
         // Verify outbound DELETE_IKE_SA message
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-        IkeMessage rekeyDeleteResp = mIkeMessageCaptor.getValue();
+        IkeMessage rekeyDeleteResp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
         IkeHeader rekeyDeleteRespHeader = rekeyDeleteResp.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, rekeyDeleteRespHeader.nextPayloadType);
         assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, rekeyDeleteRespHeader.exchangeType);
@@ -2994,9 +2950,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify no request received, or response sent.
         verify(mMockIkeMessageHelper, never()).decode(anyInt(), anyObject(), anyObject());
-        verify(mMockIkeMessageHelper, never())
-                .encryptAndEncode(
-                        anyObject(), anyObject(), eq(mSpyCurrentIkeSaRecord), anyObject());
+        verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // Verify final state has not changed - signal was not sent.
         assertTrue(
@@ -3020,9 +2974,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify no request received, or response sent.
         verify(mMockIkeMessageHelper, never()).decode(anyInt(), anyObject(), anyObject());
-        verify(mMockIkeMessageHelper, never())
-                .encryptAndEncode(
-                        anyObject(), anyObject(), eq(mSpyCurrentIkeSaRecord), anyObject());
+        verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // Verify final state - Idle, with new SA, and old SA closed.
         verifyRekeyReplaceSa(mSpyRemoteInitIkeSaRecord);
@@ -3326,15 +3278,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
 
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-
         // Verify outbound message
-        IkeMessage delMsg = mIkeMessageCaptor.getValue();
+        IkeMessage delMsg = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = delMsg.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
@@ -3397,12 +3342,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify no more request out
-        verify(mMockIkeMessageHelper, never())
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        any(IkeMessage.class));
+        verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // Verify state machine quit properly
         verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
@@ -3444,9 +3384,8 @@ public final class IkeSessionStateMachineTest {
         verifyRetransmissionStarted();
 
         // Verify delete sent out.
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(), anyObject(), eq(mSpyCurrentIkeSaRecord), anyObject());
+        verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
+
         reset(mMockIkeMessageHelper); // Discard value.
         when(mMockIkeMessageHelper.encryptAndEncode(any(), any(), any(), any()))
                 .thenReturn(new byte[0]);
@@ -3459,15 +3398,8 @@ public final class IkeSessionStateMachineTest {
         verifyRetransmissionStarted();
         verifyIncrementRemoteReqMsgId();
 
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-
         // Verify outbound response
-        IkeMessage resp = mIkeMessageCaptor.getValue();
+        IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = resp.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
@@ -3493,15 +3425,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         verifyIncrementRemoteReqMsgId();
 
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
-
         // Verify outbound message
-        IkeMessage delMsg = mIkeMessageCaptor.getValue();
+        IkeMessage delMsg = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = delMsg.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
@@ -3530,15 +3455,9 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
 
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDpdRequest);
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
 
         // Verify outbound response
-        IkeMessage resp = mIkeMessageCaptor.getValue();
+        IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
         IkeHeader ikeHeader = resp.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
         assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
@@ -3567,15 +3486,9 @@ public final class IkeSessionStateMachineTest {
                         instanceof IkeSessionStateMachine.RekeyIkeRemoteDelete);
 
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDpdRequest);
-        verify(mMockIkeMessageHelper)
-                .encryptAndEncode(
-                        anyObject(),
-                        anyObject(),
-                        eq(mSpyCurrentIkeSaRecord),
-                        mIkeMessageCaptor.capture());
 
         // Verify outbound response
-        IkeMessage resp = mIkeMessageCaptor.getValue();
+        IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
         IkeHeader ikeHeader = resp.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
         assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
@@ -3608,7 +3521,7 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mReceiving);
         mLooper.dispatchAll();
-        verify(mMockIkeMessageHelper, never()).encryptAndEncode(any(), any(), any(), any());
+        verifyEncryptAndEncodeNeverCalled();
 
         // Queue a local request, and expect that it is not run (yet)
         mIkeSessionStateMachine.sendMessage(
@@ -3617,7 +3530,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify that the state machine is still in the Receiving state
-        verify(mMockIkeMessageHelper, never()).encryptAndEncode(any(), any(), any(), any());
+        verifyEncryptAndEncodeNeverCalled();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.Receiving);
@@ -3630,7 +3543,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
-        verify(mMockIkeMessageHelper, times(1)).encryptAndEncode(any(), any(), any(), any());
+        verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
     }
 
     @Test
