@@ -40,7 +40,6 @@ import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.telephony.TelephonyManager;
-import android.util.Base64;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
@@ -51,6 +50,7 @@ import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
@@ -101,8 +101,6 @@ import javax.crypto.spec.SecretKeySpec;
  * Method for Subscriber Identity Modules (EAP-SIM)</a>
  */
 class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
-    private final TelephonyManager mTelephonyManager;
-    private final EapSimConfig mEapSimConfig;
     private final SecureRandom mSecureRandom;
     private final EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
@@ -124,14 +122,12 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             EapSimConfig eapSimConfig,
             SecureRandom secureRandom,
             EapSimTypeDataDecoder eapSimTypeDataDecoder) {
-        if (telephonyManager == null) {
-            throw new IllegalArgumentException("TelephonyManager must be non-null");
-        } else if (eapSimTypeDataDecoder == null) {
+        super(telephonyManager.createForSubscriptionId(eapSimConfig.subId), eapSimConfig);
+
+        if (eapSimTypeDataDecoder == null) {
             throw new IllegalArgumentException("EapSimTypeDataDecoder must be non-null");
         }
 
-        this.mTelephonyManager = telephonyManager.createForSubscriptionId(eapSimConfig.subId);
-        this.mEapSimConfig = eapSimConfig;
         this.mSecureRandom = secureRandom;
         this.mEapSimTypeDataDecoder = eapSimTypeDataDecoder;
         transitionTo(new CreatedState());
@@ -270,7 +266,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 LOG.wtf(mTAG, "Exception thrown while making AtIdentity attribute", ex);
                 return new EapError(ex);
             } catch (EapSimAkaIdentityUnavailableException ex) {
-                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapSimConfig.subId);
+                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapUiccConfig.subId);
                 return new EapError(ex);
             }
 
@@ -333,7 +329,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 String imsi = mTelephonyManager.getSubscriberId();
                 if (imsi == null) {
                     throw new EapSimAkaIdentityUnavailableException(
-                            "IMSI for subId (" + mEapSimConfig.subId + ") not available");
+                            "IMSI for subId (" + mEapUiccConfig.subId + ") not available");
                 }
 
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
@@ -431,6 +427,8 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                         message.eapIdentifier,
                         EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
+            }  catch (EapSimAkaAuthenticationFailureException ex) {
+                return new EapError(ex);
             }
 
             try {
@@ -497,7 +495,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         @VisibleForTesting
         List<RandChallengeResult> getRandChallengeResults(EapSimTypeData eapSimTypeData)
-                throws EapSimAkaInvalidLengthException {
+                throws EapSimAkaInvalidLengthException, EapSimAkaAuthenticationFailureException {
             AtRandSim atRand = (AtRandSim) eapSimTypeData.attributeMap.get(EAP_AT_RAND);
             List<byte[]> randList = atRand.rands;
             List<RandChallengeResult> challengeResults = new ArrayList<>();
@@ -508,13 +506,11 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 formattedRand.put((byte) rand.length);
                 formattedRand.put(rand);
 
-                String base64Challenge =
-                        Base64.encodeToString(formattedRand.array(), Base64.NO_WRAP);
-                String challengeResponse = mTelephonyManager.getIccAuthentication(
-                        mEapSimConfig.apptype,
-                        TelephonyManager.AUTHTYPE_EAP_SIM,
-                        base64Challenge);
-                byte[] challengeResponseBytes = Base64.decode(challengeResponse, Base64.DEFAULT);
+                byte[] challengeResponseBytes =
+                        processUiccAuthentication(
+                                mTAG,
+                                TelephonyManager.AUTHTYPE_EAP_SIM,
+                                formattedRand.array());
 
                 RandChallengeResult randChallengeResult =
                         getRandChallengeResultFromResponse(challengeResponseBytes);

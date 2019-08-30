@@ -122,7 +122,11 @@ public final class EapSessionConfig {
         }
     }
 
-    private abstract static class EapUiccConfig extends EapMethodConfig {
+    /**
+     * EapUiccConfig represents the configs needed for EAP methods that rely on UICC cards for
+     * authentication.
+     */
+    public abstract static class EapUiccConfig extends EapMethodConfig {
         public final int subId;
         public final int apptype;
 
