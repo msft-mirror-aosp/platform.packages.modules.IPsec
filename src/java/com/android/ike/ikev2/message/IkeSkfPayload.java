@@ -34,7 +34,7 @@ import java.security.GeneralSecurityException;
  *     Version 2 (IKEv2) Message Fragmentation</a>
  */
 public final class IkeSkfPayload extends IkeSkPayload {
-    private static final int SKF_HEADER_LEN = 4;
+    public static final int SKF_HEADER_LEN = 4;
 
     /** Current Fragment message number, starting from 1 */
     public final int fragmentNum;

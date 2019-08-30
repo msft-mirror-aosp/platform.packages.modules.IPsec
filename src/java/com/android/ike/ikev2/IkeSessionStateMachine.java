@@ -137,6 +137,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
     private static final String TAG = "IkeSessionStateMachine";
 
+    // TODO: b/140579254 Allow users to configure fragment size.
+
+    // Default fragment size in bytes.
+    @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
+
     // TODO: Add SA_HARD_LIFETIME_MS
 
     // Time after which IKE SA needs to be rekeyed
@@ -269,8 +274,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     final HashMap<IChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
 
-    @VisibleForTesting byte[] mLastReceivedIkeReq;
-    @VisibleForTesting byte[] mLastSentIkeResp;
+    // TODO: Store them in IkeSaRecord
+    // If received request is identical in byte with last received request or the first fragment of
+    // last received request, retransmit the cached response.
+    @VisibleForTesting byte[] mLastReceivedIkeReqFirstPacket;
+    @VisibleForTesting byte[][] mLastSentIkeResp;
 
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
@@ -289,6 +297,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     @VisibleForTesting boolean mIsLocalBehindNat;
     /** Indicates if remote node is behind a NAT. */
     @VisibleForTesting boolean mIsRemoteBehindNat;
+
+    /** Indicates if both sides support fragmentation. Set in IKE INIT */
+    @VisibleForTesting boolean mSupportFragment;
 
     /** Package private SaProposal that represents the negotiated IKE SA proposal. */
     @VisibleForTesting SaProposal mSaProposal;
@@ -1152,10 +1163,17 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     // Sends the provided IkeMessage using the provided IKE SA record
     @VisibleForTesting
     void sendEncryptedIkeMessage(IkeSaRecord ikeSaRecord, IkeMessage msg) {
-        byte[] bytes = msg.encryptAndEncode(mIkeIntegrity, mIkeCipher, ikeSaRecord);
-        mIkeSocket.sendIkePacket(bytes, mRemoteAddress);
-
-        if (msg.ikeHeader.isResponseMsg) mLastSentIkeResp = bytes;
+        byte[][] packetList =
+                msg.encryptAndEncode(
+                        mIkeIntegrity,
+                        mIkeCipher,
+                        ikeSaRecord,
+                        mSupportFragment,
+                        DEFAULT_FRAGMENT_SIZE);
+        for (byte[] packet : packetList) {
+            mIkeSocket.sendIkePacket(packet, mRemoteAddress);
+        }
+        if (msg.ikeHeader.isResponseMsg) mLastSentIkeResp = packetList;
     }
 
     // Builds and sends IKE-level error notification response on the provided IKE SA record
@@ -1415,10 +1433,12 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             } else {
                 int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
                 if (expectedMsgId - 1 == ikeHeader.messageId) {
-                    if (Arrays.equals(mLastReceivedIkeReq, ikePacketBytes)) {
+                    if (Arrays.equals(mLastReceivedIkeReqFirstPacket, ikePacketBytes)) {
                         logd("Received re-transmitted request. Retransmitting response");
 
-                        mIkeSocket.sendIkePacket(mLastSentIkeResp, mRemoteAddress);
+                        for (byte[] packet : mLastSentIkeResp) {
+                            mIkeSocket.sendIkePacket(packet, mRemoteAddress);
+                        }
 
                         // Notify state if it is listening for retransmitted request.
                         handleRetransmittedReq();
@@ -1442,7 +1462,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             ikeSaRecord.resetCollectedFragments(false /*isResp*/);
 
                             // TODO:b/140429499 Only store the first fragment
-                            mLastReceivedIkeReq = ikePacketBytes;
+                            mLastReceivedIkeReqFirstPacket = ikePacketBytes;
                             IkeMessage ikeMessage = ((DecodeResultOk) decodeResult).ikeMessage;
 
                             // Handle DPD here.
@@ -1497,7 +1517,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             ikeSaRecord.resetCollectedFragments(false /*isResp*/);
 
-                            mLastReceivedIkeReq = ikePacketBytes;
+                            mLastReceivedIkeReqFirstPacket = ikePacketBytes;
 
                             // IkeException MUST be already wrapped into an IkeProtocolException
                             handleRequestGenericProcessError(
@@ -2303,6 +2323,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         private IkeSecurityParameterIndex mLocalIkeSpiResource;
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
         private Retransmitter mRetransmitter;
+
+        // TODO: Support negotiating IKE fragmentation
 
         @Override
         public void enterState() {
