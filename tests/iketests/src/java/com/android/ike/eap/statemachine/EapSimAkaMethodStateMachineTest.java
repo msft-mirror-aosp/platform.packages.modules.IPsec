@@ -33,6 +33,7 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.K_ENCR_STRIN
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK_STRING;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_1;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_IDENTITY;
@@ -44,15 +45,20 @@ import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.SESSI
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import android.telephony.TelephonyManager;
+
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
@@ -70,18 +76,30 @@ import java.util.List;
 
 public class EapSimAkaMethodStateMachineTest {
     private static final String TAG = EapSimAkaMethodStateMachineTest.class.getSimpleName();
+    private static final int SUB_ID = 1;
     private static final String VERSIONS_STRING = "0001";
     private static final String SELECTED_VERSION = "0001";
     private static final byte[] SHA_1_INPUT = hexStringToByteArray("0123456789ABCDEF");
+    private static final byte[] FORMATTED_UICC_CHALLENGE =
+            hexStringToByteArray("1000112233445566778899AABBCCDDEEFF");
+    private static final String BASE_64_CHALLENGE = "EAARIjNEVWZ3iJmqu8zd7v8=";
+    private static final String BASE_64_RESPONSE = "BBEiM0QIAQIDBAUGBwg=";
+    private static final byte[] UICC_RESPONSE =
+            hexStringToByteArray("04" + SRES_1 + "08" + KC_1);
 
     // K_encr + K_aut + MSK + EMSK
     private static final int PRF_OUTPUT_BYTES = (2 * KEY_LEN) + (2 * SESSION_KEY_LENGTH);
 
+    private TelephonyManager mMockTelephonyManager;
+    private EapSimConfig mEapSimConfig;
     private EapSimAkaMethodStateMachine mStateMachine;
 
     @Before
     public void setUp() {
-        mStateMachine = new EapSimAkaMethodStateMachine() {
+        mMockTelephonyManager = mock(TelephonyManager.class);
+        mEapSimConfig = new EapSimConfig(SUB_ID, TelephonyManager.APPTYPE_USIM);
+
+        mStateMachine = new EapSimAkaMethodStateMachine(mMockTelephonyManager, mEapSimConfig) {
             @Override
             EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
                 return new EapSimTypeData(EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
@@ -165,5 +183,53 @@ public class EapSimAkaMethodStateMachineTest {
         MessageDigest sha1 = MessageDigest.getInstance(mStateMachine.MASTER_KEY_GENERATION_ALG);
         byte[] sha1Result = sha1.digest(SHA_1_INPUT);
         assertFalse(Arrays.equals(SHA_1_INPUT, sha1Result));
+    }
+
+    @Test
+    public void testProcessUiccAuthentication() throws Exception {
+        when(mMockTelephonyManager
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE)).thenReturn(BASE_64_RESPONSE);
+
+        byte[] result =
+                mStateMachine.processUiccAuthentication(
+                        TAG,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        FORMATTED_UICC_CHALLENGE);
+
+        assertArrayEquals(UICC_RESPONSE, result);
+        verify(mMockTelephonyManager)
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE);
+        verifyNoMoreInteractions(mMockTelephonyManager);
+    }
+
+    @Test
+    public void testProcessUiccAuthenticationNullResponse() throws Exception {
+        when(mMockTelephonyManager
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE)).thenReturn(null);
+
+        try {
+            mStateMachine.processUiccAuthentication(
+                    TAG,
+                    TelephonyManager.AUTHTYPE_EAP_AKA,
+                    FORMATTED_UICC_CHALLENGE);
+            fail("EapSimAkaAuthenticationFailureException expected for null TelMan response");
+        } catch (EapSimAkaAuthenticationFailureException expected) {
+        }
+
+        verify(mMockTelephonyManager)
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE);
+        verifyNoMoreInteractions(mMockTelephonyManager);
     }
 }
