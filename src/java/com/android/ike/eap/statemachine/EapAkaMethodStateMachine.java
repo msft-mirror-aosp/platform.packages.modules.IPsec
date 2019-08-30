@@ -84,8 +84,6 @@ import java.util.Set;
 class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
     private static final String TAG = EapAkaMethodStateMachine.class.getSimpleName();
 
-    private final TelephonyManager mTelephonyManager;
-    private final EapAkaConfig mEapAkaConfig;
     private final EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
 
     EapAkaMethodStateMachine(Context context, EapAkaConfig eapAkaConfig) {
@@ -100,8 +98,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             TelephonyManager telephonyManager,
             EapAkaConfig eapAkaConfig,
             EapAkaTypeDataDecoder eapAkaTypeDataDecoder) {
-        mTelephonyManager = telephonyManager.createForSubscriptionId(eapAkaConfig.subId);
-        mEapAkaConfig = eapAkaConfig;
+        super(telephonyManager.createForSubscriptionId(eapAkaConfig.subId), eapAkaConfig);
         mEapAkaTypeDataDecoder = eapAkaTypeDataDecoder;
 
         transitionTo(new CreatedState());
@@ -194,10 +191,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
             String imsi = mTelephonyManager.getSubscriberId();
             if (imsi == null) {
-                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapAkaConfig.subId);
+                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapUiccConfig.subId);
                 return new EapError(
                         new EapSimAkaIdentityUnavailableException(
-                                "IMSI for subId (" + mEapAkaConfig.subId + ") not available"));
+                                "IMSI for subId (" + mEapUiccConfig.subId + ") not available"));
             }
             String identity = "0" + imsi;
             AtIdentity atIdentity;
