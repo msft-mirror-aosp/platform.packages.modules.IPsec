@@ -975,6 +975,16 @@ public abstract class EapSimAkaAttribute {
             int bytesUsed = MIN_ATTR_LENGTH + res.length;
             addPadding(bytesUsed, byteBuffer);
         }
+
+        /**
+         * Checks whether the given RES length is valid.
+         *
+         * @param resLenBytes the RES length to be checked
+         * @return true iff the given resLen is valid
+         */
+        public static boolean isValidResLen(int resLenBytes) {
+            return resLenBytes >= MIN_RES_LEN_BYTES && resLenBytes <= MAX_RES_LEN_BYTES;
+        }
     }
 
     /**
@@ -982,7 +992,7 @@ public abstract class EapSimAkaAttribute {
      */
     public static class AtAuts extends EapSimAkaAttribute {
         private static final int ATTR_LENGTH = 4 * LENGTH_SCALING;
-        private static final int AUTS_LENGTH = 14;
+        public static final int AUTS_LENGTH = 14;
 
         public final byte[] auts = new byte[AUTS_LENGTH];
 
@@ -997,12 +1007,10 @@ public abstract class EapSimAkaAttribute {
             byteBuffer.get(auts);
         }
 
-        public AtAuts(int lengthInBytes, byte[] auts) throws EapSimAkaInvalidAttributeException {
-            super(EAP_AT_AUTS, lengthInBytes);
+        public AtAuts(byte[] auts) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_AUTS, ATTR_LENGTH);
 
-            if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimAkaInvalidAttributeException("Length must be 16B");
-            } else if (auts.length != AUTS_LENGTH) {
+            if (auts.length != AUTS_LENGTH) {
                 throw new EapSimAkaInvalidAttributeException("Auts must be 14B");
             }
 
