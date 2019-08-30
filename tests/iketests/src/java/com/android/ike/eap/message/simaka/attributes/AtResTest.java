@@ -26,6 +26,7 @@ import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefi
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
@@ -95,5 +96,13 @@ public class AtResTest {
         ByteBuffer result = ByteBuffer.allocate(AT_RES.length);
         atRes.encode(result);
         assertArrayEquals(AT_RES, result.array());
+    }
+
+    @Test
+    public void testIsValidResLen() {
+        // valid RES length: 4 <= RES length <= 16
+        assertTrue(AtRes.isValidResLen(5));
+        assertFalse(AtRes.isValidResLen(0));
+        assertFalse(AtRes.isValidResLen(20));
     }
 }
