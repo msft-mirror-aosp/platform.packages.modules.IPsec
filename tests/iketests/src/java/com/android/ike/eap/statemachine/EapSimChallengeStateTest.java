@@ -18,28 +18,20 @@ package com.android.ike.eap.statemachine;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_KC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CHALLENGE_RESPONSE_INVALID_SRES;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EMSK;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EMSK_STRING;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.KC_1;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.KC_1_BYTES;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.KC_2;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.KC_2_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.K_AUT;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.K_AUT_STRING;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.K_ENCR;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.K_ENCR_STRING;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MAC_INPUT;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.MK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK_STRING;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_1_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_2_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.VALID_CHALLENGE_RESPONSE;
@@ -47,9 +39,10 @@ import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CHALLENGE;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT;
-import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1_BYTES;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2_BYTES;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -58,7 +51,6 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -69,15 +61,17 @@ import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapSuccess;
-import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
-import com.android.ike.eap.exceptions.simaka.EapSimInvalidLengthException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNonceMt;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
 import com.android.ike.eap.statemachine.EapMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState;
@@ -86,7 +80,6 @@ import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState.
 import org.junit.Test;
 
 import java.nio.BufferUnderflowException;
-import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -100,11 +93,7 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     private static final int VALID_KC_LENGTH = 8;
     private static final int INVALID_KC_LENGTH = 9;
     private static final int AT_RAND_LENGTH = 36;
-    private static final int SUB_ID = 1;
     private static final List<Integer> VERSIONS = Arrays.asList(1);
-    private static final String VERSIONS_STRING = "0001";
-    private static final String SELECTED_VERSION = "0001";
-    private static final int PRF_OUTPUT_BYTES = 16 + 16 + 64 + 64; // K_encr + K_aut + MSK + EMSK
 
     // Base64 of {@link EapTestAttributeDefinitions#RAND_1}
     private static final String BASE_64_RAND_1 = "EAARIjNEVWZ3iJmqu8zd7v8=";
@@ -120,8 +109,6 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
 
     // Base64 of "04" + SRES_1 + '081122"
     private static final String BASE_64_INVALID_RESP = "BBEiM0QIESI=";
-
-    private static final byte[] SHA_1_INPUT = hexStringToByteArray("0123456789ABCDEF");
 
     private AtNonceMt mAtNonceMt;
     private ChallengeState mChallengeState;
@@ -152,8 +139,8 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
 
     @Test
     public void testProcessSuccess() throws Exception {
-        System.arraycopy(MSK, 0, mChallengeState.mMsk, 0, MSK.length);
-        System.arraycopy(EMSK, 0, mChallengeState.mEmsk, 0, EMSK.length);
+        System.arraycopy(MSK, 0, mEapSimMethodStateMachine.mMsk, 0, MSK.length);
+        System.arraycopy(EMSK, 0, mEapSimMethodStateMachine.mEmsk, 0, EMSK.length);
 
         EapMessage input = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
         EapResult result = mEapSimMethodStateMachine.process(input);
@@ -193,15 +180,15 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
         try {
             mChallengeState.new RandChallengeResult(
                     new byte[VALID_SRES_LENGTH], new byte[INVALID_KC_LENGTH]);
-            fail("EapSimInvalidLengthException expected for invalid SRES lengths");
-        } catch (EapSimInvalidLengthException expected) {
+            fail("EapSimAkaInvalidLengthException expected for invalid SRES lengths");
+        } catch (EapSimAkaInvalidLengthException expected) {
         }
 
         try {
             mChallengeState.new RandChallengeResult(
                     new byte[INVALID_SRES_LENGTH], new byte[VALID_KC_LENGTH]);
-            fail("EapSimInvalidLengthException expected for invalid Kc lengths");
-        } catch (EapSimInvalidLengthException expected) {
+            fail("EapSimAkaInvalidLengthException expected for invalid Kc lengths");
+        } catch (EapSimAkaInvalidLengthException expected) {
         }
     }
 
@@ -244,8 +231,8 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     public void testGetRandChallengeResultFromResponseInvalidSres() {
         try {
             mChallengeState.getRandChallengeResultFromResponse(CHALLENGE_RESPONSE_INVALID_SRES);
-            fail("EapSimInvalidLengthException expected for invalid SRES_1 length");
-        } catch (EapSimInvalidLengthException expected) {
+            fail("EapSimAkaInvalidLengthException expected for invalid SRES_1 length");
+        } catch (EapSimAkaInvalidLengthException expected) {
         }
     }
 
@@ -253,8 +240,8 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     public void testGetRandChallengeResultFromResponseInvalidKc() {
         try {
             mChallengeState.getRandChallengeResultFromResponse(CHALLENGE_RESPONSE_INVALID_KC);
-            fail("EapSimInvalidLengthException expected for invalid KC length");
-        } catch (EapSimInvalidLengthException expected) {
+            fail("EapSimAkaInvalidLengthException expected for invalid KC length");
+        } catch (EapSimAkaInvalidLengthException expected) {
         }
     }
 
@@ -340,49 +327,46 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
         verifyNoMoreInteractions(mMockTelephonyManager);
     }
 
-    @Test
-    public void testGenerateAndPersistKeys() throws Exception {
-        byte[] mkInput = hexStringToByteArray(
-                EAP_SIM_IDENTITY
-                + KC_1
-                + KC_2
-                + NONCE_MT_STRING
-                + VERSIONS_STRING
-                + SELECTED_VERSION);
-        MessageDigest mockSha1 = mock(MessageDigest.class);
-        when(mockSha1.digest(eq(mkInput))).thenReturn(MK);
-
-        byte[] keys = hexStringToByteArray(K_ENCR_STRING + K_AUT_STRING + MSK_STRING + EMSK_STRING);
-        Fips186_2Prf mockFips186_2Prf = mock(Fips186_2Prf.class);
-        when(mockFips186_2Prf.getRandom(eq(MK), eq(PRF_OUTPUT_BYTES))).thenReturn(keys);
-
-        List<RandChallengeResult> randChallengeResults = Arrays.asList(
-                mChallengeState.new RandChallengeResult(SRES_1_BYTES, KC_1_BYTES),
-                mChallengeState.new RandChallengeResult(SRES_2_BYTES, KC_2_BYTES));
-
-        mChallengeState.generateAndPersistKeys(mockSha1, mockFips186_2Prf, randChallengeResults);
-        assertArrayEquals(K_ENCR, mChallengeState.mKEncr);
-        assertArrayEquals(K_AUT, mChallengeState.mKAut);
-        assertArrayEquals(MSK, mChallengeState.mMsk);
-        assertArrayEquals(EMSK, mChallengeState.mEmsk);
-
-        verify(mockSha1).digest(eq(mkInput));
-        verify(mockFips186_2Prf).getRandom(eq(MK), eq(PRF_OUTPUT_BYTES));
-        verifyNoMoreInteractions(mockSha1, mockFips186_2Prf);
-    }
-
     /**
-     * Test that we can actually instantiate and use the SHA-1 and HMAC-SHA-1 algorithms.
+     * Test that we can actually instantiate and use the HMAC-SHA-1 algorithm.
      */
     @Test
-    public void testCreateAlgorithms() throws Exception {
-        MessageDigest sha1 = MessageDigest.getInstance(mChallengeState.mMasterKeyGenerationAlg);
-        byte[] sha1Result = sha1.digest(SHA_1_INPUT);
-        assertFalse(Arrays.equals(SHA_1_INPUT, sha1Result));
-
+    public void testCreateHmacSha1() throws Exception {
         Mac macAlgorithm = Mac.getInstance(mChallengeState.mMacAlgorithmString);
         macAlgorithm.init(new SecretKeySpec(K_AUT, mChallengeState.mMacAlgorithmString));
         byte[] mac = macAlgorithm.doFinal(MAC_INPUT);
         assertFalse(Arrays.equals(MAC_INPUT, mac));
+    }
+
+    @Test
+    public void testProcessUiccAuthenticationNullResponse() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        AtRandSim atRandSim = new AtRandSim(AT_RAND_LENGTH, RAND_1_BYTES, RAND_2_BYTES);
+
+        DecodeResult<EapSimTypeData> decodeResult =
+                new DecodeResult<>(
+                        new EapSimTypeData(
+                                EAP_SIM_CHALLENGE,
+                                Arrays.asList(atRandSim, new AtMac())));
+        when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        when(mMockTelephonyManager
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_SIM,
+                        BASE_64_RAND_1))
+                .thenReturn(null);
+
+        EapError eapError = (EapError) mEapSimMethodStateMachine.process(eapMessage);
+        assertTrue(eapError.cause instanceof EapSimAkaAuthenticationFailureException);
+
+        verify(mMockEapSimTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        verify(mMockTelephonyManager)
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_SIM,
+                        BASE_64_RAND_1);
+        verifyNoMoreInteractions(mMockEapSimTypeDataDecoder, mMockTelephonyManager);
     }
 }

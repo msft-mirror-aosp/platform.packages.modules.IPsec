@@ -40,7 +40,6 @@ import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
 import android.annotation.Nullable;
 import android.content.Context;
 import android.telephony.TelephonyManager;
-import android.util.Base64;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
@@ -51,9 +50,10 @@ import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
-import com.android.ike.eap.exceptions.simaka.EapSimIdentityUnavailableException;
-import com.android.ike.eap.exceptions.simaka.EapSimInvalidLengthException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
@@ -101,8 +101,6 @@ import javax.crypto.spec.SecretKeySpec;
  * Method for Subscriber Identity Modules (EAP-SIM)</a>
  */
 class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
-    private final TelephonyManager mTelephonyManager;
-    private final EapSimConfig mEapSimConfig;
     private final SecureRandom mSecureRandom;
     private final EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
@@ -124,14 +122,12 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             EapSimConfig eapSimConfig,
             SecureRandom secureRandom,
             EapSimTypeDataDecoder eapSimTypeDataDecoder) {
-        if (telephonyManager == null) {
-            throw new IllegalArgumentException("TelephonyManager must be non-null");
-        } else if (eapSimTypeDataDecoder == null) {
+        super(telephonyManager.createForSubscriptionId(eapSimConfig.subId), eapSimConfig);
+
+        if (eapSimTypeDataDecoder == null) {
             throw new IllegalArgumentException("EapSimTypeDataDecoder must be non-null");
         }
 
-        this.mTelephonyManager = telephonyManager.createForSubscriptionId(eapSimConfig.subId);
-        this.mEapSimConfig = eapSimConfig;
         this.mSecureRandom = secureRandom;
         this.mEapSimTypeDataDecoder = eapSimTypeDataDecoder;
         transitionTo(new CreatedState());
@@ -143,7 +139,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         return EAP_TYPE_SIM;
     }
 
-    protected class CreatedState extends EapState {
+    protected class CreatedState extends EapMethodState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
@@ -190,7 +186,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         }
     }
 
-    protected class StartState extends EapState {
+    protected class StartState extends EapMethodState {
         private final String mTAG = StartState.class.getSimpleName();
         private final AtNonceMt mAtNonceMt;
 
@@ -269,8 +265,8 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             } catch (EapSimAkaInvalidAttributeException ex) {
                 LOG.wtf(mTAG, "Exception thrown while making AtIdentity attribute", ex);
                 return new EapError(ex);
-            } catch (EapSimIdentityUnavailableException ex) {
-                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapSimConfig.subId);
+            } catch (EapSimAkaIdentityUnavailableException ex) {
+                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapUiccConfig.subId);
                 return new EapError(ex);
             }
 
@@ -323,7 +319,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         @VisibleForTesting
         @Nullable
         AtIdentity getIdentityResponse(EapSimTypeData eapSimTypeData)
-                throws EapSimAkaInvalidAttributeException, EapSimIdentityUnavailableException {
+                throws EapSimAkaInvalidAttributeException, EapSimAkaIdentityUnavailableException {
             Set<Integer> attributes = eapSimTypeData.attributeMap.keySet();
 
             // TODO(b/136180022): process separate ID requests differently (pseudonym vs permanent)
@@ -332,8 +328,8 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                     || attributes.contains(EAP_AT_ANY_ID_REQ)) {
                 String imsi = mTelephonyManager.getSubscriberId();
                 if (imsi == null) {
-                    throw new EapSimIdentityUnavailableException(
-                            "IMSI for subId (" + mEapSimConfig.subId + ") not available");
+                    throw new EapSimAkaIdentityUnavailableException(
+                            "IMSI for subId (" + mEapUiccConfig.subId + ") not available");
                 }
 
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
@@ -350,16 +346,10 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         }
     }
 
-    protected class ChallengeState extends EapState {
+    protected class ChallengeState extends EapMethodState {
         private final String mTAG = ChallengeState.class.getSimpleName();
         private final int mBytesPerShort = 2;
         private final int mVersionLenBytes = 2;
-
-        // K_encr and K_aut lengths are 16 bytes (RFC 4186 Section 7)
-        private final int mKeyLen = 16;
-
-        // Session Key lengths are 64 bytes (RFC 4186 Section 7)
-        private final int mSessionKeyLength = 64;
 
         // Lengths defined by TS 31.102 Section 7.1.2.1 (case 3)
         // SRES stands for "SIM response"
@@ -367,17 +357,11 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final int mSresLenBytes = 4;
         private final int mKcLenBytes = 8;
 
-        @VisibleForTesting final String mMasterKeyGenerationAlg = "SHA-1";
         @VisibleForTesting final String mMacAlgorithmString = "HmacSHA1";
 
         private final List<Integer> mVersions;
         private final byte[] mNonce;
         private final byte[] mIdentity;
-
-        @VisibleForTesting final byte[] mKEncr = new byte[mKeyLen];
-        @VisibleForTesting final byte[] mKAut = new byte[mKeyLen];
-        @VisibleForTesting final byte[] mMsk = new byte[mSessionKeyLength];
-        @VisibleForTesting final byte[] mEmsk = new byte[mSessionKeyLength];
 
         protected ChallengeState(List<Integer> versions, AtNonceMt atNonceMt, byte[] identity) {
             mVersions = versions;
@@ -437,17 +421,20 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             List<RandChallengeResult> randChallengeResults;
             try {
                 randChallengeResults = getRandChallengeResults(eapSimTypeData);
-            } catch (EapSimInvalidLengthException | BufferUnderflowException ex) {
+            } catch (EapSimAkaInvalidLengthException | BufferUnderflowException ex) {
                 LOG.e(mTAG, "Invalid SRES/Kc tuple returned from SIM", ex);
                 return buildClientErrorResponse(
                         message.eapIdentifier,
                         EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
+            }  catch (EapSimAkaAuthenticationFailureException ex) {
+                return new EapError(ex);
             }
 
             try {
-                MessageDigest sha1 = MessageDigest.getInstance(mMasterKeyGenerationAlg);
-                generateAndPersistKeys(sha1, new Fips186_2Prf(), randChallengeResults);
+                MessageDigest sha1 = MessageDigest.getInstance(MASTER_KEY_GENERATION_ALG);
+                byte[] mkInputData = getMkInputData(randChallengeResults);
+                generateAndPersistKeys(mTAG, sha1, new Fips186_2Prf(), mkInputData);
             } catch (NoSuchAlgorithmException | BufferUnderflowException ex) {
                 LOG.e(mTAG, "Error while creating keys", ex);
                 return buildClientErrorResponse(
@@ -508,7 +495,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         @VisibleForTesting
         List<RandChallengeResult> getRandChallengeResults(EapSimTypeData eapSimTypeData)
-                throws EapSimInvalidLengthException {
+                throws EapSimAkaInvalidLengthException, EapSimAkaAuthenticationFailureException {
             AtRandSim atRand = (AtRandSim) eapSimTypeData.attributeMap.get(EAP_AT_RAND);
             List<byte[]> randList = atRand.rands;
             List<RandChallengeResult> challengeResults = new ArrayList<>();
@@ -519,13 +506,11 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 formattedRand.put((byte) rand.length);
                 formattedRand.put(rand);
 
-                String base64Challenge =
-                        Base64.encodeToString(formattedRand.array(), Base64.NO_WRAP);
-                String challengeResponse = mTelephonyManager.getIccAuthentication(
-                        mEapSimConfig.apptype,
-                        TelephonyManager.AUTHTYPE_EAP_SIM,
-                        base64Challenge);
-                byte[] challengeResponseBytes = Base64.decode(challengeResponse, Base64.DEFAULT);
+                byte[] challengeResponseBytes =
+                        processUiccAuthentication(
+                                mTAG,
+                                TelephonyManager.AUTHTYPE_EAP_SIM,
+                                formattedRand.array());
 
                 RandChallengeResult randChallengeResult =
                         getRandChallengeResultFromResponse(challengeResponseBytes);
@@ -548,18 +533,18 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
          */
         @VisibleForTesting
         RandChallengeResult getRandChallengeResultFromResponse(byte[] challengeResponse)
-                throws EapSimInvalidLengthException {
+                throws EapSimAkaInvalidLengthException {
             ByteBuffer buffer = ByteBuffer.wrap(challengeResponse);
             int lenSres = Byte.toUnsignedInt(buffer.get());
             if (lenSres != mSresLenBytes) {
-                throw new EapSimInvalidLengthException("Invalid SRES length specified");
+                throw new EapSimAkaInvalidLengthException("Invalid SRES length specified");
             }
             byte[] sres = new byte[mSresLenBytes];
             buffer.get(sres);
 
             int lenKc = Byte.toUnsignedInt(buffer.get());
             if (lenKc != mKcLenBytes) {
-                throw new EapSimInvalidLengthException("Invalid Kc length specified");
+                throw new EapSimAkaInvalidLengthException("Invalid Kc length specified");
             }
             byte[] kc = new byte[mKcLenBytes];
             buffer.get(kc);
@@ -572,15 +557,15 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             public final byte[] sres;
             public final byte[] kc;
 
-            RandChallengeResult(byte[] sres, byte[] kc) throws EapSimInvalidLengthException {
+            RandChallengeResult(byte[] sres, byte[] kc) throws EapSimAkaInvalidLengthException {
                 this.sres = sres;
                 this.kc = kc;
 
                 if (sres.length != mSresLenBytes) {
-                    throw new EapSimInvalidLengthException("Invalid SRES length");
+                    throw new EapSimAkaInvalidLengthException("Invalid SRES length");
                 }
                 if (kc.length != mKcLenBytes) {
-                    throw new EapSimInvalidLengthException("Invalid Kc length");
+                    throw new EapSimAkaInvalidLengthException("Invalid Kc length");
                 }
             }
 
@@ -601,17 +586,13 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
         }
 
-        @VisibleForTesting
-        void generateAndPersistKeys(
-                MessageDigest messageDigest,
-                Fips186_2Prf prf,
-                List<RandChallengeResult> randChallengeResults) {
+        private byte[] getMkInputData(List<RandChallengeResult> randChallengeResults) {
             int numInputBytes =
                     mIdentity.length
-                    + (randChallengeResults.size() * mKcLenBytes)
-                    + mNonce.length
-                    + (mVersions.size() * mBytesPerShort) // 2B per version
-                    + mVersionLenBytes;
+                            + (randChallengeResults.size() * mKcLenBytes)
+                            + mNonce.length
+                            + (mVersions.size() * mBytesPerShort) // 2B per version
+                            + mVersionLenBytes;
 
             ByteBuffer mkInputBuffer = ByteBuffer.allocate(numInputBytes);
             mkInputBuffer.put(mIdentity);
@@ -623,24 +604,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 mkInputBuffer.putShort((short) i);
             }
             mkInputBuffer.putShort((short) AtSelectedVersion.SUPPORTED_VERSION);
-
-            byte[] mk = messageDigest.digest(mkInputBuffer.array());
-
-            // run mk through FIPS 186-2
-            int outputBytes = mKEncr.length + mKAut.length + mMsk.length + mEmsk.length;
-            byte[] prfResult = prf.getRandom(mk, outputBytes);
-
-            ByteBuffer mkResultBuffer = ByteBuffer.wrap(prfResult);
-            mkResultBuffer.get(mKEncr);
-            mkResultBuffer.get(mKAut);
-            mkResultBuffer.get(mMsk);
-            mkResultBuffer.get(mEmsk);
-
-            // Log keys as PII
-            LOG.d(mTAG, "K_encr=" + LOG.pii(mKEncr));
-            LOG.d(mTAG, "K_aut=" + LOG.pii(mKAut));
-            LOG.d(mTAG, "MSK=" + LOG.pii(mMsk));
-            LOG.d(mTAG, "EMSK=" + LOG.pii(mEmsk));
+            return mkInputBuffer.array();
         }
     }
 

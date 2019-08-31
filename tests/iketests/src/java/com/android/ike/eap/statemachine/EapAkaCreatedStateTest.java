@@ -26,6 +26,7 @@ import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY
 
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -61,7 +62,9 @@ public class EapAkaCreatedStateTest extends EapAkaStateTest {
         mEapAkaMethodStateMachine.process(eapMessage);
 
         assertTrue(mEapAkaMethodStateMachine.getState() instanceof IdentityState);
-        verify(mMockEapAkaTypeDataDecoder).decode(DUMMY_EAP_TYPE_DATA);
+
+        // decoded in CreatedState and IdentityState
+        verify(mMockEapAkaTypeDataDecoder, times(2)).decode(eq(DUMMY_EAP_TYPE_DATA));
         verifyNoMoreInteractions(mMockTelephonyManager, mMockEapAkaTypeDataDecoder);
     }
 
@@ -79,7 +82,9 @@ public class EapAkaCreatedStateTest extends EapAkaStateTest {
         mEapAkaMethodStateMachine.process(eapMessage);
 
         assertTrue(mEapAkaMethodStateMachine.getState() instanceof ChallengeState);
-        verify(mMockEapAkaTypeDataDecoder).decode(DUMMY_EAP_TYPE_DATA);
+
+        // decoded in CreatedState and ChallengeState
+        verify(mMockEapAkaTypeDataDecoder, times(2)).decode(DUMMY_EAP_TYPE_DATA);
         verifyNoMoreInteractions(mMockTelephonyManager, mMockEapAkaTypeDataDecoder);
     }
 

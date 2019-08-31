@@ -16,30 +16,29 @@
 
 package com.android.ike.eap.exceptions.simaka;
 
-import android.telephony.TelephonyManager;
-
 /**
- * EapSimInvalidLengthException is thrown when
- * {@link TelephonyManager#getIccAuthentication(int, int, String)} returns responses with the wrong
- * lengths.
+ * EapSimAkaAuthenticationFailureException is thrown when an invalid Uicc Challenge is processed
+ * during an EAP-SIM or EAP-AKA session.
  */
-public class EapSimInvalidLengthException extends Exception {
+public class EapSimAkaAuthenticationFailureException extends Exception {
     /**
-     * Construct an instance of EapSimInvalidLengthException with the specified detail message.
+     * Construct an instance of EapSimAkaAuthenticationFailureException with the specified detail
+     * message.
      *
      * @param message the detail message.
      */
-    public EapSimInvalidLengthException(String message) {
+    public EapSimAkaAuthenticationFailureException(String message) {
         super(message);
     }
 
     /**
-     * Construct an instance of EapSimInvalidLengthException with the specified message and cause.
+     * Construct an instance of EapSimAkaAuthenticationFailureException with the specified message
+     * and cause.
      *
      * @param message the detail message.
      * @param cause the cause.
      */
-    public EapSimInvalidLengthException(String message, Throwable cause) {
+    public EapSimAkaAuthenticationFailureException(String message, Throwable cause) {
         super(message, cause);
     }
 }

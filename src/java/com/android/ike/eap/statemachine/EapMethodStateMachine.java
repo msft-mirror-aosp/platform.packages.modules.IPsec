@@ -51,7 +51,7 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
     }
 
     @VisibleForTesting
-    protected void transitionTo(EapState newState) {
+    protected void transitionTo(EapMethodState newState) {
         LOG.d(
                 this.getClass().getSimpleName(),
                 "Transitioning from " + mState.getClass().getSimpleName()
@@ -61,7 +61,7 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
 
     abstract EapResult handleEapNotification(String tag, EapMessage message);
 
-    protected abstract class EapState extends SimpleState {
+    protected abstract class EapMethodState extends SimpleState {
         /**
          * Handles premature EAP-Success and EAP-Failure messages, as well as EAP-Notification
          * messages.
@@ -79,7 +79,7 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
                 // so receiving a premature SUCCESS message is an unrecoverable error.
                 return new EapError(
                         new EapInvalidRequestException(
-                                "Received an EAP-Success in the CreatedState"));
+                                "Received an EAP-Success in the " + tag));
             } else if (message.eapCode == EAP_CODE_FAILURE) {
                 transitionTo(new EapAkaMethodStateMachine.FinalState());
                 return new EapFailure();
@@ -95,7 +95,7 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
         }
     }
 
-    protected class FinalState extends EapState {
+    protected class FinalState extends EapMethodState {
         @Override
         public EapResult process(EapMessage msg) {
             return new EapError(
