@@ -39,6 +39,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 
 public class AtNonceSTest {
+    private static final byte[] INVALID_NONCE = new byte[10];
     private static final int EXPECTED_LENGTH = 20;
 
     private EapSimAkaAttributeFactory mAttributeFactory;
@@ -46,6 +47,15 @@ public class AtNonceSTest {
     @Before
     public void setUp() {
         mAttributeFactory = new EapSimAkaAttributeFactory() {};
+    }
+
+    @Test
+    public void testConstructorInvalidNonceLength() {
+        try {
+            new AtNonceS(INVALID_NONCE);
+            fail("Expected EapSimAkaInvalidAttributeException for invalid NonceMt length");
+        } catch (EapSimAkaInvalidAttributeException expected) {
+        }
     }
 
     @Test
