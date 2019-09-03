@@ -25,6 +25,7 @@ import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PARTIAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
@@ -2474,6 +2475,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             mRemoteAddress,
                             mLocalPort,
                             IkeSocket.IKE_SERVER_PORT);
+            payloadList.add(
+                    new IkeNotifyPayload(
+                            IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
 
             // TODO: Add Notification Payloads according to user configurations.
 
@@ -2556,6 +2560,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                                     + " found");
                                 }
                                 natDestPayload = notifyPayload;
+                                break;
+                            case NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED:
+                                mSupportFragment = true;
                                 break;
                             default:
                                 // Unknown and unexpected status notifications are ignored as per

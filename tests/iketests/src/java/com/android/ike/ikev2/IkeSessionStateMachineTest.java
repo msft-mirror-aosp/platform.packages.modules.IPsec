@@ -32,6 +32,7 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_U
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
+import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_AUTH;
@@ -192,6 +193,7 @@ public final class IkeSessionStateMachineTest {
             "2900001c00004004e54f73b7d83f6beb881eab2051d8663f421d10b0";
     private static final String NAT_DETECTION_DESTINATION_PAYLOAD_HEX_STRING =
             "2b00001c00004005d915368ca036004cb578ae3e3fb268509aeab190";
+    private static final String FRAGMENTATION_SUPPORTED_PAYLOAD_HEX_STRING = "290000080000402e";
     private static final String DELETE_IKE_PAYLOAD_HEX_STRING = "0000000801000000";
     private static final String NOTIFY_REKEY_IKE_PAYLOAD_HEX_STRING = "2100000800004009";
     private static final String ID_PAYLOAD_INITIATOR_HEX_STRING =
@@ -720,12 +722,14 @@ public final class IkeSessionStateMachineTest {
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
 
         payloadHexStringList.add(IKE_SA_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NAT_DETECTION_SOURCE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NAT_DETECTION_DESTINATION_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(FRAGMENTATION_SUPPORTED_PAYLOAD_HEX_STRING);
 
         // In each test assign different IKE responder SPI in IKE INIT response to avoid remote SPI
         // collision during response validation.
@@ -1141,6 +1145,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isIkePayloadExist(payloadList, IkePayload.PAYLOAD_TYPE_NONCE));
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP));
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
+        assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
 
         verify(mSpyIkeSocket)
                 .registerIke(eq(mSpyCurrentIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
@@ -1181,6 +1186,9 @@ public final class IkeSessionStateMachineTest {
         // Validate NAT detection
         assertTrue(mIkeSessionStateMachine.mIsLocalBehindNat);
         assertFalse(mIkeSessionStateMachine.mIsRemoteBehindNat);
+
+        // Validate fragmentation support negotiation
+        assertTrue(mIkeSessionStateMachine.mSupportFragment);
     }
 
     private void setIkeInitResults() throws Exception {
@@ -1192,6 +1200,7 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
         mIkeSessionStateMachine.mIsLocalBehindNat = true;
         mIkeSessionStateMachine.mIsRemoteBehindNat = false;
+        mIkeSessionStateMachine.mSupportFragment = true;
         mIkeSessionStateMachine.addIkeSaRecord(mSpyCurrentIkeSaRecord);
     }
 
