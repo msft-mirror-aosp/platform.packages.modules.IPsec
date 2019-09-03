@@ -542,7 +542,8 @@ public final class IkeMessage {
                 List<IkePayload> supportedPayloadList =
                         decodePayloadList(
                                 header.nextPayloadType, header.isResponseMsg, unencryptedPayloads);
-                return new DecodeResultOk(new IkeMessage(header, supportedPayloadList));
+                return new DecodeResultOk(
+                        new IkeMessage(header, supportedPayloadList), inputPacket);
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 // Invalid length error when parsing payload bodies.
                 return new DecodeResultUnprotectedError(
@@ -638,6 +639,7 @@ public final class IkeMessage {
                 return collectedFragments;
             }
 
+            byte[] firstPacket = inputPacket;
             byte[] decryptedBytes = pair.first.getUnencryptedData();
             int firstPayloadType = pair.second;
 
@@ -649,6 +651,7 @@ public final class IkeMessage {
                 DecodeResultPartial DecodeResultPartial =
                         processIkeFragment(
                                 header,
+                                inputPacket,
                                 (IkeSkfPayload) (pair.first),
                                 pair.second,
                                 collectedFragments);
@@ -657,6 +660,7 @@ public final class IkeMessage {
 
                 firstPayloadType = DecodeResultPartial.firstPayloadType;
                 decryptedBytes = DecodeResultPartial.reassembleAllFrags();
+                firstPacket = DecodeResultPartial.firstFragBytes;
             }
 
             // Received or has reassembled a complete IKE message. Check if there is protocol error.
@@ -667,13 +671,14 @@ public final class IkeMessage {
                         decodePayloadList(firstPayloadType, header.isResponseMsg, decryptedBytes);
 
                 header.validateInboundHeader(inputPacket.length);
-                return new DecodeResultOk(new IkeMessage(header, supportedPayloadList));
+                return new DecodeResultOk(
+                        new IkeMessage(header, supportedPayloadList), firstPacket);
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 // Invalid length error when parsing payload bodies.
                 return new DecodeResultProtectedError(
-                        new InvalidSyntaxException("Malformed IKE Payload", e));
+                        new InvalidSyntaxException("Malformed IKE Payload", e), firstPacket);
             } catch (IkeProtocolException e) {
-                return new DecodeResultProtectedError(e);
+                return new DecodeResultProtectedError(e, firstPacket);
             }
         }
 
@@ -734,11 +739,13 @@ public final class IkeMessage {
 
         private DecodeResultPartial processIkeFragment(
                 IkeHeader header,
+                byte[] inputPacket,
                 IkeSkfPayload skf,
                 int nextPayloadType,
                 @Nullable DecodeResultPartial collectedFragments) {
             if (collectedFragments == null) {
-                return new DecodeResultPartial(header, skf, nextPayloadType, collectedFragments);
+                return new DecodeResultPartial(
+                        header, inputPacket, skf, nextPayloadType, collectedFragments);
             }
 
             if (skf.totalFragments > collectedFragments.collectedFragsList.length) {
@@ -748,7 +755,7 @@ public final class IkeMessage {
                                 "Received IKE fragment has larger total fragments number. Discard"
                                         + " all previously collected fragments");
                 return new DecodeResultPartial(
-                        header, skf, nextPayloadType, null /*collectedFragments*/);
+                        header, inputPacket, skf, nextPayloadType, null /*collectedFragments*/);
             }
 
             if (skf.totalFragments < collectedFragments.collectedFragsList.length) {
@@ -765,7 +772,8 @@ public final class IkeMessage {
                 return collectedFragments;
             }
 
-            return new DecodeResultPartial(header, skf, nextPayloadType, collectedFragments);
+            return new DecodeResultPartial(
+                    header, inputPacket, skf, nextPayloadType, collectedFragments);
         }
     }
 
@@ -807,12 +815,12 @@ public final class IkeMessage {
     /** This class represents an IKE message has been successfully (decrypted and) decoded. */
     public static class DecodeResultOk extends DecodeResult {
         public final IkeMessage ikeMessage;
+        public final byte[] firstPacket;
 
-        // TODO: Store first IKE packet for hanlding re-transmitted request.
-
-        public DecodeResultOk(IkeMessage ikeMessage) {
+        public DecodeResultOk(IkeMessage ikeMessage, byte[] firstPacket) {
             super(DECODE_STATUS_OK);
             this.ikeMessage = ikeMessage;
+            this.firstPacket = firstPacket;
         }
     }
 
@@ -829,6 +837,7 @@ public final class IkeMessage {
      */
     public static class DecodeResultPartial extends DecodeResult {
         public final int firstPayloadType;
+        public final byte[] firstFragBytes;
         public final IkeHeader ikeHeader;
         public final byte[][] collectedFragsList;
 
@@ -842,6 +851,7 @@ public final class IkeMessage {
          */
         public DecodeResultPartial(
                 IkeHeader ikeHeader,
+                byte[] inputPacket,
                 IkeSkfPayload skfPayload,
                 int nextPayloadType,
                 @Nullable DecodeResultPartial collectedFragments) {
@@ -853,11 +863,14 @@ public final class IkeMessage {
                 this.ikeHeader = ikeHeader;
                 this.firstPayloadType =
                         isFirstFragment ? nextPayloadType : IkePayload.PAYLOAD_TYPE_NO_NEXT;
+                this.firstFragBytes = isFirstFragment ? inputPacket : null;
                 this.collectedFragsList = new byte[skfPayload.totalFragments][];
             } else {
                 this.ikeHeader = collectedFragments.ikeHeader;
                 this.firstPayloadType =
                         isFirstFragment ? nextPayloadType : collectedFragments.firstPayloadType;
+                this.firstFragBytes =
+                        isFirstFragment ? inputPacket : collectedFragments.firstFragBytes;
                 this.collectedFragsList = collectedFragments.collectedFragsList;
             }
 
@@ -908,10 +921,11 @@ public final class IkeMessage {
      * authenticated and decrypted.
      */
     public static class DecodeResultProtectedError extends DecodeResultError {
-        // TODO: Store first IKE packet for hanlding re-transmitted request.
+        public final byte[] firstPacket;
 
-        public DecodeResultProtectedError(IkeException ikeException) {
+        public DecodeResultProtectedError(IkeException ikeException, byte[] firstPacket) {
             super(DECODE_STATUS_PROTECTED_ERROR, ikeException);
+            this.firstPacket = firstPacket;
         }
     }
     /** This class represents errors have been found during message authentication or decryption. */
