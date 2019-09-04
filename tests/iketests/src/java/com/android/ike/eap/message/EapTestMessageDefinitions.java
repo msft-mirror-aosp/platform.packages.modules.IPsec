@@ -232,4 +232,7 @@ public class EapTestMessageDefinitions {
                             + "0B050000" + EAP_AKA_CHALLENGE_RESPONSE_MAC); // AT_MAC attribute
 
     public static final byte[] EAP_SUCCESS = hexStringToByteArray("03860004");
+
+    public static final byte[] EAP_REQUEST_MSCHAP_V2 =
+            hexStringToByteArray("01" + ID + "00061A01");
 }

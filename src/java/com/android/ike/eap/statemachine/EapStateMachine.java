@@ -21,6 +21,7 @@ import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapData.EAP_NAK;
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_STRING;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
@@ -39,6 +40,7 @@ import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
 import com.android.ike.eap.EapSessionConfig.EapMethodConfig;
+import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
@@ -291,6 +293,9 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 case EAP_TYPE_AKA:
                     EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
                     return new EapAkaMethodStateMachine(mContext, eapAkaConfig);
+                case EAP_TYPE_MSCHAP_V2:
+                    EapMsChapV2Config eapMsChapV2Config = (EapMsChapV2Config) eapMethodConfig;
+                    return new EapMsChapV2MethodStateMachine(eapMsChapV2Config, mSecureRandom);
                 default:
                     // received unsupported EAP Type. This should never happen.
                     LOG.e(mTAG, "Received unsupported EAP Type=" + eapType);
