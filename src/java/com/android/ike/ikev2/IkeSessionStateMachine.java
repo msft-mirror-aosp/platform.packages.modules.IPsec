@@ -736,8 +736,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         public final List<IkePayload> reqPayloads;
         public final List<IkePayload> respPayloads;
 
-        // TODO: Also store ChildSessionCallback
-
         FirstChildNegotiationData(
                 ChildSessionOptions childSessionOptions,
                 IChildSessionCallback childSessionCallback,
@@ -1048,8 +1046,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                     transitionTo(mChildProcedureOngoing);
                     break;
                 default:
-                    throw new IllegalArgumentException(
-                            "Invalid local request procedure type: " + req.procedureType);
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Invalid local request procedure type: " + req.procedureType));
             }
         }
     }
@@ -1072,9 +1071,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     private static int getIkeExchangeSubType(IkeMessage ikeMessage) {
         IkeHeader ikeHeader = ikeMessage.ikeHeader;
         if (ikeHeader.isResponseMsg) {
-            // STOPSHIP: b/130190639 Notify user the error and close IKE session.
-            throw new UnsupportedOperationException(
-                    "Do not support getting IKE exchange subtype from a response message.");
+            throw new IllegalStateException("IKE Exchange subtype invalid for response messages.");
         }
 
         switch (ikeHeader.exchangeType) {
@@ -1136,9 +1133,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                 }
                 return IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
             default:
-                // STOPSHIP: b/130190639 Notify user the error and close IKE session.
-                throw new IllegalArgumentException(
-                        "Unrecognized exchange type: " + ikeHeader.exchangeType);
+                throw new IllegalStateException(
+                        "Unrecognized exchange type in the validated IKE header: "
+                                + ikeHeader.exchangeType);
         }
     }
 
@@ -1246,20 +1243,19 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
-                    if (!(req instanceof ChildLocalRequest)) {
-                        throw new IllegalArgumentException(
-                                "Local child request issued without valid ChildLocalRequest");
-                    }
                     ChildLocalRequest childReq = (ChildLocalRequest) req;
                     if (childReq.procedureType != requestVal) {
-                        throw new IllegalArgumentException(
-                                "ChildLocalRequest procedure type was invalid");
+                        cleanUpAndQuit(
+                                new IllegalArgumentException(
+                                        "ChildLocalRequest procedure type was invalid"));
                     }
                     mScheduler.addRequest(childReq);
                     return;
 
                 default:
-                    logw("Unknown local request passed to handleLocalRequest");
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Unknown local request passed to handleLocalRequest"));
             }
         }
     }
@@ -1457,11 +1453,18 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             if (ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_INVALID
                                     || ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_IKE_INIT
                                     || ikeExchangeSubType == IKE_EXCHANGE_SUBTYPE_IKE_AUTH) {
-                                // TODO: Reply with INVALID_SYNTAX and close IKE Session.
-                                throw new UnsupportedOperationException(
-                                        "Cannot handle message with invalid or unexpected"
-                                                + " IkeExchangeSubType: "
-                                                + ikeExchangeSubType);
+
+                                // Reply with INVALID_SYNTAX and close IKE Session.
+                                buildAndSendErrorNotificationResponse(
+                                        mCurrentIkeSaRecord,
+                                        ikeHeader.messageId,
+                                        ERROR_TYPE_INVALID_SYNTAX);
+                                handleIkeFatalError(
+                                        new InvalidSyntaxException(
+                                                "Cannot handle message with invalid or unexpected"
+                                                        + " IkeExchangeSubType: "
+                                                        + ikeExchangeSubType));
+                                return;
                             }
                             handleRequestIkeMessage(ikeMessage, ikeExchangeSubType, message);
                             break;
@@ -1492,8 +1495,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                     }
                 }
             }
-
-            // TODO: Handle fatal error notifications.
         }
 
         private boolean isTempFailure(IkeMessage message) {
@@ -1808,11 +1809,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             }
         }
 
-        @Override
-        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
-            // TODO: Extract payloads and re-direct to awaiting ChildSessionStateMachines.
-        }
-
         private void handleRekeyCreationFailureAndBackToIdle(
                 int messageId, IkeProtocolException e) {
             loge("Received invalid Rekey IKE request. Reject with error notification", e);
@@ -1913,9 +1909,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
                     mChildInLocalProcedure = getChildSession(childData.childSessionCallback);
                     if (mChildInLocalProcedure == null) {
-                        logWtf("First child not found.");
-
-                        // TODO: Kill session, fire callbacks, and exit state machine.
+                        cleanUpAndQuit(new IllegalStateException("First child not found."));
                         return HANDLED;
                     }
 
@@ -1991,8 +1985,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                     mChildInLocalProcedure.deleteChildSession();
                     break;
                 default:
-                    logWtf("Invalid Child procedure type: " + req.procedureType);
-                    transitionToIdleIfAllProceduresDone();
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Invalid Child procedure type: " + req.procedureType));
                     break;
             }
         }
@@ -2033,10 +2028,12 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                     handleInboundRekeyChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
-                    // TODO: Handle general informational request
+                    // TODO:b/139943757 Handle general informational request
                 default:
-                    throw new IllegalArgumentException(
-                            "Invalid IKE exchange subtype: " + ikeExchangeSubType);
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Invalid IKE exchange subtype: " + ikeExchangeSubType));
+                    return;
             }
             transitionToIdleIfAllProceduresDone();
         }
@@ -2131,8 +2128,17 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                 }
             }
 
-            // TODO: If no Child SA is found, only reply with IKE related payloads or an empty
-            // message.
+            // If no Child SA is found, only reply with IKE related payloads or an empty
+            // message
+            if (childToDelPayloadsMap.isEmpty()) {
+                logd("No Child SA is found for this request.");
+                sendEncryptedIkeMessage(
+                        buildEncryptedInformationalMessage(
+                                new IkeInformationalPayload[0],
+                                true /*isResp*/,
+                                ikeMessage.ikeHeader.messageId));
+                return;
+            }
 
             // Send Delete Payloads to Child Sessions
             for (ChildSessionStateMachine child : childToDelPayloadsMap.keySet()) {
@@ -2212,7 +2218,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                 ikeMessage.ikeHeader.messageId);
 
                 sendEncryptedIkeMessage(mCurrentIkeSaRecord, msg);
-                transitionToIdleIfAllProceduresDone();
                 return;
             }
 
@@ -2341,15 +2346,17 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                         break;
                     case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
                         // IKE INIT response is not protected. So we should never get this status
-                        throw new IllegalArgumentException(
-                                "Unexpected decoding status: " + decodeResult.status);
+                        cleanUpAndQuit(
+                                new IllegalStateException(
+                                        "Unexpected decoding status: " + decodeResult.status));
                     case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
                         logi(
                                 "Discard unencrypted response with syntax error",
                                 decodeResult.ikeException);
                     default:
-                        throw new IllegalArgumentException(
-                                "Invalid decoding status: " + decodeResult.status);
+                        cleanUpAndQuit(
+                                new IllegalStateException(
+                                        "Invalid decoding status: " + decodeResult.status));
                 }
 
             } else {
@@ -2615,8 +2622,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             mRetransmitter.retransmit();
         }
 
-        // TODO: If receiving a remote request while waiting for the last IKE AUTH response, defer
-        // it to next state.
+        // TODO: b/139482382 If receiving a remote request while waiting for the last IKE AUTH
+        // response, defer it to next state.
 
         protected IkeMessage buildIkeAuthReqMessage(List<IkePayload> payloadList) {
             // Build IKE header
