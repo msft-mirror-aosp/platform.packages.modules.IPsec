@@ -304,6 +304,7 @@ public final class IkeMessage {
      */
     public boolean isDpdRequest() {
         return !ikeHeader.isResponseMsg
+                && ikeHeader.exchangeType == IkeHeader.EXCHANGE_TYPE_INFORMATIONAL
                 && ikePayloadList.isEmpty()
                 && ikeHeader.nextPayloadType == IkePayload.PAYLOAD_TYPE_SK;
     }
