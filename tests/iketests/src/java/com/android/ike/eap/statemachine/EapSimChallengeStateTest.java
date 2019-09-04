@@ -29,8 +29,6 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.EMSK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.KC_1_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.KC_2_BYTES;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.K_AUT;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.MAC_INPUT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_1_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_2_BYTES;
@@ -83,9 +81,6 @@ import java.nio.BufferUnderflowException;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 public class EapSimChallengeStateTest extends EapSimStateTest {
     private static final int VALID_SRES_LENGTH = 4;
@@ -325,17 +320,6 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
                         TelephonyManager.AUTHTYPE_EAP_SIM,
                         BASE_64_RAND_2);
         verifyNoMoreInteractions(mMockTelephonyManager);
-    }
-
-    /**
-     * Test that we can actually instantiate and use the HMAC-SHA-1 algorithm.
-     */
-    @Test
-    public void testCreateHmacSha1() throws Exception {
-        Mac macAlgorithm = Mac.getInstance(mChallengeState.mMacAlgorithmString);
-        macAlgorithm.init(new SecretKeySpec(K_AUT, mChallengeState.mMacAlgorithmString));
-        byte[] mac = macAlgorithm.doFinal(MAC_INPUT);
-        assertFalse(Arrays.equals(MAC_INPUT, mac));
     }
 
     @Test

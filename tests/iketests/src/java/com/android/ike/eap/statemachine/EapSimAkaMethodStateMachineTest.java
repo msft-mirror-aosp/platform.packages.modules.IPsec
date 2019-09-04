@@ -18,6 +18,10 @@ package com.android.ike.eap.statemachine;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.COMPUTED_MAC;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CHALLENGE_RESPONSE_WITH_MAC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_RESPONSE_PACKET;
@@ -30,16 +34,26 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.K_AUT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.K_AUT_STRING;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.K_ENCR;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.K_ENCR_STRING;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MAC_INPUT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSK_STRING;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.ORIGINAL_MAC;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_1;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.SRES_BYTES;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_IDENTITY;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.IDENTITY;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1_BYTES;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2_BYTES;
 import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.KEY_LEN;
+import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.MAC_ALGORITHM_STRING;
+import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.MASTER_KEY_GENERATION_ALG;
 import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.SESSION_KEY_LENGTH;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -47,7 +61,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -59,9 +76,13 @@ import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
+import com.android.ike.eap.message.EapData;
+import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
@@ -74,9 +95,13 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
 public class EapSimAkaMethodStateMachineTest {
     private static final String TAG = EapSimAkaMethodStateMachineTest.class.getSimpleName();
     private static final int SUB_ID = 1;
+    private static final int AT_RAND_LEN = 36;
     private static final String VERSIONS_STRING = "0001";
     private static final String SELECTED_VERSION = "0001";
     private static final byte[] SHA_1_INPUT = hexStringToByteArray("0123456789ABCDEF");
@@ -99,24 +124,26 @@ public class EapSimAkaMethodStateMachineTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mEapSimConfig = new EapSimConfig(SUB_ID, TelephonyManager.APPTYPE_USIM);
 
-        mStateMachine = new EapSimAkaMethodStateMachine(mMockTelephonyManager, mEapSimConfig) {
-            @Override
-            EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
-                return new EapSimTypeData(EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
-            }
+        mStateMachine =
+                new EapSimAkaMethodStateMachine(mMockTelephonyManager, mEapSimConfig) {
+                    @Override
+                    EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
+                        return new EapSimTypeData(
+                                EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
+                    }
 
-            @Override
-            EapSimAkaTypeData getEapSimAkaTypeData(
-                    int eapSubtype,
-                    List<EapSimAkaAttribute> attributes) {
-                return new EapSimTypeData(eapSubtype, attributes);
-            }
+                    @Override
+                    EapSimAkaTypeData getEapSimAkaTypeData(
+                            int eapSubtype, List<EapSimAkaAttribute> attributes) {
+                        return new EapSimTypeData(eapSubtype, attributes);
+                    }
 
-            @Override
-            int getEapMethod() {
-                return 0;
-            }
-        };
+                    @Override
+                    int getEapMethod() {
+                        return EAP_TYPE_SIM;
+                    }
+                };
+        mStateMachine = spy(mStateMachine);
     }
 
     @Test
@@ -180,9 +207,20 @@ public class EapSimAkaMethodStateMachineTest {
      */
     @Test
     public void testCreateSha1() throws Exception {
-        MessageDigest sha1 = MessageDigest.getInstance(mStateMachine.MASTER_KEY_GENERATION_ALG);
+        MessageDigest sha1 = MessageDigest.getInstance(MASTER_KEY_GENERATION_ALG);
         byte[] sha1Result = sha1.digest(SHA_1_INPUT);
         assertFalse(Arrays.equals(SHA_1_INPUT, sha1Result));
+    }
+
+    /**
+     * Test that we can actually instantiate and use the HMAC-SHA-1 algorithm.
+     */
+    @Test
+    public void testCreateHmacSha1() throws Exception {
+        Mac macAlgorithm = Mac.getInstance(MAC_ALGORITHM_STRING);
+        macAlgorithm.init(new SecretKeySpec(K_AUT, MAC_ALGORITHM_STRING));
+        byte[] mac = macAlgorithm.doFinal(MAC_INPUT);
+        assertFalse(Arrays.equals(MAC_INPUT, mac));
     }
 
     @Test
@@ -231,5 +269,74 @@ public class EapSimAkaMethodStateMachineTest {
                         TelephonyManager.AUTHTYPE_EAP_AKA,
                         BASE_64_CHALLENGE);
         verifyNoMoreInteractions(mMockTelephonyManager);
+    }
+
+    @Test
+    public void testGetMac() throws Exception {
+        AtMac atMac = new AtMac(ORIGINAL_MAC);
+        AtRandSim atRandSim = new AtRandSim(AT_RAND_LEN, RAND_1_BYTES, RAND_2_BYTES);
+        EapSimTypeData eapSimTypeData =
+                new EapSimTypeData(EAP_SIM_CHALLENGE, Arrays.asList(atRandSim, atMac));
+
+        Mac mockMac = mock(Mac.class);
+        when(mockMac.doFinal(eq(MAC_INPUT))).thenReturn(COMPUTED_MAC);
+        mStateMachine.mMacAlgorithm = mockMac;
+
+        byte[] mac = mStateMachine.getMac(EAP_CODE_REQUEST, ID_INT, eapSimTypeData, NONCE_MT);
+        assertArrayEquals(COMPUTED_MAC, mac);
+        AtMac postCalculationAtMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
+        assertArrayEquals(ORIGINAL_MAC, postCalculationAtMac.mac);
+
+        verify(mockMac).doFinal(eq(MAC_INPUT));
+        verifyNoMoreInteractions(mockMac);
+    }
+
+    @Test
+    public void testGetMacNoMacAlgorithm() throws Exception {
+        try {
+            mStateMachine.getMac(EAP_CODE_REQUEST, ID_INT, null, null);
+            fail("Expected IllegalStateException if Mac not set");
+        } catch (IllegalStateException expected) {
+        }
+    }
+
+    @Test
+    public void testReceivedValidMac() throws Exception {
+        AtMac atMac = new AtMac(ORIGINAL_MAC);
+        AtRandSim atRandSim = new AtRandSim(AT_RAND_LEN, RAND_1_BYTES, RAND_2_BYTES);
+        EapSimTypeData eapSimTypeData =
+                new EapSimTypeData(EAP_SIM_CHALLENGE, Arrays.asList(atRandSim, atMac));
+        EapData eapData = new EapData(EAP_TYPE_SIM, new byte[0]);
+        EapMessage message = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        doReturn(ORIGINAL_MAC)
+                .when(mStateMachine)
+                .getMac(eq(EAP_CODE_REQUEST), eq(ID_INT), eq(eapSimTypeData), eq(NONCE_MT));
+
+        assertTrue(mStateMachine.isValidMac(TAG, message, eapSimTypeData, NONCE_MT));
+
+        doReturn(new byte[0])
+                .when(mStateMachine)
+                .getMac(eq(EAP_CODE_REQUEST), eq(ID_INT), eq(eapSimTypeData), eq(NONCE_MT));
+
+        assertFalse(mStateMachine.isValidMac(TAG, message, eapSimTypeData, NONCE_MT));
+
+        verify(mStateMachine, times(2))
+                .getMac(eq(EAP_CODE_REQUEST), eq(ID_INT), eq(eapSimTypeData), eq(NONCE_MT));
+    }
+
+    @Test
+    public void testBuildResponseMessageWithMac() {
+        Mac mockMac = mock(Mac.class);
+        when(mockMac.doFinal(eq(EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT))).thenReturn(COMPUTED_MAC);
+        mStateMachine.mMacAlgorithm = mockMac;
+
+        EapResult result =
+                mStateMachine.buildResponseMessageWithMac(ID_INT, EAP_SIM_CHALLENGE, SRES_BYTES);
+
+        EapResponse eapResponse = (EapResponse) result;
+        assertArrayEquals(EAP_SIM_CHALLENGE_RESPONSE_WITH_MAC, eapResponse.packet);
+        verify(mockMac).doFinal(eq(EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT));
+        verifyNoMoreInteractions(mockMac);
     }
 }
