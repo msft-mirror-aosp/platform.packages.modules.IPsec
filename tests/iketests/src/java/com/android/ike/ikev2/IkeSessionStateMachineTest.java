@@ -1556,6 +1556,29 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testRemoteDeleteChildHandlesReqWithNoRecognizedSpi() throws Exception {
+        int unrecognizedSpi = 2;
+
+        setupIdleStateMachine();
+
+        // Receive Delete Child Request without any recognized SPI
+        IkeDeletePayload[] inboundDelPayloads =
+                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {unrecognizedSpi})};
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDeleteChildPacket(inboundDelPayloads, false /*isResp*/));
+        mLooper.dispatchAll();
+
+        // Verify outbound empty response was sent
+        List<IkePayload> payloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertTrue(payloadList.isEmpty());
+
+        // Verify IKE Session was back to Idle
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    @Test
     public void testRemoteCreateChild() throws Exception {
         setupIdleStateMachine();
 
@@ -3724,6 +3747,35 @@ public final class IkeSessionStateMachineTest {
         assertEquals(ERROR_TYPE_INVALID_SYNTAX, ((IkeNotifyPayload) payload).notifyType);
 
         // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+    }
+
+    @Test
+    public void testHandlesInvalidRequest() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mChildProcedureOngoing);
+
+        // Receive an IKE AUTH request
+        ReceivedIkePacket request =
+                makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                        mSpyCurrentIkeSaRecord,
+                        IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                        false /*isResp*/,
+                        new LinkedList<IkePayload>());
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
+        mLooper.dispatchAll();
+
+        // Verify error notification was sent
+        List<IkePayload> ikePayloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
+        assertEquals(1, ikePayloadList.size());
+        assertEquals(
+                ERROR_TYPE_INVALID_SYNTAX, ((IkeNotifyPayload) ikePayloadList.get(0)).notifyType);
+
+        // Verify IKE Session has quit
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
     }
