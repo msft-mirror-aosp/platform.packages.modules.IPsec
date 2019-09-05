@@ -22,6 +22,7 @@ import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefi
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RES;
 
 /**
  * EapTestMessageDefinitions provides byte[] encodings of commonly used EAP Messages.
@@ -209,4 +210,22 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("02" + ID + "0018" // EAP-Response | ID | length in bytes
                     + "17040000" // EAP-SIM | Synchronization-Failure | 2B padding
                     + "0404112233445566778899AABBCCDDEE"); // AT_AUTS attribute
+
+    public static final String IK = "00112233445566778899AABBCCDDEEFF";
+    public static final byte[] IK_BYTES = hexStringToByteArray(IK);
+    public static final String CK = "FFEEDDCCBBAA99887766554433221100";
+    public static final byte[] CK_BYTES = hexStringToByteArray(CK);
+
+    // Base-64 of: 'DB05' + RES_BYTES + '10' + IK + '10' + CK
+    // 'DB0511223344551000112233445566778899AABBCCDDEEFF10FFEEDDCCBBAA99887766554433221100'
+    public static final String EAP_AKA_UICC_RESP_SUCCESS_BASE_64 =
+            "2wURIjNEVRAAESIzRFVmd4iZqrvM3e7/EP/u3cy7qpmId2ZVRDMiEQA=";
+
+    public static final String EAP_AKA_CHALLENGE_RESPONSE_MAC = "C70366512D9C5EBA8E3484509A25DCE4";
+    public static final byte[] EAP_AKA_CHALLENGE_RESPONSE =
+            hexStringToByteArray(
+                    "02100028" // EAP-Response | ID | length in bytes
+                            + "17010000" // EAP-AKA | Challenge | 2B padding
+                            + "03030028" + RES + "000000" // AT_RES attribute
+                            + "0B050000" + EAP_AKA_CHALLENGE_RESPONSE_MAC); // AT_MAC attribute
 }
