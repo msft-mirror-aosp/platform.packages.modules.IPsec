@@ -50,7 +50,7 @@ public class IkeSkPayload extends IkePayload {
      * @param integrityMac the negotiated integrity algorithm.
      * @param decryptCipher the negotiated encryption algorithm.
      * @param integrityKey the negotiated integrity algorithm key.
-     * @param decryptKey the negotiated decryption key.
+     * @param decryptionKey the negotiated decryption key.
      */
     @VisibleForTesting
     IkeSkPayload(
@@ -59,7 +59,7 @@ public class IkeSkPayload extends IkePayload {
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             byte[] integrityKey,
-            byte[] decryptKey)
+            byte[] decryptionKey)
             throws IkeProtocolException, GeneralSecurityException {
 
         this(
@@ -70,7 +70,14 @@ public class IkeSkPayload extends IkePayload {
                 integrityMac,
                 decryptCipher,
                 integrityKey,
-                decryptKey);
+                decryptionKey);
+    }
+
+    /** Construct an instance of IkeSkPayload for testing.*/
+    @VisibleForTesting
+    IkeSkPayload(boolean isSkf, IkeEncryptedPayloadBody encryptedPayloadBody) {
+        super(isSkf ? PAYLOAD_TYPE_SKF : PAYLOAD_TYPE_SK, false/*critical*/);
+        mIkeEncryptedPayloadBody = encryptedPayloadBody;
     }
 
     /** Construct an instance of IkeSkPayload from decrypting an incoming packet. */
@@ -82,7 +89,7 @@ public class IkeSkPayload extends IkePayload {
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             byte[] integrityKey,
-            byte[] decryptKey)
+            byte[] decryptionKey)
             throws IkeProtocolException, GeneralSecurityException {
         super(isSkf ? PAYLOAD_TYPE_SKF : PAYLOAD_TYPE_SK, critical);
 
@@ -95,7 +102,7 @@ public class IkeSkPayload extends IkePayload {
                         integrityMac,
                         decryptCipher,
                         integrityKey,
-                        decryptKey);
+                        decryptionKey);
     }
 
     /**
