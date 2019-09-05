@@ -91,7 +91,7 @@ public class EapAkaTypeData extends EapSimAkaTypeData {
     }
 
     /**
-     * EapSimTypeDataDecoder will be used for decoding {@link EapAkaTypeData} objects.
+     * EapAkaTypeDataDecoder will be used for decoding {@link EapAkaTypeData} objects.
      */
     public static class EapAkaTypeDataDecoder extends EapSimAkaTypeDataDecoder<EapAkaTypeData> {
         private static final String TAG = EapAkaTypeDataDecoder.class.getSimpleName();
@@ -109,7 +109,7 @@ public class EapAkaTypeData extends EapSimAkaTypeData {
         /**
          * Decodes the given byte-array into a DecodeResult object.
          *
-         * @param typeData the byte-encoding of the EapSimTypeData to be parsed
+         * @param typeData the byte-encoding of the EapAkaTypeData to be parsed
          * @return a DecodeResult object. If the decoding is successful, this will encapsulate an
          *         EapAkaTypeData instance representing the data stored in typeData. Otherwise, it
          *         will contain the relevant AtClientErrorCode for the decoding error.
