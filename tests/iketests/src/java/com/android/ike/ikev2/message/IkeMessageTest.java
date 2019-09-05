@@ -17,26 +17,43 @@
 package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_AUTH;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_ID_INITIATOR;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NO_NEXT;
+import static com.android.ike.ikev2.message.IkeTestUtils.makeDummySkfPayload;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyBoolean;
+import static org.mockito.Matchers.anyInt;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.IkeInternalException;
-import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultError;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultOk;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
+import com.android.ike.ikev2.message.IkePayloadFactory.IIkePayloadDecoder;
 
 import org.junit.After;
 import org.junit.Before;
@@ -105,6 +122,18 @@ public final class IkeMessageTest {
                     + "29000008000040000000000c000040010000000100000000"
                     + "000000000000000b";
 
+    private static final String IKE_FRAG_HEX_STRING =
+            "939ae1251d18eb9077a99551b15c6e9335202320000000010000"
+                    + "00c0000000a400020002fd7c7931705af184b7be76bbd45a"
+                    + "8ecbb3ffd58b9438b93f67e9fe86b06229f80e9b52d2ff6a"
+                    + "fde3f2c13ae93ce55a801f62e1a818c9003880a36bbe986f"
+                    + "e6979ba233b9f4f0ddc992d06dbad5a2b998be18fae947e5"
+                    + "ccfb37775d069344e711fbf499bb289cf4cca245bd450ad8"
+                    + "9d18689207759507ba18d47247e920b9e000a25a7596e413"
+                    + "0929e5cdc37d5c1b0d90bbaae946c260f4d3cf815f6d";
+    private static final String ID_INIT_PAYLOAD_HEX_STRING = "2400000c010000000a50500d";
+    private static final String ID_RESP_PAYLOAD_HEX_STRING = "0000000c010000000a505050";
+
     private static final long INIT_SPI = 0x5f54bf6d8b48e6e1L;
     private static final long RESP_SPI = 0x909232b3d1edcb5cL;
     private static final String IKE_EMPTY_INFO_MSG_HEX_STRING =
@@ -118,6 +147,17 @@ public final class IkeMessageTest {
             "f83b48ba0dbc68bcc4a78136832100aa";
     private static final String IKE_EMPTY_INFO_MSG_CHECKSUM_HEX_STRING = "4192f251cd4d1b97d298e550";
 
+    private static final byte[] FRAGMENT_ONE_UNENCRYPTED_DATA = "fragmentOne".getBytes();
+    private static final byte[] FRAGMENT_TWO_UNENCRYPTED_DATA = "fragmentTwo".getBytes();
+
+    private static final int TOTAL_FRAGMENTS = 2;
+    private static final int FRAGMENT_NUM_ONE = 1;
+    private static final int FRAGMENT_NUM_TWO = 2;
+
+    private static final int IKE_FRAG_EXPECTED_MESSAGE_ID = 1;
+    private static final int TOTAL_FRAGMENTS_OFFSET =
+            IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH + 2;
+
     private static final int IKE_AUTH_EXPECTED_MESSAGE_ID = 1;
     private static final int IKE_AUTH_CIPHER_IV_SIZE = 16;
     private static final int IKE_AUTH_CIPHER_BLOCK_SIZE = 16;
@@ -127,9 +167,18 @@ public final class IkeMessageTest {
     private byte[] mUnencryptedPaddedData;
     private IkeHeader mIkeAuthHeader;
 
+    private IIkePayloadDecoder mSpyIkePayloadDecoder;
+
     private IkeMacIntegrity mMockIntegrity;
     private IkeCipher mMockCipher;
     private IkeSaRecord mMockIkeSaRecord;
+
+    private byte[] mIkeFragPacket;
+    private IkeHeader mFragOneHeader;
+    private IkeHeader mFragTwoHeader;
+
+    private IkeSkfPayload mDummySkfPayloadOne;
+    private IkeSkfPayload mDummySkfPayloadTwo;
 
     private static final int[] EXPECTED_IKE_INIT_PAYLOAD_LIST = {
         IkePayload.PAYLOAD_TYPE_SA,
@@ -165,20 +214,20 @@ public final class IkeMessageTest {
 
     @Before
     public void setUp() throws Exception {
-        IkePayloadFactory.sDecoderInstance =
-                new IkePayloadFactory.IIkePayloadDecoder() {
-
-                    @Override
-                    public IkePayload decodeIkePayload(
-                            int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
-                            throws IkeProtocolException {
-                        if (support(payloadType)) {
-                            return new TestIkeSupportedPayload(payloadType, isCritical);
-                        } else {
-                            return new IkeUnsupportedPayload(payloadType, isCritical);
-                        }
+        mSpyIkePayloadDecoder = spy(new IkePayloadFactory.IkePayloadDecoder());
+        doAnswer(
+                (invocation) -> {
+                    int payloadType = (int) invocation.getArguments()[0];
+                    boolean isCritical = (boolean) invocation.getArguments()[1];
+                    if (support(payloadType)) {
+                        return new TestIkeSupportedPayload(payloadType, isCritical);
                     }
-                };
+                    return new IkeUnsupportedPayload(payloadType, isCritical);
+                })
+                .when(mSpyIkePayloadDecoder)
+                .decodeIkePayload(anyInt(), anyBoolean(), anyBoolean(), any());
+
+        IkePayloadFactory.sDecoderInstance = mSpyIkePayloadDecoder;
 
         mIkeAuthPacket = TestUtils.hexStringToByteArray(IKE_AUTH_HEX_STRING);
         mUnencryptedPaddedData =
@@ -199,11 +248,42 @@ public final class IkeMessageTest {
         mMockIkeSaRecord = mock(IkeSaRecord.class);
         when(mMockIkeSaRecord.getInboundDecryptionKey()).thenReturn(new byte[0]);
         when(mMockIkeSaRecord.getInboundIntegrityKey()).thenReturn(new byte[0]);
+
+        mIkeFragPacket = TestUtils.hexStringToByteArray(IKE_FRAG_HEX_STRING);
+        mFragOneHeader = new IkeHeader(mIkeFragPacket);
+        mFragTwoHeader = new IkeHeader(mIkeFragPacket);
+
+        mDummySkfPayloadOne =
+                makeDummySkfPayload(
+                        FRAGMENT_ONE_UNENCRYPTED_DATA, FRAGMENT_NUM_ONE, TOTAL_FRAGMENTS);
+        mDummySkfPayloadTwo =
+                makeDummySkfPayload(
+                        FRAGMENT_TWO_UNENCRYPTED_DATA, FRAGMENT_NUM_TWO, TOTAL_FRAGMENTS);
     }
 
     @After
     public void tearDown() {
         IkePayloadFactory.sDecoderInstance = new IkePayloadFactory.IkePayloadDecoder();
+    }
+
+    private IkeMessage verifyDecodeResultOkAndGetMessage(DecodeResult decodeResult)
+            throws Exception {
+        assertEquals(DECODE_STATUS_OK, decodeResult.status);
+
+        DecodeResultOk resultOk = (DecodeResultOk) decodeResult;
+        assertNotNull(resultOk.ikeMessage);
+
+        return resultOk.ikeMessage;
+    }
+
+    private IkeException verifyDecodeResultErrorAndGetIkeException(
+            DecodeResult decodeResult, int decodeStatus) throws Exception {
+        assertEquals(decodeStatus, decodeResult.status);
+
+        DecodeResultError resultError = (DecodeResultError) decodeResult;
+        assertNotNull(resultError.ikeException);
+
+        return resultError.ikeException;
     }
 
     @Test
@@ -212,11 +292,9 @@ public final class IkeMessageTest {
         IkeHeader header = new IkeHeader(inputPacket);
 
         DecodeResult decodeResult = IkeMessage.decode(0, header, inputPacket);
-        assertEquals(DECODE_STATUS_OK, decodeResult.status);
-        assertNotNull(decodeResult.ikeMessage);
-        assertNull(decodeResult.ikeException);
 
-        IkeMessage message = decodeResult.ikeMessage;
+        IkeMessage message = verifyDecodeResultOkAndGetMessage(decodeResult);
+
         assertEquals(EXPECTED_IKE_INIT_PAYLOAD_LIST.length, message.ikePayloadList.size());
         for (int i = 0; i < EXPECTED_IKE_INIT_PAYLOAD_LIST.length; i++) {
             assertEquals(
@@ -232,11 +310,9 @@ public final class IkeMessageTest {
         IkeHeader header = new IkeHeader(inputPacket);
 
         DecodeResult decodeResult = IkeMessage.decode(0, header, inputPacket);
-        assertEquals(DECODE_STATUS_OK, decodeResult.status);
-        assertNotNull(decodeResult.ikeMessage);
-        assertNull(decodeResult.ikeException);
 
-        IkeMessage message = decodeResult.ikeMessage;
+        IkeMessage message = verifyDecodeResultOkAndGetMessage(decodeResult);
+
         assertEquals(EXPECTED_IKE_INIT_PAYLOAD_LIST.length - 1, message.ikePayloadList.size());
         for (int i = 0; i < EXPECTED_IKE_INIT_PAYLOAD_LIST.length - 1; i++) {
             assertEquals(
@@ -294,12 +370,11 @@ public final class IkeMessageTest {
                         mMockCipher,
                         mMockIkeSaRecord,
                         mIkeAuthHeader,
-                        mIkeAuthPacket);
-        assertEquals(IkeMessage.DECODE_STATUS_OK, decodeResult.status);
-        assertNotNull(decodeResult.ikeMessage);
-        assertNull(decodeResult.ikeException);
+                        mIkeAuthPacket,
+                        null /*collectedFragments*/);
+        IkeMessage ikeMessage = verifyDecodeResultOkAndGetMessage(decodeResult);
 
-        assertEquals(IKE_AUTH_PAYLOAD_SIZE, decodeResult.ikeMessage.ikePayloadList.size());
+        assertEquals(IKE_AUTH_PAYLOAD_SIZE, ikeMessage.ikePayloadList.size());
     }
 
     @Test
@@ -311,12 +386,13 @@ public final class IkeMessageTest {
                         mMockCipher,
                         mMockIkeSaRecord,
                         mIkeAuthHeader,
-                        mIkeAuthPacket);
-        assertEquals(IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, decodeResult.status);
-        assertNull(decodeResult.ikeMessage);
-        assertNotNull(decodeResult.ikeException);
+                        mIkeAuthPacket,
+                        null /*collectedFragments*/);
+        IkeException ikeException =
+                verifyDecodeResultErrorAndGetIkeException(
+                        decodeResult, DECODE_STATUS_UNPROTECTED_ERROR);
 
-        assertTrue(decodeResult.ikeException instanceof InvalidMessageIdException);
+        assertTrue(ikeException instanceof InvalidMessageIdException);
     }
 
     @Test
@@ -330,13 +406,14 @@ public final class IkeMessageTest {
                         mMockCipher,
                         mMockIkeSaRecord,
                         mIkeAuthHeader,
-                        mIkeAuthPacket);
-        assertEquals(IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, decodeResult.status);
-        assertNull(decodeResult.ikeMessage);
-        assertNotNull(decodeResult.ikeException);
+                        mIkeAuthPacket,
+                        null /*collectedFragments*/);
+        IkeException ikeException =
+                verifyDecodeResultErrorAndGetIkeException(
+                        decodeResult, DECODE_STATUS_UNPROTECTED_ERROR);
 
         assertTrue(
-                ((IkeInternalException) decodeResult.ikeException).getCause()
+                ((IkeInternalException) ikeException).getCause()
                         instanceof GeneralSecurityException);
     }
 
@@ -351,13 +428,14 @@ public final class IkeMessageTest {
                         mMockCipher,
                         mMockIkeSaRecord,
                         mIkeAuthHeader,
-                        mIkeAuthPacket);
-        assertEquals(IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE, decodeResult.status);
-        assertNull(decodeResult.ikeMessage);
-        assertNotNull(decodeResult.ikeException);
+                        mIkeAuthPacket,
+                        null /*collectedFragments*/);
 
+        IkeException ikeException =
+                verifyDecodeResultErrorAndGetIkeException(
+                        decodeResult, DECODE_STATUS_UNPROTECTED_ERROR);
         assertTrue(
-                ((IkeInternalException) decodeResult.ikeException).getCause()
+                ((IkeInternalException) ikeException).getCause()
                         instanceof IllegalBlockSizeException);
     }
 
@@ -377,12 +455,13 @@ public final class IkeMessageTest {
                         mMockCipher,
                         mMockIkeSaRecord,
                         mIkeAuthHeader,
-                        mIkeAuthPacket);
-        assertEquals(IkeMessage.DECODE_STATUS_PROTECTED_ERROR_MESSAGE, decodeResult.status);
-        assertNull(decodeResult.ikeMessage);
-        assertNotNull(decodeResult.ikeException);
+                        mIkeAuthPacket,
+                        null /*collectedFragments*/);
+        IkeException ikeException =
+                verifyDecodeResultErrorAndGetIkeException(
+                        decodeResult, DECODE_STATUS_PROTECTED_ERROR);
 
-        assertTrue(decodeResult.ikeException instanceof InvalidSyntaxException);
+        assertTrue(ikeException instanceof InvalidSyntaxException);
     }
 
     private boolean support(int payloadType) {
@@ -395,7 +474,8 @@ public final class IkeMessageTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(IKE_SA_INIT_RAW_PACKET);
         byte[] ikeBodyBytes = TestUtils.hexStringToByteArray(IKE_SA_INIT_BODY_RAW_PACKET);
         IkeHeader header = new IkeHeader(inputPacket);
-        IkeMessage message = IkeMessage.decode(0, header, inputPacket).ikeMessage;
+        IkeMessage message =
+                ((DecodeResultOk) IkeMessage.decode(0, header, inputPacket)).ikeMessage;
 
         byte[] encodedIkeMessage = message.attachEncodedHeader(ikeBodyBytes);
         assertArrayEquals(inputPacket, encodedIkeMessage);
@@ -432,5 +512,305 @@ public final class IkeMessageTest {
         assertArrayEquals(expectedBytes, ikeMessageBytes);
     }
 
-    // TODO: Implement encodeToByteBuffer() of each payload and add test for encoding message
+    private DecodeResultPartial makeDecodeResultForFragOne(DecodeResultPartial collectedFrags) {
+        return new DecodeResultPartial(
+                mFragOneHeader, mDummySkfPayloadOne, PAYLOAD_TYPE_AUTH, collectedFrags);
+    }
+
+    private DecodeResultPartial makeDecodeResultForFragTwo(DecodeResultPartial collectedFrags) {
+        return new DecodeResultPartial(
+                mFragTwoHeader, mDummySkfPayloadTwo, PAYLOAD_TYPE_NO_NEXT, collectedFrags);
+    }
+
+    @Test
+    public void testConstructDecodePartialFirstFragArriveFirst() throws Exception {
+        DecodeResultPartial resultPartial = makeDecodeResultForFragOne(null /*collectedFragments*/);
+
+        assertEquals(mFragOneHeader, resultPartial.ikeHeader);
+
+        assertEquals(TOTAL_FRAGMENTS, resultPartial.collectedFragsList.length);
+        assertArrayEquals(
+                FRAGMENT_ONE_UNENCRYPTED_DATA,
+                resultPartial.collectedFragsList[FRAGMENT_NUM_ONE - 1]);
+        assertFalse(resultPartial.isAllFragmentsReceived());
+    }
+
+    @Test
+    public void testConstructDecodePartialSecondFragArriveFirst() throws Exception {
+        DecodeResultPartial resultPartial = makeDecodeResultForFragTwo(null /*collectedFragments*/);
+
+        assertEquals(PAYLOAD_TYPE_NO_NEXT, resultPartial.firstPayloadType);
+        assertEquals(mFragTwoHeader, resultPartial.ikeHeader);
+
+        assertEquals(TOTAL_FRAGMENTS, resultPartial.collectedFragsList.length);
+        assertArrayEquals(
+                FRAGMENT_TWO_UNENCRYPTED_DATA,
+                resultPartial.collectedFragsList[FRAGMENT_NUM_TWO - 1]);
+        assertFalse(resultPartial.isAllFragmentsReceived());
+    }
+
+    @Test
+    public void testConstructDecodeResultPartialWithCollectedFrags() throws Exception {
+        DecodeResultPartial resultPartialIncomplete =
+                makeDecodeResultForFragTwo(null /*collectedFragments*/);
+        DecodeResultPartial resultPartialComplete =
+                makeDecodeResultForFragOne(resultPartialIncomplete);
+
+        assertEquals(PAYLOAD_TYPE_AUTH, resultPartialComplete.firstPayloadType);
+        assertEquals(mFragTwoHeader, resultPartialComplete.ikeHeader);
+
+        assertEquals(TOTAL_FRAGMENTS, resultPartialComplete.collectedFragsList.length);
+        assertTrue(resultPartialComplete.isAllFragmentsReceived());
+    }
+
+    @Test
+    public void testReassembleAllFrags() throws Exception {
+        DecodeResultPartial resultPartialIncomplete =
+                makeDecodeResultForFragOne(null /*collectedFragments*/);
+        DecodeResultPartial resultPartialComplete =
+                makeDecodeResultForFragTwo(resultPartialIncomplete);
+
+        assertEquals(PAYLOAD_TYPE_AUTH, resultPartialIncomplete.firstPayloadType);
+        assertEquals(mFragOneHeader, resultPartialIncomplete.ikeHeader);
+
+        assertEquals(TOTAL_FRAGMENTS, resultPartialIncomplete.collectedFragsList.length);
+        assertTrue(resultPartialIncomplete.isAllFragmentsReceived());
+
+        // Verify reassembly result
+        ByteBuffer expectedBuffer =
+                ByteBuffer.allocate(
+                        FRAGMENT_ONE_UNENCRYPTED_DATA.length
+                                + FRAGMENT_TWO_UNENCRYPTED_DATA.length);
+        expectedBuffer.put(FRAGMENT_ONE_UNENCRYPTED_DATA).put(FRAGMENT_TWO_UNENCRYPTED_DATA);
+
+        byte[] reassembledBytes = resultPartialComplete.reassembleAllFrags();
+        assertArrayEquals(expectedBuffer.array(), reassembledBytes);
+    }
+
+    @Test
+    public void testReassembleIncompleteFragmentsThrows() throws Exception {
+        DecodeResultPartial resultPartial = makeDecodeResultForFragTwo(null /*collectedFragments*/);
+
+        assertFalse(resultPartial.isAllFragmentsReceived());
+
+        try {
+            resultPartial.reassembleAllFrags();
+            fail("Expected to fail because reassembly is not done");
+        } catch (IllegalStateException expected) {
+
+        }
+    }
+
+    private void setDecryptSkfPayload(IkeSkfPayload skf) throws Exception {
+        doReturn(skf)
+                .when(mSpyIkePayloadDecoder)
+                .decodeIkeSkPayload(
+                        eq(true),
+                        anyBoolean(),
+                        any(),
+                        eq(mMockIntegrity),
+                        eq(mMockCipher),
+                        any(),
+                        any());
+    }
+
+    private DecodeResult decodeSkf(
+            int expectedMsgId,
+            IkeHeader header,
+            byte[] packet,
+            DecodeResultPartial collectFragments)
+            throws Exception {
+        return IkeMessage.decode(
+                expectedMsgId,
+                mMockIntegrity,
+                mMockCipher,
+                mMockIkeSaRecord,
+                header,
+                packet,
+                collectFragments);
+    }
+
+    @Test
+    public void testRcvFirstArrivedFrag() throws Exception {
+        setDecryptSkfPayload(mDummySkfPayloadTwo);
+        DecodeResult decodeResult =
+                decodeSkf(
+                        IKE_FRAG_EXPECTED_MESSAGE_ID,
+                        mFragTwoHeader,
+                        mIkeFragPacket,
+                        null /* collectedFragments*/);
+
+        // Verify decoding result
+        assertTrue(decodeResult instanceof DecodeResultPartial);
+        DecodeResultPartial resultPartial = (DecodeResultPartial) decodeResult;
+
+        assertEquals(PAYLOAD_TYPE_NO_NEXT, resultPartial.firstPayloadType);
+        assertEquals(mFragTwoHeader, resultPartial.ikeHeader);
+
+        assertEquals(TOTAL_FRAGMENTS, resultPartial.collectedFragsList.length);
+        assertArrayEquals(
+                FRAGMENT_TWO_UNENCRYPTED_DATA,
+                resultPartial.collectedFragsList[FRAGMENT_NUM_TWO - 1]);
+        assertFalse(resultPartial.isAllFragmentsReceived());
+    }
+
+    @Test
+    public void testRcvLastArrivedFrag() throws Exception {
+        // Create two dummy SKF Payloads so that the complete unencrypted data is two ID payloads
+        byte[] idInitPayloadBytes = TestUtils.hexStringToByteArray(ID_INIT_PAYLOAD_HEX_STRING);
+        byte[] idRespPayloadBytes = TestUtils.hexStringToByteArray(ID_RESP_PAYLOAD_HEX_STRING);
+        IkeSkfPayload skfOne =
+                makeDummySkfPayload(idInitPayloadBytes, FRAGMENT_NUM_ONE, TOTAL_FRAGMENTS);
+        IkeSkfPayload skfTwo =
+                makeDummySkfPayload(idRespPayloadBytes, FRAGMENT_NUM_TWO, TOTAL_FRAGMENTS);
+
+        DecodeResultPartial resultPartialIncomplete =
+                new DecodeResultPartial(
+                        mFragOneHeader,
+                        skfOne,
+                        PAYLOAD_TYPE_ID_INITIATOR,
+                        null /* collectedFragments*/);
+
+        setDecryptSkfPayload(skfTwo);
+        DecodeResult decodeResult =
+                decodeSkf(
+                        IKE_FRAG_EXPECTED_MESSAGE_ID,
+                        mFragTwoHeader,
+                        mIkeFragPacket,
+                        resultPartialIncomplete);
+
+        // Verify fragments reassembly has been finished and complete message has been decoded.
+        assertTrue(decodeResult instanceof DecodeResultOk);
+        DecodeResultOk resultOk = (DecodeResultOk) decodeResult;
+        assertEquals(2, resultOk.ikeMessage.ikePayloadList.size());
+    }
+
+    @Test
+    public void testRcvFirstArrivedFragWithUnprotectedError() throws Exception {
+        DecodeResult decodeResult =
+                decodeSkf(
+                        IKE_FRAG_EXPECTED_MESSAGE_ID + 1,
+                        mFragTwoHeader,
+                        mIkeFragPacket,
+                        null /* collectedFragments*/);
+
+        // Verify that unprotected error was returned
+        IkeException ikeException =
+                verifyDecodeResultErrorAndGetIkeException(
+                        decodeResult, DECODE_STATUS_UNPROTECTED_ERROR);
+        assertTrue(ikeException instanceof InvalidMessageIdException);
+    }
+
+    @Test
+    public void testRcvLastArrivedFragWithUnprotectedError() throws Exception {
+        DecodeResultPartial resultPartialIncomplete =
+                makeDecodeResultForFragOne(null /* collectedFragments*/);
+
+        DecodeResult decodeResult =
+                decodeSkf(
+                        IKE_FRAG_EXPECTED_MESSAGE_ID + 1,
+                        mFragTwoHeader,
+                        mIkeFragPacket,
+                        resultPartialIncomplete);
+
+        // Verify that newly received fragment was discarded
+        assertEquals(resultPartialIncomplete, decodeResult);
+    }
+
+    @Test
+    public void testRcvFragWithLargerTotalFragments() throws Exception {
+        DecodeResultPartial resultPartialIncomplete =
+                new DecodeResultPartial(
+                        mFragOneHeader,
+                        mDummySkfPayloadOne,
+                        PAYLOAD_TYPE_NO_NEXT,
+                        null /* collectedFragments*/);
+
+        // Set total fragments of inbound fragment to 5
+        int totalFragments = 5;
+        byte[] fragPacket = TestUtils.hexStringToByteArray(IKE_FRAG_HEX_STRING);
+        fragPacket[TOTAL_FRAGMENTS_OFFSET] = 0;
+        fragPacket[TOTAL_FRAGMENTS_OFFSET] = 5;
+
+        byte[] unencryptedData = "testRcvFragWithLargerTotalFragments".getBytes();
+        IkeSkfPayload skfPayload =
+                makeDummySkfPayload(unencryptedData, FRAGMENT_NUM_TWO, totalFragments);
+        setDecryptSkfPayload(skfPayload);
+        DecodeResult decodeResult =
+                decodeSkf(
+                        IKE_FRAG_EXPECTED_MESSAGE_ID,
+                        mFragTwoHeader,
+                        fragPacket,
+                        resultPartialIncomplete);
+
+        // Verify that previously collected fragments were all discarded
+        assertTrue(decodeResult instanceof DecodeResultPartial);
+        DecodeResultPartial resultPartial = (DecodeResultPartial) decodeResult;
+
+        assertEquals(PAYLOAD_TYPE_NO_NEXT, resultPartial.firstPayloadType);
+        assertEquals(mFragTwoHeader, resultPartial.ikeHeader);
+
+        assertEquals(totalFragments, resultPartial.collectedFragsList.length);
+        assertArrayEquals(unencryptedData, resultPartial.collectedFragsList[FRAGMENT_NUM_TWO - 1]);
+        assertFalse(resultPartial.isAllFragmentsReceived());
+    }
+
+    @Test
+    public void testRcvFragWithSmallerTotalFragments() throws Exception {
+        int totalFragments = 5;
+        byte[] unencryptedData = "testRcvFragWithSmallerTotalFragments".getBytes();
+        IkeSkfPayload skfPayload =
+                makeDummySkfPayload(unencryptedData, FRAGMENT_NUM_ONE, totalFragments);
+
+        DecodeResultPartial resultPartialIncomplete =
+                new DecodeResultPartial(
+                        mFragOneHeader,
+                        skfPayload,
+                        PAYLOAD_TYPE_AUTH,
+                        null /* collectedFragments*/);
+
+        setDecryptSkfPayload(mDummySkfPayloadTwo);
+        DecodeResult decodeResult =
+                decodeSkf(
+                        IKE_FRAG_EXPECTED_MESSAGE_ID,
+                        mFragTwoHeader,
+                        mIkeFragPacket,
+                        resultPartialIncomplete);
+
+        // Verify that newly received fragment was discarded
+        assertEquals(resultPartialIncomplete, decodeResult);
+    }
+
+    @Test
+    public void testRcvReplayFrag() throws Exception {
+        DecodeResultPartial resultPartialIncomplete =
+                makeDecodeResultForFragTwo(null /* collectedFragments*/);
+
+        setDecryptSkfPayload(mDummySkfPayloadTwo);
+        DecodeResult decodeResult =
+                decodeSkf(
+                        IKE_FRAG_EXPECTED_MESSAGE_ID,
+                        mFragTwoHeader,
+                        mIkeFragPacket,
+                        resultPartialIncomplete);
+
+        // Verify that newly received fragment was discarded
+        assertEquals(resultPartialIncomplete, decodeResult);
+    }
+
+    @Test
+    public void testRcvCompleteMessageDuringReassembly() throws Exception {
+        DecodeResultPartial resultPartialIncomplete =
+                makeDecodeResultForFragTwo(null /* collectedFragments*/);
+
+        DecodeResult decodeResult =
+                decodeSkf(
+                        IKE_AUTH_EXPECTED_MESSAGE_ID,
+                        mIkeAuthHeader,
+                        mIkeAuthPacket,
+                        resultPartialIncomplete);
+
+        // Verify that newly received IKE message was discarded
+        assertEquals(resultPartialIncomplete, decodeResult);
+    }
 }

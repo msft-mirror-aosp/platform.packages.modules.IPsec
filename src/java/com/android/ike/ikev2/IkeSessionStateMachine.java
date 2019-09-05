@@ -22,8 +22,9 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ErrorType;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_OK;
-import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR_MESSAGE;
-import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PARTIAL;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
+import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
@@ -76,6 +77,9 @@ import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultError;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultOk;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
 import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
@@ -1362,36 +1366,45 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                 mIkeCipher,
                                 ikeSaRecord,
                                 ikeHeader,
-                                ikePacketBytes);
+                                ikePacketBytes,
+                                ikeSaRecord.getCollectedFragments(true /*isResp*/));
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
                         ikeSaRecord.incrementLocalRequestMessageId();
+                        ikeSaRecord.resetCollectedFragments(true /*isResp*/);
 
-                        if (isTempFailure(decodeResult.ikeMessage)) {
+                        DecodeResultOk resultOk = (DecodeResultOk) decodeResult;
+                        if (isTempFailure(resultOk.ikeMessage)) {
                             handleTempFailure();
                         } else {
                             mTempFailHandler.reset();
                         }
 
-                        handleResponseIkeMessage(decodeResult.ikeMessage);
+                        handleResponseIkeMessage(resultOk.ikeMessage);
                         break;
-                    case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
-                        loge(methodTag + "Protected error", decodeResult.ikeException);
+                    case DECODE_STATUS_PARTIAL:
+                        ikeSaRecord.updateCollectedFragments(
+                                (DecodeResultPartial) decodeResult, true /*isResp*/);
+                        break;
+                    case DECODE_STATUS_PROTECTED_ERROR:
+                        IkeException ikeException = ((DecodeResultError) decodeResult).ikeException;
+                        logi(methodTag + "Protected error", ikeException);
 
                         ikeSaRecord.incrementLocalRequestMessageId();
+                        ikeSaRecord.resetCollectedFragments(true /*isResp*/);
 
                         handleResponseGenericProcessError(
                                 ikeSaRecord,
                                 new InvalidSyntaxException(
                                         "Generic processing error in the received response",
-                                        decodeResult.ikeException));
+                                        ikeException));
                         break;
-                    case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
+                    case DECODE_STATUS_UNPROTECTED_ERROR:
                         logi(
                                 methodTag
                                         + "Message authentication or decryption failed on received"
                                         + " response. Discard it",
-                                decodeResult.ikeException);
+                                ((DecodeResultError) decodeResult).ikeException);
                         break;
                     default:
                         cleanUpAndQuit(
@@ -1421,12 +1434,16 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                     mIkeCipher,
                                     ikeSaRecord,
                                     ikeHeader,
-                                    ikePacketBytes);
+                                    ikePacketBytes,
+                                    ikeSaRecord.getCollectedFragments(false /*isResp*/));
                     switch (decodeResult.status) {
                         case DECODE_STATUS_OK:
                             ikeSaRecord.incrementRemoteRequestMessageId();
+                            ikeSaRecord.resetCollectedFragments(false /*isResp*/);
+
+                            // TODO:b/140429499 Only store the first fragment
                             mLastReceivedIkeReq = ikePacketBytes;
-                            IkeMessage ikeMessage = decodeResult.ikeMessage;
+                            IkeMessage ikeMessage = ((DecodeResultOk) decodeResult).ikeMessage;
 
                             // Handle DPD here.
                             if (ikeMessage.isDpdRequest()) {
@@ -1468,24 +1485,32 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             }
                             handleRequestIkeMessage(ikeMessage, ikeExchangeSubType, message);
                             break;
-                        case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
-                            loge(methodTag + "Protected error", decodeResult.ikeException);
+                        case DECODE_STATUS_PARTIAL:
+                            ikeSaRecord.updateCollectedFragments(
+                                    (DecodeResultPartial) decodeResult, false /*isResp*/);
+                            break;
+                        case DECODE_STATUS_PROTECTED_ERROR:
+                            IkeException ikeException =
+                                    ((DecodeResultError) decodeResult).ikeException;
+                            logi(methodTag + "Protected error", ikeException);
 
                             ikeSaRecord.incrementRemoteRequestMessageId();
+                            ikeSaRecord.resetCollectedFragments(false /*isResp*/);
+
                             mLastReceivedIkeReq = ikePacketBytes;
 
                             // IkeException MUST be already wrapped into an IkeProtocolException
                             handleRequestGenericProcessError(
                                     ikeSaRecord,
                                     ikeHeader.messageId,
-                                    (IkeProtocolException) decodeResult.ikeException);
+                                    (IkeProtocolException) ikeException);
                             break;
-                        case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
+                        case DECODE_STATUS_UNPROTECTED_ERROR:
                             logi(
                                     methodTag
                                             + "Message authentication or decryption failed on"
                                             + " received request. Discard it",
-                                    decodeResult.ikeException);
+                                    ((DecodeResultError) decodeResult).ikeException);
                             break;
                         default:
                             cleanUpAndQuit(
@@ -2336,7 +2361,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
-                        handleResponseIkeMessage(decodeResult.ikeMessage);
+                        handleResponseIkeMessage(((DecodeResultOk) decodeResult).ikeMessage);
                         mIkeInitResponseBytes = ikePacketBytes;
 
                         // SA negotiation failed
@@ -2344,15 +2369,20 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
                         mCurrentIkeSaRecord.incrementLocalRequestMessageId();
                         break;
-                    case DECODE_STATUS_PROTECTED_ERROR_MESSAGE:
+                    case DECODE_STATUS_PARTIAL:
+                        // Fall through. We don't support IKE fragmentation here. We should never
+                        // get this status.
+                    case DECODE_STATUS_PROTECTED_ERROR:
                         // IKE INIT response is not protected. So we should never get this status
                         cleanUpAndQuit(
                                 new IllegalStateException(
                                         "Unexpected decoding status: " + decodeResult.status));
-                    case DECODE_STATUS_UNPROTECTED_ERROR_MESSAGE:
+                        break;
+                    case DECODE_STATUS_UNPROTECTED_ERROR:
                         logi(
                                 "Discard unencrypted response with syntax error",
-                                decodeResult.ikeException);
+                                ((DecodeResultError) decodeResult).ikeException);
+                        break;
                     default:
                         cleanUpAndQuit(
                                 new IllegalStateException(
@@ -3628,10 +3658,12 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                         mIkeCipher,
                                         ikeSaRecord,
                                         ikeHeader,
-                                        receivedIkePacket.ikePacketBytes);
+                                        receivedIkePacket.ikePacketBytes,
+                                        ikeSaRecord.getCollectedFragments(ikeHeader.isResponseMsg));
                         isMessageOnNewSa =
-                                (decodeResult.status == DECODE_STATUS_PROTECTED_ERROR_MESSAGE)
-                                        || (decodeResult.status == DECODE_STATUS_OK);
+                                (decodeResult.status == DECODE_STATUS_PROTECTED_ERROR)
+                                        || (decodeResult.status == DECODE_STATUS_OK)
+                                        || (decodeResult.status == DECODE_STATUS_PARTIAL);
                     }
 
                     // Authenticated request received on the new/surviving SA; treat it as

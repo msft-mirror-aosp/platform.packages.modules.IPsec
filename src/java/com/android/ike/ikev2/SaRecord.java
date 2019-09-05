@@ -33,6 +33,7 @@ import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
 import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.internal.annotations.VisibleForTesting;
@@ -563,6 +564,9 @@ public abstract class SaRecord implements AutoCloseable {
         private int mLocalRequestMessageId;
         private int mRemoteRequestMessageId;
 
+        private DecodeResultPartial mCollectedReqFragments;
+        private DecodeResultPartial mCollectedRespFragments;
+
         /** Package private */
         IkeSaRecord(
                 IkeSecurityParameterIndex initSpi,
@@ -589,6 +593,9 @@ public abstract class SaRecord implements AutoCloseable {
 
             mLocalRequestMessageId = 0;
             mRemoteRequestMessageId = 0;
+
+            mCollectedReqFragments = null;
+            mCollectedRespFragments = null;
         }
 
         /**
@@ -746,6 +753,33 @@ public abstract class SaRecord implements AutoCloseable {
          */
         public void incrementRemoteRequestMessageId() {
             mRemoteRequestMessageId++;
+        }
+
+        /** Return all collected IKE fragments that have been collected. */
+        public DecodeResultPartial getCollectedFragments(boolean isResp) {
+            return isResp ? mCollectedRespFragments : mCollectedReqFragments;
+        }
+
+        /**
+         * Update collected IKE fragments when receiving new IKE fragment.
+         *
+         * <p>TODO: b/140264067 Investigate if we need to support reassembling timeout. It is safe
+         * to do not support it because as an initiator, we will re-transmit the request anyway. As
+         * a responder, caching these fragments until getting a complete message won't affect
+         * anything.
+         */
+        public void updateCollectedFragments(
+                DecodeResultPartial updatedFragments, boolean isResp) {
+            if (isResp) {
+                mCollectedRespFragments = updatedFragments;
+            } else {
+                mCollectedReqFragments = updatedFragments;
+            }
+        }
+
+        /** Reset collected IKE fragemnts */
+        public void resetCollectedFragments(boolean isResp) {
+            updateCollectedFragments(null, isResp);
         }
 
         /** Release IKE SPI resource. */

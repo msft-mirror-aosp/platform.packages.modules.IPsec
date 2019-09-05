@@ -66,8 +66,8 @@ public final class IkeManager {
                 firstChildSessionCallback);
     }
 
-    // Package private
-    static Log getIkeLog() {
+    /** Returns IKE logger. */
+    public static Log getIkeLog() {
         return sIkeLog;
     }
 
