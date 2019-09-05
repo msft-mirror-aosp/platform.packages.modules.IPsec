@@ -545,11 +545,10 @@ public final class IkeMessage {
                 return new DecodeResultOk(new IkeMessage(header, supportedPayloadList));
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 // Invalid length error when parsing payload bodies.
-                return new DecodeResultError(
-                        DECODE_STATUS_UNPROTECTED_ERROR,
+                return new DecodeResultUnprotectedError(
                         new InvalidSyntaxException("Malformed IKE Payload"));
             } catch (IkeProtocolException e) {
-                return new DecodeResultError(DECODE_STATUS_UNPROTECTED_ERROR, e);
+                return new DecodeResultUnprotectedError(e);
             }
         }
 
@@ -602,7 +601,7 @@ public final class IkeMessage {
                                 decryptionKey);
             } catch (IkeException e) {
                 if (collectedFragments == null) {
-                    return new DecodeResultError(DECODE_STATUS_UNPROTECTED_ERROR, e);
+                    return new DecodeResultUnprotectedError(e);
                 } else {
                     getIkeLog()
                             .i(
@@ -671,11 +670,10 @@ public final class IkeMessage {
                 return new DecodeResultOk(new IkeMessage(header, supportedPayloadList));
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 // Invalid length error when parsing payload bodies.
-                return new DecodeResultError(
-                        DECODE_STATUS_PROTECTED_ERROR,
+                return new DecodeResultProtectedError(
                         new InvalidSyntaxException("Malformed IKE Payload", e));
             } catch (IkeProtocolException e) {
-                return new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, e);
+                return new DecodeResultProtectedError(e);
             }
         }
 
@@ -810,6 +808,8 @@ public final class IkeMessage {
     public static class DecodeResultOk extends DecodeResult {
         public final IkeMessage ikeMessage;
 
+        // TODO: Store first IKE packet for hanlding re-transmitted request.
+
         public DecodeResultOk(IkeMessage ikeMessage) {
             super(DECODE_STATUS_OK);
             this.ikeMessage = ikeMessage;
@@ -892,13 +892,32 @@ public final class IkeMessage {
         }
     }
 
-    /** This class represents that errors have been found during decrypting or decoding. */
-    public static class DecodeResultError extends DecodeResult {
+    /**
+     * This class represents common information of error cases in decrypting and decoding message.
+     */
+    public abstract static class DecodeResultError extends DecodeResult {
         public final IkeException ikeException;
 
-        public DecodeResultError(int status, IkeException ikeException) {
+        protected DecodeResultError(int status, IkeException ikeException) {
             super(status);
             this.ikeException = ikeException;
+        }
+    }
+    /**
+     * This class represents that decoding errors have been found after the IKE message is
+     * authenticated and decrypted.
+     */
+    public static class DecodeResultProtectedError extends DecodeResultError {
+        // TODO: Store first IKE packet for hanlding re-transmitted request.
+
+        public DecodeResultProtectedError(IkeException ikeException) {
+            super(DECODE_STATUS_PROTECTED_ERROR, ikeException);
+        }
+    }
+    /** This class represents errors have been found during message authentication or decryption. */
+    public static class DecodeResultUnprotectedError extends DecodeResultError {
+        public DecodeResultUnprotectedError(IkeException ikeException) {
+            super(DECODE_STATUS_UNPROTECTED_ERROR, ikeException);
         }
     }
 

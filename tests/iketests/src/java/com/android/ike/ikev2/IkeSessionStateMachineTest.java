@@ -31,7 +31,6 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
-import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -108,9 +107,9 @@ import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
-import com.android.ike.ikev2.message.IkeMessage.DecodeResultError;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultOk;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultProtectedError;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -413,7 +412,7 @@ public final class IkeSessionStateMachineTest {
                 makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SK);
         when(mMockIkeMessageHelper.decode(
                         anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
-                .thenReturn(new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
+                .thenReturn(new DecodeResultProtectedError(exception));
 
         return new ReceivedIkePacket(header, new byte[0]);
     }
@@ -461,10 +460,7 @@ public final class IkeSessionStateMachineTest {
                 makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SKF);
 
         setDecodeEncryptedPacketResult(
-                ikeSaRecord,
-                header,
-                collectedFrags,
-                new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
+                ikeSaRecord, header, collectedFrags, new DecodeResultProtectedError(exception));
 
         return new ReceivedIkePacket(header, new byte[0] /*dummyIkePacketBytes*/);
     }
