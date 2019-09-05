@@ -99,6 +99,15 @@ public class AtResTest {
     }
 
     @Test
+    public void testGetAtRes() throws Exception {
+        AtRes atRes = AtRes.getAtRes(RES_BYTES);
+
+        ByteBuffer result = ByteBuffer.allocate(AT_RES.length);
+        atRes.encode(result);
+        assertArrayEquals(AT_RES, result.array());
+    }
+
+    @Test
     public void testIsValidResLen() {
         // valid RES length: 4 <= RES length <= 16
         assertTrue(AtRes.isValidResLen(5));
