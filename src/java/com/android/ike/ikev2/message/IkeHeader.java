@@ -155,8 +155,8 @@ public final class IkeHeader {
         return mEncodedMessageLength;
     }
 
-    /** Validate syntax and major version of inbound IKE header. */
-    public void checkInboundValidOrThrow(int packetLength) throws IkeProtocolException {
+    /** Validate major version of inbound IKE header. */
+    public void validateMajorVersion() throws IkeProtocolException {
         if (majorVersion > 2) {
             // Receive higher version of protocol. Stop parsing.
             throw new InvalidMajorVersionException(majorVersion);
@@ -168,6 +168,15 @@ public final class IkeHeader {
             // error.
             throw new InvalidSyntaxException("Major version is smaller than 2.");
         }
+    }
+
+    /**
+     * Validate syntax of inbound IKE header.
+     *
+     * <p>It MUST only be used for an inbound IKE header because we don't know the outbound message
+     * length before we encode it.
+     */
+    public void validateInboundHeader(int packetLength) throws IkeProtocolException {
         if (exchangeType < EXCHANGE_TYPE_IKE_SA_INIT
                 || exchangeType > EXCHANGE_TYPE_INFORMATIONAL) {
             throw new InvalidSyntaxException("Invalid IKE Exchange Type.");
