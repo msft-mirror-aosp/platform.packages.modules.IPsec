@@ -63,7 +63,7 @@ public final class IkeSkPayloadTest {
     private static final int CHECKSUM_LEN = 12;
 
     private IkeCipher mAesCbcDecryptCipher;
-    private byte[] mAesCbcDecryptKey;
+    private byte[] mAesCbcDecryptionKey;
 
     private IkeMacIntegrity mHmacSha1IntegrityMac;
     private byte[] mHmacSha1IntegrityKey;
@@ -76,7 +76,7 @@ public final class IkeSkPayloadTest {
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
                                 SaProposal.KEY_LEN_AES_128),
                         IkeMessage.getSecurityProvider());
-        mAesCbcDecryptKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
+        mAesCbcDecryptionKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
         mHmacSha1IntegrityMac =
                 IkeMacIntegrity.create(
                         new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),
@@ -97,7 +97,7 @@ public final class IkeSkPayloadTest {
                                 mHmacSha1IntegrityMac,
                                 mAesCbcDecryptCipher,
                                 mHmacSha1IntegrityKey,
-                                mAesCbcDecryptKey)
+                                mAesCbcDecryptionKey)
                         .first;
         int payloadLength = payload.getPayloadLength();
         ByteBuffer buffer = ByteBuffer.allocate(payloadLength);
