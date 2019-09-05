@@ -23,8 +23,6 @@ import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefi
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
 
-import java.util.Arrays;
-
 /**
  * EapTestMessageDefinitions provides byte[] encodings of commonly used EAP Messages.
  *
@@ -163,7 +161,6 @@ public class EapTestMessageDefinitions {
     public static final byte[] ORIGINAL_MAC = hexStringToByteArray(ORIGINAL_MAC_STRING);
     public static final String COMPUTED_MAC_STRING = "FFEEDDCCBBAA998877665544332211FF";
     public static final byte[] COMPUTED_MAC = hexStringToByteArray(COMPUTED_MAC_STRING);
-    public static final byte[] RETURNED_MAC = Arrays.copyOf(COMPUTED_MAC, 16);
     public static final String EAP_SIM_CHALLENGE_REQUEST_STRING =
             "01" + ID + "0040" // EAP-Request | ID | length in bytes
             + "120b0000" // EAP-SIM | Challenge | 2B padding

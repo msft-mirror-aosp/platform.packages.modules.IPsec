@@ -20,15 +20,12 @@ import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
-import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
-import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_FULLAUTH_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IV;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
-import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_NOTIFICATION;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
@@ -44,7 +41,6 @@ import android.telephony.TelephonyManager;
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
-import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
@@ -54,15 +50,12 @@ import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureExcep
 import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
-import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNonceMt;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtSelectedVersion;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
@@ -82,9 +75,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-
 /**
  * EapSimMethodStateMachine represents the valid paths possible for the EAP-SIM protocol.
  *
@@ -103,9 +93,6 @@ import javax.crypto.spec.SecretKeySpec;
 class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
     private final SecureRandom mSecureRandom;
     private final EapSimTypeDataDecoder mEapSimTypeDataDecoder;
-
-    @VisibleForTesting Mac mMacAlgorithm;
-    @VisibleForTesting boolean mHasReceivedSimNotification = false;
 
     EapSimMethodStateMachine(
             Context context, EapSimConfig eapSimConfig, SecureRandom secureRandom) {
@@ -162,7 +149,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_SIM_START:
                     break;
                 case EAP_SIM_NOTIFICATION:
-                    return handleEapSimNotification(
+                    return handleEapSimAkaNotification(
                             true, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
@@ -217,7 +204,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_SIM_START:
                     break;
                 case EAP_SIM_NOTIFICATION:
-                    return handleEapSimNotification(
+                    return handleEapSimAkaNotification(
                             true, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
@@ -357,8 +344,6 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final int mSresLenBytes = 4;
         private final int mKcLenBytes = 8;
 
-        @VisibleForTesting final String mMacAlgorithmString = "HmacSHA1";
-
         private final List<Integer> mVersions;
         private final byte[] mNonce;
         private final byte[] mIdentity;
@@ -398,7 +383,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             EapSimTypeData eapSimTypeData = decodeResult.eapTypeData;
             switch (eapSimTypeData.eapSubtype) {
                 case EAP_SIM_NOTIFICATION:
-                    return handleEapSimNotification(
+                    return handleEapSimAkaNotification(
                             false, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
@@ -444,21 +429,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             try {
-                mMacAlgorithm = Mac.getInstance(mMacAlgorithmString);
-                mMacAlgorithm.init(new SecretKeySpec(mKAut, mMacAlgorithmString));
-
-                byte[] mac = getMac(
-                        message.eapCode,
-                        message.eapIdentifier,
-                        eapSimTypeData,
-                        mNonce);
-                // attributes are 'valid', so must have AtMac
-                AtMac atMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
-                if (!Arrays.equals(mac, atMac.mac)) {
-                    // MAC in message != calculated mac
-                    LOG.e(mTAG, "Received message with invalid Mac."
-                            + " expected=" + Arrays.toString(mac)
-                            + ", actual=" + Arrays.toString(atMac.mac));
+                if (!isValidMac(mTAG, message, eapSimTypeData, mNonce)) {
                     return buildClientErrorResponse(
                             message.eapIdentifier,
                             EAP_TYPE_SIM,
@@ -614,135 +585,5 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
 
     EapSimTypeData getEapSimAkaTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
         return new EapSimTypeData(eapSubtype, attributes);
-    }
-
-    @VisibleForTesting
-    byte[] getMac(
-            int eapCode,
-            int eapIdentifier,
-            EapSimTypeData eapSimTypeData,
-            byte[] extraData) throws EapSimAkaInvalidAttributeException, EapSilentException {
-        if (mMacAlgorithm == null) {
-            throw new IllegalStateException(
-                    "Can't calculate MAC before mMacAlgorithm is set in ChallengeState");
-        }
-
-        // cache original Mac so it can be restored after calculating the Mac
-        AtMac originalMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
-        eapSimTypeData.attributeMap.put(EAP_AT_MAC, new AtMac());
-
-        byte[] typeDataWithEmptyMac = eapSimTypeData.encode();
-        EapData eapData = new EapData(EAP_TYPE_SIM, typeDataWithEmptyMac);
-        EapMessage messageForMac = new EapMessage(eapCode, eapIdentifier, eapData);
-
-        ByteBuffer buffer =
-                ByteBuffer.allocate(messageForMac.eapLength + extraData.length);
-        buffer.put(messageForMac.encode());
-        buffer.put(extraData);
-        byte[] mac = mMacAlgorithm.doFinal(buffer.array());
-
-        eapSimTypeData.attributeMap.put(EAP_AT_MAC, originalMac);
-
-        // need HMAC-SHA1-128 - first 16 bytes of SHA1 (RFC 4186 Section 10.14)
-        return Arrays.copyOfRange(mac, 0, AtMac.MAC_LENGTH);
-    }
-
-    @VisibleForTesting
-    EapResult buildResponseMessageWithMac(
-            int identifier,
-            int eapSubtype,
-            byte[] extraData) {
-        try {
-            EapSimTypeData eapSimTypeData =
-                    new EapSimTypeData(eapSubtype, Arrays.asList(new AtMac()));
-
-            byte[] mac = getMac(
-                    EAP_CODE_RESPONSE,
-                    identifier,
-                    eapSimTypeData,
-                    extraData);
-
-            eapSimTypeData.attributeMap.put(EAP_AT_MAC, new AtMac(mac));
-            EapData eapData = new EapData(EAP_TYPE_SIM, eapSimTypeData.encode());
-            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
-            return EapResponse.getEapResponse(eapMessage);
-        } catch (EapSimAkaInvalidAttributeException | EapSilentException ex) {
-            // this should never happen
-            return new EapError(ex);
-        }
-    }
-
-    @VisibleForTesting
-    EapResult handleEapSimNotification(
-            boolean isPreChallengeState,
-            int identifier,
-            EapSimTypeData eapSimTypeData) {
-        // EAP-SIM exchanges must not include more than one EAP-SIM notification round
-        // (RFC 4186#6.1)
-        if (mHasReceivedSimNotification) {
-            return new EapError(
-                    new EapInvalidRequestException("Received multiple EAP-SIM notifications"));
-        }
-
-        mHasReceivedSimNotification = true;
-        AtNotification atNotification = (AtNotification)
-                eapSimTypeData.attributeMap.get(EAP_AT_NOTIFICATION);
-
-        // P bit of notification code is only allowed after a successful challenge round. This is
-        // only possible in the ChallengeState (RFC 4186#6.1)
-        if (isPreChallengeState && !atNotification.isPreSuccessfulChallenge) {
-            return buildClientErrorResponse(
-                    identifier,
-                    EAP_TYPE_SIM,
-                    AtClientErrorCode.UNABLE_TO_PROCESS);
-        }
-
-        if (atNotification.isPreSuccessfulChallenge) {
-            // AT_MAC attribute must not be included when the P bit is set (RFC 4186#9.8)
-            if (eapSimTypeData.attributeMap.containsKey(EAP_AT_MAC)) {
-                return buildClientErrorResponse(
-                        identifier,
-                        EAP_TYPE_SIM,
-                        AtClientErrorCode.UNABLE_TO_PROCESS);
-            }
-
-            return buildResponseMessage(
-                    EAP_TYPE_SIM,
-                    EAP_SIM_NOTIFICATION,
-                    identifier,
-                    Arrays.asList());
-        } else if (!eapSimTypeData.attributeMap.containsKey(EAP_AT_MAC)) {
-            // MAC must be included for messages with their P bit not set (RFC 4186#9.8)
-            return buildClientErrorResponse(
-                    identifier,
-                    EAP_TYPE_SIM,
-                    AtClientErrorCode.UNABLE_TO_PROCESS);
-        }
-
-        try {
-            byte[] mac = getMac(
-                    EAP_CODE_REQUEST,
-                    identifier,
-                    eapSimTypeData,
-                    new byte[0]);
-
-            AtMac atMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
-            if (!Arrays.equals(mac, atMac.mac)) {
-                // MAC in message != calculated mac
-                return buildClientErrorResponse(
-                        identifier,
-                        EAP_TYPE_SIM,
-                        AtClientErrorCode.UNABLE_TO_PROCESS);
-            }
-        } catch (EapSilentException | EapSimAkaInvalidAttributeException ex) {
-            // We can't continue if the MAC can't be generated
-            return new EapError(ex);
-        }
-
-        // server has been authenticated, so we can send a response
-        return buildResponseMessageWithMac(
-                identifier,
-                EAP_SIM_NOTIFICATION,
-                new byte[0]);
     }
 }
