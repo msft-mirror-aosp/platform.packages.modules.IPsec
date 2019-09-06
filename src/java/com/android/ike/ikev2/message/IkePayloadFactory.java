@@ -85,6 +85,8 @@ final class IkePayloadFactory {
                     return new IkeTsPayload(isCritical, payloadBody, true);
                 case IkePayload.PAYLOAD_TYPE_TS_RESPONDER:
                     return new IkeTsPayload(isCritical, payloadBody, false);
+                case IkePayload.PAYLOAD_TYPE_CP:
+                    return new IkeConfigPayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_EAP:
                     return new IkeEapPayload(isCritical, payloadBody);
                 default:
