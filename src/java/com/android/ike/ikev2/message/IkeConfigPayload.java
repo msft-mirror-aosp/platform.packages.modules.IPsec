@@ -22,7 +22,10 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.net.Inet4Address;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -39,6 +42,37 @@ import java.util.List;
  */
 public final class IkeConfigPayload extends IkePayload {
     private static final int CONFIG_HEADER_RESERVED_LEN = 3;
+
+    // TODO: Move these constant definitions to API
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+        CONFIG_ATTR_INTERNAL_IP4_ADDRESS,
+        CONFIG_ATTR_INTERNAL_IP4_NETMASK,
+        CONFIG_ATTR_INTERNAL_IP4_DNS,
+        CONFIG_ATTR_INTERNAL_IP4_NBNS,
+        CONFIG_ATTR_INTERNAL_IP4_DHCP,
+        CONFIG_ATTR_APPLICATION_VERSION,
+        CONFIG_ATTR_INTERNAL_IP6_ADDRESS,
+        CONFIG_ATTR_INTERNAL_IP6_DNS,
+        CONFIG_ATTR_INTERNAL_IP6_DHCP,
+        CONFIG_ATTR_INTERNAL_IP4_SUBNET,
+        CONFIG_ATTR_SUPPORTED_ATTRIBUTES,
+        CONFIG_ATTR_INTERNAL_IP6_SUBNET
+    })
+    public @interface ConfigAttr {}
+
+    public static final int CONFIG_ATTR_INTERNAL_IP4_ADDRESS = 1;
+    public static final int CONFIG_ATTR_INTERNAL_IP4_NETMASK = 2;
+    public static final int CONFIG_ATTR_INTERNAL_IP4_DNS = 3;
+    public static final int CONFIG_ATTR_INTERNAL_IP4_NBNS = 4;
+    public static final int CONFIG_ATTR_INTERNAL_IP4_DHCP = 6;
+    public static final int CONFIG_ATTR_APPLICATION_VERSION = 7;
+    public static final int CONFIG_ATTR_INTERNAL_IP6_ADDRESS = 8;
+    public static final int CONFIG_ATTR_INTERNAL_IP6_DNS = 10;
+    public static final int CONFIG_ATTR_INTERNAL_IP6_DHCP = 12;
+    public static final int CONFIG_ATTR_INTERNAL_IP4_SUBNET = 13;
+    public static final int CONFIG_ATTR_SUPPORTED_ATTRIBUTES = 14;
+    public static final int CONFIG_ATTR_INTERNAL_IP6_SUBNET = 15;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({CONFIG_TYPE_REQUEST, CONFIG_TYPE_REPLY})
@@ -73,6 +107,24 @@ public final class IkeConfigPayload extends IkePayload {
 
     /** This class represents common information of all Configuration Attributes. */
     public abstract static class ConfigAttribute {
+        protected static final int VALUE_LEN_NOT_INCLUDED = 0;
+        protected static final int IPV4_ADDRESS_LEN = 4;
+        protected static final int IPV6_ADDRESS_LEN = 16;
+
+        public final int attributeType;
+
+        protected ConfigAttribute(int attributeType) {
+            this.attributeType = attributeType;
+        }
+
+        protected ConfigAttribute(int attributeType, int len) throws InvalidSyntaxException {
+            this(attributeType);
+
+            if (!isLengthValid(len)) {
+                throw new InvalidSyntaxException("Invalid configuration length");
+            }
+        }
+
         /**
          * Package private method to decode ConfigAttribute list from an inbound packet
          *
@@ -81,8 +133,89 @@ public final class IkeConfigPayload extends IkePayload {
          */
         static List<ConfigAttribute> decodeAttributeFrom(ByteBuffer inputBuffer)
                 throws InvalidSyntaxException {
-            // TODO: Implement it.
-            return null;
+            List<ConfigAttribute> configList = new LinkedList();
+
+            while (inputBuffer.hasRemaining()) {
+                int attributeType = Short.toUnsignedInt(inputBuffer.getShort());
+                int length = Short.toUnsignedInt(inputBuffer.getShort());
+                byte[] value = new byte[length];
+                inputBuffer.get(value);
+
+                switch (attributeType) {
+                    case CONFIG_ATTR_INTERNAL_IP4_ADDRESS:
+                        configList.add(new ConfigAttributeIpv4Address(value));
+                        break;
+                    default:
+                        // Ignore unrecognized attribute type.
+                }
+            }
+
+            return configList;
+        }
+
+        protected abstract boolean isLengthValid(int length);
+
+        // TODO: Add encoding method
+    }
+
+    /**
+     * This class represents common information of all Configuration Attributes whoses value is one
+     * IPv4 address or empty.
+     */
+    abstract static class ConfigAttrIpv4AddressBase extends ConfigAttribute {
+        public final Inet4Address address;
+
+        protected ConfigAttrIpv4AddressBase(int attributeType, Inet4Address address) {
+            super(attributeType);
+            this.address = address;
+        }
+
+        protected ConfigAttrIpv4AddressBase(int attributeType) {
+            super(attributeType);
+            this.address = null;
+        }
+
+        protected ConfigAttrIpv4AddressBase(int attributeType, byte[] value)
+                throws InvalidSyntaxException {
+            super(attributeType, value.length);
+
+            if (value.length == VALUE_LEN_NOT_INCLUDED) {
+                address = null;
+                return;
+            }
+
+            try {
+                address = (Inet4Address) Inet4Address.getByAddress(value);
+            } catch (UnknownHostException e) {
+                throw new InvalidSyntaxException("Invalid attribute value", e);
+            }
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length == IPV4_ADDRESS_LEN || length == VALUE_LEN_NOT_INCLUDED;
+        }
+    }
+
+    /** This class represents Configuration Attribute for IPv4 internal address. */
+    public static class ConfigAttributeIpv4Address extends ConfigAttrIpv4AddressBase {
+        /** Construct an instance with specified address for an outbound packet. */
+        public ConfigAttributeIpv4Address(Inet4Address ipv4Address) {
+            super(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, ipv4Address);
+        }
+
+        /**
+         * Construct an instance without a specified address for an outbound packet.
+         *
+         * <p>It should be only used in a configuration request.
+         */
+        public ConfigAttributeIpv4Address() {
+            super(CONFIG_ATTR_INTERNAL_IP4_ADDRESS);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        public ConfigAttributeIpv4Address(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, value);
         }
     }
 

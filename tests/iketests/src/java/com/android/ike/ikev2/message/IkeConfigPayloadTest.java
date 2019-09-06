@@ -16,20 +16,28 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import com.android.ike.TestUtils;
+import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttribute;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+
+import libcore.net.InetAddressUtils;
 
 import org.junit.Test;
 
+import java.net.Inet4Address;
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -43,6 +51,9 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray(CONFIG_REQ_PAYLOAD_HEX);
     private static final byte[] CONFIG_RESP_PAYLOAD =
             TestUtils.hexStringToByteArray(CONFIG_RESP_PAYLOAD_HEX);
+
+    private static final Inet4Address IPV4_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("10.10.10.1"));
 
     private IkeConfigPayload verifyDecodeHeaderAndGetPayload(
             IkePayload payload, int expectedConfigType) {
@@ -68,7 +79,15 @@ public final class IkeConfigPayloadTest {
         IkeConfigPayload configPayload =
                 verifyDecodeHeaderAndGetPayload(payload, CONFIG_TYPE_REQUEST);
 
-        // TODO: Verify decoded configuration attributes
+        List<ConfigAttribute> recognizedAttributeList = configPayload.recognizedAttributeList;
+        assertEquals(1, recognizedAttributeList.size());
+
+        ConfigAttributeIpv4Address attributeIp4Address =
+                (ConfigAttributeIpv4Address) recognizedAttributeList.get(0);
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
+        assertNull(attributeIp4Address.address);
+
+        // TODO: Verify decoded other types of attributes when they are supported.
     }
 
     @Test
@@ -83,7 +102,15 @@ public final class IkeConfigPayloadTest {
         IkeConfigPayload configPayload =
                 verifyDecodeHeaderAndGetPayload(payload, CONFIG_TYPE_REPLY);
 
-        // TODO: Verify decoded configuration attributes
+        List<ConfigAttribute> recognizedAttributeList = configPayload.recognizedAttributeList;
+        assertEquals(1, recognizedAttributeList.size());
+
+        ConfigAttributeIpv4Address attributeIp4Address =
+                (ConfigAttributeIpv4Address) recognizedAttributeList.get(0);
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
+        assertEquals(IPV4_ADDRESS, attributeIp4Address.address);
+
+        // TODO: Verify decoded other types of attributes when they are supported.
     }
 
     @Test
@@ -96,4 +123,36 @@ public final class IkeConfigPayloadTest {
         assertEquals(CONFIG_TYPE_REQUEST, configPayload.configType);
         assertEquals(mockAttributeList, configPayload.recognizedAttributeList);
     }
+
+    @Test
+    public void testDecodeIpv4AddressWithValue() throws Exception {
+        ConfigAttributeIpv4Address attributeIp4Address =
+                new ConfigAttributeIpv4Address(IPV4_ADDRESS.getAddress());
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
+        assertEquals(IPV4_ADDRESS, attributeIp4Address.address);
+    }
+
+    @Test
+    public void testDecodeIpv4AddressWithoutValue() throws Exception {
+        ConfigAttributeIpv4Address attributeIp4Address =
+                new ConfigAttributeIpv4Address(new byte[0]);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
+        assertNull(attributeIp4Address.address);
+    }
+
+    @Test
+    public void testDecodeIpv4AddressWithInvalidValue() throws Exception {
+        byte[] invalidValue = new byte[] {1};
+
+        try {
+            ConfigAttributeIpv4Address attributeIp4Address =
+                    new ConfigAttributeIpv4Address(invalidValue);
+            fail("Expected to fail due to invalid attribute value");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    // TODO: Testing encoding attributes
 }
