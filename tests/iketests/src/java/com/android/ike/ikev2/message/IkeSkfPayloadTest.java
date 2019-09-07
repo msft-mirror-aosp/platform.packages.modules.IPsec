@@ -111,7 +111,7 @@ public final class IkeSkfPayloadTest {
                                         mSpyHmacSha256IntegrityMac,
                                         mSpyAesCbcCipher,
                                         new byte[0] /*integrityKey*/,
-                                        new byte[0] /*decryptKey*/)
+                                        new byte[0] /*decryptionKey*/)
                                 .first;
         return payload;
     }
