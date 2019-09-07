@@ -42,6 +42,7 @@ import java.util.List;
  */
 public final class IkeConfigPayload extends IkePayload {
     private static final int CONFIG_HEADER_RESERVED_LEN = 3;
+    private static final int CONFIG_HEADER_LEN = 4;
 
     // TODO: Move these constant definitions to API
     @Retention(RetentionPolicy.SOURCE)
@@ -107,6 +108,10 @@ public final class IkeConfigPayload extends IkePayload {
 
     /** This class represents common information of all Configuration Attributes. */
     public abstract static class ConfigAttribute {
+        private static final int ATTRIBUTE_TYPE_MASK = 0x7fff;
+
+        private static final int ATTRIBUTE_HEADER_LEN = 4;
+
         protected static final int VALUE_LEN_NOT_INCLUDED = 0;
         protected static final int IPV4_ADDRESS_LEN = 4;
         protected static final int IPV6_ADDRESS_LEN = 16;
@@ -153,9 +158,23 @@ public final class IkeConfigPayload extends IkePayload {
             return configList;
         }
 
-        protected abstract boolean isLengthValid(int length);
+        /** Encode attribute to ByteBuffer. */
+        public void encodeAttributeToByteBuffer(ByteBuffer buffer) {
+            buffer.putShort((short) (attributeType & ATTRIBUTE_TYPE_MASK))
+                    .putShort((short) getValueLength());
+            encodeValueToByteBuffer(buffer);
+        }
 
-        // TODO: Add encoding method
+        /** Get attribute length. */
+        public int getAttributeLen() {
+            return ATTRIBUTE_HEADER_LEN + getValueLength();
+        }
+
+        protected abstract void encodeValueToByteBuffer(ByteBuffer buffer);
+
+        protected abstract int getValueLength();
+
+        protected abstract boolean isLengthValid(int length);
     }
 
     /**
@@ -189,6 +208,21 @@ public final class IkeConfigPayload extends IkePayload {
             } catch (UnknownHostException e) {
                 throw new InvalidSyntaxException("Invalid attribute value", e);
             }
+        }
+
+        @Override
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            if (address == null) {
+                buffer.put(new byte[0]);
+                return;
+            }
+
+            buffer.put(address.getAddress());
+        }
+
+        @Override
+        protected int getValueLength() {
+            return address == null ? 0 : IPV4_ADDRESS_LEN;
         }
 
         @Override
@@ -227,8 +261,12 @@ public final class IkeConfigPayload extends IkePayload {
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException();
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+        byteBuffer.put((byte) configType).put(new byte[CONFIG_HEADER_RESERVED_LEN]);
+
+        for (ConfigAttribute attr : recognizedAttributeList) {
+            attr.encodeAttributeToByteBuffer(byteBuffer);
+        }
     }
 
     /**
@@ -238,8 +276,13 @@ public final class IkeConfigPayload extends IkePayload {
      */
     @Override
     protected int getPayloadLength() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException();
+        int len = GENERIC_HEADER_LENGTH + CONFIG_HEADER_LEN;
+
+        for (ConfigAttribute attr : recognizedAttributeList) {
+            len += attr.getAttributeLen();
+        }
+
+        return len;
     }
 
     /**

@@ -20,13 +20,18 @@ import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNA
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -39,6 +44,7 @@ import org.junit.Test;
 
 import java.net.Inet4Address;
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
 import java.util.List;
 
 public final class IkeConfigPayloadTest {
@@ -54,6 +60,17 @@ public final class IkeConfigPayloadTest {
 
     private static final Inet4Address IPV4_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("10.10.10.1"));
+    private static final byte[] IPV4_ADDRESS_ATTRIBUTE_WITH_VALUE =
+            TestUtils.hexStringToByteArray("000100040a0a0a01");
+    private static final byte[] IPV4_ADDRESS_ATTRIBUTE_WITHOUT_VALUE =
+            TestUtils.hexStringToByteArray("00010000");
+
+    private static final byte[] IPV6_ADDRESS_ATTRIBUTE_WITHOUT_VALUE =
+            TestUtils.hexStringToByteArray("00080000");
+    private static final byte[] IPV4_DNS_ATTRIBUTE_WITHOUT_VALUE =
+            TestUtils.hexStringToByteArray("00030000");
+    private static final byte[] IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE =
+            TestUtils.hexStringToByteArray("000a0000");
 
     private IkeConfigPayload verifyDecodeHeaderAndGetPayload(
             IkePayload payload, int expectedConfigType) {
@@ -86,8 +103,6 @@ public final class IkeConfigPayloadTest {
                 (ConfigAttributeIpv4Address) recognizedAttributeList.get(0);
         assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
         assertNull(attributeIp4Address.address);
-
-        // TODO: Verify decoded other types of attributes when they are supported.
     }
 
     @Test
@@ -109,19 +124,42 @@ public final class IkeConfigPayloadTest {
                 (ConfigAttributeIpv4Address) recognizedAttributeList.get(0);
         assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
         assertEquals(IPV4_ADDRESS, attributeIp4Address.address);
+    }
 
-        // TODO: Verify decoded other types of attributes when they are supported.
+    private ConfigAttribute makeMockAttribute(byte[] encodedAttribute) {
+        ConfigAttribute mockAttribute = mock(ConfigAttribute.class);
+
+        when(mockAttribute.getAttributeLen()).thenReturn(encodedAttribute.length);
+
+        doAnswer(
+                (invocation) -> {
+                    ByteBuffer buffer = (ByteBuffer) invocation.getArguments()[0];
+                    buffer.put(encodedAttribute);
+                    return null;
+                })
+                .when(mockAttribute)
+                .encodeAttributeToByteBuffer(any(ByteBuffer.class));
+
+        return mockAttribute;
     }
 
     @Test
-    public void testBuildOutboundConfig() throws Exception {
-        List<ConfigAttribute> mockAttributeList = mock(List.class);
+    public void testBuildAndEncodeOutboundConfig() throws Exception {
+        List<ConfigAttribute> mockAttributeList = new LinkedList<>();
+        mockAttributeList.add(makeMockAttribute(IPV4_ADDRESS_ATTRIBUTE_WITHOUT_VALUE));
+        mockAttributeList.add(makeMockAttribute(IPV6_ADDRESS_ATTRIBUTE_WITHOUT_VALUE));
+        mockAttributeList.add(makeMockAttribute(IPV4_DNS_ATTRIBUTE_WITHOUT_VALUE));
+        mockAttributeList.add(makeMockAttribute(IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE));
         IkeConfigPayload configPayload = new IkeConfigPayload(false /*isReply*/, mockAttributeList);
 
         assertEquals(PAYLOAD_TYPE_CP, configPayload.payloadType);
         assertFalse(configPayload.isCritical);
         assertEquals(CONFIG_TYPE_REQUEST, configPayload.configType);
         assertEquals(mockAttributeList, configPayload.recognizedAttributeList);
+
+        ByteBuffer buffer = ByteBuffer.allocate(configPayload.getPayloadLength());
+        configPayload.encodeToByteBuffer(PAYLOAD_TYPE_NOTIFY, buffer);
+        assertArrayEquals(CONFIG_REQ_PAYLOAD, buffer.array());
     }
 
     @Test
@@ -154,5 +192,28 @@ public final class IkeConfigPayloadTest {
         }
     }
 
-    // TODO: Testing encoding attributes
+    @Test
+    public void testEncodeIpv4AddressWithValue() throws Exception {
+        ConfigAttributeIpv4Address attributeIp4Address =
+                new ConfigAttributeIpv4Address(IPV4_ADDRESS);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
+        assertEquals(IPV4_ADDRESS, attributeIp4Address.address);
+
+        ByteBuffer buffer = ByteBuffer.allocate(attributeIp4Address.getAttributeLen());
+        attributeIp4Address.encodeAttributeToByteBuffer(buffer);
+        assertArrayEquals(IPV4_ADDRESS_ATTRIBUTE_WITH_VALUE, buffer.array());
+    }
+
+    @Test
+    public void testEncodeIpv4AddressWithoutValue() throws Exception {
+        ConfigAttributeIpv4Address attributeIp4Address = new ConfigAttributeIpv4Address();
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
+        assertNull(attributeIp4Address.address);
+
+        ByteBuffer buffer = ByteBuffer.allocate(attributeIp4Address.getAttributeLen());
+        attributeIp4Address.encodeAttributeToByteBuffer(buffer);
+        assertArrayEquals(IPV4_ADDRESS_ATTRIBUTE_WITHOUT_VALUE, buffer.array());
+    }
 }
