@@ -211,13 +211,18 @@ public final class IkeMessage {
      * @param integrityMac the negotiated integrity algorithm.
      * @param encryptCipher the negotiated encryption algortihm.
      * @param ikeSaRecord the ikeSaRecord where this packet is sent on.
+     * @param supportFragment if IKE fragmentation is supported
+     * @param fragSize the maximum size of IKE fragment
      * @return encoded IKE message in byte array.
      */
-    public byte[] encryptAndEncode(
+    public byte[][] encryptAndEncode(
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
-            IkeSaRecord ikeSaRecord) {
-        return sIkeMessageHelper.encryptAndEncode(integrityMac, encryptCipher, ikeSaRecord, this);
+            IkeSaRecord ikeSaRecord,
+            boolean supportFragment,
+            int fragSize) {
+        return sIkeMessageHelper.encryptAndEncode(
+                integrityMac, encryptCipher, ikeSaRecord, this, supportFragment, fragSize);
     }
 
     /**
@@ -341,14 +346,18 @@ public final class IkeMessage {
          * @param integrityMac the negotiated integrity algorithm.
          * @param encryptCipher the negotiated encryption algortihm.
          * @param ikeSaRecord the ikeSaRecord where this packet is sent on.
-         * @param ikeMessage message need to be encoded.
+         * @param ikeMessage message need to be encoded. * @param supportFragment if IKE
+         *     fragmentation is supported.
+         * @param fragSize the maximum size of IKE fragment.
          * @return encoded IKE message in byte array.
          */
-        byte[] encryptAndEncode(
+        byte[][] encryptAndEncode(
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher encryptCipher,
                 IkeSaRecord ikeSaRecord,
-                IkeMessage ikeMessage);
+                IkeMessage ikeMessage,
+                boolean supportFragment,
+                int fragSize);
 
         // TODO: Return DecodeResult when decoding unencrypted message
         /**
@@ -392,11 +401,13 @@ public final class IkeMessage {
         }
 
         @Override
-        public byte[] encryptAndEncode(
+        public byte[][] encryptAndEncode(
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher encryptCipher,
                 IkeSaRecord ikeSaRecord,
-                IkeMessage ikeMessage) {
+                IkeMessage ikeMessage,
+                boolean supportFragment,
+                int fragSize) {
             return encryptAndEncode(
                     ikeMessage.ikeHeader,
                     ikeMessage.ikePayloadList.isEmpty()
@@ -406,32 +417,112 @@ public final class IkeMessage {
                     integrityMac,
                     encryptCipher,
                     ikeSaRecord.getOutboundIntegrityKey(),
-                    ikeSaRecord.getOutboundEncryptionKey());
+                    ikeSaRecord.getOutboundEncryptionKey(),
+                    supportFragment,
+                    fragSize);
         }
 
-        private byte[] encryptAndEncode(
+        @VisibleForTesting
+        byte[][] encryptAndEncode(
                 IkeHeader ikeHeader,
-                @PayloadType int firstPayload,
+                @PayloadType int firstInnerPayload,
                 byte[] unencryptedPayloads,
                 @Nullable IkeMacIntegrity integrityMac,
                 IkeCipher encryptCipher,
                 byte[] integrityKey,
-                byte[] encryptKey) {
+                byte[] encryptionKey,
+                boolean supportFragment,
+                int fragSize) {
+
             IkeSkPayload skPayload =
                     new IkeSkPayload(
                             ikeHeader,
-                            firstPayload,
+                            firstInnerPayload,
                             unencryptedPayloads,
                             integrityMac,
                             encryptCipher,
                             integrityKey,
-                            encryptKey);
+                            encryptionKey);
+            int msgLen = IkeHeader.IKE_HEADER_LENGTH + skPayload.getPayloadLength();
 
+            // Build complete IKE message
+            if (!supportFragment || msgLen <= fragSize) {
+                byte[][] packetList = new byte[1][];
+                packetList[0] = encodeHeaderAndBody(ikeHeader, skPayload, firstInnerPayload);
+
+                getIkeLog()
+                        .d(
+                                "IkeMessage",
+                                "Build a complete IKE message: " + getIkeLog().pii(packetList[0]));
+                return packetList;
+            }
+
+            // Build IKE fragments
+            int dataLenPerPacket =
+                    fragSize
+                            - IkeHeader.IKE_HEADER_LENGTH
+                            - IkePayload.GENERIC_HEADER_LENGTH
+                            - IkeSkfPayload.SKF_HEADER_LEN
+                            - encryptCipher.getIvLen()
+                            - integrityMac.getChecksumLen()
+                            - encryptCipher.getBlockSize();
+
+            // Caller of this method MUST validate fragSize is valid.
+            if (dataLenPerPacket <= 0) {
+                throw new IllegalArgumentException(
+                        "Max fragment size is too small for an IKE fragment.");
+            }
+
+            int totalFragments =
+                    (unencryptedPayloads.length + dataLenPerPacket - 1) / dataLenPerPacket;
+            IkeHeader skfHeader = ikeHeader.makeSkfHeaderFromSkHeader();
+            byte[][] packetList = new byte[totalFragments][];
+
+            ByteBuffer unencryptedDataBuffer = ByteBuffer.wrap(unencryptedPayloads);
+            for (int i = 0; i < totalFragments; i++) {
+                byte[] unencryptedData =
+                        new byte[Math.min(dataLenPerPacket, unencryptedDataBuffer.remaining())];
+                unencryptedDataBuffer.get(unencryptedData);
+
+                int fragNum = i + 1; // 1-based
+
+                IkeSkfPayload skfPayload =
+                        new IkeSkfPayload(
+                                ikeHeader,
+                                firstInnerPayload,
+                                unencryptedData,
+                                integrityMac,
+                                encryptCipher,
+                                integrityKey,
+                                encryptionKey,
+                                fragNum,
+                                totalFragments);
+
+                packetList[i] =
+                        encodeHeaderAndBody(
+                                skfHeader,
+                                skfPayload,
+                                i == 0 ? firstInnerPayload : IkePayload.PAYLOAD_TYPE_NO_NEXT);
+                getIkeLog()
+                        .d(
+                                "IkeMessage",
+                                "Build an IKE fragment ("
+                                        + (i + 1)
+                                        + "/"
+                                        + totalFragments
+                                        + "): "
+                                        + getIkeLog().pii(packetList[0]));
+            }
+
+            return packetList;
+        }
+
+        private byte[] encodeHeaderAndBody(
+                IkeHeader ikeHeader, IkeSkPayload skPayload, @PayloadType int firstInnerPayload) {
             ByteBuffer outputBuffer =
                     ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH + skPayload.getPayloadLength());
             ikeHeader.encodeToByteBuffer(outputBuffer, skPayload.getPayloadLength());
-            skPayload.encodeToByteBuffer(firstPayload, outputBuffer);
-
+            skPayload.encodeToByteBuffer(firstInnerPayload, outputBuffer);
             return outputBuffer.array();
         }
 

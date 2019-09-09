@@ -115,10 +115,10 @@ public final class IkeMacIntegrityTest {
 
     @Test
     public void buildIpSecAlgorithmWithInvalidKey() throws Exception {
-        byte[] encryptKey = TestUtils.hexStringToByteArray(INTEGRITY_KEY_HEX_STRING + "00");
+        byte[] encryptionKey = TestUtils.hexStringToByteArray(INTEGRITY_KEY_HEX_STRING + "00");
 
         try {
-            mHmacSha1IntegrityMac.buildIpSecAlgorithmWithKey(encryptKey);
+            mHmacSha1IntegrityMac.buildIpSecAlgorithmWithKey(encryptionKey);
 
             fail("Expected to fail due to integrity key with wrong length.");
         } catch (IllegalArgumentException expected) {

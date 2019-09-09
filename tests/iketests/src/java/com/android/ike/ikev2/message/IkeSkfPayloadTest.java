@@ -34,6 +34,9 @@ import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+
 public final class IkeSkfPayloadTest {
     private static final String IKE_FRAG_MSG_HEX_STRING =
             "bb3d5237aa558779db24aeb6c9ea183e352023200000000100000134"
@@ -177,5 +180,19 @@ public final class IkeSkfPayloadTest {
                             + " Total Fragments Number");
         } catch (InvalidSyntaxException expected) {
         }
+    }
+
+    @Test
+    public void testEncode() throws Exception {
+        byte[] message = TestUtils.hexStringToByteArray(IKE_FRAG_MSG_HEX_STRING);
+        IkeSkfPayload payload = decodeAndDecryptFragMsg(message);
+
+        int payloadLength = payload.getPayloadLength();
+        ByteBuffer buffer = ByteBuffer.allocate(payloadLength);
+        payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_NO_NEXT, buffer);
+
+        byte[] expectedPayloadBytes =
+                Arrays.copyOfRange(message, IkeHeader.IKE_HEADER_LENGTH, message.length);
+        assertArrayEquals(expectedPayloadBytes, buffer.array());
     }
 }
