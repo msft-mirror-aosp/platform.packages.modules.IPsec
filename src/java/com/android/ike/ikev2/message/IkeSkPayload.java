@@ -40,7 +40,7 @@ import java.security.GeneralSecurityException;
  */
 public class IkeSkPayload extends IkePayload {
 
-    private final IkeEncryptedPayloadBody mIkeEncryptedPayloadBody;
+    protected final IkeEncryptedPayloadBody mIkeEncryptedPayloadBody;
 
     /**
      * Construct an instance of IkeSkPayload from decrypting an incoming packet.
@@ -114,7 +114,7 @@ public class IkeSkPayload extends IkePayload {
      * @param integrityMac the negotiated integrity algorithm.
      * @param encryptCipher the negotiated encryption algorithm.
      * @param integrityKey the negotiated integrity algorithm key.
-     * @param encryptKey the negotiated encryption key.
+     * @param encryptionKey the negotiated encryption key.
      */
     @VisibleForTesting
     IkeSkPayload(
@@ -124,8 +124,31 @@ public class IkeSkPayload extends IkePayload {
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
             byte[] integrityKey,
-            byte[] encryptKey) {
-        super(PAYLOAD_TYPE_SK, false);
+            byte[] encryptionKey) {
+
+        this(
+                false /*isSkf*/,
+                ikeHeader,
+                firstPayloadType,
+                unencryptedPayloads,
+                integrityMac,
+                encryptCipher,
+                integrityKey,
+                encryptionKey);
+    }
+
+    /** Construct an instance of IkeSkPayload for building outbound packet. */
+    @VisibleForTesting
+    protected IkeSkPayload(
+            boolean isSkf,
+            IkeHeader ikeHeader,
+            @PayloadType int firstPayloadType,
+            byte[] unencryptedPayloads,
+            @Nullable IkeMacIntegrity integrityMac,
+            IkeCipher encryptCipher,
+            byte[] integrityKey,
+            byte[] encryptionKey) {
+        super(isSkf ? PAYLOAD_TYPE_SKF : PAYLOAD_TYPE_SK, false);
 
         // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
@@ -137,7 +160,7 @@ public class IkeSkPayload extends IkePayload {
                         integrityMac,
                         encryptCipher,
                         integrityKey,
-                        encryptKey);
+                        encryptionKey);
     }
 
     /**

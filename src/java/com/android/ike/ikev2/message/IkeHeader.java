@@ -145,6 +145,21 @@ public final class IkeHeader {
         mEncodedMessageLength = buffer.getInt();
     }
 
+    /** Packet private method to build header of an IKE fragemnt from current IKE header. */
+    IkeHeader makeSkfHeaderFromSkHeader() {
+        if (nextPayloadType != IkePayload.PAYLOAD_TYPE_SK) {
+            throw new IllegalArgumentException("Next payload type is not SK.");
+        }
+        return new IkeHeader(
+                ikeInitiatorSpi,
+                ikeResponderSpi,
+                IkePayload.PAYLOAD_TYPE_SKF,
+                exchangeType,
+                isResponseMsg,
+                fromIkeInitiator,
+                messageId);
+    }
+
     /*Package private*/
     @VisibleForTesting
     int getInboundMessageLength() {
