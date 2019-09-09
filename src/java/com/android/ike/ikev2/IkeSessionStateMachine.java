@@ -1365,11 +1365,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
             logd(
                     methodTag
-                            + "Received an IKE "
-                            + msgDirection
+                            + "Received an "
+                            + ikeHeader.getBasicInfoString()
                             + " on IKE SA with local SPI: "
                             + ikeSaRecord.getLocalSpi()
-                            + ". IKE message size: "
+                            + ". Packet size: "
                             + ikePacketBytes.length);
 
             if (ikeHeader.isResponseMsg) {
@@ -2374,12 +2374,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
 
-            String msgDirection = ikeHeader.isResponseMsg ? "response" : "request";
             logd(
                     methodTag
-                            + "Received an IKE "
-                            + msgDirection
-                            + ". IKE message size: "
+                            + "Received an "
+                            + ikeHeader.getBasicInfoString()
+                            + ". Packet size: "
                             + ikePacketBytes.length);
 
             if (ikeHeader.isResponseMsg) {

@@ -147,9 +147,9 @@ public final class IkeTsPayload extends IkePayload {
     public String getTypeString() {
         switch (payloadType) {
             case PAYLOAD_TYPE_ID_INITIATOR:
-                return "Traffic Selector Initiator Payload";
+                return "TSi";
             case PAYLOAD_TYPE_ID_RESPONDER:
-                return "Traffic Selector Responder Payload";
+                return "TSr";
             default:
                 // Won't reach here.
                 throw new IllegalArgumentException(

@@ -1724,7 +1724,7 @@ public final class IkeSaPayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "SA Payload";
+        return "SA";
     }
 
     @Override

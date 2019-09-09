@@ -211,7 +211,7 @@ public final class IkeMessageTest {
 
         @Override
         public String getTypeString() {
-            return "Test Payload";
+            return "Test(" + payloadType + ")";
         }
     }
 
