@@ -71,6 +71,8 @@ public class EapTestMessageDefinitions {
             "02" + ID + "0024120A0000100100010E060011" + IDENTITY_STRING + "000000");
     public static final byte[] EAP_SIM_NOTIFICATION_RESPONSE = hexStringToByteArray(
             "02" + ID + "0008120C0000");
+    public static final byte[] EAP_AKA_NOTIFICATION_RESPONSE =
+            hexStringToByteArray("02" + ID + "0008170C0000");
 
     // Body of EapData is the list of supported methods
     public static final byte[] EAP_RESPONSE_NAK_PACKET =
