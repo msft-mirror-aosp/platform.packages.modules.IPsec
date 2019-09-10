@@ -230,4 +230,6 @@ public class EapTestMessageDefinitions {
                             + "17010000" // EAP-AKA | Challenge | 2B padding
                             + "03030028" + RES + "000000" // AT_RES attribute
                             + "0B050000" + EAP_AKA_CHALLENGE_RESPONSE_MAC); // AT_MAC attribute
+
+    public static final byte[] EAP_SUCCESS = hexStringToByteArray("03860004");
 }

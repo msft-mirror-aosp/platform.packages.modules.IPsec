@@ -23,6 +23,7 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -95,7 +96,6 @@ public class EapSimTest {
     private static final byte[] EAP_SIM_CHALLENGE_RESPONSE = hexStringToByteArray(
             "0286001c120b0000" // EAP header
                     + "0b050000e5df9cb1d935ea5f54d449a038bed061"); // AT_NAC attribute
-    private static final byte[] EAP_SUCCESS = hexStringToByteArray("03860004");
 
     private Context mMockContext;
     private TelephonyManager mMockTelephonyManager;
