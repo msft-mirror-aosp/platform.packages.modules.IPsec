@@ -23,8 +23,11 @@ import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_NOTIFICATION_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_NOTIFICATION;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification.GENERAL_FAILURE_PRE_CHALLENGE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -45,11 +48,14 @@ import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.statemachine.EapMethodStateMachine.EapMethodState;
 
 import org.junit.Before;
 import org.junit.Test;
+
+import java.util.Arrays;
 
 public class EapAkaStateTest {
     protected static final int SUB_ID = 1;
@@ -92,6 +98,26 @@ public class EapAkaStateTest {
         assertTrue(result instanceof EapResult.EapResponse);
         EapResult.EapResponse eapResponse = (EapResult.EapResponse) result;
         assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
+    }
+
+    @Test
+    public void testProcessEapAkaNotification() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+        EapMethodState preProcess = (EapMethodState) mEapAkaMethodStateMachine.getState();
+        EapAkaTypeData typeData =
+                new EapAkaTypeData(
+                        EAP_AKA_NOTIFICATION,
+                        Arrays.asList(new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE)));
+
+        DecodeResult<EapAkaTypeData> decodeResult = new DecodeResult<>(typeData);
+        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+
+        EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
+        assertArrayEquals(EAP_AKA_NOTIFICATION_RESPONSE, eapResponse.packet);
+        assertEquals(preProcess, mEapAkaMethodStateMachine.getState());
+        verify(mMockEapAkaTypeDataDecoder).decode(DUMMY_EAP_TYPE_DATA);
+        verifyNoMoreInteractions(mMockTelephonyManager, mMockEapAkaTypeDataDecoder);
     }
 
     @Test

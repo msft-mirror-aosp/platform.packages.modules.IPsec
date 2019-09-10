@@ -146,9 +146,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_AKA_CHALLENGE:
                     return transitionAndProcess(new ChallengeState(), message);
                 case EAP_AKA_NOTIFICATION:
-                    // TODO(b/139808612): move EAP-SIM/AKA notification handling to superclass
-                    throw new UnsupportedOperationException(
-                            "EAP-AKA notifications not supported yet");
+                    return handleEapSimAkaNotification(
+                            true, // isPreChallengeState
+                            message.eapIdentifier,
+                            eapAkaTypeData);
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
@@ -185,9 +186,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_AKA_CHALLENGE:
                     return transitionAndProcess(new ChallengeState(mIdentity), message);
                 case EAP_AKA_NOTIFICATION:
-                    // TODO(b/139808612): move EAP-SIM/AKA notification handling to superclass
-                    throw new UnsupportedOperationException(
-                            "EAP-AKA notifications not supported yet");
+                    return handleEapSimAkaNotification(
+                            true, // isPreChallengeState
+                            message.eapIdentifier,
+                            eapAkaTypeData);
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
@@ -309,9 +311,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_AKA_CHALLENGE:
                     break;
                 case EAP_AKA_NOTIFICATION:
-                    // TODO(b/139808612): move EAP-SIM/AKA notification handling to superclass
-                    throw new UnsupportedOperationException(
-                            "EAP-AKA notifications not supported yet");
+                    return handleEapSimAkaNotification(
+                            false, // isPreChallengeState
+                            message.eapIdentifier,
+                            eapAkaTypeData);
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
