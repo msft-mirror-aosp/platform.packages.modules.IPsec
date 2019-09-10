@@ -116,6 +116,10 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      * being negotiated. Only allowed in the request/response for negotiating a Child SA.
      */
     public static final int NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED = 16394;
+    /**
+     * Indicates that the sender supports IKE fragmentation.
+     */
+    public static final int NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED = 16430;
     // TODO: List all supported notify types.
 
     private static final int NOTIFY_HEADER_LEN = 4;

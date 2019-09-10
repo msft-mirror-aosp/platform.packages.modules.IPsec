@@ -115,10 +115,10 @@ public final class IkeCipherTest {
 
     @Test
     public void testEncryptWithWrongKey() throws Exception {
-        byte[] encryptKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP + "00");
+        byte[] encryptionKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP + "00");
 
         try {
-            mAesCbcCipher.decrypt(mEncryptedPaddedData, mAesCbcKey, encryptKey);
+            mAesCbcCipher.decrypt(mEncryptedPaddedData, mAesCbcKey, encryptionKey);
             fail("Expected to fail due to encryption key with wrong length.");
         } catch (IllegalArgumentException expected) {
 
@@ -150,10 +150,10 @@ public final class IkeCipherTest {
 
     @Test
     public void buildIpSecAlgorithmWithInvalidKey() throws Exception {
-        byte[] encryptKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP + "00");
+        byte[] encryptionKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP + "00");
 
         try {
-            mAesCbcCipher.buildIpSecAlgorithmWithKey(encryptKey);
+            mAesCbcCipher.buildIpSecAlgorithmWithKey(encryptionKey);
 
             fail("Expected to fail due to encryption key with wrong length.");
         } catch (IllegalArgumentException expected) {

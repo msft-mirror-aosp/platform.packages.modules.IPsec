@@ -33,11 +33,14 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.android.ike.TestUtils;
@@ -505,9 +508,15 @@ public final class IkeMessageTest {
                         0);
         IkeMessage ikeMessage = new IkeMessage(ikeHeader, new LinkedList<>());
 
-        byte[] ikeMessageBytes =
-                ikeMessage.encryptAndEncode(mMockIntegrity, mMockCipher, mMockIkeSaRecord);
-        byte[] expectedBytes = TestUtils.hexStringToByteArray(IKE_EMPTY_INFO_MSG_HEX_STRING);
+        byte[][] ikeMessageBytes =
+                ikeMessage.encryptAndEncode(
+                        mMockIntegrity,
+                        mMockCipher,
+                        mMockIkeSaRecord,
+                        true /*supportFragment*/,
+                        1280 /*fragSize*/);
+        byte[][] expectedBytes =
+                new byte[][] {TestUtils.hexStringToByteArray(IKE_EMPTY_INFO_MSG_HEX_STRING)};
 
         assertArrayEquals(expectedBytes, ikeMessageBytes);
     }
@@ -812,5 +821,85 @@ public final class IkeMessageTest {
 
         // Verify that newly received IKE message was discarded
         assertEquals(resultPartialIncomplete, decodeResult);
+    }
+
+    @Test
+    public void testEncodeAndEncryptFragments() throws Exception {
+        int messageId = 1;
+        int fragSize = 140;
+        int expectedTotalFragments = 3;
+
+        byte[] integrityKey = new byte[0];
+        byte[] encryptionKey = new byte[0];
+        byte[] iv = new byte[IKE_AUTH_CIPHER_IV_SIZE];
+
+        when(mMockCipher.generateIv()).thenReturn(iv);
+        when(mMockCipher.encrypt(any(), any(), any()))
+                .thenAnswer(
+                        (invocation) -> {
+                            return (byte[]) invocation.getArguments()[0];
+                        });
+
+        IkeHeader ikeHeader =
+                new IkeHeader(
+                        INIT_SPI,
+                        RESP_SPI,
+                        IkePayload.PAYLOAD_TYPE_SK,
+                        IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                        true /*isResp*/,
+                        false /*fromInit*/,
+                        messageId);
+
+        byte[][] packetList =
+                new IkeMessage.IkeMessageHelper()
+                        .encryptAndEncode(
+                                ikeHeader,
+                                IkePayload.PAYLOAD_TYPE_AUTH,
+                                mUnencryptedPaddedData,
+                                mMockIntegrity,
+                                mMockCipher,
+                                integrityKey,
+                                encryptionKey,
+                                true /*supportFragment*/,
+                                fragSize);
+
+        assertEquals(expectedTotalFragments, packetList.length);
+
+        IkeHeader expectedIkeHeader =
+                new IkeHeader(
+                        INIT_SPI,
+                        RESP_SPI,
+                        IkePayload.PAYLOAD_TYPE_SKF,
+                        IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
+                        true /*isResp*/,
+                        false /*fromInit*/,
+                        messageId);
+        for (int i = 0; i < packetList.length; i++) {
+            byte[] p = packetList[i];
+
+            // Verify fragment length
+            assertNotNull(p);
+            assertTrue(p.length <= fragSize);
+
+            ByteBuffer packetBuffer = ByteBuffer.wrap(p);
+
+            // Verify IKE header
+            byte[] headerBytes = new byte[IkeHeader.IKE_HEADER_LENGTH];
+            packetBuffer.get(headerBytes);
+
+            ByteBuffer expectedHeadBuffer = ByteBuffer.allocate(IkeHeader.IKE_HEADER_LENGTH);
+            expectedIkeHeader.encodeToByteBuffer(
+                    expectedHeadBuffer, p.length - IkeHeader.IKE_HEADER_LENGTH);
+
+            assertArrayEquals(expectedHeadBuffer.array(), headerBytes);
+
+            // Verify fragment payload header
+            packetBuffer.get(new byte[IkePayload.GENERIC_HEADER_LENGTH]);
+            assertEquals(i + 1 /*expetced fragNum*/, Short.toUnsignedInt(packetBuffer.getShort()));
+            assertEquals(expectedTotalFragments, Short.toUnsignedInt(packetBuffer.getShort()));
+        }
+
+        verify(mMockCipher, times(expectedTotalFragments + 1))
+                .encrypt(any(), eq(encryptionKey), eq(iv));
     }
 }
