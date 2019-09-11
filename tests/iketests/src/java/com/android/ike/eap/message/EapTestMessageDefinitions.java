@@ -71,6 +71,8 @@ public class EapTestMessageDefinitions {
             "02" + ID + "0024120A0000100100010E060011" + IDENTITY_STRING + "000000");
     public static final byte[] EAP_SIM_NOTIFICATION_RESPONSE = hexStringToByteArray(
             "02" + ID + "0008120C0000");
+    public static final byte[] EAP_AKA_NOTIFICATION_RESPONSE =
+            hexStringToByteArray("02" + ID + "0008170C0000");
 
     // Body of EapData is the list of supported methods
     public static final byte[] EAP_RESPONSE_NAK_PACKET =
@@ -228,4 +230,6 @@ public class EapTestMessageDefinitions {
                             + "17010000" // EAP-AKA | Challenge | 2B padding
                             + "03030028" + RES + "000000" // AT_RES attribute
                             + "0B050000" + EAP_AKA_CHALLENGE_RESPONSE_MAC); // AT_MAC attribute
+
+    public static final byte[] EAP_SUCCESS = hexStringToByteArray("03860004");
 }
