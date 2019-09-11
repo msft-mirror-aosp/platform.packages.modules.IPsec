@@ -49,12 +49,13 @@ import java.util.Set;
 public class EapData {
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
-            EAP_IDENTITY,
-            EAP_NOTIFICATION,
-            EAP_NAK,
-            EAP_TYPE_SIM,
-            EAP_TYPE_AKA,
-            EAP_TYPE_AKA_PRIME
+        EAP_IDENTITY,
+        EAP_NOTIFICATION,
+        EAP_NAK,
+        EAP_TYPE_SIM,
+        EAP_TYPE_AKA,
+        EAP_TYPE_MSCHAP_V2,
+        EAP_TYPE_AKA_PRIME
     })
     public @interface EapType {}
 
@@ -62,6 +63,7 @@ public class EapData {
     @IntDef({
             EAP_TYPE_SIM,
             EAP_TYPE_AKA,
+            EAP_TYPE_MSCHAP_V2,
             EAP_TYPE_AKA_PRIME
     })
     public @interface EapMethod {}
@@ -74,6 +76,7 @@ public class EapData {
     // EAP_MD5_CHALLENGE unsupported, allowable based on RFC 3748, Section 5.4
     public static final int EAP_TYPE_SIM = 18;
     public static final int EAP_TYPE_AKA = 23;
+    public static final int EAP_TYPE_MSCHAP_V2 = 26;
     public static final int EAP_TYPE_AKA_PRIME = 50;
 
     public static final Map<Integer, String> EAP_TYPE_STRING = new HashMap<>();
@@ -83,6 +86,7 @@ public class EapData {
         EAP_TYPE_STRING.put(EAP_NAK, "Nak");
         EAP_TYPE_STRING.put(EAP_TYPE_SIM, "EAP-SIM");
         EAP_TYPE_STRING.put(EAP_TYPE_AKA, "EAP-AKA");
+        EAP_TYPE_STRING.put(EAP_TYPE_MSCHAP_V2, "EAP-MSCHAP-V2");
         EAP_TYPE_STRING.put(EAP_TYPE_AKA_PRIME, "EAP-AKA-PRIME");
     }
 
@@ -95,6 +99,7 @@ public class EapData {
         // supported EAP Method types
         SUPPORTED_TYPES.add(EAP_TYPE_SIM);
         SUPPORTED_TYPES.add(EAP_TYPE_AKA);
+        SUPPORTED_TYPES.add(EAP_TYPE_MSCHAP_V2);
     }
 
     @EapType public final int eapType;
