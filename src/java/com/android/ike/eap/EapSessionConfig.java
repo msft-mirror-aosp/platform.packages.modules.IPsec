@@ -17,6 +17,7 @@
 package com.android.ike.eap;
 
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
 import android.telephony.TelephonyManager.UiccAppType;
@@ -98,6 +99,18 @@ public final class EapSessionConfig {
         }
 
         /**
+         * Sets the configuration for EAP MSCHAPv2.
+         *
+         * @param username String the client account's username to be authenticated
+         * @param password String the client account's password to be authenticated
+         * @return Builder this, to faciliate chaining
+         */
+        public Builder setEapMsChapV2Config(String username, String password) {
+            mEapConfigs.put(EAP_TYPE_MSCHAP_V2, new EapMsChapV2Config(username, password));
+            return this;
+        }
+
+        /**
          * Constructs and returns an EapSessionConfig with the configurations applied to this
          * Builder.
          *
@@ -154,6 +167,21 @@ public final class EapSessionConfig {
         @VisibleForTesting
         public EapAkaConfig(int subId, @UiccAppType int apptype) {
             super(EAP_TYPE_AKA, subId, apptype);
+        }
+    }
+
+    /**
+     * EapMsChapV2Config represents the configs needed for an EAP MSCHAPv2 session.
+     */
+    public static class EapMsChapV2Config extends EapMethodConfig {
+        public final String username;
+        public final String password;
+
+        private EapMsChapV2Config(String username, String password) {
+            super(EAP_TYPE_MSCHAP_V2);
+
+            this.username = username;
+            this.password = password;
         }
     }
 }
