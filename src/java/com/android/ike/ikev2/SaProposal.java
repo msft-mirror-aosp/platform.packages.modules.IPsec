@@ -17,6 +17,7 @@
 package com.android.ike.ikev2;
 
 import android.annotation.IntDef;
+import android.annotation.NonNull;
 import android.util.ArraySet;
 import android.util.SparseArray;
 
@@ -558,6 +559,22 @@ public final class SaProposal {
         }
     }
 
+    @Override
+    @NonNull
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append(IkePayload.getProtocolTypeString(mProtocolId)).append(": ");
+
+        int len = getAllTransforms().length;
+        for (int i = 0; i < len; i++) {
+            sb.append(getAllTransforms()[i].toString());
+            if (i < len - 1) sb.append("|");
+        }
+
+        return sb.toString();
+    }
+
     /**
      * Check if the provided algorithm is a supported encryption algorithm.
      *
@@ -596,5 +613,37 @@ public final class SaProposal {
      */
     public static boolean isSupportedDhGroup(@DhGroup int dhGroup) {
         return SUPPORTED_DH_GROUP_TO_STR.get(dhGroup) != null;
+    }
+
+    /** Return the encryption algorithm as a String. */
+    public static String getEncryptionAlgorithmString(int algorithm) {
+        if (isSupportedEncryptionAlgorithm(algorithm)) {
+            return SUPPORTED_ENCRYPTION_ALGO_TO_STR.get(algorithm);
+        }
+        return "ENC_Unknown_" + algorithm;
+    }
+
+    /** Return the pseudorandom function as a String. */
+    public static String getPseudorandomFunctionString(int algorithm) {
+        if (isSupportedPseudorandomFunction(algorithm)) {
+            return SUPPORTED_PRF_TO_STR.get(algorithm);
+        }
+        return "PRF_Unknown_" + algorithm;
+    }
+
+    /** Return the integrity algorithm as a String. */
+    public static String getIntegrityAlgorithmString(int algorithm) {
+        if (isSupportedIntegrityAlgorithm(algorithm)) {
+            return SUPPORTED_INTEGRITY_ALGO_TO_STR.get(algorithm);
+        }
+        return "AUTH_Unknown_" + algorithm;
+    }
+
+    /** Return Diffie-Hellman Group as a String. */
+    public static String getDhGroupString(int dhGroup) {
+        if (isSupportedDhGroup(dhGroup)) {
+            return SUPPORTED_DH_GROUP_TO_STR.get(dhGroup);
+        }
+        return "DH_Unknown_" + dhGroup;
     }
 }
