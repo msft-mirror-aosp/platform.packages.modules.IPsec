@@ -16,12 +16,8 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.IkeManager.getIkeLog;
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
@@ -108,7 +104,7 @@ import java.util.concurrent.TimeUnit;
  *      Exchange Type = {Create | Delete}
  * </pre>
  */
-public class ChildSessionStateMachine extends SessionStateMachineBase {
+public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private static final String TAG = "ChildSessionStateMachine";
 
     private static final int SPI_NOT_REGISTERED = 0;
@@ -116,18 +112,16 @@ public class ChildSessionStateMachine extends SessionStateMachineBase {
     // Time after which Child SA needs to be rekeyed
     @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(2L);
 
+    private static final int CMD_GENERAL_BASE = CMD_PRIVATE_BASE;
+
     /** Receive request for negotiating first Child SA. */
-    private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = 1;
+    private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = CMD_GENERAL_BASE + 1;
     /** Receive a request from the remote. */
-    private static final int CMD_HANDLE_RECEIVED_REQUEST = 2;
+    private static final int CMD_HANDLE_RECEIVED_REQUEST = CMD_GENERAL_BASE + 2;
     /** Receive a reponse from the remote. */
-    private static final int CMD_HANDLE_RECEIVED_RESPONSE = 3;
+    private static final int CMD_HANDLE_RECEIVED_RESPONSE = CMD_GENERAL_BASE + 3;
     /** Kill Session and close all alive Child SAs immediately. */
-    private static final int CMD_KILL_SESSION = 4;
-    /** Timeout when the remote side fails to send a Rekey-Delete request. */
-    @VisibleForTesting static final int TIMEOUT_REKEY_REMOTE_DELETE = 5;
-    /** Force state machine to a target state for testing purposes. */
-    @VisibleForTesting static final int CMD_FORCE_TRANSITION = 99;
+    private static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 4;
 
     private final Context mContext;
     private final IpSecManager mIpSecManager;
@@ -557,43 +551,9 @@ public class ChildSessionStateMachine extends SessionStateMachineBase {
         }
     }
 
-    /**
-     * Top level state for handling uncaught exceptions for all subclasses.
-     *
-     * <p>All other state MUST extend this state.
-     *
-     * <p>Only errors this state should catch are unexpected internal failures. Since this may be
-     * run in critical processes, it must never take down the process if it fails
-     */
-    abstract class ExceptionHandler extends State {
+    /** Top level state for handling uncaught exceptions for all subclasses. */
+    abstract class ExceptionHandler extends ExceptionHandlerBase {
         @Override
-        public final void enter() {
-            try {
-                enterState();
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-            }
-        }
-
-        @Override
-        public final boolean processMessage(Message message) {
-            try {
-                return processStateMessage(message);
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-                return HANDLED;
-            }
-        }
-
-        @Override
-        public final void exit() {
-            try {
-                exitState();
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-            }
-        }
-
         protected void cleanUpAndQuit(RuntimeException e) {
             // TODO: b/140123526 Send a response if exception was caught when processing a request.
 
@@ -606,18 +566,6 @@ public class ChildSessionStateMachine extends SessionStateMachineBase {
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
-        }
-
-        protected void enterState() {
-            // Do nothing. Subclasses MUST override it if they are.
-        }
-
-        protected boolean processStateMessage(Message message) {
-            return NOT_HANDLED;
-        }
-
-        protected void exitState() {
-            // Do nothing. Subclasses MUST override it if they are.
         }
     }
 
