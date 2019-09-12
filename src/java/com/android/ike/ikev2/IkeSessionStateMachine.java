@@ -238,6 +238,29 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     static final int CMD_LOCAL_REQUEST_REKEY_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 3;
     static final int CMD_LOCAL_REQUEST_INFO = CMD_IKE_LOCAL_REQUEST_BASE + 4;
 
+    private static final SparseArray<String> CMD_TO_STR;
+
+    static {
+        CMD_TO_STR = new SparseArray<>();
+        CMD_TO_STR.put(CMD_RECEIVE_IKE_PACKET, "Rcv packet");
+        CMD_TO_STR.put(CMD_RECEIVE_PACKET_INVALID_IKE_SPI, "Rcv invalid IKE SPI");
+        CMD_TO_STR.put(CMD_RECEIVE_REQUEST_FOR_CHILD, "Rcv Child request");
+        CMD_TO_STR.put(CMD_OUTBOUND_CHILD_PAYLOADS_READY, "Out child payloads ready");
+        CMD_TO_STR.put(CMD_CHILD_PROCEDURE_FINISHED, "Child procedure finished");
+        CMD_TO_STR.put(CMD_HANDLE_FIRST_CHILD_NEGOTIATION, "Negotiate first Child");
+        CMD_TO_STR.put(CMD_EXECUTE_LOCAL_REQ, "Execute local request");
+        CMD_TO_STR.put(CMD_RETRANSMIT, "Retransmit");
+        CMD_TO_STR.put(CMD_EAP_START_EAP_AUTH, "Start EAP");
+        CMD_TO_STR.put(CMD_EAP_OUTBOUND_MSG_READY, "EAP outbound msg ready");
+        CMD_TO_STR.put(CMD_EAP_ERRORED, "EAP errored");
+        CMD_TO_STR.put(CMD_EAP_FAILED, "EAP failed");
+        CMD_TO_STR.put(CMD_EAP_FINISH_EAP_AUTH, "Finish EAP");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_IKE, "Create IKE");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
+    }
+
     private final IkeSessionOptions mIkeSessionOptions;
 
     /** Map that stores all IkeSaRecords, keyed by locally generated IKE SPI. */
@@ -842,6 +865,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
+        }
+
+        @Override
+        protected String getCmdString(int cmd) {
+            return CMD_TO_STR.get(cmd);
         }
     }
 

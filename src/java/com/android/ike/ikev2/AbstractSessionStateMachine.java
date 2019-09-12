@@ -19,6 +19,7 @@ import static com.android.ike.ikev2.IkeManager.getIkeLog;
 
 import android.os.Looper;
 import android.os.Message;
+import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
@@ -62,6 +63,17 @@ abstract class AbstractSessionStateMachine extends StateMachine {
     /** Private commands for subclasses */
     protected static final int CMD_PRIVATE_BASE = CMD_SHARED_BASE + 3 * CMD_CATEGORY_SIZE;
 
+    protected static final SparseArray<String> SHARED_CMD_TO_STR;
+
+    static {
+        SHARED_CMD_TO_STR = new SparseArray<>();
+        SHARED_CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_CHILD, "Create Child");
+        SHARED_CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_CHILD, "Delete Child");
+        SHARED_CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_CHILD, "Rekey Child");
+        SHARED_CMD_TO_STR.put(TIMEOUT_REKEY_REMOTE_DELETE, "Timout rekey remote delete");
+        SHARED_CMD_TO_STR.put(CMD_FORCE_TRANSITION, "Force transition");
+    }
+
     // Use a value greater than the retransmit-failure timeout.
     static final long REKEY_DELETE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180L);
 
@@ -93,6 +105,14 @@ abstract class AbstractSessionStateMachine extends StateMachine {
         @Override
         public final boolean processMessage(Message message) {
             try {
+                String cmdName = SHARED_CMD_TO_STR.get(message.what);
+                if (cmdName == null) {
+                    cmdName = getCmdString(message.what);
+                }
+
+                // Unrecognized message will be logged by super class(Android StateMachine)
+                if (cmdName != null) logd("processStateMessage: " + cmdName);
+
                 return processStateMessage(message);
             } catch (RuntimeException e) {
                 cleanUpAndQuit(e);
@@ -122,6 +142,8 @@ abstract class AbstractSessionStateMachine extends StateMachine {
         }
 
         protected abstract void cleanUpAndQuit(RuntimeException e);
+
+        protected abstract String getCmdString(int cmd);
     }
 
     @Override

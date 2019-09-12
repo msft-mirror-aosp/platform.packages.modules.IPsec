@@ -46,6 +46,7 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
+import android.util.SparseArray;
 
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeExchangeSubType;
@@ -122,6 +123,16 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private static final int CMD_HANDLE_RECEIVED_RESPONSE = CMD_GENERAL_BASE + 3;
     /** Kill Session and close all alive Child SAs immediately. */
     private static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 4;
+
+    private static final SparseArray<String> CMD_TO_STR;
+
+    static {
+        CMD_TO_STR = new SparseArray<>();
+        CMD_TO_STR.put(CMD_HANDLE_FIRST_CHILD_EXCHANGE, "Handle First Child");
+        CMD_TO_STR.put(CMD_HANDLE_RECEIVED_REQUEST, "Rcv request");
+        CMD_TO_STR.put(CMD_HANDLE_RECEIVED_RESPONSE, "Rcv response");
+        CMD_TO_STR.put(CMD_KILL_SESSION, "Kill session");
+    }
 
     private final Context mContext;
     private final IpSecManager mIpSecManager;
@@ -566,6 +577,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
+        }
+
+        @Override
+        protected String getCmdString(int cmd) {
+            return CMD_TO_STR.get(cmd);
         }
     }
 
