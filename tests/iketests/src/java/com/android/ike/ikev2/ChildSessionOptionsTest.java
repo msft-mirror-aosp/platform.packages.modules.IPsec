@@ -24,7 +24,6 @@ import static org.junit.Assert.fail;
 import org.junit.Test;
 
 public final class ChildSessionOptionsTest {
-
     private static final int NUM_TS = 1;
 
     @Test
@@ -36,7 +35,7 @@ public final class ChildSessionOptionsTest {
                                 SaProposal.KEY_LEN_AES_128)
                         .build();
         ChildSessionOptions sessionOptions =
-                new ChildSessionOptions.Builder().addSaProposal(saProposal).build();
+                new TunnelModeChildSessionOptions.Builder().addSaProposal(saProposal).build();
 
         assertArrayEquals(new SaProposal[] {saProposal}, sessionOptions.getSaProposals());
         assertEquals(NUM_TS, sessionOptions.getLocalTrafficSelectors().length);
@@ -47,7 +46,7 @@ public final class ChildSessionOptionsTest {
     @Test
     public void testBuildWithoutSaProposal() throws Exception {
         try {
-            new ChildSessionOptions.Builder().build();
+            new TunnelModeChildSessionOptions.Builder().build();
             fail("Expected to fail due to the absence of SA proposal.");
         } catch (IllegalArgumentException expected) {
         }

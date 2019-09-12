@@ -742,7 +742,7 @@ public final class IkeSessionStateMachineTest {
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .build();
 
-        return new ChildSessionOptions.Builder().addSaProposal(saProposal).build();
+        return new TransportModeChildSessionOptions.Builder().addSaProposal(saProposal).build();
     }
 
     private ReceivedIkePacket makeIkeInitResponse() throws Exception {

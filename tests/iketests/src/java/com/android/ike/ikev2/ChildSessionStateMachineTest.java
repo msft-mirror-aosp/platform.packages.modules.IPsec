@@ -269,7 +269,7 @@ public final class ChildSessionStateMachineTest {
     }
 
     private ChildSessionOptions buildChildSessionOptions() throws Exception {
-        return new ChildSessionOptions.Builder().addSaProposal(buildSaProposal()).build();
+        return new TunnelModeChildSessionOptions.Builder().addSaProposal(buildSaProposal()).build();
     }
 
     private void setUpChildSaRecords() {
