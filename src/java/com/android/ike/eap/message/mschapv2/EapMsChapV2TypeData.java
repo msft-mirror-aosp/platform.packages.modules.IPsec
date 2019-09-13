@@ -137,6 +137,60 @@ public class EapMsChapV2TypeData {
         }
     }
 
+    /**
+     * EapMsChapV2ChallengeResponse represents the EAP MSCHAPv2 Response Packet (EAP MSCHAPv2#2.2).
+     */
+    public static class EapMsChapV2ChallengeResponse extends EapMsChapV2VariableTypeData {
+        public static final int VALUE_SIZE = 49;
+        public static final int PEER_CHALLENGE_SIZE = 16;
+        public static final int RESERVED_BYTES = 8;
+        public static final int NT_RESPONSE_SIZE = 24;
+        public static final int TYPE_DATA_HEADER_SIZE = 5;
+
+        public final byte[] peerChallenge = new byte[PEER_CHALLENGE_SIZE];
+        public final byte[] ntResponse = new byte[NT_RESPONSE_SIZE];
+        public final int flags;
+        public final byte[] name;
+
+        public EapMsChapV2ChallengeResponse(
+                int msChapV2Id, byte[] peerChallenge, byte[] ntResponse, int flags, byte[] name)
+                throws EapMsChapV2ParsingException {
+            super(
+                    EAP_MSCHAP_V2_RESPONSE,
+                    msChapV2Id,
+                    TYPE_DATA_HEADER_SIZE + VALUE_SIZE + name.length);
+
+            if (peerChallenge.length != PEER_CHALLENGE_SIZE) {
+                throw new EapMsChapV2ParsingException("Peer-Challenge must be 16B");
+            } else if (ntResponse.length != NT_RESPONSE_SIZE) {
+                throw new EapMsChapV2ParsingException("NT-Response must be 24B");
+            } else if (flags != 0) {
+                throw new EapMsChapV2ParsingException("Flags must be 0x00");
+            }
+
+            System.arraycopy(peerChallenge, 0, this.peerChallenge, 0, PEER_CHALLENGE_SIZE);
+            System.arraycopy(ntResponse, 0, this.ntResponse, 0, NT_RESPONSE_SIZE);
+            this.flags = flags;
+            this.name = name;
+        }
+
+        @Override
+        public byte[] encode() {
+            ByteBuffer buffer = ByteBuffer.allocate(msLength);
+            buffer.put((byte) EAP_MSCHAP_V2_RESPONSE);
+            buffer.put((byte) msChapV2Id);
+            buffer.putShort((short) msLength);
+            buffer.put((byte) VALUE_SIZE);
+            buffer.put(peerChallenge);
+            buffer.put(new byte[RESERVED_BYTES]);
+            buffer.put(ntResponse);
+            buffer.put((byte) flags);
+            buffer.put(name);
+
+            return buffer.array();
+        }
+    }
+
     /** Class for decoding EAP MSCHAPv2 type data. */
     public static class EapMsChapV2TypeDataDecoder {
         /**
