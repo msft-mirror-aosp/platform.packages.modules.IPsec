@@ -31,7 +31,6 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
-import static com.android.ike.ikev2.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -108,9 +107,9 @@ import com.android.ike.ikev2.message.IkeInformationalPayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
-import com.android.ike.ikev2.message.IkeMessage.DecodeResultError;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultOk;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultProtectedError;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -337,7 +336,7 @@ public final class IkeSessionStateMachineTest {
 
         byte[] dummyIkePacketBytes = new byte[0];
         when(mMockIkeMessageHelper.decode(0, dummyIkeMessage.ikeHeader, dummyIkePacketBytes))
-                .thenReturn(new DecodeResultOk(dummyIkeMessage));
+                .thenReturn(new DecodeResultOk(dummyIkeMessage, dummyIkePacketBytes));
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
@@ -396,7 +395,7 @@ public final class IkeSessionStateMachineTest {
                 ikeSaRecord,
                 dummyIkeMessage.ikeHeader,
                 null /*collectedFrags*/,
-                new DecodeResultOk(dummyIkeMessage));
+                new DecodeResultOk(dummyIkeMessage, dummyIkePacketBytes));
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
@@ -411,11 +410,12 @@ public final class IkeSessionStateMachineTest {
             IkeSaRecord ikeSaRecord, boolean isResp, int eType, IkeProtocolException exception) {
         IkeHeader header =
                 makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SK);
+        byte[] dummyPacket = new byte[0];
         when(mMockIkeMessageHelper.decode(
                         anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
-                .thenReturn(new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
+                .thenReturn(new DecodeResultProtectedError(exception, dummyPacket));
 
-        return new ReceivedIkePacket(header, new byte[0]);
+        return new ReceivedIkePacket(header, dummyPacket);
     }
 
     private ReceivedIkePacket makeDummyReceivedIkeFragmentPacket(
@@ -427,11 +427,14 @@ public final class IkeSessionStateMachineTest {
             DecodeResultPartial collectedFrags) {
         IkeHeader header =
                 makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SKF);
+
+        byte[] dummyPacket = new byte[0];
         DecodeResultPartial resultFrags =
-                new DecodeResultPartial(header, skfPayload, nextPayloadType, collectedFrags);
+                new DecodeResultPartial(
+                        header, dummyPacket, skfPayload, nextPayloadType, collectedFrags);
         setDecodeEncryptedPacketResult(ikeSaRecord, header, collectedFrags, resultFrags);
 
-        return new ReceivedIkePacket(header, new byte[0]);
+        return new ReceivedIkePacket(header, dummyPacket);
     }
 
     private ReceivedIkePacket makeDummyReceivedLastIkeFragmentPacketOk(
@@ -439,14 +442,18 @@ public final class IkeSessionStateMachineTest {
             boolean isResp,
             int eType,
             DecodeResultPartial collectedFrags,
-            List<IkePayload> payloadList) {
+            List<IkePayload> payloadList,
+            byte[] firstFragBytes) {
         IkeHeader header =
                 makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SKF);
 
         IkeMessage completeMessage = new IkeMessage(header, payloadList);
 
         setDecodeEncryptedPacketResult(
-                ikeSaRecord, header, collectedFrags, new DecodeResultOk(completeMessage));
+                ikeSaRecord,
+                header,
+                collectedFrags,
+                new DecodeResultOk(completeMessage, firstFragBytes));
 
         return new ReceivedIkePacket(header, new byte[0] /*dummyIkePacketBytes*/);
     }
@@ -460,13 +467,14 @@ public final class IkeSessionStateMachineTest {
         IkeHeader header =
                 makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SKF);
 
+        byte[] dummyIkePacketBytes = new byte[0];
         setDecodeEncryptedPacketResult(
                 ikeSaRecord,
                 header,
                 collectedFrags,
-                new DecodeResultError(DECODE_STATUS_PROTECTED_ERROR, exception));
+                new DecodeResultProtectedError(exception, dummyIkePacketBytes));
 
-        return new ReceivedIkePacket(header, new byte[0] /*dummyIkePacketBytes*/);
+        return new ReceivedIkePacket(header, dummyIkePacketBytes);
     }
 
     private IkeHeader makeDummyIkeHeader(
@@ -2364,7 +2372,8 @@ public final class IkeSessionStateMachineTest {
                         true /*isResp*/,
                         IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
                         mockCollectedFrags,
-                        authPayloadList);
+                        authPayloadList,
+                        "FirstFrag".getBytes());
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, packet);
         mLooper.dispatchAll();
 
