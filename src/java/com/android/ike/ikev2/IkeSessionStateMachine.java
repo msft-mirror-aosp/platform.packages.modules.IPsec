@@ -81,6 +81,7 @@ import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultError;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultOk;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultProtectedError;
 import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkeNotifyPayload;
 import com.android.ike.ikev2.message.IkePayload;
@@ -1462,9 +1463,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             ikeSaRecord.resetCollectedFragments(false /*isResp*/);
 
-                            // TODO:b/140429499 Only store the first fragment
-                            mLastReceivedIkeReqFirstPacket = ikePacketBytes;
-                            IkeMessage ikeMessage = ((DecodeResultOk) decodeResult).ikeMessage;
+                            DecodeResultOk resultOk = (DecodeResultOk) decodeResult;
+                            mLastReceivedIkeReqFirstPacket = resultOk.firstPacket;
+                            IkeMessage ikeMessage = resultOk.ikeMessage;
 
                             // Handle DPD here.
                             if (ikeMessage.isDpdRequest()) {
@@ -1511,14 +1512,16 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                     (DecodeResultPartial) decodeResult, false /*isResp*/);
                             break;
                         case DECODE_STATUS_PROTECTED_ERROR:
-                            IkeException ikeException =
-                                    ((DecodeResultError) decodeResult).ikeException;
-                            logi(methodTag + "Protected error", ikeException);
+                            DecodeResultProtectedError resultError =
+                                    (DecodeResultProtectedError) decodeResult;
+
+                            IkeException ikeException = resultError.ikeException;
+                            logi(methodTag + "Protected error", resultError.ikeException);
 
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             ikeSaRecord.resetCollectedFragments(false /*isResp*/);
 
-                            mLastReceivedIkeReqFirstPacket = ikePacketBytes;
+                            mLastReceivedIkeReqFirstPacket = resultError.firstPacket;
 
                             // IkeException MUST be already wrapped into an IkeProtocolException
                             handleRequestGenericProcessError(
