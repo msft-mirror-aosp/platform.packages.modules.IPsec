@@ -17,7 +17,9 @@
 package com.android.ike.ikev2;
 
 import android.annotation.IntDef;
+import android.annotation.NonNull;
 import android.util.ArraySet;
+import android.util.SparseArray;
 
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
@@ -61,15 +63,15 @@ public final class SaProposal {
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_12 = 19;
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_16 = 20;
 
-    private static final Set<Integer> SUPPORTED_ENCRYPTION_ALGORITHM;
+    private static final SparseArray<String> SUPPORTED_ENCRYPTION_ALGO_TO_STR;
 
     static {
-        SUPPORTED_ENCRYPTION_ALGORITHM = new ArraySet<>();
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_3DES);
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_AES_CBC);
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_AES_GCM_8);
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_AES_GCM_12);
-        SUPPORTED_ENCRYPTION_ALGORITHM.add(ENCRYPTION_ALGORITHM_AES_GCM_16);
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR = new SparseArray<>();
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_3DES, "ENCR_3DES");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_CBC, "ENCR_AES_CBC");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_8, "ENCR_AES_GCM_8");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_12, "ENCR_AES_GCM_12");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_16, "ENCR_AES_GCM_16");
     }
 
     public static final int KEY_LEN_AES_128 = 128;
@@ -83,12 +85,12 @@ public final class SaProposal {
     public static final int PSEUDORANDOM_FUNCTION_HMAC_SHA1 = 2;
     public static final int PSEUDORANDOM_FUNCTION_AES128_XCBC = 4;
 
-    private static final Set<Integer> SUPPORTED_PSEUDORANDOM_FUNCTION;
+    private static final SparseArray<String> SUPPORTED_PRF_TO_STR;
 
     static {
-        SUPPORTED_PSEUDORANDOM_FUNCTION = new ArraySet<>();
-        SUPPORTED_PSEUDORANDOM_FUNCTION.add(PSEUDORANDOM_FUNCTION_HMAC_SHA1);
-        SUPPORTED_PSEUDORANDOM_FUNCTION.add(PSEUDORANDOM_FUNCTION_AES128_XCBC);
+        SUPPORTED_PRF_TO_STR = new SparseArray<>();
+        SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_HMAC_SHA1, "PRF_HMAC_SHA1");
+        SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_AES128_XCBC, "PRF_AES128_XCBC");
     }
 
     @Retention(RetentionPolicy.SOURCE)
@@ -109,16 +111,19 @@ public final class SaProposal {
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_384_192 = 13;
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_512_256 = 14;
 
-    private static final Set<Integer> SUPPORTED_INTEGRITY_ALGORITHM;
+    private static final SparseArray<String> SUPPORTED_INTEGRITY_ALGO_TO_STR;
 
     static {
-        SUPPORTED_INTEGRITY_ALGORITHM = new ArraySet<>();
-        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_NONE);
-        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA1_96);
-        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_AES_XCBC_96);
-        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_256_128);
-        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_384_192);
-        SUPPORTED_INTEGRITY_ALGORITHM.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
+        SUPPORTED_INTEGRITY_ALGO_TO_STR = new SparseArray<>();
+        SUPPORTED_INTEGRITY_ALGO_TO_STR.put(INTEGRITY_ALGORITHM_NONE, "AUTH_NONE");
+        SUPPORTED_INTEGRITY_ALGO_TO_STR.put(INTEGRITY_ALGORITHM_HMAC_SHA1_96, "AUTH_HMAC_SHA1_96");
+        SUPPORTED_INTEGRITY_ALGO_TO_STR.put(INTEGRITY_ALGORITHM_AES_XCBC_96, "AUTH_AES_XCBC_96");
+        SUPPORTED_INTEGRITY_ALGO_TO_STR.put(
+                INTEGRITY_ALGORITHM_HMAC_SHA2_256_128, "AUTH_HMAC_SHA2_256_128");
+        SUPPORTED_INTEGRITY_ALGO_TO_STR.put(
+                INTEGRITY_ALGORITHM_HMAC_SHA2_384_192, "AUTH_HMAC_SHA2_384_192");
+        SUPPORTED_INTEGRITY_ALGO_TO_STR.put(
+                INTEGRITY_ALGORITHM_HMAC_SHA2_512_256, "AUTH_HMAC_SHA2_512_256");
     }
 
     @Retention(RetentionPolicy.SOURCE)
@@ -129,13 +134,13 @@ public final class SaProposal {
     public static final int DH_GROUP_1024_BIT_MODP = 2;
     public static final int DH_GROUP_2048_BIT_MODP = 14;
 
-    private static final Set<Integer> SUPPORTED_DH_GROUP;
+    private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
 
     static {
-        SUPPORTED_DH_GROUP = new ArraySet<>();
-        SUPPORTED_DH_GROUP.add(DH_GROUP_NONE);
-        SUPPORTED_DH_GROUP.add(DH_GROUP_1024_BIT_MODP);
-        SUPPORTED_DH_GROUP.add(DH_GROUP_2048_BIT_MODP);
+        SUPPORTED_DH_GROUP_TO_STR = new SparseArray<>();
+        SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_NONE, "DH_NONE");
+        SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_1024_BIT_MODP, "DH_1024_BIT_MODP");
+        SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_2048_BIT_MODP, "DH_2048_BIT_MODP");
     }
 
     /** Package private */
@@ -554,6 +559,22 @@ public final class SaProposal {
         }
     }
 
+    @Override
+    @NonNull
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append(IkePayload.getProtocolTypeString(mProtocolId)).append(": ");
+
+        int len = getAllTransforms().length;
+        for (int i = 0; i < len; i++) {
+            sb.append(getAllTransforms()[i].toString());
+            if (i < len - 1) sb.append("|");
+        }
+
+        return sb.toString();
+    }
+
     /**
      * Check if the provided algorithm is a supported encryption algorithm.
      *
@@ -561,7 +582,7 @@ public final class SaProposal {
      * @return true if the provided algorithm is a supported encryption algorithm.
      */
     public static boolean isSupportedEncryptionAlgorithm(@EncryptionAlgorithm int algorithm) {
-        return SUPPORTED_ENCRYPTION_ALGORITHM.contains(algorithm);
+        return SUPPORTED_ENCRYPTION_ALGO_TO_STR.get(algorithm) != null;
     }
 
     /**
@@ -571,7 +592,7 @@ public final class SaProposal {
      * @return true if the provided algorithm is a supported pseudorandom function.
      */
     public static boolean isSupportedPseudorandomFunction(@PseudorandomFunction int algorithm) {
-        return SUPPORTED_PSEUDORANDOM_FUNCTION.contains(algorithm);
+        return SUPPORTED_PRF_TO_STR.get(algorithm) != null;
     }
 
     /**
@@ -581,7 +602,7 @@ public final class SaProposal {
      * @return true if the provided algorithm is a supported integrity algorithm.
      */
     public static boolean isSupportedIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
-        return SUPPORTED_INTEGRITY_ALGORITHM.contains(algorithm);
+        return SUPPORTED_INTEGRITY_ALGO_TO_STR.get(algorithm) != null;
     }
 
     /**
@@ -591,6 +612,38 @@ public final class SaProposal {
      * @return true if the provided number is for a supported Diffie-Hellman Group.
      */
     public static boolean isSupportedDhGroup(@DhGroup int dhGroup) {
-        return SUPPORTED_DH_GROUP.contains(dhGroup);
+        return SUPPORTED_DH_GROUP_TO_STR.get(dhGroup) != null;
+    }
+
+    /** Return the encryption algorithm as a String. */
+    public static String getEncryptionAlgorithmString(int algorithm) {
+        if (isSupportedEncryptionAlgorithm(algorithm)) {
+            return SUPPORTED_ENCRYPTION_ALGO_TO_STR.get(algorithm);
+        }
+        return "ENC_Unknown_" + algorithm;
+    }
+
+    /** Return the pseudorandom function as a String. */
+    public static String getPseudorandomFunctionString(int algorithm) {
+        if (isSupportedPseudorandomFunction(algorithm)) {
+            return SUPPORTED_PRF_TO_STR.get(algorithm);
+        }
+        return "PRF_Unknown_" + algorithm;
+    }
+
+    /** Return the integrity algorithm as a String. */
+    public static String getIntegrityAlgorithmString(int algorithm) {
+        if (isSupportedIntegrityAlgorithm(algorithm)) {
+            return SUPPORTED_INTEGRITY_ALGO_TO_STR.get(algorithm);
+        }
+        return "AUTH_Unknown_" + algorithm;
+    }
+
+    /** Return Diffie-Hellman Group as a String. */
+    public static String getDhGroupString(int dhGroup) {
+        if (isSupportedDhGroup(dhGroup)) {
+            return SUPPORTED_DH_GROUP_TO_STR.get(dhGroup);
+        }
+        return "DH_Unknown_" + dhGroup;
     }
 }
