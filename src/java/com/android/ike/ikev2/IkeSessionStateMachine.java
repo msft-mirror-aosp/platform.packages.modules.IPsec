@@ -1442,9 +1442,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             mIkeSocket.sendIkePacket(packet, mRemoteAddress);
                         }
 
-                        // Notify state if it is listening for retransmitted request.
-                        handleRetransmittedReq();
-
                         // TODO:Support resetting remote rekey delete timer.
                     }
                     logi(methodTag + "Received response with invalid message ID. Discard it.");
@@ -1477,9 +1474,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                                 true,
                                                 ikeHeader.messageId);
                                 sendEncryptedIkeMessage(ikeSaRecord, dpdResponse);
-
-                                // Notify state if it is listening for DPD packets
-                                handleDpd();
                                 break;
                             }
 
@@ -1556,14 +1550,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                 }
             }
             return false;
-        }
-
-        protected void handleDpd() {
-            // Do nothing - Child states should override if they care.
-        }
-
-        protected void handleRetransmittedReq() {
-            // Do nothing - Child states should override if they care.
         }
 
         protected void handleTempFailure() {
@@ -1764,18 +1750,27 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
     /**
      * Receiving represents a state when idle IkeSessionStateMachine receives an incoming packet.
+     *
+     * <p>If this incoming packet is fully handled by Receiving state and does not trigger any
+     * further state transition or deletion of whole IKE Session, IkeSessionStateMachine MUST
+     * transition back to Idle.
      */
     class Receiving extends RekeyIkeHandlerBase {
+        private boolean mProcedureFinished = true;
+
         @Override
-        protected void handleDpd() {
-            // Go back to IDLE - the received request was a DPD
-            transitionTo(mIdle);
+        public void enterState() {
+            mProcedureFinished = true;
         }
 
         @Override
-        protected void handleRetransmittedReq() {
-            // Go back to IDLE - the received request was retransmitted
-            transitionTo(mIdle);
+        protected void handleReceivedIkePacket(Message message) {
+            super.handleReceivedIkePacket(message);
+
+            // If the received packet does not trigger a state transition or the packet causes this
+            // state machine to quit, transition back to Idle State. In the second case, state
+            // machine will first go back to Idle and then quit.
+            if (mProcedureFinished) transitionTo(mIdle);
         }
 
         @Override
@@ -1824,16 +1819,18 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                         ikeMessage, responseIkeMessage, false /*isLocalInit*/);
 
                         sendEncryptedIkeMessage(responseIkeMessage);
+
                         transitionTo(mRekeyIkeRemoteDelete);
+                        mProcedureFinished = false;
                     } catch (IkeProtocolException e) {
-                        handleRekeyCreationFailureAndBackToIdle(ikeMessage.ikeHeader.messageId, e);
+                        handleRekeyCreationFailure(ikeMessage.ikeHeader.messageId, e);
                     } catch (GeneralSecurityException e) {
-                        handleRekeyCreationFailureAndBackToIdle(
+                        handleRekeyCreationFailure(
                                 ikeMessage.ikeHeader.messageId,
                                 new NoValidProposalChosenException(
                                         "Error in building new IKE SA", e));
                     } catch (IOException e) {
-                        handleRekeyCreationFailureAndBackToIdle(
+                        handleRekeyCreationFailure(
                                 ikeMessage.ikeHeader.messageId,
                                 new NoValidProposalChosenException(
                                         "IKE SPI allocation collided - they reused an SPI.", e));
@@ -1852,20 +1849,18 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                     0 /*placeHolder*/,
                                     ikeMessage));
                     transitionTo(mChildProcedureOngoing);
+                    mProcedureFinished = false;
                     return;
                 default:
                     // TODO: Add support for generic INFORMATIONAL request
             }
         }
 
-        private void handleRekeyCreationFailureAndBackToIdle(
-                int messageId, IkeProtocolException e) {
+        private void handleRekeyCreationFailure(int messageId, IkeProtocolException e) {
             loge("Received invalid Rekey IKE request. Reject with error notification", e);
 
             buildAndSendNotificationResponse(
                     mCurrentIkeSaRecord, messageId, e.buildNotifyPayload());
-
-            transitionTo(mIdle);
         }
     }
 

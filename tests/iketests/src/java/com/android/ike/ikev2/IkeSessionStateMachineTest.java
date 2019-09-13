@@ -110,6 +110,7 @@ import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultOk;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultProtectedError;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultUnprotectedError;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -414,6 +415,18 @@ public final class IkeSessionStateMachineTest {
         when(mMockIkeMessageHelper.decode(
                         anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
                 .thenReturn(new DecodeResultProtectedError(exception, dummyPacket));
+
+        return new ReceivedIkePacket(header, dummyPacket);
+    }
+
+    private ReceivedIkePacket makeDummyReceivedIkePacketWithUnprotectedError(
+            IkeSaRecord ikeSaRecord, boolean isResp, int eType, IkeException exception) {
+        IkeHeader header =
+                makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SK);
+        byte[] dummyPacket = new byte[0];
+        when(mMockIkeMessageHelper.decode(
+                        anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
+                .thenReturn(new DecodeResultUnprotectedError(exception));
 
         return new ReceivedIkePacket(header, dummyPacket);
     }
@@ -3249,6 +3262,9 @@ public final class IkeSessionStateMachineTest {
         assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
         assertArrayEquals(
                 dummyIkeReqFirstPacket, mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket);
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
     @Test
@@ -3302,6 +3318,9 @@ public final class IkeSessionStateMachineTest {
 
         assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
         verify(mSpyIkeSocket, never()).sendIkePacket(any(), any());
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
     @Test
@@ -3947,5 +3966,21 @@ public final class IkeSessionStateMachineTest {
         // Verify IKE Session has quit
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+    }
+
+    @Test
+    public void testIdleHandlesUnprotectedPacket() throws Exception {
+        setupIdleStateMachine();
+
+        ReceivedIkePacket req =
+                makeDummyReceivedIkePacketWithUnprotectedError(
+                        mSpyCurrentIkeSaRecord,
+                        false /*isResp*/,
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        mock(IkeException.class));
+
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 }
