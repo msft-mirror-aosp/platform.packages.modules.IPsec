@@ -18,6 +18,7 @@ package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
@@ -41,6 +42,7 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttribute;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Address;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 
 import libcore.net.InetAddressUtils;
 
@@ -48,6 +50,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
@@ -81,8 +84,19 @@ public final class IkeConfigPayloadTest {
     private static final byte[] IPV4_SUBNET_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("000d0000");
 
+    private static final Inet6Address IPV6_ADDRESS =
+            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:db8::1"));
+    private static final int IP6_PREFIX_LEN = 64;
+    private static final LinkAddress IPV6_LINK_ADDRESS =
+            new LinkAddress(IPV6_ADDRESS, IP6_PREFIX_LEN);
+
+    private static final byte[] IPV6_ADDRESS_ATTRIBUTE_VALUE =
+            TestUtils.hexStringToByteArray("20010db800000000000000000000000140");
+    private static final byte[] IPV6_ADDRESS_ATTRIBUTE_WITH_VALUE =
+            TestUtils.hexStringToByteArray("0008001120010db800000000000000000000000140");
     private static final byte[] IPV6_ADDRESS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00080000");
+
     private static final byte[] IPV4_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00030000");
     private static final byte[] IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE =
@@ -316,5 +330,60 @@ public final class IkeConfigPayloadTest {
                     mNetMasks[i].getAddress(),
                     ConfigAttribute.prefixToNetmaskBytes(mIpv4PrefixLens[i]));
         }
+    }
+
+    @Test
+    public void testDecodeIpv6AddressWithValue() throws Exception {
+        ConfigAttributeIpv6Address attributeIp6Address =
+                new ConfigAttributeIpv6Address(IPV6_ADDRESS_ATTRIBUTE_VALUE);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, attributeIp6Address.attributeType);
+        assertEquals(IPV6_LINK_ADDRESS, attributeIp6Address.linkAddress);
+    }
+
+    @Test
+    public void testDecodeIpv6AddressWithoutValue() throws Exception {
+        ConfigAttributeIpv6Address attributeIp6Address =
+                new ConfigAttributeIpv6Address(new byte[0]);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, attributeIp6Address.attributeType);
+        assertNull(attributeIp6Address.linkAddress);
+    }
+
+    @Test
+    public void testDecodeIpv6AddressWithInvalidValue() throws Exception {
+        byte[] invalidValue = new byte[] {1};
+
+        try {
+            ConfigAttributeIpv6Address attributeIp6Address =
+                    new ConfigAttributeIpv6Address(invalidValue);
+            fail("Expected to fail due to invalid attribute value");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testEncodeIpv6AddressWithValue() throws Exception {
+        ConfigAttributeIpv6Address attributeIp6Address =
+                new ConfigAttributeIpv6Address(IPV6_LINK_ADDRESS);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, attributeIp6Address.attributeType);
+        assertEquals(IPV6_LINK_ADDRESS, attributeIp6Address.linkAddress);
+
+        ByteBuffer buffer = ByteBuffer.allocate(attributeIp6Address.getAttributeLen());
+        attributeIp6Address.encodeAttributeToByteBuffer(buffer);
+        assertArrayEquals(IPV6_ADDRESS_ATTRIBUTE_WITH_VALUE, buffer.array());
+    }
+
+    @Test
+    public void testEncodeIpv6AddressWithoutValue() throws Exception {
+        ConfigAttributeIpv6Address attributeIp6Address = new ConfigAttributeIpv6Address();
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, attributeIp6Address.attributeType);
+        assertNull(attributeIp6Address.linkAddress);
+
+        ByteBuffer buffer = ByteBuffer.allocate(attributeIp6Address.getAttributeLen());
+        attributeIp6Address.encodeAttributeToByteBuffer(buffer);
+        assertArrayEquals(IPV6_ADDRESS_ATTRIBUTE_WITHOUT_VALUE, buffer.array());
     }
 }
