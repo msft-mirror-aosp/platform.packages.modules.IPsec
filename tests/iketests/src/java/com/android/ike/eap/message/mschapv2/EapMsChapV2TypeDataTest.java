@@ -16,8 +16,18 @@
 
 package com.android.ike.eap.message.mschapv2;
 
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.AUTH_BYTES;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.AUTH_STRING;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EXTRA_M_MESSAGE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.MESSAGE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_DUPLICATE_KEY;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_EXTRA_M;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_INVALID_FORMAT;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_MISSING_M;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_CHALLENGE;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -30,10 +40,15 @@ import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2Varia
 
 import org.junit.Test;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class EapMsChapV2TypeDataTest {
     private static final int INVALID_OPCODE = -1;
     private static final int MSCHAP_V2_ID = 1;
     private static final int MS_LENGTH = 32;
+    private static final String HEX_STRING_INVALID_LENGTH = "00112";
+    private static final String HEX_STRING_INVALID_CHARS = "001122z-+x";
 
     @Test
     public void testEapMsChapV2TypeDataConstructor() throws Exception {
@@ -71,5 +86,70 @@ public class EapMsChapV2TypeDataTest {
 
         result = new DecodeResult(new EapError(new Exception()));
         assertFalse(result.isSuccessfulDecode());
+    }
+
+    @Test
+    public void testGetMessageMappings() throws Exception {
+        Map<String, String> expectedMappings = new HashMap<>();
+        expectedMappings.put("S", AUTH_STRING);
+        expectedMappings.put("M", MESSAGE);
+        assertEquals(expectedMappings, EapMsChapV2TypeData.getMessageMappings(SUCCESS_REQUEST));
+
+        expectedMappings = new HashMap<>();
+        expectedMappings.put("S", AUTH_STRING);
+        expectedMappings.put("M", EXTRA_M_MESSAGE);
+        assertEquals(
+                expectedMappings, EapMsChapV2TypeData.getMessageMappings(SUCCESS_REQUEST_EXTRA_M));
+    }
+
+    @Test
+    public void testGetMessageMappingsMissingM() {
+        try {
+            EapMsChapV2TypeData.getMessageMappings(SUCCESS_REQUEST_MISSING_M);
+            fail("Expected EapMsChapV2ParsingException for missing 'M='");
+        } catch (EapMsChapV2ParsingException expected) {
+        }
+    }
+
+    @Test
+    public void testGetMessageMappingsInvalidFormat() {
+        try {
+            EapMsChapV2TypeData.getMessageMappings(SUCCESS_REQUEST_INVALID_FORMAT);
+            fail("Expected EapMsChapV2ParsingException for extra '='s in message");
+        } catch (EapMsChapV2ParsingException expected) {
+        }
+    }
+
+    @Test
+    public void testGetMessageMappingDuplicateKey() {
+        try {
+            EapMsChapV2TypeData.getMessageMappings(SUCCESS_REQUEST_DUPLICATE_KEY);
+            fail("Expected EapMsChapV2ParsingException for duplicate key in message");
+        } catch (EapMsChapV2ParsingException expected) {
+        }
+    }
+
+    @Test
+    public void testHexStringToByteArray() throws Exception {
+        byte[] result = EapMsChapV2TypeData.hexStringToByteArray(AUTH_STRING);
+        assertArrayEquals(AUTH_BYTES, result);
+    }
+
+    @Test
+    public void testHexStringToByteArrayInvalidLength() {
+        try {
+            EapMsChapV2TypeData.hexStringToByteArray(HEX_STRING_INVALID_LENGTH);
+            fail("Expected EapMsChapV2ParsingException for invalid hex string length");
+        } catch (EapMsChapV2ParsingException expected) {
+        }
+    }
+
+    @Test
+    public void testHexStringToByteArrayInvalidChars() throws Exception {
+        try {
+            EapMsChapV2TypeData.hexStringToByteArray(HEX_STRING_INVALID_CHARS);
+            fail("Expected NumberFormatException for invalid hex chars");
+        } catch (NumberFormatException expected) {
+        }
     }
 }
