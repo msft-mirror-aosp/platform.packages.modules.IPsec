@@ -24,6 +24,7 @@ import static com.android.ike.eap.message.EapMessage.EAP_HEADER_LENGTH;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MSCHAP_V2;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
@@ -56,6 +57,9 @@ import org.mockito.ArgumentMatcher;
 import java.security.SecureRandom;
 
 public class MethodStateTest extends EapStateTest {
+    private static final String USERNAME = "username";
+    private static final String PASSWORD = "password";
+
     @Before
     @Override
     public void setUp() {
@@ -94,6 +98,20 @@ public class MethodStateTest extends EapStateTest {
         assertTrue(mEapStateMachine.getState() instanceof MethodState);
         MethodState methodState = (MethodState) mEapStateMachine.getState();
         assertTrue(methodState.mEapMethodStateMachine instanceof EapAkaMethodStateMachine);
+    }
+
+    @Test
+    public void testProcessTransitionToEapMsChapV2() {
+        // make EapStateMachine with EAP MSCHAPv2 configurations
+        EapSessionConfig eapSessionConfig =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
+        mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
+
+        mEapStateMachine.process(EAP_REQUEST_MSCHAP_V2);
+
+        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+        MethodState methodState = (MethodState) mEapStateMachine.getState();
+        assertTrue(methodState.mEapMethodStateMachine instanceof EapMsChapV2MethodStateMachine);
     }
 
     @Test
