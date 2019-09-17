@@ -16,10 +16,15 @@
 
 package com.android.ike.eap.message.mschapv2;
 
+import static com.android.ike.eap.EapAuthenticator.LOG;
+
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.exceptions.mschapv2.EapMsChapV2ParsingException;
 import com.android.ike.eap.message.EapMessage;
+import com.android.internal.annotations.VisibleForTesting;
 
+import java.nio.BufferUnderflowException;
+import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -87,8 +92,84 @@ public class EapMsChapV2TypeData {
         }
     }
 
+    /**
+     * EapMsChapV2ChallengeRequest represents the EAP MSCHAPv2 Challenge Packet (EAP MSCHAPv2#2.1).
+     */
+    public static class EapMsChapV2ChallengeRequest extends EapMsChapV2VariableTypeData {
+        public static final int VALUE_SIZE = 16;
+        public static final int TYPE_DATA_HEADER_SIZE = 5;
+
+        public final byte[] challenge = new byte[VALUE_SIZE];
+        public final byte[] name;
+
+        EapMsChapV2ChallengeRequest(ByteBuffer buffer) throws EapMsChapV2ParsingException {
+            super(
+                    EAP_MSCHAP_V2_CHALLENGE,
+                    Byte.toUnsignedInt(buffer.get()),
+                    Short.toUnsignedInt(buffer.getShort()));
+
+            int valueSize = Byte.toUnsignedInt(buffer.get());
+            if (valueSize != VALUE_SIZE) {
+                throw new EapMsChapV2ParsingException("Challenge Value-Size must be 16");
+            }
+            buffer.get(challenge);
+
+            int nameLenBytes = msLength - VALUE_SIZE - TYPE_DATA_HEADER_SIZE;
+            if (nameLenBytes < 0) {
+                throw new EapMsChapV2ParsingException("Invalid MS-Length specified");
+            }
+
+            name = new byte[nameLenBytes];
+            buffer.get(name);
+        }
+
+        @VisibleForTesting
+        EapMsChapV2ChallengeRequest(int msChapV2Id, int msLength, byte[] challenge, byte[] name)
+                throws EapMsChapV2ParsingException {
+            super(EAP_MSCHAP_V2_CHALLENGE, msChapV2Id, msLength);
+
+            if (challenge.length != VALUE_SIZE) {
+                throw new EapMsChapV2ParsingException("Challenge length must be 16");
+            }
+
+            System.arraycopy(challenge, 0, this.challenge, 0, VALUE_SIZE);
+            this.name = name;
+        }
+    }
+
     /** Class for decoding EAP MSCHAPv2 type data. */
     public static class EapMsChapV2TypeDataDecoder {
+        /**
+         * Decodes and returns an EapMsChapV2ChallengeRequest for the specified eapTypeData.
+         *
+         * @param tag String for logging tag
+         * @param eapTypeData byte[] to be decoded as an EapMsChapV2ChallengeRequest instance
+         * @return DecodeResult wrapping an EapMsChapV2ChallengeRequest instance for the given
+         *     eapTypeData iff the eapTypeData is formatted correctly. Otherwise, the DecodeResult
+         *     wraps the appropriate EapError.
+         */
+        public DecodeResult<EapMsChapV2ChallengeRequest> decodeChallengeRequest(
+                String tag, byte[] eapTypeData) {
+            try {
+                ByteBuffer buffer = ByteBuffer.wrap(eapTypeData);
+                int opCode = Byte.toUnsignedInt(buffer.get());
+
+                if (opCode != EAP_MSCHAP_V2_CHALLENGE) {
+                    return new DecodeResult<>(
+                            new EapError(
+                                    new EapMsChapV2ParsingException(
+                                            "Received type data with invalid opCode: "
+                                                    + EAP_OP_CODE_STRING.getOrDefault(
+                                                            opCode, "Unknown"))));
+                }
+
+                return new DecodeResult<>(new EapMsChapV2ChallengeRequest(buffer));
+            } catch (BufferUnderflowException | EapMsChapV2ParsingException ex) {
+                LOG.e(tag, "Error parsing EAP MSCHAPv2 Challenge Request type data");
+                return new DecodeResult<>(new EapError(ex));
+            }
+        }
+
         /**
          * DecodeResult represents the result from calling a decode method within
          * EapMsChapV2TypeDataDecoder. It will contain either an EapMsChapV2TypeData or an EapError.
