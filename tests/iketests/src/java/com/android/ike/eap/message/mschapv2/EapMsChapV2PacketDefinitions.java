@@ -126,4 +126,6 @@ public class EapMsChapV2PacketDefinitions {
             "S==" + AUTH_STRING + "M=" + MESSAGE;
     public static final String SUCCESS_REQUEST_DUPLICATE_KEY =
             "S=" + AUTH_STRING + " S=" + AUTH_STRING + " M=" + MESSAGE;
+
+    public static final byte[] EAP_MSCHAP_V2_SUCCESS_RESPONSE = hexStringToByteArray("03");
 }
