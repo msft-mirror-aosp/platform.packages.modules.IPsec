@@ -461,6 +461,28 @@ public final class IkeConfigPayload extends IkePayload {
         }
     }
 
+    /** This class represents Configuration Attribute for IPv6 subnets. */
+    public static class ConfigAttributeIpv6Subnet extends ConfigAttrIpv6AddrRangeBase {
+        /** Construct an instance with specified address for an outbound packet. */
+        public ConfigAttributeIpv6Subnet(LinkAddress ipv6LinkAddress) {
+            super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, ipv6LinkAddress);
+        }
+
+        /**
+         * Construct an instance without a specified address for an outbound packet.
+         *
+         * <p>It should be only used in a configuration request.
+         */
+        public ConfigAttributeIpv6Subnet() {
+            super(CONFIG_ATTR_INTERNAL_IP6_SUBNET);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        public ConfigAttributeIpv6Subnet(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, value);
+        }
+    }
+
     /**
      * Encode Configuration payload to ByteBUffer.
      *
