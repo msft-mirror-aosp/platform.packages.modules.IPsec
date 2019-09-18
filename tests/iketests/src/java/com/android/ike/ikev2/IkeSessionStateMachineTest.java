@@ -125,6 +125,8 @@ import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeSkfPayload;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.ikev2.utils.Retransmitter;
+import com.android.ike.ikev2.utils.Retransmitter.IBackoffTimeoutCalculator;
 import com.android.ike.utils.Log;
 import com.android.internal.util.State;
 
@@ -237,6 +239,8 @@ public final class IkeSessionStateMachineTest {
 
     private static final int PAYLOAD_TYPE_UNSUPPORTED = 127;
 
+    private static final long RETRANSMIT_BACKOFF_TIMEOUT_MS = 5000L;
+
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private Context mContext;
     private IpSecManager mIpSecManager;
@@ -262,6 +266,7 @@ public final class IkeSessionStateMachineTest {
 
     private IIkeMessageHelper mMockIkeMessageHelper;
     private ISaRecordHelper mMockSaRecordHelper;
+    private IBackoffTimeoutCalculator mMockBackoffTimeoutCalculator;
 
     private ChildSessionStateMachine mMockChildSessionStateMachine;
     private IChildSessionFactoryHelper mMockChildSessionFactoryHelper;
@@ -634,6 +639,12 @@ public final class IkeSessionStateMachineTest {
                 mMockChildSessionFactoryHelper);
         setupChildStateMachineFactory(mMockChildSessionStateMachine);
 
+        // Inject longer retransmission timeout
+        mMockBackoffTimeoutCalculator = mock(IBackoffTimeoutCalculator.class);
+        when(mMockBackoffTimeoutCalculator.getExponentialBackoffTimeout(anyInt()))
+                .thenReturn(RETRANSMIT_BACKOFF_TIMEOUT_MS);
+        Retransmitter.setBackoffTimeoutCalculator(mMockBackoffTimeoutCalculator);
+
         // Setup state machine
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsPsk(mPsk));
 
@@ -663,6 +674,7 @@ public final class IkeSessionStateMachineTest {
         mSpyRemoteInitIkeSaRecord.close();
 
         IkeManager.resetIkeLog();
+        Retransmitter.resetBackoffTimeoutCalculator();
         IkeMessage.setIkeMessageHelper(new IkeMessageHelper());
         SaRecord.setSaRecordHelper(new SaRecordHelper());
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
@@ -3227,6 +3239,8 @@ public final class IkeSessionStateMachineTest {
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyReqBytesList[1]), eq(REMOTE_ADDRESS));
         assertArrayEquals(dummyLastRespBytes, mIkeSessionStateMachine.mLastSentIkeResp);
     }
+
+    // TODO: b/141275871 Test retransmisstions are fired for correct times within certain time.
 
     @Test
     public void testCacheLastRequestAndResponse() throws Exception {
