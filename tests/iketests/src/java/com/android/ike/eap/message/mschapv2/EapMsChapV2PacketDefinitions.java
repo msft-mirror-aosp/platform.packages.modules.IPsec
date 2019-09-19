@@ -61,4 +61,69 @@ public class EapMsChapV2PacketDefinitions {
                             + PEER_NAME);
 
     public static final byte[] SHORT_NT_RESPONSE = hexStringToByteArray("0011223344");
+
+    public static final String AUTH_STRING = "00112233445566778899AABBCCDDEEFF00112233";
+
+    // ASCII hex for AUTH_STRING
+    public static final String AUTH_STRING_HEX =
+            "30303131323233333434353536363737383839394141424243434444454546463030313132323333";
+    public static final byte[] AUTH_BYTES = hexStringToByteArray(AUTH_STRING);
+
+    // hex("S=") + AUTH_STRING_HEX
+    public static final String FORMATTED_AUTH_STRING = "533D" + AUTH_STRING_HEX;
+
+    public static final String SPACE_HEX = "20";
+
+    // ASCII hex for: "test Android 1234"
+    public static final String MESSAGE = "test Android 1234";
+    public static final String MESSAGE_HEX = "7465737420416E64726F69642031323334";
+
+    // hex("M=") + MESSAGE_HEX
+    public static final String FORMATTED_MESSAGE = "4D3D" + MESSAGE_HEX;
+
+    public static final byte[] EAP_MSCHAP_V2_SUCCESS_REQUEST =
+            hexStringToByteArray(
+                    "03" + ID + "0042" + FORMATTED_AUTH_STRING + SPACE_HEX + FORMATTED_MESSAGE);
+    public static final byte[] EAP_MSCHAP_V2_SUCCESS_REQUEST_EMPTY_MESSAGE =
+            hexStringToByteArray("03" + ID + "0031" + FORMATTED_AUTH_STRING + SPACE_HEX + "4D3D");
+
+    public static final String SHORT_AUTH_STRING = "001122334455";
+
+    public static final byte[] SUCCESS_REQUEST_WRONG_OP_CODE = hexStringToByteArray("02");
+
+    // message format: hex("M=") + AUTH_STRING_HEX + hex("M=") + MESSAGE_HEX
+    public static final byte[] SUCCESS_REQUEST_WRONG_PREFIX =
+            hexStringToByteArray("03" + ID + "00314D3D" + AUTH_STRING_HEX + SPACE_HEX + "4D3D");
+
+    // message format: hex("S=") + SHORT_AUTH_STRING + hex("M=") + MESSAGE_HEX
+    public static final byte[] SUCCESS_REQUEST_SHORT_AUTH_STRING =
+            hexStringToByteArray("03" + ID + "0031533D" + SHORT_AUTH_STRING + SPACE_HEX + "4D3D");
+
+    public static final String INVALID_AUTH_HEX =
+            "3030313132323333343435353636373738383939414142424343444445454646303031317A7A7979";
+    public static final byte[] SUCCESS_REQUEST_INVALID_AUTH_STRING =
+            hexStringToByteArray("03" + ID + "0031533D" + INVALID_AUTH_HEX + SPACE_HEX + "4D3D");
+
+    // extra key-value: hex("V=12")
+    public static final String EXTRA_KEY_VALUE = "563D3132";
+    public static final byte[] SUCCESS_REQUEST_EXTRA_KEY_VALUE =
+            hexStringToByteArray(
+                    "03"
+                            + ID
+                            + "0042"
+                            + FORMATTED_AUTH_STRING
+                            + SPACE_HEX
+                            + EXTRA_KEY_VALUE
+                            + SPACE_HEX
+                            + FORMATTED_MESSAGE);
+
+    public static final String SUCCESS_REQUEST = "S=" + AUTH_STRING + " M=" + MESSAGE;
+    public static final String EXTRA_M_MESSAGE = "M=" + MESSAGE;
+    public static final String SUCCESS_REQUEST_EXTRA_M =
+            "S=" + AUTH_STRING + " M=" + EXTRA_M_MESSAGE;
+    public static final String SUCCESS_REQUEST_MISSING_M = "S=" + AUTH_STRING;
+    public static final String SUCCESS_REQUEST_INVALID_FORMAT =
+            "S==" + AUTH_STRING + "M=" + MESSAGE;
+    public static final String SUCCESS_REQUEST_DUPLICATE_KEY =
+            "S=" + AUTH_STRING + " S=" + AUTH_STRING + " M=" + MESSAGE;
 }
