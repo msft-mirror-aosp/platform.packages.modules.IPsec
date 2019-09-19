@@ -154,6 +154,6 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
 
     @Override
     public String getTypeString() {
-        return "Authentication-Digital-Signature Payload";
+        return "Auth(Digital Sign)";
     }
 }
