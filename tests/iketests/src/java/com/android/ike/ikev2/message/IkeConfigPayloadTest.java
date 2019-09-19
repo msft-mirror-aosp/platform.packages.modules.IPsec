@@ -20,6 +20,7 @@ import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNA
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
@@ -48,6 +49,7 @@ import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Address
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
 
 import libcore.net.InetAddressUtils;
@@ -116,6 +118,8 @@ public final class IkeConfigPayloadTest {
     private static final byte[] IPV6_SUBNET_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("000f0000");
 
+    private static final Inet6Address IPV6_DNS =
+            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:db8:100::1"));
     private static final byte[] IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("000a0000");
 
@@ -492,5 +496,30 @@ public final class IkeConfigPayloadTest {
                 CONFIG_ATTR_INTERNAL_IP6_SUBNET,
                 IPV6_SUBNET_ATTRIBUTE_WITHOUT_VALUE,
                 null /*expectedLinkAddress*/);
+    }
+
+    @Test
+    public void testDecodeIpv6DnsWithValue() throws Exception {
+        ConfigAttributeIpv6Dns attribute = new ConfigAttributeIpv6Dns(IPV6_DNS.getAddress());
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_DNS, attribute.attributeType);
+        assertEquals(IPV6_DNS, attribute.address);
+    }
+
+    @Test
+    public void testDecodeIpv6DnsWithoutValue() throws Exception {
+        ConfigAttributeIpv6Dns attribute = new ConfigAttributeIpv6Dns(new byte[0]);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_DNS, attribute.attributeType);
+        assertNull(attribute.address);
+    }
+
+    @Test
+    public void testEncodeIpv6Dns() throws Exception {
+        ConfigAttributeIpv6Dns attribute = new ConfigAttributeIpv6Dns();
+
+        verifyBuildAndEncodeAttributeCommon(
+                attribute, CONFIG_ATTR_INTERNAL_IP6_DNS, IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE);
+        assertNull(attribute.address);
     }
 }
