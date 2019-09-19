@@ -23,6 +23,9 @@ import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.crypto.ParityBitUtil;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeRequest;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.org.bouncycastle.crypto.digests.MD4Digest;
 
@@ -90,11 +93,21 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
 
     private final EapMsChapV2Config mEapMsChapV2Config;
     private final SecureRandom mSecureRandom;
+    private final EapMsChapV2TypeDataDecoder mTypeDataDecoder;
 
     public EapMsChapV2MethodStateMachine(
             EapMsChapV2Config eapMsChapV2Config, SecureRandom secureRandom) {
+        this(eapMsChapV2Config, secureRandom, new EapMsChapV2TypeDataDecoder());
+    }
+
+    @VisibleForTesting
+    EapMsChapV2MethodStateMachine(
+            EapMsChapV2Config eapMsChapV2Config,
+            SecureRandom secureRandom,
+            EapMsChapV2TypeDataDecoder eapMsChapV2TypeDataDecoder) {
         this.mEapMsChapV2Config = eapMsChapV2Config;
         this.mSecureRandom = secureRandom;
+        this.mTypeDataDecoder = eapMsChapV2TypeDataDecoder;
 
         transitionTo(new CreatedState());
     }
@@ -111,10 +124,22 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     }
 
     protected class CreatedState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/140571186): implement CreatedState
-            return null;
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            DecodeResult<EapMsChapV2ChallengeRequest> decodeResult =
+                    mTypeDataDecoder.decodeChallengeRequest(mTAG, message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                return decodeResult.eapError;
+            }
+
+            return transitionAndProcess(new ChallengeState(), message);
         }
     }
 
