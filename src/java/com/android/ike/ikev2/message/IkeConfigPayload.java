@@ -290,6 +290,28 @@ public final class IkeConfigPayload extends IkePayload {
         }
     }
 
+    /**
+     * This class represents Configuration Attribute for IPv4 DNS.
+     *
+     * <p>There is no use case to create a DNS request for a specfic DNS server address. As an IKE
+     * client, we will only support building an empty DNS attribute for an outbound IKE packet.
+     */
+    public static class ConfigAttributeIpv4Dns extends ConfigAttrIpv4AddressBase {
+        /**
+         * Construct an instance without a specified address for an outbound packet.
+         *
+         * <p>It should be only used in a configuration request.
+         */
+        public ConfigAttributeIpv4Dns() {
+            super(CONFIG_ATTR_INTERNAL_IP4_DNS);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        public ConfigAttributeIpv4Dns(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP4_DNS, value);
+        }
+    }
+
     /** This class represents Configuration Attribute for IPv4 subnets. */
     public static class ConfigAttributeIpv4Subnet extends ConfigAttribute {
         private static final int VALUE_LEN = 2 * IPV4_ADDRESS_LEN;
