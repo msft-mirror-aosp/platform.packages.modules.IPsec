@@ -17,6 +17,7 @@
 package com.android.ike.ikev2.message;
 
 import java.nio.ByteBuffer;
+
 /**
  * IkeUnsupportedPayload represents anunsupported payload.
  *
@@ -65,6 +66,6 @@ final class IkeUnsupportedPayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "Unsupported Payload";
+        return String.valueOf(payloadType);
     }
 }

@@ -201,6 +201,6 @@ public class IkeSkPayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "Encrypted and Authenticated Payload";
+        return "SK";
     }
 }
