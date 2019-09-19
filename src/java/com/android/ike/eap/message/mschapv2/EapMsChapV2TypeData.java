@@ -25,6 +25,7 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -35,6 +36,10 @@ import java.util.Set;
  * session.
  */
 public class EapMsChapV2TypeData {
+    private static final int LABEL_VALUE_LENGTH = 2;
+    private static final String MESSAGE_PREFIX = "M=";
+    private static final String MESSAGE_LABEL = "M";
+
     // EAP MSCHAPv2 OpCode values (EAP MSCHAPv2#2)
     public static final int EAP_MSCHAP_V2_CHALLENGE = 1;
     public static final int EAP_MSCHAP_V2_RESPONSE = 2;
@@ -191,6 +196,105 @@ public class EapMsChapV2TypeData {
         }
     }
 
+    /**
+     * EapMsChapV2SuccessRequest represents the EAP MSCHAPv2 Success Request Packet
+     * (EAP MSCHAPv2#2.3).
+     */
+    public static class EapMsChapV2SuccessRequest extends EapMsChapV2VariableTypeData {
+        private static final int AUTH_STRING_LEN_HEX = 40;
+        private static final int AUTH_STRING_LEN_BYTES = 20;
+        private static final int REQUIRED_NUM_MAPPINGS = 2;
+        private static final String AUTH_STRING_LABEL = "S";
+        private static final String ASCII_CHARSET_NAME = "US-ASCII";
+
+        public final byte[] authBytes = new byte[AUTH_STRING_LEN_BYTES];
+        public final String message;
+
+        EapMsChapV2SuccessRequest(ByteBuffer buffer) throws EapMsChapV2ParsingException {
+            super(
+                    EAP_MSCHAP_V2_SUCCESS,
+                    Byte.toUnsignedInt(buffer.get()),
+                    Short.toUnsignedInt(buffer.getShort()));
+
+            byte[] message = new byte[buffer.remaining()];
+            buffer.get(message);
+
+            // message formatting: "S=<auth_string> M=<message>"
+            Map<String, String> mappings =
+                    getMessageMappings(new String(message, Charset.forName(ASCII_CHARSET_NAME)));
+
+            if (!mappings.containsKey(AUTH_STRING_LABEL)
+                    || mappings.size() != REQUIRED_NUM_MAPPINGS) {
+                throw new EapMsChapV2ParsingException(
+                        "Auth message must be in the format: 'S=<auth_string> M=<message>'");
+            }
+
+            String authStringHex = mappings.get(AUTH_STRING_LABEL);
+            if (authStringHex.length() != AUTH_STRING_LEN_HEX) {
+                throw new EapMsChapV2ParsingException("Auth String must be 40 hex chars (20B)");
+            }
+            byte[] authBytes = hexStringToByteArray(authStringHex);
+            System.arraycopy(authBytes, 0, this.authBytes, 0, AUTH_STRING_LEN_BYTES);
+
+            this.message = mappings.get(MESSAGE_LABEL);
+        }
+
+        @VisibleForTesting
+        EapMsChapV2SuccessRequest(int msChapV2Id, int msLength, byte[] authBytes, String message)
+                throws EapMsChapV2ParsingException {
+            super(EAP_MSCHAP_V2_SUCCESS, msChapV2Id, msLength);
+
+            if (authBytes.length != AUTH_STRING_LEN_BYTES) {
+                throw new EapMsChapV2ParsingException("Auth String must be 20B");
+            }
+
+            System.arraycopy(authBytes, 0, this.authBytes, 0, AUTH_STRING_LEN_BYTES);
+            this.message = message;
+        }
+    }
+
+    @VisibleForTesting
+    static Map<String, String> getMessageMappings(String message)
+            throws EapMsChapV2ParsingException {
+        Map<String, String> messageMappings = new HashMap<>();
+        int mPos = message.indexOf(MESSAGE_PREFIX);
+        if (mPos == -1) {
+            throw new EapMsChapV2ParsingException("Message String must contain 'M='");
+        }
+
+        // preMString: "S=<auth string> " or "E=<error> R=r C=<challenge> V=<version> "
+        String preMString = message.substring(0, mPos);
+        for (String value : preMString.split(" ")) {
+            String[] keyValue = value.split("=");
+            if (keyValue.length != LABEL_VALUE_LENGTH) {
+                throw new EapMsChapV2ParsingException(
+                        "Message must be formatted <label character>=<value>");
+            } else if (messageMappings.containsKey(keyValue[0])) {
+                throw new EapMsChapV2ParsingException(
+                        "Duplicated key-value pair in message: " + LOG.pii(message));
+            }
+            messageMappings.put(keyValue[0], keyValue[1]);
+        }
+        messageMappings.put(MESSAGE_LABEL, message.substring(mPos + MESSAGE_PREFIX.length()));
+
+        return messageMappings;
+    }
+
+    @VisibleForTesting
+    static byte[] hexStringToByteArray(String hexString)
+            throws EapMsChapV2ParsingException, NumberFormatException {
+        if (hexString.length() % 2 != 0) {
+            throw new EapMsChapV2ParsingException(
+                    "Hex string must contain an even number of characters");
+        }
+
+        byte[] dataBytes = new byte[hexString.length() / 2];
+        for (int i = 0; i < hexString.length(); i += 2) {
+            dataBytes[i / 2] = (byte) Integer.parseInt(hexString.substring(i, i + 2), 16);
+        }
+        return dataBytes;
+    }
+
     /** Class for decoding EAP MSCHAPv2 type data. */
     public static class EapMsChapV2TypeDataDecoder {
         /**
@@ -220,6 +324,39 @@ public class EapMsChapV2TypeData {
                 return new DecodeResult<>(new EapMsChapV2ChallengeRequest(buffer));
             } catch (BufferUnderflowException | EapMsChapV2ParsingException ex) {
                 LOG.e(tag, "Error parsing EAP MSCHAPv2 Challenge Request type data");
+                return new DecodeResult<>(new EapError(ex));
+            }
+        }
+
+        /**
+         * Decodes and returns an EapMsChapV2SuccessRequest for the specified eapTypeData.
+         *
+         * @param tag String for logging tag
+         * @param eapTypeData byte[] to be decoded as an EapMsChapV2SuccessRequest instance
+         * @return DecodeResult wrapping an EapMsChapV2SuccessRequest instance for the given
+         *     eapTypeData iff the eapTypeData is formatted correctly. Otherwise, the DecodeResult
+         *     wraps the appropriate EapError.
+         */
+        public DecodeResult<EapMsChapV2SuccessRequest> decodeSuccessRequest(
+                String tag, byte[] eapTypeData) {
+            try {
+                ByteBuffer buffer = ByteBuffer.wrap(eapTypeData);
+                int opCode = Byte.toUnsignedInt(buffer.get());
+
+                if (opCode != EAP_MSCHAP_V2_SUCCESS) {
+                    return new DecodeResult<>(
+                            new EapError(
+                                    new EapMsChapV2ParsingException(
+                                            "Received type data with invalid opCode: "
+                                                    + EAP_OP_CODE_STRING.getOrDefault(
+                                                            opCode, "Unknown"))));
+                }
+
+                return new DecodeResult<>(new EapMsChapV2SuccessRequest(buffer));
+            } catch (BufferUnderflowException
+                    | NumberFormatException
+                    | EapMsChapV2ParsingException ex) {
+                LOG.e(tag, "Error parsing EAP MSCHAPv2 Success Request type data");
                 return new DecodeResult<>(new EapError(ex));
             }
         }
