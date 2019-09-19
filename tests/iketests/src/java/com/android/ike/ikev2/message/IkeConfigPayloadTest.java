@@ -17,6 +17,7 @@
 package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
@@ -33,13 +34,17 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.net.LinkAddress;
+
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttribute;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
 
 import libcore.net.InetAddressUtils;
 
+import org.junit.Before;
 import org.junit.Test;
 
 import java.net.Inet4Address;
@@ -51,7 +56,7 @@ public final class IkeConfigPayloadTest {
     private static final String CONFIG_REQ_PAYLOAD_HEX =
             "2900001801000000000100000008000000030000000a0000";
     private static final String CONFIG_RESP_PAYLOAD_HEX =
-            "2100002002000000000100040a0a0a0100030004080808080003000408080404";
+            "210000200200000000010004c000026400030004080808080003000408080404";
 
     private static final byte[] CONFIG_REQ_PAYLOAD =
             TestUtils.hexStringToByteArray(CONFIG_REQ_PAYLOAD_HEX);
@@ -59,11 +64,22 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray(CONFIG_RESP_PAYLOAD_HEX);
 
     private static final Inet4Address IPV4_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("10.10.10.1"));
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+    private static final int IP4_PREFIX_LEN = 28;
+    private static final LinkAddress IPV4_LINK_ADDRESS =
+            new LinkAddress(IPV4_ADDRESS, IP4_PREFIX_LEN);
+
     private static final byte[] IPV4_ADDRESS_ATTRIBUTE_WITH_VALUE =
-            TestUtils.hexStringToByteArray("000100040a0a0a01");
+            TestUtils.hexStringToByteArray("00010004c0000264");
     private static final byte[] IPV4_ADDRESS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00010000");
+
+    private static final byte[] IPV4_SUBNET_ATTRIBUTE_VALUE =
+            TestUtils.hexStringToByteArray("c0000264fffffff0");
+    private static final byte[] IPV4_SUBNET_ATTRIBUTE_WITH_VALUE =
+            TestUtils.hexStringToByteArray("000d0008c0000264fffffff0");
+    private static final byte[] IPV4_SUBNET_ATTRIBUTE_WITHOUT_VALUE =
+            TestUtils.hexStringToByteArray("000d0000");
 
     private static final byte[] IPV6_ADDRESS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00080000");
@@ -71,6 +87,20 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("00030000");
     private static final byte[] IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("000a0000");
+
+    private Inet4Address[] mNetMasks;
+    private int[] mIpv4PrefixLens;
+
+    @Before
+    public void setUp() throws Exception {
+        mNetMasks =
+                new Inet4Address[] {
+                    (Inet4Address) (InetAddressUtils.parseNumericAddress("0.0.0.0")),
+                    (Inet4Address) (InetAddressUtils.parseNumericAddress("255.255.255.255")),
+                    (Inet4Address) (InetAddressUtils.parseNumericAddress("255.255.255.240"))
+                };
+        mIpv4PrefixLens = new int[] {0, 32, 28};
+    }
 
     private IkeConfigPayload verifyDecodeHeaderAndGetPayload(
             IkePayload payload, int expectedConfigType) {
@@ -215,5 +245,76 @@ public final class IkeConfigPayloadTest {
         ByteBuffer buffer = ByteBuffer.allocate(attributeIp4Address.getAttributeLen());
         attributeIp4Address.encodeAttributeToByteBuffer(buffer);
         assertArrayEquals(IPV4_ADDRESS_ATTRIBUTE_WITHOUT_VALUE, buffer.array());
+    }
+
+    @Test
+    public void testDecodeIpv4SubnetWithValue() throws Exception {
+        ConfigAttributeIpv4Subnet attributeIp4Subnet =
+                new ConfigAttributeIpv4Subnet(IPV4_SUBNET_ATTRIBUTE_VALUE);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_SUBNET, attributeIp4Subnet.attributeType);
+        assertEquals(IPV4_LINK_ADDRESS, attributeIp4Subnet.linkAddress);
+    }
+
+    @Test
+    public void testDecodeIpv4SubnetWithoutValue() throws Exception {
+        ConfigAttributeIpv4Subnet attributeIp4Subnet = new ConfigAttributeIpv4Subnet(new byte[0]);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_SUBNET, attributeIp4Subnet.attributeType);
+        assertNull(attributeIp4Subnet.linkAddress);
+    }
+
+    @Test
+    public void testDecodeIpv4SubnetWithInvalidValue() throws Exception {
+        byte[] ipAddress = IPV4_ADDRESS.getAddress();
+        ByteBuffer buffer = ByteBuffer.allocate(ipAddress.length * 2);
+        buffer.put(ipAddress).put(ipAddress);
+
+        try {
+            new ConfigAttributeIpv4Subnet(buffer.array());
+            fail("Expected to fail due to invalid netmask.");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testEncodeIpv4SubnetWithValue() throws Exception {
+        ConfigAttributeIpv4Subnet attributeIp4Subnet =
+                new ConfigAttributeIpv4Subnet(IPV4_LINK_ADDRESS);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_SUBNET, attributeIp4Subnet.attributeType);
+        assertEquals(IPV4_LINK_ADDRESS, attributeIp4Subnet.linkAddress);
+
+        ByteBuffer buffer = ByteBuffer.allocate(attributeIp4Subnet.getAttributeLen());
+        attributeIp4Subnet.encodeAttributeToByteBuffer(buffer);
+        assertArrayEquals(IPV4_SUBNET_ATTRIBUTE_WITH_VALUE, buffer.array());
+    }
+
+    @Test
+    public void testEncodeIpv4SubnetWithoutValue() throws Exception {
+        ConfigAttributeIpv4Subnet attributeIp4Subnet = new ConfigAttributeIpv4Subnet();
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_SUBNET, attributeIp4Subnet.attributeType);
+        assertNull(attributeIp4Subnet.linkAddress);
+
+        ByteBuffer buffer = ByteBuffer.allocate(attributeIp4Subnet.getAttributeLen());
+        attributeIp4Subnet.encodeAttributeToByteBuffer(buffer);
+        assertArrayEquals(IPV4_SUBNET_ATTRIBUTE_WITHOUT_VALUE, buffer.array());
+    }
+
+    @Test
+    public void testNetmaskToPrefixLen() throws Exception {
+        for (int i = 0; i < mNetMasks.length; i++) {
+            assertEquals(mIpv4PrefixLens[i], ConfigAttribute.netmaskToPrefixLen(mNetMasks[i]));
+        }
+    }
+
+    @Test
+    public void testPrefixToNetmaskBytes() throws Exception {
+        for (int i = 0; i < mIpv4PrefixLens.length; i++) {
+            assertArrayEquals(
+                    mNetMasks[i].getAddress(),
+                    ConfigAttribute.prefixToNetmaskBytes(mIpv4PrefixLens[i]));
+        }
     }
 }
