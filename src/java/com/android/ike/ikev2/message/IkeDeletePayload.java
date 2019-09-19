@@ -171,6 +171,6 @@ public final class IkeDeletePayload extends IkeInformationalPayload {
      */
     @Override
     public String getTypeString() {
-        return "Delete Payload";
+        return "Del";
     }
 }

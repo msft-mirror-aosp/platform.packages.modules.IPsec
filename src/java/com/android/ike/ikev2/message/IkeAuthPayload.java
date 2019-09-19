@@ -123,11 +123,6 @@ public abstract class IkeAuthPayload extends IkePayload {
         return GENERIC_HEADER_LENGTH + AUTH_HEADER_LEN + getAuthDataLength();
     }
 
-    @Override
-    public String getTypeString() {
-        return "Authentication Payload";
-    }
-
     protected abstract void encodeAuthDataToByteBuffer(ByteBuffer byteBuffer);
 
     protected abstract int getAuthDataLength();
