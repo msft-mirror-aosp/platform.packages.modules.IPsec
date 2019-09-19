@@ -15,6 +15,8 @@
  */
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.IkeManager.getIkeLog;
+
 import android.annotation.Nullable;
 import android.content.Context;
 import android.net.IpSecManager;
@@ -23,7 +25,6 @@ import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
-import android.util.Log;
 
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
@@ -101,10 +102,21 @@ public abstract class SaRecord implements AutoCloseable {
         mSkEi = skEi;
         mSkEr = skEr;
 
+        logKey("SK_ai", skAi);
+        logKey("SK_ar", skAr);
+        logKey("SK_ei", skEi);
+        logKey("SK_er", skEr);
+
         mFutureRekeyEvent = futureRekeyEvent;
 
         mCloseGuard.open("close");
     }
+
+    private void logKey(String type, byte[] key) {
+        getIkeLog().d(getTag(), type + ": " + getIkeLog().pii(key));
+    }
+
+    protected abstract String getTag();
 
     /**
      * Get the integrity key for calculate integrity checksum for an outbound packet.
@@ -487,7 +499,7 @@ public abstract class SaRecord implements AutoCloseable {
             }
 
             if (udpEncapSocket != null && sourceAddress instanceof Inet6Address) {
-                Log.wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
+                getIkeLog().wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
             }
             if (udpEncapSocket != null && sourceAddress instanceof Inet4Address) {
                 builder.setIpv4Encapsulation(udpEncapSocket, IkeSocket.IKE_SERVER_PORT);
@@ -552,6 +564,8 @@ public abstract class SaRecord implements AutoCloseable {
 
     /** IkeSaRecord represents an IKE SA. */
     public static class IkeSaRecord extends SaRecord implements Comparable<IkeSaRecord> {
+        private static final String TAG = "IkeSaRecord";
+
         /** SPI of IKE SA initiator */
         private final IkeSecurityParameterIndex mInitiatorSpiResource;
         /** SPI of IKE SA responder */
@@ -596,6 +610,10 @@ public abstract class SaRecord implements AutoCloseable {
 
             mCollectedReqFragments = null;
             mCollectedRespFragments = null;
+
+            logKey("SK_d", skD);
+            logKey("SK_pi", skPi);
+            logKey("SK_pr", skPr);
         }
 
         /**
@@ -652,6 +670,15 @@ public abstract class SaRecord implements AutoCloseable {
                             encryptionKeyLength,
                             isLocalInit,
                             futureRekeyEvent));
+        }
+
+        private void logKey(String type, byte[] key) {
+            getIkeLog().d(TAG, type + ": " + getIkeLog().pii(key));
+        }
+
+        @Override
+        protected String getTag() {
+            return TAG;
         }
 
         /** Package private */
@@ -822,6 +849,8 @@ public abstract class SaRecord implements AutoCloseable {
 
     /** ChildSaRecord represents an Child SA. */
     public static class ChildSaRecord extends SaRecord implements Comparable<ChildSaRecord> {
+        private static final String TAG = "ChildSaRecord";
+
         /** Locally generated SPI for receiving IPsec Packet. */
         private final int mInboundSpi;
         /** Remotely generated SPI for sending IPsec Packet. */
@@ -893,6 +922,11 @@ public abstract class SaRecord implements AutoCloseable {
                             isTransport,
                             isLocalInit,
                             futureRekeyEvent));
+        }
+
+        @Override
+        protected String getTag() {
+            return TAG;
         }
 
         /** Package private */
