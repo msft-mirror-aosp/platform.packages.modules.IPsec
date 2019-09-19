@@ -102,6 +102,6 @@ public final class IkeNoncePayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "Nonce Payload";
+        return "Nonce";
     }
 }

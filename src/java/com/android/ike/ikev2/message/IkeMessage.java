@@ -157,10 +157,14 @@ public final class IkeMessage {
         // For marking the existence of supported payloads in this message.
         HashSet<Integer> supportedTypesFoundSet = new HashSet<>();
 
+        StringBuilder logPayloadsSb = new StringBuilder();
+        logPayloadsSb.append("Decoded payloads [ ");
+
         while (currentPayloadType != IkePayload.PAYLOAD_TYPE_NO_NEXT) {
             Pair<IkePayload, Integer> pair =
                     IkePayloadFactory.getIkePayload(currentPayloadType, isResp, inputBuffer);
             IkePayload payload = pair.first;
+            logPayloadsSb.append(payload.getTypeString()).append(" ");
 
             if (!(payload instanceof IkeUnsupportedPayload)) {
                 int type = payload.payloadType;
@@ -178,6 +182,9 @@ public final class IkeMessage {
 
             currentPayloadType = pair.second;
         }
+
+        logPayloadsSb.append("]");
+        getIkeLog().d("IkeMessage", logPayloadsSb.toString());
 
         if (inputBuffer.remaining() > 0) {
             throw new InvalidSyntaxException(
@@ -231,17 +238,20 @@ public final class IkeMessage {
      * @return byte array contains all encoded payloads
      */
     private byte[] encodePayloads() {
-        if (ikePayloadList.isEmpty()) {
-            return new byte[0];
-        }
+        StringBuilder logPayloadsSb = new StringBuilder();
+        logPayloadsSb.append("Generating payloads [ ");
 
         int payloadLengthSum = 0;
         for (IkePayload payload : ikePayloadList) {
             payloadLengthSum += payload.getPayloadLength();
+            logPayloadsSb.append(payload.getTypeString()).append(" ");
         }
+        logPayloadsSb.append("]");
+        getIkeLog().d("IkeMessage", logPayloadsSb.toString());
+
+        if (ikePayloadList.isEmpty()) return new byte[0];
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(payloadLengthSum);
-
         for (int i = 0; i < ikePayloadList.size() - 1; i++) {
             ikePayloadList
                     .get(i)
@@ -396,8 +406,12 @@ public final class IkeMessage {
     public static final class IkeMessageHelper implements IIkeMessageHelper {
         @Override
         public byte[] encode(IkeMessage ikeMessage) {
+            getIkeLog().d("IkeMessage", "Generating " + ikeMessage.ikeHeader.getBasicInfoString());
+
             byte[] encodedIkeBody = ikeMessage.encodePayloads();
-            return ikeMessage.attachEncodedHeader(encodedIkeBody);
+            byte[] packet = ikeMessage.attachEncodedHeader(encodedIkeBody);
+            getIkeLog().d("IkeMessage", "Build a complete IKE message: " + getIkeLog().pii(packet));
+            return packet;
         }
 
         @Override
@@ -408,6 +422,8 @@ public final class IkeMessage {
                 IkeMessage ikeMessage,
                 boolean supportFragment,
                 int fragSize) {
+            getIkeLog().d("IkeMessage", "Generating " + ikeMessage.ikeHeader.getBasicInfoString());
+
             return encryptAndEncode(
                     ikeMessage.ikeHeader,
                     ikeMessage.ikePayloadList.isEmpty()

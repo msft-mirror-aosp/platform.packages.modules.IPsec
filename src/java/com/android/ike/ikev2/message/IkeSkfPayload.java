@@ -163,6 +163,6 @@ public final class IkeSkfPayload extends IkeSkPayload {
      */
     @Override
     public String getTypeString() {
-        return "Encrypted and Authenticated Fragment Payload";
+        return "SKF";
     }
 }

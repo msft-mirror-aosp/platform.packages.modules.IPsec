@@ -235,7 +235,7 @@ public final class IkeNotifyPayloadTest {
     public void testGetNotifyTypeString() throws Exception {
         IkeNotifyPayload payload = new IkeNotifyPayload(ERROR_TYPE_AUTHENTICATION_FAILED);
 
-        assertEquals("Notify Payload (Authentication failed)", payload.getTypeString());
+        assertEquals("Notify(Authentication failed)", payload.getTypeString());
     }
 
     @Test
@@ -243,6 +243,6 @@ public final class IkeNotifyPayloadTest {
         int unrecognizedType = 0;
         IkeNotifyPayload payload = new IkeNotifyPayload(unrecognizedType);
 
-        assertEquals("Notify Payload (Unrecognized: 0)", payload.getTypeString());
+        assertEquals("Notify(0)", payload.getTypeString());
     }
 }
