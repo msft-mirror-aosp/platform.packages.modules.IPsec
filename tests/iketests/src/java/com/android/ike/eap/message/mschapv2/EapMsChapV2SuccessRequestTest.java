@@ -21,7 +21,7 @@ import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EAP_MSCHAP_V2_SUCCESS_REQUEST_EMPTY_MESSAGE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.ID_INT;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.MESSAGE;
-import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_EXTRA_KEY_VALUE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_EXTRA_ATTRIBUTE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_INVALID_AUTH_STRING;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_SHORT_AUTH_STRING;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_WRONG_OP_CODE;
@@ -130,9 +130,9 @@ public class EapMsChapV2SuccessRequestTest {
     }
 
     @Test
-    public void testDecodeSuccessRequestExtraKeyValue() {
+    public void testDecodeSuccessRequestExtraAttribute() {
         DecodeResult<EapMsChapV2SuccessRequest> result =
-                mTypeDataDecoder.decodeSuccessRequest(TAG, SUCCESS_REQUEST_EXTRA_KEY_VALUE);
+                mTypeDataDecoder.decodeSuccessRequest(TAG, SUCCESS_REQUEST_EXTRA_ATTRIBUTE);
         assertFalse(result.isSuccessfulDecode());
         EapError eapError = result.eapError;
         assertTrue(eapError.cause instanceof EapMsChapV2ParsingException);
