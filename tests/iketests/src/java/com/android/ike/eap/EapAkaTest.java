@@ -49,85 +49,84 @@ public class EapAkaTest {
     private static final long AUTHENTICATOR_TIMEOUT_MILLIS = 250L;
 
     private static final int SUB_ID = 1;
-    private static final String UNFORMATTED_IDENTITY = "123456789012345"; // IMSI
+    private static final String UNFORMATTED_IDENTITY = "123456789ABCDEF"; // IMSI
 
-    // TODO(b/140258387): replace with externally generated values
     // TODO(b/140797965): find valid AUTN/RAND values for the CTS test sim
-    // IK: 0123456789ABCDEFFEDCBA9876543210
-    // CK: FEDCBA98765432100123456789ABCDEF
-    // MK: 342706B4C2632BFD61C3C16675DC3D719DDB7242
-    // K_encr: 6ACF941D8E5372A4876427F82BCB7009
-    // K_aut: 203FD02EB370465515BC5272E090D178
-    private static final String RAND_1 = "00112233445566778899AABBCCDDEEFF";
+    // IK: 7320EE404E055EF2B5AB0F86E96C48BE
+    // CK: E9D1707652E13BF3E05975F601678E5C
+    // MK: 2AE8AD50432246E6ACED9AA0FC794A22CE9CE4BB
+    // K_encr: DB6F06910D5D19CC9DA5F2687F5C5737
+    // K_aut: B20A586592796E08E7408FB53356E9B1
+    private static final String RAND_1 = "D6A296F030A305601B311D38A004505C";
     private static final String RAND_2 = "000102030405060708090A0B0C0D0E0F";
-    private static final String AUTN = "FFEEDDCCBBAA99887766554433221100";
-    private static final String RES = "00DEADBEEF";
+    private static final String AUTN = "35A9143ED9E100011795E785DAFAAD9B";
+    private static final String RES = "E5167A255FDCDE9248AF6B50ADA0D944";
     private static final String AUTS = "0102030405060708090A0B0C0D0E";
     private static final byte[] MSK =
             hexStringToByteArray(
-                    "91844F02FC56EBF0DFCF022224F9599F"
-                            + "2D5C66A29002A182AF669C923AA1715C"
-                            + "5BC14ABB672373631562E5F8BD494AA8"
-                            + "66E54CB0518E95EE98EBA3D88D716C4D");
+                    "EFC4FB9F54D99A3F4A04B756993CA813"
+                            + "E463CA0ADBF3CB2A296519ED4C600FF5"
+                            + "81898B1C425C20FE7471FC43A4BB3C00"
+                            + "DDF80A7083972B660BC7153CBF2C9AA1");
     private static final byte[] EMSK =
             hexStringToByteArray(
-                    "8B04469725F115AA40C3065B3D8B4349"
-                            + "18B31CD0C860D77CF42B7E94CE03A96B"
-                            + "350511D8F49B0B1305BB693801E62995"
-                            + "FAF04D26B49A4BD2587E1661B67B71C6");
+                    "5C95F3E2476ED4D6588CE6DE2618D808"
+                            + "9ECA12A4636C8A1B0C678562CBFC31D3"
+                            + "94B578DE0A3686E17F96F14D5341FE75"
+                            + "2012944CA394E5288BA1B2C70CB65063");
 
     // Base 64 of: [Length][RAND_1][Length][AUTN]
     private static final String BASE64_CHALLENGE_1 =
-            "EAARIjNEVWZ3iJmqu8zd7v8Q/+7dzLuqmYh3ZlVEMyIRAA==";
+            "ENailvAwowVgGzEdOKAEUFwQNakUPtnhAAEXleeF2vqtmw==";
 
     // Base 64 of: ['DB'][Length][RES][Length][IK][Length][CK]
     private static final String BASE_64_RESPONSE_SUCCESS =
-            "2wUA3q2+7xABI0VniavN7/7cuph2VDIQEP7cuph2VDIQASNFZ4mrze8=";
+            "2xDlFnolX9zekkiva1CtoNlEEHMg7kBOBV7ytasPhulsSL4Q6dFwdlLhO/PgWXX2AWeOXA==";
 
     // Base 64 of: [Length][RAND_2][Length][AUTN]
     private static final String BASE64_CHALLENGE_2 =
-            "EAABAgMEBQYHCAkKCwwNDg8Q/+7dzLuqmYh3ZlVEMyIRAA==";
+            "EAABAgMEBQYHCAkKCwwNDg8QNakUPtnhAAEXleeF2vqtmw==";
 
     // Base 64 of: ['DC'][Length][AUTS]
     private static final String BASE_64_RESPONSE_SYNC_FAIL = "3A4BAgMEBQYHCAkKCwwNDg==";
 
-    private static final String REQUEST_MAC = "8BA174E3F5A3F758D027546214744868";
-    private static final String RESPONSE_MAC = "5a000bb376b37330f46482c6f6c4e536";
+    private static final String REQUEST_MAC = "90C3554783D49A18F9EAA231F3C261EC";
+    private static final String RESPONSE_MAC = "D085987D3D15FA50A80D0CECFA2412EB";
 
     private static final byte[] EAP_AKA_IDENTITY_REQUEST =
             hexStringToByteArray(
-                    "0110000C" // EAP-Request | ID | length in bytes
+                    "01CD000C" // EAP-Request | ID | length in bytes
                             + "17050000" // EAP-AKA | Identity | 2B padding
                             + "0D010000"); // AT_ANY_ID_REQ attribute
     private static final byte[] EAP_AKA_IDENTITY_RESPONSE =
             hexStringToByteArray(
-                    "0210001C" // EAP-Response | ID | length in bytes
+                    "02CD001C" // EAP-Response | ID | length in bytes
                             + "17050000" // EAP-AKA | Identity | 2B padding
-                            + "0E05001030313233343536373839303132333435"); // AT_IDENTITY attribute
+                            + "0E05001030313233343536373839414243444546"); // AT_IDENTITY attribute
 
     private static final byte[] EAP_AKA_CHALLENGE_REQUEST =
             hexStringToByteArray(
-                    "01110044" // EAP-Request | ID | length in bytes
+                    "01CE0044" // EAP-Request | ID | length in bytes
                             + "17010000" // EAP-AKA | Challenge | 2B padding
                             + "01050000" + RAND_1 // AT_RAND attribute
                             + "02050000" + AUTN // AT_AUTN attribute
                             + "0B050000" + REQUEST_MAC); // AT_MAC attribute
     private static final byte[] EAP_AKA_CHALLENGE_RESPONSE =
             hexStringToByteArray(
-                    "02110028" // EAP-Response | ID | length in bytes
+                    "02CE0030" // EAP-Response | ID | length in bytes
                             + "17010000" // EAP-AKA | Challenge | 2B padding
-                            + "03030028" + RES + "000000" // AT_RES attribute
+                            + "03050080" + RES // AT_RES attribute
                             + "0B050000" + RESPONSE_MAC); // AT_MAC attribute
     private static final byte[] EAP_AKA_CHALLENGE_REQUEST_SYNC_FAIL =
             hexStringToByteArray(
-                    "01110044" // EAP-Request | ID | length in bytes
+                    "01CE0044" // EAP-Request | ID | length in bytes
                             + "17010000" // EAP-AKA | Challenge | 2B padding
                             + "01050000" + RAND_2 // AT_RAND attribute
                             + "02050000" + AUTN // AT_AUTN attribute
                             + "0B050000" + REQUEST_MAC); // AT_MAC attribute
     private static final byte[] EAP_AKA_SYNC_FAIL_RESPONSE =
             hexStringToByteArray(
-                    "02110018" // EAP-Response | ID | length in bytes
+                    "02CE0018" // EAP-Response | ID | length in bytes
                             + "17040000" // EAP-AKA | Challenge | 2B padding
                             + "0404" + AUTS);  // AT_AUTS attribute
     private static final byte[] EAP_RESPONSE_NAK_PACKET =
