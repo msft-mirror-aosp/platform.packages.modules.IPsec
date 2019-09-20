@@ -17,11 +17,19 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
+import com.android.ike.eap.statemachine.EapMsChapV2MethodStateMachine.CreatedState;
+
+import org.junit.Before;
 import org.junit.Test;
+
+import java.security.SecureRandom;
 
 public class EapMsChapV2MethodStateMachineTest {
     // Test vectors taken from RFC 2759#9.2
@@ -43,6 +51,25 @@ public class EapMsChapV2MethodStateMachineTest {
             hexStringToByteArray("82309ECD8D708B5EA08FAA3981CD83544233114A3D85D6DF");
     private static final byte[] AUTHENTICATOR_RESPONSE =
             hexStringToByteArray("407A5589115FD0D6209F510FE9C04566932CDA56");
+
+    private EapMsChapV2Config mEapMsChapV2Config;
+    private EapMsChapV2MethodStateMachine mStateMachine;
+
+    @Before
+    public void setUp() {
+        mEapMsChapV2Config = new EapMsChapV2Config(USERNAME, PASSWORD);
+        mStateMachine = new EapMsChapV2MethodStateMachine(mEapMsChapV2Config, new SecureRandom());
+    }
+
+    @Test
+    public void testGetEapMethod() {
+        assertEquals(EAP_TYPE_MSCHAP_V2, mStateMachine.getEapMethod());
+    }
+
+    @Test
+    public void testStartsOnCreatedState() {
+        assertTrue(mStateMachine.getState() instanceof CreatedState);
+    }
 
     // Tests for MS CHAPv2 authentication utils. Test vectors from RFC 2759#9.2.
 
