@@ -249,4 +249,6 @@ public class EapMsChapV2PacketDefinitions {
                             + EXTRA_KEY
                             + SPACE_HEX
                             + FORMATTED_MESSAGE);
+
+    public static final byte[] EAP_MSCHAP_V2_FAILURE_RESPONSE = hexStringToByteArray("04");
 }
