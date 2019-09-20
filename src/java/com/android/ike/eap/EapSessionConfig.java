@@ -177,7 +177,8 @@ public final class EapSessionConfig {
         public final String username;
         public final String password;
 
-        private EapMsChapV2Config(String username, String password) {
+        @VisibleForTesting
+        public EapMsChapV2Config(String username, String password) {
             super(EAP_TYPE_MSCHAP_V2);
 
             this.username = username;
