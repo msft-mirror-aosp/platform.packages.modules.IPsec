@@ -23,6 +23,8 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_USERNAME;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -47,8 +49,6 @@ import org.junit.Test;
 import java.security.SecureRandom;
 
 public class EapMsChapV2StateTest {
-    protected static final String USERNAME = "user";
-    protected static final String PASSWORD = "password";
     protected static final String CREATED_STATE_TAG = "CreatedState";
     protected static final String NOTIFICATION_MESSAGE = "test";
     protected static final byte[] DUMMY_TYPE_DATA = hexStringToByteArray("00112233");
@@ -64,7 +64,7 @@ public class EapMsChapV2StateTest {
         mMockSecureRandom = mock(SecureRandom.class);
         mMockTypeDataDecoder = mock(EapMsChapV2TypeDataDecoder.class);
 
-        mEapMsChapV2Config = new EapMsChapV2Config(USERNAME, PASSWORD);
+        mEapMsChapV2Config = new EapMsChapV2Config(MSCHAP_V2_USERNAME, MSCHAP_V2_PASSWORD);
         mStateMachine =
                 new EapMsChapV2MethodStateMachine(
                         mEapMsChapV2Config, mMockSecureRandom, mMockTypeDataDecoder);
