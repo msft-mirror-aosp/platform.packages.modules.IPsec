@@ -104,16 +104,16 @@ public class EapMsChapV2PacketDefinitions {
     public static final byte[] SUCCESS_REQUEST_INVALID_AUTH_STRING =
             hexStringToByteArray("03" + ID + "0031533D" + INVALID_AUTH_HEX + SPACE_HEX + "4D3D");
 
-    // extra key-value: hex("V=12")
-    public static final String EXTRA_KEY_VALUE = "563D3132";
-    public static final byte[] SUCCESS_REQUEST_EXTRA_KEY_VALUE =
+    // extra key-value: hex("N=12")
+    public static final String EXTRA_KEY = "4E3D3132";
+    public static final byte[] SUCCESS_REQUEST_EXTRA_ATTRIBUTE =
             hexStringToByteArray(
                     "03"
                             + ID
                             + "0042"
                             + FORMATTED_AUTH_STRING
                             + SPACE_HEX
-                            + EXTRA_KEY_VALUE
+                            + EXTRA_KEY
                             + SPACE_HEX
                             + FORMATTED_MESSAGE);
 
@@ -128,4 +128,125 @@ public class EapMsChapV2PacketDefinitions {
             "S=" + AUTH_STRING + " S=" + AUTH_STRING + " M=" + MESSAGE;
 
     public static final byte[] EAP_MSCHAP_V2_SUCCESS_RESPONSE = hexStringToByteArray("03");
+
+    public static final int ERROR_CODE = 647; // account disabled
+
+    // formatted error code: hex("E=" + ERROR_CODE)
+    public static final String FORMATTED_ERROR_CODE = "453D363437";
+    public static final boolean RETRY_BIT = true;
+
+    // formatted retry bit: hex("R=1")
+    public static final String FORMATTED_RETRY_BIT = "523D31";
+
+    // challenge hex: hex(CHALLENGE)
+    public static final String CHALLENGE_HEX =
+            "3030303130323033303430353036303730383039304130423043304430453046";
+
+    // formatted challenge: hex("C=") + CHALLENGE_HEX
+    public static final String FORMATTED_CHALLENGE = "433D" + CHALLENGE_HEX;
+
+    public static final int PASSWORD_CHANGE_PROTOCOL = 3;
+
+    // formatted password change protocol: hex("V=3")
+    public static final String FORMATTED_PASSWORD_CHANGE_PROTOCOL = "563D33";
+
+    public static final byte[] EAP_MSCHAP_V2_FAILURE_REQUEST =
+            hexStringToByteArray(
+                    "04"
+                            + ID
+                            + "0048"
+                            + FORMATTED_ERROR_CODE
+                            + SPACE_HEX
+                            + FORMATTED_RETRY_BIT
+                            + SPACE_HEX
+                            + FORMATTED_CHALLENGE
+                            + SPACE_HEX
+                            + FORMATTED_PASSWORD_CHANGE_PROTOCOL
+                            + SPACE_HEX
+                            + FORMATTED_MESSAGE);
+
+    // invalid error code: hex("E=abc")
+    public static final String INVALID_ERROR_CODE = "453D616263";
+    public static final byte[] FAILURE_REQUEST_INVALID_ERROR_CODE =
+            hexStringToByteArray(
+                    "04"
+                            + ID
+                            + "0048"
+                            + INVALID_ERROR_CODE
+                            + SPACE_HEX
+                            + FORMATTED_RETRY_BIT
+                            + SPACE_HEX
+                            + FORMATTED_CHALLENGE
+                            + SPACE_HEX
+                            + FORMATTED_PASSWORD_CHANGE_PROTOCOL
+                            + SPACE_HEX
+                            + FORMATTED_MESSAGE);
+
+    // invalid challenge: hex("C=zyxd")
+    public static final String INVALID_CHALLENGE = "433D7A797864";
+    public static final byte[] FAILURE_REQUEST_INVALID_CHALLENGE =
+            hexStringToByteArray(
+                    "04"
+                            + ID
+                            + "0032"
+                            + FORMATTED_ERROR_CODE
+                            + SPACE_HEX
+                            + FORMATTED_RETRY_BIT
+                            + SPACE_HEX
+                            + INVALID_CHALLENGE
+                            + SPACE_HEX
+                            + FORMATTED_PASSWORD_CHANGE_PROTOCOL
+                            + SPACE_HEX
+                            + FORMATTED_MESSAGE);
+
+    // short challenge: hex("C=" + SHORT_CHALLENGE)
+    public static final String FORMATTED_SHORT_CHALLENGE = "433D303031313232333334343535";
+    public static final byte[] FAILURE_REQUEST_SHORT_CHALLENGE =
+            hexStringToByteArray(
+                    "04"
+                            + ID
+                            + "0034"
+                            + FORMATTED_ERROR_CODE
+                            + SPACE_HEX
+                            + FORMATTED_RETRY_BIT
+                            + SPACE_HEX
+                            + FORMATTED_SHORT_CHALLENGE
+                            + SPACE_HEX
+                            + FORMATTED_PASSWORD_CHANGE_PROTOCOL
+                            + SPACE_HEX
+                            + FORMATTED_MESSAGE);
+
+    // invalid password change protocol: hex("V=d")
+    public static final String INVALID_PASSWORD_CHANGE_PROTOCOL = "563D64";
+    public static final byte[] FAILURE_REQUEST_INVALID_PASSWORD_CHANGE_PROTOCOL =
+            hexStringToByteArray(
+                    "04"
+                            + ID
+                            + "0048"
+                            + FORMATTED_ERROR_CODE
+                            + SPACE_HEX
+                            + FORMATTED_RETRY_BIT
+                            + SPACE_HEX
+                            + FORMATTED_CHALLENGE
+                            + SPACE_HEX
+                            + INVALID_PASSWORD_CHANGE_PROTOCOL
+                            + SPACE_HEX
+                            + FORMATTED_MESSAGE);
+
+    public static final byte[] FAILURE_REQUEST_EXTRA_ATTRIBUTE =
+            hexStringToByteArray(
+                    "04"
+                            + ID
+                            + "0048"
+                            + FORMATTED_ERROR_CODE
+                            + SPACE_HEX
+                            + FORMATTED_RETRY_BIT
+                            + SPACE_HEX
+                            + FORMATTED_CHALLENGE
+                            + SPACE_HEX
+                            + FORMATTED_PASSWORD_CHANGE_PROTOCOL
+                            + SPACE_HEX
+                            + EXTRA_KEY
+                            + SPACE_HEX
+                            + FORMATTED_MESSAGE);
 }
