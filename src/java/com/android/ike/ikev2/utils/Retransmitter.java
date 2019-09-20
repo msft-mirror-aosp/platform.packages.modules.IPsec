@@ -30,6 +30,9 @@ import com.android.internal.annotations.VisibleForTesting;
  * instance of this class.
  */
 public abstract class Retransmitter {
+    private static IBackoffTimeoutCalculator sBackoffTimeoutCalculator =
+            new BackoffTimeoutCalculator();
+
     /*
      * Retransmit parameters
      *
@@ -73,7 +76,7 @@ public abstract class Retransmitter {
 
         send(mRetransmitMsg);
 
-        long timeout = getExponentialBackoffTimeout(mRetransmitCount++);
+        long timeout = sBackoffTimeoutCalculator.getExponentialBackoffTimeout(mRetransmitCount++);
         mHandler.sendMessageDelayed(mHandler.obtainMessage(CMD_RETRANSMIT, this), timeout);
     }
 
@@ -103,9 +106,34 @@ public abstract class Retransmitter {
      */
     protected abstract void handleRetransmissionFailure();
 
+    /**
+     * IBackoffTimeoutCalculator provides interface for calculating retransmission backoff timeout.
+     *
+     * <p>IBackoffTimeoutCalculator exists so that the interface is injectable for testing.
+     */
     @VisibleForTesting
-    static long getExponentialBackoffTimeout(int retransmitCount) {
-        double expBackoffFactor = Math.pow(RETRANSMIT_BACKOFF_FACTOR, retransmitCount);
-        return (long) (RETRANSMIT_TIMEOUT_MS * expBackoffFactor);
+    public interface IBackoffTimeoutCalculator {
+        /** Calculate retransmission backoff timeout */
+        long getExponentialBackoffTimeout(int retransmitCount);
+    }
+
+    private static final class BackoffTimeoutCalculator implements IBackoffTimeoutCalculator {
+        @Override
+        public long getExponentialBackoffTimeout(int retransmitCount) {
+            double expBackoffFactor = Math.pow(RETRANSMIT_BACKOFF_FACTOR, retransmitCount);
+            return (long) (RETRANSMIT_TIMEOUT_MS * expBackoffFactor);
+        }
+    }
+
+    /** Sets IBackoffTimeoutCalculator */
+    @VisibleForTesting
+    public static void setBackoffTimeoutCalculator(IBackoffTimeoutCalculator calculator) {
+        sBackoffTimeoutCalculator = calculator;
+    }
+
+    /** Resets BackoffTimeoutCalculator of retransmitter */
+    @VisibleForTesting
+    public static void resetBackoffTimeoutCalculator() {
+        sBackoffTimeoutCalculator = new BackoffTimeoutCalculator();
     }
 }
