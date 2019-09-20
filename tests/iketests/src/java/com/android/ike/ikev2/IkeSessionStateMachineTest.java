@@ -3199,12 +3199,24 @@ public final class IkeSessionStateMachineTest {
         assertEquals(ERROR_TYPE_INVALID_SYNTAX, generatedPayload.notifyType);
     }
 
+    private void verifyLastSentRespAllPackets(byte[][] expectedPackets, IkeSaRecord saRecord) {
+        if (expectedPackets == null) {
+            assertNull(saRecord.getLastSentRespAllPackets());
+            return;
+        }
+
+        assertEquals(expectedPackets.length, saRecord.getLastSentRespAllPackets().size());
+        for (int i = 0; i < expectedPackets.length; i++) {
+            assertArrayEquals(expectedPackets[i], saRecord.getLastSentRespAllPackets().get(i));
+        }
+    }
+
     @Test
     public void testEncryptedRetransmitterImmediatelySendsRequest() throws Exception {
         setupIdleStateMachine();
         byte[][] dummyLastRespBytes =
                 new byte[][] {"testRetransmitterSendsRequestLastResp".getBytes()};
-        mIkeSessionStateMachine.mLastSentIkeResp = dummyLastRespBytes;
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyLastRespBytes));
 
         IkeMessage spyIkeReqMessage =
                 spy(
@@ -3237,7 +3249,7 @@ public final class IkeSessionStateMachineTest {
         // mLastSentIkeResp.
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyReqBytesList[0]), eq(REMOTE_ADDRESS));
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyReqBytesList[1]), eq(REMOTE_ADDRESS));
-        assertArrayEquals(dummyLastRespBytes, mIkeSessionStateMachine.mLastSentIkeResp);
+        verifyLastSentRespAllPackets(dummyLastRespBytes, mSpyCurrentIkeSaRecord);
     }
 
     // TODO: b/141275871 Test retransmisstions are fired for correct times within certain time.
@@ -3245,8 +3257,8 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCacheLastRequestAndResponse() throws Exception {
         setupIdleStateMachine();
-        mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket = null;
-        mIkeSessionStateMachine.mLastSentIkeResp = null;
+        mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(null /*reqPacket*/);
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(null /*respPacketList*/);
 
         byte[] dummyIkeReqFirstPacket = "testLastSentRequest".getBytes();
         byte[][] dummyIkeResp =
@@ -3273,9 +3285,9 @@ public final class IkeSessionStateMachineTest {
 
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[0]), eq(REMOTE_ADDRESS));
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[1]), eq(REMOTE_ADDRESS));
-        assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
-        assertArrayEquals(
-                dummyIkeReqFirstPacket, mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket);
+
+        verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
+        assertTrue(mSpyCurrentIkeSaRecord.isRetransmittedRequest(dummyIkeReqFirstPacket));
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
@@ -3286,24 +3298,24 @@ public final class IkeSessionStateMachineTest {
         setupIdleStateMachine();
 
         // Mock last sent request and response
-        byte[] dummyIkeReqFisrtPacket = "testRcvRetransmittedRequestReq".getBytes();
+        byte[] dummyIkeReqFirstPacket = "testRcvRetransmittedRequestReq".getBytes();
         byte[][] dummyIkeResp = new byte[][] {"testRcvRetransmittedRequestResp".getBytes()};
 
-        mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket = dummyIkeReqFisrtPacket;
-        mIkeSessionStateMachine.mLastSentIkeResp = dummyIkeResp;
+        mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(dummyIkeReqFirstPacket);
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyIkeResp));
         mSpyCurrentIkeSaRecord.incrementRemoteRequestMessageId();
 
         // Build request with last validated message ID
         ReceivedIkePacket request =
                 makeDpdIkeRequest(
                         mSpyCurrentIkeSaRecord.getRemoteRequestMessageId() - 1,
-                        dummyIkeReqFisrtPacket);
+                        dummyIkeReqFirstPacket);
 
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
 
         mLooper.dispatchAll();
 
-        assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
+        verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[0]), eq(REMOTE_ADDRESS));
 
         assertTrue(
@@ -3317,8 +3329,8 @@ public final class IkeSessionStateMachineTest {
         // Mock last sent request and response
         byte[] dummyIkeReqFirstPacket = "testDiscardFakeRetransmittedRequestReq".getBytes();
         byte[][] dummyIkeResp = new byte[][] {"testDiscardFakeRetransmittedRequestResp".getBytes()};
-        mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket = dummyIkeReqFirstPacket;
-        mIkeSessionStateMachine.mLastSentIkeResp = dummyIkeResp;
+        mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(dummyIkeReqFirstPacket);
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyIkeResp));
         mSpyCurrentIkeSaRecord.incrementRemoteRequestMessageId();
 
         // Build request with last validated message ID but different bytes
@@ -3330,7 +3342,7 @@ public final class IkeSessionStateMachineTest {
 
         mLooper.dispatchAll();
 
-        assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
+        verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
         verify(mSpyIkeSocket, never()).sendIkePacket(any(), any());
 
         assertTrue(
