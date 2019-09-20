@@ -285,12 +285,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     final HashMap<IChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
 
-    // TODO: Store them in IkeSaRecord
-    // If received request is identical in byte with last received request or the first fragment of
-    // last received request, retransmit the cached response.
-    @VisibleForTesting byte[] mLastReceivedIkeReqFirstPacket;
-    @VisibleForTesting byte[][] mLastSentIkeResp;
-
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
      * State.
@@ -1142,7 +1136,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         for (byte[] packet : packetList) {
             mIkeSocket.sendIkePacket(packet, mRemoteAddress);
         }
-        if (msg.ikeHeader.isResponseMsg) mLastSentIkeResp = packetList;
+        if (msg.ikeHeader.isResponseMsg) {
+            ikeSaRecord.updateLastSentRespAllPackets(Arrays.asList(packetList));
+        }
     }
 
     // Builds and sends IKE-level error notification response on the provided IKE SA record
@@ -1412,10 +1408,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             } else {
                 int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
                 if (expectedMsgId - 1 == ikeHeader.messageId) {
-                    if (Arrays.equals(mLastReceivedIkeReqFirstPacket, ikePacketBytes)) {
+
+                    if (ikeSaRecord.isRetransmittedRequest(ikePacketBytes)) {
                         logd("Received re-transmitted request. Retransmitting response");
 
-                        for (byte[] packet : mLastSentIkeResp) {
+                        for (byte[] packet : ikeSaRecord.getLastSentRespAllPackets()) {
                             mIkeSocket.sendIkePacket(packet, mRemoteAddress);
                         }
 
@@ -1438,8 +1435,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             ikeSaRecord.resetCollectedFragments(false /*isResp*/);
 
                             DecodeResultOk resultOk = (DecodeResultOk) decodeResult;
-                            mLastReceivedIkeReqFirstPacket = resultOk.firstPacket;
                             IkeMessage ikeMessage = resultOk.ikeMessage;
+                            ikeSaRecord.updateLastReceivedReqFirstPacket(resultOk.firstPacket);
 
                             // Handle DPD here.
                             if (ikeMessage.isDpdRequest()) {
@@ -1492,7 +1489,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             ikeSaRecord.resetCollectedFragments(false /*isResp*/);
 
-                            mLastReceivedIkeReqFirstPacket = resultError.firstPacket;
+                            ikeSaRecord.updateLastReceivedReqFirstPacket(resultError.firstPacket);
 
                             // IkeException MUST be already wrapped into an IkeProtocolException
                             handleRequestGenericProcessError(
