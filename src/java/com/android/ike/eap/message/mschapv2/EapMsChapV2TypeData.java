@@ -130,7 +130,8 @@ public class EapMsChapV2TypeData {
         }
 
         @VisibleForTesting
-        EapMsChapV2ChallengeRequest(int msChapV2Id, int msLength, byte[] challenge, byte[] name)
+        public EapMsChapV2ChallengeRequest(
+                int msChapV2Id, int msLength, byte[] challenge, byte[] name)
                 throws EapMsChapV2ParsingException {
             super(EAP_MSCHAP_V2_CHALLENGE, msChapV2Id, msLength);
 
