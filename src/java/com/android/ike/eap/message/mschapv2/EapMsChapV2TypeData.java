@@ -365,6 +365,39 @@ public class EapMsChapV2TypeData {
         }
     }
 
+    /**
+     * EapMsChapV2FailureResponse represents the EAP MSCHAPv2 Failure Response Packet
+     * (EAP MSCHAPv2#2.6).
+     */
+    public static class EapMsChapV2FailureResponse extends EapMsChapV2TypeData {
+        private EapMsChapV2FailureResponse() throws EapMsChapV2ParsingException {
+            super(EAP_MSCHAP_V2_FAILURE);
+        }
+
+        /**
+         * Constructs and returns a new EAP MSCHAPv2 Failure Response type data.
+         *
+         * @return a new EapMsChapV2FailureResponse instance
+         */
+        public static EapMsChapV2FailureResponse getEapMsChapV2FailureResponse() {
+            try {
+                return new EapMsChapV2FailureResponse();
+            } catch (EapMsChapV2ParsingException ex) {
+                // This should never happen
+                LOG.wtf(
+                        EapMsChapV2SuccessResponse.class.getSimpleName(),
+                        "ParsingException thrown while creating EapMsChapV2FailureResponse",
+                        ex);
+                return null;
+            }
+        }
+
+        @Override
+        public byte[] encode() {
+            return new byte[] {(byte) EAP_MSCHAP_V2_FAILURE};
+        }
+    }
+
     @VisibleForTesting
     static Map<String, String> getMessageMappings(String message)
             throws EapMsChapV2ParsingException {
