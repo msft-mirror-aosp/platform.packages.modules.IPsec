@@ -110,6 +110,7 @@ import com.android.ike.ikev2.message.IkeMessage.DecodeResult;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultOk;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
 import com.android.ike.ikev2.message.IkeMessage.DecodeResultProtectedError;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultUnprotectedError;
 import com.android.ike.ikev2.message.IkeMessage.IIkeMessageHelper;
 import com.android.ike.ikev2.message.IkeMessage.IkeMessageHelper;
 import com.android.ike.ikev2.message.IkeNoncePayload;
@@ -124,6 +125,8 @@ import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeSkfPayload;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.ikev2.utils.Retransmitter;
+import com.android.ike.ikev2.utils.Retransmitter.IBackoffTimeoutCalculator;
 import com.android.ike.utils.Log;
 import com.android.internal.util.State;
 
@@ -236,6 +239,8 @@ public final class IkeSessionStateMachineTest {
 
     private static final int PAYLOAD_TYPE_UNSUPPORTED = 127;
 
+    private static final long RETRANSMIT_BACKOFF_TIMEOUT_MS = 5000L;
+
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private Context mContext;
     private IpSecManager mIpSecManager;
@@ -261,6 +266,7 @@ public final class IkeSessionStateMachineTest {
 
     private IIkeMessageHelper mMockIkeMessageHelper;
     private ISaRecordHelper mMockSaRecordHelper;
+    private IBackoffTimeoutCalculator mMockBackoffTimeoutCalculator;
 
     private ChildSessionStateMachine mMockChildSessionStateMachine;
     private IChildSessionFactoryHelper mMockChildSessionFactoryHelper;
@@ -414,6 +420,18 @@ public final class IkeSessionStateMachineTest {
         when(mMockIkeMessageHelper.decode(
                         anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
                 .thenReturn(new DecodeResultProtectedError(exception, dummyPacket));
+
+        return new ReceivedIkePacket(header, dummyPacket);
+    }
+
+    private ReceivedIkePacket makeDummyReceivedIkePacketWithUnprotectedError(
+            IkeSaRecord ikeSaRecord, boolean isResp, int eType, IkeException exception) {
+        IkeHeader header =
+                makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SK);
+        byte[] dummyPacket = new byte[0];
+        when(mMockIkeMessageHelper.decode(
+                        anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
+                .thenReturn(new DecodeResultUnprotectedError(exception));
 
         return new ReceivedIkePacket(header, dummyPacket);
     }
@@ -621,6 +639,12 @@ public final class IkeSessionStateMachineTest {
                 mMockChildSessionFactoryHelper);
         setupChildStateMachineFactory(mMockChildSessionStateMachine);
 
+        // Inject longer retransmission timeout
+        mMockBackoffTimeoutCalculator = mock(IBackoffTimeoutCalculator.class);
+        when(mMockBackoffTimeoutCalculator.getExponentialBackoffTimeout(anyInt()))
+                .thenReturn(RETRANSMIT_BACKOFF_TIMEOUT_MS);
+        Retransmitter.setBackoffTimeoutCalculator(mMockBackoffTimeoutCalculator);
+
         // Setup state machine
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsPsk(mPsk));
 
@@ -650,6 +674,7 @@ public final class IkeSessionStateMachineTest {
         mSpyRemoteInitIkeSaRecord.close();
 
         IkeManager.resetIkeLog();
+        Retransmitter.resetBackoffTimeoutCalculator();
         IkeMessage.setIkeMessageHelper(new IkeMessageHelper());
         SaRecord.setSaRecordHelper(new SaRecordHelper());
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
@@ -2979,7 +3004,7 @@ public final class IkeSessionStateMachineTest {
 
         // Trigger a timeout, and immediately re-enter remote-delete
         mLooper.moveTimeForward(IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS / 2 + 1);
-        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.TIMEOUT_REKEY_REMOTE_DELETE_IKE);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.TIMEOUT_REKEY_REMOTE_DELETE);
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                 mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
@@ -3174,12 +3199,24 @@ public final class IkeSessionStateMachineTest {
         assertEquals(ERROR_TYPE_INVALID_SYNTAX, generatedPayload.notifyType);
     }
 
+    private void verifyLastSentRespAllPackets(byte[][] expectedPackets, IkeSaRecord saRecord) {
+        if (expectedPackets == null) {
+            assertNull(saRecord.getLastSentRespAllPackets());
+            return;
+        }
+
+        assertEquals(expectedPackets.length, saRecord.getLastSentRespAllPackets().size());
+        for (int i = 0; i < expectedPackets.length; i++) {
+            assertArrayEquals(expectedPackets[i], saRecord.getLastSentRespAllPackets().get(i));
+        }
+    }
+
     @Test
     public void testEncryptedRetransmitterImmediatelySendsRequest() throws Exception {
         setupIdleStateMachine();
         byte[][] dummyLastRespBytes =
                 new byte[][] {"testRetransmitterSendsRequestLastResp".getBytes()};
-        mIkeSessionStateMachine.mLastSentIkeResp = dummyLastRespBytes;
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyLastRespBytes));
 
         IkeMessage spyIkeReqMessage =
                 spy(
@@ -3212,14 +3249,16 @@ public final class IkeSessionStateMachineTest {
         // mLastSentIkeResp.
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyReqBytesList[0]), eq(REMOTE_ADDRESS));
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyReqBytesList[1]), eq(REMOTE_ADDRESS));
-        assertArrayEquals(dummyLastRespBytes, mIkeSessionStateMachine.mLastSentIkeResp);
+        verifyLastSentRespAllPackets(dummyLastRespBytes, mSpyCurrentIkeSaRecord);
     }
+
+    // TODO: b/141275871 Test retransmisstions are fired for correct times within certain time.
 
     @Test
     public void testCacheLastRequestAndResponse() throws Exception {
         setupIdleStateMachine();
-        mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket = null;
-        mIkeSessionStateMachine.mLastSentIkeResp = null;
+        mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(null /*reqPacket*/);
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(null /*respPacketList*/);
 
         byte[] dummyIkeReqFirstPacket = "testLastSentRequest".getBytes();
         byte[][] dummyIkeResp =
@@ -3246,9 +3285,12 @@ public final class IkeSessionStateMachineTest {
 
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[0]), eq(REMOTE_ADDRESS));
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[1]), eq(REMOTE_ADDRESS));
-        assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
-        assertArrayEquals(
-                dummyIkeReqFirstPacket, mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket);
+
+        verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
+        assertTrue(mSpyCurrentIkeSaRecord.isRetransmittedRequest(dummyIkeReqFirstPacket));
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
     @Test
@@ -3256,24 +3298,24 @@ public final class IkeSessionStateMachineTest {
         setupIdleStateMachine();
 
         // Mock last sent request and response
-        byte[] dummyIkeReqFisrtPacket = "testRcvRetransmittedRequestReq".getBytes();
+        byte[] dummyIkeReqFirstPacket = "testRcvRetransmittedRequestReq".getBytes();
         byte[][] dummyIkeResp = new byte[][] {"testRcvRetransmittedRequestResp".getBytes()};
 
-        mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket = dummyIkeReqFisrtPacket;
-        mIkeSessionStateMachine.mLastSentIkeResp = dummyIkeResp;
+        mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(dummyIkeReqFirstPacket);
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyIkeResp));
         mSpyCurrentIkeSaRecord.incrementRemoteRequestMessageId();
 
         // Build request with last validated message ID
         ReceivedIkePacket request =
                 makeDpdIkeRequest(
                         mSpyCurrentIkeSaRecord.getRemoteRequestMessageId() - 1,
-                        dummyIkeReqFisrtPacket);
+                        dummyIkeReqFirstPacket);
 
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
 
         mLooper.dispatchAll();
 
-        assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
+        verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
         verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[0]), eq(REMOTE_ADDRESS));
 
         assertTrue(
@@ -3287,8 +3329,8 @@ public final class IkeSessionStateMachineTest {
         // Mock last sent request and response
         byte[] dummyIkeReqFirstPacket = "testDiscardFakeRetransmittedRequestReq".getBytes();
         byte[][] dummyIkeResp = new byte[][] {"testDiscardFakeRetransmittedRequestResp".getBytes()};
-        mIkeSessionStateMachine.mLastReceivedIkeReqFirstPacket = dummyIkeReqFirstPacket;
-        mIkeSessionStateMachine.mLastSentIkeResp = dummyIkeResp;
+        mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(dummyIkeReqFirstPacket);
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyIkeResp));
         mSpyCurrentIkeSaRecord.incrementRemoteRequestMessageId();
 
         // Build request with last validated message ID but different bytes
@@ -3300,8 +3342,11 @@ public final class IkeSessionStateMachineTest {
 
         mLooper.dispatchAll();
 
-        assertArrayEquals(dummyIkeResp, mIkeSessionStateMachine.mLastSentIkeResp);
+        verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
         verify(mSpyIkeSocket, never()).sendIkePacket(any(), any());
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
     @Test
@@ -3947,5 +3992,21 @@ public final class IkeSessionStateMachineTest {
         // Verify IKE Session has quit
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+    }
+
+    @Test
+    public void testIdleHandlesUnprotectedPacket() throws Exception {
+        setupIdleStateMachine();
+
+        ReceivedIkePacket req =
+                makeDummyReceivedIkePacketWithUnprotectedError(
+                        mSpyCurrentIkeSaRecord,
+                        false /*isResp*/,
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        mock(IkeException.class));
+
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 }

@@ -455,8 +455,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         String notifyTypeString = NOTIFY_TYPE_TO_STRING.get(notifyType);
 
         if (notifyTypeString == null) {
-            return "Notify Payload (Unrecognized: " + notifyType + ")";
+            return "Notify(" + notifyType + ")";
         }
-        return "Notify Payload (" + notifyTypeString + ")";
+        return "Notify(" + notifyTypeString + ")";
     }
 }

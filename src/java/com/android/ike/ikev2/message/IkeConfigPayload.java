@@ -17,12 +17,14 @@
 package com.android.ike.ikev2.message;
 
 import android.annotation.IntDef;
+import android.net.LinkAddress;
 
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
@@ -111,10 +113,13 @@ public final class IkeConfigPayload extends IkePayload {
         private static final int ATTRIBUTE_TYPE_MASK = 0x7fff;
 
         private static final int ATTRIBUTE_HEADER_LEN = 4;
+        private static final int IPV4_PREFIX_LEN_MAX = 32;
 
         protected static final int VALUE_LEN_NOT_INCLUDED = 0;
+
         protected static final int IPV4_ADDRESS_LEN = 4;
         protected static final int IPV6_ADDRESS_LEN = 16;
+        protected static final int PREFIX_LEN_LEN = 1;
 
         public final int attributeType;
 
@@ -168,6 +173,38 @@ public final class IkeConfigPayload extends IkePayload {
         /** Get attribute length. */
         public int getAttributeLen() {
             return ATTRIBUTE_HEADER_LEN + getValueLength();
+        }
+
+        protected static int netmaskToPrefixLen(Inet4Address address) {
+            byte[] bytes = address.getAddress();
+
+            int netmaskInt = ByteBuffer.wrap(bytes).getInt();
+            int leftmostBitMask = 0x80000000;
+
+            int prefixLen = 0;
+            while ((netmaskInt & leftmostBitMask) == leftmostBitMask) {
+                prefixLen++;
+                netmaskInt <<= 1;
+            }
+
+            if (netmaskInt != 0) {
+                throw new IllegalArgumentException("Invalid netmask address");
+            }
+
+            return prefixLen;
+        }
+
+        protected static byte[] prefixToNetmaskBytes(int prefixLen) {
+            if (prefixLen > IPV4_PREFIX_LEN_MAX || prefixLen < 0) {
+                throw new IllegalArgumentException("Invalid IPv4 prefix length.");
+            }
+
+            int netmaskInt = (int) (((long) 0xffffffff) << (IPV4_PREFIX_LEN_MAX - prefixLen));
+            byte[] netmask = new byte[IPV4_ADDRESS_LEN];
+
+            ByteBuffer buffer = ByteBuffer.allocate(IPV4_ADDRESS_LEN);
+            buffer.putInt(netmaskInt);
+            return buffer.array();
         }
 
         protected abstract void encodeValueToByteBuffer(ByteBuffer buffer);
@@ -250,6 +287,221 @@ public final class IkeConfigPayload extends IkePayload {
         /** Construct an instance with a decoded inbound packet. */
         public ConfigAttributeIpv4Address(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, value);
+        }
+    }
+
+    /**
+     * This class represents Configuration Attribute for IPv4 DNS.
+     *
+     * <p>There is no use case to create a DNS request for a specfic DNS server address. As an IKE
+     * client, we will only support building an empty DNS attribute for an outbound IKE packet.
+     */
+    public static class ConfigAttributeIpv4Dns extends ConfigAttrIpv4AddressBase {
+        /**
+         * Construct an instance without a specified address for an outbound packet.
+         *
+         * <p>It should be only used in a configuration request.
+         */
+        public ConfigAttributeIpv4Dns() {
+            super(CONFIG_ATTR_INTERNAL_IP4_DNS);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        public ConfigAttributeIpv4Dns(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP4_DNS, value);
+        }
+    }
+
+    /** This class represents Configuration Attribute for IPv4 subnets. */
+    public static class ConfigAttributeIpv4Subnet extends ConfigAttribute {
+        private static final int VALUE_LEN = 2 * IPV4_ADDRESS_LEN;
+
+        public final LinkAddress linkAddress;
+
+        protected ConfigAttributeIpv4Subnet(LinkAddress ipv4LinkAddress) {
+            super(CONFIG_ATTR_INTERNAL_IP4_SUBNET);
+
+            if (!ipv4LinkAddress.isIpv4()) {
+                throw new IllegalArgumentException("Input LinkAddress is not IPv4");
+            }
+
+            this.linkAddress = ipv4LinkAddress;
+        }
+
+        protected ConfigAttributeIpv4Subnet() {
+            super(CONFIG_ATTR_INTERNAL_IP4_SUBNET);
+            this.linkAddress = null;
+        }
+
+        protected ConfigAttributeIpv4Subnet(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP4_SUBNET, value.length);
+
+            if (value.length == VALUE_LEN_NOT_INCLUDED) {
+                linkAddress = null;
+                return;
+            }
+
+            try {
+                ByteBuffer inputBuffer = ByteBuffer.wrap(value);
+                byte[] ipBytes = new byte[IPV4_ADDRESS_LEN];
+                inputBuffer.get(ipBytes);
+                byte[] netmaskBytes = new byte[IPV4_ADDRESS_LEN];
+                inputBuffer.get(netmaskBytes);
+
+                InetAddress address = InetAddress.getByAddress(ipBytes);
+                InetAddress netmask = InetAddress.getByAddress(netmaskBytes);
+                validateInet4AddressTypeOrThrow(address);
+                validateInet4AddressTypeOrThrow(netmask);
+
+                linkAddress = new LinkAddress(address, netmaskToPrefixLen((Inet4Address) netmask));
+            } catch (UnknownHostException | IllegalArgumentException e) {
+                throw new InvalidSyntaxException("Invalid attribute value", e);
+            }
+        }
+
+        private void validateInet4AddressTypeOrThrow(InetAddress address) {
+            if (!(address instanceof Inet4Address)) {
+                throw new IllegalArgumentException("Input InetAddress is not IPv4");
+            }
+        }
+
+        @Override
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            if (linkAddress == null) {
+                buffer.put(new byte[VALUE_LEN_NOT_INCLUDED]);
+                return;
+            }
+            byte[] netmaskBytes = prefixToNetmaskBytes(linkAddress.getPrefixLength());
+            buffer.put(linkAddress.getAddress().getAddress()).put(netmaskBytes);
+        }
+
+        @Override
+        protected int getValueLength() {
+            return linkAddress == null ? 0 : VALUE_LEN;
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length == VALUE_LEN || length == VALUE_LEN_NOT_INCLUDED;
+        }
+    }
+
+    /**
+     * This class represents common information of all Configuration Attributes whoses value is an
+     * IPv6 address range.
+     *
+     * <p>These attributes contains an IPv6 address and a prefix length.
+     */
+    abstract static class ConfigAttrIpv6AddrRangeBase extends ConfigAttribute {
+        private static final int VALUE_LEN = IPV6_ADDRESS_LEN + PREFIX_LEN_LEN;
+
+        public final LinkAddress linkAddress;
+
+        protected ConfigAttrIpv6AddrRangeBase(int attributeType, LinkAddress ipv6LinkAddress) {
+            super(attributeType);
+
+            validateIpv6LinkAddressTypeOrThrow(ipv6LinkAddress);
+            linkAddress = ipv6LinkAddress;
+        }
+
+        protected ConfigAttrIpv6AddrRangeBase(int attributeType) {
+            super(attributeType);
+            linkAddress = null;
+        }
+
+        protected ConfigAttrIpv6AddrRangeBase(int attributeType, byte[] value)
+                throws InvalidSyntaxException {
+            super(attributeType, value.length);
+
+            if (value.length == VALUE_LEN_NOT_INCLUDED) {
+                linkAddress = null;
+                return;
+            }
+
+            try {
+                ByteBuffer inputBuffer = ByteBuffer.wrap(value);
+                byte[] ip6AddrBytes = new byte[IPV6_ADDRESS_LEN];
+                inputBuffer.get(ip6AddrBytes);
+                InetAddress address = InetAddress.getByAddress(ip6AddrBytes);
+
+                int prefixLen = Byte.toUnsignedInt(inputBuffer.get());
+
+                linkAddress = new LinkAddress(address, prefixLen);
+                validateIpv6LinkAddressTypeOrThrow(linkAddress);
+            } catch (UnknownHostException | IllegalArgumentException e) {
+                throw new InvalidSyntaxException("Invalid attribute value", e);
+            }
+        }
+
+        private void validateIpv6LinkAddressTypeOrThrow(LinkAddress address) {
+            if (!address.isIpv6()) {
+                throw new IllegalArgumentException("Input LinkAddress is not IPv6");
+            }
+        }
+
+        @Override
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            if (linkAddress == null) {
+                buffer.put(new byte[VALUE_LEN_NOT_INCLUDED]);
+                return;
+            }
+
+            buffer.put(linkAddress.getAddress().getAddress())
+                    .put((byte) linkAddress.getPrefixLength());
+        }
+
+        @Override
+        protected int getValueLength() {
+            return linkAddress == null ? VALUE_LEN_NOT_INCLUDED : VALUE_LEN;
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length == VALUE_LEN || length == VALUE_LEN_NOT_INCLUDED;
+        }
+    }
+
+    /** This class represents Configuration Attribute for IPv6 internal addresses. */
+    public static class ConfigAttributeIpv6Address extends ConfigAttrIpv6AddrRangeBase {
+        /** Construct an instance with specified address for an outbound packet. */
+        public ConfigAttributeIpv6Address(LinkAddress ipv6LinkAddress) {
+            super(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, ipv6LinkAddress);
+        }
+
+        /**
+         * Construct an instance without a specified address for an outbound packet.
+         *
+         * <p>It should be only used in a configuration request.
+         */
+        public ConfigAttributeIpv6Address() {
+            super(CONFIG_ATTR_INTERNAL_IP6_ADDRESS);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        public ConfigAttributeIpv6Address(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, value);
+        }
+    }
+
+    /** This class represents Configuration Attribute for IPv6 subnets. */
+    public static class ConfigAttributeIpv6Subnet extends ConfigAttrIpv6AddrRangeBase {
+        /** Construct an instance with specified address for an outbound packet. */
+        public ConfigAttributeIpv6Subnet(LinkAddress ipv6LinkAddress) {
+            super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, ipv6LinkAddress);
+        }
+
+        /**
+         * Construct an instance without a specified address for an outbound packet.
+         *
+         * <p>It should be only used in a configuration request.
+         */
+        public ConfigAttributeIpv6Subnet() {
+            super(CONFIG_ATTR_INTERNAL_IP6_SUBNET);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        public ConfigAttributeIpv6Subnet(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, value);
         }
     }
 

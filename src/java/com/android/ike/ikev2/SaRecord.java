@@ -47,6 +47,7 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -581,6 +582,9 @@ public abstract class SaRecord implements AutoCloseable {
         private DecodeResultPartial mCollectedReqFragments;
         private DecodeResultPartial mCollectedRespFragments;
 
+        private byte[] mLastRecivedReqFirstPacket;
+        private List<byte[]> mLastSentRespAllPackets;
+
         /** Package private */
         IkeSaRecord(
                 IkeSecurityParameterIndex initSpi,
@@ -807,6 +811,26 @@ public abstract class SaRecord implements AutoCloseable {
         /** Reset collected IKE fragemnts */
         public void resetCollectedFragments(boolean isResp) {
             updateCollectedFragments(null, isResp);
+        }
+
+        /** Update first packet of last received request. */
+        public void updateLastReceivedReqFirstPacket(byte[] reqPacket) {
+            mLastRecivedReqFirstPacket = reqPacket;
+        }
+
+        /** Update all packets of last sent response. */
+        public void updateLastSentRespAllPackets(List<byte[]> respPacketList) {
+            mLastSentRespAllPackets = respPacketList;
+        }
+
+        /** Returns if received IKE packet is the first packet of a re-transmistted request. */
+        public boolean isRetransmittedRequest(byte[] request) {
+            return Arrays.equals(mLastRecivedReqFirstPacket, request);
+        }
+
+        /** Get all encoded packets of last sent response. */
+        public List<byte[]> getLastSentRespAllPackets() {
+            return mLastSentRespAllPackets;
         }
 
         /** Release IKE SPI resource. */

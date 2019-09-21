@@ -136,6 +136,6 @@ public final class IkeAuthPskPayload extends IkeAuthPayload {
 
     @Override
     public String getTypeString() {
-        return "Authentication-PSK Payload";
+        return "Auth(PSK)";
     }
 }

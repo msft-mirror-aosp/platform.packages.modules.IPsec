@@ -135,7 +135,7 @@ import java.util.concurrent.TimeUnit;
  *      Exchange Type = {IkeInit | IkeAuth | Create | Delete | Info}
  * </pre>
  */
-public class IkeSessionStateMachine extends SessionStateMachineBase {
+public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     private static final String TAG = "IkeSessionStateMachine";
 
@@ -158,9 +158,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
 
     // TODO: Allow users to configure IKE lifetime
-
-    // Use a value greater than the retransmit-failure timeout.
-    static final long REKEY_DELETE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180L);
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -204,9 +201,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     }
 
     /** Package private signals accessible for testing code. */
-    private static final int CMD_GENERAL_BASE = 0;
+    private static final int CMD_GENERAL_BASE = CMD_PRIVATE_BASE;
 
-    private static final int CMD_CATEGORY_SIZE = 100;
     /** Receive encoded IKE packet on IkeSessionStateMachine. */
     static final int CMD_RECEIVE_IKE_PACKET = CMD_GENERAL_BASE + 1;
     /** Receive encoded IKE packet with unrecognized IKE SPI on IkeSessionStateMachine. */
@@ -235,22 +231,35 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     static final int CMD_EAP_FINISH_EAP_AUTH = CMD_GENERAL_BASE + 14;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
-    // TODO: Add signal for retransmission.
 
-    // Constants for local request will be used in both IkeSessionStateMachine and
-    // ChildSessionStateMachine.
-    private static final int CMD_LOCAL_REQUEST_BASE = CMD_GENERAL_BASE + CMD_CATEGORY_SIZE;
-    static final int CMD_LOCAL_REQUEST_CREATE_IKE = CMD_LOCAL_REQUEST_BASE + 1;
-    static final int CMD_LOCAL_REQUEST_DELETE_IKE = CMD_LOCAL_REQUEST_BASE + 2;
-    static final int CMD_LOCAL_REQUEST_REKEY_IKE = CMD_LOCAL_REQUEST_BASE + 3;
-    static final int CMD_LOCAL_REQUEST_INFO = CMD_LOCAL_REQUEST_BASE + 4;
-    static final int CMD_LOCAL_REQUEST_CREATE_CHILD = CMD_LOCAL_REQUEST_BASE + 5;
-    static final int CMD_LOCAL_REQUEST_DELETE_CHILD = CMD_LOCAL_REQUEST_BASE + 6;
-    static final int CMD_LOCAL_REQUEST_REKEY_CHILD = CMD_LOCAL_REQUEST_BASE + 7;
-    // TODO: Add signals for other procedure types and notificaitons.
+    static final int CMD_IKE_LOCAL_REQUEST_BASE = CMD_GENERAL_BASE + CMD_CATEGORY_SIZE;
+    static final int CMD_LOCAL_REQUEST_CREATE_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 1;
+    static final int CMD_LOCAL_REQUEST_DELETE_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 2;
+    static final int CMD_LOCAL_REQUEST_REKEY_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 3;
+    static final int CMD_LOCAL_REQUEST_INFO = CMD_IKE_LOCAL_REQUEST_BASE + 4;
 
-    private static final int TIMEOUT_BASE = CMD_GENERAL_BASE + 200;
-    static final int TIMEOUT_REKEY_REMOTE_DELETE_IKE = TIMEOUT_BASE + 1;
+    private static final SparseArray<String> CMD_TO_STR;
+
+    static {
+        CMD_TO_STR = new SparseArray<>();
+        CMD_TO_STR.put(CMD_RECEIVE_IKE_PACKET, "Rcv packet");
+        CMD_TO_STR.put(CMD_RECEIVE_PACKET_INVALID_IKE_SPI, "Rcv invalid IKE SPI");
+        CMD_TO_STR.put(CMD_RECEIVE_REQUEST_FOR_CHILD, "Rcv Child request");
+        CMD_TO_STR.put(CMD_OUTBOUND_CHILD_PAYLOADS_READY, "Out child payloads ready");
+        CMD_TO_STR.put(CMD_CHILD_PROCEDURE_FINISHED, "Child procedure finished");
+        CMD_TO_STR.put(CMD_HANDLE_FIRST_CHILD_NEGOTIATION, "Negotiate first Child");
+        CMD_TO_STR.put(CMD_EXECUTE_LOCAL_REQ, "Execute local request");
+        CMD_TO_STR.put(CMD_RETRANSMIT, "Retransmit");
+        CMD_TO_STR.put(CMD_EAP_START_EAP_AUTH, "Start EAP");
+        CMD_TO_STR.put(CMD_EAP_OUTBOUND_MSG_READY, "EAP outbound msg ready");
+        CMD_TO_STR.put(CMD_EAP_ERRORED, "EAP errored");
+        CMD_TO_STR.put(CMD_EAP_FAILED, "EAP failed");
+        CMD_TO_STR.put(CMD_EAP_FINISH_EAP_AUTH, "Finish EAP");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_IKE, "Create IKE");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
+    }
 
     private final IkeSessionOptions mIkeSessionOptions;
 
@@ -275,12 +284,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
     @GuardedBy("mChildCbToSessions")
     final HashMap<IChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
-
-    // TODO: Store them in IkeSaRecord
-    // If received request is identical in byte with last received request or the first fragment of
-    // last received request, retransmit the cached response.
-    @VisibleForTesting byte[] mLastReceivedIkeReqFirstPacket;
-    @VisibleForTesting byte[][] mLastSentIkeResp;
 
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
@@ -843,43 +846,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         }
     }
 
-    /**
-     * Top level state for handling uncaught exceptions for all subclasses.
-     *
-     * <p>All other state MUST extend this state.
-     *
-     * <p>Only errors this state should catch are unexpected internal failures. Since this may be
-     * run in critical processes, it must never take down the process if it fails
-     */
-    abstract class ExceptionHandler extends State {
+    /** Top level state for handling uncaught exceptions for all subclasses. */
+    abstract class ExceptionHandler extends ExceptionHandlerBase {
         @Override
-        public final void enter() {
-            try {
-                enterState();
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-            }
-        }
-
-        @Override
-        public final boolean processMessage(Message message) {
-            try {
-                return processStateMessage(message);
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-                return HANDLED;
-            }
-        }
-
-        @Override
-        public final void exit() {
-            try {
-                exitState();
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-            }
-        }
-
         protected void cleanUpAndQuit(RuntimeException e) {
             // Clean up all SaRecords.
             closeAllSaRecords(false /*expectSaClosed*/);
@@ -892,16 +861,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             quitNow();
         }
 
-        protected void enterState() {
-            // Do nothing. Subclasses MUST override it if they are.
-        }
-
-        protected boolean processStateMessage(Message message) {
-            return NOT_HANDLED;
-        }
-
-        protected void exitState() {
-            // Do nothing. Subclasses MUST override it if they are.
+        @Override
+        protected String getCmdString(int cmd) {
+            return CMD_TO_STR.get(cmd);
         }
     }
 
@@ -1034,8 +996,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
                 default:
                     // Queue local requests, and trigger next procedure
-                    if (message.what >= CMD_LOCAL_REQUEST_BASE
-                            && message.what < CMD_LOCAL_REQUEST_BASE + CMD_CATEGORY_SIZE) {
+                    if (isLocalRequest(message.what)) {
                         handleLocalRequest(message.what, (LocalRequest) message.obj);
 
                         // Synchronously calls through to the scheduler callback, which will
@@ -1175,7 +1136,9 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
         for (byte[] packet : packetList) {
             mIkeSocket.sendIkePacket(packet, mRemoteAddress);
         }
-        if (msg.ikeHeader.isResponseMsg) mLastSentIkeResp = packetList;
+        if (msg.ikeHeader.isResponseMsg) {
+            ikeSaRecord.updateLastSentRespAllPackets(Arrays.asList(packetList));
+        }
     }
 
     // Builds and sends IKE-level error notification response on the provided IKE SA record
@@ -1282,6 +1245,17 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                     "Unknown local request passed to handleLocalRequest"));
             }
         }
+
+        /** Check if received signal is a local request. */
+        protected boolean isLocalRequest(int msgWhat) {
+            if ((msgWhat >= CMD_IKE_LOCAL_REQUEST_BASE
+                            && msgWhat < CMD_IKE_LOCAL_REQUEST_BASE + CMD_CATEGORY_SIZE)
+                    || (msgWhat >= CMD_CHILD_LOCAL_REQUEST_BASE
+                            && msgWhat < CMD_CHILD_LOCAL_REQUEST_BASE + CMD_CATEGORY_SIZE)) {
+                return true;
+            }
+            return false;
+        }
     }
 
     /**
@@ -1312,8 +1286,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
                 default:
                     // Queue local requests, and trigger next procedure
-                    if (message.what >= CMD_LOCAL_REQUEST_BASE
-                            && message.what < CMD_LOCAL_REQUEST_BASE + CMD_CATEGORY_SIZE) {
+                    if (isLocalRequest(message.what)) {
                         handleLocalRequest(message.what, (LocalRequest) message.obj);
                         return HANDLED;
                     }
@@ -1365,11 +1338,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
             logd(
                     methodTag
-                            + "Received an IKE "
-                            + msgDirection
+                            + "Received an "
+                            + ikeHeader.getBasicInfoString()
                             + " on IKE SA with local SPI: "
                             + ikeSaRecord.getLocalSpi()
-                            + ". IKE message size: "
+                            + ". Packet size: "
                             + ikePacketBytes.length);
 
             if (ikeHeader.isResponseMsg) {
@@ -1435,15 +1408,13 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             } else {
                 int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
                 if (expectedMsgId - 1 == ikeHeader.messageId) {
-                    if (Arrays.equals(mLastReceivedIkeReqFirstPacket, ikePacketBytes)) {
+
+                    if (ikeSaRecord.isRetransmittedRequest(ikePacketBytes)) {
                         logd("Received re-transmitted request. Retransmitting response");
 
-                        for (byte[] packet : mLastSentIkeResp) {
+                        for (byte[] packet : ikeSaRecord.getLastSentRespAllPackets()) {
                             mIkeSocket.sendIkePacket(packet, mRemoteAddress);
                         }
-
-                        // Notify state if it is listening for retransmitted request.
-                        handleRetransmittedReq();
 
                         // TODO:Support resetting remote rekey delete timer.
                     }
@@ -1464,8 +1435,8 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             ikeSaRecord.resetCollectedFragments(false /*isResp*/);
 
                             DecodeResultOk resultOk = (DecodeResultOk) decodeResult;
-                            mLastReceivedIkeReqFirstPacket = resultOk.firstPacket;
                             IkeMessage ikeMessage = resultOk.ikeMessage;
+                            ikeSaRecord.updateLastReceivedReqFirstPacket(resultOk.firstPacket);
 
                             // Handle DPD here.
                             if (ikeMessage.isDpdRequest()) {
@@ -1477,9 +1448,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                                 true,
                                                 ikeHeader.messageId);
                                 sendEncryptedIkeMessage(ikeSaRecord, dpdResponse);
-
-                                // Notify state if it is listening for DPD packets
-                                handleDpd();
                                 break;
                             }
 
@@ -1521,7 +1489,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                             ikeSaRecord.incrementRemoteRequestMessageId();
                             ikeSaRecord.resetCollectedFragments(false /*isResp*/);
 
-                            mLastReceivedIkeReqFirstPacket = resultError.firstPacket;
+                            ikeSaRecord.updateLastReceivedReqFirstPacket(resultError.firstPacket);
 
                             // IkeException MUST be already wrapped into an IkeProtocolException
                             handleRequestGenericProcessError(
@@ -1556,14 +1524,6 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                 }
             }
             return false;
-        }
-
-        protected void handleDpd() {
-            // Do nothing - Child states should override if they care.
-        }
-
-        protected void handleRetransmittedReq() {
-            // Do nothing - Child states should override if they care.
         }
 
         protected void handleTempFailure() {
@@ -1764,18 +1724,27 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
     /**
      * Receiving represents a state when idle IkeSessionStateMachine receives an incoming packet.
+     *
+     * <p>If this incoming packet is fully handled by Receiving state and does not trigger any
+     * further state transition or deletion of whole IKE Session, IkeSessionStateMachine MUST
+     * transition back to Idle.
      */
     class Receiving extends RekeyIkeHandlerBase {
+        private boolean mProcedureFinished = true;
+
         @Override
-        protected void handleDpd() {
-            // Go back to IDLE - the received request was a DPD
-            transitionTo(mIdle);
+        public void enterState() {
+            mProcedureFinished = true;
         }
 
         @Override
-        protected void handleRetransmittedReq() {
-            // Go back to IDLE - the received request was retransmitted
-            transitionTo(mIdle);
+        protected void handleReceivedIkePacket(Message message) {
+            super.handleReceivedIkePacket(message);
+
+            // If the received packet does not trigger a state transition or the packet causes this
+            // state machine to quit, transition back to Idle State. In the second case, state
+            // machine will first go back to Idle and then quit.
+            if (mProcedureFinished) transitionTo(mIdle);
         }
 
         @Override
@@ -1824,16 +1793,18 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                         ikeMessage, responseIkeMessage, false /*isLocalInit*/);
 
                         sendEncryptedIkeMessage(responseIkeMessage);
+
                         transitionTo(mRekeyIkeRemoteDelete);
+                        mProcedureFinished = false;
                     } catch (IkeProtocolException e) {
-                        handleRekeyCreationFailureAndBackToIdle(ikeMessage.ikeHeader.messageId, e);
+                        handleRekeyCreationFailure(ikeMessage.ikeHeader.messageId, e);
                     } catch (GeneralSecurityException e) {
-                        handleRekeyCreationFailureAndBackToIdle(
+                        handleRekeyCreationFailure(
                                 ikeMessage.ikeHeader.messageId,
                                 new NoValidProposalChosenException(
                                         "Error in building new IKE SA", e));
                     } catch (IOException e) {
-                        handleRekeyCreationFailureAndBackToIdle(
+                        handleRekeyCreationFailure(
                                 ikeMessage.ikeHeader.messageId,
                                 new NoValidProposalChosenException(
                                         "IKE SPI allocation collided - they reused an SPI.", e));
@@ -1852,20 +1823,18 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
                                     0 /*placeHolder*/,
                                     ikeMessage));
                     transitionTo(mChildProcedureOngoing);
+                    mProcedureFinished = false;
                     return;
                 default:
                     // TODO: Add support for generic INFORMATIONAL request
             }
         }
 
-        private void handleRekeyCreationFailureAndBackToIdle(
-                int messageId, IkeProtocolException e) {
+        private void handleRekeyCreationFailure(int messageId, IkeProtocolException e) {
             loge("Received invalid Rekey IKE request. Reject with error notification", e);
 
             buildAndSendNotificationResponse(
                     mCurrentIkeSaRecord, messageId, e.buildNotifyPayload());
-
-            transitionTo(mIdle);
         }
     }
 
@@ -2374,12 +2343,11 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             IkeHeader ikeHeader = receivedIkePacket.ikeHeader;
             byte[] ikePacketBytes = receivedIkePacket.ikePacketBytes;
 
-            String msgDirection = ikeHeader.isResponseMsg ? "response" : "request";
             logd(
                     methodTag
-                            + "Received an IKE "
-                            + msgDirection
-                            + ". IKE message size: "
+                            + "Received an "
+                            + ikeHeader.getBasicInfoString()
+                            + ". Packet size: "
                             + ikePacketBytes.length);
 
             if (ikeHeader.isResponseMsg) {
@@ -4012,14 +3980,14 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
             mIkeSaRecordSurviving = mRemoteInitNewIkeSaRecord;
             mIkeSaRecordAwaitingRemoteDel = mCurrentIkeSaRecord;
 
-            sendMessageDelayed(TIMEOUT_REKEY_REMOTE_DELETE_IKE, REKEY_DELETE_TIMEOUT_MS);
+            sendMessageDelayed(TIMEOUT_REKEY_REMOTE_DELETE, REKEY_DELETE_TIMEOUT_MS);
         }
 
         @Override
         public boolean processStateMessage(Message message) {
             // Intercept rekey delete timeout. Assume rekey succeeded since no retransmissions
             // were received.
-            if (message.what == TIMEOUT_REKEY_REMOTE_DELETE_IKE) {
+            if (message.what == TIMEOUT_REKEY_REMOTE_DELETE) {
                 finishRekey();
                 transitionTo(mIdle);
 
@@ -4031,7 +3999,7 @@ public class IkeSessionStateMachine extends SessionStateMachineBase {
 
         @Override
         public void exitState() {
-            removeMessages(TIMEOUT_REKEY_REMOTE_DELETE_IKE);
+            removeMessages(TIMEOUT_REKEY_REMOTE_DELETE);
         }
     }
 

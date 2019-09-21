@@ -985,13 +985,15 @@ public abstract class EapSimAkaAttribute {
          * Creates and returns an AtRes instance with the given res value.
          *
          * @param res byte-array RES value to be used for this
-         * @return AtRes value for
+         * @return AtRes instance for the given RES value
          * @throws EapSimAkaInvalidAttributeException if the given res value has an invalid length
          */
         public static AtRes getAtRes(byte[] res) throws EapSimAkaInvalidAttributeException {
             // Attributes must be 4B-aligned, so there can be 0 to 3 padding bytes added
-            int atResPaddingBytes = LENGTH_SCALING - (res.length % LENGTH_SCALING);
-            int resLenBytes = MIN_ATTR_LENGTH + res.length + atResPaddingBytes;
+            int resLenBytes = MIN_ATTR_LENGTH + res.length;
+            if (resLenBytes % LENGTH_SCALING != 0) {
+                resLenBytes += LENGTH_SCALING - (resLenBytes % LENGTH_SCALING);
+            }
 
             return new AtRes(resLenBytes, res);
         }

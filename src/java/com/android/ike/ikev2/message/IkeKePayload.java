@@ -267,6 +267,6 @@ public final class IkeKePayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "KE Payload";
+        return "KE";
     }
 }

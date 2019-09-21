@@ -151,9 +151,9 @@ public final class IkeIdPayload extends IkePayload {
     public String getTypeString() {
         switch (payloadType) {
             case PAYLOAD_TYPE_ID_INITIATOR:
-                return "Identification Initiator Payload";
+                return "IDi";
             case PAYLOAD_TYPE_ID_RESPONDER:
-                return "Identification Responder Payload";
+                return "IDr";
             default:
                 // Won't reach here.
                 throw new IllegalArgumentException(

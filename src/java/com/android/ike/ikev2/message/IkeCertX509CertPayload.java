@@ -93,6 +93,6 @@ public final class IkeCertX509CertPayload extends IkeCertPayload {
      */
     @Override
     public String getTypeString() {
-        return "Certificate Payload Carrying X.509 Certificate";
+        return "Cert(X509)";
     }
 }
