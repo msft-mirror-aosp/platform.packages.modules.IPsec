@@ -24,6 +24,7 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
@@ -502,6 +503,61 @@ public final class IkeConfigPayload extends IkePayload {
         /** Construct an instance with a decoded inbound packet. */
         public ConfigAttributeIpv6Subnet(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, value);
+        }
+    }
+
+    /**
+     * This class represents Configuration Attribute for IPv6 DNS.
+     *
+     * <p>There is no use case to create a DNS request for a specfic DNS server address. As an IKE
+     * client, we will only support building an empty DNS attribute for an outbound IKE packet.
+     */
+    public static class ConfigAttributeIpv6Dns extends ConfigAttribute {
+        public final Inet6Address address;
+
+        protected ConfigAttributeIpv6Dns() {
+            super(CONFIG_ATTR_INTERNAL_IP6_DNS);
+            this.address = null;
+        }
+
+        protected ConfigAttributeIpv6Dns(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP6_DNS, value.length);
+
+            if (value.length == VALUE_LEN_NOT_INCLUDED) {
+                address = null;
+                return;
+            }
+
+            try {
+                InetAddress netAddress = InetAddress.getByAddress(value);
+
+                if (!(netAddress instanceof Inet6Address)) {
+                    throw new InvalidSyntaxException("Invalid IPv6 address.");
+                }
+                address = (Inet6Address) netAddress;
+            } catch (UnknownHostException e) {
+                throw new InvalidSyntaxException("Invalid attribute value", e);
+            }
+        }
+
+        @Override
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            if (address == null) {
+                buffer.put(new byte[0]);
+                return;
+            }
+
+            buffer.put(address.getAddress());
+        }
+
+        @Override
+        protected int getValueLength() {
+            return address == null ? 0 : IPV6_ADDRESS_LEN;
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length == IPV6_ADDRESS_LEN || length == VALUE_LEN_NOT_INCLUDED;
         }
     }
 
