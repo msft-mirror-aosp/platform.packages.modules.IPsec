@@ -235,4 +235,29 @@ public class EapTestMessageDefinitions {
 
     public static final byte[] EAP_REQUEST_MSCHAP_V2 =
             hexStringToByteArray("01" + ID + "00061A01");
+
+    // MSCHAPv2 Test vectors taken from RFC 2759#9.2
+    public static final String MSCHAP_V2_USERNAME = "User";
+    public static final byte[] MSCHAP_V2_USERNAME_ASCII_BYTES = hexStringToByteArray("55736572");
+    public static final String MSCHAP_V2_PASSWORD = "clientPass";
+    public static final byte[] MSCHAP_V2_PASSWORD_UTF_BYTES =
+            hexStringToByteArray("63006C00690065006E0074005000610073007300");
+    public static final String MSCHAP_V2_AUTHENTICATOR_CHALLENGE_STRING =
+            "5B5D7C7D7B3F2F3E3C2C602132262628";
+    public static final byte[] MSCHAP_V2_AUTHENTICATOR_CHALLENGE =
+            hexStringToByteArray(MSCHAP_V2_AUTHENTICATOR_CHALLENGE_STRING);
+    public static final String MSCHAP_V2_PEER_CHALLENGE_STRING = "21402324255E262A28295F2B3A337C7E";
+    public static final byte[] MSCHAP_V2_PEER_CHALLENGE =
+            hexStringToByteArray(MSCHAP_V2_PEER_CHALLENGE_STRING);
+    public static final byte[] MSCHAP_V2_CHALLENGE = hexStringToByteArray("D02E4386BCE91226");
+    public static final byte[] MSCHAP_V2_PASSWORD_HASH =
+            hexStringToByteArray("44EBBA8D5312B8D611474411F56989AE");
+    public static final byte[] MSCHAP_V2_PASSWORD_HASH_HASH =
+            hexStringToByteArray("41C00C584BD2D91C4017A2A12FA59F3F");
+    public static final String MSCHAP_V2_NT_RESPONSE_STRING =
+            "82309ECD8D708B5EA08FAA3981CD83544233114A3D85D6DF";
+    public static final byte[] MSCHAP_V2_NT_RESPONSE =
+            hexStringToByteArray(MSCHAP_V2_NT_RESPONSE_STRING);
+    public static final byte[] MSCHAP_V2_AUTHENTICATOR_RESPONSE =
+            hexStringToByteArray("407A5589115FD0D6209F510FE9C04566932CDA56");
 }
