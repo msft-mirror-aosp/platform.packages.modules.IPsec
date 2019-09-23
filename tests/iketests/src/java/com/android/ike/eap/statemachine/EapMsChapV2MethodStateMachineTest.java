@@ -16,8 +16,18 @@
 
 package com.android.ike.eap.statemachine;
 
-import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_AUTHENTICATOR_CHALLENGE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_AUTHENTICATOR_RESPONSE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_CHALLENGE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_NT_RESPONSE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD_HASH;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD_HASH_HASH;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD_UTF_BYTES;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PEER_CHALLENGE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_USERNAME;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_USERNAME_ASCII_BYTES;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -32,32 +42,12 @@ import org.junit.Test;
 import java.security.SecureRandom;
 
 public class EapMsChapV2MethodStateMachineTest {
-    // Test vectors taken from RFC 2759#9.2
-    private static final String USERNAME = "User";
-    private static final byte[] USERNAME_ASCII_BYTES = hexStringToByteArray("55736572");
-    private static final String PASSWORD = "clientPass";
-    private static final byte[] PASSWORD_UTF_BYTES =
-            hexStringToByteArray("63006C00690065006E0074005000610073007300");
-    private static final byte[] AUTHENTICATOR_CHALLENGE =
-            hexStringToByteArray("5B5D7C7D7B3F2F3E3C2C602132262628");
-    private static final byte[] PEER_CHALLENGE =
-            hexStringToByteArray("21402324255E262A28295F2B3A337C7E");
-    private static final byte[] CHALLENGE = hexStringToByteArray("D02E4386BCE91226");
-    private static final byte[] PASSWORD_HASH =
-            hexStringToByteArray("44EBBA8D5312B8D611474411F56989AE");
-    private static final byte[] PASSWORD_HASH_HASH =
-            hexStringToByteArray("41C00C584BD2D91C4017A2A12FA59F3F");
-    private static final byte[] NT_RESPONSE =
-            hexStringToByteArray("82309ECD8D708B5EA08FAA3981CD83544233114A3D85D6DF");
-    private static final byte[] AUTHENTICATOR_RESPONSE =
-            hexStringToByteArray("407A5589115FD0D6209F510FE9C04566932CDA56");
-
     private EapMsChapV2Config mEapMsChapV2Config;
     private EapMsChapV2MethodStateMachine mStateMachine;
 
     @Before
     public void setUp() {
-        mEapMsChapV2Config = new EapMsChapV2Config(USERNAME, PASSWORD);
+        mEapMsChapV2Config = new EapMsChapV2Config(MSCHAP_V2_USERNAME, MSCHAP_V2_PASSWORD);
         mStateMachine = new EapMsChapV2MethodStateMachine(mEapMsChapV2Config, new SecureRandom());
     }
 
@@ -76,56 +66,69 @@ public class EapMsChapV2MethodStateMachineTest {
     @Test
     public void testUsernameToBytes() throws Exception {
         assertArrayEquals(
-                USERNAME_ASCII_BYTES, EapMsChapV2MethodStateMachine.usernameToBytes(USERNAME));
+                MSCHAP_V2_USERNAME_ASCII_BYTES,
+                EapMsChapV2MethodStateMachine.usernameToBytes(MSCHAP_V2_USERNAME));
     }
 
     @Test
     public void testPasswordToBytes() throws Exception {
         assertArrayEquals(
-                PASSWORD_UTF_BYTES, EapMsChapV2MethodStateMachine.passwordToBytes(PASSWORD));
+                MSCHAP_V2_PASSWORD_UTF_BYTES,
+                EapMsChapV2MethodStateMachine.passwordToBytes(MSCHAP_V2_PASSWORD));
     }
 
     @Test
     public void testGenerateNtResponse() throws Exception {
         byte[] ntResponse =
                 EapMsChapV2MethodStateMachine.generateNtResponse(
-                        AUTHENTICATOR_CHALLENGE, PEER_CHALLENGE, USERNAME, PASSWORD);
-        assertArrayEquals(NT_RESPONSE, ntResponse);
+                        MSCHAP_V2_AUTHENTICATOR_CHALLENGE,
+                        MSCHAP_V2_PEER_CHALLENGE,
+                        MSCHAP_V2_USERNAME,
+                        MSCHAP_V2_PASSWORD);
+        assertArrayEquals(MSCHAP_V2_NT_RESPONSE, ntResponse);
     }
 
     @Test
     public void testChallengeHash() throws Exception {
         byte[] challenge =
                 EapMsChapV2MethodStateMachine.challengeHash(
-                        PEER_CHALLENGE, AUTHENTICATOR_CHALLENGE, USERNAME);
-        assertArrayEquals(CHALLENGE, challenge);
+                        MSCHAP_V2_PEER_CHALLENGE,
+                        MSCHAP_V2_AUTHENTICATOR_CHALLENGE,
+                        MSCHAP_V2_USERNAME);
+        assertArrayEquals(MSCHAP_V2_CHALLENGE, challenge);
     }
 
     @Test
     public void testNtPasswordHash() throws Exception {
-        byte[] passwordHash = EapMsChapV2MethodStateMachine.ntPasswordHash(PASSWORD);
-        assertArrayEquals(PASSWORD_HASH, passwordHash);
+        byte[] passwordHash = EapMsChapV2MethodStateMachine.ntPasswordHash(MSCHAP_V2_PASSWORD);
+        assertArrayEquals(MSCHAP_V2_PASSWORD_HASH, passwordHash);
     }
 
     @Test
     public void testHashNtPasswordHash() throws Exception {
-        byte[] passwordHashHash = EapMsChapV2MethodStateMachine.hashNtPasswordHash(PASSWORD_HASH);
-        assertArrayEquals(PASSWORD_HASH_HASH, passwordHashHash);
+        byte[] passwordHashHash =
+                EapMsChapV2MethodStateMachine.hashNtPasswordHash(MSCHAP_V2_PASSWORD_HASH);
+        assertArrayEquals(MSCHAP_V2_PASSWORD_HASH_HASH, passwordHashHash);
     }
 
     @Test
     public void testChallengeResponse() throws Exception {
         byte[] challengeResponse =
-                EapMsChapV2MethodStateMachine.challengeResponse(CHALLENGE, PASSWORD_HASH);
-        assertArrayEquals(NT_RESPONSE, challengeResponse);
+                EapMsChapV2MethodStateMachine.challengeResponse(
+                        MSCHAP_V2_CHALLENGE, MSCHAP_V2_PASSWORD_HASH);
+        assertArrayEquals(MSCHAP_V2_NT_RESPONSE, challengeResponse);
     }
 
     @Test
     public void testGenerateAuthenticatorResponse() throws Exception {
         byte[] authenticatorResponse =
                 EapMsChapV2MethodStateMachine.generateAuthenticatorResponse(
-                        PASSWORD, NT_RESPONSE, PEER_CHALLENGE, AUTHENTICATOR_CHALLENGE, USERNAME);
-        assertArrayEquals(AUTHENTICATOR_RESPONSE, authenticatorResponse);
+                        MSCHAP_V2_PASSWORD,
+                        MSCHAP_V2_NT_RESPONSE,
+                        MSCHAP_V2_PEER_CHALLENGE,
+                        MSCHAP_V2_AUTHENTICATOR_CHALLENGE,
+                        MSCHAP_V2_USERNAME);
+        assertArrayEquals(MSCHAP_V2_AUTHENTICATOR_RESPONSE, authenticatorResponse);
     }
 
     @Test
@@ -133,11 +136,11 @@ public class EapMsChapV2MethodStateMachineTest {
         assertTrue(
                 "AuthenticatorResponse didn't match computed response",
                 EapMsChapV2MethodStateMachine.checkAuthenticatorResponse(
-                        PASSWORD,
-                        NT_RESPONSE,
-                        PEER_CHALLENGE,
-                        AUTHENTICATOR_CHALLENGE,
-                        USERNAME,
-                        AUTHENTICATOR_RESPONSE));
+                        MSCHAP_V2_PASSWORD,
+                        MSCHAP_V2_NT_RESPONSE,
+                        MSCHAP_V2_PEER_CHALLENGE,
+                        MSCHAP_V2_AUTHENTICATOR_CHALLENGE,
+                        MSCHAP_V2_USERNAME,
+                        MSCHAP_V2_AUTHENTICATOR_RESPONSE));
     }
 }
