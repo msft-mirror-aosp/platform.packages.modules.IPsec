@@ -292,6 +292,35 @@ public final class IkeConfigPayload extends IkePayload {
     }
 
     /**
+     * This class represents Configuration Attribute for IPv4 netmask.
+     *
+     * <p>Non-empty values for this attribute in a CFG_REQUEST do not make sense and thus MUST NOT
+     * be included
+     */
+    public static class ConfigAttributeIpv4Netmask extends ConfigAttrIpv4AddressBase {
+        /**
+         * Construct an instance without a specified address for an outbound packet.
+         *
+         * <p>It should be only used in a configuration request.
+         */
+        public ConfigAttributeIpv4Netmask() {
+            super(CONFIG_ATTR_INTERNAL_IP4_NETMASK);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        public ConfigAttributeIpv4Netmask(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP4_NETMASK, value);
+
+            if (address == null) return;
+            try {
+                netmaskToPrefixLen(address);
+            } catch (IllegalArgumentException e) {
+                throw new InvalidSyntaxException("Invalid attribute value", e);
+            }
+        }
+    }
+
+    /**
      * This class represents Configuration Attribute for IPv4 DNS.
      *
      * <p>There is no use case to create a DNS request for a specfic DNS server address. As an IKE
