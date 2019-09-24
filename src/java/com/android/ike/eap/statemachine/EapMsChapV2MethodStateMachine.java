@@ -16,14 +16,23 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 
 import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.crypto.ParityBitUtil;
+import com.android.ike.eap.exceptions.EapSilentException;
+import com.android.ike.eap.exceptions.mschapv2.EapMsChapV2ParsingException;
+import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeRequest;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeResponse;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
@@ -51,6 +60,10 @@ import javax.crypto.spec.DESKeySpec;
  * <p>Note: All Failure-Request messages received in the PostChallenge state will be responded to
  * with Failure-Response messages. That is, retryable failures <i>will not</i> be retried.
  *
+ * <p>Note: The EAP standard states that EAP methods may disallow EAP Notification messages for the
+ * duration of the method (RFC 3748#5.2). EAP MSCHAPv2 does not explicitly ban these packets, so
+ * they are allowed at any time (except once a terminal state is reached).
+ *
  * @see <a href="https://tools.ietf.org/html/draft-kamath-pppext-eap-mschapv2-02">Microsoft EAP CHAP
  *     Extensions Draft (EAP MSCHAPv2)</a>
  * @see <a href="https://tools.ietf.org/html/rfc2759">RFC 2759, Microsoft PPP CHAP Extensions,
@@ -59,11 +72,12 @@ import javax.crypto.spec.DESKeySpec;
  *     Point-to-Point Encryption (MPPE)</a>
  */
 public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
-    public static final String SHA_ALG = "SHA-1";
-    public static final String DES_ALG = "DES/ECB/NoPadding";
-    public static final String DES_KEY_FACTORY = "DES";
-    public static final String USERNAME_CHARSET = "US-ASCII";
-    public static final String PASSWORD_CHARSET = "UTF-16LE";
+    private static final String SHA_ALG = "SHA-1";
+    private static final String DES_ALG = "DES/ECB/NoPadding";
+    private static final String DES_KEY_FACTORY = "DES";
+    private static final String USERNAME_CHARSET = "US-ASCII";
+    private static final String PASSWORD_CHARSET = "UTF-16LE";
+    private static final int PEER_CHALLENGE_SIZE = 16;
     private static final int CHALLENGE_HASH_LEN = 8;
     private static final int PASSWORD_HASH_LEN = 16;
     private static final int PASSWORD_HASH_HASH_LEN = 16;
@@ -71,6 +85,9 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     private static final int Z_PASSWORD_HASH_LEN = 21;
     private static final int Z_PASSWORD_SECTION_LEN = 7;
     private static final int RESPONSE_SECTION_LEN = 8;
+
+    // Reserved for future use and must be 0 (EAP MSCHAPv2#2.2)
+    private static final int FLAGS = 0;
 
     // we all need a little magic in our lives
     // Defined in RFC 2759#8.7. Constants used for response Success response generation.
@@ -144,10 +161,53 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     }
 
     protected class ChallengeState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/140320101): implement ChallengeState
-            return null;
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            DecodeResult<EapMsChapV2ChallengeRequest> decodeResult =
+                    mTypeDataDecoder.decodeChallengeRequest(mTAG, message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                return decodeResult.eapError;
+            }
+
+            EapMsChapV2ChallengeRequest challengeRequest = decodeResult.eapTypeData;
+            byte[] peerChallenge = new byte[PEER_CHALLENGE_SIZE];
+            mSecureRandom.nextBytes(peerChallenge);
+
+            byte[] ntResponse;
+            try {
+                ntResponse =
+                        generateNtResponse(
+                                challengeRequest.challenge,
+                                peerChallenge,
+                                mEapMsChapV2Config.username,
+                                mEapMsChapV2Config.password);
+            } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
+                LOG.e(mTAG, "Error generating EAP MSCHAPv2 Challenge response", ex);
+                return new EapError(ex);
+            }
+
+            try {
+                EapMsChapV2ChallengeResponse challengeResponse =
+                        new EapMsChapV2ChallengeResponse(
+                                challengeRequest.msChapV2Id,
+                                peerChallenge,
+                                ntResponse,
+                                FLAGS,
+                                usernameToBytes(mEapMsChapV2Config.username));
+                transitionTo(new PostChallengeState());
+                LOG.e(mTAG, "transitioned to PostChallengeState");
+                return buildEapMessageResponse(mTAG, message.eapIdentifier, challengeResponse);
+            } catch (UnsupportedEncodingException | EapMsChapV2ParsingException ex) {
+                LOG.e(mTAG, "Error building response type data", ex);
+                return new EapError(ex);
+            }
         }
     }
 
@@ -156,6 +216,18 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
         public EapResult process(EapMessage message) {
             // TODO(b/140322003): implement PostChallengeState
             return null;
+        }
+    }
+
+    private EapResult buildEapMessageResponse(
+            String tag, int eapIdentifier, EapMsChapV2TypeData typeData) {
+        try {
+            EapData eapData = new EapData(getEapMethod(), typeData.encode());
+            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, eapData);
+            return EapResponse.getEapResponse(eapMessage);
+        } catch (EapSilentException ex) {
+            LOG.e(tag, "Error building response EapMessage", ex);
+            return new EapError(ex);
         }
     }
 
