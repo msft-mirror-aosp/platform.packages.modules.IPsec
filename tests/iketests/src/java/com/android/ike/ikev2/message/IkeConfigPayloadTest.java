@@ -18,8 +18,10 @@ package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
@@ -46,8 +48,10 @@ import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttrIpv6AddrRangeBas
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttribute;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Address;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
 
 import libcore.net.InetAddressUtils;
@@ -74,6 +78,8 @@ public final class IkeConfigPayloadTest {
 
     private static final Inet4Address IPV4_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+    private static final Inet4Address IPV4_NETMASK =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("255.255.255.240"));
     private static final int IP4_PREFIX_LEN = 28;
     private static final LinkAddress IPV4_LINK_ADDRESS =
             new LinkAddress(IPV4_ADDRESS, IP4_PREFIX_LEN);
@@ -82,6 +88,9 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("00010004c0000264");
     private static final byte[] IPV4_ADDRESS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00010000");
+
+    private static final byte[] IPV4_NETMASK_ATTRIBUTE_WITHOUT_VALUE =
+            TestUtils.hexStringToByteArray("00020000");
 
     private static final Inet4Address IPV4_DNS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("8.8.8.8"));
@@ -116,6 +125,8 @@ public final class IkeConfigPayloadTest {
     private static final byte[] IPV6_SUBNET_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("000f0000");
 
+    private static final Inet6Address IPV6_DNS =
+            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:db8:100::1"));
     private static final byte[] IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("000a0000");
 
@@ -306,6 +317,34 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
+    public void testDecodeIpv4NetmaskWithValue() throws Exception {
+        ConfigAttributeIpv4Netmask attribute =
+                new ConfigAttributeIpv4Netmask(IPV4_NETMASK.getAddress());
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_NETMASK, attribute.attributeType);
+        assertEquals(IPV4_NETMASK, attribute.address);
+    }
+
+    @Test
+    public void testDecodeIpv4NetmaskWithoutValue() throws Exception {
+        ConfigAttributeIpv4Netmask attribute = new ConfigAttributeIpv4Netmask(new byte[0]);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_NETMASK, attribute.attributeType);
+        assertNull(attribute.address);
+    }
+
+    @Test
+    public void testEncodeIpv4Netmask() throws Exception {
+        ConfigAttributeIpv4Netmask attribute = new ConfigAttributeIpv4Netmask();
+
+        verifyEncodeIpv4AddresBaseAttribute(
+                attribute,
+                CONFIG_ATTR_INTERNAL_IP4_NETMASK,
+                IPV4_NETMASK_ATTRIBUTE_WITHOUT_VALUE,
+                null /*expectedAddress*/);
+    }
+
+    @Test
     public void testDecodeIpv4DnsWithValue() throws Exception {
         ConfigAttributeIpv4Dns attribute = new ConfigAttributeIpv4Dns(IPV4_DNS.getAddress());
 
@@ -492,5 +531,30 @@ public final class IkeConfigPayloadTest {
                 CONFIG_ATTR_INTERNAL_IP6_SUBNET,
                 IPV6_SUBNET_ATTRIBUTE_WITHOUT_VALUE,
                 null /*expectedLinkAddress*/);
+    }
+
+    @Test
+    public void testDecodeIpv6DnsWithValue() throws Exception {
+        ConfigAttributeIpv6Dns attribute = new ConfigAttributeIpv6Dns(IPV6_DNS.getAddress());
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_DNS, attribute.attributeType);
+        assertEquals(IPV6_DNS, attribute.address);
+    }
+
+    @Test
+    public void testDecodeIpv6DnsWithoutValue() throws Exception {
+        ConfigAttributeIpv6Dns attribute = new ConfigAttributeIpv6Dns(new byte[0]);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_DNS, attribute.attributeType);
+        assertNull(attribute.address);
+    }
+
+    @Test
+    public void testEncodeIpv6Dns() throws Exception {
+        ConfigAttributeIpv6Dns attribute = new ConfigAttributeIpv6Dns();
+
+        verifyBuildAndEncodeAttributeCommon(
+                attribute, CONFIG_ATTR_INTERNAL_IP6_DNS, IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE);
+        assertNull(attribute.address);
     }
 }
