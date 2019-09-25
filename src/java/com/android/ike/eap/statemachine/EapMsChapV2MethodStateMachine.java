@@ -55,7 +55,13 @@ import javax.crypto.spec.DESKeySpec;
  *
  * <p>EAP MSCHAPv2 sessions will always follow the path:
  *
- * <p>CreatedState --> ChallengeState --> PostChallengeState --> FinalState
+ * <p>CreatedState
+ *      |
+ *      +--> ChallengeState
+ *             |
+ *             +--> ValidateAuthenticatorState --+--> AwaitingEapSuccessState --> FinalState
+ *                                               |
+ *                                               +--> AwaitingEapFailureState --> FinalState
  *
  * <p>Note: All Failure-Request messages received in the PostChallenge state will be responded to
  * with Failure-Response messages. That is, retryable failures <i>will not</i> be retried.
@@ -201,8 +207,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                                 ntResponse,
                                 FLAGS,
                                 usernameToBytes(mEapMsChapV2Config.username));
-                transitionTo(new PostChallengeState());
-                LOG.e(mTAG, "transitioned to PostChallengeState");
+                transitionTo(new ValidateAuthenticatorState());
                 return buildEapMessageResponse(mTAG, message.eapIdentifier, challengeResponse);
             } catch (UnsupportedEncodingException | EapMsChapV2ParsingException ex) {
                 LOG.e(mTAG, "Error building response type data", ex);
@@ -211,10 +216,26 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class PostChallengeState extends EapMethodState {
+    protected class ValidateAuthenticatorState extends EapMethodState {
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/140322003): implement PostChallengeState
+            // TODO(b/140322003): implement ValidateAuthenticatorState
+            return null;
+        }
+    }
+
+    protected class AwaitingEapSuccessState extends EapMethodState {
+        @Override
+        public EapResult process(EapMessage message) {
+            // TODO(b/141483998): implement the AwaitingEapSuccessState
+            return null;
+        }
+    }
+
+    protected class AwaitingEapFailureState extends EapMethodState {
+        @Override
+        public EapResult process(EapMessage message) {
+            // TODO(b/141483998): implement the AwaitingEapFailureState
             return null;
         }
     }
