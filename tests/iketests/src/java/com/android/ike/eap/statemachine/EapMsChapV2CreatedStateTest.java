@@ -36,7 +36,7 @@ import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeRequest;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
-import com.android.ike.eap.statemachine.EapMsChapV2MethodStateMachine.PostChallengeState;
+import com.android.ike.eap.statemachine.EapMsChapV2MethodStateMachine.ValidateAuthenticatorState;
 
 import org.junit.Test;
 
@@ -54,7 +54,7 @@ public class EapMsChapV2CreatedStateTest extends EapMsChapV2StateTest {
 
         mStateMachine.process(eapMessage);
 
-        assertTrue(mStateMachine.getState() instanceof PostChallengeState);
+        assertTrue(mStateMachine.getState() instanceof ValidateAuthenticatorState);
         verify(mMockTypeDataDecoder, times(2))
                 .decodeChallengeRequest(any(String.class), eq(DUMMY_TYPE_DATA));
     }
