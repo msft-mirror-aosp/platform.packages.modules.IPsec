@@ -73,6 +73,10 @@ public abstract class IkeCertPayload extends IkePayload {
 
     @CertificateEncoding public final int certEncodingType;
 
+    protected IkeCertPayload(@CertificateEncoding int encodingType) {
+        this(false /*critical*/, encodingType);
+    }
+
     protected IkeCertPayload(boolean critical, @CertificateEncoding int encodingType) {
         super(PAYLOAD_TYPE_CERT, critical);
         certEncodingType = encodingType;

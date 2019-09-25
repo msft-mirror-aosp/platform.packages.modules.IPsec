@@ -55,6 +55,7 @@ import com.android.ike.ikev2.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
 import com.android.ike.ikev2.IkeSessionOptions.IkeAuthConfig;
+import com.android.ike.ikev2.IkeSessionOptions.IkeAuthDigitalSignRemoteConfig;
 import com.android.ike.ikev2.IkeSessionOptions.IkeAuthPskConfig;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -66,9 +67,11 @@ import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeCertPayload;
+import com.android.ike.ikev2.message.IkeCertX509CertPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeEapPayload;
 import com.android.ike.ikev2.message.IkeHeader;
@@ -107,6 +110,8 @@ import java.net.SocketException;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.security.SecureRandom;
+import java.security.cert.TrustAnchor;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -2971,13 +2976,66 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             respIdPayload);
                     break;
                 case IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
-                    // STOPSHIP: b/122685769 Validate received certificates and digital signature.
+                    authenticateDigitalSignature(
+                            certPayloads,
+                            ((IkeAuthDigitalSignRemoteConfig)
+                                            mIkeSessionOptions.getRemoteAuthConfig())
+                                    .mTrustAnchor,
+                            authPayload,
+                            respIdPayload);
                     break;
                 default:
                     cleanUpAndQuit(
                             new IllegalArgumentException(
                                     "Unrecognized auth method: " + authPayload.authMethod));
             }
+        }
+
+        private void authenticateDigitalSignature(
+                List<IkeCertPayload> certPayloads,
+                TrustAnchor trustAnchor,
+                IkeAuthPayload authPayload,
+                IkeIdPayload respIdPayload)
+                throws AuthenticationFailedException {
+            if (authPayload.authMethod != IkeAuthPayload.AUTH_METHOD_RSA_DIGITAL_SIGN
+                    && authPayload.authMethod != IkeAuthPayload.AUTH_METHOD_GENERIC_DIGITAL_SIGN) {
+                throw new AuthenticationFailedException(
+                        "Expected the remote/server to use digital-signature-based authentication"
+                                + " but they used: "
+                                + authPayload.authMethod);
+            }
+
+            X509Certificate endCert = null;
+            List<X509Certificate> certList = new LinkedList<>();
+
+            // TODO: b/122676944 Extract CRL from IkeCrlPayload when we support IkeCrlPayload
+            for (IkeCertPayload certPayload : certPayloads) {
+                X509Certificate cert = ((IkeCertX509CertPayload) certPayload).certificate;
+
+                // The first certificate MUST be the end entity certificate.
+                if (endCert == null) endCert = cert;
+                certList.add(cert);
+            }
+
+            if (endCert == null) {
+                throw new AuthenticationFailedException(
+                        "The remote/server failed to provide a end certificate");
+            }
+
+            Set<TrustAnchor> trustAnchorSet = new HashSet<>();
+            trustAnchorSet.add(trustAnchor);
+
+            IkeCertPayload.validateCertificates(
+                    endCert, certList, null /*crlList*/, trustAnchorSet);
+
+            IkeAuthDigitalSignPayload signPayload = (IkeAuthDigitalSignPayload) authPayload;
+            signPayload.verifyInboundSignature(
+                    endCert,
+                    mIkeInitResponseBytes,
+                    mCurrentIkeSaRecord.nonceInitiator,
+                    respIdPayload.getEncodedPayloadBody(),
+                    mIkePrf,
+                    mCurrentIkeSaRecord.getSkPr());
         }
 
         @Override

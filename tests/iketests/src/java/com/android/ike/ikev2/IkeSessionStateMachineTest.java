@@ -99,6 +99,7 @@ import com.android.ike.ikev2.exceptions.UnsupportedCriticalPayloadException;
 import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
+import com.android.ike.ikev2.message.IkeCertX509CertPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeEapPayload;
 import com.android.ike.ikev2.message.IkeHeader;
@@ -125,6 +126,7 @@ import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeSkfPayload;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.ikev2.testutils.CertUtils;
 import com.android.ike.ikev2.testutils.MockIpSecTestUtils;
 import com.android.ike.ikev2.utils.Retransmitter;
 import com.android.ike.ikev2.utils.Retransmitter.IBackoffTimeoutCalculator;
@@ -285,6 +287,9 @@ public final class IkeSessionStateMachineTest {
     private EapSessionConfig mEapSessionConfig;
     private IkeEapAuthenticatorFactory mMockEapAuthenticatorFactory;
     private EapAuthenticator mMockEapAuthenticator;
+
+    private X509Certificate mRootCertificate;
+    private X509Certificate mServerEndCertificate;
 
     private ArgumentCaptor<IkeMessage> mIkeMessageCaptor =
             ArgumentCaptor.forClass(IkeMessage.class);
@@ -611,6 +616,9 @@ public final class IkeSessionStateMachineTest {
         when(mMockEapAuthenticatorFactory.newEapAuthenticator(any(), any(), any(), any()))
                 .thenReturn(mMockEapAuthenticator);
 
+        mRootCertificate = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
+        mServerEndCertificate = CertUtils.createCertFromPemFile("end-cert-a.pem");
+
         mPsk = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
         mChildSessionOptions = buildChildSessionOptions();
@@ -731,7 +739,7 @@ public final class IkeSessionStateMachineTest {
 
     private IkeSessionOptions buildIkeSessionOptionsEap() throws Exception {
         return buildIkeSessionOptionsCommon()
-                .setAuthEap(mock(X509Certificate.class), mEapSessionConfig)
+                .setAuthEap(mRootCertificate, mEapSessionConfig)
                 .build();
     }
 
@@ -1996,6 +2004,20 @@ public final class IkeSessionStateMachineTest {
         return spyAuthPayload;
     }
 
+    private IkeAuthDigitalSignPayload makeSpyDigitalSignAuthPayload() throws Exception {
+        IkeAuthDigitalSignPayload spyAuthPayload =
+                spy(
+                        (IkeAuthDigitalSignPayload)
+                                IkeTestUtils.hexStringToIkePayload(
+                                        IkePayload.PAYLOAD_TYPE_AUTH,
+                                        true /*isResp*/,
+                                        GENERIC_DIGITAL_SIGN_AUTH_RESP_HEX_STRING));
+        doNothing()
+                .when(spyAuthPayload)
+                .verifyInboundSignature(any(), any(), any(), any(), any(), any());
+        return spyAuthPayload;
+    }
+
     private IkeIdPayload makeRespIdPayload() throws Exception {
         return (IkeIdPayload)
                 IkeTestUtils.hexStringToIkePayload(
@@ -2086,28 +2108,15 @@ public final class IkeSessionStateMachineTest {
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
         verifyRetransmissionStarted();
 
-        // Build IKE AUTH response with EAP Payload and ID-Responder Payload.
-
-        // TODO: Also include Cert Payload.
+        // Build IKE AUTH response with EAP. Auth, ID-Resp and Cert payloads.
         List<IkePayload> authRelatedPayloads = new LinkedList<>();
 
         authRelatedPayloads.add(new IkeEapPayload(EAP_DUMMY_MSG));
+        authRelatedPayloads.add(makeSpyDigitalSignAuthPayload());
+        authRelatedPayloads.add(makeRespIdPayload());
 
-        IkeAuthDigitalSignPayload authPayload =
-                (IkeAuthDigitalSignPayload)
-                        IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_AUTH,
-                                true /*isResp*/,
-                                GENERIC_DIGITAL_SIGN_AUTH_RESP_HEX_STRING);
-        authRelatedPayloads.add(authPayload);
-
-        IkeIdPayload respIdPayload =
-                (IkeIdPayload)
-                        IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
-                                true /*isResp*/,
-                                ID_PAYLOAD_RESPONDER_HEX_STRING);
-        authRelatedPayloads.add(respIdPayload);
+        IkeCertX509CertPayload certPayload = new IkeCertX509CertPayload(mServerEndCertificate);
+        authRelatedPayloads.add(certPayload);
 
         // Send IKE AUTH response to IKE state machine
         mIkeSessionStateMachine.sendMessage(
@@ -2127,8 +2136,6 @@ public final class IkeSessionStateMachineTest {
         verifyRetransmissionStopped();
         assertNotNull(mIkeSessionStateMachine.mInitIdPayload);
         assertNotNull(mIkeSessionStateMachine.mRespIdPayload);
-
-        // TODO: Verify authentication is done
     }
 
     private IEapCallback verifyEapAuthenticatorCreatedAndGetCallback() {
