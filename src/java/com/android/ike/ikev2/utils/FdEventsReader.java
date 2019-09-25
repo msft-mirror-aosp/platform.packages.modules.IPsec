@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.ike.utils;
+package com.android.ike.ikev2.utils;
 
 import static android.os.MessageQueue.OnFileDescriptorEventListener.EVENT_ERROR;
 import static android.os.MessageQueue.OnFileDescriptorEventListener.EVENT_INPUT;

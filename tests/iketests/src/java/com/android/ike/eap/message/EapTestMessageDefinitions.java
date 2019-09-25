@@ -238,7 +238,9 @@ public class EapTestMessageDefinitions {
 
     // MSCHAPv2 Test vectors taken from RFC 2759#9.2
     public static final String MSCHAP_V2_USERNAME = "User";
-    public static final byte[] MSCHAP_V2_USERNAME_ASCII_BYTES = hexStringToByteArray("55736572");
+    public static final String MSCHAP_V2_USERNAME_HEX = "55736572";
+    public static final byte[] MSCHAP_V2_USERNAME_ASCII_BYTES =
+            hexStringToByteArray(MSCHAP_V2_USERNAME_HEX);
     public static final String MSCHAP_V2_PASSWORD = "clientPass";
     public static final byte[] MSCHAP_V2_PASSWORD_UTF_BYTES =
             hexStringToByteArray("63006C00690065006E0074005000610073007300");
@@ -260,4 +262,16 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray(MSCHAP_V2_NT_RESPONSE_STRING);
     public static final byte[] MSCHAP_V2_AUTHENTICATOR_RESPONSE =
             hexStringToByteArray("407A5589115FD0D6209F510FE9C04566932CDA56");
+
+    public static final String MSCHAP_V2_ID = "42";
+    public static final int MSCHAP_V2_ID_INT = Integer.parseInt(MSCHAP_V2_ID, 16 /* radix */);
+    public static final byte[] EAP_MSCHAP_V2_CHALLENGE_RESPONSE =
+            hexStringToByteArray("02" + ID + "003F" // EAP-Response | ID | length in bytes
+                    + "1A02" + MSCHAP_V2_ID // EAP-MSCHAPv2 | Response | MSCHAPv2 ID
+                    + "003A31" // MS length | Value Size (0x31)
+                    + MSCHAP_V2_PEER_CHALLENGE_STRING
+                    + "0000000000000000" // 8B (reserved)
+                    + MSCHAP_V2_NT_RESPONSE_STRING
+                    + "00" // Flags (always 0)
+                    + MSCHAP_V2_USERNAME_HEX);
 }
