@@ -43,8 +43,7 @@ import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeRequest;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
-import com.android.ike.eap.statemachine.EapMsChapV2MethodStateMachine.ChallengeState;
-import com.android.ike.eap.statemachine.EapMsChapV2MethodStateMachine.PostChallengeState;
+import com.android.ike.eap.statemachine.EapMsChapV2MethodStateMachine.ValidateAuthenticatorState;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -81,7 +80,7 @@ public class EapMsChapV2ChallengeStateTest extends EapMsChapV2StateTest {
         EapResult result = mStateMachine.process(eapMessage);
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_MSCHAP_V2_CHALLENGE_RESPONSE, eapResponse.packet);
-        assertTrue(mStateMachine.getState() instanceof PostChallengeState);
+        assertTrue(mStateMachine.getState() instanceof ValidateAuthenticatorState);
         verify(mMockSecureRandom).nextBytes(any(byte[].class));
         verify(mMockTypeDataDecoder).decodeChallengeRequest(any(String.class), eq(DUMMY_TYPE_DATA));
     }
