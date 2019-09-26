@@ -20,6 +20,7 @@ import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.AUTH_STRING;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EXTRA_M_MESSAGE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.MESSAGE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.MESSAGE_MISSING_TEXT;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_DUPLICATE_KEY;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_EXTRA_M;
@@ -100,15 +101,13 @@ public class EapMsChapV2TypeDataTest {
         expectedMappings.put("M", EXTRA_M_MESSAGE);
         assertEquals(
                 expectedMappings, EapMsChapV2TypeData.getMessageMappings(SUCCESS_REQUEST_EXTRA_M));
-    }
 
-    @Test
-    public void testGetMessageMappingsMissingM() {
-        try {
-            EapMsChapV2TypeData.getMessageMappings(SUCCESS_REQUEST_MISSING_M);
-            fail("Expected EapMsChapV2ParsingException for missing 'M='");
-        } catch (EapMsChapV2ParsingException expected) {
-        }
+        expectedMappings = new HashMap<>();
+        expectedMappings.put("S", AUTH_STRING);
+        expectedMappings.put("M", MESSAGE_MISSING_TEXT);
+        assertEquals(
+                expectedMappings,
+                EapMsChapV2TypeData.getMessageMappings(SUCCESS_REQUEST_MISSING_M));
     }
 
     @Test
