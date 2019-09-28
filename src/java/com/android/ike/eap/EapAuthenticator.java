@@ -137,8 +137,12 @@ public class EapAuthenticator extends Handler {
                             () -> {
                                 // No synchronization needed, since Handler serializes
                                 if (!mCallbackFired) {
-                                    LOG.i(TAG, "EapSateMachine returned "
-                                            + finalProcessResponse.getClass().getSimpleName());
+                                    LOG.i(
+                                            TAG,
+                                            "EapStateMachine returned "
+                                                    + finalProcessResponse
+                                                            .getClass()
+                                                            .getSimpleName());
 
                                     if (finalProcessResponse instanceof EapResponse) {
                                         mCb.onResponse(((EapResponse) finalProcessResponse).packet);
