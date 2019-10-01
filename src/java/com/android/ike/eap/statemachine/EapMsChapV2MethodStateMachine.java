@@ -102,13 +102,17 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     private static final int Z_PASSWORD_HASH_LEN = 21;
     private static final int Z_PASSWORD_SECTION_LEN = 7;
     private static final int RESPONSE_SECTION_LEN = 8;
+    private static final int SHS_PAD_LEN = 40;
+    private static final int MASTER_KEY_LEN = 16;
+    private static final int SESSION_KEY_LEN = 16;
+    private static final int MASTER_SESSION_KEY_LEN = 2 * SESSION_KEY_LEN;
 
     // Reserved for future use and must be 0 (EAP MSCHAPv2#2.2)
     private static final int FLAGS = 0;
 
     // we all need a little magic in our lives
-    // Defined in RFC 2759#8.7. Constants used for response Success response generation.
-    private static final byte[] MAGIC_1 = {
+    // Defined in RFC 2759#8.7. Constants used for Success response generation.
+    private static final byte[] CHALLENGE_MAGIC_1 = {
         (byte) 0x4D, (byte) 0x61, (byte) 0x67, (byte) 0x69, (byte) 0x63, (byte) 0x20, (byte) 0x73,
         (byte) 0x65, (byte) 0x72, (byte) 0x76, (byte) 0x65, (byte) 0x72, (byte) 0x20, (byte) 0x74,
         (byte) 0x6F, (byte) 0x20, (byte) 0x63, (byte) 0x6C, (byte) 0x69, (byte) 0x65, (byte) 0x6E,
@@ -116,13 +120,61 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
         (byte) 0x6E, (byte) 0x67, (byte) 0x20, (byte) 0x63, (byte) 0x6F, (byte) 0x6E, (byte) 0x73,
         (byte) 0x74, (byte) 0x61, (byte) 0x6E, (byte) 0x74
     };
-    private static final byte[] MAGIC_2 = {
+    private static final byte[] CHALLENGE_MAGIC_2 = {
         (byte) 0x50, (byte) 0x61, (byte) 0x64, (byte) 0x20, (byte) 0x74, (byte) 0x6F, (byte) 0x20,
         (byte) 0x6D, (byte) 0x61, (byte) 0x6B, (byte) 0x65, (byte) 0x20, (byte) 0x69, (byte) 0x74,
         (byte) 0x20, (byte) 0x64, (byte) 0x6F, (byte) 0x20, (byte) 0x6D, (byte) 0x6F, (byte) 0x72,
         (byte) 0x65, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x61, (byte) 0x6E, (byte) 0x20,
         (byte) 0x6F, (byte) 0x6E, (byte) 0x65, (byte) 0x20, (byte) 0x69, (byte) 0x74, (byte) 0x65,
         (byte) 0x72, (byte) 0x61, (byte) 0x74, (byte) 0x69, (byte) 0x6F, (byte) 0x6E
+    };
+
+    // Defined in RFC 3079#3.4. Constants used for Master Session Key (MSK) generation
+    private static final byte[] SHS_PAD_1 = new byte[SHS_PAD_LEN];
+    private static final byte[] SHS_PAD_2 = new byte[SHS_PAD_LEN];
+
+    static {
+        Arrays.fill(SHS_PAD_2, (byte) 0xF2);
+    }
+
+    private static final byte[] MSK_MAGIC_1 = {
+        (byte) 0x54, (byte) 0x68, (byte) 0x69, (byte) 0x73, (byte) 0x20, (byte) 0x69,
+        (byte) 0x73, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65, (byte) 0x20,
+        (byte) 0x4D, (byte) 0x50, (byte) 0x50, (byte) 0x45, (byte) 0x20, (byte) 0x4D,
+        (byte) 0x61, (byte) 0x73, (byte) 0x74, (byte) 0x65, (byte) 0x72, (byte) 0x20,
+        (byte) 0x4B, (byte) 0x65, (byte) 0x79
+    };
+    private static final byte[] MSK_MAGIC_2 = {
+        (byte) 0x4F, (byte) 0x6E, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65,
+        (byte) 0x20, (byte) 0x63, (byte) 0x6C, (byte) 0x69, (byte) 0x65, (byte) 0x6E,
+        (byte) 0x74, (byte) 0x20, (byte) 0x73, (byte) 0x69, (byte) 0x64, (byte) 0x65,
+        (byte) 0x2C, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x69, (byte) 0x73,
+        (byte) 0x20, (byte) 0x69, (byte) 0x73, (byte) 0x20, (byte) 0x74, (byte) 0x68,
+        (byte) 0x65, (byte) 0x20, (byte) 0x73, (byte) 0x65, (byte) 0x6E, (byte) 0x64,
+        (byte) 0x20, (byte) 0x6B, (byte) 0x65, (byte) 0x79, (byte) 0x3B, (byte) 0x20,
+        (byte) 0x6F, (byte) 0x6E, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65,
+        (byte) 0x20, (byte) 0x73, (byte) 0x65, (byte) 0x72, (byte) 0x76, (byte) 0x65,
+        (byte) 0x72, (byte) 0x20, (byte) 0x73, (byte) 0x69, (byte) 0x64, (byte) 0x65,
+        (byte) 0x2C, (byte) 0x20, (byte) 0x69, (byte) 0x74, (byte) 0x20, (byte) 0x69,
+        (byte) 0x73, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65, (byte) 0x20,
+        (byte) 0x72, (byte) 0x65, (byte) 0x63, (byte) 0x65, (byte) 0x69, (byte) 0x76,
+        (byte) 0x65, (byte) 0x20, (byte) 0x6B, (byte) 0x65, (byte) 0x79, (byte) 0x2E
+    };
+    private static final byte[] MSK_MAGIC_3 = {
+        (byte) 0x4F, (byte) 0x6E, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65,
+        (byte) 0x20, (byte) 0x63, (byte) 0x6C, (byte) 0x69, (byte) 0x65, (byte) 0x6E,
+        (byte) 0x74, (byte) 0x20, (byte) 0x73, (byte) 0x69, (byte) 0x64, (byte) 0x65,
+        (byte) 0x2C, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x69, (byte) 0x73,
+        (byte) 0x20, (byte) 0x69, (byte) 0x73, (byte) 0x20, (byte) 0x74, (byte) 0x68,
+        (byte) 0x65, (byte) 0x20, (byte) 0x72, (byte) 0x65, (byte) 0x63, (byte) 0x65,
+        (byte) 0x69, (byte) 0x76, (byte) 0x65, (byte) 0x20, (byte) 0x6B, (byte) 0x65,
+        (byte) 0x79, (byte) 0x3B, (byte) 0x20, (byte) 0x6F, (byte) 0x6E, (byte) 0x20,
+        (byte) 0x74, (byte) 0x68, (byte) 0x65, (byte) 0x20, (byte) 0x73, (byte) 0x65,
+        (byte) 0x72, (byte) 0x76, (byte) 0x65, (byte) 0x72, (byte) 0x20, (byte) 0x73,
+        (byte) 0x69, (byte) 0x64, (byte) 0x65, (byte) 0x2C, (byte) 0x20, (byte) 0x69,
+        (byte) 0x74, (byte) 0x20, (byte) 0x69, (byte) 0x73, (byte) 0x20, (byte) 0x74,
+        (byte) 0x68, (byte) 0x65, (byte) 0x20, (byte) 0x73, (byte) 0x65, (byte) 0x6E,
+        (byte) 0x64, (byte) 0x20, (byte) 0x6B, (byte) 0x65, (byte) 0x79, (byte) 0x2E
     };
 
     private final EapMsChapV2Config mEapMsChapV2Config;
@@ -488,14 +540,14 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
         MessageDigest sha1 = MessageDigest.getInstance(SHA_ALG);
         sha1.update(passwordHashHash);
         sha1.update(ntResponse);
-        sha1.update(MAGIC_1); // add just a dash of magic
+        sha1.update(CHALLENGE_MAGIC_1); // add just a dash of magic
         byte[] digest = sha1.digest();
 
         byte[] challenge = challengeHash(peerChallenge, authenticatorChallenge, username);
 
         sha1.update(digest);
         sha1.update(challenge);
-        sha1.update(MAGIC_2);
+        sha1.update(CHALLENGE_MAGIC_2);
 
         return sha1.digest();
     }
@@ -514,5 +566,45 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 generateAuthenticatorResponse(
                         password, ntResponse, peerChallenge, authenticatorChallenge, userName);
         return Arrays.equals(myResponse, receivedResponse);
+    }
+
+    /* Implementation of RFC 3079#3.4: GetMasterKey() */
+    @VisibleForTesting
+    static byte[] getMasterKey(byte[] passwordHashHash, byte[] ntResponse)
+            throws GeneralSecurityException {
+        MessageDigest sha1 = MessageDigest.getInstance(SHA_ALG);
+        sha1.update(passwordHashHash);
+        sha1.update(ntResponse);
+        sha1.update(MSK_MAGIC_1);
+        return Arrays.copyOf(sha1.digest(), MASTER_KEY_LEN);
+    }
+
+    /* Implementation of RFC 3079#3.4: GetAsymmetricStartKey() */
+    @VisibleForTesting
+    static byte[] getAsymmetricStartKey(byte[] masterKey, boolean isSend)
+            throws GeneralSecurityException {
+        // salt: referred to as 's' in RFC 3079#3.4 GetAsymmetricStartKey()
+        byte[] salt = isSend ? MSK_MAGIC_2 : MSK_MAGIC_3;
+        MessageDigest sha1 = MessageDigest.getInstance(SHA_ALG);
+        sha1.update(masterKey);
+        sha1.update(SHS_PAD_1);
+        sha1.update(salt);
+        sha1.update(SHS_PAD_2);
+        return Arrays.copyOf(sha1.digest(), SESSION_KEY_LEN);
+    }
+
+    @VisibleForTesting
+    static byte[] generateMsk(String password, byte[] ntResponse)
+            throws GeneralSecurityException, UnsupportedEncodingException {
+        byte[] passwordHash = ntPasswordHash(password);
+        byte[] passwordHashHash = hashNtPasswordHash(passwordHash);
+        byte[] masterKey = getMasterKey(passwordHashHash, ntResponse);
+
+        // MSK: SendKey + ReceiveKey
+        ByteBuffer msk = ByteBuffer.allocate(MASTER_SESSION_KEY_LEN);
+        msk.put(getAsymmetricStartKey(masterKey, true /* isSend */));
+        msk.put(getAsymmetricStartKey(masterKey, false /* isSend */));
+
+        return msk.array();
     }
 }
