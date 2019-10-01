@@ -19,20 +19,16 @@ package com.android.ike.eap;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.statemachine.EapStateMachine;
@@ -40,12 +36,10 @@ import com.android.ike.eap.statemachine.EapStateMachine;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.security.SecureRandom;
-
 /**
  * This test verifies that EAP-AKA is functional for an end-to-end implementation
  */
-public class EapAkaTest {
+public class EapAkaTest extends EapMethodEndToEndTest {
     private static final long AUTHENTICATOR_TIMEOUT_MILLIS = 250L;
 
     private static final int SUB_ID = 1;
@@ -132,23 +126,15 @@ public class EapAkaTest {
     private static final byte[] EAP_RESPONSE_NAK_PACKET =
             hexStringToByteArray("021000060317"); // NAK with EAP-AKA listed
 
-    private Context mMockContext;
     private TelephonyManager mMockTelephonyManager;
-    private SecureRandom mMockSecureRandom;
-    private IEapCallback mMockCallback;
-
-    private TestLooper mTestLooper;
-    private EapSessionConfig mEapSessionConfig;
-    private EapAuthenticator mEapAuthenticator;
 
     @Before
+    @Override
     public void setUp() {
-        mMockContext = mock(Context.class);
-        mMockTelephonyManager = mock(TelephonyManager.class);
-        mMockSecureRandom = mock(SecureRandom.class);
-        mMockCallback = mock(IEapCallback.class);
+        super.setUp();
 
-        mTestLooper = new TestLooper();
+        mMockTelephonyManager = mock(TelephonyManager.class);
+
         mEapSessionConfig =
                 new EapSessionConfig.Builder().setEapAkaConfig(SUB_ID, APPTYPE_USIM).build();
         mEapAuthenticator =
@@ -275,16 +261,6 @@ public class EapAkaTest {
 
         // verify that onSuccess callback made
         verify(mMockCallback).onSuccess(eq(MSK), eq(EMSK));
-        verifyNoMoreInteractions(
-                mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
-    }
-
-    private void verifyEapNotification(int callsToVerify) {
-        mEapAuthenticator.processEapMessage(EAP_REQUEST_NOTIFICATION_PACKET);
-        mTestLooper.dispatchAll();
-
-        verify(mMockCallback, times(callsToVerify))
-                .onResponse(eq(EAP_RESPONSE_NOTIFICATION_PACKET));
         verifyNoMoreInteractions(
                 mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
     }
