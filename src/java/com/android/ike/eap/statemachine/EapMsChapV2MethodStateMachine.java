@@ -18,6 +18,7 @@ package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_STRING;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_FAILURE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_SUCCESS;
@@ -339,10 +340,25 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     }
 
     protected class AwaitingEapFailureState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/141483998): implement the AwaitingEapFailureState
-            return null;
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            LOG.e(
+                    mTAG,
+                    "Received unexpected EAP message. Type="
+                            + EAP_TYPE_STRING.getOrDefault(message.eapData.eapType, "UNKNOWN"));
+            return new EapError(
+                    new EapInvalidRequestException(
+                            "Expected EAP Type "
+                                    + getEapMethod()
+                                    + ", received "
+                                    + message.eapData.eapType));
         }
     }
 
