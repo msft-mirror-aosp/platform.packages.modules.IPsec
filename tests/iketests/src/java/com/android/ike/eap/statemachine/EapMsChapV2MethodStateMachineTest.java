@@ -20,12 +20,16 @@ import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_AUTHENTICATOR_CHALLENGE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_AUTHENTICATOR_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_CHALLENGE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_MASTER_KEY;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_MSK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_NT_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD_HASH;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD_HASH_HASH;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD_UTF_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PEER_CHALLENGE;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_RECEIVE_START_KEY;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_SEND_START_KEY;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_USERNAME;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.MSCHAP_V2_USERNAME_ASCII_BYTES;
 
@@ -35,6 +39,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.statemachine.EapMsChapV2MethodStateMachine.CreatedState;
+import com.android.ike.utils.Log;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -142,5 +147,35 @@ public class EapMsChapV2MethodStateMachineTest {
                         MSCHAP_V2_AUTHENTICATOR_CHALLENGE,
                         MSCHAP_V2_USERNAME,
                         MSCHAP_V2_AUTHENTICATOR_RESPONSE));
+    }
+
+    @Test
+    public void testGetMasterKey() throws Exception {
+        byte[] masterKey =
+                EapMsChapV2MethodStateMachine.getMasterKey(
+                        MSCHAP_V2_PASSWORD_HASH_HASH, MSCHAP_V2_NT_RESPONSE);
+        assertArrayEquals(MSCHAP_V2_MASTER_KEY, masterKey);
+    }
+
+    @Test
+    public void testGetAsymmetricStartKeySendKey() throws Exception {
+        byte[] startKey =
+                EapMsChapV2MethodStateMachine.getAsymmetricStartKey(MSCHAP_V2_MASTER_KEY, true);
+        assertArrayEquals(Log.byteArrayToHexString(startKey), MSCHAP_V2_SEND_START_KEY, startKey);
+    }
+
+    @Test
+    public void testGetAsymmetricStartKeyReceiveKey() throws Exception {
+        byte[] receiveKey =
+                EapMsChapV2MethodStateMachine.getAsymmetricStartKey(MSCHAP_V2_MASTER_KEY, false);
+        assertArrayEquals(MSCHAP_V2_RECEIVE_START_KEY, receiveKey);
+    }
+
+    @Test
+    public void testGenerateMsk() throws Exception {
+        byte[] msk =
+                EapMsChapV2MethodStateMachine.generateMsk(
+                        MSCHAP_V2_PASSWORD, MSCHAP_V2_NT_RESPONSE);
+        assertArrayEquals(MSCHAP_V2_MSK, msk);
     }
 }
