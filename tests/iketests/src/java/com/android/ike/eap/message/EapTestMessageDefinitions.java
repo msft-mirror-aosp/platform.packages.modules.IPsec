@@ -274,4 +274,14 @@ public class EapTestMessageDefinitions {
                     + MSCHAP_V2_NT_RESPONSE_STRING
                     + "00" // Flags (always 0)
                     + MSCHAP_V2_USERNAME_HEX);
+
+    public static final byte[] EAP_MSCHAP_V2_SUCCESS_RESPONSE =
+            hexStringToByteArray("02" + ID + "0006" // EAP-Response | ID | length in bytes
+                    + "1A03"); // EAP-MSCHAPv2 | Success
+
+    public static final byte[] INVALID_AUTHENTICATOR_RESPONSE = new byte[20];
+
+    public static final byte[] EAP_MSCHAP_V2_FAILURE_RESPONSE =
+            hexStringToByteArray("02" + ID + "0006" // EAP-Response | ID | length in bytes
+                    + "1A04"); // EAP-MSCHAPv2 | Failure
 }
