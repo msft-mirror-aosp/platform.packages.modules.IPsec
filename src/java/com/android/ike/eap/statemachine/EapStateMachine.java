@@ -24,9 +24,11 @@ import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_STRING;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_STRING;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -257,6 +259,22 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             EapMessage eapMessage = decodeResult.eapMessage;
 
             if (mEapMethodStateMachine == null) {
+                if (eapMessage.eapCode == EAP_CODE_SUCCESS) {
+                    // EAP-SUCCESS is required to be the last EAP message sent during the EAP
+                    // protocol, so receiving a premature SUCCESS message is an unrecoverable error
+                    return new EapError(
+                            new EapInvalidRequestException(
+                                    "Received an EAP-Success in the MethodState"));
+                } else if (eapMessage.eapCode == EAP_CODE_FAILURE) {
+                    transitionTo(new FailureState());
+                    return new EapFailure();
+                } else if (eapMessage.eapData.eapType == EAP_NOTIFICATION
+                        && mEapMethodStateMachine == null) {
+                    // if no EapMethodStateMachine has been assigned and we receive an
+                    // EAP-Notification, we should log it and respond
+                    return handleNotification(mTAG, eapMessage);
+                }
+
                 int eapType = eapMessage.eapData.eapType;
                 mEapMethodStateMachine = buildEapMethodStateMachine(eapType);
 
