@@ -404,12 +404,17 @@ public class EapMsChapV2TypeData {
             throws EapMsChapV2ParsingException {
         Map<String, String> messageMappings = new HashMap<>();
         int mPos = message.indexOf(MESSAGE_PREFIX);
+
+        String preMString;
         if (mPos == -1) {
-            throw new EapMsChapV2ParsingException("Message String must contain 'M='");
+            preMString = message;
+            messageMappings.put(MESSAGE_LABEL, "<omitted by authenticator>");
+        } else {
+            preMString = message.substring(0, mPos);
+            messageMappings.put(MESSAGE_LABEL, message.substring(mPos + MESSAGE_PREFIX.length()));
         }
 
         // preMString: "S=<auth string> " or "E=<error> R=r C=<challenge> V=<version> "
-        String preMString = message.substring(0, mPos);
         for (String value : preMString.split(" ")) {
             String[] keyValue = value.split("=");
             if (keyValue.length != LABEL_VALUE_LENGTH) {
@@ -421,7 +426,6 @@ public class EapMsChapV2TypeData {
             }
             messageMappings.put(keyValue[0], keyValue[1]);
         }
-        messageMappings.put(MESSAGE_LABEL, message.substring(mPos + MESSAGE_PREFIX.length()));
 
         return messageMappings;
     }

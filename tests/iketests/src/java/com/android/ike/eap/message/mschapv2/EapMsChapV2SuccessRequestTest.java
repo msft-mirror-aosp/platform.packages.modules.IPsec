@@ -19,8 +19,11 @@ package com.android.ike.eap.message.mschapv2;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.AUTH_BYTES;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EAP_MSCHAP_V2_SUCCESS_REQUEST;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EAP_MSCHAP_V2_SUCCESS_REQUEST_EMPTY_MESSAGE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EAP_MSCHAP_V2_SUCCESS_REQUEST_MISSING_MESSAGE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EAP_MSCHAP_V2_SUCCESS_REQUEST_MISSING_MESSAGE_WITH_SPACE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.ID_INT;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.MESSAGE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.MESSAGE_MISSING_TEXT;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_EXTRA_ATTRIBUTE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_INVALID_AUTH_STRING;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.SUCCESS_REQUEST_SHORT_AUTH_STRING;
@@ -82,6 +85,38 @@ public class EapMsChapV2SuccessRequestTest {
         assertEquals(EAP_MSCHAP_V2_SUCCESS_REQUEST_EMPTY_MESSAGE.length, successRequest.msLength);
         assertArrayEquals(AUTH_BYTES, successRequest.authBytes);
         assertTrue(successRequest.message.isEmpty());
+    }
+
+    @Test
+    public void testDecodeSuccessRequestMissingMessage() {
+        DecodeResult<EapMsChapV2SuccessRequest> result =
+                mTypeDataDecoder.decodeSuccessRequest(
+                        TAG, EAP_MSCHAP_V2_SUCCESS_REQUEST_MISSING_MESSAGE);
+        assertTrue(result.isSuccessfulDecode());
+
+        EapMsChapV2SuccessRequest successRequest = result.eapTypeData;
+        assertEquals(EAP_MSCHAP_V2_SUCCESS, successRequest.opCode);
+        assertEquals(ID_INT, successRequest.msChapV2Id);
+        assertEquals(EAP_MSCHAP_V2_SUCCESS_REQUEST_MISSING_MESSAGE.length, successRequest.msLength);
+        assertArrayEquals(AUTH_BYTES, successRequest.authBytes);
+        assertEquals(MESSAGE_MISSING_TEXT, successRequest.message);
+    }
+
+    @Test
+    public void testDecodeSuccessRequestMissingMessageWithSpace() {
+        DecodeResult<EapMsChapV2SuccessRequest> result =
+                mTypeDataDecoder.decodeSuccessRequest(
+                        TAG, EAP_MSCHAP_V2_SUCCESS_REQUEST_MISSING_MESSAGE_WITH_SPACE);
+        assertTrue(result.isSuccessfulDecode());
+
+        EapMsChapV2SuccessRequest successRequest = result.eapTypeData;
+        assertEquals(EAP_MSCHAP_V2_SUCCESS, successRequest.opCode);
+        assertEquals(ID_INT, successRequest.msChapV2Id);
+        assertEquals(
+                EAP_MSCHAP_V2_SUCCESS_REQUEST_MISSING_MESSAGE_WITH_SPACE.length,
+                successRequest.msLength);
+        assertArrayEquals(AUTH_BYTES, successRequest.authBytes);
+        assertEquals(MESSAGE_MISSING_TEXT, successRequest.message);
     }
 
     @Test
