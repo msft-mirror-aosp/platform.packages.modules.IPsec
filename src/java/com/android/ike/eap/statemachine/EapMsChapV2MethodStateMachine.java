@@ -17,9 +17,12 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.EapAuthenticator.LOG;
+import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_STRING;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_FAILURE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_SUCCESS;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureRequest.EAP_ERROR_CODE_STRING;
@@ -30,6 +33,7 @@ import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.crypto.ParityBitUtil;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
@@ -347,7 +351,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                         return new EapFailure();
                     }
 
-                    transitionTo(new AwaitingEapSuccessState());
+                    transitionTo(new AwaitingEapSuccessState(mNtResponse));
                     return buildEapMessageResponse(
                             mTAG, message.eapIdentifier, getEapMsChapV2SuccessResponse());
 
@@ -384,10 +388,46 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     }
 
     protected class AwaitingEapSuccessState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
+        private final byte[] mNtResponse;
+
+        AwaitingEapSuccessState(byte[] ntResponse) {
+            this.mNtResponse = ntResponse;
+        }
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/141483998): implement the AwaitingEapSuccessState
-            return null;
+            if (message.eapCode == EAP_CODE_FAILURE) {
+                LOG.e(mTAG, "Received EAP-Failure in PreSuccessState");
+                transitionTo(new FinalState());
+                return new EapFailure();
+            } else if (message.eapCode != EAP_CODE_SUCCESS) {
+                if (message.eapData.eapType == EAP_NOTIFICATION) {
+                    return handleEapNotification(mTAG, message);
+                } else {
+                    LOG.e(
+                            mTAG,
+                            "Received unexpected EAP message. Type="
+                                    + EAP_TYPE_STRING.getOrDefault(
+                                            message.eapData.eapType, "UNKNOWN"));
+                    return new EapError(
+                            new EapInvalidRequestException(
+                                    "Expected EAP Type "
+                                            + getEapMethod()
+                                            + ", received "
+                                            + message.eapData.eapType));
+                }
+            }
+
+            try {
+                byte[] msk = generateMsk(mEapMsChapV2Config.password, mNtResponse);
+                transitionTo(new FinalState());
+                return new EapSuccess(msk, new byte[0]);
+            } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
+                LOG.e(mTAG, "Error generating MSK for EAP MSCHAPv2", ex);
+                return new EapError(ex);
+            }
         }
     }
 
