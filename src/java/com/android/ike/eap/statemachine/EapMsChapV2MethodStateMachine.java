@@ -19,12 +19,19 @@ package com.android.ike.eap.statemachine;
 import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_FAILURE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_SUCCESS;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureRequest.EAP_ERROR_CODE_STRING;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureResponse.getEapMsChapV2FailureResponse;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessResponse.getEapMsChapV2SuccessResponse;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.crypto.ParityBitUtil;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.mschapv2.EapMsChapV2ParsingException;
 import com.android.ike.eap.message.EapData;
@@ -33,12 +40,15 @@ import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeRequest;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeResponse;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureRequest;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessRequest;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.org.bouncycastle.crypto.digests.MD4Digest;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -207,7 +217,10 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                                 ntResponse,
                                 FLAGS,
                                 usernameToBytes(mEapMsChapV2Config.username));
-                transitionTo(new ValidateAuthenticatorState());
+                transitionTo(
+                        new ValidateAuthenticatorState(
+                                challengeRequest.challenge, peerChallenge, ntResponse));
+                LOG.e(mTAG, "transitioned to PostChallengeState");
                 return buildEapMessageResponse(mTAG, message.eapIdentifier, challengeResponse);
             } catch (UnsupportedEncodingException | EapMsChapV2ParsingException ex) {
                 LOG.e(mTAG, "Error building response type data", ex);
@@ -217,10 +230,103 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     }
 
     protected class ValidateAuthenticatorState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
+        private final byte[] mAuthenticatorChallenge;
+        private final byte[] mPeerChallenge;
+        private final byte[] mNtResponse;
+
+        @VisibleForTesting
+        ValidateAuthenticatorState(
+                byte[] authenticatorChallenge, byte[] peerChallenge, byte[] ntResponse) {
+            this.mAuthenticatorChallenge = authenticatorChallenge;
+            this.mPeerChallenge = peerChallenge;
+            this.mNtResponse = ntResponse;
+        }
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/140322003): implement ValidateAuthenticatorState
-            return null;
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            int opCode;
+            try {
+                opCode = mTypeDataDecoder.getOpCode(message.eapData.eapTypeData);
+            } catch (BufferUnderflowException ex) {
+                LOG.e(mTAG, "Empty type data received in ValidateAuthenticatorState", ex);
+                return new EapError(ex);
+            }
+
+            switch (opCode) {
+                case EAP_MSCHAP_V2_SUCCESS:
+                    DecodeResult<EapMsChapV2SuccessRequest> successDecodeResult =
+                            mTypeDataDecoder.decodeSuccessRequest(
+                                    mTAG, message.eapData.eapTypeData);
+                    if (!successDecodeResult.isSuccessfulDecode()) {
+                        return successDecodeResult.eapError;
+                    }
+
+                    EapMsChapV2SuccessRequest successRequest = successDecodeResult.eapTypeData;
+                    LOG.d(mTAG, "SuccessRequest message: " + successRequest.message);
+
+                    boolean isSuccessfulAuth;
+                    try {
+                        isSuccessfulAuth =
+                                checkAuthenticatorResponse(
+                                        mEapMsChapV2Config.password,
+                                        mNtResponse,
+                                        mPeerChallenge,
+                                        mAuthenticatorChallenge,
+                                        mEapMsChapV2Config.username,
+                                        successRequest.authBytes);
+                    } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
+                        LOG.e(mTAG, "Error validating MSCHAPv2 Authenticator Response", ex);
+                        return new EapError(ex);
+                    }
+
+                    if (!isSuccessfulAuth) {
+                        LOG.e(
+                                mTAG,
+                                "Authenticator Response does not match expected response value");
+                        transitionTo(new FinalState());
+                        return new EapFailure();
+                    }
+
+                    transitionTo(new AwaitingEapSuccessState());
+                    return buildEapMessageResponse(
+                            mTAG, message.eapIdentifier, getEapMsChapV2SuccessResponse());
+
+                case EAP_MSCHAP_V2_FAILURE:
+                    DecodeResult<EapMsChapV2FailureRequest> failureDecodeResult =
+                            mTypeDataDecoder.decodeFailureRequest(
+                                    mTAG, message.eapData.eapTypeData);
+                    if (!failureDecodeResult.isSuccessfulDecode()) {
+                        return failureDecodeResult.eapError;
+                    }
+
+                    EapMsChapV2FailureRequest failureRequest = failureDecodeResult.eapTypeData;
+                    int errorCode = failureRequest.errorCode;
+                    LOG.e(
+                            mTAG,
+                            String.format(
+                                    "Received MSCHAPv2 Failure-Request: E=%s (%d) R=%b V=%d M=%s",
+                                    EAP_ERROR_CODE_STRING.getOrDefault(errorCode, "UNKNOWN"),
+                                    errorCode,
+                                    failureRequest.isRetryable,
+                                    failureRequest.passwordChangeProtocol,
+                                    failureRequest.message));
+                    transitionTo(new AwaitingEapFailureState());
+                    return buildEapMessageResponse(
+                            mTAG, message.eapIdentifier, getEapMsChapV2FailureResponse());
+
+                default:
+                    LOG.e(mTAG, "Invalid OpCode received in ValidateAuthenticatorState: " + opCode);
+                    return new EapError(
+                            new EapInvalidRequestException(
+                                    "Unexpected request received in EAP MSCHAPv2"));
+            }
         }
     }
 
