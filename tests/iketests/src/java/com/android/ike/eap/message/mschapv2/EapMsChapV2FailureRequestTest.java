@@ -18,6 +18,8 @@ package com.android.ike.eap.message.mschapv2;
 
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.CHALLENGE_BYTES;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EAP_MSCHAP_V2_FAILURE_REQUEST;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EAP_MSCHAP_V2_FAILURE_REQUEST_MISSING_MESSAGE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.EAP_MSCHAP_V2_FAILURE_REQUEST_MISSING_MESSAGE_WITH_SPACE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.ERROR_CODE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.FAILURE_REQUEST_EXTRA_ATTRIBUTE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.FAILURE_REQUEST_INVALID_CHALLENGE;
@@ -26,6 +28,7 @@ import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.FAILURE_REQUEST_SHORT_CHALLENGE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.ID_INT;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.MESSAGE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.MESSAGE_MISSING_TEXT;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.PASSWORD_CHANGE_PROTOCOL;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2PacketDefinitions.RETRY_BIT;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_FAILURE;
@@ -68,6 +71,44 @@ public class EapMsChapV2FailureRequestTest {
         assertArrayEquals(CHALLENGE_BYTES, failureRequest.challenge);
         assertEquals(PASSWORD_CHANGE_PROTOCOL, failureRequest.passwordChangeProtocol);
         assertEquals(MESSAGE, failureRequest.message);
+    }
+
+    @Test
+    public void testDecodeFailureRequestMissingMessage() {
+        DecodeResult<EapMsChapV2FailureRequest> result =
+                mTypeDataDecoder.decodeFailureRequest(
+                        TAG, EAP_MSCHAP_V2_FAILURE_REQUEST_MISSING_MESSAGE);
+        assertTrue(result.isSuccessfulDecode());
+
+        EapMsChapV2FailureRequest failureRequest = result.eapTypeData;
+        assertEquals(EAP_MSCHAP_V2_FAILURE, failureRequest.opCode);
+        assertEquals(ID_INT, failureRequest.msChapV2Id);
+        assertEquals(EAP_MSCHAP_V2_FAILURE_REQUEST_MISSING_MESSAGE.length, failureRequest.msLength);
+        assertEquals(ERROR_CODE, failureRequest.errorCode);
+        assertEquals(RETRY_BIT, failureRequest.isRetryable);
+        assertArrayEquals(CHALLENGE_BYTES, failureRequest.challenge);
+        assertEquals(PASSWORD_CHANGE_PROTOCOL, failureRequest.passwordChangeProtocol);
+        assertEquals(MESSAGE_MISSING_TEXT, failureRequest.message);
+    }
+
+    @Test
+    public void testDecodeFailureRequestMissingMessageWithSpace() {
+        DecodeResult<EapMsChapV2FailureRequest> result =
+                mTypeDataDecoder.decodeFailureRequest(
+                        TAG, EAP_MSCHAP_V2_FAILURE_REQUEST_MISSING_MESSAGE_WITH_SPACE);
+        assertTrue(result.isSuccessfulDecode());
+
+        EapMsChapV2FailureRequest failureRequest = result.eapTypeData;
+        assertEquals(EAP_MSCHAP_V2_FAILURE, failureRequest.opCode);
+        assertEquals(ID_INT, failureRequest.msChapV2Id);
+        assertEquals(
+                EAP_MSCHAP_V2_FAILURE_REQUEST_MISSING_MESSAGE_WITH_SPACE.length,
+                failureRequest.msLength);
+        assertEquals(ERROR_CODE, failureRequest.errorCode);
+        assertEquals(RETRY_BIT, failureRequest.isRetryable);
+        assertArrayEquals(CHALLENGE_BYTES, failureRequest.challenge);
+        assertEquals(PASSWORD_CHANGE_PROTOCOL, failureRequest.passwordChangeProtocol);
+        assertEquals(MESSAGE_MISSING_TEXT, failureRequest.message);
     }
 
     @Test
