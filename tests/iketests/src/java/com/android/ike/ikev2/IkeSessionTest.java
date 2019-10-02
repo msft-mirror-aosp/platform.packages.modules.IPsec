@@ -29,6 +29,8 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
 
+import com.android.ike.ikev2.testutils.MockIpSecTestUtils;
+
 import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
