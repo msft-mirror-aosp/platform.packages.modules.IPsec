@@ -98,6 +98,8 @@ public final class IkeConfigPayload extends IkePayload {
         inputBuffer.get(new byte[CONFIG_HEADER_RESERVED_LEN]);
 
         recognizedAttributeList = ConfigAttribute.decodeAttributeFrom(inputBuffer);
+
+        // TODO: Validate inbound config payload. Implemented in the following CL.
     }
 
     /** Build an IkeConfigPayload instance for an outbound IKE packet. */
@@ -174,6 +176,11 @@ public final class IkeConfigPayload extends IkePayload {
         /** Get attribute length. */
         public int getAttributeLen() {
             return ATTRIBUTE_HEADER_LEN + getValueLength();
+        }
+
+        /** Returns if this attribute value is empty. */
+        public boolean isEmptyValue() {
+            return getValueLength() == VALUE_LEN_NOT_INCLUDED;
         }
 
         protected static int netmaskToPrefixLen(Inet4Address address) {
@@ -317,6 +324,11 @@ public final class IkeConfigPayload extends IkePayload {
             } catch (IllegalArgumentException e) {
                 throw new InvalidSyntaxException("Invalid attribute value", e);
             }
+        }
+
+        /** Convert netmask to prefix length. */
+        public int getPrefixLen() {
+            return netmaskToPrefixLen(address);
         }
     }
 
