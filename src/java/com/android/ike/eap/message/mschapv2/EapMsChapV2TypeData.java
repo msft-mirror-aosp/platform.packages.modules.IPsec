@@ -241,7 +241,8 @@ public class EapMsChapV2TypeData {
         }
 
         @VisibleForTesting
-        EapMsChapV2SuccessRequest(int msChapV2Id, int msLength, byte[] authBytes, String message)
+        public EapMsChapV2SuccessRequest(
+                int msChapV2Id, int msLength, byte[] authBytes, String message)
                 throws EapMsChapV2ParsingException {
             super(EAP_MSCHAP_V2_SUCCESS, msChapV2Id, msLength);
 
@@ -300,6 +301,17 @@ public class EapMsChapV2TypeData {
         private static final String CHALLENGE_LABEL = "C";
         private static final String PASSWORD_CHANGE_PROTOCOL_LABEL = "V";
 
+        // Error codes defined in EAP MSCHAPv2#2.5
+        public static final Map<Integer, String> EAP_ERROR_CODE_STRING = new HashMap<>();
+        static {
+            EAP_ERROR_CODE_STRING.put(646, "ERROR_RESTRICTED_LOGON_HOURS");
+            EAP_ERROR_CODE_STRING.put(647, "ERROR_ACCT_DISABLED");
+            EAP_ERROR_CODE_STRING.put(648, "ERROR_PASSWD_EXPIRED");
+            EAP_ERROR_CODE_STRING.put(649, "ERROR_NO_DIALIN_PERMISSION");
+            EAP_ERROR_CODE_STRING.put(691, "ERROR_AUTHENTICATION_FAILURE");
+            EAP_ERROR_CODE_STRING.put(709, "ERROR_CHANGING_PASSWORD");
+        }
+
         public final int errorCode;
         public final boolean isRetryable;
         public final byte[] challenge;
@@ -343,7 +355,7 @@ public class EapMsChapV2TypeData {
         }
 
         @VisibleForTesting
-        EapMsChapV2FailureRequest(
+        public EapMsChapV2FailureRequest(
                 int msChapV2Id,
                 int msLength,
                 int errorCode,
@@ -404,12 +416,17 @@ public class EapMsChapV2TypeData {
             throws EapMsChapV2ParsingException {
         Map<String, String> messageMappings = new HashMap<>();
         int mPos = message.indexOf(MESSAGE_PREFIX);
+
+        String preMString;
         if (mPos == -1) {
-            throw new EapMsChapV2ParsingException("Message String must contain 'M='");
+            preMString = message;
+            messageMappings.put(MESSAGE_LABEL, "<omitted by authenticator>");
+        } else {
+            preMString = message.substring(0, mPos);
+            messageMappings.put(MESSAGE_LABEL, message.substring(mPos + MESSAGE_PREFIX.length()));
         }
 
         // preMString: "S=<auth string> " or "E=<error> R=r C=<challenge> V=<version> "
-        String preMString = message.substring(0, mPos);
         for (String value : preMString.split(" ")) {
             String[] keyValue = value.split("=");
             if (keyValue.length != LABEL_VALUE_LENGTH) {
@@ -421,7 +438,6 @@ public class EapMsChapV2TypeData {
             }
             messageMappings.put(keyValue[0], keyValue[1]);
         }
-        messageMappings.put(MESSAGE_LABEL, message.substring(mPos + MESSAGE_PREFIX.length()));
 
         return messageMappings;
     }
@@ -443,6 +459,17 @@ public class EapMsChapV2TypeData {
 
     /** Class for decoding EAP MSCHAPv2 type data. */
     public static class EapMsChapV2TypeDataDecoder {
+        /**
+         * Returns the EAP MSCHAPv2 Op Code for the given EAP type data.
+         *
+         * @param eapTypeData byte[] type data to read the Op Code from
+         * @return the EAP MSCHAPv2 Op Code for the current type data
+         * @throws BufferUnderflowException iff eapTypeData.length == 0
+         */
+        public int getOpCode(byte[] eapTypeData) throws BufferUnderflowException {
+            return Byte.toUnsignedInt(ByteBuffer.wrap(eapTypeData).get());
+        }
+
         /**
          * Decodes and returns an EapMsChapV2ChallengeRequest for the specified eapTypeData.
          *

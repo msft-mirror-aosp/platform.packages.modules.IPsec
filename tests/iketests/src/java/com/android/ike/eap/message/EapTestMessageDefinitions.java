@@ -236,7 +236,7 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_REQUEST_MSCHAP_V2 =
             hexStringToByteArray("01" + ID + "00061A01");
 
-    // MSCHAPv2 Test vectors taken from RFC 2759#9.2
+    // MSCHAPv2 Test vectors taken from RFC 2759#9.2 and RFC 3079#3.5.3
     public static final String MSCHAP_V2_USERNAME = "User";
     public static final String MSCHAP_V2_USERNAME_HEX = "55736572";
     public static final byte[] MSCHAP_V2_USERNAME_ASCII_BYTES =
@@ -262,6 +262,20 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray(MSCHAP_V2_NT_RESPONSE_STRING);
     public static final byte[] MSCHAP_V2_AUTHENTICATOR_RESPONSE =
             hexStringToByteArray("407A5589115FD0D6209F510FE9C04566932CDA56");
+    public static final byte[] MSCHAP_V2_MASTER_KEY =
+            hexStringToByteArray("FDECE3717A8C838CB388E527AE3CDD31");
+
+    // generated based on RFC 3079#3.5.3 params
+    public static final String SEND_KEY = "D5F0E9521E3EA9589645E86051C82226";
+    public static final byte[] MSCHAP_V2_SEND_START_KEY = hexStringToByteArray(SEND_KEY);
+
+    // This value is labeled 'send key' in RFC 3079#3.5.3. However, it's used as 'receive key' here,
+    // because send and receive keys are swapped for peers relative to authenticators.
+    public static final String RECEIVE_KEY = "8B7CDC149B993A1BA118CB153F56DCCB";
+    public static final byte[] MSCHAP_V2_RECEIVE_START_KEY = hexStringToByteArray(RECEIVE_KEY);
+
+    // MSK: MSCHAP_V2_SEND_START_KEY + MSCHAP_V2_RECEIVE_START_KEY
+    public static final byte[] MSCHAP_V2_MSK = hexStringToByteArray(SEND_KEY + RECEIVE_KEY);
 
     public static final String MSCHAP_V2_ID = "42";
     public static final int MSCHAP_V2_ID_INT = Integer.parseInt(MSCHAP_V2_ID, 16 /* radix */);
@@ -274,4 +288,14 @@ public class EapTestMessageDefinitions {
                     + MSCHAP_V2_NT_RESPONSE_STRING
                     + "00" // Flags (always 0)
                     + MSCHAP_V2_USERNAME_HEX);
+
+    public static final byte[] EAP_MSCHAP_V2_SUCCESS_RESPONSE =
+            hexStringToByteArray("02" + ID + "0006" // EAP-Response | ID | length in bytes
+                    + "1A03"); // EAP-MSCHAPv2 | Success
+
+    public static final byte[] INVALID_AUTHENTICATOR_RESPONSE = new byte[20];
+
+    public static final byte[] EAP_MSCHAP_V2_FAILURE_RESPONSE =
+            hexStringToByteArray("02" + ID + "0006" // EAP-Response | ID | length in bytes
+                    + "1A04"); // EAP-MSCHAPv2 | Failure
 }

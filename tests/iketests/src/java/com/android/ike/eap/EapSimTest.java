@@ -20,22 +20,18 @@ import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.statemachine.EapStateMachine;
@@ -43,12 +39,10 @@ import com.android.ike.eap.statemachine.EapStateMachine;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.security.SecureRandom;
-
 /**
  * This test verifies that EAP-SIM is functional for an end-to-end implementation
  */
-public class EapSimTest {
+public class EapSimTest extends EapMethodEndToEndTest {
     private static final long AUTHENTICATOR_TIMEOUT_MILLIS = 250L;
 
     private static final byte[] NONCE = hexStringToByteArray("37f3ddd3954c4831a5ee08c574844398");
@@ -97,23 +91,15 @@ public class EapSimTest {
             "0286001c120b0000" // EAP header
                     + "0b050000e5df9cb1d935ea5f54d449a038bed061"); // AT_NAC attribute
 
-    private Context mMockContext;
     private TelephonyManager mMockTelephonyManager;
-    private SecureRandom mMockSecureRandom;
-    private IEapCallback mMockCallback;
-
-    private TestLooper mTestLooper;
-    private EapSessionConfig mEapSessionConfig;
-    private EapAuthenticator mEapAuthenticator;
 
     @Before
+    @Override
     public void setUp() {
-        mMockContext = mock(Context.class);
-        mMockTelephonyManager = mock(TelephonyManager.class);
-        mMockSecureRandom = mock(SecureRandom.class);
-        mMockCallback = mock(IEapCallback.class);
+        super.setUp();
 
-        mTestLooper = new TestLooper();
+        mMockTelephonyManager = mock(TelephonyManager.class);
+
         mEapSessionConfig = new EapSessionConfig.Builder()
                 .setEapSimConfig(SUB_ID, APPTYPE_USIM)
                 .build();
@@ -155,13 +141,13 @@ public class EapSimTest {
 
     @Test
     public void verifyEapSimWithEapNotifications() {
-        verifyEapNotification();
+        verifyEapNotification(1);
         verifyEapSimStart();
 
-        verifyEapNotification();
+        verifyEapNotification(2);
         verifyEapSimChallenge();
 
-        verifyEapNotification();
+        verifyEapNotification(3);
         verifyEapSuccess();
     }
 
@@ -254,18 +240,5 @@ public class EapSimTest {
                 mMockTelephonyManager,
                 mMockSecureRandom,
                 mMockCallback);
-    }
-
-    private void verifyEapNotification() {
-        mEapAuthenticator.processEapMessage(EAP_REQUEST_NOTIFICATION_PACKET);
-        mTestLooper.dispatchAll();
-
-        verify(mMockCallback).onResponse(eq(EAP_RESPONSE_NOTIFICATION_PACKET));
-        verifyNoMoreInteractions(
-                mMockContext,
-                mMockTelephonyManager,
-                mMockSecureRandom,
-                mMockCallback);
-        reset(mMockCallback);
     }
 }

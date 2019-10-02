@@ -17,14 +17,26 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.EapAuthenticator.LOG;
+import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_STRING;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_FAILURE;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_SUCCESS;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureRequest.EAP_ERROR_CODE_STRING;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureResponse.getEapMsChapV2FailureResponse;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessResponse.getEapMsChapV2SuccessResponse;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
+import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
+import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.crypto.ParityBitUtil;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
 import com.android.ike.eap.exceptions.mschapv2.EapMsChapV2ParsingException;
 import com.android.ike.eap.message.EapData;
@@ -33,12 +45,15 @@ import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeRequest;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeResponse;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureRequest;
+import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessRequest;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.org.bouncycastle.crypto.digests.MD4Digest;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
@@ -91,13 +106,17 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     private static final int Z_PASSWORD_HASH_LEN = 21;
     private static final int Z_PASSWORD_SECTION_LEN = 7;
     private static final int RESPONSE_SECTION_LEN = 8;
+    private static final int SHS_PAD_LEN = 40;
+    private static final int MASTER_KEY_LEN = 16;
+    private static final int SESSION_KEY_LEN = 16;
+    private static final int MASTER_SESSION_KEY_LEN = 2 * SESSION_KEY_LEN;
 
     // Reserved for future use and must be 0 (EAP MSCHAPv2#2.2)
     private static final int FLAGS = 0;
 
     // we all need a little magic in our lives
-    // Defined in RFC 2759#8.7. Constants used for response Success response generation.
-    private static final byte[] MAGIC_1 = {
+    // Defined in RFC 2759#8.7. Constants used for Success response generation.
+    private static final byte[] CHALLENGE_MAGIC_1 = {
         (byte) 0x4D, (byte) 0x61, (byte) 0x67, (byte) 0x69, (byte) 0x63, (byte) 0x20, (byte) 0x73,
         (byte) 0x65, (byte) 0x72, (byte) 0x76, (byte) 0x65, (byte) 0x72, (byte) 0x20, (byte) 0x74,
         (byte) 0x6F, (byte) 0x20, (byte) 0x63, (byte) 0x6C, (byte) 0x69, (byte) 0x65, (byte) 0x6E,
@@ -105,13 +124,61 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
         (byte) 0x6E, (byte) 0x67, (byte) 0x20, (byte) 0x63, (byte) 0x6F, (byte) 0x6E, (byte) 0x73,
         (byte) 0x74, (byte) 0x61, (byte) 0x6E, (byte) 0x74
     };
-    private static final byte[] MAGIC_2 = {
+    private static final byte[] CHALLENGE_MAGIC_2 = {
         (byte) 0x50, (byte) 0x61, (byte) 0x64, (byte) 0x20, (byte) 0x74, (byte) 0x6F, (byte) 0x20,
         (byte) 0x6D, (byte) 0x61, (byte) 0x6B, (byte) 0x65, (byte) 0x20, (byte) 0x69, (byte) 0x74,
         (byte) 0x20, (byte) 0x64, (byte) 0x6F, (byte) 0x20, (byte) 0x6D, (byte) 0x6F, (byte) 0x72,
         (byte) 0x65, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x61, (byte) 0x6E, (byte) 0x20,
         (byte) 0x6F, (byte) 0x6E, (byte) 0x65, (byte) 0x20, (byte) 0x69, (byte) 0x74, (byte) 0x65,
         (byte) 0x72, (byte) 0x61, (byte) 0x74, (byte) 0x69, (byte) 0x6F, (byte) 0x6E
+    };
+
+    // Defined in RFC 3079#3.4. Constants used for Master Session Key (MSK) generation
+    private static final byte[] SHS_PAD_1 = new byte[SHS_PAD_LEN];
+    private static final byte[] SHS_PAD_2 = new byte[SHS_PAD_LEN];
+
+    static {
+        Arrays.fill(SHS_PAD_2, (byte) 0xF2);
+    }
+
+    private static final byte[] MSK_MAGIC_1 = {
+        (byte) 0x54, (byte) 0x68, (byte) 0x69, (byte) 0x73, (byte) 0x20, (byte) 0x69,
+        (byte) 0x73, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65, (byte) 0x20,
+        (byte) 0x4D, (byte) 0x50, (byte) 0x50, (byte) 0x45, (byte) 0x20, (byte) 0x4D,
+        (byte) 0x61, (byte) 0x73, (byte) 0x74, (byte) 0x65, (byte) 0x72, (byte) 0x20,
+        (byte) 0x4B, (byte) 0x65, (byte) 0x79
+    };
+    private static final byte[] MSK_MAGIC_2 = {
+        (byte) 0x4F, (byte) 0x6E, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65,
+        (byte) 0x20, (byte) 0x63, (byte) 0x6C, (byte) 0x69, (byte) 0x65, (byte) 0x6E,
+        (byte) 0x74, (byte) 0x20, (byte) 0x73, (byte) 0x69, (byte) 0x64, (byte) 0x65,
+        (byte) 0x2C, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x69, (byte) 0x73,
+        (byte) 0x20, (byte) 0x69, (byte) 0x73, (byte) 0x20, (byte) 0x74, (byte) 0x68,
+        (byte) 0x65, (byte) 0x20, (byte) 0x73, (byte) 0x65, (byte) 0x6E, (byte) 0x64,
+        (byte) 0x20, (byte) 0x6B, (byte) 0x65, (byte) 0x79, (byte) 0x3B, (byte) 0x20,
+        (byte) 0x6F, (byte) 0x6E, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65,
+        (byte) 0x20, (byte) 0x73, (byte) 0x65, (byte) 0x72, (byte) 0x76, (byte) 0x65,
+        (byte) 0x72, (byte) 0x20, (byte) 0x73, (byte) 0x69, (byte) 0x64, (byte) 0x65,
+        (byte) 0x2C, (byte) 0x20, (byte) 0x69, (byte) 0x74, (byte) 0x20, (byte) 0x69,
+        (byte) 0x73, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65, (byte) 0x20,
+        (byte) 0x72, (byte) 0x65, (byte) 0x63, (byte) 0x65, (byte) 0x69, (byte) 0x76,
+        (byte) 0x65, (byte) 0x20, (byte) 0x6B, (byte) 0x65, (byte) 0x79, (byte) 0x2E
+    };
+    private static final byte[] MSK_MAGIC_3 = {
+        (byte) 0x4F, (byte) 0x6E, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x65,
+        (byte) 0x20, (byte) 0x63, (byte) 0x6C, (byte) 0x69, (byte) 0x65, (byte) 0x6E,
+        (byte) 0x74, (byte) 0x20, (byte) 0x73, (byte) 0x69, (byte) 0x64, (byte) 0x65,
+        (byte) 0x2C, (byte) 0x20, (byte) 0x74, (byte) 0x68, (byte) 0x69, (byte) 0x73,
+        (byte) 0x20, (byte) 0x69, (byte) 0x73, (byte) 0x20, (byte) 0x74, (byte) 0x68,
+        (byte) 0x65, (byte) 0x20, (byte) 0x72, (byte) 0x65, (byte) 0x63, (byte) 0x65,
+        (byte) 0x69, (byte) 0x76, (byte) 0x65, (byte) 0x20, (byte) 0x6B, (byte) 0x65,
+        (byte) 0x79, (byte) 0x3B, (byte) 0x20, (byte) 0x6F, (byte) 0x6E, (byte) 0x20,
+        (byte) 0x74, (byte) 0x68, (byte) 0x65, (byte) 0x20, (byte) 0x73, (byte) 0x65,
+        (byte) 0x72, (byte) 0x76, (byte) 0x65, (byte) 0x72, (byte) 0x20, (byte) 0x73,
+        (byte) 0x69, (byte) 0x64, (byte) 0x65, (byte) 0x2C, (byte) 0x20, (byte) 0x69,
+        (byte) 0x74, (byte) 0x20, (byte) 0x69, (byte) 0x73, (byte) 0x20, (byte) 0x74,
+        (byte) 0x68, (byte) 0x65, (byte) 0x20, (byte) 0x73, (byte) 0x65, (byte) 0x6E,
+        (byte) 0x64, (byte) 0x20, (byte) 0x6B, (byte) 0x65, (byte) 0x79, (byte) 0x2E
     };
 
     private final EapMsChapV2Config mEapMsChapV2Config;
@@ -207,7 +274,10 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                                 ntResponse,
                                 FLAGS,
                                 usernameToBytes(mEapMsChapV2Config.username));
-                transitionTo(new ValidateAuthenticatorState());
+                transitionTo(
+                        new ValidateAuthenticatorState(
+                                challengeRequest.challenge, peerChallenge, ntResponse));
+                LOG.e(mTAG, "transitioned to PostChallengeState");
                 return buildEapMessageResponse(mTAG, message.eapIdentifier, challengeResponse);
             } catch (UnsupportedEncodingException | EapMsChapV2ParsingException ex) {
                 LOG.e(mTAG, "Error building response type data", ex);
@@ -217,26 +287,170 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     }
 
     protected class ValidateAuthenticatorState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
+        private final byte[] mAuthenticatorChallenge;
+        private final byte[] mPeerChallenge;
+        private final byte[] mNtResponse;
+
+        @VisibleForTesting
+        ValidateAuthenticatorState(
+                byte[] authenticatorChallenge, byte[] peerChallenge, byte[] ntResponse) {
+            this.mAuthenticatorChallenge = authenticatorChallenge;
+            this.mPeerChallenge = peerChallenge;
+            this.mNtResponse = ntResponse;
+        }
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/140322003): implement ValidateAuthenticatorState
-            return null;
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            int opCode;
+            try {
+                opCode = mTypeDataDecoder.getOpCode(message.eapData.eapTypeData);
+            } catch (BufferUnderflowException ex) {
+                LOG.e(mTAG, "Empty type data received in ValidateAuthenticatorState", ex);
+                return new EapError(ex);
+            }
+
+            switch (opCode) {
+                case EAP_MSCHAP_V2_SUCCESS:
+                    DecodeResult<EapMsChapV2SuccessRequest> successDecodeResult =
+                            mTypeDataDecoder.decodeSuccessRequest(
+                                    mTAG, message.eapData.eapTypeData);
+                    if (!successDecodeResult.isSuccessfulDecode()) {
+                        return successDecodeResult.eapError;
+                    }
+
+                    EapMsChapV2SuccessRequest successRequest = successDecodeResult.eapTypeData;
+                    LOG.d(mTAG, "SuccessRequest message: " + successRequest.message);
+
+                    boolean isSuccessfulAuth;
+                    try {
+                        isSuccessfulAuth =
+                                checkAuthenticatorResponse(
+                                        mEapMsChapV2Config.password,
+                                        mNtResponse,
+                                        mPeerChallenge,
+                                        mAuthenticatorChallenge,
+                                        mEapMsChapV2Config.username,
+                                        successRequest.authBytes);
+                    } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
+                        LOG.e(mTAG, "Error validating MSCHAPv2 Authenticator Response", ex);
+                        return new EapError(ex);
+                    }
+
+                    if (!isSuccessfulAuth) {
+                        LOG.e(
+                                mTAG,
+                                "Authenticator Response does not match expected response value");
+                        transitionTo(new FinalState());
+                        return new EapFailure();
+                    }
+
+                    transitionTo(new AwaitingEapSuccessState(mNtResponse));
+                    return buildEapMessageResponse(
+                            mTAG, message.eapIdentifier, getEapMsChapV2SuccessResponse());
+
+                case EAP_MSCHAP_V2_FAILURE:
+                    DecodeResult<EapMsChapV2FailureRequest> failureDecodeResult =
+                            mTypeDataDecoder.decodeFailureRequest(
+                                    mTAG, message.eapData.eapTypeData);
+                    if (!failureDecodeResult.isSuccessfulDecode()) {
+                        return failureDecodeResult.eapError;
+                    }
+
+                    EapMsChapV2FailureRequest failureRequest = failureDecodeResult.eapTypeData;
+                    int errorCode = failureRequest.errorCode;
+                    LOG.e(
+                            mTAG,
+                            String.format(
+                                    "Received MSCHAPv2 Failure-Request: E=%s (%d) R=%b V=%d M=%s",
+                                    EAP_ERROR_CODE_STRING.getOrDefault(errorCode, "UNKNOWN"),
+                                    errorCode,
+                                    failureRequest.isRetryable,
+                                    failureRequest.passwordChangeProtocol,
+                                    failureRequest.message));
+                    transitionTo(new AwaitingEapFailureState());
+                    return buildEapMessageResponse(
+                            mTAG, message.eapIdentifier, getEapMsChapV2FailureResponse());
+
+                default:
+                    LOG.e(mTAG, "Invalid OpCode received in ValidateAuthenticatorState: " + opCode);
+                    return new EapError(
+                            new EapInvalidRequestException(
+                                    "Unexpected request received in EAP MSCHAPv2"));
+            }
         }
     }
 
     protected class AwaitingEapSuccessState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
+        private final byte[] mNtResponse;
+
+        AwaitingEapSuccessState(byte[] ntResponse) {
+            this.mNtResponse = ntResponse;
+        }
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/141483998): implement the AwaitingEapSuccessState
-            return null;
+            if (message.eapCode == EAP_CODE_FAILURE) {
+                LOG.e(mTAG, "Received EAP-Failure in PreSuccessState");
+                transitionTo(new FinalState());
+                return new EapFailure();
+            } else if (message.eapCode != EAP_CODE_SUCCESS) {
+                if (message.eapData.eapType == EAP_NOTIFICATION) {
+                    return handleEapNotification(mTAG, message);
+                } else {
+                    LOG.e(
+                            mTAG,
+                            "Received unexpected EAP message. Type="
+                                    + EAP_TYPE_STRING.getOrDefault(
+                                            message.eapData.eapType, "UNKNOWN"));
+                    return new EapError(
+                            new EapInvalidRequestException(
+                                    "Expected EAP Type "
+                                            + getEapMethod()
+                                            + ", received "
+                                            + message.eapData.eapType));
+                }
+            }
+
+            try {
+                byte[] msk = generateMsk(mEapMsChapV2Config.password, mNtResponse);
+                transitionTo(new FinalState());
+                return new EapSuccess(msk, new byte[0]);
+            } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
+                LOG.e(mTAG, "Error generating MSK for EAP MSCHAPv2", ex);
+                return new EapError(ex);
+            }
         }
     }
 
     protected class AwaitingEapFailureState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/141483998): implement the AwaitingEapFailureState
-            return null;
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            LOG.e(
+                    mTAG,
+                    "Received unexpected EAP message. Type="
+                            + EAP_TYPE_STRING.getOrDefault(message.eapData.eapType, "UNKNOWN"));
+            return new EapError(
+                    new EapInvalidRequestException(
+                            "Expected EAP Type "
+                                    + getEapMethod()
+                                    + ", received "
+                                    + message.eapData.eapType));
         }
     }
 
@@ -366,14 +580,14 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
         MessageDigest sha1 = MessageDigest.getInstance(SHA_ALG);
         sha1.update(passwordHashHash);
         sha1.update(ntResponse);
-        sha1.update(MAGIC_1); // add just a dash of magic
+        sha1.update(CHALLENGE_MAGIC_1); // add just a dash of magic
         byte[] digest = sha1.digest();
 
         byte[] challenge = challengeHash(peerChallenge, authenticatorChallenge, username);
 
         sha1.update(digest);
         sha1.update(challenge);
-        sha1.update(MAGIC_2);
+        sha1.update(CHALLENGE_MAGIC_2);
 
         return sha1.digest();
     }
@@ -392,5 +606,45 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 generateAuthenticatorResponse(
                         password, ntResponse, peerChallenge, authenticatorChallenge, userName);
         return Arrays.equals(myResponse, receivedResponse);
+    }
+
+    /* Implementation of RFC 3079#3.4: GetMasterKey() */
+    @VisibleForTesting
+    static byte[] getMasterKey(byte[] passwordHashHash, byte[] ntResponse)
+            throws GeneralSecurityException {
+        MessageDigest sha1 = MessageDigest.getInstance(SHA_ALG);
+        sha1.update(passwordHashHash);
+        sha1.update(ntResponse);
+        sha1.update(MSK_MAGIC_1);
+        return Arrays.copyOf(sha1.digest(), MASTER_KEY_LEN);
+    }
+
+    /* Implementation of RFC 3079#3.4: GetAsymmetricStartKey() */
+    @VisibleForTesting
+    static byte[] getAsymmetricStartKey(byte[] masterKey, boolean isSend)
+            throws GeneralSecurityException {
+        // salt: referred to as 's' in RFC 3079#3.4 GetAsymmetricStartKey()
+        byte[] salt = isSend ? MSK_MAGIC_2 : MSK_MAGIC_3;
+        MessageDigest sha1 = MessageDigest.getInstance(SHA_ALG);
+        sha1.update(masterKey);
+        sha1.update(SHS_PAD_1);
+        sha1.update(salt);
+        sha1.update(SHS_PAD_2);
+        return Arrays.copyOf(sha1.digest(), SESSION_KEY_LEN);
+    }
+
+    @VisibleForTesting
+    static byte[] generateMsk(String password, byte[] ntResponse)
+            throws GeneralSecurityException, UnsupportedEncodingException {
+        byte[] passwordHash = ntPasswordHash(password);
+        byte[] passwordHashHash = hashNtPasswordHash(passwordHash);
+        byte[] masterKey = getMasterKey(passwordHashHash, ntResponse);
+
+        // MSK: SendKey + ReceiveKey
+        ByteBuffer msk = ByteBuffer.allocate(MASTER_SESSION_KEY_LEN);
+        msk.put(getAsymmetricStartKey(masterKey, true /* isSend */));
+        msk.put(getAsymmetricStartKey(masterKey, false /* isSend */));
+
+        return msk.array();
     }
 }

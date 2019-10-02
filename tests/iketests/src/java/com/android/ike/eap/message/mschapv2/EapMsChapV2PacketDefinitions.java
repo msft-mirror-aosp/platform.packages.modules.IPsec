@@ -86,6 +86,11 @@ public class EapMsChapV2PacketDefinitions {
                     "03" + ID + "0042" + FORMATTED_AUTH_STRING + SPACE_HEX + FORMATTED_MESSAGE);
     public static final byte[] EAP_MSCHAP_V2_SUCCESS_REQUEST_EMPTY_MESSAGE =
             hexStringToByteArray("03" + ID + "0031" + FORMATTED_AUTH_STRING + SPACE_HEX + "4D3D");
+    public static final byte[] EAP_MSCHAP_V2_SUCCESS_REQUEST_MISSING_MESSAGE =
+            hexStringToByteArray("03" + ID + "002E" + FORMATTED_AUTH_STRING);
+    public static final byte[] EAP_MSCHAP_V2_SUCCESS_REQUEST_MISSING_MESSAGE_WITH_SPACE =
+            hexStringToByteArray("03" + ID + "002F" + FORMATTED_AUTH_STRING + SPACE_HEX);
+    public static final String MESSAGE_MISSING_TEXT = "<omitted by authenticator>";
 
     public static final String SHORT_AUTH_STRING = "001122334455";
 
@@ -164,6 +169,31 @@ public class EapMsChapV2PacketDefinitions {
                             + FORMATTED_PASSWORD_CHANGE_PROTOCOL
                             + SPACE_HEX
                             + FORMATTED_MESSAGE);
+    public static final byte[] EAP_MSCHAP_V2_FAILURE_REQUEST_MISSING_MESSAGE =
+            hexStringToByteArray(
+                    "04"
+                            + ID
+                            + "0034"
+                            + FORMATTED_ERROR_CODE
+                            + SPACE_HEX
+                            + FORMATTED_RETRY_BIT
+                            + SPACE_HEX
+                            + FORMATTED_CHALLENGE
+                            + SPACE_HEX
+                            + FORMATTED_PASSWORD_CHANGE_PROTOCOL);
+    public static final byte[] EAP_MSCHAP_V2_FAILURE_REQUEST_MISSING_MESSAGE_WITH_SPACE =
+            hexStringToByteArray(
+                    "04"
+                            + ID
+                            + "0035"
+                            + FORMATTED_ERROR_CODE
+                            + SPACE_HEX
+                            + FORMATTED_RETRY_BIT
+                            + SPACE_HEX
+                            + FORMATTED_CHALLENGE
+                            + SPACE_HEX
+                            + FORMATTED_PASSWORD_CHANGE_PROTOCOL
+                            + SPACE_HEX);
 
     // invalid error code: hex("E=abc")
     public static final String INVALID_ERROR_CODE = "453D616263";
