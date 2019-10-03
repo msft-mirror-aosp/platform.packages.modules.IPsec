@@ -36,7 +36,6 @@ import android.net.IpSecSpiResponse;
 import android.util.Pair;
 
 import com.android.ike.TestUtils;
-import com.android.ike.ikev2.MockIpSecTestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -56,6 +55,7 @@ import com.android.ike.ikev2.message.IkeSaPayload.Transform;
 import com.android.ike.ikev2.message.IkeSaPayload.TransformDecoder;
 import com.android.ike.ikev2.message.IkeSaPayload.UnrecognizedAttribute;
 import com.android.ike.ikev2.message.IkeSaPayload.UnrecognizedTransform;
+import com.android.ike.ikev2.testutils.MockIpSecTestUtils;
 import com.android.server.IpSecService;
 
 import libcore.net.InetAddressUtils;

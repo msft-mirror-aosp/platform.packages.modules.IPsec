@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.ike.ikev2;
+package com.android.ike.ikev2.testutils;
 
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.IPPROTO_UDP;

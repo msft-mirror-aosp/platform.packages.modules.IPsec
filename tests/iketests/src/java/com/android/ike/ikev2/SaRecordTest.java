@@ -51,6 +51,7 @@ import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
+import com.android.ike.ikev2.testutils.MockIpSecTestUtils;
 import com.android.server.IpSecService;
 
 import libcore.net.InetAddressUtils;
