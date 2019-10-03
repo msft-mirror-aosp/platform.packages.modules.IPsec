@@ -119,7 +119,6 @@ import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
-import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeSkfPayload;
@@ -707,8 +706,8 @@ public final class IkeSessionStateMachineTest {
         return ikeSession;
     }
 
-    static SaProposal buildSaProposal() throws Exception {
-        return SaProposal.Builder.newIkeSaProposalBuilder()
+    static IkeSaProposal buildSaProposal() throws Exception {
+        return new IkeSaProposal.Builder()
                 .addEncryptionAlgorithm(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                 .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
@@ -736,8 +735,8 @@ public final class IkeSessionStateMachineTest {
     }
 
     private ChildSessionOptions buildChildSessionOptions() throws Exception {
-        SaProposal saProposal =
-                SaProposal.Builder.newChildSaProposalBuilder()
+        ChildSaProposal saProposal =
+                new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
@@ -1192,7 +1191,7 @@ public final class IkeSessionStateMachineTest {
         verifyRetransmissionStarted();
 
         // Validate negotiated SA proposal.
-        SaProposal negotiatedProposal = mIkeSessionStateMachine.mSaProposal;
+        IkeSaProposal negotiatedProposal = mIkeSessionStateMachine.mSaProposal;
         assertNotNull(negotiatedProposal);
 
         assertEquals(
@@ -1202,7 +1201,6 @@ public final class IkeSessionStateMachineTest {
                 new IntegrityTransform[] {mIkeIntegrityTransform},
                 negotiatedProposal.getIntegrityTransforms());
         assertEquals(new PrfTransform[] {mIkePrfTransform}, negotiatedProposal.getPrfTransforms());
-        assertEquals(new EsnTransform[0], negotiatedProposal.getEsnTransforms());
 
         // Validate current IkeSaRecord.
         verify(mMockSaRecordHelper)

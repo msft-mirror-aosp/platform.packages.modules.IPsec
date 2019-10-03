@@ -178,7 +178,7 @@ public final class ChildSessionStateMachineTest {
     private IntegrityTransform mChildIntegrityTransform;
     private DhGroupTransform mChildDhGroupTransform;
 
-    private SaProposal mMockNegotiatedProposal;
+    private ChildSaProposal mMockNegotiatedProposal;
 
     private Executor mSpyUserCbExecutor;
     private IChildSessionCallback mMockChildSessionCallback;
@@ -222,7 +222,7 @@ public final class ChildSessionStateMachineTest {
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
         mMockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
 
-        mMockNegotiatedProposal = mock(SaProposal.class);
+        mMockNegotiatedProposal = mock(ChildSaProposal.class);
 
         mSpyUserCbExecutor =
                 spy(
@@ -260,8 +260,8 @@ public final class ChildSessionStateMachineTest {
         SaRecord.setSaRecordHelper(new SaRecordHelper());
     }
 
-    private SaProposal buildSaProposal() throws Exception {
-        return SaProposal.Builder.newChildSaProposalBuilder()
+    private ChildSaProposal buildSaProposal() throws Exception {
+        return new ChildSaProposal.Builder()
                 .addEncryptionAlgorithm(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                 .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
@@ -408,7 +408,7 @@ public final class ChildSessionStateMachineTest {
                         instanceof ChildSessionStateMachine.Idle);
 
         // Validate negotiated SA proposal.
-        SaProposal negotiatedProposal = mChildSessionStateMachine.mSaProposal;
+        ChildSaProposal negotiatedProposal = mChildSessionStateMachine.mSaProposal;
         assertNotNull(negotiatedProposal);
         assertEquals(
                 new EncryptionTransform[] {mChildEncryptionTransform},

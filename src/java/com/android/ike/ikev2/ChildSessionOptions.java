@@ -16,7 +16,6 @@
 
 package com.android.ike.ikev2;
 
-import com.android.ike.ikev2.message.IkePayload;
 
 import libcore.net.InetAddressUtils;
 
@@ -37,13 +36,13 @@ public final class ChildSessionOptions {
 
     private final IkeTrafficSelector[] mLocalTrafficSelectors;
     private final IkeTrafficSelector[] mRemoteTrafficSelectors;
-    private final SaProposal[] mSaProposals;
+    private final ChildSaProposal[] mSaProposals;
     private final boolean mIsTransport;
 
     private ChildSessionOptions(
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
-            SaProposal[] proposals,
+            ChildSaProposal[] proposals,
             boolean isTransport) {
         mLocalTrafficSelectors = localTs;
         mRemoteTrafficSelectors = remoteTs;
@@ -62,7 +61,7 @@ public final class ChildSessionOptions {
     }
 
     /** Package private */
-    SaProposal[] getSaProposals() {
+    ChildSaProposal[] getSaProposals() {
         return mSaProposals;
     }
 
@@ -75,7 +74,7 @@ public final class ChildSessionOptions {
     public static final class Builder {
         private final List<IkeTrafficSelector> mLocalTsList = new LinkedList<>();
         private final List<IkeTrafficSelector> mRemoteTsList = new LinkedList<>();
-        private final List<SaProposal> mSaProposalList = new LinkedList<>();
+        private final List<ChildSaProposal> mSaProposalList = new LinkedList<>();
 
         private boolean mIsTransport = false;
 
@@ -86,14 +85,7 @@ public final class ChildSessionOptions {
          * @return Builder this, to facilitate chaining.
          * @throws IllegalArgumentException if input proposal is not a Child SA proposal.
          */
-        public Builder addSaProposal(SaProposal proposal) {
-            // TODO: Consider making IkeProposal and ChildProposal seperate classes so that
-            // we can do a static check of this input.
-            if (proposal.getProtocolId() != IkePayload.PROTOCOL_ID_ESP) {
-                throw new IllegalArgumentException(
-                        "Expected ESP SA Proposal. Received protocol ID: "
-                                + proposal.getProtocolId());
-            }
+        public Builder addSaProposal(ChildSaProposal proposal) {
             mSaProposalList.add(proposal);
             return this;
         }
@@ -134,7 +126,7 @@ public final class ChildSessionOptions {
             return new ChildSessionOptions(
                     mLocalTsList.toArray(new IkeTrafficSelector[mLocalTsList.size()]),
                     mRemoteTsList.toArray(new IkeTrafficSelector[mRemoteTsList.size()]),
-                    mSaProposalList.toArray(new SaProposal[mSaProposalList.size()]),
+                    mSaProposalList.toArray(new ChildSaProposal[mSaProposalList.size()]),
                     mIsTransport);
         }
     }
