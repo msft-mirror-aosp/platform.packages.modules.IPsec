@@ -1889,6 +1889,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
+        @Override
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_RECEIVE_REQUEST_FOR_CHILD:
@@ -3455,6 +3460,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 scheduleRetry(mCurrentIkeSaRecord.getFutureRekeyEvent());
                 transitionTo(mIdle);
             }
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
         }
 
         @Override
