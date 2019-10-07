@@ -1417,8 +1417,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         }
 
                         // TODO:Support resetting remote rekey delete timer.
+                    } else {
+                        logi(methodTag + "Received response with invalid message ID. Discard it.");
                     }
-                    logi(methodTag + "Received response with invalid message ID. Discard it.");
                 } else {
                     DecodeResult decodeResult =
                             IkeMessage.decode(
