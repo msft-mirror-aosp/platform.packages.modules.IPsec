@@ -20,7 +20,6 @@ import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -255,13 +254,8 @@ public class EapAkaTest extends EapMethodEndToEndTest {
     }
 
     private void verifyEapSuccess() {
-        // EAP-Success
-        mEapAuthenticator.processEapMessage(EAP_SUCCESS);
-        mTestLooper.dispatchAll();
+        super.verifyEapSuccess(MSK, EMSK);
 
-        // verify that onSuccess callback made
-        verify(mMockCallback).onSuccess(eq(MSK), eq(EMSK));
-        verifyNoMoreInteractions(
-                mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
+        verifyNoMoreInteractions(mMockTelephonyManager);
     }
 }
