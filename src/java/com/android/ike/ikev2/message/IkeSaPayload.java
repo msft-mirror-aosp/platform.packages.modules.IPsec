@@ -16,18 +16,19 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.IkeManager.getIkeLog;
 import static com.android.ike.ikev2.SaProposal.DhGroup;
 import static com.android.ike.ikev2.SaProposal.EncryptionAlgorithm;
 import static com.android.ike.ikev2.SaProposal.IntegrityAlgorithm;
 import static com.android.ike.ikev2.SaProposal.PseudorandomFunction;
 
 import android.annotation.IntDef;
+import android.annotation.NonNull;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.util.ArraySet;
-import android.util.Log;
 import android.util.Pair;
 
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
@@ -93,10 +94,13 @@ public final class IkeSaPayload extends IkePayload {
         for (int i = 1; i < proposalList.size(); i++) {
             boolean isIkeProposal = (proposalList.get(i).protocolId == PROTOCOL_ID_IKE);
             if (firstIsIkeProposal != isIkeProposal) {
-                Log.w(TAG, "Found both IKE proposals and Child proposals in this SA Payload.");
+                getIkeLog()
+                        .w(TAG, "Found both IKE proposals and Child proposals in this SA Payload.");
                 break;
             }
         }
+
+        getIkeLog().d(TAG, "Receive " + toString());
     }
 
     /** Package private constructor for building a request for IKE SA initial creation or rekey */
@@ -115,6 +119,8 @@ public final class IkeSaPayload extends IkePayload {
                     IkeProposal.createIkeProposal(
                             (byte) (i + 1) /*number*/, spiSize, saProposals[i], localAddress));
         }
+
+        getIkeLog().d(TAG, "Generate " + toString());
     }
 
     /** Package private constructor for building an response SA Payload for IKE SA rekeys. */
@@ -131,6 +137,8 @@ public final class IkeSaPayload extends IkePayload {
         proposalList.add(
                 IkeProposal.createIkeProposal(
                         proposalNumber /*number*/, spiSize, saProposal, localAddress));
+
+        getIkeLog().d(TAG, "Generate " + toString());
     }
 
     private IkeSaPayload(boolean isResp, byte spiSize, InetAddress localAddress)
@@ -167,6 +175,8 @@ public final class IkeSaPayload extends IkePayload {
                     ChildProposal.createChildProposal(
                             (byte) (i + 1) /*number*/, saProposals[i], ipSecManager, localAddress));
         }
+
+        getIkeLog().d(TAG, "Generate " + toString());
     }
 
     /**
@@ -185,6 +195,8 @@ public final class IkeSaPayload extends IkePayload {
         proposalList.add(
                 ChildProposal.createChildProposal(
                         proposalNumber /*number*/, saProposal, ipSecManager, localAddress));
+
+        getIkeLog().d(TAG, "Generate " + toString());
     }
 
     /** Constructor for building an outbound SA Payload for Child SA negotiation. */
@@ -656,6 +668,12 @@ public final class IkeSaPayload extends IkePayload {
             Transform[] allTransforms = saProposal.getAllTransforms();
             for (Transform t : allTransforms) len += t.getTransformLength();
             return len;
+        }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return "Proposal(" + number + ") " + saProposal.toString();
         }
 
         /** Package private method for releasing SPI resource in this unselected Proposal. */
@@ -1168,6 +1186,15 @@ public final class IkeSaPayload extends IkePayload {
         public String getTransformTypeString() {
             return "Encryption Algorithm";
         }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return SaProposal.getEncryptionAlgorithmString(id)
+                    + "("
+                    + getSpecifiedKeyLength()
+                    + ")";
+        }
     }
 
     /**
@@ -1234,6 +1261,12 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         public String getTransformTypeString() {
             return "Pseudorandom Function";
+        }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return SaProposal.getPseudorandomFunctionString(id);
         }
     }
 
@@ -1306,6 +1339,12 @@ public final class IkeSaPayload extends IkePayload {
         public String getTransformTypeString() {
             return "Integrity Algorithm";
         }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return SaProposal.getIntegrityAlgorithmString(id);
+        }
     }
 
     /**
@@ -1376,6 +1415,12 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         public String getTransformTypeString() {
             return "Diffie-Hellman Group";
+        }
+
+        @Override
+        @NonNull
+        public String toString() {
+            return SaProposal.getDhGroupString(id);
         }
     }
 
@@ -1453,6 +1498,15 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         public String getTransformTypeString() {
             return "Extended Sequence Numbers";
+        }
+
+        @Override
+        @NonNull
+        public String toString() {
+            if (id == ESN_POLICY_NO_EXTENDED) {
+                return "ESN_No_Extended";
+            }
+            return "ESN_Extended";
         }
     }
 
@@ -1670,6 +1724,25 @@ public final class IkeSaPayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "SA Payload";
+        return "SA";
+    }
+
+    @Override
+    @NonNull
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        if (isSaResponse) {
+            sb.append("SA Response: ");
+        } else {
+            sb.append("SA Request: ");
+        }
+
+        int len = proposalList.size();
+        for (int i = 0; i < len; i++) {
+            sb.append(proposalList.get(i).toString());
+            if (i < len - 1) sb.append(", ");
+        }
+
+        return sb.toString();
     }
 }

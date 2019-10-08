@@ -17,10 +17,18 @@ package com.android.ike.ikev2;
 
 import android.content.Context;
 
+import com.android.ike.utils.Log;
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.util.concurrent.Executor;
 
 /** This class contains methods for managing IKE sessions. */
 public final class IkeManager {
+    private static final String IKE_TAG = "IKE";
+    private static final boolean LOG_SENSITIVE = false;
+
+    private static Log sIkeLog = new Log(IKE_TAG, LOG_SENSITIVE);
+
     /**
      * Construct an instance of {@link IkeSession} and start the IKE Session setup process.
      *
@@ -56,5 +64,20 @@ public final class IkeManager {
                 userCbExecutor,
                 ikeSessionCallback,
                 firstChildSessionCallback);
+    }
+
+    /** Returns IKE logger. */
+    public static Log getIkeLog() {
+        return sIkeLog;
+    }
+
+    @VisibleForTesting
+    static void setIkeLog(Log log) {
+        sIkeLog = log;
+    }
+
+    @VisibleForTesting
+    static void resetIkeLog() {
+        sIkeLog = new Log(IKE_TAG, LOG_SENSITIVE);
     }
 }

@@ -25,6 +25,8 @@ package com.android.ike.ikev2.exceptions;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class InvalidSyntaxException extends IkeProtocolException {
+    private static final int EXPECTED_ERROR_DATA_LEN = 0;
+
     /**
      * Construct an instance of InvalidSyntaxException.
      *
@@ -41,5 +43,29 @@ public final class InvalidSyntaxException extends IkeProtocolException {
      */
     public InvalidSyntaxException(Throwable cause) {
         super(ERROR_TYPE_INVALID_SYNTAX, cause);
+    }
+
+    /**
+     * Construct a instance of InvalidSyntaxException.
+     *
+     * @param message the descriptive message.
+     * @param cause the reason of exception.
+     */
+    public InvalidSyntaxException(String message, Throwable cause) {
+        super(ERROR_TYPE_INVALID_SYNTAX, message, cause);
+    }
+
+    /**
+     * Construct a instance of InvalidSyntaxException from a notify payload.
+     *
+     * @param notifyData the notify data included in the payload.
+     */
+    public InvalidSyntaxException(byte[] notifyData) {
+        super(ERROR_TYPE_INVALID_SYNTAX, notifyData);
+    }
+
+    @Override
+    protected boolean isValidDataLength(int dataLen) {
+        return EXPECTED_ERROR_DATA_LEN == dataLen;
     }
 }

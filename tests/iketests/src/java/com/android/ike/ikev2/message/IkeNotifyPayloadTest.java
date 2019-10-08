@@ -16,6 +16,10 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -23,8 +27,12 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.TestUtils;
+import com.android.ike.ikev2.SaProposal;
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
+import com.android.ike.ikev2.exceptions.InvalidKeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.exceptions.UnrecognizedIkeProtocolException;
 
 import org.junit.Test;
 
@@ -157,5 +165,84 @@ public final class IkeNotifyPayloadTest {
         byte[] expectedNoncePayload =
                 TestUtils.hexStringToByteArray(NOTIFY_NAT_DETECTION_PAYLOAD_HEX_STRING);
         assertArrayEquals(expectedNoncePayload, byteBuffer.array());
+    }
+
+    @Test
+    public void testValidateAndBuildIkeExceptionWithData() throws Exception {
+        // Invalid Message ID
+        byte[] dhGroup = new byte[] {(byte) 0x00, (byte) 0x0e};
+        int expectedDhGroup = SaProposal.DH_GROUP_2048_BIT_MODP;
+
+        IkeNotifyPayload payload = new IkeNotifyPayload(ERROR_TYPE_INVALID_KE_PAYLOAD, dhGroup);
+        IkeProtocolException exception = payload.validateAndBuildIkeException();
+
+        assertTrue(exception instanceof InvalidKeException);
+        assertEquals(ERROR_TYPE_INVALID_KE_PAYLOAD, exception.getErrorType());
+        assertArrayEquals(dhGroup, exception.getErrorData());
+        assertEquals(expectedDhGroup, ((InvalidKeException) exception).getDhGroup());
+    }
+
+    @Test
+    public void testValidateAndBuildIkeExceptionWithoutData() throws Exception {
+        // Invalid Syntax
+        IkeNotifyPayload payload = new IkeNotifyPayload(ERROR_TYPE_AUTHENTICATION_FAILED);
+        IkeProtocolException exception = payload.validateAndBuildIkeException();
+
+        assertTrue(exception instanceof AuthenticationFailedException);
+        assertEquals(ERROR_TYPE_AUTHENTICATION_FAILED, exception.getErrorType());
+        assertArrayEquals(new byte[0], exception.getErrorData());
+    }
+
+    @Test
+    public void testValidateAndBuildUnrecognizedIkeException() throws Exception {
+        int unrecognizedType = 0;
+        IkeNotifyPayload payload = new IkeNotifyPayload(unrecognizedType);
+        IkeProtocolException exception = payload.validateAndBuildIkeException();
+
+        assertTrue(exception instanceof UnrecognizedIkeProtocolException);
+        assertEquals(unrecognizedType, exception.getErrorType());
+        assertArrayEquals(new byte[0], exception.getErrorData());
+    }
+
+    @Test
+    public void testValidateAndBuildIkeExceptionWithInvalidPayload() throws Exception {
+        // Build a invalid notify payload
+        IkeNotifyPayload payload = new IkeNotifyPayload(ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD);
+
+        try {
+            payload.validateAndBuildIkeException();
+            fail("Expected to fail due to invalid error data");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildIkeExceptionWithStatusNotify() throws Exception {
+        // Rekey notification
+        byte[] inputPacket = TestUtils.hexStringToByteArray(NOTIFY_REKEY_PAYLOAD_BODY_HEX_STRING);
+        IkeNotifyPayload payload = new IkeNotifyPayload(false, inputPacket);
+
+        assertFalse(payload.isErrorNotify());
+
+        try {
+            payload.validateAndBuildIkeException();
+            fail("Expected to fail because it is not error notification");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testGetNotifyTypeString() throws Exception {
+        IkeNotifyPayload payload = new IkeNotifyPayload(ERROR_TYPE_AUTHENTICATION_FAILED);
+
+        assertEquals("Notify(Authentication failed)", payload.getTypeString());
+    }
+
+    @Test
+    public void testGetNotifyTypeStringForUnrecoginizedNotify() throws Exception {
+        int unrecognizedType = 0;
+        IkeNotifyPayload payload = new IkeNotifyPayload(unrecognizedType);
+
+        assertEquals("Notify(0)", payload.getTypeString());
     }
 }

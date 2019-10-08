@@ -17,6 +17,7 @@
 package com.android.ike.ikev2.message;
 
 import android.annotation.IntDef;
+import android.util.SparseArray;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -120,6 +121,16 @@ public abstract class IkePayload {
     public static final int PROTOCOL_ID_AH = 2;
     public static final int PROTOCOL_ID_ESP = 3;
 
+    private static final SparseArray<String> PROTOCOL_TO_STR;
+
+    static {
+        PROTOCOL_TO_STR = new SparseArray<>();
+        PROTOCOL_TO_STR.put(PROTOCOL_ID_UNSET, "Protocol Unset");
+        PROTOCOL_TO_STR.put(PROTOCOL_ID_IKE, "IKE");
+        PROTOCOL_TO_STR.put(PROTOCOL_ID_AH, "AH");
+        PROTOCOL_TO_STR.put(PROTOCOL_ID_ESP, "ESP");
+    }
+
     public static final byte SPI_LEN_NOT_INCLUDED = 0;
     public static final byte SPI_LEN_IPSEC = 4;
     public static final byte SPI_LEN_IKE = 8;
@@ -210,6 +221,11 @@ public abstract class IkePayload {
                 .put((byte) nextPayload)
                 .put(PAYLOAD_HEADER_CRITICAL_BIT_UNSET)
                 .putShort((short) payloadLength);
+    }
+
+    /** Retuns protocol type as String. */
+    public static String getProtocolTypeString(@ProtocolId int protocol) {
+        return PROTOCOL_TO_STR.get(protocol);
     }
 
     /**

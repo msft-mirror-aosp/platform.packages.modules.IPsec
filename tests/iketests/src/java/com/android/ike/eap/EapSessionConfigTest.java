@@ -16,14 +16,20 @@
 
 package com.android.ike.eap;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
+import static com.android.ike.eap.EapSessionConfig.DEFAULT_IDENTITY;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
 import com.android.ike.eap.EapSessionConfig.EapMethodConfig;
+import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 
 import org.junit.Test;
@@ -31,19 +37,46 @@ import org.junit.Test;
 public class EapSessionConfigTest {
     private static final byte[] EAP_IDENTITY = "test@android.net".getBytes();
     private static final int SUB_ID = 1;
+    private static final String USERNAME = "username";
+    private static final String PASSWORD = "password";
 
     @Test
-    public void testBuild() {
+    public void testBuildEapSim() {
         EapSessionConfig result = new EapSessionConfig.Builder()
                 .setEapIdentity(EAP_IDENTITY)
-                .setEapSimConfig(SUB_ID)
+                .setEapSimConfig(SUB_ID, APPTYPE_USIM)
                 .build();
 
         assertArrayEquals(EAP_IDENTITY, result.eapIdentity);
 
         EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_SIM);
         assertEquals(EAP_TYPE_SIM, eapMethodConfig.methodType);
-        assertTrue(eapMethodConfig instanceof EapSimConfig);
+        EapSimConfig eapSimConfig = (EapSimConfig) eapMethodConfig;
+        assertEquals(SUB_ID, eapSimConfig.subId);
+        assertEquals(APPTYPE_USIM, eapSimConfig.apptype);
+    }
+
+    @Test
+    public void testBuildEapAka() {
+        EapSessionConfig result = new EapSessionConfig.Builder()
+                .setEapAkaConfig(SUB_ID, APPTYPE_USIM)
+                .build();
+
+        assertArrayEquals(DEFAULT_IDENTITY, result.eapIdentity);
+        EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_AKA);
+        EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
+        assertEquals(SUB_ID, eapAkaConfig.subId);
+        assertEquals(APPTYPE_USIM, eapAkaConfig.apptype);
+    }
+
+    @Test
+    public void testBuildEapMsChapV2() {
+        EapSessionConfig result =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
+
+        EapMsChapV2Config config = (EapMsChapV2Config) result.eapConfigs.get(EAP_TYPE_MSCHAP_V2);
+        assertEquals(USERNAME, config.username);
+        assertEquals(PASSWORD, config.password);
     }
 
     @Test

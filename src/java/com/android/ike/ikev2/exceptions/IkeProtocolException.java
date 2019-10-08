@@ -17,8 +17,11 @@ package com.android.ike.ikev2.exceptions;
 
 import android.annotation.IntDef;
 
+import com.android.ike.ikev2.message.IkeNotifyPayload;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.nio.ByteBuffer;
 
 /**
  * IkeProtocolException is an abstract class that represents the common information for all IKE
@@ -66,40 +69,83 @@ public abstract class IkeProtocolException extends IkeException {
     public static final int ERROR_TYPE_TEMPORARY_FAILURE = 43;
     public static final int ERROR_TYPE_CHILD_SA_NOT_FOUND = 44;
 
-    public static final int ERROR_DATA_NOT_INCLUDED = Integer.MIN_VALUE;
+    public static final byte[] ERROR_DATA_NOT_INCLUDED = new byte[0];
+
+    private static final int INTEGER_BYTE_SIZE = 4;
 
     @ErrorType private final int mErrorType;
-    private final boolean mHasErrorData;
-    private final int mErrorData;
-
-    // TODO: Add a flag to indicate if this error is in an inbound message.
+    private final byte[] mErrorData;
 
     protected IkeProtocolException(@ErrorType int code) {
         super();
         mErrorType = code;
-        mHasErrorData = false;
         mErrorData = ERROR_DATA_NOT_INCLUDED;
-    }
-
-    protected IkeProtocolException(@ErrorType int code, int errorData) {
-        super();
-        mErrorType = code;
-        mHasErrorData = true;
-        mErrorData = errorData;
     }
 
     protected IkeProtocolException(@ErrorType int code, String message) {
         super(message);
         mErrorType = code;
-        mHasErrorData = false;
         mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
     protected IkeProtocolException(@ErrorType int code, Throwable cause) {
         super(cause);
         mErrorType = code;
-        mHasErrorData = false;
         mErrorData = ERROR_DATA_NOT_INCLUDED;
+    }
+
+    protected IkeProtocolException(@ErrorType int code, String message, Throwable cause) {
+        super(message, cause);
+        mErrorType = code;
+        mErrorData = ERROR_DATA_NOT_INCLUDED;
+    }
+
+    // Construct an instance from a notify Payload.
+    protected IkeProtocolException(@ErrorType int code, byte[] notifyData) {
+        super();
+
+        if (!isValidDataLength(notifyData.length)) {
+            throw new IllegalArgumentException(
+                    "Invalid error data for error type: "
+                            + code
+                            + " Received error data size: "
+                            + notifyData.length);
+        }
+
+        mErrorType = code;
+        mErrorData = notifyData;
+    }
+
+    protected abstract boolean isValidDataLength(int dataLen);
+
+    protected static byte[] integerToByteArray(int integer, int arraySize) {
+        if (arraySize > INTEGER_BYTE_SIZE) {
+            throw new IllegalArgumentException(
+                    "Cannot convert integer to a byte array of length: " + arraySize);
+        }
+
+        ByteBuffer dataBuffer = ByteBuffer.allocate(INTEGER_BYTE_SIZE);
+        dataBuffer.putInt(integer);
+        dataBuffer.rewind();
+
+        byte[] zeroPad = new byte[INTEGER_BYTE_SIZE - arraySize];
+        byte[] byteData = new byte[arraySize];
+        dataBuffer.get(zeroPad).get(byteData);
+
+        return byteData;
+    }
+
+    protected static int byteArrayToInteger(byte[] byteArray) {
+        if (byteArray == null || byteArray.length > INTEGER_BYTE_SIZE) {
+            throw new IllegalArgumentException("Cannot convert the byte array to integer");
+        }
+
+        ByteBuffer dataBuffer = ByteBuffer.allocate(INTEGER_BYTE_SIZE);
+        byte[] zeroPad = new byte[INTEGER_BYTE_SIZE - byteArray.length];
+        dataBuffer.put(zeroPad).put(byteArray);
+        dataBuffer.rewind();
+
+        return dataBuffer.getInt();
     }
 
     /**
@@ -113,25 +159,24 @@ public abstract class IkeProtocolException extends IkeException {
     }
 
     /**
-     * Returns if an error data is included in this {@link IkeProtocolException} instance.
-     *
-     * @return true if an error data is included in this {@link IkeProtocolException} instance,
-     *     false otherwise.
-     */
-    public boolean hasErrorData() {
-        return mHasErrorData;
-    }
-
-    /**
      * Returns the included error data of this {@link IkeProtocolException} instance.
      *
      * <p>Note that only few error types will go with an error data. This data has different meaning
      * with different error types. Users should first check if an error data is included before they
      * call this method.
      *
-     * @return the included error data.
+     * @return the included error data in byte array.
      */
-    public int getErrorData() {
+    public byte[] getErrorData() {
         return mErrorData;
+    }
+
+    /**
+     * Build an IKE Notification Payload for this {@link IkeProtocolException} instance.
+     *
+     * @return the notification payload.
+     */
+    public IkeNotifyPayload buildNotifyPayload() {
+        return new IkeNotifyPayload(mErrorType, mErrorData);
     }
 }

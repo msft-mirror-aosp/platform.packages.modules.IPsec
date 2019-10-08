@@ -15,14 +15,10 @@
  */
 package com.android.ike.ikev2;
 
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
+import static com.android.ike.ikev2.IkeManager.getIkeLog;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
-import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
@@ -49,8 +45,8 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 import android.os.Message;
-import android.util.Log;
 import android.util.Pair;
+import android.util.SparseArray;
 
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeExchangeSubType;
@@ -64,6 +60,7 @@ import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidKeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.exceptions.TemporaryFailureException;
 import com.android.ike.ikev2.exceptions.TsUnacceptableException;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeKePayload;
@@ -78,7 +75,6 @@ import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
-import com.android.internal.util.StateMachine;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -109,24 +105,34 @@ import java.util.concurrent.TimeUnit;
  *      Exchange Type = {Create | Delete}
  * </pre>
  */
-public class ChildSessionStateMachine extends StateMachine {
+public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private static final String TAG = "ChildSessionStateMachine";
+
+    private static final int SPI_NOT_REGISTERED = 0;
 
     // Time after which Child SA needs to be rekeyed
     @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(2L);
 
+    private static final int CMD_GENERAL_BASE = CMD_PRIVATE_BASE;
+
     /** Receive request for negotiating first Child SA. */
-    private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = 1;
+    private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = CMD_GENERAL_BASE + 1;
     /** Receive a request from the remote. */
-    private static final int CMD_HANDLE_RECEIVED_REQUEST = 2;
+    private static final int CMD_HANDLE_RECEIVED_REQUEST = CMD_GENERAL_BASE + 2;
     /** Receive a reponse from the remote. */
-    private static final int CMD_HANDLE_RECEIVED_RESPONSE = 3;
+    private static final int CMD_HANDLE_RECEIVED_RESPONSE = CMD_GENERAL_BASE + 3;
     /** Kill Session and close all alive Child SAs immediately. */
-    private static final int CMD_KILL_SESSION = 4;
-    /** Timeout when the remote side fails to send a Rekey-Delete request. */
-    @VisibleForTesting static final int TIMEOUT_REKEY_REMOTE_DELETE = 5;
-    /** Force state machine to a target state for testing purposes. */
-    @VisibleForTesting static final int CMD_FORCE_TRANSITION = 99;
+    private static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 4;
+
+    private static final SparseArray<String> CMD_TO_STR;
+
+    static {
+        CMD_TO_STR = new SparseArray<>();
+        CMD_TO_STR.put(CMD_HANDLE_FIRST_CHILD_EXCHANGE, "Handle First Child");
+        CMD_TO_STR.put(CMD_HANDLE_RECEIVED_REQUEST, "Rcv request");
+        CMD_TO_STR.put(CMD_HANDLE_RECEIVED_RESPONSE, "Rcv response");
+        CMD_TO_STR.put(CMD_KILL_SESSION, "Kill session");
+    }
 
     private final Context mContext;
     private final IpSecManager mIpSecManager;
@@ -264,6 +270,9 @@ public class ChildSessionStateMachine extends StateMachine {
         /** Schedule a future Child Rekey Request on the LocalRequestScheduler. */
         void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime);
 
+        /** Schedule retry for a Child Rekey Request on the LocalRequestScheduler. */
+        void scheduleRetryLocalRequest(ChildLocalRequest futureRequest);
+
         /** Notify the IKE Session to send out IKE message for this Child Session. */
         void onOutboundPayloadsReady(
                 @ExchangeType int exchangeType,
@@ -314,16 +323,17 @@ public class ChildSessionStateMachine extends StateMachine {
             UdpEncapsulationSocket udpEncapSocket,
             IkeMacPrf ikePrf,
             byte[] skD) {
-        registerProvisionalChildSession(respPayloads);
+
         this.mLocalAddress = localAddress;
         this.mRemoteAddress = remoteAddress;
         this.mUdpEncapSocket = udpEncapSocket;
         this.mIkePrf = ikePrf;
         this.mSkD = skD;
 
+        int spi = registerProvisionalChildAndGetSpi(respPayloads);
         sendMessage(
                 CMD_HANDLE_FIRST_CHILD_EXCHANGE,
-                new FirstChildNegotiationData(reqPayloads, respPayloads));
+                new FirstChildNegotiationData(reqPayloads, respPayloads, spi));
     }
 
     /**
@@ -423,16 +433,17 @@ public class ChildSessionStateMachine extends StateMachine {
      *     needs validation.
      */
     public void receiveResponse(@ExchangeType int exchangeType, List<IkePayload> payloadList) {
+        if (!isAwaitingCreateResp()) {
+            sendMessage(
+                    CMD_HANDLE_RECEIVED_RESPONSE, new ReceivedResponse(exchangeType, payloadList));
+        }
+
         // If we are waiting for a Create/RekeyCreate response and the received message contains SA
         // payload we need to register for this provisional Child.
-
-        if (isAwaitingCreateResp()
-                && IkePayload.getPayloadForTypeInProvidedList(
-                                PAYLOAD_TYPE_SA, IkeSaPayload.class, payloadList)
-                        != null) {
-            registerProvisionalChildSession(payloadList);
-        }
-        sendMessage(CMD_HANDLE_RECEIVED_RESPONSE, new ReceivedResponse(exchangeType, payloadList));
+        int spi = registerProvisionalChildAndGetSpi(payloadList);
+        sendMessage(
+                CMD_HANDLE_RECEIVED_RESPONSE,
+                new ReceivedCreateResponse(exchangeType, payloadList, spi));
     }
 
     private boolean isAwaitingCreateResp() {
@@ -457,26 +468,20 @@ public class ChildSessionStateMachine extends StateMachine {
      *
      * <p>This method is for avoiding CHILD_SA_NOT_FOUND error in IkeSessionStateMachine when remote
      * peer sends request for delete/rekey this Child SA before ChildSessionStateMachine sends
-     * FirstChildNegotiationData to itself.
+     * FirstChildNegotiationData or Create response to itself.
      */
-    private void registerProvisionalChildSession(List<IkePayload> respPayloads) {
-        // When decoding responding IkeSaPayload in IkeSessionStateMachine, it is validated that
-        // IkeSaPayload has exactly one IkeSaPayload.Proposal.
-        IkeSaPayload saPayload = null;
-        for (IkePayload payload : respPayloads) {
-            if (payload.payloadType == IkePayload.PAYLOAD_TYPE_SA) {
-                saPayload = (IkeSaPayload) payload;
-                break;
-            }
-        }
-        if (saPayload == null) {
-            throw new IllegalArgumentException(
-                    "Receive no SA payload for first Child SA negotiation.");
-        }
+    private int registerProvisionalChildAndGetSpi(List<IkePayload> respPayloads) {
+        IkeSaPayload saPayload =
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_SA, IkeSaPayload.class, respPayloads);
+
+        if (saPayload == null) return SPI_NOT_REGISTERED;
+
         // IkeSaPayload.Proposal stores SPI in long type so as to be applied to both 8-byte IKE SPI
         // and 4-byte Child SPI. Here we cast the stored SPI to int to represent a Child SPI.
         int remoteGenSpi = (int) (saPayload.proposalList.get(0).spi);
         mChildSmCallback.onChildSaCreated(remoteGenSpi, this);
+        return remoteGenSpi;
     }
 
     private void replyErrorNotification(@NotifyType int notifyType) {
@@ -498,21 +503,6 @@ public class ChildSessionStateMachine extends StateMachine {
                 childSaRecord.getOutboundIpSecTransform(), IpSecManager.DIRECTION_OUT);
         mUserCallback.onIpSecTransformDeleted(
                 childSaRecord.getInboundIpSecTransform(), IpSecManager.DIRECTION_IN);
-    }
-
-    /**
-     * FirstChildNegotiationData contains payloads for negotiating first Child SA in IKE_AUTH
-     * request and IKE_AUTH response and callback to notify IkeSessionStateMachine the SA
-     * negotiation result.
-     */
-    private static class FirstChildNegotiationData {
-        public final List<IkePayload> requestPayloads;
-        public final List<IkePayload> responsePayloads;
-
-        FirstChildNegotiationData(List<IkePayload> reqPayloads, List<IkePayload> respPayloads) {
-            requestPayloads = reqPayloads;
-            responsePayloads = respPayloads;
-        }
     }
 
     /**
@@ -548,6 +538,109 @@ public class ChildSessionStateMachine extends StateMachine {
         }
     }
 
+    private static class ReceivedCreateResponse extends ReceivedResponse {
+        public final int registeredSpi;
+
+        ReceivedCreateResponse(@ExchangeType int eType, List<IkePayload> respPayloads, int spi) {
+            super(eType, respPayloads);
+            registeredSpi = spi;
+        }
+    }
+
+    /**
+     * FirstChildNegotiationData contains payloads for negotiating first Child SA in IKE_AUTH
+     * request and IKE_AUTH response and callback to notify IkeSessionStateMachine the SA
+     * negotiation result.
+     */
+    private static class FirstChildNegotiationData extends ReceivedCreateResponse {
+        public final List<IkePayload> requestPayloads;
+
+        FirstChildNegotiationData(
+                List<IkePayload> reqPayloads, List<IkePayload> respPayloads, int spi) {
+            super(EXCHANGE_TYPE_IKE_AUTH, respPayloads, spi);
+            requestPayloads = reqPayloads;
+        }
+    }
+
+    /** Top level state for handling uncaught exceptions for all subclasses. */
+    abstract class ExceptionHandler extends ExceptionHandlerBase {
+        @Override
+        protected void cleanUpAndQuit(RuntimeException e) {
+            // TODO: b/140123526 Send a response if exception was caught when processing a request.
+
+            // Clean up all SaRecords.
+            closeAllSaRecords(false /*expectSaClosed*/);
+
+            mUserCbExecutor.execute(
+                    () -> {
+                        mUserCallback.onError(new IkeInternalException(e));
+                    });
+            logWtf("Unexpected exception in " + getCurrentState().getName(), e);
+            quitNow();
+        }
+
+        @Override
+        protected String getCmdString(int cmd) {
+            return CMD_TO_STR.get(cmd);
+        }
+    }
+
+    /** Called when this StateMachine quits. */
+    @Override
+    protected void onQuitting() {
+        // Clean up all SaRecords.
+        closeAllSaRecords(true /*expectSaClosed*/);
+
+        mChildSmCallback.onProcedureFinished(this);
+        mChildSmCallback.onChildSessionClosed(mUserCallback);
+    }
+
+    private void closeAllSaRecords(boolean expectSaClosed) {
+        closeChildSaRecord(mCurrentChildSaRecord, expectSaClosed);
+        closeChildSaRecord(mLocalInitNewChildSaRecord, expectSaClosed);
+        closeChildSaRecord(mRemoteInitNewChildSaRecord, expectSaClosed);
+
+        mCurrentChildSaRecord = null;
+        mLocalInitNewChildSaRecord = null;
+        mRemoteInitNewChildSaRecord = null;
+    }
+
+    private void closeChildSaRecord(ChildSaRecord childSaRecord, boolean expectSaClosed) {
+        if (childSaRecord == null) return;
+
+        mUserCbExecutor.execute(
+                () -> {
+                    onIpSecTransformPairDeleted(childSaRecord);
+                });
+
+        mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
+        childSaRecord.close();
+
+        if (!expectSaClosed) return;
+
+        logWtf(
+                "ChildSaRecord with local SPI: "
+                        + childSaRecord.getLocalSpi()
+                        + " is not correctly closed.");
+    }
+
+    private void handleChildFatalError(Exception error) {
+        IkeException ikeException =
+                error instanceof IkeException
+                        ? (IkeException) error
+                        : new IkeInternalException(error);
+
+        mUserCbExecutor.execute(
+                () -> {
+                    mUserCallback.onError(ikeException);
+                });
+        loge("Child Session fatal error", ikeException);
+
+        // Clean up all SaRecords and quit
+        closeAllSaRecords(false /*expectSaClosed*/);
+        quitNow();
+    }
+
     /**
      * This state handles the request to close Child Session immediately without initiating any
      * exchange.
@@ -556,9 +649,9 @@ public class ChildSessionStateMachine extends StateMachine {
      * Session. All states MUST be a child state of KillChildSessionParent to handle the closing
      * request.
      */
-    private class KillChildSessionParent extends State {
+    private class KillChildSessionParent extends ExceptionHandler {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_KILL_SESSION:
                     mUserCbExecutor.execute(
@@ -566,13 +659,7 @@ public class ChildSessionStateMachine extends StateMachine {
                                 mUserCallback.onClosed();
                             });
 
-                    closeChildSaRecordIfExist(mCurrentChildSaRecord);
-                    closeChildSaRecordIfExist(mLocalInitNewChildSaRecord);
-                    closeChildSaRecordIfExist(mRemoteInitNewChildSaRecord);
-
-                    mCurrentChildSaRecord = null;
-                    mLocalInitNewChildSaRecord = null;
-                    mRemoteInitNewChildSaRecord = null;
+                    closeAllSaRecords(false /*expectSaClosed*/);
 
                     quitNow();
                     return HANDLED;
@@ -580,30 +667,19 @@ public class ChildSessionStateMachine extends StateMachine {
                     return NOT_HANDLED;
             }
         }
-
-        private void closeChildSaRecordIfExist(ChildSaRecord childSaRecord) {
-            if (childSaRecord == null) return;
-
-            mUserCbExecutor.execute(
-                    () -> {
-                        onIpSecTransformPairDeleted(childSaRecord);
-                    });
-
-            mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
-            childSaRecord.close();
-        }
     }
 
     /**
      * CreateChildLocalCreateBase represents the common information for a locally-initiated initial
      * Child SA negotiation for setting up this Child Session.
      */
-    private abstract class CreateChildLocalCreateBase extends State {
+    private abstract class CreateChildLocalCreateBase extends ExceptionHandler {
         protected void validateAndBuildChild(
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads,
                 @ExchangeType int exchangeType,
-                @ExchangeType int expectedExchangeType) {
+                @ExchangeType int expectedExchangeType,
+                int registeredSpi) {
             CreateChildResult createChildResult =
                     CreateChildSaHelper.validateAndNegotiateInitChild(
                             reqPayloads,
@@ -657,24 +733,25 @@ public class ChildSessionStateMachine extends StateMachine {
                             | SpiUnavailableException
                             | IOException e) {
                         // #makeChildSaRecord failed.
+
+                        // TODO: Initiate deletion
+                        mChildSmCallback.onChildSaDeleted(createChildResult.respSpi.getSpi());
                         createChildResult.initSpi.close();
                         createChildResult.respSpi.close();
-                        // TODO: Initiate deletion and close this Child Session
-                        throw new UnsupportedOperationException("Cannot handle this error");
+                        handleChildFatalError(e);
                     }
                     break;
                 case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
-                    // TODO: Initiate deletion and close this Child Session
-                    throw new UnsupportedOperationException("Cannot handle this error");
+                    // TODO: Initiate deletion
+                    handleCreationFailAndQuit(registeredSpi, createChildResult.exception);
+                    break;
                 case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
-                    // TODO: Unregister remotely generated SPI and locally close the Child Session.
-                    throw new UnsupportedOperationException("Cannot handle this error");
-                case CREATE_STATUS_IKE_ERROR:
-                    // TODO: Unregister remotely generated SPI and locally close the Child Session.
-                    mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                    handleCreationFailAndQuit(registeredSpi, createChildResult.exception);
                     break;
                 default:
-                    throw new IllegalArgumentException("Unrecognized status");
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Unrecognized status: " + createChildResult.status));
             }
         }
 
@@ -700,12 +777,19 @@ public class ChildSessionStateMachine extends StateMachine {
             mLocalTs = createChildResult.initTs;
             mRemoteTs = createChildResult.respTs;
         }
+
+        private void handleCreationFailAndQuit(int registeredSpi, IkeException exception) {
+            if (registeredSpi != SPI_NOT_REGISTERED) {
+                mChildSmCallback.onChildSaDeleted(registeredSpi);
+            }
+            handleChildFatalError(exception);
+        }
     }
 
     /** Initial state of ChildSessionStateMachine. */
     class Initial extends CreateChildLocalCreateBase {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_FIRST_CHILD_EXCHANGE:
                     FirstChildNegotiationData childNegotiationData =
@@ -719,11 +803,20 @@ public class ChildSessionStateMachine extends StateMachine {
                             reqPayloads,
                             respPayloads,
                             EXCHANGE_TYPE_IKE_AUTH,
-                            EXCHANGE_TYPE_IKE_AUTH);
+                            EXCHANGE_TYPE_IKE_AUTH,
+                            childNegotiationData.registeredSpi);
 
                     return HANDLED;
                 case CMD_LOCAL_REQUEST_CREATE_CHILD:
                     transitionTo(mCreateChildLocalCreate);
+                    return HANDLED;
+                case CMD_LOCAL_REQUEST_DELETE_CHILD:
+                    // This may happen when creation has been rescheduled to be after deletion.
+                    mUserCbExecutor.execute(
+                            () -> {
+                                mUserCallback.onClosed();
+                            });
+                    quitNow();
                     return HANDLED;
                 case CMD_FORCE_TRANSITION:
                     transitionTo((State) message.obj);
@@ -742,7 +835,7 @@ public class ChildSessionStateMachine extends StateMachine {
         private List<IkePayload> mRequestPayloads;
 
         @Override
-        public void enter() {
+        public void enterState() {
             try {
                 mRequestPayloads =
                         CreateChildSaHelper.getInitChildCreateReqPayloads(
@@ -756,20 +849,22 @@ public class ChildSessionStateMachine extends StateMachine {
                         mRequestPayloads,
                         ChildSessionStateMachine.this);
             } catch (ResourceUnavailableException e) {
-                // TODO: Notify users and close the Child Session.
+                // Fail to assign SPI
+                handleChildFatalError(e);
             }
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
-                    ReceivedResponse rcvResp = (ReceivedResponse) message.obj;
+                    ReceivedCreateResponse rcvResp = (ReceivedCreateResponse) message.obj;
                     validateAndBuildChild(
                             mRequestPayloads,
                             rcvResp.responsePayloads,
                             rcvResp.exchangeType,
-                            EXCHANGE_TYPE_CREATE_CHILD_SA);
+                            EXCHANGE_TYPE_CREATE_CHILD_SA,
+                            rcvResp.registeredSpi);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -780,14 +875,14 @@ public class ChildSessionStateMachine extends StateMachine {
     /**
      * Idle represents a state when there is no ongoing IKE exchange affecting established Child SA.
      */
-    class Idle extends State {
+    class Idle extends ExceptionHandler {
         @Override
-        public void enter() {
+        public void enterState() {
             mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     transitionTo(mDeleteChildLocalDelete);
@@ -816,8 +911,6 @@ public class ChildSessionStateMachine extends StateMachine {
                     return NOT_HANDLED;
             }
         }
-
-        // TODO: Support local rekey request,  remote rekey request and remote delete request.
     }
 
     /**
@@ -826,7 +919,7 @@ public class ChildSessionStateMachine extends StateMachine {
      * <p>All post-init states share common functionality of being able to respond to Delete Child
      * requests.
      */
-    private abstract class DeleteResponderBase extends State {
+    private abstract class DeleteResponderBase extends ExceptionHandler {
         /**
          * Check if the payload list has a Delete Payload that includes the remote SPI of the input
          * ChildSaRecord.
@@ -872,10 +965,10 @@ public class ChildSessionStateMachine extends StateMachine {
          */
         protected void handleDeleteSessionRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
-                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
-                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
-                mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
-
+                cleanUpAndQuit(
+                        new IllegalStateException(
+                                "Found no remote SPI for mCurrentChildSaRecord in a Delete Child"
+                                        + " request."));
             } else {
 
                 mUserCbExecutor.execute(
@@ -906,7 +999,7 @@ public class ChildSessionStateMachine extends StateMachine {
         /** Validate payload types in Delete Child response. */
         protected void validateDeleteRespPayloadAndExchangeType(
                 List<IkePayload> respPayloads, @ExchangeType int exchangeType)
-                throws InvalidSyntaxException {
+                throws IkeProtocolException {
 
             if (exchangeType != EXCHANGE_TYPE_INFORMATIONAL) {
                 throw new InvalidSyntaxException(
@@ -931,9 +1024,7 @@ public class ChildSessionStateMachine extends StateMachine {
                             break handlePayload;
                         }
 
-                        // TODO: Handle error notifications.
-                        throw new UnsupportedOperationException(
-                                "Cannot handle error notifications in a Delete Child response");
+                        throw notify.validateAndBuildIkeException();
                     default:
                         logw(
                                 "Unexpected payload type in Delete Child response: "
@@ -951,13 +1042,13 @@ public class ChildSessionStateMachine extends StateMachine {
         private boolean mSimulDeleteDetected = false;
 
         @Override
-        public void enter() {
+        public void enterState() {
             mSimulDeleteDetected = false;
             sendDeleteChild(mCurrentChildSaRecord, false /*isResp*/);
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     try {
@@ -992,8 +1083,9 @@ public class ChildSessionStateMachine extends StateMachine {
                         mCurrentChildSaRecord = null;
 
                         quitNow();
-                    } catch (InvalidSyntaxException e) {
-                        mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                    } catch (IkeProtocolException e) {
+                        // Shut down Child Session and notify users the error.
+                        handleChildFatalError(e);
                     }
                     return HANDLED;
                 case CMD_HANDLE_RECEIVED_REQUEST:
@@ -1004,11 +1096,11 @@ public class ChildSessionStateMachine extends StateMachine {
                             // request can be ONLY for mCurrentChildSaRecord at this point.
                             if (!hasRemoteChildSpiForDelete(
                                     req.requestPayloads, mCurrentChildSaRecord)) {
-                                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
-
-                                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
-                                mChildSmCallback.onFatalIkeSessionError(
-                                        false /*needsNotifyRemote*/);
+                                // Program error
+                                cleanUpAndQuit(
+                                        new IllegalStateException(
+                                                "Found no remote SPI for mCurrentChildSaRecord in"
+                                                        + " a Delete request"));
 
                             } else {
                                 mChildSmCallback.onOutboundPayloadsReady(
@@ -1023,9 +1115,11 @@ public class ChildSessionStateMachine extends StateMachine {
                             replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
                             return HANDLED;
                         default:
-                            throw new IllegalArgumentException(
-                                    "Invalid exchange subtype for Child Session: "
-                                            + req.exchangeSubtype);
+                            cleanUpAndQuit(
+                                    new IllegalStateException(
+                                            "Invalid exchange subtype for Child Session: "
+                                                    + req.exchangeSubtype));
+                            return HANDLED;
                     }
                 default:
                     return NOT_HANDLED;
@@ -1039,7 +1133,7 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     class DeleteChildRemoteDelete extends DeleteResponderBase {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_REQUEST:
                     ReceivedRequest req = (ReceivedRequest) message.obj;
@@ -1065,7 +1159,7 @@ public class ChildSessionStateMachine extends StateMachine {
         private List<IkePayload> mRequestPayloads;
 
         @Override
-        public void enter() {
+        public void enterState() {
             try {
                 // Build request with negotiated proposal and TS.
                 mRequestPayloads =
@@ -1083,15 +1177,18 @@ public class ChildSessionStateMachine extends StateMachine {
                         mRequestPayloads,
                         ChildSessionStateMachine.this);
             } catch (ResourceUnavailableException e) {
-                // TODO: Notify users and close the Child Session.
+                loge("Fail to assign Child SPI. Schedule a retry for rekey Child");
+                mChildSmCallback.scheduleRetryLocalRequest(
+                        (ChildLocalRequest) mCurrentChildSaRecord.getFutureRekeyEvent());
+                transitionTo(mIdle);
             }
         }
 
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
-                    ReceivedResponse resp = (ReceivedResponse) message.obj;
+                    ReceivedCreateResponse resp = (ReceivedCreateResponse) message.obj;
                     CreateChildResult createChildResult =
                             CreateChildSaHelper.validateAndNegotiateRekeyChildResp(
                                     mRequestPayloads,
@@ -1149,32 +1246,56 @@ public class ChildSessionStateMachine extends StateMachine {
                                     | ResourceUnavailableException
                                     | SpiUnavailableException
                                     | IOException e) {
-                                // #makeChildSaRecord failed.
+                                // #makeChildSaRecord failed
+                                handleProcessRespOrSaCreationFailAndQuit(resp.registeredSpi, e);
                                 createChildResult.initSpi.close();
                                 createChildResult.respSpi.close();
-                                // TODO: Initiate deletion on newly created SA and retry rekey
-                                throw new UnsupportedOperationException("Cannot handle this error");
                             }
                             break;
                         case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
-                            // TODO: Initiate deletion on newly created SA and retry rekey
-                            throw new UnsupportedOperationException("Cannot handle this error");
+                            handleProcessRespOrSaCreationFailAndQuit(
+                                    resp.registeredSpi, createChildResult.exception);
+                            break;
                         case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
-                            // TODO: Locally delete newly created Child SA and retry rekey
-                            throw new UnsupportedOperationException("Cannot handle this error");
-                        case CREATE_STATUS_IKE_ERROR:
-                            // TODO: Locally delete newly created Child SA
-                            mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                            if (createChildResult.exception instanceof TemporaryFailureException) {
+                                loge(
+                                        "Received TEMPORARY_FAILURE for rekey Child. Retry has"
+                                                + "already been scheduled by IKE Session.");
+                            } else {
+                                loge(
+                                        "Received error notification for rekey Child. Schedule a"
+                                                + " retry");
+                                mChildSmCallback.scheduleRetryLocalRequest(
+                                        (ChildLocalRequest)
+                                                mCurrentChildSaRecord.getFutureRekeyEvent());
+                            }
+
+                            transitionTo(mIdle);
                             break;
                         default:
-                            throw new IllegalArgumentException(
-                                    "Unrecognized status: " + createChildResult.status);
+                            cleanUpAndQuit(
+                                    new IllegalStateException(
+                                            "Unrecognized status: " + createChildResult.status));
                     }
                     return HANDLED;
                 default:
                     // TODO: Handle rekey and delete request
                     return NOT_HANDLED;
             }
+        }
+
+        private void handleProcessRespOrSaCreationFailAndQuit(
+                int registeredSpi, Exception exception) {
+            // We don't retry rekey if failure was caused by invalid response or SA creation error.
+            // Reason is there is no way to notify the remote side the old SA is still alive but the
+            // new one has failed. Sending delete request for new SA indicates the rekey has
+            // finished and the new SA has died.
+
+            // TODO: Initiate deletion on newly created SA
+            if (registeredSpi != SPI_NOT_REGISTERED) {
+                mChildSmCallback.onChildSaDeleted(registeredSpi);
+            }
+            handleChildFatalError(exception);
         }
     }
 
@@ -1184,10 +1305,15 @@ public class ChildSessionStateMachine extends StateMachine {
      *
      * <p>As indicated in RFC 7296 section 2.8, "when rekeying, the new Child SA SHOULD NOT have
      * different Traffic Selectors and algorithms than the old one."
+     *
+     * <p>Errors in this exchange with no specific protocol error code will all be classified to use
+     * NO_PROPOSAL_CHOSEN. The reason that we don't use NO_ADDITIONAL_SAS is because it indicates
+     * "responder is unwilling to accept any more Child SAs on this IKE SA.", according to RFC 7296.
+     * Sending this error may mislead the remote peer.
      */
-    class RekeyChildRemoteCreate extends State {
+    class RekeyChildRemoteCreate extends ExceptionHandler {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_REQUEST:
                     ReceivedRequest req = (ReceivedRequest) message.obj;
@@ -1204,8 +1330,10 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         private void handleCreateChildRequest(ReceivedRequest req) {
+            List<IkePayload> reqPayloads = null;
+            List<IkePayload> respPayloads = null;
             try {
-                List<IkePayload> reqPayloads = req.requestPayloads;
+                reqPayloads = req.requestPayloads;
 
                 // Build a rekey response payload list with our previously selected proposal,
                 // against which we will validate the received request. It is guaranteed in
@@ -1216,7 +1344,7 @@ public class ChildSessionStateMachine extends StateMachine {
                                 PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
                 byte respProposalNumber = reqSaPayload.getNegotiatedProposalNumber(mSaProposal);
 
-                List<IkePayload> respPayloads =
+                respPayloads =
                         CreateChildSaHelper.getRekeyChildCreateRespPayloads(
                                 mIpSecManager,
                                 mLocalAddress,
@@ -1226,91 +1354,123 @@ public class ChildSessionStateMachine extends StateMachine {
                                 mRemoteTs,
                                 mCurrentChildSaRecord.getLocalSpi(),
                                 mChildSessionOptions.isTransportMode());
-
-                CreateChildResult createChildResult =
-                        CreateChildSaHelper.validateAndNegotiateRekeyChildRequest(
-                                reqPayloads,
-                                respPayloads,
-                                req.exchangeType /*exchangeType*/,
-                                EXCHANGE_TYPE_CREATE_CHILD_SA /*expectedExchangeType*/,
-                                mChildSessionOptions.isTransportMode(),
-                                mIpSecManager,
-                                mRemoteAddress);
-
-                switch (createChildResult.status) {
-                    case CREATE_STATUS_OK:
-                        try {
-                            // Do not need to update the negotiated proposal and TS
-                            // because they are not changed.
-
-                            ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
-
-                            mRemoteInitNewChildSaRecord =
-                                    ChildSaRecord.makeChildSaRecord(
-                                            mContext,
-                                            reqPayloads,
-                                            respPayloads,
-                                            createChildResult.initSpi,
-                                            createChildResult.respSpi,
-                                            mLocalAddress,
-                                            mRemoteAddress,
-                                            mUdpEncapSocket,
-                                            mIkePrf,
-                                            mChildIntegrity,
-                                            mChildCipher,
-                                            mSkD,
-                                            mChildSessionOptions.isTransportMode(),
-                                            false /*isLocalInit*/,
-                                            rekeyLocalRequest);
-
-                            mChildSmCallback.scheduleLocalRequest(
-                                    rekeyLocalRequest, getRekeyTimeout());
-
-                            mChildSmCallback.onChildSaCreated(
-                                    mRemoteInitNewChildSaRecord.getRemoteSpi(),
-                                    ChildSessionStateMachine.this);
-
-                            // To avoid traffic loss, outbound transform should only be applied once
-                            // the remote has (implicitly) acknowledged our response via the
-                            // delete-old-SA request. This will be performed in the finishRekey()
-                            // method.
-                            mUserCbExecutor.execute(
-                                    () -> {
-                                        mUserCallback.onIpSecTransformCreated(
-                                                mRemoteInitNewChildSaRecord
-                                                        .getInboundIpSecTransform(),
-                                                IpSecManager.DIRECTION_IN);
-                                    });
-
-                            mChildSmCallback.onOutboundPayloadsReady(
-                                    EXCHANGE_TYPE_CREATE_CHILD_SA,
-                                    true /*isResp*/,
-                                    respPayloads,
-                                    ChildSessionStateMachine.this);
-
-                            transitionTo(mRekeyChildRemoteDelete);
-                        } catch (GeneralSecurityException
-                                | ResourceUnavailableException
-                                | SpiUnavailableException
-                                | IOException e) {
-                            // #makeChildSaRecord failed.
-                            createChildResult.initSpi.close();
-                            createChildResult.respSpi.close();
-
-                            // TODO: Reply with error notification and transition to
-                            // Idle state.
-                            throw new UnsupportedOperationException("Cannot handle this error");
-                        }
-                        break;
-                    default:
-                        // TODO: Handle error status
-                        throw new IllegalArgumentException(
-                                "Unrecognized status: " + createChildResult.status);
-                }
-
-            } catch (NoValidProposalChosenException | ResourceUnavailableException e) {
-                // TODO: Reply with error notification and transition to Idle state.
+            } catch (NoValidProposalChosenException e) {
+                handleCreationFailureAndBackToIdle(e);
+                return;
+            } catch (ResourceUnavailableException e) {
+                handleCreationFailureAndBackToIdle(
+                        new NoValidProposalChosenException("Fail to assign inbound SPI", e));
+                return;
             }
+
+            CreateChildResult createChildResult =
+                    CreateChildSaHelper.validateAndNegotiateRekeyChildRequest(
+                            reqPayloads,
+                            respPayloads,
+                            req.exchangeType /*exchangeType*/,
+                            EXCHANGE_TYPE_CREATE_CHILD_SA /*expectedExchangeType*/,
+                            mChildSessionOptions.isTransportMode(),
+                            mIpSecManager,
+                            mRemoteAddress);
+
+            switch (createChildResult.status) {
+                case CREATE_STATUS_OK:
+                    try {
+                        // Do not need to update the negotiated proposal and TS
+                        // because they are not changed.
+
+                        ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
+
+                        mRemoteInitNewChildSaRecord =
+                                ChildSaRecord.makeChildSaRecord(
+                                        mContext,
+                                        reqPayloads,
+                                        respPayloads,
+                                        createChildResult.initSpi,
+                                        createChildResult.respSpi,
+                                        mLocalAddress,
+                                        mRemoteAddress,
+                                        mUdpEncapSocket,
+                                        mIkePrf,
+                                        mChildIntegrity,
+                                        mChildCipher,
+                                        mSkD,
+                                        mChildSessionOptions.isTransportMode(),
+                                        false /*isLocalInit*/,
+                                        rekeyLocalRequest);
+
+                        mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
+
+                        mChildSmCallback.onChildSaCreated(
+                                mRemoteInitNewChildSaRecord.getRemoteSpi(),
+                                ChildSessionStateMachine.this);
+
+                        // To avoid traffic loss, outbound transform should only be applied once
+                        // the remote has (implicitly) acknowledged our response via the
+                        // delete-old-SA request. This will be performed in the finishRekey()
+                        // method.
+                        mUserCbExecutor.execute(
+                                () -> {
+                                    mUserCallback.onIpSecTransformCreated(
+                                            mRemoteInitNewChildSaRecord.getInboundIpSecTransform(),
+                                            IpSecManager.DIRECTION_IN);
+                                });
+
+                        mChildSmCallback.onOutboundPayloadsReady(
+                                EXCHANGE_TYPE_CREATE_CHILD_SA,
+                                true /*isResp*/,
+                                respPayloads,
+                                ChildSessionStateMachine.this);
+
+                        transitionTo(mRekeyChildRemoteDelete);
+                    } catch (GeneralSecurityException
+                            | ResourceUnavailableException
+                            | SpiUnavailableException
+                            | IOException e) {
+                        // #makeChildSaRecord failed.
+                        createChildResult.initSpi.close();
+                        createChildResult.respSpi.close();
+
+                        handleCreationFailureAndBackToIdle(
+                                new NoValidProposalChosenException(
+                                        "Error in Child SA creation", e));
+                    }
+                    break;
+                case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
+                    IkeException error = createChildResult.exception;
+                    if (error instanceof IkeProtocolException) {
+                        handleCreationFailureAndBackToIdle((IkeProtocolException) error);
+                    } else {
+                        handleCreationFailureAndBackToIdle(
+                                new NoValidProposalChosenException(
+                                        "Error in validating Create Child request", error));
+                    }
+                    break;
+                case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Unexpected processing status in Create Child request: "
+                                            + createChildResult.status));
+                    break;
+                default:
+                    cleanUpAndQuit(
+                            new IllegalStateException(
+                                    "Unrecognized status: " + createChildResult.status));
+            }
+        }
+
+        private void handleCreationFailureAndBackToIdle(IkeProtocolException e) {
+            loge("Received invalid Rekey Child request. Reject with error notification", e);
+
+            ArrayList<IkePayload> payloads = new ArrayList<>(1);
+            payloads.add(e.buildNotifyPayload());
+            mChildSmCallback.onOutboundPayloadsReady(
+                    EXCHANGE_TYPE_CREATE_CHILD_SA,
+                    true /*isResp*/,
+                    payloads,
+                    ChildSessionStateMachine.this);
+
+            transitionTo(mIdle);
         }
     }
 
@@ -1319,16 +1479,21 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     abstract class RekeyChildDeleteBase extends DeleteBase {
         @Override
-        public boolean processMessage(Message message) {
+        public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_REQUEST:
-                    if (isOnNewSa((ReceivedRequest) message.obj)) {
-                        finishRekey();
-                        deferMessage(message);
-                        transitionTo(mIdle);
+                    try {
+                        if (isOnNewSa((ReceivedRequest) message.obj)) {
+                            finishRekey();
+                            deferMessage(message);
+                            transitionTo(mIdle);
+                            return HANDLED;
+                        }
+                        return NOT_HANDLED;
+                    } catch (IllegalStateException e) {
+                        cleanUpAndQuit(e);
                         return HANDLED;
                     }
-                    return NOT_HANDLED;
                 default:
                     return NOT_HANDLED;
             }
@@ -1342,7 +1507,7 @@ public class ChildSessionStateMachine extends StateMachine {
                     return CreateChildSaHelper.hasRemoteChildSpiForRekey(
                             req.requestPayloads, mChildSaRecordSurviving);
                 default:
-                    throw new IllegalArgumentException(
+                    throw new IllegalStateException(
                             "Invalid exchange subtype for Child Session: " + req.exchangeSubtype);
             }
         }
@@ -1371,14 +1536,14 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     class RekeyChildLocalDelete extends RekeyChildDeleteBase {
         @Override
-        public void enter() {
+        public void enterState() {
             mChildSaRecordSurviving = mLocalInitNewChildSaRecord;
             sendDeleteChild(mCurrentChildSaRecord, false /*isResp*/);
         }
 
         @Override
-        public boolean processMessage(Message message) {
-            if (super.processMessage(message) == HANDLED) {
+        public boolean processStateMessage(Message message) {
+            if (super.processStateMessage(message) == HANDLED) {
                 return HANDLED;
             }
 
@@ -1393,17 +1558,18 @@ public class ChildSessionStateMachine extends StateMachine {
                                 hasRemoteChildSpiForDelete(
                                         resp.responsePayloads, mCurrentChildSaRecord);
                         if (!currentSaSpiFound) {
-                            throw new InvalidSyntaxException(
-                                    "Found no remote SPI in received Delete response.");
+                            loge(
+                                    "Found no remote SPI for current SA in received Delete"
+                                        + " response. Shutting down old SA and finishing rekey.");
                         }
-
-                        finishRekey();
-
-                        transitionTo(mIdle);
-                    } catch (InvalidSyntaxException e) {
-                        // Handle validation error and absence of remotely generated SPI.
-                        mChildSmCallback.onFatalIkeSessionError(true /*needsNotifyRemote*/);
+                    } catch (IkeProtocolException e) {
+                        loge(
+                                "Received Delete response with invalid syntax or error"
+                                    + " notifications. Shutting down old SA and finishing rekey.",
+                                e);
                     }
+                    finishRekey();
+                    transitionTo(mIdle);
                     return HANDLED;
                 default:
                     // TODO: Handle requests on mCurrentChildSaRecord: Reply TEMPORARY_FAILURE to
@@ -1419,14 +1585,14 @@ public class ChildSessionStateMachine extends StateMachine {
      */
     class RekeyChildRemoteDelete extends RekeyChildDeleteBase {
         @Override
-        public void enter() {
+        public void enterState() {
             mChildSaRecordSurviving = mRemoteInitNewChildSaRecord;
             sendMessageDelayed(TIMEOUT_REKEY_REMOTE_DELETE, REKEY_DELETE_TIMEOUT_MS);
         }
 
         @Override
-        public boolean processMessage(Message message) {
-            if (super.processMessage(message) == HANDLED) {
+        public boolean processStateMessage(Message message) {
+            if (super.processStateMessage(message) == HANDLED) {
                 return HANDLED;
             }
 
@@ -1463,9 +1629,11 @@ public class ChildSessionStateMachine extends StateMachine {
 
         private void handleDeleteRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
-                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
-                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
-                mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
+                // Request received on incorrect SA
+                cleanUpAndQuit(
+                        new IllegalStateException(
+                                "Found no remote SPI for current SA in received Delete"
+                                        + " response."));
             } else {
                 sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
                 finishRekey();
@@ -1486,7 +1654,7 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         @Override
-        public void exit() {
+        public void exitState() {
             removeMessages(TIMEOUT_REKEY_REMOTE_DELETE);
         }
     }
@@ -1716,7 +1884,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         exchangeType,
                         expectedExchangeType);
             } catch (InvalidSyntaxException e) {
-                return new CreateChildResult(CREATE_STATUS_IKE_ERROR, e);
+                return new CreateChildResult(CREATE_STATUS_CHILD_ERROR_INVALID_MSG, e);
             }
 
             List<IkeNotifyPayload> notifyPayloads =
@@ -1728,10 +1896,17 @@ public class ChildSessionStateMachine extends StateMachine {
             boolean hasTransportNotify = false;
             for (IkeNotifyPayload notify : notifyPayloads) {
                 if (notify.isErrorNotify()) {
-                    // TODO: Return CreateChildResult with CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY and
-                    // IkeProtocolException if inboundPayloads is a response. Otherwise, ignore
-                    // error notifications.
-                    throw new UnsupportedOperationException("Cannot handle this error");
+                    try {
+                        IkeProtocolException exception = notify.validateAndBuildIkeException();
+                        if (isLocalInit) {
+                            return new CreateChildResult(
+                                    CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY, exception);
+                        } else {
+                            logw("Received unexpected error notification: " + notify.notifyType);
+                        }
+                    } catch (InvalidSyntaxException e) {
+                        return new CreateChildResult(CREATE_STATUS_CHILD_ERROR_INVALID_MSG, e);
+                    }
                 }
 
                 switch (notify.notifyType) {
@@ -1750,8 +1925,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         break;
                     default:
                         // Unknown and unexpected status notifications are ignored as per RFC7296.
-                        Log.w(
-                                TAG,
+                        logw(
                                 "Received unknown or unexpected status notifications with notify"
                                         + " type: "
                                         + notify.notifyType);
@@ -1799,12 +1973,14 @@ public class ChildSessionStateMachine extends StateMachine {
                     childProposalPair.second.getChildSpiResource().close();
                 }
 
-                if (e instanceof IkeProtocolException) {
-                    int errorStatus =
-                            (e instanceof InvalidSyntaxException)
-                                    ? CREATE_STATUS_IKE_ERROR
-                                    : CREATE_STATUS_CHILD_ERROR_INVALID_MSG;
-                    return new CreateChildResult(errorStatus, (IkeProtocolException) e);
+                if (e instanceof InvalidSyntaxException) {
+                    return new CreateChildResult(
+                            CREATE_STATUS_CHILD_ERROR_INVALID_MSG, (InvalidSyntaxException) e);
+                } else if (e instanceof IkeProtocolException) {
+                    return new CreateChildResult(
+                            CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
+                            new InvalidSyntaxException(
+                                    "Processing error in received Create Child response", e));
                 } else {
                     return new CreateChildResult(
                             CREATE_STATUS_CHILD_ERROR_INVALID_MSG, new IkeInternalException(e));
@@ -1812,6 +1988,7 @@ public class ChildSessionStateMachine extends StateMachine {
             }
         }
 
+        // Validate syntax to make sure all necessary payloads exist and exchange type is correct.
         private static void validatePayloadAndExchangeType(
                 List<IkePayload> inboundPayloads,
                 boolean isResp,
@@ -1823,6 +2000,7 @@ public class ChildSessionStateMachine extends StateMachine {
             boolean hasNoncePayload = false;
             boolean hasTsInitPayload = false;
             boolean hasTsRespPayload = false;
+            boolean hasErrorNotify = false;
 
             for (IkePayload payload : inboundPayloads) {
                 switch (payload.payloadType) {
@@ -1844,18 +2022,12 @@ public class ChildSessionStateMachine extends StateMachine {
                         hasTsRespPayload = true;
                         break;
                     case PAYLOAD_TYPE_NOTIFY:
-                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
-
-                        if (notifyPayload.isErrorNotify() && !isResp) {
-                            Log.w(
-                                    TAG,
-                                    "Received error notification in a Create Child SA request: "
-                                            + notifyPayload.notifyType);
-                        }
+                        if (((IkeNotifyPayload) payload).isErrorNotify()) hasErrorNotify = true;
+                        // Do not have enough context to handle all notifications. Handle them
+                        // together in higher layer.
                         break;
                     default:
-                        Log.w(
-                                TAG,
+                        logw(
                                 "Received unexpected payload in Create Child SA message. Payload"
                                         + " type: "
                                         + payload.payloadType);
@@ -1876,13 +2048,17 @@ public class ChildSessionStateMachine extends StateMachine {
                             || hasNoncePayload
                             || hasTsInitPayload
                             || hasTsRespPayload)) {
-                Log.w(
-                        TAG,
+                logw(
                         "Unexpected payload found in an INFORMATIONAL message: SA, KE, Nonce,"
                                 + " TS-Initiator or TS-Responder");
             }
 
-            if (!hasSaPayload || !hasNoncePayload || !hasTsInitPayload || !hasTsRespPayload) {
+            if (isResp
+                    && !hasErrorNotify
+                    && (!hasSaPayload
+                            || !hasNoncePayload
+                            || !hasTsInitPayload
+                            || !hasTsRespPayload)) {
                 throw new InvalidSyntaxException(
                         "SA, Nonce, TS-Initiator or TS-Responder missing.");
             }
@@ -1952,14 +2128,17 @@ public class ChildSessionStateMachine extends StateMachine {
                 throw new InvalidSyntaxException("Received unexpected KE Payload.");
             }
         }
+
+        private static void logw(String s) {
+            getIkeLog().w(TAG, s);
+        }
     }
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         CREATE_STATUS_OK,
         CREATE_STATUS_CHILD_ERROR_INVALID_MSG,
-        CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY,
-        CREATE_STATUS_IKE_ERROR
+        CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY
     })
     @interface CreateStatus {}
 
@@ -1969,8 +2148,6 @@ public class ChildSessionStateMachine extends StateMachine {
     private static final int CREATE_STATUS_CHILD_ERROR_INVALID_MSG = 1;
     /** The inbound message includes error notification that failed the Child negotiation. */
     private static final int CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY = 2;
-    /** The inbound message has fatal error that causes IKE library to close the IKE Session. */
-    private static final int CREATE_STATUS_IKE_ERROR = 3;
 
     private static class CreateChildResult {
         @CreateStatus public final int status;
@@ -2027,39 +2204,4 @@ public class ChildSessionStateMachine extends StateMachine {
                     exception);
         }
     }
-
-    /** Called when this StateMachine quits. */
-    @Override
-    protected void onQuitting() {
-        verifyChildSaRecordIsClosed(mCurrentChildSaRecord);
-        verifyChildSaRecordIsClosed(mLocalInitNewChildSaRecord);
-        verifyChildSaRecordIsClosed(mRemoteInitNewChildSaRecord);
-
-        mCurrentChildSaRecord = null;
-        mLocalInitNewChildSaRecord = null;
-        mRemoteInitNewChildSaRecord = null;
-
-        mChildSmCallback.onProcedureFinished(this);
-        mChildSmCallback.onChildSessionClosed(mUserCallback);
-    }
-
-    private void verifyChildSaRecordIsClosed(ChildSaRecord childSaRecord) {
-        if (childSaRecord == null) return;
-
-        Log.wtf(
-                TAG,
-                "ChildSaRecord with local SPI: "
-                        + childSaRecord.getLocalSpi()
-                        + " is not correctly closed.");
-
-        mUserCbExecutor.execute(
-                () -> {
-                    onIpSecTransformPairDeleted(childSaRecord);
-                });
-
-        mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
-        childSaRecord.close();
-    }
-
-    // TODO: Add states to support deleting Child SA and rekeying Child SA.
 }

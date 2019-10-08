@@ -15,6 +15,8 @@
  */
 package com.android.ike.ikev2;
 
+import static com.android.ike.ikev2.IkeManager.getIkeLog;
+
 import android.annotation.Nullable;
 import android.content.Context;
 import android.net.IpSecManager;
@@ -23,7 +25,6 @@ import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
-import android.util.Log;
 
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
@@ -33,6 +34,7 @@ import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
+import com.android.ike.ikev2.message.IkeMessage.DecodeResultPartial;
 import com.android.ike.ikev2.message.IkeNoncePayload;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.internal.annotations.VisibleForTesting;
@@ -45,6 +47,7 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -100,10 +103,21 @@ public abstract class SaRecord implements AutoCloseable {
         mSkEi = skEi;
         mSkEr = skEr;
 
+        logKey("SK_ai", skAi);
+        logKey("SK_ar", skAr);
+        logKey("SK_ei", skEi);
+        logKey("SK_er", skEr);
+
         mFutureRekeyEvent = futureRekeyEvent;
 
         mCloseGuard.open("close");
     }
+
+    private void logKey(String type, byte[] key) {
+        getIkeLog().d(getTag(), type + ": " + getIkeLog().pii(key));
+    }
+
+    protected abstract String getTag();
 
     /**
      * Get the integrity key for calculate integrity checksum for an outbound packet.
@@ -486,7 +500,7 @@ public abstract class SaRecord implements AutoCloseable {
             }
 
             if (udpEncapSocket != null && sourceAddress instanceof Inet6Address) {
-                Log.wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
+                getIkeLog().wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
             }
             if (udpEncapSocket != null && sourceAddress instanceof Inet4Address) {
                 builder.setIpv4Encapsulation(udpEncapSocket, IkeSocket.IKE_SERVER_PORT);
@@ -551,6 +565,8 @@ public abstract class SaRecord implements AutoCloseable {
 
     /** IkeSaRecord represents an IKE SA. */
     public static class IkeSaRecord extends SaRecord implements Comparable<IkeSaRecord> {
+        private static final String TAG = "IkeSaRecord";
+
         /** SPI of IKE SA initiator */
         private final IkeSecurityParameterIndex mInitiatorSpiResource;
         /** SPI of IKE SA responder */
@@ -562,6 +578,12 @@ public abstract class SaRecord implements AutoCloseable {
 
         private int mLocalRequestMessageId;
         private int mRemoteRequestMessageId;
+
+        private DecodeResultPartial mCollectedReqFragments;
+        private DecodeResultPartial mCollectedRespFragments;
+
+        private byte[] mLastRecivedReqFirstPacket;
+        private List<byte[]> mLastSentRespAllPackets;
 
         /** Package private */
         IkeSaRecord(
@@ -589,6 +611,13 @@ public abstract class SaRecord implements AutoCloseable {
 
             mLocalRequestMessageId = 0;
             mRemoteRequestMessageId = 0;
+
+            mCollectedReqFragments = null;
+            mCollectedRespFragments = null;
+
+            logKey("SK_d", skD);
+            logKey("SK_pi", skPi);
+            logKey("SK_pr", skPr);
         }
 
         /**
@@ -645,6 +674,15 @@ public abstract class SaRecord implements AutoCloseable {
                             encryptionKeyLength,
                             isLocalInit,
                             futureRekeyEvent));
+        }
+
+        private void logKey(String type, byte[] key) {
+            getIkeLog().d(TAG, type + ": " + getIkeLog().pii(key));
+        }
+
+        @Override
+        protected String getTag() {
+            return TAG;
         }
 
         /** Package private */
@@ -748,6 +786,53 @@ public abstract class SaRecord implements AutoCloseable {
             mRemoteRequestMessageId++;
         }
 
+        /** Return all collected IKE fragments that have been collected. */
+        public DecodeResultPartial getCollectedFragments(boolean isResp) {
+            return isResp ? mCollectedRespFragments : mCollectedReqFragments;
+        }
+
+        /**
+         * Update collected IKE fragments when receiving new IKE fragment.
+         *
+         * <p>TODO: b/140264067 Investigate if we need to support reassembling timeout. It is safe
+         * to do not support it because as an initiator, we will re-transmit the request anyway. As
+         * a responder, caching these fragments until getting a complete message won't affect
+         * anything.
+         */
+        public void updateCollectedFragments(
+                DecodeResultPartial updatedFragments, boolean isResp) {
+            if (isResp) {
+                mCollectedRespFragments = updatedFragments;
+            } else {
+                mCollectedReqFragments = updatedFragments;
+            }
+        }
+
+        /** Reset collected IKE fragemnts */
+        public void resetCollectedFragments(boolean isResp) {
+            updateCollectedFragments(null, isResp);
+        }
+
+        /** Update first packet of last received request. */
+        public void updateLastReceivedReqFirstPacket(byte[] reqPacket) {
+            mLastRecivedReqFirstPacket = reqPacket;
+        }
+
+        /** Update all packets of last sent response. */
+        public void updateLastSentRespAllPackets(List<byte[]> respPacketList) {
+            mLastSentRespAllPackets = respPacketList;
+        }
+
+        /** Returns if received IKE packet is the first packet of a re-transmistted request. */
+        public boolean isRetransmittedRequest(byte[] request) {
+            return Arrays.equals(mLastRecivedReqFirstPacket, request);
+        }
+
+        /** Get all encoded packets of last sent response. */
+        public List<byte[]> getLastSentRespAllPackets() {
+            return mLastSentRespAllPackets;
+        }
+
         /** Release IKE SPI resource. */
         @Override
         public void close() {
@@ -788,6 +873,8 @@ public abstract class SaRecord implements AutoCloseable {
 
     /** ChildSaRecord represents an Child SA. */
     public static class ChildSaRecord extends SaRecord implements Comparable<ChildSaRecord> {
+        private static final String TAG = "ChildSaRecord";
+
         /** Locally generated SPI for receiving IPsec Packet. */
         private final int mInboundSpi;
         /** Remotely generated SPI for sending IPsec Packet. */
@@ -859,6 +946,11 @@ public abstract class SaRecord implements AutoCloseable {
                             isTransport,
                             isLocalInit,
                             futureRekeyEvent));
+        }
+
+        @Override
+        protected String getTag() {
+            return TAG;
         }
 
         /** Package private */

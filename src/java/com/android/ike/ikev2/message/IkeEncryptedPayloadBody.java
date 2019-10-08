@@ -60,7 +60,7 @@ final class IkeEncryptedPayloadBody {
             IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             byte[] integrityKey,
-            byte[] decryptKey)
+            byte[] decryptionKey)
             throws IkeProtocolException, GeneralSecurityException {
         ByteBuffer inputBuffer = ByteBuffer.wrap(message);
 
@@ -82,7 +82,7 @@ final class IkeEncryptedPayloadBody {
         // Authenticate and decrypt.
         byte[] dataToAuthenticate = Arrays.copyOfRange(message, 0, message.length - checksumLen);
         validateChecksumOrThrow(dataToAuthenticate, integrityMac, integrityKey, mIntegrityChecksum);
-        mUnencryptedData = decrypt(mEncryptedAndPaddedData, decryptCipher, decryptKey, mIv);
+        mUnencryptedData = decrypt(mEncryptedAndPaddedData, decryptCipher, decryptionKey, mIv);
     }
 
     /**
@@ -96,7 +96,7 @@ final class IkeEncryptedPayloadBody {
             IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
             byte[] integrityKey,
-            byte[] encryptKey) {
+            byte[] encryptionKey) {
         this(
                 ikeHeader,
                 firstPayloadType,
@@ -104,7 +104,7 @@ final class IkeEncryptedPayloadBody {
                 integrityMac,
                 encryptCipher,
                 integrityKey,
-                encryptKey,
+                encryptionKey,
                 encryptCipher.generateIv(),
                 calculatePadding(unencryptedPayloads.length, encryptCipher.getBlockSize()));
     }
@@ -118,7 +118,7 @@ final class IkeEncryptedPayloadBody {
             IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
             byte[] integrityKey,
-            byte[] encryptKey,
+            byte[] encryptionKey,
             byte[] iv,
             byte[] padding) {
         mUnencryptedData = unencryptedPayloads;
@@ -126,7 +126,7 @@ final class IkeEncryptedPayloadBody {
         // Encrypt data
         mIv = iv;
         mEncryptedAndPaddedData =
-                encrypt(unencryptedPayloads, encryptCipher, encryptKey, iv, padding);
+                encrypt(unencryptedPayloads, encryptCipher, encryptionKey, iv, padding);
 
         // Build authenticated section using ByteBuffer. Authenticated section includes bytes from
         // beginning of IKE header to the pad length, which are concatenation of IKE header, current
@@ -189,7 +189,7 @@ final class IkeEncryptedPayloadBody {
     static byte[] encrypt(
             byte[] dataToEncrypt,
             IkeCipher encryptCipher,
-            byte[] encryptKey,
+            byte[] encryptionKey,
             byte[] iv,
             byte[] padding) {
         int padLength = padding.length;
@@ -198,15 +198,15 @@ final class IkeEncryptedPayloadBody {
         inputBuffer.put(dataToEncrypt).put(padding).put((byte) padLength);
 
         // Encrypt data.
-        return encryptCipher.encrypt(inputBuffer.array(), encryptKey, iv);
+        return encryptCipher.encrypt(inputBuffer.array(), encryptionKey, iv);
     }
 
     /** Package private for testing */
     @VisibleForTesting
     static byte[] decrypt(
-            byte[] encryptedData, IkeCipher decryptCipher, byte[] decryptKey, byte[] iv)
+            byte[] encryptedData, IkeCipher decryptCipher, byte[] decryptionKey, byte[] iv)
             throws IllegalBlockSizeException {
-        byte[] decryptedPaddedData = decryptCipher.decrypt(encryptedData, decryptKey, iv);
+        byte[] decryptedPaddedData = decryptCipher.decrypt(encryptedData, decryptionKey, iv);
 
         // Remove padding. Pad length value is the last byte of the padded unencrypted data.
         int padLength = Byte.toUnsignedInt(decryptedPaddedData[encryptedData.length - 1]);

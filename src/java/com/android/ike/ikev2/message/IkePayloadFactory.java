@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.message;
 
+import android.annotation.Nullable;
 import android.util.Pair;
 
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -84,10 +85,41 @@ final class IkePayloadFactory {
                     return new IkeTsPayload(isCritical, payloadBody, true);
                 case IkePayload.PAYLOAD_TYPE_TS_RESPONDER:
                     return new IkeTsPayload(isCritical, payloadBody, false);
+                case IkePayload.PAYLOAD_TYPE_CP:
+                    return new IkeConfigPayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_EAP:
                     return new IkeEapPayload(isCritical, payloadBody);
                 default:
                     return new IkeUnsupportedPayload(payloadType, isCritical);
+            }
+        }
+
+        @Override
+        public IkeSkPayload decodeIkeSkPayload(
+                boolean isSkf,
+                boolean critical,
+                byte[] message,
+                @Nullable IkeMacIntegrity integrityMac,
+                IkeCipher decryptCipher,
+                byte[] integrityKey,
+                byte[] decryptionKey)
+                throws IkeProtocolException, GeneralSecurityException {
+            if (isSkf) {
+                return new IkeSkfPayload(
+                        critical,
+                        message,
+                        integrityMac,
+                        decryptCipher,
+                        integrityKey,
+                        decryptionKey);
+            } else {
+                return new IkeSkPayload(
+                        critical,
+                        message,
+                        integrityMac,
+                        decryptCipher,
+                        integrityKey,
+                        decryptionKey);
             }
         }
     }
@@ -134,7 +166,7 @@ final class IkePayloadFactory {
      * @param integrityMac the negotiated integrity algorithm.
      * @param decryptCipher the negotiated encryption algorithm.
      * @param integrityKey the negotiated integrity algorithm key.
-     * @param decryptKey the negotiated decryption key.
+     * @param decryptionKey the negotiated decryption key.
      * @return a pair including IkePayload and next payload type.
      * @throws IkeProtocolException for decoding errors.
      * @throws GeneralSecurityException if there is any error during integrity check or decryption.
@@ -145,7 +177,7 @@ final class IkePayloadFactory {
             IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             byte[] integrityKey,
-            byte[] decryptKey)
+            byte[] decryptionKey)
             throws IkeProtocolException, GeneralSecurityException {
         ByteBuffer input =
                 ByteBuffer.wrap(
@@ -174,26 +206,15 @@ final class IkePayloadFactory {
                             + " or SK Payload is not the only payload.");
         }
 
-        IkeSkPayload payload = null;
-        if (isSkf) {
-            payload =
-                    new IkeSkfPayload(
-                            isCritical,
-                            message,
-                            integrityMac,
-                            decryptCipher,
-                            integrityKey,
-                            decryptKey);
-        } else {
-            payload =
-                    new IkeSkPayload(
-                            isCritical,
-                            message,
-                            integrityMac,
-                            decryptCipher,
-                            integrityKey,
-                            decryptKey);
-        }
+        IkeSkPayload payload =
+                sDecoderInstance.decodeIkeSkPayload(
+                        isSkf,
+                        isCritical,
+                        message,
+                        integrityMac,
+                        decryptCipher,
+                        integrityKey,
+                        decryptionKey);
 
         return new Pair(payload, nextPayloadType);
     }
@@ -209,5 +230,15 @@ final class IkePayloadFactory {
         IkePayload decodeIkePayload(
                 int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
                 throws IkeProtocolException;
+
+        IkeSkPayload decodeIkeSkPayload(
+                boolean isSkf,
+                boolean critical,
+                byte[] message,
+                @Nullable IkeMacIntegrity integrityMac,
+                IkeCipher decryptCipher,
+                byte[] integrityKey,
+                byte[] decryptionKey)
+                throws IkeProtocolException, GeneralSecurityException;
     }
 }

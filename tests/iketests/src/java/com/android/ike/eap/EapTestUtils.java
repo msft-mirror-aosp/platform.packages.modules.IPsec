@@ -16,6 +16,8 @@
 
 package com.android.ike.eap;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
 import java.util.HashMap;
 
 /**
@@ -47,6 +49,6 @@ public class EapTestUtils {
      * @return a new EapSessionConfig with EAP-SIM configs set
      */
     public static EapSessionConfig getDummyEapSimSessionConfig() {
-        return new EapSessionConfig.Builder().setEapSimConfig(0).build();
+        return new EapSessionConfig.Builder().setEapSimConfig(0, APPTYPE_USIM).build();
     }
 }

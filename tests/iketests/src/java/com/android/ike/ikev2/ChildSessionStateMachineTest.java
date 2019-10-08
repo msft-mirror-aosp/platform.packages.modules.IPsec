@@ -21,6 +21,8 @@ import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REK
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -47,6 +49,7 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -61,7 +64,6 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
-import android.os.Looper;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -77,8 +79,11 @@ import com.android.ike.ikev2.SaRecord.SaRecordHelper;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.IkeException;
+import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.InvalidKeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
@@ -92,6 +97,8 @@ import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.ikev2.testutils.MockIpSecTestUtils;
+import com.android.ike.utils.Log;
 import com.android.server.IpSecService;
 
 import libcore.net.InetAddressUtils;
@@ -104,12 +111,15 @@ import org.mockito.ArgumentMatcher;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
 
 public final class ChildSessionStateMachineTest {
+    private static final String TAG = "ChildSessionStateMachineTest";
+
     private static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
@@ -123,6 +133,9 @@ public final class ChildSessionStateMachineTest {
                     + "03000008030000020000000805000000";
     private static final String REKEY_CHILD_REQ_SA_PAYLOAD =
             "2800002c0000002801030403c88336490300000c0100000c800e0080"
+                    + "03000008030000020000000805000000";
+    private static final String REKEY_CHILD_UNACCEPTABLE_REQ_SA_PAYLOAD =
+            "2800002c0000002801030403c88336490300000c0100000c800e00c0"
                     + "03000008030000020000000805000000";
 
     private static final int CURRENT_CHILD_SA_SPI_IN = 0x2ad4c0a2;
@@ -155,6 +168,8 @@ public final class ChildSessionStateMachineTest {
     private ChildSaRecord mSpyCurrentChildSaRecord;
     private ChildSaRecord mSpyLocalInitNewChildSaRecord;
     private ChildSaRecord mSpyRemoteInitNewChildSaRecord;
+
+    private Log mSpyIkeLog;
 
     private ISaRecordHelper mMockSaRecordHelper;
 
@@ -194,7 +209,8 @@ public final class ChildSessionStateMachineTest {
 
     @Before
     public void setup() throws Exception {
-        if (Looper.myLooper() == null) Looper.prepare();
+        mSpyIkeLog = TestUtils.makeSpyLogThrowExceptionForWtf(TAG);
+        IkeManager.setIkeLog(mSpyIkeLog);
 
         mIkePrf =
                 IkeMacPrf.create(
@@ -240,6 +256,7 @@ public final class ChildSessionStateMachineTest {
     @After
     public void tearDown() {
         mChildSessionStateMachine.setDbg(false);
+        IkeManager.resetIkeLog();
         SaRecord.setSaRecordHelper(new SaRecordHelper());
     }
 
@@ -501,6 +518,85 @@ public final class ChildSessionStateMachineTest {
         quitAndVerify();
     }
 
+    private <T extends IkeException> void verifyHandleFatalErrorAndQuit(Class<T> exceptionClass) {
+        assertNull(mChildSessionStateMachine.getCurrentState());
+        verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
+
+        verify(mMockChildSessionCallback).onError(any(exceptionClass));
+    }
+
+    @Test
+    public void testCreateChildHandlesErrorNotifyResp() throws Exception {
+        // Send out Create request
+        mChildSessionStateMachine.createChildSession(
+                LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
+        mLooper.dispatchAll();
+
+        // Receive error notification in Create response
+        IkeNotifyPayload notifyPayload = new IkeNotifyPayload(ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+        List<IkePayload> respPayloads = new LinkedList<>();
+        respPayloads.add(notifyPayload);
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
+        mLooper.dispatchAll();
+
+        // Verify no SPI for provisional Child was registered.
+        verify(mMockChildSessionSmCallback, never())
+                .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
+
+        // Verify user was notified and state machine has quit.
+        verifyHandleFatalErrorAndQuit(NoValidProposalChosenException.class);
+    }
+
+    @Test
+    public void testCreateChildHandlesRespWithMissingPayload() throws Exception {
+        // Send out Create request
+        mChildSessionStateMachine.createChildSession(
+                LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
+        mLooper.dispatchAll();
+
+        // Receive response with no Nonce Payload
+        List<IkePayload> respPayloads = new LinkedList<>();
+        for (IkePayload payload : mFirstSaRespPayloads) {
+            if (IkePayload.PAYLOAD_TYPE_NONCE == payload.payloadType) continue;
+            respPayloads.add(payload);
+        }
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
+        mLooper.dispatchAll();
+
+        // Verify SPI for provisional Child was registered and unregistered.
+        verify(mMockChildSessionSmCallback)
+                .onChildSaCreated(CURRENT_CHILD_SA_SPI_OUT, mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onChildSaDeleted(CURRENT_CHILD_SA_SPI_OUT);
+
+        // Verify user was notified and state machine has quit.
+        verifyHandleFatalErrorAndQuit(InvalidSyntaxException.class);
+    }
+
+    @Test
+    public void testCreateChildHandlesKeyCalculationFail() throws Exception {
+        // Throw exception when building ChildSaRecord
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
+                .thenThrow(
+                        new GeneralSecurityException("testCreateChildHandlesKeyCalculationFail"));
+
+        // Send out and receive Create Child message
+        mChildSessionStateMachine.createChildSession(
+                LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
+        mLooper.dispatchAll();
+        mChildSessionStateMachine.receiveResponse(
+                EXCHANGE_TYPE_CREATE_CHILD_SA, mFirstSaRespPayloads);
+        mLooper.dispatchAll();
+
+        // Verify SPI for provisional Child was registered and unregistered.
+        verify(mMockChildSessionSmCallback)
+                .onChildSaCreated(CURRENT_CHILD_SA_SPI_OUT, mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onChildSaDeleted(CURRENT_CHILD_SA_SPI_OUT);
+
+        // Verify user was notified and state machine has quit.
+        verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+    }
+
     private void setupIdleStateMachine() throws Exception {
         mChildSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
         mChildSessionStateMachine.mRemoteAddress = REMOTE_ADDRESS;
@@ -589,6 +685,33 @@ public final class ChildSessionStateMachineTest {
         assertNull(mChildSessionStateMachine.getCurrentState());
 
         verifyNotifyUsersDeleteSession();
+    }
+
+    @Test
+    public void testDeleteChildLocalHandlesInvalidResp() throws Exception {
+        setupIdleStateMachine();
+
+        // Test initiating Delete request
+        mChildSessionStateMachine.deleteChildSession();
+        mLooper.dispatchAll();
+
+        // Test receiving response with no Delete Payload
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
+        mLooper.dispatchAll();
+
+        assertNull(mChildSessionStateMachine.getCurrentState());
+        verify(mMockChildSessionCallback).onError(any(InvalidSyntaxException.class));
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+    }
+
+    @Test
+    public void testDeleteChildLocalInInitial() throws Exception {
+        mChildSessionStateMachine.deleteChildSession();
+        mLooper.dispatchAll();
+
+        assertNull(mChildSessionStateMachine.getCurrentState());
+        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
+        verify(mMockChildSessionCallback).onClosed();
     }
 
     @Test
@@ -826,6 +949,114 @@ public final class ChildSessionStateMachineTest {
     }
 
     @Test
+    public void testRekeyLocalCreateHandlesErrorNotifyResp() throws Exception {
+        setupIdleStateMachine();
+        setUpSpiResource(LOCAL_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_IN);
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+
+        // Receive error notification in Create response
+        IkeNotifyPayload notifyPayload = new IkeNotifyPayload(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE);
+        List<IkePayload> respPayloads = new LinkedList<>();
+        respPayloads.add(notifyPayload);
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
+        mLooper.dispatchAll();
+
+        // Verify rekey has been rescheduled and Child Session is alive
+        verify(mMockChildSessionSmCallback)
+                .scheduleRetryLocalRequest(
+                        (ChildLocalRequest) mSpyCurrentChildSaRecord.getFutureRekeyEvent());
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+
+        // Verify no SPI for provisional Child was registered.
+        verify(mMockChildSessionSmCallback, never())
+                .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
+    }
+
+    @Test
+    public void testRekeyLocalCreateHandlesRespWithMissingPayload() throws Exception {
+        setupIdleStateMachine();
+        setUpSpiResource(LOCAL_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_IN);
+        reset(mMockChildSessionSmCallback);
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+
+        // Receive response with no SA Payload
+        List<IkePayload> validRekeyRespPayloads =
+                makeInboundRekeyChildPayloads(
+                        LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_RESP_SA_PAYLOAD,
+                        true /*isLocalInitRekey*/);
+        List<IkePayload> respPayloads = new LinkedList<>();
+        for (IkePayload payload : validRekeyRespPayloads) {
+            if (IkePayload.PAYLOAD_TYPE_SA == payload.payloadType) continue;
+            respPayloads.add(payload);
+        }
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
+        mLooper.dispatchAll();
+
+        // Verify user was notified and state machine has quit.
+        verifyHandleFatalErrorAndQuit(InvalidSyntaxException.class);
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+
+        // Verify no SPI for provisional Child was registered.
+        verify(mMockChildSessionSmCallback, never())
+                .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
+
+        // Verify retry was not scheduled
+        verify(mMockChildSessionSmCallback, never()).scheduleRetryLocalRequest(any());
+    }
+
+    @Test
+    public void testRekeyLocalCreateChildHandlesKeyCalculationFail() throws Exception {
+        // Throw exception when building ChildSaRecord
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
+                .thenThrow(
+                        new GeneralSecurityException(
+                                "testRekeyCreateChildHandlesKeyCalculationFail"));
+
+        // Setup for rekey negotiation
+        setupIdleStateMachine();
+        setUpSpiResource(LOCAL_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_IN);
+        setUpSpiResource(REMOTE_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
+        reset(mMockChildSessionSmCallback);
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
+
+        // Receive Rekey response
+        List<IkePayload> rekeyRespPayloads =
+                makeInboundRekeyChildPayloads(
+                        LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_RESP_SA_PAYLOAD,
+                        true /*isLocalInitRekey*/);
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyRespPayloads);
+        mLooper.dispatchAll();
+
+        // Verify user was notified and state machine has quit.
+        verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+
+        // Verify SPI for provisional Child was registered and unregistered.
+        verify(mMockChildSessionSmCallback)
+                .onChildSaCreated(LOCAL_INIT_NEW_CHILD_SA_SPI_OUT, mChildSessionStateMachine);
+        verify(mMockChildSessionSmCallback).onChildSaDeleted(LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
+
+        // Verify retry was not scheduled
+        verify(mMockChildSessionSmCallback, never()).scheduleRetryLocalRequest(any());
+    }
+
+    @Test
     public void testRekeyChildLocalDeleteSendsRequest() throws Exception {
         setupIdleStateMachine();
 
@@ -883,6 +1114,33 @@ public final class ChildSessionStateMachineTest {
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockChildSessionCallback, never()).onClosed();
         verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+    }
+
+    @Test
+    public void testRekeyChildLocalDeleteHandlesInvalidResp() throws Exception {
+        setupIdleStateMachine();
+
+        // Seed fake rekey data and force transition to RekeyChildLocalDelete
+        mChildSessionStateMachine.mLocalInitNewChildSaRecord = mSpyLocalInitNewChildSaRecord;
+        mChildSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildLocalDelete);
+        mLooper.dispatchAll();
+
+        // Test receiving Delete response with missing Delete payload
+        mChildSessionStateMachine.receiveResponse(
+                EXCHANGE_TYPE_INFORMATIONAL, new ArrayList<IkePayload>());
+        mLooper.dispatchAll();
+
+        // Verify rekey has finished
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+        verifyChildSaUpdated(mSpyCurrentChildSaRecord, mSpyLocalInitNewChildSaRecord);
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+
+        // First invoked in #setupIdleStateMachine
+        verify(mMockChildSessionSmCallback, times(2))
+                .onProcedureFinished(mChildSessionStateMachine);
     }
 
     @Test
@@ -951,6 +1209,72 @@ public final class ChildSessionStateMachineTest {
         // Verify that users are notified the creation of new inbound IpSecTransform
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, true /*expectInbound*/);
+    }
+
+    private void verifyOutboundErrorNotify(int exchangeType, int errorCode) {
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(exchangeType),
+                        eq(true),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
+
+        assertEquals(1, respPayloadList.size());
+        IkePayload payload = respPayloadList.get(0);
+        assertEquals(IkePayload.PAYLOAD_TYPE_NOTIFY, payload.payloadType);
+        assertEquals(errorCode, ((IkeNotifyPayload) payload).notifyType);
+    }
+
+    @Test
+    public void testRekeyChildRemoteCreateHandlesInvalidReq() throws Exception {
+        setupIdleStateMachine();
+
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_UNACCEPTABLE_REQ_SA_PAYLOAD,
+                        false /*isLocalInitRekey*/);
+
+        // Receive rekey Child request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
+        mLooper.dispatchAll();
+
+        // Verify error notification was sent and state machind was back to Idle
+        verifyOutboundErrorNotify(EXCHANGE_TYPE_CREATE_CHILD_SA, ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+    }
+
+    @Test
+    public void testRekeyChildRemoteCreateSaCreationFail() throws Exception {
+        // Throw exception when building ChildSaRecord
+        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
+                .thenThrow(
+                        new GeneralSecurityException("testRekeyChildRemoteCreateSaCreationFail"));
+
+        setupIdleStateMachine();
+
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_REQ_SA_PAYLOAD,
+                        false /*isLocalInitRekey*/);
+
+        // Receive rekey Child request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
+        mLooper.dispatchAll();
+
+        // Verify error notification was sent and state machind was back to Idle
+        verifyOutboundErrorNotify(EXCHANGE_TYPE_CREATE_CHILD_SA, ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
     }
 
     @Test
@@ -1233,5 +1557,18 @@ public final class ChildSessionStateMachineTest {
 
         CreateChildSaHelper.validateKePayloads(
                 payloadList, false /*isResp*/, mMockNegotiatedProposal);
+    }
+
+    @Test
+    public void testHandleUnexpectedException() throws Exception {
+        Log spyIkeLog = TestUtils.makeSpyLogDoLogErrorForWtf(TAG);
+        IkeManager.setIkeLog(spyIkeLog);
+
+        mChildSessionStateMachine.createChildSession(
+                null /*localAddress*/, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
+        mLooper.dispatchAll();
+
+        verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 }

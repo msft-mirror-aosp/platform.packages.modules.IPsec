@@ -26,6 +26,8 @@ package com.android.ike.ikev2.exceptions;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class NoValidProposalChosenException extends IkeProtocolException {
+    private static final int EXPECTED_ERROR_DATA_LEN = 0;
+
     /**
      * Construct an instance of NoValidProposalChosenException.
      *
@@ -33,5 +35,29 @@ public final class NoValidProposalChosenException extends IkeProtocolException {
      */
     public NoValidProposalChosenException(String message) {
         super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, message);
+    }
+
+    /**
+     * Construct an instance of NoValidProposalChosenException.
+     *
+     * @param message the descriptive message.
+     * @param cause the reason of exception.
+     */
+    public NoValidProposalChosenException(String message, Throwable cause) {
+        super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, cause);
+    }
+
+    /**
+     * Construct a instance of NoValidProposalChosenException from a notify payload.
+     *
+     * @param notifyData the notify data included in the payload.
+     */
+    public NoValidProposalChosenException(byte[] notifyData) {
+        super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, notifyData);
+    }
+
+    @Override
+    protected boolean isValidDataLength(int dataLen) {
+        return EXPECTED_ERROR_DATA_LEN == dataLen;
     }
 }

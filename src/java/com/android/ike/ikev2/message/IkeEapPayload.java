@@ -88,6 +88,6 @@ public final class IkeEapPayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "EAP Payload";
+        return "EAP";
     }
 }

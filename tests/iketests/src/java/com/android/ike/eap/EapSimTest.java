@@ -16,7 +16,12 @@
 
 package com.android.ike.eap;
 
+import static android.telephony.TelephonyManager.APPTYPE_USIM;
+
 import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -27,7 +32,6 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
 import com.android.ike.eap.statemachine.EapStateMachine;
@@ -35,12 +39,10 @@ import com.android.ike.eap.statemachine.EapStateMachine;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.security.SecureRandom;
-
 /**
  * This test verifies that EAP-SIM is functional for an end-to-end implementation
  */
-public class EapSimTest {
+public class EapSimTest extends EapMethodEndToEndTest {
     private static final long AUTHENTICATOR_TIMEOUT_MILLIS = 250L;
 
     private static final byte[] NONCE = hexStringToByteArray("37f3ddd3954c4831a5ee08c574844398");
@@ -60,54 +62,47 @@ public class EapSimTest {
 
     private static final byte[] MSK = hexStringToByteArray(
             "9B1E2B6892BC113F6B6D0B5789DD8ADD"
-            + "B83BE2A84AA50FCAECD0003F92D8DA16"
-            + "4BF983C923695C309F1D7D68DB6992B0"
-            + "76EA8CE7129647A6F198F3A6AA8ADED9");
+                    + "B83BE2A84AA50FCAECD0003F92D8DA16"
+                    + "4BF983C923695C309F1D7D68DB6992B0"
+                    + "76EA8CE7129647A6F198F3A6AA8ADED9");
     private static final byte[] EMSK = hexStringToByteArray(
             "88210b6724400313539c740f417076b0"
-            + "41da7e64658ec365bd2901a7cd7c2763"
-            + "dad1a0508b92a42fdf85ac53c6f7e756"
-            + "7f99b62bcaf467441b567f19b58d86ae");
+                    + "41da7e64658ec365bd2901a7cd7c2763"
+                    + "dad1a0508b92a42fdf85ac53c6f7e756"
+                    + "7f99b62bcaf467441b567f19b58d86ae");
 
     private static final byte[] EAP_SIM_START_REQUEST = hexStringToByteArray(
             "01850014120a0000" // EAP header
-            + "0f02000200010000" // AT_VERSION_LIST attribute
-            + "0d010000"); // AT_ANY_ID_REQ attribute
+                    + "0f02000200010000" // AT_VERSION_LIST attribute
+                    + "0d010000"); // AT_ANY_ID_REQ attribute
     private static final byte[] EAP_SIM_START_RESPONSE = hexStringToByteArray(
             "02850034120a0000" // EAP header
-            + "0705000037f3ddd3954c4831a5ee08c574844398" // AT_NONCE_MT attribute
-            + "10010001" // AT_SELECTED_VERSION attribute
-            + "0e05001031313233343536373839414243444546"); // AT_IDENTITY attribute
+                    + "0705000037f3ddd3954c4831a5ee08c574844398" // AT_NONCE_MT attribute
+                    + "10010001" // AT_SELECTED_VERSION attribute
+                    + "0e05001031313233343536373839414243444546"); // AT_IDENTITY attribute
     private static final byte[] EAP_SIM_CHALLENGE_REQUEST = hexStringToByteArray(
             "01860050120b0000" // EAP header
-            + "010d0000" // AT_RAND attribute
+                    + "010d0000" // AT_RAND attribute
                     + "0123456789abcdef1123456789abcdef" // Rand 1
                     + "1123456789abcdef1123456789abcdef" // Rand 2
                     + "2123456789abcdef1123456789abcdef" // Rand 3
-            + "0b050000e4675b17fa7ba4d93db48d1af9ecbb01"); // AT_MAC attribute
+                    + "0b050000e4675b17fa7ba4d93db48d1af9ecbb01"); // AT_MAC attribute
     private static final byte[] EAP_SIM_CHALLENGE_RESPONSE = hexStringToByteArray(
             "0286001c120b0000" // EAP header
-            + "0b050000e5df9cb1d935ea5f54d449a038bed061"); // AT_NAC attribute
-    private static final byte[] EAP_SUCCESS = hexStringToByteArray("03860004");
+                    + "0b050000e5df9cb1d935ea5f54d449a038bed061"); // AT_NAC attribute
 
-    private Context mMockContext;
     private TelephonyManager mMockTelephonyManager;
-    private SecureRandom mMockSecureRandom;
-    private IEapCallback mMockCallback;
-
-    private TestLooper mTestLooper;
-    private EapSessionConfig mEapSessionConfig;
-    private EapAuthenticator mEapAuthenticator;
 
     @Before
+    @Override
     public void setUp() {
-        mMockContext = mock(Context.class);
-        mMockTelephonyManager = mock(TelephonyManager.class);
-        mMockSecureRandom = mock(SecureRandom.class);
-        mMockCallback = mock(IEapCallback.class);
+        super.setUp();
 
-        mTestLooper = new TestLooper();
-        mEapSessionConfig = new EapSessionConfig.Builder().setEapSimConfig(SUB_ID).build();
+        mMockTelephonyManager = mock(TelephonyManager.class);
+
+        mEapSessionConfig = new EapSessionConfig.Builder()
+                .setEapSimConfig(SUB_ID, APPTYPE_USIM)
+                .build();
         mEapAuthenticator =
                 new EapAuthenticator(
                         mTestLooper.getLooper(),
@@ -119,6 +114,44 @@ public class EapSimTest {
 
     @Test
     public void testEapSimEndToEnd() {
+        verifyEapSimStart();
+        verifyEapSimChallenge();
+        verifyEapSuccess();
+    }
+
+    @Test
+    public void testEapSimUnsupportedType() {
+        // EAP-Request/AKA-Identity (unsupported type)
+        mEapAuthenticator.processEapMessage(EAP_REQUEST_AKA_IDENTITY_PACKET);
+        mTestLooper.dispatchAll();
+
+        // verify EAP-Response/Nak returned
+        verify(mMockCallback).onResponse(eq(EAP_RESPONSE_NAK_PACKET));
+        verifyNoMoreInteractions(
+                mMockContext,
+                mMockTelephonyManager,
+                mMockSecureRandom,
+                mMockCallback);
+
+        // Switch to EAP-SIM and go through protocol
+        verifyEapSimStart();
+        verifyEapSimChallenge();
+        verifyEapSuccess();
+    }
+
+    @Test
+    public void verifyEapSimWithEapNotifications() {
+        verifyEapNotification(1);
+        verifyEapSimStart();
+
+        verifyEapNotification(2);
+        verifyEapSimChallenge();
+
+        verifyEapNotification(3);
+        verifyEapSuccess();
+    }
+
+    private void verifyEapSimStart() {
         // EAP-SIM/Start request
         when(mMockContext.getSystemService(Context.TELEPHONY_SERVICE))
                 .thenReturn(mMockTelephonyManager);
@@ -145,7 +178,9 @@ public class EapSimTest {
                 mMockTelephonyManager,
                 mMockSecureRandom,
                 mMockCallback);
+    }
 
+    private void verifyEapSimChallenge() {
         // EAP-SIM/Challenge request
         when(mMockTelephonyManager
                 .getIccAuthentication(
@@ -191,7 +226,9 @@ public class EapSimTest {
                 mMockTelephonyManager,
                 mMockSecureRandom,
                 mMockCallback);
+    }
 
+    private void verifyEapSuccess() {
         // EAP-Success
         mEapAuthenticator.processEapMessage(EAP_SUCCESS);
         mTestLooper.dispatchAll();

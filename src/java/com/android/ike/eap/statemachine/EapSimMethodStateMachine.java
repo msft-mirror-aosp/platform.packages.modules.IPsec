@@ -16,64 +16,56 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
-import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
-import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ANY_ID_REQ;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_ENCR_DATA;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_FULLAUTH_ID_REQ;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_IV;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_MAC;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_NOTIFICATION;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_PERMANENT_ID_REQ;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_RAND;
-import static com.android.ike.eap.message.EapSimAttribute.EAP_AT_VERSION_LIST;
-import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CHALLENGE;
-import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
-import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_NOTIFICATION;
-import static com.android.ike.eap.message.EapSimTypeData.EAP_SIM_START;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_FULLAUTH_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IV;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CHALLENGE;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_NOTIFICATION;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
 
 import android.annotation.Nullable;
 import android.content.Context;
 import android.telephony.TelephonyManager;
-import android.util.Base64;
-import android.util.Log;
 
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
-import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
-import com.android.ike.eap.exceptions.EapSimIdentityUnavailableException;
-import com.android.ike.eap.exceptions.EapSimInvalidAttributeException;
-import com.android.ike.eap.exceptions.EapSimInvalidLengthException;
-import com.android.ike.eap.message.EapData;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
+import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtClientErrorCode;
-import com.android.ike.eap.message.EapSimAttribute.AtIdentity;
-import com.android.ike.eap.message.EapSimAttribute.AtMac;
-import com.android.ike.eap.message.EapSimAttribute.AtNonceMt;
-import com.android.ike.eap.message.EapSimAttribute.AtNotification;
-import com.android.ike.eap.message.EapSimAttribute.AtRand;
-import com.android.ike.eap.message.EapSimAttribute.AtSelectedVersion;
-import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
-import com.android.ike.eap.message.EapSimTypeData;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNonceMt;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtSelectedVersion;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
+import com.android.ike.eap.message.simaka.EapSimTypeData;
+import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -82,9 +74,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 /**
  * EapSimMethodStateMachine represents the valid paths possible for the EAP-SIM protocol.
@@ -101,16 +90,9 @@ import javax.crypto.spec.SecretKeySpec;
  * @see <a href="https://tools.ietf.org/html/rfc4186">RFC 4186, Extensible Authentication Protocol
  * Method for Subscriber Identity Modules (EAP-SIM)</a>
  */
-class EapSimMethodStateMachine extends EapMethodStateMachine {
-    private static final String TAG = EapSimMethodStateMachine.class.getSimpleName();
-
-    private final TelephonyManager mTelephonyManager;
-    private final EapSimConfig mEapSimConfig;
+class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
     private final SecureRandom mSecureRandom;
     private final EapSimTypeDataDecoder mEapSimTypeDataDecoder;
-
-    @VisibleForTesting Mac mMacAlgorithm;
-    @VisibleForTesting boolean mHasReceivedSimNotification = false;
 
     EapSimMethodStateMachine(
             Context context, EapSimConfig eapSimConfig, SecureRandom secureRandom) {
@@ -118,7 +100,7 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE),
                 eapSimConfig,
                 secureRandom,
-                new EapSimTypeDataDecoder());
+                EapSimTypeData.getEapSimTypeDataDecoder());
     }
 
     @VisibleForTesting
@@ -127,14 +109,12 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             EapSimConfig eapSimConfig,
             SecureRandom secureRandom,
             EapSimTypeDataDecoder eapSimTypeDataDecoder) {
-        if (telephonyManager == null) {
-            throw new IllegalArgumentException("TelephonyManager must be non-null");
-        } else if (eapSimTypeDataDecoder == null) {
+        super(telephonyManager.createForSubscriptionId(eapSimConfig.subId), eapSimConfig);
+
+        if (eapSimTypeDataDecoder == null) {
             throw new IllegalArgumentException("EapSimTypeDataDecoder must be non-null");
         }
 
-        this.mTelephonyManager = telephonyManager.createForSubscriptionId(eapSimConfig.subId);
-        this.mEapSimConfig = eapSimConfig;
         this.mSecureRandom = secureRandom;
         this.mEapSimTypeDataDecoder = eapSimTypeDataDecoder;
         transitionTo(new CreatedState());
@@ -146,59 +126,37 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         return EAP_TYPE_SIM;
     }
 
-    @VisibleForTesting
-    protected SimpleState getState() {
-        return mState;
-    }
-
-    @VisibleForTesting
-    protected void transitionTo(EapSimState newState) {
-        super.transitionTo(newState);
-    }
-
-    protected abstract class EapSimState extends SimpleState {
-    }
-
-    protected class CreatedState extends EapSimState {
+    protected class CreatedState extends EapMethodState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
         public EapResult process(EapMessage message) {
-            if (message.eapCode == EAP_CODE_SUCCESS) {
-                // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
-                // so receiving a premature SUCCESS message is an unrecoverable error.
-                return new EapError(
-                        new EapInvalidRequestException(
-                                "Received an EAP-Success in the CreatedState"));
-            } else if (message.eapCode == EAP_CODE_FAILURE) {
-                transitionTo(new FinalState());
-                return new EapFailure();
-            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
-                return handleEapNotification(mTAG, message);
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
             }
 
-            if (message.eapData.eapType != getEapMethod()) {
-                return new EapError(new EapInvalidRequestException(
-                        "Expected EAP Type " + getEapMethod()
-                                + ", received " + message.eapData.eapType));
-            }
-
-            DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<EapSimTypeData> decodeResult =
+                    mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         decodeResult.atClientErrorCode);
             }
 
-            EapSimTypeData eapSimTypeData = decodeResult.eapSimTypeData;
+            EapSimTypeData eapSimTypeData = decodeResult.eapTypeData;
             switch (eapSimTypeData.eapSubtype) {
                 case EAP_SIM_START:
                     break;
                 case EAP_SIM_NOTIFICATION:
-                    return handleEapSimNotification(
+                    return handleEapSimAkaNotification(
                             true, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
                 default:
-                    return buildClientErrorResponse(message.eapIdentifier,
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_SIM,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -207,15 +165,15 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             AtNonceMt atNonceMt;
             try {
                 atNonceMt = new AtNonceMt(nonce);
-            } catch (EapSimInvalidAttributeException ex) {
-                Log.wtf(mTAG, "Exception thrown while creating AtNonceMt", ex);
+            } catch (EapSimAkaInvalidAttributeException ex) {
+                LOG.wtf(mTAG, "Exception thrown while creating AtNonceMt", ex);
                 return new EapError(ex);
             }
             return transitionAndProcess(new StartState(atNonceMt), message);
         }
     }
 
-    protected class StartState extends EapSimState {
+    protected class StartState extends EapMethodState {
         private final String mTAG = StartState.class.getSimpleName();
         private final AtNonceMt mAtNonceMt;
 
@@ -227,37 +185,26 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         }
 
         public EapResult process(EapMessage message) {
-            if (message.eapCode == EAP_CODE_SUCCESS) {
-                // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
-                // so receiving a premature SUCCESS message is an unrecoverable error.
-                return new EapError(
-                        new EapInvalidRequestException(
-                                "Received an EAP-Success in the StartState"));
-            } else if (message.eapCode == EAP_CODE_FAILURE) {
-                transitionTo(new FinalState());
-                return new EapFailure();
-            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
-                return handleEapNotification(mTAG, message);
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
             }
 
-            if (message.eapData.eapType != getEapMethod()) {
-                return new EapError(new EapInvalidRequestException(
-                        "Expected EAP Type " + getEapMethod()
-                                + ", received " + message.eapData.eapType));
-            }
-
-            DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<EapSimTypeData> decodeResult =
+                    mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         decodeResult.atClientErrorCode);
             }
 
-            EapSimTypeData eapSimTypeData = decodeResult.eapSimTypeData;
+            EapSimTypeData eapSimTypeData = decodeResult.eapTypeData;
             switch (eapSimTypeData.eapSubtype) {
                 case EAP_SIM_START:
                     break;
                 case EAP_SIM_NOTIFICATION:
-                    return handleEapSimNotification(
+                    return handleEapSimAkaNotification(
                             true, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
@@ -269,16 +216,20 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                     return transitionAndProcess(
                             new ChallengeState(mVersions, mAtNonceMt, mIdentity), message);
                 default:
-                    return buildClientErrorResponse(message.eapIdentifier,
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_SIM,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
             if (!isValidStartAttributes(eapSimTypeData)) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
-            List<EapSimAttribute> responseAttributes = new ArrayList<>();
+            List<EapSimAkaAttribute> responseAttributes = new ArrayList<>();
             responseAttributes.add(mAtNonceMt);
 
             // choose EAP-SIM version
@@ -286,7 +237,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                     eapSimTypeData.attributeMap.get(EAP_AT_VERSION_LIST);
             mVersions = atVersionList.versions;
             if (!mVersions.contains(AtSelectedVersion.SUPPORTED_VERSION)) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNSUPPORTED_VERSION);
             }
             responseAttributes.add(AtSelectedVersion.getSelectedVersion());
@@ -296,15 +249,19 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 if (atIdentity != null) {
                     responseAttributes.add(atIdentity);
                 }
-            } catch (EapSimInvalidAttributeException ex) {
-                Log.d(mTAG, "Exception thrown while making AtIdentity attribute", ex);
+            } catch (EapSimAkaInvalidAttributeException ex) {
+                LOG.wtf(mTAG, "Exception thrown while making AtIdentity attribute", ex);
                 return new EapError(ex);
-            } catch (EapSimIdentityUnavailableException ex) {
-                Log.d(mTAG, "Unable to get IMSI for subId=" + mEapSimConfig.subId);
+            } catch (EapSimAkaIdentityUnavailableException ex) {
+                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapUiccConfig.subId);
                 return new EapError(ex);
             }
 
-            return buildResponseMessage(EAP_SIM_START, message.eapIdentifier, responseAttributes);
+            return buildResponseMessage(
+                    EAP_TYPE_SIM,
+                    EAP_SIM_START,
+                    message.eapIdentifier,
+                    responseAttributes);
         }
 
         /**
@@ -349,7 +306,7 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         @VisibleForTesting
         @Nullable
         AtIdentity getIdentityResponse(EapSimTypeData eapSimTypeData)
-                throws EapSimInvalidAttributeException, EapSimIdentityUnavailableException {
+                throws EapSimAkaInvalidAttributeException, EapSimAkaIdentityUnavailableException {
             Set<Integer> attributes = eapSimTypeData.attributeMap.keySet();
 
             // TODO(b/136180022): process separate ID requests differently (pseudonym vs permanent)
@@ -358,13 +315,17 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                     || attributes.contains(EAP_AT_ANY_ID_REQ)) {
                 String imsi = mTelephonyManager.getSubscriberId();
                 if (imsi == null) {
-                    throw new EapSimIdentityUnavailableException(
-                            "IMSI for subId (" + mEapSimConfig.subId + ") not available");
+                    throw new EapSimAkaIdentityUnavailableException(
+                            "IMSI for subId (" + mEapUiccConfig.subId + ") not available");
                 }
 
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
                 String identity = "1" + imsi;
                 mIdentity = identity.getBytes();
+
+                // Log requested EAP-SIM/Identity as PII
+                LOG.d(mTAG, "requested EAP-SIM/Identity=" + LOG.pii(mIdentity));
+
                 return AtIdentity.getAtIdentity(mIdentity);
             }
 
@@ -372,16 +333,10 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         }
     }
 
-    protected class ChallengeState extends EapSimState {
+    protected class ChallengeState extends EapMethodState {
         private final String mTAG = ChallengeState.class.getSimpleName();
         private final int mBytesPerShort = 2;
         private final int mVersionLenBytes = 2;
-
-        // K_encr and K_aut lengths are 16 bytes (RFC 4186 Section 7)
-        private final int mKeyLen = 16;
-
-        // Session Key lengths are 64 bytes (RFC 4186 Section 7)
-        private final int mSessionKeyLength = 64;
 
         // Lengths defined by TS 31.102 Section 7.1.2.1 (case 3)
         // SRES stands for "SIM response"
@@ -389,17 +344,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
         private final int mSresLenBytes = 4;
         private final int mKcLenBytes = 8;
 
-        @VisibleForTesting final String mMasterKeyGenerationAlg = "SHA-1";
-        @VisibleForTesting final String mMacAlgorithmString = "HmacSHA1";
-
         private final List<Integer> mVersions;
         private final byte[] mNonce;
         private final byte[] mIdentity;
-
-        @VisibleForTesting final byte[] mKEncr = new byte[mKeyLen];
-        @VisibleForTesting final byte[] mKAut = new byte[mKeyLen];
-        @VisibleForTesting final byte[] mMsk = new byte[mSessionKeyLength];
-        @VisibleForTesting final byte[] mEmsk = new byte[mSessionKeyLength];
 
         protected ChallengeState(List<Integer> versions, AtNonceMt atNonceMt, byte[] identity) {
             mVersions = versions;
@@ -424,73 +371,74 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                                 + ", received " + message.eapData.eapType));
             }
 
-            DecodeResult decodeResult = mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<EapSimTypeData> decodeResult =
+                    mEapSimTypeDataDecoder.decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         decodeResult.atClientErrorCode);
             }
 
-            EapSimTypeData eapSimTypeData = decodeResult.eapSimTypeData;
+            EapSimTypeData eapSimTypeData = decodeResult.eapTypeData;
             switch (eapSimTypeData.eapSubtype) {
                 case EAP_SIM_NOTIFICATION:
-                    return handleEapSimNotification(
+                    return handleEapSimAkaNotification(
                             false, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
                 case EAP_SIM_CHALLENGE:
                     break;
                 default:
-                    return buildClientErrorResponse(message.eapIdentifier,
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_SIM,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
             if (!isValidChallengeAttributes(eapSimTypeData)) {
-                return buildClientErrorResponse(message.eapIdentifier,
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
             List<RandChallengeResult> randChallengeResults;
             try {
                 randChallengeResults = getRandChallengeResults(eapSimTypeData);
-            } catch (EapSimInvalidLengthException | BufferUnderflowException ex) {
-                Log.e(mTAG, "Invalid SRES/Kc tuple returned from SIM", ex);
-                return buildClientErrorResponse(message.eapIdentifier,
-                        AtClientErrorCode.UNABLE_TO_PROCESS);
-            }
-
-            try {
-                MessageDigest sha1 = MessageDigest.getInstance(mMasterKeyGenerationAlg);
-                generateAndPersistKeys(sha1, new Fips186_2Prf(), randChallengeResults);
-            } catch (NoSuchAlgorithmException | BufferUnderflowException ex) {
-                Log.e(mTAG, "Invalid SRES/Kc tuple returned from SIM", ex);
-                return buildClientErrorResponse(message.eapIdentifier,
-                        AtClientErrorCode.UNABLE_TO_PROCESS);
-            }
-
-            try {
-                mMacAlgorithm = Mac.getInstance(mMacAlgorithmString);
-                mMacAlgorithm.init(new SecretKeySpec(mKAut, mMacAlgorithmString));
-
-                byte[] mac = getMac(
-                        message.eapCode,
+            } catch (EapSimAkaInvalidLengthException | BufferUnderflowException ex) {
+                LOG.e(mTAG, "Invalid SRES/Kc tuple returned from SIM", ex);
+                return buildClientErrorResponse(
                         message.eapIdentifier,
-                        eapSimTypeData,
-                        mNonce);
-                // attributes are 'valid', so must have AtMac
-                AtMac atMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
-                if (!Arrays.equals(mac, atMac.mac)) {
-                    // MAC in message != calculated mac
-                    String msg = "Received message with invalid Mac."
-                            + "expected=" + Arrays.toString(mac)
-                            + ", actual=" + Arrays.toString(atMac.mac);
-                    Log.d(mTAG, msg);
-                    return buildClientErrorResponse(message.eapIdentifier,
+                        EAP_TYPE_SIM,
+                        AtClientErrorCode.UNABLE_TO_PROCESS);
+            }  catch (EapSimAkaAuthenticationFailureException ex) {
+                return new EapError(ex);
+            }
+
+            try {
+                MessageDigest sha1 = MessageDigest.getInstance(MASTER_KEY_GENERATION_ALG);
+                byte[] mkInputData = getMkInputData(randChallengeResults);
+                generateAndPersistKeys(mTAG, sha1, new Fips186_2Prf(), mkInputData);
+            } catch (NoSuchAlgorithmException | BufferUnderflowException ex) {
+                LOG.e(mTAG, "Error while creating keys", ex);
+                return buildClientErrorResponse(
+                        message.eapIdentifier,
+                        EAP_TYPE_SIM,
+                        AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
+
+            try {
+                if (!isValidMac(mTAG, message, eapSimTypeData, mNonce)) {
+                    return buildClientErrorResponse(
+                            message.eapIdentifier,
+                            EAP_TYPE_SIM,
                             AtClientErrorCode.UNABLE_TO_PROCESS);
                 }
             } catch (GeneralSecurityException | EapSilentException
-                    | EapSimInvalidAttributeException ex) {
+                    | EapSimAkaInvalidAttributeException ex) {
                 // if the MAC can't be generated, we can't continue
-                Log.e(mTAG, "Error computing MAC for EapMessage", ex);
+                LOG.e(mTAG, "Error computing MAC for EapMessage", ex);
                 return new EapError(ex);
             }
 
@@ -518,8 +466,9 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
 
         @VisibleForTesting
         List<RandChallengeResult> getRandChallengeResults(EapSimTypeData eapSimTypeData)
-                throws EapSimInvalidLengthException {
-            List<byte[]> randList = ((AtRand) (eapSimTypeData.attributeMap.get(EAP_AT_RAND))).rands;
+                throws EapSimAkaInvalidLengthException, EapSimAkaAuthenticationFailureException {
+            AtRandSim atRand = (AtRandSim) eapSimTypeData.attributeMap.get(EAP_AT_RAND);
+            List<byte[]> randList = atRand.rands;
             List<RandChallengeResult> challengeResults = new ArrayList<>();
 
             for (byte[] rand : randList) {
@@ -528,15 +477,21 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 formattedRand.put((byte) rand.length);
                 formattedRand.put(rand);
 
-                String base64Challenge =
-                        Base64.encodeToString(formattedRand.array(), Base64.NO_WRAP);
-                String challengeResponse = mTelephonyManager.getIccAuthentication(
-                        TelephonyManager.APPTYPE_USIM,
-                        TelephonyManager.AUTHTYPE_EAP_SIM,
-                        base64Challenge);
-                byte[] challengeResponseBytes = Base64.decode(challengeResponse, Base64.DEFAULT);
-                challengeResults
-                        .add(getRandChallengeResultFromResponse(challengeResponseBytes));
+                byte[] challengeResponseBytes =
+                        processUiccAuthentication(
+                                mTAG,
+                                TelephonyManager.AUTHTYPE_EAP_SIM,
+                                formattedRand.array());
+
+                RandChallengeResult randChallengeResult =
+                        getRandChallengeResultFromResponse(challengeResponseBytes);
+                challengeResults.add(randChallengeResult);
+
+                // Log rand/challenge as PII
+                LOG.d(mTAG,
+                        "rand=" + LOG.pii(rand)
+                        + " SRES=" + LOG.pii(randChallengeResult.sres)
+                        + " Kc=" + LOG.pii(randChallengeResult.kc));
             }
 
             return challengeResults;
@@ -549,18 +504,18 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
          */
         @VisibleForTesting
         RandChallengeResult getRandChallengeResultFromResponse(byte[] challengeResponse)
-                throws EapSimInvalidLengthException {
+                throws EapSimAkaInvalidLengthException {
             ByteBuffer buffer = ByteBuffer.wrap(challengeResponse);
             int lenSres = Byte.toUnsignedInt(buffer.get());
             if (lenSres != mSresLenBytes) {
-                throw new EapSimInvalidLengthException("Invalid SRES length specified");
+                throw new EapSimAkaInvalidLengthException("Invalid SRES length specified");
             }
             byte[] sres = new byte[mSresLenBytes];
             buffer.get(sres);
 
             int lenKc = Byte.toUnsignedInt(buffer.get());
             if (lenKc != mKcLenBytes) {
-                throw new EapSimInvalidLengthException("Invalid Kc length specified");
+                throw new EapSimAkaInvalidLengthException("Invalid Kc length specified");
             }
             byte[] kc = new byte[mKcLenBytes];
             buffer.get(kc);
@@ -573,15 +528,15 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             public final byte[] sres;
             public final byte[] kc;
 
-            RandChallengeResult(byte[] sres, byte[] kc) throws EapSimInvalidLengthException {
+            RandChallengeResult(byte[] sres, byte[] kc) throws EapSimAkaInvalidLengthException {
                 this.sres = sres;
                 this.kc = kc;
 
                 if (sres.length != mSresLenBytes) {
-                    throw new EapSimInvalidLengthException("Invalid SRES length");
+                    throw new EapSimAkaInvalidLengthException("Invalid SRES length");
                 }
                 if (kc.length != mKcLenBytes) {
-                    throw new EapSimInvalidLengthException("Invalid Kc length");
+                    throw new EapSimAkaInvalidLengthException("Invalid Kc length");
                 }
             }
 
@@ -602,17 +557,13 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
             }
         }
 
-        @VisibleForTesting
-        void generateAndPersistKeys(
-                MessageDigest messageDigest,
-                Fips186_2Prf prf,
-                List<RandChallengeResult> randChallengeResults) {
+        private byte[] getMkInputData(List<RandChallengeResult> randChallengeResults) {
             int numInputBytes =
                     mIdentity.length
-                    + (randChallengeResults.size() * mKcLenBytes)
-                    + mNonce.length
-                    + (mVersions.size() * mBytesPerShort) // 2B per version
-                    + mVersionLenBytes;
+                            + (randChallengeResults.size() * mKcLenBytes)
+                            + mNonce.length
+                            + (mVersions.size() * mBytesPerShort) // 2B per version
+                            + mVersionLenBytes;
 
             ByteBuffer mkInputBuffer = ByteBuffer.allocate(numInputBytes);
             mkInputBuffer.put(mIdentity);
@@ -624,181 +575,15 @@ class EapSimMethodStateMachine extends EapMethodStateMachine {
                 mkInputBuffer.putShort((short) i);
             }
             mkInputBuffer.putShort((short) AtSelectedVersion.SUPPORTED_VERSION);
-
-            byte[] mk = messageDigest.digest(mkInputBuffer.array());
-
-            // run mk through FIPS 186-2
-            int outputBytes = mKEncr.length + mKAut.length + mMsk.length + mEmsk.length;
-            byte[] prfResult = prf.getRandom(mk, outputBytes);
-
-            ByteBuffer mkResultBuffer = ByteBuffer.wrap(prfResult);
-            mkResultBuffer.get(mKEncr);
-            mkResultBuffer.get(mKAut);
-            mkResultBuffer.get(mMsk);
-            mkResultBuffer.get(mEmsk);
+            return mkInputBuffer.array();
         }
     }
 
-    protected class FinalState extends EapSimState {
-        @Override
-        public EapResult process(EapMessage msg) {
-            return new EapError(
-                    new IllegalStateException("Attempting to process from a FinalState"));
-        }
+    EapSimTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
+        return new EapSimTypeData(EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
     }
 
-    private EapResult handleEapNotification(String tag, EapMessage message) {
-        // Type-Data will be UTF-8 encoded ISO 10646 characters (RFC 3748 Section 5.2)
-        String content = new String(message.eapData.eapTypeData, StandardCharsets.UTF_8);
-        Log.i(tag, "Received EAP-Request/Notification: [" + content + "]");
-        return EapMessage.getNotificationResponse(message.eapIdentifier);
-    }
-
-    @VisibleForTesting
-    EapResult buildResponseMessage(int subtype, int identifier,
-            List<EapSimAttribute> eapSimAttributes) {
-        EapSimTypeData eapSimTypeData = new EapSimTypeData(subtype, eapSimAttributes);
-        EapData eapData = new EapData(EAP_TYPE_SIM, eapSimTypeData.encode());
-
-        try {
-            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
-            return EapResponse.getEapResponse(eapMessage);
-        } catch (EapSilentException ex) {
-            Log.d(TAG, "Exception while creating EapMessage response for Client Error", ex);
-            return new EapError(ex);
-        }
-    }
-
-    @VisibleForTesting
-    EapResult buildClientErrorResponse(int identifier, AtClientErrorCode clientErrorCode) {
-        EapSimTypeData eapSimTypeData = new EapSimTypeData(
-                EAP_SIM_CLIENT_ERROR, Arrays.asList(clientErrorCode));
-        byte[] encodedTypeData = eapSimTypeData.encode();
-
-        EapData eapData = new EapData(EAP_TYPE_SIM, encodedTypeData);
-        try {
-            EapMessage response = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
-            return EapResponse.getEapResponse(response);
-        } catch (EapSilentException ex) {
-            Log.d(TAG, "Exception while creating EapMessage response for Client Error", ex);
-            return new EapError(ex);
-        }
-    }
-
-    @VisibleForTesting
-    byte[] getMac(
-            int eapCode,
-            int eapIdentifier,
-            EapSimTypeData eapSimTypeData,
-            byte[] extraData) throws EapSimInvalidAttributeException, EapSilentException {
-        if (mMacAlgorithm == null) {
-            throw new IllegalStateException(
-                    "Can't calculate MAC before mMacAlgorithm is set in ChallengeState");
-        }
-
-        // cache original Mac so it can be restored after calculating the Mac
-        AtMac originalMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
-        eapSimTypeData.attributeMap.put(EAP_AT_MAC, new AtMac());
-
-        byte[] typeDataWithEmptyMac = eapSimTypeData.encode();
-        EapData eapData = new EapData(EAP_TYPE_SIM, typeDataWithEmptyMac);
-        EapMessage messageForMac = new EapMessage(eapCode, eapIdentifier, eapData);
-
-        ByteBuffer buffer =
-                ByteBuffer.allocate(messageForMac.eapLength + extraData.length);
-        buffer.put(messageForMac.encode());
-        buffer.put(extraData);
-        byte[] mac = mMacAlgorithm.doFinal(buffer.array());
-
-        eapSimTypeData.attributeMap.put(EAP_AT_MAC, originalMac);
-
-        // need HMAC-SHA1-128 - first 16 bytes of SHA1 (RFC 4186 Section 10.14)
-        return Arrays.copyOfRange(mac, 0, AtMac.MAC_LENGTH);
-    }
-
-    @VisibleForTesting
-    EapResult buildResponseMessageWithMac(
-            int identifier,
-            int eapSubtype,
-            byte[] extraData) {
-        try {
-            EapSimTypeData eapSimTypeData =
-                    new EapSimTypeData(eapSubtype, Arrays.asList(new AtMac()));
-
-            byte[] mac = getMac(
-                    EAP_CODE_RESPONSE,
-                    identifier,
-                    eapSimTypeData,
-                    extraData);
-
-            eapSimTypeData.attributeMap.put(EAP_AT_MAC, new AtMac(mac));
-            EapData eapData = new EapData(EAP_TYPE_SIM, eapSimTypeData.encode());
-            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
-            return EapResponse.getEapResponse(eapMessage);
-        } catch (EapSimInvalidAttributeException | EapSilentException ex) {
-            // this should never happen
-            return new EapError(ex);
-        }
-    }
-
-    @VisibleForTesting
-    EapResult handleEapSimNotification(
-            boolean isPreChallengeState,
-            int identifier,
-            EapSimTypeData eapSimTypeData) {
-        // EAP-SIM exchanges must not include more than one EAP-SIM notification round
-        // (RFC 4186#6.1)
-        if (mHasReceivedSimNotification) {
-            return new EapError(
-                    new EapInvalidRequestException("Received multiple EAP-SIM notifications"));
-        }
-
-        mHasReceivedSimNotification = true;
-        AtNotification atNotification = (AtNotification)
-                eapSimTypeData.attributeMap.get(EAP_AT_NOTIFICATION);
-
-        // P bit of notification code is only allowed after a successful challenge round. This is
-        // only possible in the ChallengeState (RFC 4186#6.1)
-        if (isPreChallengeState && !atNotification.isPreSuccessfulChallenge) {
-            return buildClientErrorResponse(identifier, AtClientErrorCode.UNABLE_TO_PROCESS);
-        }
-
-        if (atNotification.isPreSuccessfulChallenge) {
-            // AT_MAC attribute must not be included when the P bit is set (RFC 4186#9.8)
-            if (eapSimTypeData.attributeMap.containsKey(EAP_AT_MAC)) {
-                return buildClientErrorResponse(identifier, AtClientErrorCode.UNABLE_TO_PROCESS);
-            }
-
-            return buildResponseMessage(EAP_SIM_NOTIFICATION, identifier, Arrays.asList());
-        } else if (!eapSimTypeData.attributeMap.containsKey(EAP_AT_MAC)) {
-            // MAC must be included for messages with their P bit not set (RFC 4186#9.8)
-            return buildClientErrorResponse(
-                    identifier,
-                    AtClientErrorCode.UNABLE_TO_PROCESS);
-        }
-
-        try {
-            byte[] mac = getMac(
-                    EAP_CODE_REQUEST,
-                    identifier,
-                    eapSimTypeData,
-                    new byte[0]);
-
-            AtMac atMac = (AtMac) eapSimTypeData.attributeMap.get(EAP_AT_MAC);
-            if (!Arrays.equals(mac, atMac.mac)) {
-                // MAC in message != calculated mac
-                return buildClientErrorResponse(identifier,
-                        AtClientErrorCode.UNABLE_TO_PROCESS);
-            }
-        } catch (EapSilentException | EapSimInvalidAttributeException ex) {
-            // We can't continue if the MAC can't be generated
-            return new EapError(ex);
-        }
-
-        // server has been authenticated, so we can send a response
-        return buildResponseMessageWithMac(
-                identifier,
-                EAP_SIM_NOTIFICATION,
-                new byte[0]);
+    EapSimTypeData getEapSimAkaTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
+        return new EapSimTypeData(eapSubtype, attributes);
     }
 }

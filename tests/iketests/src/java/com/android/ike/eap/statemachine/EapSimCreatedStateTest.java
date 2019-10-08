@@ -17,7 +17,9 @@
 package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 
@@ -34,13 +36,13 @@ import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
-import com.android.ike.eap.message.EapSimAttribute;
-import com.android.ike.eap.message.EapSimAttribute.AtPermanentIdReq;
-import com.android.ike.eap.message.EapSimAttribute.AtVersionList;
-import com.android.ike.eap.message.EapSimTypeData;
-import com.android.ike.eap.message.EapSimTypeData.EapSimTypeDataDecoder.DecodeResult;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
+import com.android.ike.eap.message.simaka.EapSimTypeData;
+import com.android.ike.eap.statemachine.EapMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.CreatedState;
-import com.android.ike.eap.statemachine.EapSimMethodStateMachine.FinalState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
 
 import org.junit.Before;
@@ -84,9 +86,10 @@ public class EapSimCreatedStateTest extends EapSimStateTest {
         EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
-        List<EapSimAttribute> attributes = Arrays.asList(
+        List<EapSimAkaAttribute> attributes = Arrays.asList(
                 new AtVersionList(8, 1), new AtPermanentIdReq());
-        DecodeResult decodeResult = new DecodeResult(new EapSimTypeData(EAP_SIM_START, attributes));
+        DecodeResult<EapSimTypeData> decodeResult =
+                new DecodeResult<>(new EapSimTypeData(EAP_SIM_START, attributes));
         when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
 
         mEapSimMethodStateMachine.process(eapMessage);
