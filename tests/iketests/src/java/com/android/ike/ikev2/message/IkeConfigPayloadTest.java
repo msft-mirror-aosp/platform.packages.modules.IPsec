@@ -61,6 +61,7 @@ import org.junit.Test;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.List;
@@ -70,6 +71,10 @@ public final class IkeConfigPayloadTest {
             "2900001801000000000100000008000000030000000a0000";
     private static final String CONFIG_RESP_PAYLOAD_HEX =
             "210000200200000000010004c000026400030004080808080003000408080404";
+    private static final String CONFIG_RESP_PAYLOAD_INVALID_ONE_HEX =
+            "210000200200000000010004c000026400020004fffffffe00020004fffffffe";
+    private static final String CONFIG_RESP_PAYLOAD_INVALID_TWO_HEX =
+            "210000100200000000020004fffffffe";
 
     private static final byte[] CONFIG_REQ_PAYLOAD =
             TestUtils.hexStringToByteArray(CONFIG_REQ_PAYLOAD_HEX);
@@ -169,12 +174,23 @@ public final class IkeConfigPayloadTest {
                 verifyDecodeHeaderAndGetPayload(payload, CONFIG_TYPE_REQUEST);
 
         List<ConfigAttribute> recognizedAttributeList = configPayload.recognizedAttributeList;
-        assertEquals(1, recognizedAttributeList.size());
+        assertEquals(4, recognizedAttributeList.size());
 
-        ConfigAttributeIpv4Address attributeIp4Address =
-                (ConfigAttributeIpv4Address) recognizedAttributeList.get(0);
-        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
-        assertNull(attributeIp4Address.address);
+        ConfigAttribute att = recognizedAttributeList.get(0);
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, att.attributeType);
+        assertNull(((ConfigAttributeIpv4Address) att).address);
+
+        att = recognizedAttributeList.get(1);
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, att.attributeType);
+        assertNull(((ConfigAttributeIpv6Address) att).linkAddress);
+
+        att = recognizedAttributeList.get(2);
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_DNS, att.attributeType);
+        assertNull(((ConfigAttributeIpv4Dns) att).address);
+
+        att = recognizedAttributeList.get(3);
+        assertEquals(CONFIG_ATTR_INTERNAL_IP6_DNS, att.attributeType);
+        assertNull(((ConfigAttributeIpv6Dns) att).address);
     }
 
     @Test
@@ -190,12 +206,44 @@ public final class IkeConfigPayloadTest {
                 verifyDecodeHeaderAndGetPayload(payload, CONFIG_TYPE_REPLY);
 
         List<ConfigAttribute> recognizedAttributeList = configPayload.recognizedAttributeList;
-        assertEquals(1, recognizedAttributeList.size());
+        assertEquals(3, recognizedAttributeList.size());
 
-        ConfigAttributeIpv4Address attributeIp4Address =
-                (ConfigAttributeIpv4Address) recognizedAttributeList.get(0);
-        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, attributeIp4Address.attributeType);
-        assertEquals(IPV4_ADDRESS, attributeIp4Address.address);
+        ConfigAttribute att = recognizedAttributeList.get(0);
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, att.attributeType);
+        assertEquals(IPV4_ADDRESS, ((ConfigAttributeIpv4Address) att).address);
+
+        att = recognizedAttributeList.get(1);
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_DNS, att.attributeType);
+        assertEquals(IPV4_DNS, ((ConfigAttributeIpv4Dns) att).address);
+
+        att = recognizedAttributeList.get(2);
+        InetAddress expectedDns = InetAddress.getByName("8.8.4.4");
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_DNS, att.attributeType);
+        assertEquals(expectedDns, ((ConfigAttributeIpv4Dns) att).address);
+    }
+
+    @Test
+    public void testDecodeConfigRespWithTwoNetmask() throws Exception {
+        byte[] configPayloadBytes =
+                TestUtils.hexStringToByteArray(CONFIG_RESP_PAYLOAD_INVALID_ONE_HEX);
+        try {
+            IkePayloadFactory.getIkePayload(
+                    PAYLOAD_TYPE_CP, true /*isResp*/, ByteBuffer.wrap(configPayloadBytes));
+            fail("Expected to fail because more than on netmask found");
+        } catch (InvalidSyntaxException expected) {
+        }
+    }
+
+    @Test
+    public void testDecodeConfigRespNetmaskFoundWithoutIpv4Addr() throws Exception {
+        byte[] configPayloadBytes =
+                TestUtils.hexStringToByteArray(CONFIG_RESP_PAYLOAD_INVALID_TWO_HEX);
+        try {
+            IkePayloadFactory.getIkePayload(
+                    PAYLOAD_TYPE_CP, true /*isResp*/, ByteBuffer.wrap(configPayloadBytes));
+            fail("Expected to fail because netmask is found without a IPv4 address");
+        } catch (InvalidSyntaxException expected) {
+        }
     }
 
     private ConfigAttribute makeMockAttribute(byte[] encodedAttribute) {
