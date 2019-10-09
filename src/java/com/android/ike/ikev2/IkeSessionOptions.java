@@ -48,7 +48,7 @@ public final class IkeSessionOptions {
 
     private final InetAddress mServerAddress;
     private final UdpEncapsulationSocket mUdpEncapSocket;
-    private final SaProposal[] mSaProposals;
+    private final IkeSaProposal[] mSaProposals;
 
     private final IkeIdentification mLocalIdentification;
     private final IkeIdentification mRemoteIdentification;
@@ -61,7 +61,7 @@ public final class IkeSessionOptions {
     private IkeSessionOptions(
             InetAddress serverAddress,
             UdpEncapsulationSocket udpEncapsulationSocket,
-            SaProposal[] proposals,
+            IkeSaProposal[] proposals,
             IkeIdentification localIdentification,
             IkeIdentification remoteIdentification,
             IkeAuthConfig localAuthConfig,
@@ -89,7 +89,7 @@ public final class IkeSessionOptions {
         return mUdpEncapSocket;
     }
     /** Package private */
-    SaProposal[] getSaProposals() {
+    IkeSaProposal[] getSaProposals() {
         return mSaProposals;
     }
     /** Package private */
@@ -179,7 +179,7 @@ public final class IkeSessionOptions {
     public static final class Builder {
         private final InetAddress mServerAddress;
         private final UdpEncapsulationSocket mUdpEncapSocket;
-        private final List<SaProposal> mSaProposalList = new LinkedList<>();
+        private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
 
         private IkeIdentification mLocalIdentification;
         private IkeIdentification mRemoteIdentification;
@@ -231,7 +231,7 @@ public final class IkeSessionOptions {
          * @return Builder this, to facilitate chaining.
          * @throws IllegalArgumentException if input proposal is not IKE SA proposal.
          */
-        public Builder addSaProposal(SaProposal proposal) {
+        public Builder addSaProposal(IkeSaProposal proposal) {
             if (proposal.getProtocolId() != IkePayload.PROTOCOL_ID_IKE) {
                 throw new IllegalArgumentException(
                         "Expected IKE SA Proposal but received Child SA proposal");
@@ -313,7 +313,7 @@ public final class IkeSessionOptions {
             return new IkeSessionOptions(
                     mServerAddress,
                     mUdpEncapSocket,
-                    mSaProposalList.toArray(new SaProposal[mSaProposalList.size()]),
+                    mSaProposalList.toArray(new IkeSaProposal[mSaProposalList.size()]),
                     mLocalIdentification,
                     mRemoteIdentification,
                     mLocalAuthConfig,

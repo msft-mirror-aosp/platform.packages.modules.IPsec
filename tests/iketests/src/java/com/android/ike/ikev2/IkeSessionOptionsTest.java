@@ -56,7 +56,7 @@ public final class IkeSessionOptionsTest {
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
 
     private UdpEncapsulationSocket mUdpEncapSocket;
-    private SaProposal mIkeSaProposal;
+    private IkeSaProposal mIkeSaProposal;
     private IkeIdentification mLocalIdentification;
     private IkeIdentification mRemoteIdentification;
 
@@ -67,7 +67,7 @@ public final class IkeSessionOptionsTest {
         mUdpEncapSocket = ipSecManager.openUdpEncapsulationSocket();
 
         mIkeSaProposal =
-                SaProposal.Builder.newIkeSaProposalBuilder()
+                new IkeSaProposal.Builder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
                                 SaProposal.KEY_LEN_AES_128)
@@ -177,24 +177,6 @@ public final class IkeSessionOptionsTest {
                     .setRemoteIdentification(mRemoteIdentification)
                     .build();
             fail("Expected to fail because authentiction method is not set.");
-        } catch (IllegalArgumentException expected) {
-        }
-    }
-
-    @Test
-    public void testBuildWithChildSaProposal() throws Exception {
-        SaProposal saProposal =
-                SaProposal.Builder.newChildSaProposalBuilder()
-                        .addEncryptionAlgorithm(
-                                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
-                                SaProposal.KEY_LEN_AES_128)
-                        .build();
-        try {
-            new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
-                    .addSaProposal(saProposal)
-                    .setAuthPsk(PSK)
-                    .build();
-            fail("Expected to fail due to wrong type of SA proposal.");
         } catch (IllegalArgumentException expected) {
         }
     }
