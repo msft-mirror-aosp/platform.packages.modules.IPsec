@@ -39,6 +39,12 @@ import java.security.cert.X509Certificate;
 public final class IkeCertX509CertPayload extends IkeCertPayload {
     public final X509Certificate certificate;
 
+    /** Construct IkeCertX509CertPayload for an outbound packet. */
+    public IkeCertX509CertPayload(X509Certificate x509Certificate) {
+        super(CERTIFICATE_ENCODING_X509_CERT_SIGNATURE);
+        certificate = x509Certificate;
+    }
+
     protected IkeCertX509CertPayload(boolean critical, byte[] certData)
             throws IkeProtocolException {
         super(critical, CERTIFICATE_ENCODING_X509_CERT_SIGNATURE);
