@@ -24,6 +24,7 @@ import static org.junit.Assert.fail;
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 
 import org.junit.Before;
@@ -112,8 +113,7 @@ public final class IkeAuthPayloadTest {
         try {
             IkeAuthPayload payload = IkeAuthPayload.getIkeAuthPayload(false, inputPacket);
             fail("Expected Exception: authentication method is not supported");
-        } catch (UnsupportedOperationException e) {
-            // TODO: Catch AuthenticationFailedException after it is implemented.
+        } catch (AuthenticationFailedException e) {
         }
     }
 
