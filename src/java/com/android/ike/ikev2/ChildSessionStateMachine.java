@@ -164,8 +164,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     @VisibleForTesting byte[] mSkD;
 
-    /** Package private SaProposal that represents the negotiated Child SA proposal. */
-    @VisibleForTesting SaProposal mSaProposal;
+    /** Package private ChildSaProposal that represents the negotiated Child SA proposal. */
+    @VisibleForTesting ChildSaProposal mSaProposal;
 
     /** Negotiated local Traffic Selector. */
     @VisibleForTesting IkeTrafficSelector[] mLocalTs;
@@ -756,13 +756,13 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         private void setUpNegotiatedResult(CreateChildResult createChildResult) {
-            // Build crypto tools using negotiated SaProposal. It is ensured by {@link
-            // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that the negotiated SaProposal
-            // is valid. The negotiated SaProposal has exactly one encryption algorithm. When it has
-            // a combined-mode encryption algorithm, it either does not have integrity
-            // algorithm or only has one NONE value integrity algorithm. When the negotiated
-            // SaProposal has a normal encryption algorithm, it either does not have integrity
-            // algorithm or has one integrity algorithm with any supported value.
+            // Build crypto tools using negotiated ChildSaProposal. It is ensured by {@link
+            // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that the negotiated
+            // ChildSaProposal is valid. The negotiated ChildSaProposal has exactly one encryption
+            // algorithm. When it has a combined-mode encryption algorithm, it either does not have
+            // integrity algorithm or only has one NONE value integrity algorithm. When the
+            // negotiated ChildSaProposal has a normal encryption algorithm, it either does not have
+            // integrity algorithm or has one integrity algorithm with any supported value.
 
             mSaProposal = createChildResult.negotiatedProposal;
             Provider provider = IkeMessage.getSecurityProvider();
@@ -1672,7 +1672,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 boolean isFirstChild)
                 throws ResourceUnavailableException {
 
-            SaProposal[] saProposals = childSessionOptions.getSaProposals();
+            ChildSaProposal[] saProposals = childSessionOptions.getSaProposals();
 
             if (isFirstChild) {
                 for (int i = 0; i < saProposals.length; i++) {
@@ -1693,7 +1693,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public static List<IkePayload> getRekeyChildCreateReqPayloads(
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
-                SaProposal currentProposal,
+                ChildSaProposal currentProposal,
                 IkeTrafficSelector[] currentLocalTs,
                 IkeTrafficSelector[] currentRemoteTs,
                 int localSpi,
@@ -1702,7 +1702,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             List<IkePayload> payloads =
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
-                                    new SaProposal[] {currentProposal}, ipSecManager, localAddress),
+                                    new ChildSaProposal[] {currentProposal},
+                                    ipSecManager,
+                                    localAddress),
                             currentLocalTs,
                             currentRemoteTs,
                             isTransport);
@@ -1718,7 +1720,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
                 byte proposalNumber,
-                SaProposal currentProposal,
+                ChildSaProposal currentProposal,
                 IkeTrafficSelector[] currentLocalTs,
                 IkeTrafficSelector[] currentRemoteTs,
                 int localSpi,
@@ -1753,7 +1755,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             payloadList.add(new IkeNoncePayload());
 
             DhGroupTransform[] dhGroups =
-                    saPayload.proposalList.get(0).saProposal.getDhGroupTransforms();
+                    ((ChildProposal) saPayload.proposalList.get(0))
+                            .saProposal.getDhGroupTransforms();
             if (dhGroups.length != 0 && dhGroups[0].id != DH_GROUP_NONE) {
                 payloadList.add(new IkeKePayload(dhGroups[0].id));
             }
@@ -1947,7 +1950,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 childProposalPair =
                         IkeSaPayload.getVerifiedNegotiatedChildProposalPair(
                                 reqSaPayload, respSaPayload, ipSecManager, remoteAddress);
-                SaProposal saProposal = childProposalPair.second.saProposal;
+                ChildSaProposal saProposal = childProposalPair.second.saProposal;
 
                 validateKePayloads(inboundPayloads, isLocalInit /*isResp*/, saProposal);
 
@@ -2098,7 +2101,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         @VisibleForTesting
         static void validateKePayloads(
-                List<IkePayload> inboundPayloads, boolean isResp, SaProposal negotiatedProposal)
+                List<IkePayload> inboundPayloads,
+                boolean isResp,
+                ChildSaProposal negotiatedProposal)
                 throws IkeProtocolException {
             DhGroupTransform[] dhTransforms = negotiatedProposal.getDhGroupTransforms();
 
@@ -2153,7 +2158,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         @CreateStatus public final int status;
         public final SecurityParameterIndex initSpi;
         public final SecurityParameterIndex respSpi;
-        public final SaProposal negotiatedProposal;
+        public final ChildSaProposal negotiatedProposal;
         public final IkeTrafficSelector[] initTs;
         public final IkeTrafficSelector[] respTs;
         public final IkeException exception;
@@ -2162,7 +2167,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 @CreateStatus int status,
                 SecurityParameterIndex initSpi,
                 SecurityParameterIndex respSpi,
-                SaProposal negotiatedProposal,
+                ChildSaProposal negotiatedProposal,
                 IkeTrafficSelector[] initTs,
                 IkeTrafficSelector[] respTs,
                 IkeException exception) {
@@ -2179,7 +2184,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         CreateChildResult(
                 SecurityParameterIndex initSpi,
                 SecurityParameterIndex respSpi,
-                SaProposal negotiatedProposal,
+                ChildSaProposal negotiatedProposal,
                 IkeTrafficSelector[] initTs,
                 IkeTrafficSelector[] respTs) {
             this(
