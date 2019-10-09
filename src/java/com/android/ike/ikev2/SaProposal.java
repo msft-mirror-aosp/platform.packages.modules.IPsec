@@ -24,15 +24,14 @@ import android.util.SparseArray;
 import com.android.ike.ikev2.message.IkePayload;
 import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
-import com.android.ike.ikev2.message.IkeSaPayload.EsnTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.Transform;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
@@ -45,7 +44,7 @@ import java.util.Set;
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public final class SaProposal {
+public abstract class SaProposal {
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
@@ -74,6 +73,7 @@ public final class SaProposal {
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_16, "ENCR_AES_GCM_16");
     }
 
+    public static final int KEY_LEN_UNUSED = 0;
     public static final int KEY_LEN_AES_128 = 128;
     public static final int KEY_LEN_AES_192 = 192;
     public static final int KEY_LEN_AES_256 = 256;
@@ -143,63 +143,20 @@ public final class SaProposal {
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_2048_BIT_MODP, "DH_2048_BIT_MODP");
     }
 
-    /** Package private */
     @IkePayload.ProtocolId private final int mProtocolId;
-    /** Package private */
     private final EncryptionTransform[] mEncryptionAlgorithms;
-    /** Package private */
-    private final PrfTransform[] mPseudorandomFunctions;
-    /** Package private */
     private final IntegrityTransform[] mIntegrityAlgorithms;
-    /** Package private */
     private final DhGroupTransform[] mDhGroups;
-    /** Package private */
-    private final EsnTransform[] mEsns;
 
-    private SaProposal(
+    protected SaProposal(
             @IkePayload.ProtocolId int protocol,
             EncryptionTransform[] encryptionAlgos,
-            PrfTransform[] prfs,
             IntegrityTransform[] integrityAlgos,
             DhGroupTransform[] dhGroups) {
         mProtocolId = protocol;
         mEncryptionAlgorithms = encryptionAlgos;
-        mPseudorandomFunctions = prfs;
         mIntegrityAlgorithms = integrityAlgos;
         mDhGroups = dhGroups;
-
-        if (protocol == IkePayload.PROTOCOL_ID_IKE) {
-            // Do not negotiate ESN for IKE SA proposal
-            mEsns = new EsnTransform[0];
-        } else {
-            // Do not support negotiating Child SAs using extended sequence numbers.
-            mEsns = new EsnTransform[] {new EsnTransform()};
-        }
-    }
-
-    /**
-     * Construct SaProposal from a decoded inbound IKE packet, only called by IkeSaPayload.
-     *
-     * @param protocol IP protocol ID
-     * @param encryptionAlgos encryption algorithms decoded from inbound IKE packet.
-     * @param prfs pseudorandom functions decoded from inbound IKE packet.
-     * @param integrityAlgos integrity algorithms decoded from inbound IKE packet.
-     * @param dhGroups Dh groups decoded from inbound IKE packet.
-     * @param esns ESN policies decoded from IKE packet.
-     */
-    public SaProposal(
-            @IkePayload.ProtocolId int protocol,
-            EncryptionTransform[] encryptionAlgos,
-            PrfTransform[] prfs,
-            IntegrityTransform[] integrityAlgos,
-            DhGroupTransform[] dhGroups,
-            EsnTransform[] esns) {
-        mProtocolId = protocol;
-        mEncryptionAlgorithms = encryptionAlgos;
-        mPseudorandomFunctions = prfs;
-        mIntegrityAlgorithms = integrityAlgos;
-        mDhGroups = dhGroups;
-        mEsns = esns;
     }
 
     /**
@@ -211,12 +168,10 @@ public final class SaProposal {
      *     from SA initiator.
      */
     public boolean isNegotiatedFrom(SaProposal reqProposal) {
-        return isTransformSelectedFrom(mEncryptionAlgorithms, reqProposal.mEncryptionAlgorithms)
-                && isTransformSelectedFrom(
-                        mPseudorandomFunctions, reqProposal.mPseudorandomFunctions)
+        return this.mProtocolId == reqProposal.mProtocolId
+                && isTransformSelectedFrom(mEncryptionAlgorithms, reqProposal.mEncryptionAlgorithms)
                 && isTransformSelectedFrom(mIntegrityAlgorithms, reqProposal.mIntegrityAlgorithms)
-                && isTransformSelectedFrom(mDhGroups, reqProposal.mDhGroups)
-                && isTransformSelectedFrom(mEsns, reqProposal.mEsns);
+                && isTransformSelectedFrom(mDhGroups, reqProposal.mDhGroups);
     }
 
     /** Package private */
@@ -243,11 +198,6 @@ public final class SaProposal {
     }
 
     /*Package private*/
-    PrfTransform[] getPrfTransforms() {
-        return mPseudorandomFunctions;
-    }
-
-    /*Package private*/
     IntegrityTransform[] getIntegrityTransforms() {
         return mIntegrityAlgorithms;
     }
@@ -257,73 +207,39 @@ public final class SaProposal {
         return mDhGroups;
     }
 
-    /*Package private*/
-    EsnTransform[] getEsnTransforms() {
-        return mEsns;
-    }
+    protected List<Transform> getAllTransformsAsList() {
+        List<Transform> transformList = new LinkedList<>();
 
-    /** Package private method to avoid negotiating DH Group for negotiating first Child SA. */
-    SaProposal getCopyWithoutDhTransform() {
-        return new SaProposal(
-                mProtocolId,
-                mEncryptionAlgorithms,
-                mPseudorandomFunctions,
-                mIntegrityAlgorithms,
-                new DhGroupTransform[0],
-                mEsns);
+        transformList.addAll(Arrays.asList(mEncryptionAlgorithms));
+        transformList.addAll(Arrays.asList(mIntegrityAlgorithms));
+        transformList.addAll(Arrays.asList(mDhGroups));
+
+        return transformList;
     }
 
     /**
      * Return all SA Transforms in this SaProposal to be encoded for building an outbound IKE
      * message.
      *
-     * <p>This method can be called by only IKE library.
+     * <p>This method should be called by only IKE library.
      *
      * @return Array of Transforms to be encoded.
      */
-    public Transform[] getAllTransforms() {
-        int encodedNumTransforms =
-                mEncryptionAlgorithms.length
-                        + mPseudorandomFunctions.length
-                        + mIntegrityAlgorithms.length
-                        + mDhGroups.length
-                        + mEsns.length;
+    public abstract Transform[] getAllTransforms();
 
-        List<Transform> transformList = new ArrayList<Transform>(encodedNumTransforms);
-        transformList.addAll(Arrays.asList(mEncryptionAlgorithms));
-        transformList.addAll(Arrays.asList(mPseudorandomFunctions));
-        transformList.addAll(Arrays.asList(mIntegrityAlgorithms));
-        transformList.addAll(Arrays.asList(mDhGroups));
-        transformList.addAll(Arrays.asList(mEsns));
-
-        return transformList.toArray(new Transform[encodedNumTransforms]);
-    }
-
-    /**
-     * This class can be used to incrementally construct a SaProposal. SaProposal instances are
-     * immutable once built.
-     *
-     * <p>TODO: Support users to add algorithms from most preferred to least preferred.
-     */
-    public static final class Builder {
-        private static final String ERROR_TAG = "Invalid SA Proposal: ";
-
-        /** Indicate if Builder is for building IKE SA proposal or Child SA proposal. */
-        private final boolean mIsIkeProposal;
+    /** This class is an abstract Builder for building a SaProposal */
+    protected abstract static class Builder {
+        protected static final String ERROR_TAG = "Invalid SA Proposal: ";
 
         // Use set to avoid adding repeated algorithms.
-        private final Set<EncryptionTransform> mProposedEncryptAlgos = new ArraySet<>();
-        private final Set<PrfTransform> mProposedPrfs = new ArraySet<>();
-        private final Set<IntegrityTransform> mProposedIntegrityAlgos = new ArraySet<>();
-        private final Set<DhGroupTransform> mProposedDhGroups = new ArraySet<>();
+        protected final Set<EncryptionTransform> mProposedEncryptAlgos = new ArraySet<>();
+        protected final Set<PrfTransform> mProposedPrfs = new ArraySet<>();
+        protected final Set<IntegrityTransform> mProposedIntegrityAlgos = new ArraySet<>();
+        protected final Set<DhGroupTransform> mProposedDhGroups = new ArraySet<>();
 
-        private boolean mHasAead = false;
+        protected boolean mHasAead = false;
 
-        private Builder(boolean isIke) {
-            mIsIkeProposal = isIke;
-        }
-
-        private static boolean isAead(@EncryptionAlgorithm int algorithm) {
+        protected static boolean isAead(@EncryptionAlgorithm int algorithm) {
             switch (algorithm) {
                 case ENCRYPTION_ALGORITHM_3DES:
                     // Fall through
@@ -341,7 +257,7 @@ public final class SaProposal {
             }
         }
 
-        private EncryptionTransform[] buildEncryptAlgosOrThrow() {
+        protected EncryptionTransform[] buildEncryptAlgosOrThrow() {
             if (mProposedEncryptAlgos.isEmpty()) {
                 throw new IllegalArgumentException(
                         ERROR_TAG + "Encryption algorithm must be proposed.");
@@ -351,211 +267,35 @@ public final class SaProposal {
                     new EncryptionTransform[mProposedEncryptAlgos.size()]);
         }
 
-        private PrfTransform[] buildPrfsOrThrow() {
-            if (mIsIkeProposal == mProposedPrfs.isEmpty()) {
-                throw new IllegalArgumentException(
-                        ERROR_TAG + "Invalid PRF configuration for this SA Proposal.");
-            }
-
-            return mProposedPrfs.toArray(new PrfTransform[mProposedPrfs.size()]);
-        }
-
-        private IntegrityTransform[] buildIntegAlgosForIkeOrThrow() {
-            // When building IKE SA Proposal with normal-mode ciphers, mProposedIntegrityAlgos must
-            // not be empty and must not have INTEGRITY_ALGORITHM_NONE. When building IKE SA
-            // Proposal with combined-mode ciphers, mProposedIntegrityAlgos must be either empty or
-            // only have INTEGRITY_ALGORITHM_NONE.
-            if (mProposedIntegrityAlgos.isEmpty() && !mHasAead) {
-                throw new IllegalArgumentException(
-                        ERROR_TAG
-                                + "Integrity algorithm "
-                                + "must be proposed with normal ciphers in IKE proposal.");
-            }
-
-            for (IntegrityTransform transform : mProposedIntegrityAlgos) {
-                if ((transform.id == INTEGRITY_ALGORITHM_NONE) != mHasAead) {
-                    throw new IllegalArgumentException(
-                            ERROR_TAG
-                                    + "Invalid integrity algorithm configuration"
-                                    + " for this SA Proposal");
-                }
-            }
-
-            return mProposedIntegrityAlgos.toArray(
-                    new IntegrityTransform[mProposedIntegrityAlgos.size()]);
-        }
-
-        private IntegrityTransform[] buildIntegAlgosForChildOrThrow() {
-            // When building Child SA Proposal with normal-mode ciphers, there is no contraint on
-            // integrity algorithm. When building Child SA Proposal with combined-mode ciphers,
-            // mProposedIntegrityAlgos must be either empty or only have INTEGRITY_ALGORITHM_NONE.
-            for (IntegrityTransform transform : mProposedIntegrityAlgos) {
-                if (transform.id != INTEGRITY_ALGORITHM_NONE && mHasAead) {
-                    throw new IllegalArgumentException(
-                            ERROR_TAG
-                                    + "Only INTEGRITY_ALGORITHM_NONE can be"
-                                    + " proposed with combined-mode ciphers in any proposal.");
-                }
-            }
-
-            return mProposedIntegrityAlgos.toArray(
-                    new IntegrityTransform[mProposedIntegrityAlgos.size()]);
-        }
-
-        private DhGroupTransform[] buildDhGroupsForIkeOrThrow() {
-            if (mProposedDhGroups.isEmpty()) {
-                throw new IllegalArgumentException(
-                        ERROR_TAG + "DH group must be proposed in IKE SA proposal.");
-            }
-
-            for (DhGroupTransform transform : mProposedDhGroups) {
-                if (transform.id == DH_GROUP_NONE) {
-                    throw new IllegalArgumentException(
-                            ERROR_TAG
-                                    + "None-value DH group must not"
-                                    + " be proposed in IKE SA proposal");
-                }
-            }
-
-            return mProposedDhGroups.toArray(new DhGroupTransform[mProposedDhGroups.size()]);
-        }
-
-        private DhGroupTransform[] buildDhGroupsForChildOrThrow() {
-            return mProposedDhGroups.toArray(new DhGroupTransform[mProposedDhGroups.size()]);
-        }
-
-        /** Returns a new Builder for a IKE SA Proposal. */
-        public static Builder newIkeSaProposalBuilder() {
-            return new Builder(true);
-        }
-
-        /**
-         * Returns a new Builder for a Child SA Proposal.
-         *
-         * <p>If this proposal is for negotiating the first Child Session of the IKE Session, DH
-         * Group will not be negotiated during the initial creation but will be negotiated during
-         * future rekey creation.
-         *
-         * @return Builder for a Child SA Proposal.
-         */
-        public static Builder newChildSaProposalBuilder() {
-            return new Builder(false);
-        }
-
-        /**
-         * Adds an encryption algorithm to SA proposal being built.
-         *
-         * @param algorithm encryption algorithm to add to SaProposal.
-         * @return Builder of SaProposal.
-         */
-        public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm) {
-            // Construct EncryptionTransform and validate proposed algorithm during
-            // construction.
-            EncryptionTransform encryptionTransform = new EncryptionTransform(algorithm);
-
-            validateOnlyOneModeEncryptAlgoProposedOrThrow(algorithm);
-
-            mProposedEncryptAlgos.add(encryptionTransform);
-            return this;
-        }
-
-        /**
-         * Adds an encryption algorithm with specific key length to SA proposal being built.
-         *
-         * @param algorithm encryption algorithm to add to SaProposal.
-         * @param keyLength key length of algorithm.
-         * @return Builder of SaProposal.
-         * @throws IllegalArgumentException if AEAD and non-combined mode algorithms are mixed.
-         */
-        public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
+        protected void validateAndAddEncryptAlgo(
+                @EncryptionAlgorithm int algorithm, int keyLength) {
             // Construct EncryptionTransform and validate proposed algorithm during
             // construction.
             EncryptionTransform encryptionTransform = new EncryptionTransform(algorithm, keyLength);
 
-            validateOnlyOneModeEncryptAlgoProposedOrThrow(algorithm);
-
-            mProposedEncryptAlgos.add(encryptionTransform);
-            return this;
-        }
-
-        private void validateOnlyOneModeEncryptAlgoProposedOrThrow(
-                @EncryptionAlgorithm int algorithm) {
+            // Validate that only one mode encryption algorithm has been proposed.
             boolean isCurrentAead = isAead(algorithm);
-
             if (!mProposedEncryptAlgos.isEmpty() && (mHasAead ^ isCurrentAead)) {
                 throw new IllegalArgumentException(
                         ERROR_TAG
                                 + "Proposal cannot has both normal ciphers "
                                 + "and combined-mode ciphers.");
             }
-
             if (isCurrentAead) mHasAead = true;
+
+            mProposedEncryptAlgos.add(encryptionTransform);
         }
 
-        /**
-         * Adds a pseudorandom function to SA proposal being built.
-         *
-         * @param algorithm pseudorandom function to add to SaProposal.
-         * @return Builder of SaProposal.
-         */
-        public Builder addPseudorandomFunction(@PseudorandomFunction int algorithm) {
-            // Construct PrfTransform and validate proposed algorithm during
-            // construction.
-            mProposedPrfs.add(new PrfTransform(algorithm));
-            return this;
-        }
-
-        /**
-         * Adds an integrity algorithm to SA proposal being built.
-         *
-         * @param algorithm integrity algorithm to add to SaProposal.
-         * @return Builder of SaProposal.
-         */
-        public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
+        protected void addIntegrityAlgo(@IntegrityAlgorithm int algorithm) {
             // Construct IntegrityTransform and validate proposed algorithm during
             // construction.
             mProposedIntegrityAlgos.add(new IntegrityTransform(algorithm));
-            return this;
         }
 
-        /**
-         * Adds a Diffie-Hellman Group to SA proposal being built.
-         *
-         * @param dhGroup to add to SaProposal.
-         * @return Builder of SaProposal.
-         */
-        public Builder addDhGroup(@DhGroup int dhGroup) {
+        protected void addDh(@DhGroup int dhGroup) {
             // Construct DhGroupTransform and validate proposed dhGroup during
             // construction.
             mProposedDhGroups.add(new DhGroupTransform(dhGroup));
-            return this;
-        }
-
-        /**
-         * Validates, builds and returns the SaProposal
-         *
-         * @return SaProposal the validated SaProposal.
-         * @throws IllegalArgumentException if SaProposal is invalid.
-         */
-        public SaProposal build() {
-            EncryptionTransform[] encryptionTransforms = buildEncryptAlgosOrThrow();
-            PrfTransform[] prfTransforms = buildPrfsOrThrow();
-            IntegrityTransform[] integrityTransforms =
-                    mIsIkeProposal
-                            ? buildIntegAlgosForIkeOrThrow()
-                            : buildIntegAlgosForChildOrThrow();
-
-            DhGroupTransform[] dhGroupTransforms =
-                    mIsIkeProposal ? buildDhGroupsForIkeOrThrow() : buildDhGroupsForChildOrThrow();
-            // IKE library only supports negotiating ESP Child SA.
-            int protocol = mIsIkeProposal ? IkePayload.PROTOCOL_ID_IKE : IkePayload.PROTOCOL_ID_ESP;
-
-            return new SaProposal(
-                    protocol,
-                    encryptionTransforms,
-                    prfTransforms,
-                    integrityTransforms,
-                    dhGroupTransforms);
         }
     }
 

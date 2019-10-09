@@ -24,19 +24,18 @@ import static org.junit.Assert.fail;
 import org.junit.Test;
 
 public final class ChildSessionOptionsTest {
-
     private static final int NUM_TS = 1;
 
     @Test
     public void testBuild() throws Exception {
-        SaProposal saProposal =
-                SaProposal.Builder.newChildSaProposalBuilder()
+        ChildSaProposal saProposal =
+                new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12,
                                 SaProposal.KEY_LEN_AES_128)
                         .build();
         ChildSessionOptions sessionOptions =
-                new ChildSessionOptions.Builder().addSaProposal(saProposal).build();
+                new TunnelModeChildSessionOptions.Builder().addSaProposal(saProposal).build();
 
         assertArrayEquals(new SaProposal[] {saProposal}, sessionOptions.getSaProposals());
         assertEquals(NUM_TS, sessionOptions.getLocalTrafficSelectors().length);
@@ -47,26 +46,8 @@ public final class ChildSessionOptionsTest {
     @Test
     public void testBuildWithoutSaProposal() throws Exception {
         try {
-            new ChildSessionOptions.Builder().build();
+            new TunnelModeChildSessionOptions.Builder().build();
             fail("Expected to fail due to the absence of SA proposal.");
-        } catch (IllegalArgumentException expected) {
-        }
-    }
-
-    @Test
-    public void testBuildWithIkeSaProposal() throws Exception {
-        SaProposal saProposal =
-                SaProposal.Builder.newIkeSaProposalBuilder()
-                        .addEncryptionAlgorithm(
-                                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
-                                SaProposal.KEY_LEN_AES_128)
-                        .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
-                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                        .build();
-
-        try {
-            new ChildSessionOptions.Builder().addSaProposal(saProposal).build();
-            fail("Expected to fail due to wrong type of SA proposal.");
         } catch (IllegalArgumentException expected) {
         }
     }
