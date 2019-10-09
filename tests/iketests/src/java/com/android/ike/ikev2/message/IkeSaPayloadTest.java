@@ -36,6 +36,8 @@ import android.net.IpSecSpiResponse;
 import android.util.Pair;
 
 import com.android.ike.TestUtils;
+import com.android.ike.ikev2.ChildSaProposal;
+import com.android.ike.ikev2.IkeSaProposal;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -73,8 +75,8 @@ import java.util.List;
 public final class IkeSaPayloadTest {
     private static final String OUTBOUND_SA_PAYLOAD_HEADER = "22000030";
     private static final String OUTBOUND_PROPOSAL_RAW_PACKET =
-            "0000002C010100040300000C0100000C800E0080030000080200000203000008030"
-                    + "000020000000804000002";
+            "0000002C010100040300000C0100000C800E0080030000080300000203000008040"
+                    + "000020000000802000002";
     private static final String INBOUND_PROPOSAL_RAW_PACKET =
             "0000002c010100040300000c0100000c800e0080030000080300000203000008040"
                     + "000020000000802000002";
@@ -146,13 +148,13 @@ public final class IkeSaPayloadTest {
 
     private Transform[] mValidNegotiatedTransformSet;
 
-    private SaProposal mIkeSaProposalOne;
-    private SaProposal mIkeSaProposalTwo;
-    private SaProposal[] mTwoIkeSaProposalsArray;
+    private IkeSaProposal mIkeSaProposalOne;
+    private IkeSaProposal mIkeSaProposalTwo;
+    private IkeSaProposal[] mTwoIkeSaProposalsArray;
 
-    private SaProposal mChildSaProposalOne;
-    private SaProposal mChildSaProposalTwo;
-    private SaProposal[] mTwoChildSaProposalsArray;
+    private ChildSaProposal mChildSaProposalOne;
+    private ChildSaProposal mChildSaProposalTwo;
+    private ChildSaProposal[] mTwoChildSaProposalsArray;
 
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private IpSecService mMockIpSecService;
@@ -189,7 +191,7 @@ public final class IkeSaPayloadTest {
                 };
 
         mIkeSaProposalOne =
-                SaProposal.Builder.newIkeSaProposalBuilder()
+                new IkeSaProposal.Builder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
@@ -198,7 +200,7 @@ public final class IkeSaPayloadTest {
                         .build();
 
         mIkeSaProposalTwo =
-                SaProposal.Builder.newIkeSaProposalBuilder()
+                new IkeSaProposal.Builder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
                                 SaProposal.KEY_LEN_AES_128)
@@ -209,21 +211,22 @@ public final class IkeSaPayloadTest {
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .addDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP)
                         .build();
-        mTwoIkeSaProposalsArray = new SaProposal[] {mIkeSaProposalOne, mIkeSaProposalTwo};
+        mTwoIkeSaProposalsArray = new IkeSaProposal[] {mIkeSaProposalOne, mIkeSaProposalTwo};
 
         mChildSaProposalOne =
-                SaProposal.Builder.newChildSaProposalBuilder()
+                new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .build();
         mChildSaProposalTwo =
-                SaProposal.Builder.newChildSaProposalBuilder()
+                new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8,
                                 SaProposal.KEY_LEN_AES_128)
                         .build();
-        mTwoChildSaProposalsArray = new SaProposal[] {mChildSaProposalOne, mChildSaProposalTwo};
+        mTwoChildSaProposalsArray =
+                new ChildSaProposal[] {mChildSaProposalOne, mChildSaProposalTwo};
 
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
@@ -625,7 +628,7 @@ public final class IkeSaPayloadTest {
         assertEquals(IkePayload.SPI_LEN_NOT_INCLUDED, proposal.spiSize);
         assertEquals(IkePayload.SPI_NOT_INCLUDED, proposal.spi);
         assertFalse(proposal.hasUnrecognizedTransform);
-        assertNotNull(proposal.saProposal);
+        assertNotNull(proposal.getSaProposal());
     }
 
     @Test
@@ -734,7 +737,7 @@ public final class IkeSaPayloadTest {
     @Test
     public void testEncodeIkeSaPayload() throws Exception {
         IkeSaPayload saPayload =
-                IkeSaPayload.createInitialIkeSaPayload(new SaProposal[] {mIkeSaProposalOne});
+                IkeSaPayload.createInitialIkeSaPayload(new IkeSaProposal[] {mIkeSaProposalOne});
 
         ByteBuffer byteBuffer = ByteBuffer.allocate(saPayload.getPayloadLength());
         saPayload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_KE, byteBuffer);
@@ -760,7 +763,7 @@ public final class IkeSaPayloadTest {
         IkeProposal reqProposal = negotiatedProposalPair.first;
         IkeProposal respProposal = negotiatedProposalPair.second;
 
-        assertEquals(respPayload.proposalList.get(0).saProposal, respProposal.saProposal);
+        assertEquals(respPayload.proposalList.get(0).getSaProposal(), respProposal.getSaProposal());
 
         // SA Payload for IKE INIT exchange does not include IKE SPIs.
         assertNull(reqProposal.getIkeSpiResource());
@@ -789,7 +792,7 @@ public final class IkeSaPayloadTest {
         ChildProposal respProposal = negotiatedProposalPair.second;
 
         // Verify results
-        assertEquals(respPayload.proposalList.get(0).saProposal, respProposal.saProposal);
+        assertEquals(respPayload.proposalList.get(0).getSaProposal(), respProposal.getSaProposal());
 
         int initSpi = isLocalInit ? CHILD_SPI_LOCAL_ONE : CHILD_SPI_REMOTE;
         int respSpi = isLocalInit ? CHILD_SPI_REMOTE : CHILD_SPI_LOCAL_ONE;

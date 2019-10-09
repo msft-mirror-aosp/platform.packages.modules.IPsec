@@ -306,8 +306,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
     @VisibleForTesting boolean mSupportFragment;
 
-    /** Package private SaProposal that represents the negotiated IKE SA proposal. */
-    @VisibleForTesting SaProposal mSaProposal;
+    /** Package private IkeSaProposal that represents the negotiated IKE SA proposal. */
+    @VisibleForTesting IkeSaProposal mSaProposal;
 
     @VisibleForTesting IkeCipher mIkeCipher;
     @VisibleForTesting IkeMacIntegrity mIkeIntegrity;
@@ -2441,8 +2441,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             long respSpi = 0;
 
             // It is validated in IkeSessionOptions.Builder to ensure IkeSessionOptions has at least
-            // one SaProposal and all SaProposals are valid for IKE SA negotiation.
-            SaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
+            // one IkeSaProposal and all SaProposals are valid for IKE SA negotiation.
+            IkeSaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getIkeInitSaRequestPayloads(
                             saProposals,
@@ -3482,7 +3482,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
          */
         private IkeMessage buildIkeRekeyReq() throws IOException {
             // TODO: Evaluate if we need to support different proposals for rekeys
-            SaProposal[] saProposals = new SaProposal[] {mSaProposal};
+            IkeSaProposal[] saProposals = new IkeSaProposal[] {mSaProposal};
 
             // No need to allocate SPIs; they will be allocated as part of the
             // getRekeyIkeSaRequestPayloads
@@ -4080,7 +4080,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      */
     private static class CreateIkeSaHelper {
         public static List<IkePayload> getIkeInitSaRequestPayloads(
-                SaProposal[] saProposals,
+                IkeSaProposal[] saProposals,
                 long initIkeSpi,
                 long respIkeSpi,
                 InetAddress localAddr,
@@ -4109,7 +4109,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         public static List<IkePayload> getRekeyIkeSaRequestPayloads(
-                SaProposal[] saProposals, InetAddress localAddr) throws IOException {
+                IkeSaProposal[] saProposals, InetAddress localAddr) throws IOException {
             if (localAddr == null) {
                 throw new IllegalArgumentException("Local address was null for rekey");
             }
@@ -4119,7 +4119,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         public static List<IkePayload> getRekeyIkeSaResponsePayloads(
-                byte respProposalNumber, SaProposal saProposal, InetAddress localAddr)
+                byte respProposalNumber, IkeSaProposal saProposal, InetAddress localAddr)
                 throws IOException {
             if (localAddr == null) {
                 throw new IllegalArgumentException("Local address was null for rekey");
@@ -4148,7 +4148,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
             DhGroupTransform dhGroupTransform =
-                    saPayload.proposalList.get(0).saProposal.getDhGroupTransforms()[0];
+                    ((IkeProposal) saPayload.proposalList.get(0))
+                            .saProposal
+                            .getDhGroupTransforms()[0];
             payloadList.add(new IkeKePayload(dhGroupTransform.id));
 
             return payloadList;
