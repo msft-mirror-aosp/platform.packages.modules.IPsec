@@ -41,6 +41,7 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
+import java.security.Security;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -60,8 +61,14 @@ public final class IkeMessage {
     private static final String TAG = "IkeMessage";
 
     private static IIkeMessageHelper sIkeMessageHelper = new IkeMessageHelper();
+
     // Currently use Bouncy Castle as crypto security provider
     static final Provider SECURITY_PROVIDER = new BouncyCastleProvider();
+
+    // TODO: b/142070035 Use Conscrypt as default security provider instead of BC
+
+    // Currently use HarmonyJSSE as TrustManager provider
+    static final Provider TRUST_MANAGER_PROVIDER = Security.getProvider("HarmonyJSSE");
 
     // Payload types in this set may be included multiple times within an IKE message. All other
     // payload types can be included at most once.
@@ -98,6 +105,17 @@ public final class IkeMessage {
     public static Provider getSecurityProvider() {
         // TODO: Move this getter out of IKE message package since not only this package uses it.
         return SECURITY_PROVIDER;
+    }
+
+    /**
+     * Get security provider for X509TrustManager to do certificate validation.
+     *
+     * <p>Use JSSEProvdier as the default security provider.
+     *
+     * @return the provider for X509TrustManager
+     */
+    public static Provider getTrustManagerProvider() {
+        return TRUST_MANAGER_PROVIDER;
     }
 
     /**
