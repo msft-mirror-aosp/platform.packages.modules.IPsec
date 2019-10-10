@@ -31,6 +31,8 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.util.ArraySet;
 import android.util.Pair;
 
+import com.android.ike.ikev2.ChildSaProposal;
+import com.android.ike.ikev2.IkeSaProposal;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
@@ -105,7 +107,8 @@ public final class IkeSaPayload extends IkePayload {
 
     /** Package private constructor for building a request for IKE SA initial creation or rekey */
     @VisibleForTesting
-    IkeSaPayload(boolean isResp, byte spiSize, SaProposal[] saProposals, InetAddress localAddress)
+    IkeSaPayload(
+            boolean isResp, byte spiSize, IkeSaProposal[] saProposals, InetAddress localAddress)
             throws IOException {
         this(isResp, spiSize, localAddress);
 
@@ -129,7 +132,7 @@ public final class IkeSaPayload extends IkePayload {
             boolean isResp,
             byte spiSize,
             byte proposalNumber,
-            SaProposal saProposal,
+            IkeSaProposal saProposal,
             InetAddress localAddress)
             throws IOException {
         this(isResp, spiSize, localAddress);
@@ -159,7 +162,7 @@ public final class IkeSaPayload extends IkePayload {
      * negotiation.
      */
     @VisibleForTesting
-    IkeSaPayload(SaProposal[] saProposals, IpSecManager ipSecManager, InetAddress localAddress)
+    IkeSaPayload(ChildSaProposal[] saProposals, IpSecManager ipSecManager, InetAddress localAddress)
             throws ResourceUnavailableException {
         this(false /*isResp*/, ipSecManager, localAddress);
 
@@ -186,7 +189,7 @@ public final class IkeSaPayload extends IkePayload {
     @VisibleForTesting
     IkeSaPayload(
             byte proposalNumber,
-            SaProposal saProposal,
+            ChildSaProposal saProposal,
             IpSecManager ipSecManager,
             InetAddress localAddress)
             throws ResourceUnavailableException {
@@ -219,7 +222,7 @@ public final class IkeSaPayload extends IkePayload {
      *
      * @param saProposals the array of all SA Proposals.
      */
-    public static IkeSaPayload createInitialIkeSaPayload(SaProposal[] saProposals)
+    public static IkeSaPayload createInitialIkeSaPayload(IkeSaProposal[] saProposals)
             throws IOException {
         return new IkeSaPayload(false /*isResp*/, SPI_LEN_NOT_INCLUDED, saProposals, null);
     }
@@ -231,7 +234,7 @@ public final class IkeSaPayload extends IkePayload {
      * @param localAddress the local address assigned on-device.
      */
     public static IkeSaPayload createRekeyIkeSaRequestPayload(
-            SaProposal[] saProposals, InetAddress localAddress) throws IOException {
+            IkeSaProposal[] saProposals, InetAddress localAddress) throws IOException {
         return new IkeSaPayload(false /*isResp*/, SPI_LEN_IKE, saProposals, localAddress);
     }
 
@@ -243,7 +246,7 @@ public final class IkeSaPayload extends IkePayload {
      * @param localAddress the local address assigned on-device.
      */
     public static IkeSaPayload createRekeyIkeSaResponsePayload(
-            byte respProposalNumber, SaProposal saProposal, InetAddress localAddress)
+            byte respProposalNumber, IkeSaProposal saProposal, InetAddress localAddress)
             throws IOException {
         return new IkeSaPayload(
                 true /*isResp*/, SPI_LEN_IKE, respProposalNumber, saProposal, localAddress);
@@ -259,7 +262,7 @@ public final class IkeSaPayload extends IkePayload {
      * @throws ResourceUnavailableException if too many SPIs are currently allocated for this user.
      */
     public static IkeSaPayload createChildSaRequestPayload(
-            SaProposal[] saProposals, IpSecManager ipSecManager, InetAddress localAddress)
+            ChildSaProposal[] saProposals, IpSecManager ipSecManager, InetAddress localAddress)
             throws ResourceUnavailableException {
 
         return new IkeSaPayload(saProposals, ipSecManager, localAddress);
@@ -276,7 +279,7 @@ public final class IkeSaPayload extends IkePayload {
      */
     public static IkeSaPayload createChildSaResponsePayload(
             byte respProposalNumber,
-            SaProposal saProposal,
+            ChildSaProposal saProposal,
             IpSecManager ipSecManager,
             InetAddress localAddress)
             throws ResourceUnavailableException {
@@ -294,8 +297,9 @@ public final class IkeSaPayload extends IkePayload {
             throws NoValidProposalChosenException {
         for (int i = 0; i < proposalList.size(); i++) {
             Proposal reqProposal = proposalList.get(i);
-            if (respProposal.isNegotiatedFrom(reqProposal.saProposal)
-                    && reqProposal.saProposal.getProtocolId() == respProposal.getProtocolId()) {
+            if (respProposal.isNegotiatedFrom(reqProposal.getSaProposal())
+                    && reqProposal.getSaProposal().getProtocolId()
+                            == respProposal.getProtocolId()) {
                 return reqProposal.number;
             }
         }
@@ -512,8 +516,6 @@ public final class IkeSaPayload extends IkePayload {
         public final byte spiSize;
         public final long spi;
 
-        public final SaProposal saProposal;
-
         public final boolean hasUnrecognizedTransform;
 
         @VisibleForTesting
@@ -522,13 +524,11 @@ public final class IkeSaPayload extends IkePayload {
                 int protocolId,
                 byte spiSize,
                 long spi,
-                SaProposal saProposal,
                 boolean hasUnrecognizedTransform) {
             this.number = number;
             this.protocolId = protocolId;
             this.spiSize = spiSize;
             this.spi = spi;
-            this.saProposal = saProposal;
             this.hasUnrecognizedTransform = hasUnrecognizedTransform;
         }
 
@@ -602,19 +602,23 @@ public final class IkeSaPayload extends IkePayload {
                 }
             }
 
-            SaProposal saProposal =
-                    new SaProposal(
-                            protocolId,
-                            encryptAlgoList.toArray(
-                                    new EncryptionTransform[encryptAlgoList.size()]),
-                            prfList.toArray(new PrfTransform[prfList.size()]),
-                            integAlgoList.toArray(new IntegrityTransform[integAlgoList.size()]),
-                            dhGroupList.toArray(new DhGroupTransform[dhGroupList.size()]),
-                            esnList.toArray(new EsnTransform[esnList.size()]));
-
             if (protocolId == PROTOCOL_ID_IKE) {
+                IkeSaProposal saProposal =
+                        new IkeSaProposal(
+                                encryptAlgoList.toArray(
+                                        new EncryptionTransform[encryptAlgoList.size()]),
+                                prfList.toArray(new PrfTransform[prfList.size()]),
+                                integAlgoList.toArray(new IntegrityTransform[integAlgoList.size()]),
+                                dhGroupList.toArray(new DhGroupTransform[dhGroupList.size()]));
                 return new IkeProposal(number, spiSize, spi, saProposal, hasUnrecognizedTransform);
             } else {
+                ChildSaProposal saProposal =
+                        new ChildSaProposal(
+                                encryptAlgoList.toArray(
+                                        new EncryptionTransform[encryptAlgoList.size()]),
+                                integAlgoList.toArray(new IntegrityTransform[integAlgoList.size()]),
+                                dhGroupList.toArray(new DhGroupTransform[dhGroupList.size()]),
+                                esnList.toArray(new EsnTransform[esnList.size()]));
                 return new ChildProposal(number, spi, saProposal, hasUnrecognizedTransform);
             }
         }
@@ -624,11 +628,11 @@ public final class IkeSaPayload extends IkePayload {
             if (protocolId != reqProposal.protocolId || number != reqProposal.number) {
                 return false;
             }
-            return saProposal.isNegotiatedFrom(reqProposal.saProposal);
+            return getSaProposal().isNegotiatedFrom(reqProposal.getSaProposal());
         }
 
         protected void encodeToByteBuffer(boolean isLast, ByteBuffer byteBuffer) {
-            Transform[] allTransforms = saProposal.getAllTransforms();
+            Transform[] allTransforms = getSaProposal().getAllTransforms();
             byte isLastIndicator = isLast ? LAST_PROPOSAL : NOT_LAST_PROPOSAL;
 
             byteBuffer
@@ -665,7 +669,7 @@ public final class IkeSaPayload extends IkePayload {
         protected int getProposalLength() {
             int len = PROPOSAL_HEADER_LEN + spiSize;
 
-            Transform[] allTransforms = saProposal.getAllTransforms();
+            Transform[] allTransforms = getSaProposal().getAllTransforms();
             for (Transform t : allTransforms) len += t.getTransformLength();
             return len;
         }
@@ -673,16 +677,21 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return "Proposal(" + number + ") " + saProposal.toString();
+            return "Proposal(" + number + ") " + getSaProposal().toString();
         }
 
         /** Package private method for releasing SPI resource in this unselected Proposal. */
         abstract void releaseSpiResourceIfExists();
+
+        /** Package private method for getting SaProposal */
+        abstract SaProposal getSaProposal();
     }
 
     /** This class represents a Proposal for IKE SA negotiation. */
     public static final class IkeProposal extends Proposal {
         private IkeSecurityParameterIndex mIkeSpiResource;
+
+        public final IkeSaProposal saProposal;
 
         /**
          * Construct IkeProposal from a decoded inbound message for IKE negotiation.
@@ -693,9 +702,10 @@ public final class IkeSaPayload extends IkePayload {
                 byte number,
                 byte spiSize,
                 long spi,
-                SaProposal saProposal,
+                IkeSaProposal saProposal,
                 boolean hasUnrecognizedTransform) {
-            super(number, PROTOCOL_ID_IKE, spiSize, spi, saProposal, hasUnrecognizedTransform);
+            super(number, PROTOCOL_ID_IKE, spiSize, spi, hasUnrecognizedTransform);
+            this.saProposal = saProposal;
         }
 
         /** Construct IkeProposal for an outbound message for IKE negotiation. */
@@ -703,15 +713,15 @@ public final class IkeSaPayload extends IkePayload {
                 byte number,
                 byte spiSize,
                 IkeSecurityParameterIndex ikeSpiResource,
-                SaProposal saProposal) {
+                IkeSaProposal saProposal) {
             super(
                     number,
                     PROTOCOL_ID_IKE,
                     spiSize,
                     ikeSpiResource == null ? SPI_NOT_INCLUDED : ikeSpiResource.getSpi(),
-                    saProposal,
                     false /*hasUnrecognizedTransform*/);
             mIkeSpiResource = ikeSpiResource;
+            this.saProposal = saProposal;
         }
 
         /**
@@ -721,7 +731,7 @@ public final class IkeSaPayload extends IkePayload {
          */
         @VisibleForTesting
         static IkeProposal createIkeProposal(
-                byte number, byte spiSize, SaProposal saProposal, InetAddress localAddress)
+                byte number, byte spiSize, IkeSaProposal saProposal, InetAddress localAddress)
                 throws IOException {
             // IKE_INIT uses SPI_LEN_NOT_INCLUDED, while rekeys use SPI_LEN_IKE
             IkeSecurityParameterIndex spiResource =
@@ -749,6 +759,11 @@ public final class IkeSaPayload extends IkePayload {
                     IkeSecurityParameterIndex.allocateSecurityParameterIndex(remoteAddress, spi);
         }
 
+        @Override
+        public SaProposal getSaProposal() {
+            return saProposal;
+        }
+
         /**
          * Get the IKE SPI resource.
          *
@@ -763,33 +778,38 @@ public final class IkeSaPayload extends IkePayload {
     public static final class ChildProposal extends Proposal {
         private SecurityParameterIndex mChildSpiResource;
 
+        public final ChildSaProposal saProposal;
+
         /**
          * Construct ChildProposal from a decoded inbound message for Child SA negotiation.
          *
          * <p>Package private
          */
         ChildProposal(
-                byte number, long spi, SaProposal saProposal, boolean hasUnrecognizedTransform) {
+                byte number,
+                long spi,
+                ChildSaProposal saProposal,
+                boolean hasUnrecognizedTransform) {
             super(
                     number,
                     PROTOCOL_ID_ESP,
                     SPI_LEN_IPSEC,
                     spi,
-                    saProposal,
                     hasUnrecognizedTransform);
+            this.saProposal = saProposal;
         }
 
         /** Construct ChildProposal for an outbound message for Child SA negotiation. */
         private ChildProposal(
-                byte number, SecurityParameterIndex childSpiResource, SaProposal saProposal) {
+                byte number, SecurityParameterIndex childSpiResource, ChildSaProposal saProposal) {
             super(
                     number,
                     PROTOCOL_ID_ESP,
                     SPI_LEN_IPSEC,
                     (long) childSpiResource.getSpi(),
-                    saProposal,
                     false /*hasUnrecognizedTransform*/);
             mChildSpiResource = childSpiResource;
+            this.saProposal = saProposal;
         }
 
         /**
@@ -800,7 +820,7 @@ public final class IkeSaPayload extends IkePayload {
         @VisibleForTesting
         static ChildProposal createChildProposal(
                 byte number,
-                SaProposal saProposal,
+                ChildSaProposal saProposal,
                 IpSecManager ipSecManager,
                 InetAddress localAddress)
                 throws ResourceUnavailableException {
@@ -824,6 +844,11 @@ public final class IkeSaPayload extends IkePayload {
                 throws ResourceUnavailableException, SpiUnavailableException {
             mChildSpiResource =
                     ipSecManager.allocateSecurityParameterIndex(remoteAddress, (int) spi);
+        }
+
+        @Override
+        public SaProposal getSaProposal() {
+            return saProposal;
         }
 
         /**
