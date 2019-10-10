@@ -150,6 +150,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                     break;
                 case EAP_SIM_NOTIFICATION:
                     return handleEapSimAkaNotification(
+                            mTAG,
                             true, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
@@ -205,6 +206,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                     break;
                 case EAP_SIM_NOTIFICATION:
                     return handleEapSimAkaNotification(
+                            mTAG,
                             true, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
@@ -223,6 +225,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             if (!isValidStartAttributes(eapSimTypeData)) {
+                LOG.e(mTAG, "Invalid attributes: " + eapSimTypeData.attributeMap.keySet());
                 return buildClientErrorResponse(
                         message.eapIdentifier,
                         EAP_TYPE_SIM,
@@ -322,9 +325,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
                 String identity = "1" + imsi;
                 mIdentity = identity.getBytes();
-
-                // Log requested EAP-SIM/Identity as PII
-                LOG.d(mTAG, "requested EAP-SIM/Identity=" + LOG.pii(mIdentity));
+                LOG.d(mTAG, "EAP-SIM/Identity=" + LOG.pii(identity));
 
                 return AtIdentity.getAtIdentity(mIdentity);
             }
@@ -384,6 +385,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             switch (eapSimTypeData.eapSubtype) {
                 case EAP_SIM_NOTIFICATION:
                     return handleEapSimAkaNotification(
+                            mTAG,
                             false, // isPreChallengeState
                             message.eapIdentifier,
                             eapSimTypeData);
@@ -397,6 +399,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             if (!isValidChallengeAttributes(eapSimTypeData)) {
+                LOG.e(mTAG, "Invalid attributes: " + eapSimTypeData.attributeMap.keySet());
                 return buildClientErrorResponse(
                         message.eapIdentifier,
                         EAP_TYPE_SIM,
@@ -488,10 +491,11 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 challengeResults.add(randChallengeResult);
 
                 // Log rand/challenge as PII
-                LOG.d(mTAG,
-                        "rand=" + LOG.pii(rand)
-                        + " SRES=" + LOG.pii(randChallengeResult.sres)
-                        + " Kc=" + LOG.pii(randChallengeResult.kc));
+                LOG.d(
+                        mTAG,
+                        "RAND=" + LOG.pii(rand)
+                                + " SRES=" + LOG.pii(randChallengeResult.sres)
+                                + " Kc=" + LOG.pii(randChallengeResult.kc));
             }
 
             return challengeResults;
