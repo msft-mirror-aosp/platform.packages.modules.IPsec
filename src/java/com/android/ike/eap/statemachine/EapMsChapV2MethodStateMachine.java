@@ -25,6 +25,7 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_FAILURE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_SUCCESS;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_OP_CODE_STRING;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureRequest.EAP_ERROR_CODE_STRING;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureResponse.getEapMsChapV2FailureResponse;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessResponse.getEapMsChapV2SuccessResponse;
@@ -49,6 +50,7 @@ import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2Failu
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessRequest;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
+import com.android.ike.utils.Log;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.org.bouncycastle.crypto.digests.MD4Digest;
 
@@ -250,6 +252,12 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
             }
 
             EapMsChapV2ChallengeRequest challengeRequest = decodeResult.eapTypeData;
+            LOG.d(
+                    mTAG,
+                    "Received Challenge Request:"
+                            + " Challenge=" + LOG.pii(challengeRequest.challenge)
+                            + " Server-Name=" + Log.byteArrayToHexString(challengeRequest.name));
+
             byte[] peerChallenge = new byte[PEER_CHALLENGE_SIZE];
             mSecureRandom.nextBytes(peerChallenge);
 
@@ -266,6 +274,13 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 return new EapError(ex);
             }
 
+            LOG.d(
+                    mTAG,
+                    "Generating Challenge Response:"
+                            + " Username=" + LOG.pii(mEapMsChapV2Config.username)
+                            + " Peer-Challenge=" + LOG.pii(peerChallenge)
+                            + " NT-Response=" + LOG.pii(ntResponse));
+
             try {
                 EapMsChapV2ChallengeResponse challengeResponse =
                         new EapMsChapV2ChallengeResponse(
@@ -277,7 +292,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 transitionTo(
                         new ValidateAuthenticatorState(
                                 challengeRequest.challenge, peerChallenge, ntResponse));
-                LOG.e(mTAG, "transitioned to PostChallengeState");
+
                 return buildEapMessageResponse(mTAG, message.eapIdentifier, challengeResponse);
             } catch (UnsupportedEncodingException | EapMsChapV2ParsingException ex) {
                 LOG.e(mTAG, "Error building response type data", ex);
@@ -316,6 +331,12 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 return new EapError(ex);
             }
 
+            LOG.d(
+                    mTAG,
+                    "Received Op Code: "
+                            + EAP_OP_CODE_STRING.getOrDefault(opCode, "Unknown")
+                            + " (" + opCode + ")");
+
             switch (opCode) {
                 case EAP_MSCHAP_V2_SUCCESS:
                     DecodeResult<EapMsChapV2SuccessRequest> successDecodeResult =
@@ -326,7 +347,11 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                     }
 
                     EapMsChapV2SuccessRequest successRequest = successDecodeResult.eapTypeData;
-                    LOG.d(mTAG, "SuccessRequest message: " + successRequest.message);
+                    LOG.d(
+                            mTAG,
+                            "Received SuccessRequest:"
+                                    + " Auth-String=" + LOG.pii(successRequest.authBytes)
+                                    + " Message=" + successRequest.message);
 
                     boolean isSuccessfulAuth;
                     try {
@@ -379,7 +404,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                             mTAG, message.eapIdentifier, getEapMsChapV2FailureResponse());
 
                 default:
-                    LOG.e(mTAG, "Invalid OpCode received in ValidateAuthenticatorState: " + opCode);
+                    LOG.e(mTAG, "Invalid OpCode: " + opCode);
                     return new EapError(
                             new EapInvalidRequestException(
                                     "Unexpected request received in EAP MSCHAPv2"));
@@ -403,20 +428,21 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 transitionTo(new FinalState());
                 return new EapFailure();
             } else if (message.eapCode != EAP_CODE_SUCCESS) {
-                if (message.eapData.eapType == EAP_NOTIFICATION) {
+                int eapType = message.eapData.eapType;
+                if (eapType == EAP_NOTIFICATION) {
                     return handleEapNotification(mTAG, message);
                 } else {
                     LOG.e(
                             mTAG,
                             "Received unexpected EAP message. Type="
                                     + EAP_TYPE_STRING.getOrDefault(
-                                            message.eapData.eapType, "UNKNOWN"));
+                                            eapType, "UNKNOWN (" + eapType + ")"));
                     return new EapError(
                             new EapInvalidRequestException(
                                     "Expected EAP Type "
                                             + getEapMethod()
                                             + ", received "
-                                            + message.eapData.eapType));
+                                            + eapType));
                 }
             }
 
@@ -440,17 +466,14 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
             if (result != null) {
                 return result;
             }
-
+            int eapType = message.eapData.eapType;
             LOG.e(
                     mTAG,
                     "Received unexpected EAP message. Type="
-                            + EAP_TYPE_STRING.getOrDefault(message.eapData.eapType, "UNKNOWN"));
+                            + EAP_TYPE_STRING.getOrDefault(eapType, "UNKNOWN (" + eapType + ")"));
             return new EapError(
                     new EapInvalidRequestException(
-                            "Expected EAP Type "
-                                    + getEapMethod()
-                                    + ", received "
-                                    + message.eapData.eapType));
+                            "Expected EAP Type " + getEapMethod() + ", received " + eapType));
         }
     }
 

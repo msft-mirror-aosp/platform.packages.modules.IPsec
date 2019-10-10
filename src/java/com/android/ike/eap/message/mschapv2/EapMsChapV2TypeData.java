@@ -491,12 +491,12 @@ public class EapMsChapV2TypeData {
                                     new EapMsChapV2ParsingException(
                                             "Received type data with invalid opCode: "
                                                     + EAP_OP_CODE_STRING.getOrDefault(
-                                                            opCode, "Unknown"))));
+                                                            opCode, "Unknown (" + opCode + ")"))));
                 }
 
                 return new DecodeResult<>(new EapMsChapV2ChallengeRequest(buffer));
             } catch (BufferUnderflowException | EapMsChapV2ParsingException ex) {
-                LOG.e(tag, "Error parsing EAP MSCHAPv2 Challenge Request type data");
+                LOG.e(tag, "Error parsing EAP MSCHAPv2 Challenge Request type data", ex);
                 return new DecodeResult<>(new EapError(ex));
             }
         }
@@ -522,14 +522,14 @@ public class EapMsChapV2TypeData {
                                     new EapMsChapV2ParsingException(
                                             "Received type data with invalid opCode: "
                                                     + EAP_OP_CODE_STRING.getOrDefault(
-                                                            opCode, "Unknown"))));
+                                                            opCode, "Unknown (" + opCode + ")"))));
                 }
 
                 return new DecodeResult<>(new EapMsChapV2SuccessRequest(buffer));
             } catch (BufferUnderflowException
                     | NumberFormatException
                     | EapMsChapV2ParsingException ex) {
-                LOG.e(tag, "Error parsing EAP MSCHAPv2 Success Request type data");
+                LOG.e(tag, "Error parsing EAP MSCHAPv2 Success Request type data", ex);
                 return new DecodeResult<>(new EapError(ex));
             }
         }
@@ -555,14 +555,14 @@ public class EapMsChapV2TypeData {
                                     new EapMsChapV2ParsingException(
                                             "Received type data with invalid opCode: "
                                                     + EAP_OP_CODE_STRING.getOrDefault(
-                                                            opCode, "Unknown"))));
+                                                            opCode, "Unknown (" + opCode + ")"))));
                 }
 
                 return new DecodeResult<>(new EapMsChapV2FailureRequest(buffer));
             } catch (BufferUnderflowException
                     | NumberFormatException
                     | EapMsChapV2ParsingException ex) {
-                LOG.e(tag, "Error parsing EAP MSCHAPv2 Failure Request type data");
+                LOG.e(tag, "Error parsing EAP MSCHAPv2 Failure Request type data", ex);
                 return new DecodeResult<>(new EapError(ex));
             }
         }
