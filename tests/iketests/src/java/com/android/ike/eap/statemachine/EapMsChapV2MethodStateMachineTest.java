@@ -69,14 +69,14 @@ public class EapMsChapV2MethodStateMachineTest {
     // Tests for MS CHAPv2 authentication utils. Test vectors from RFC 2759#9.2.
 
     @Test
-    public void testUsernameToBytes() throws Exception {
+    public void testUsernameToBytes() {
         assertArrayEquals(
                 MSCHAP_V2_USERNAME_ASCII_BYTES,
                 EapMsChapV2MethodStateMachine.usernameToBytes(MSCHAP_V2_USERNAME));
     }
 
     @Test
-    public void testPasswordToBytes() throws Exception {
+    public void testPasswordToBytes() {
         assertArrayEquals(
                 MSCHAP_V2_PASSWORD_UTF_BYTES,
                 EapMsChapV2MethodStateMachine.passwordToBytes(MSCHAP_V2_PASSWORD));
@@ -104,13 +104,13 @@ public class EapMsChapV2MethodStateMachineTest {
     }
 
     @Test
-    public void testNtPasswordHash() throws Exception {
+    public void testNtPasswordHash() {
         byte[] passwordHash = EapMsChapV2MethodStateMachine.ntPasswordHash(MSCHAP_V2_PASSWORD);
         assertArrayEquals(MSCHAP_V2_PASSWORD_HASH, passwordHash);
     }
 
     @Test
-    public void testHashNtPasswordHash() throws Exception {
+    public void testHashNtPasswordHash() {
         byte[] passwordHashHash =
                 EapMsChapV2MethodStateMachine.hashNtPasswordHash(MSCHAP_V2_PASSWORD_HASH);
         assertArrayEquals(MSCHAP_V2_PASSWORD_HASH_HASH, passwordHashHash);
