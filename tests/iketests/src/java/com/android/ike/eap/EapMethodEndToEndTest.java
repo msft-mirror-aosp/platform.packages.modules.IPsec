@@ -18,6 +18,7 @@ package com.android.ike.eap;
 
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -57,5 +58,15 @@ public class EapMethodEndToEndTest {
         verify(mMockCallback, times(callsToVerify))
                 .onResponse(eq(EAP_RESPONSE_NOTIFICATION_PACKET));
         verifyNoMoreInteractions(mMockCallback);
+    }
+
+    protected void verifyEapSuccess(byte[] msk, byte[] emsk) {
+        // EAP-Success
+        mEapAuthenticator.processEapMessage(EAP_SUCCESS);
+        mTestLooper.dispatchAll();
+
+        // verify that onSuccess callback made
+        verify(mMockCallback).onSuccess(eq(msk), eq(emsk));
+        verifyNoMoreInteractions(mMockContext, mMockSecureRandom, mMockCallback);
     }
 }
