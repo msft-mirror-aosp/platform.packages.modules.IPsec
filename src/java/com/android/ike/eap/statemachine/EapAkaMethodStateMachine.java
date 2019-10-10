@@ -147,6 +147,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     return transitionAndProcess(new ChallengeState(), message);
                 case EAP_AKA_NOTIFICATION:
                     return handleEapSimAkaNotification(
+                            mTAG,
                             true, // isPreChallengeState
                             message.eapIdentifier,
                             eapAkaTypeData);
@@ -187,6 +188,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     return transitionAndProcess(new ChallengeState(mIdentity), message);
                 case EAP_AKA_NOTIFICATION:
                     return handleEapSimAkaNotification(
+                            mTAG,
                             true, // isPreChallengeState
                             message.eapIdentifier,
                             eapAkaTypeData);
@@ -198,6 +200,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             if (!isValidIdentityAttributes(eapAkaTypeData)) {
+                LOG.e(mTAG, "Invalid attributes: " + eapAkaTypeData.attributeMap.keySet());
                 return buildClientErrorResponse(
                         message.eapIdentifier,
                         EAP_TYPE_AKA,
@@ -213,6 +216,8 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
             String identityString = "0" + imsi;
             mIdentity = identityString.getBytes();
+            LOG.d(mTAG, "EAP-AKA/Identity=" + LOG.pii(identityString));
+
             AtIdentity atIdentity;
             try {
                 atIdentity = AtIdentity.getAtIdentity(mIdentity);
@@ -312,6 +317,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     break;
                 case EAP_AKA_NOTIFICATION:
                     return handleEapSimAkaNotification(
+                            mTAG,
                             false, // isPreChallengeState
                             message.eapIdentifier,
                             eapAkaTypeData);
@@ -323,6 +329,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             if (!isValidChallengeAttributes(eapAkaTypeData)) {
+                LOG.e(mTAG, "Invalid attributes: " + eapAkaTypeData.attributeMap.keySet());
                 return buildClientErrorResponse(
                         message.eapIdentifier,
                         EAP_TYPE_AKA,
@@ -472,6 +479,14 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     // response format: [tag][AUTS length][AUTS]
                     byte[] auts = new byte[Byte.toUnsignedInt(buffer.get())];
                     buffer.get(auts);
+
+                    LOG.i(mTAG, "Synchronization Failure");
+                    LOG.d(
+                            mTAG,
+                            "RAND=" + LOG.pii(atRandAka.rand)
+                                    + " AUTN=" + LOG.pii(atAutn.autn)
+                                    + " AUTS=" + LOG.pii(auts));
+
                     return new RandChallengeResult(auts);
                 default:
                     throw new EapSimAkaAuthenticationFailureException(
@@ -486,6 +501,14 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
             byte[] ck = new byte[Byte.toUnsignedInt(buffer.get())];
             buffer.get(ck);
+
+            LOG.d(
+                    mTAG,
+                    "RAND=" + LOG.pii(atRandAka.rand)
+                            + " AUTN=" + LOG.pii(atAutn.autn)
+                            + " RES=" + LOG.pii(res)
+                            + " IK=" + LOG.pii(ik)
+                            + " CK=" + LOG.pii(ck));
 
             return new RandChallengeResult(res, ik, ck);
         }
