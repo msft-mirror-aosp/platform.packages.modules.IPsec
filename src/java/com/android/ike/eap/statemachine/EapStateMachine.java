@@ -279,8 +279,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 } else if (eapMessage.eapCode == EAP_CODE_FAILURE) {
                     transitionTo(new FailureState());
                     return new EapFailure();
-                } else if (eapMessage.eapData.eapType == EAP_NOTIFICATION
-                        && mEapMethodStateMachine == null) {
+                } else if (eapMessage.eapData.eapType == EAP_NOTIFICATION) {
                     // if no EapMethodStateMachine has been assigned and we receive an
                     // EAP-Notification, we should log it and respond
                     return handleNotification(mTAG, eapMessage);
