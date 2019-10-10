@@ -66,6 +66,7 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -324,7 +325,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
 
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)
                 String identity = "1" + imsi;
-                mIdentity = identity.getBytes();
+                mIdentity = identity.getBytes(StandardCharsets.US_ASCII);
                 LOG.d(mTAG, "EAP-SIM/Identity=" + LOG.pii(identity));
 
                 return AtIdentity.getAtIdentity(mIdentity);
