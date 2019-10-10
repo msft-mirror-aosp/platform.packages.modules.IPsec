@@ -126,6 +126,10 @@ public class EapSimAkaMethodStateMachineTest {
     private static final byte[] UICC_RESPONSE =
             hexStringToByteArray("04" + SRES_1 + "08" + KC_1);
 
+    // EAP-Identity = hex("test@android.net")
+    protected static final byte[] EAP_IDENTITY_BYTES =
+            hexStringToByteArray("7465737440616E64726F69642E6E6574");
+
     // K_encr + K_aut + MSK + EMSK
     private static final int PRF_OUTPUT_BYTES = (2 * KEY_LEN) + (2 * SESSION_KEY_LENGTH);
 
@@ -139,7 +143,8 @@ public class EapSimAkaMethodStateMachineTest {
         mEapSimConfig = new EapSimConfig(SUB_ID, TelephonyManager.APPTYPE_USIM);
 
         mStateMachine =
-                new EapSimAkaMethodStateMachine(mMockTelephonyManager, mEapSimConfig) {
+                new EapSimAkaMethodStateMachine(
+                        mMockTelephonyManager, EAP_IDENTITY_BYTES, mEapSimConfig) {
                     @Override
                     EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
                         return new EapSimTypeData(
