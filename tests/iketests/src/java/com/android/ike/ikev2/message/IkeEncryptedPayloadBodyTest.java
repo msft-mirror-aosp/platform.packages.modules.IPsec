@@ -121,6 +121,7 @@ public final class IkeEncryptedPayloadBodyTest {
                     + "53fb46ba5d6fa9509161915929de97b7fbe23dc65723b0fe";
     private static final String AES_GCM_MSG_DECRYPTED_BODY_HEX_STRING =
             "000000280200000033233837e909ec805d56151bef5b1fa9b8e25b32419c9b3fc96ee699ec29d501";
+    private static final String AES_GCM_MSG_IV = "fbd69d9ee2dafc5e";
     private static final String AES_GCM_MSG_ENCR_KEY =
             "7C04513660DEC572D896105254EF92608054F8E6EE19E79CE52AB8697B2B5F2C2AA90C29";
 
@@ -148,8 +149,18 @@ public final class IkeEncryptedPayloadBodyTest {
                     + "4340ab551ddf7f51def57eaf5a37793ff6aa1e1ec288a2adf"
                     + "a647c369f15efa61a619966a320f24e1765c0e00c5ed394aa"
                     + "ef14512032b005827c000000090100000501";
+    private static final String AES_GCM_FRAG_IV = "6faf9e5c04c67571";
+
+    private static final int AES_GCM_FRAGMENT_NUM = 2;
+    private static final int AES_GCM_TOTAL_FRAGMENTS = 2;
+
     private static final String AES_GCM_FRAG_ENCR_KEY =
             "955ED949D6F18857220E97B17D9285C830A39F8D4DC46AB43943668093C62A3D66664F8C";
+
+    private static final int ENCRYPTED_BODY_SK_OFFSET =
+            IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH;
+    private static final int ENCRYPTED_BODY_SKF_OFFSET =
+            ENCRYPTED_BODY_SK_OFFSET + IkeSkfPayload.SKF_HEADER_LEN;
 
     private IkeNormalModeCipher mAesCbcCipher;
     private byte[] mAesCbcKey;
@@ -342,7 +353,7 @@ public final class IkeEncryptedPayloadBodyTest {
         IkeEncryptedPayloadBody payloadBody =
                 new IkeEncryptedPayloadBody(
                         mIkeMessage,
-                        IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH,
+                        ENCRYPTED_BODY_SK_OFFSET,
                         mHmacSha1IntegrityMac,
                         mAesCbcCipher,
                         mHmacSha1IntegrityKey,
@@ -360,7 +371,7 @@ public final class IkeEncryptedPayloadBodyTest {
         IkeEncryptedPayloadBody payloadBody =
                 new IkeEncryptedPayloadBody(
                         message,
-                        IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH,
+                        ENCRYPTED_BODY_SK_OFFSET,
                         mHmacSha1IntegrityMac,
                         m3DesCipher,
                         TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_INTE_KEY),
@@ -392,12 +403,8 @@ public final class IkeEncryptedPayloadBodyTest {
                         TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_FRAG_IV),
                         TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_FRAG_PADDING));
 
-        int encryptedBodyOffset =
-                IkeHeader.IKE_HEADER_LENGTH
-                        + IkePayload.GENERIC_HEADER_LENGTH
-                        + IkeSkfPayload.SKF_HEADER_LEN;
         byte[] expectedEncodedData =
-                Arrays.copyOfRange(message, encryptedBodyOffset, message.length);
+                Arrays.copyOfRange(message, ENCRYPTED_BODY_SKF_OFFSET, message.length);
 
         assertArrayEquals(expectedEncodedData, payloadBody.encode());
     }
@@ -407,7 +414,7 @@ public final class IkeEncryptedPayloadBodyTest {
         IkeEncryptedPayloadBody encryptedBody =
                 new IkeEncryptedPayloadBody(
                         mAesGcmMsg,
-                        IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH,
+                        ENCRYPTED_BODY_SK_OFFSET,
                         null /*integrityMac*/,
                         mAesGcm16Cipher,
                         null /*integrityKey*/,
@@ -417,18 +424,65 @@ public final class IkeEncryptedPayloadBodyTest {
     }
 
     @Test
+    public void testBuildAndEncodeMsgWithAesGcm() throws Exception {
+        IkeHeader ikeHeader = new IkeHeader(mAesGcmMsg);
+
+        IkeEncryptedPayloadBody payloadBody =
+                new IkeEncryptedPayloadBody(
+                        ikeHeader,
+                        IkePayload.PAYLOAD_TYPE_AUTH,
+                        new byte[0],
+                        mAesGcmUnencryptedData,
+                        null /*integrityMac*/,
+                        mAesGcm16Cipher,
+                        null /*integrityKey*/,
+                        mAesGcmMsgKey,
+                        TestUtils.hexStringToByteArray(AES_GCM_MSG_IV),
+                        new byte[0] /*padding*/);
+
+        byte[] expectedEncodedData =
+                Arrays.copyOfRange(mAesGcmMsg, ENCRYPTED_BODY_SK_OFFSET, mAesGcmMsg.length);
+
+        assertArrayEquals(expectedEncodedData, payloadBody.encode());
+    }
+
+    @Test
     public void testAuthAndDecodeFragMsgWithAesGcm() throws Exception {
         IkeEncryptedPayloadBody encryptedBody =
                 new IkeEncryptedPayloadBody(
                         mAesGcmFragMsg,
-                        IkeHeader.IKE_HEADER_LENGTH
-                                + IkePayload.GENERIC_HEADER_LENGTH
-                                + IkeSkfPayload.SKF_HEADER_LEN,
+                        ENCRYPTED_BODY_SKF_OFFSET,
                         null /*integrityMac*/,
                         mAesGcm16Cipher,
                         null /*integrityKey*/,
                         mAesGcmFragKey);
 
         assertArrayEquals(mAesGcmFragUnencryptedData, encryptedBody.getUnencryptedData());
+    }
+
+    @Test
+    public void testBuildAndEncodeFragMsgWithAesGcm() throws Exception {
+        IkeHeader ikeHeader = new IkeHeader(mAesGcmFragMsg);
+        byte[] skfHeaderBytes =
+                IkeSkfPayload.encodeSkfHeader(AES_GCM_FRAGMENT_NUM, AES_GCM_TOTAL_FRAGMENTS);
+
+        IkeEncryptedPayloadBody payloadBody =
+                new IkeEncryptedPayloadBody(
+                        ikeHeader,
+                        IkePayload.PAYLOAD_TYPE_NO_NEXT,
+                        skfHeaderBytes,
+                        mAesGcmFragUnencryptedData,
+                        null /*integrityMac*/,
+                        mAesGcm16Cipher,
+                        null /*integrityKey*/,
+                        mAesGcmFragKey,
+                        TestUtils.hexStringToByteArray(AES_GCM_FRAG_IV),
+                        new byte[0] /*padding*/);
+
+        byte[] expectedEncodedData =
+                Arrays.copyOfRange(
+                        mAesGcmFragMsg, ENCRYPTED_BODY_SKF_OFFSET, mAesGcmFragMsg.length);
+
+        assertArrayEquals(expectedEncodedData, payloadBody.encode());
     }
 }
