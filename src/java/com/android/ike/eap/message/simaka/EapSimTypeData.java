@@ -32,6 +32,8 @@ import java.util.Set;
  * EapSimTypeData represents the Type Data for an {@link EapMessage} during an EAP-SIM session.
  */
 public class EapSimTypeData extends EapSimAkaTypeData {
+    private static final String TAG = EapSimTypeData.class.getSimpleName();
+
     // EAP-SIM Subtype values defined by IANA
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
     public static final int EAP_SIM_START = 10;
@@ -68,8 +70,15 @@ public class EapSimTypeData extends EapSimAkaTypeData {
     public EapSimTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
         super(eapSubtype, new LinkedHashMap<>());
 
+        if (!SUPPORTED_SUBTYPES.contains(eapSubtype)) {
+            throw new IllegalArgumentException("Invalid subtype for EAP-SIM: " + eapSubtype);
+        }
+
         for (EapSimAkaAttribute attribute : attributes) {
-            // TODO(b/135637161): check for duplicate attributes
+            if (attributeMap.containsKey(attribute.attributeType)) {
+                throw new IllegalArgumentException(
+                        "Duplicate attribute in attributes: " + attribute.attributeType);
+            }
             attributeMap.put(attribute.attributeType, attribute);
         }
     }
