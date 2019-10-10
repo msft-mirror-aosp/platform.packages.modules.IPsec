@@ -28,6 +28,7 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
+import javax.crypto.AEADBadTagException;
 import javax.crypto.IllegalBlockSizeException;
 
 /**
@@ -37,6 +38,15 @@ import javax.crypto.IllegalBlockSizeException;
  *
  * <p>Both an Encrypted Payload (IkeSkPayload) and an EncryptedFragmentPayload (IkeSkfPayload)
  * consists of an IkeEncryptedPayloadBody instance.
+ *
+ * <p>When using normal cipher with separate integrity algorithm, data to authenticate includes
+ * bytes from beginning of IKE header to the pad length, which are concatenation of IKE header,
+ * current payload header, iv and encrypted and padded data.
+ *
+ * <p>When using AEAD, additional authentication data(also known as) associated data is required. It
+ * MUST include bytes from beginning of IKE header to the last octet of the Payload Header of the
+ * Encrypted Payload. Note fragment number and total fragments are also included if Encrypted
+ * Payload is SKF.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-105">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
@@ -82,8 +92,15 @@ final class IkeEncryptedPayloadBody {
         inputBuffer.get(mIv).get(mEncryptedAndPaddedData).get(mIntegrityChecksum);
 
         if (decryptCipher.isAead()) {
-            throw new UnsupportedOperationException("AEAD decryption not supported.");
-            // TODO: Support AEAD authentication and decryption.
+            byte[] dataToAuthenticate = Arrays.copyOfRange(message, 0, encryptedBodyOffset);
+            mUnencryptedData =
+                    combinedModeDecrypt(
+                            (IkeCombinedModeCipher) decryptCipher,
+                            mEncryptedAndPaddedData,
+                            mIntegrityChecksum,
+                            dataToAuthenticate,
+                            decryptionKey,
+                            mIv);
         } else {
             byte[] dataToAuthenticate =
                     Arrays.copyOfRange(message, 0, message.length - checksumLen);
@@ -258,13 +275,32 @@ final class IkeEncryptedPayloadBody {
             byte[] decryptionKey,
             byte[] iv)
             throws IllegalBlockSizeException {
-        byte[] decryptedPaddedData = decryptCipher.decrypt(encryptedData, decryptionKey, iv);
+        byte[] paddedPlaintext = decryptCipher.decrypt(encryptedData, decryptionKey, iv);
 
-        // Remove padding. Pad length value is the last byte of the padded unencrypted data.
-        int padLength = Byte.toUnsignedInt(decryptedPaddedData[encryptedData.length - 1]);
-        int decryptedDataLen = encryptedData.length - padLength - PAD_LEN_LEN;
+        return stripPadding(paddedPlaintext);
+    }
 
-        return Arrays.copyOfRange(decryptedPaddedData, 0, decryptedDataLen);
+    /** Package private for testing */
+    @VisibleForTesting
+    static byte[] combinedModeDecrypt(
+            IkeCombinedModeCipher decryptCipher,
+            byte[] encryptedData,
+            byte[] checksum,
+            byte[] dataToAuthenticate,
+            byte[] decryptionKey,
+            byte[] iv)
+            throws AEADBadTagException {
+        ByteBuffer dataWithChecksumBuffer =
+                ByteBuffer.allocate(encryptedData.length + checksum.length);
+        dataWithChecksumBuffer.put(encryptedData);
+        dataWithChecksumBuffer.put(checksum);
+        dataWithChecksumBuffer.rewind();
+
+        byte[] paddedPlaintext =
+                decryptCipher.decrypt(
+                        dataWithChecksumBuffer.array(), dataToAuthenticate, decryptionKey, iv);
+
+        return stripPadding(paddedPlaintext);
     }
 
     /** Package private for testing */
@@ -279,6 +315,14 @@ final class IkeEncryptedPayloadBody {
         new SecureRandom().nextBytes(padding);
 
         return padding;
+    }
+
+    private static byte[] stripPadding(byte[] paddedPlaintext) {
+        // Remove padding. Pad length value is the last byte of the padded unencrypted data.
+        int padLength = Byte.toUnsignedInt(paddedPlaintext[paddedPlaintext.length - 1]);
+        int decryptedDataLen = paddedPlaintext.length - padLength - PAD_LEN_LEN;
+
+        return Arrays.copyOfRange(paddedPlaintext, 0, decryptedDataLen);
     }
 
     /** Package private */

@@ -22,6 +22,7 @@ import static org.junit.Assert.fail;
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeCombinedModeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.crypto.IkeNormalModeCipher;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
@@ -34,7 +35,6 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 public final class IkeEncryptedPayloadBodyTest {
-
     private static final String IKE_AUTH_INIT_REQUEST_HEADER =
             "5f54bf6d8b48e6e1909232b3d1edcb5c2e20230800000001000000ec";
     private static final String IKE_AUTH_INIT_REQUEST_SK_HEADER = "230000d0";
@@ -83,6 +83,44 @@ public final class IkeEncryptedPayloadBodyTest {
     private static final String HMAC_SHA1_3DES_MSG_INTE_KEY =
             "867a0bd019108db856cf6984fc9fb62d70c0de74";
 
+    // Test vectors for IKE message protected by AES_GCM_16
+    private static final String AES_GCM_MSG_HEX_STRING =
+            "77c708b4523e39a471dc683c1d4f21362e20230800000005"
+                    + "0000006127000045fbd69d9ee2dafc5e7c03a0106761065b2"
+                    + "8fa8d11aed6046f7f8af117e44da7635be6e0dfafcb0a387c"
+                    + "53fb46ba5d6fa9509161915929de97b7fbe23dc65723b0fe";
+    private static final String AES_GCM_MSG_DECRYPTED_BODY_HEX_STRING =
+            "000000280200000033233837e909ec805d56151bef5b1fa9b8e25b32419c9b3fc96ee699ec29d501";
+    private static final String AES_GCM_MSG_ENCR_KEY =
+            "7C04513660DEC572D896105254EF92608054F8E6EE19E79CE52AB8697B2B5F2C2AA90C29";
+
+    // Test vectors for IKE fragment protected by AES_GCM_16
+    private static final String AES_GCM_FRAG_HEX_STRING =
+            "77c708b4523e39a471dc683c1d4f213635202320000000010"
+                    + "0000113000000f7000200026faf9e5c04c67571871681d443"
+                    + "01489f99fd78d318b0517a5a99bf6a3e1770f43d7d997c9e0"
+                    + "d186038d16df3fd525eda821f80b3a40fc6bce397ac67539e"
+                    + "40042919a5e9af38c70881d092a8571f0e131f594c0e8d6b8"
+                    + "4ea116f0c95619439b0a267b35bc47dac72bbfb3d3776feb3"
+                    + "86d7d4f819b0248f52f60bf4371ab6384e37819a9685c27d8"
+                    + "e41abe30cd6f60905dd5c05c351ec0a1fcf9b99360161d2f3"
+                    + "4dcf6401829df9392121d88e2201d279200e25d750678af6a"
+                    + "7f4892a5c8d4a7358ec50cdf12cfa7652488f756ba6d07441"
+                    + "e9a27aad3976ac8a705ff796857cb2df9ce360c3992e0285b"
+                    + "34834255b06";
+    private static final String AES_GCM_FRAG_DECRYPTED_BODY_HEX_STRING =
+            "0fce6e996f4936ec8db8097339c371c686be75f4bed3f259c"
+                    + "14d39c3ad90cb864085c6375f75b724d9f9daa8e7b22a106a"
+                    + "488bc48c081997b7416fd33b146882e51ff6a640edf760212"
+                    + "7f2454d502e92262ba3dd07cff52ee1bb1ea85f582db41a68"
+                    + "aaf6dace362e5d8b10cfeb65eebc7572690e2c415a11cae57"
+                    + "020810cf7aa56d9f2d5c2be3a633f8e4c6af5483a2b1f05bd"
+                    + "4340ab551ddf7f51def57eaf5a37793ff6aa1e1ec288a2adf"
+                    + "a647c369f15efa61a619966a320f24e1765c0e00c5ed394aa"
+                    + "ef14512032b005827c000000090100000501";
+    private static final String AES_GCM_FRAG_ENCR_KEY =
+            "955ED949D6F18857220E97B17D9285C830A39F8D4DC46AB43943668093C62A3D66664F8C";
+
     private IkeNormalModeCipher mAesCbcCipher;
     private byte[] mAesCbcKey;
 
@@ -98,7 +136,16 @@ public final class IkeEncryptedPayloadBodyTest {
     private byte[] mIv;
     private byte[] mPadding;
 
-    // TODO: Add tests for authenticating and decrypting received message.
+    private IkeCombinedModeCipher mAesGcm16Cipher;
+
+    private byte[] mAesGcmMsgKey;
+    private byte[] mAesGcmMsg;
+    private byte[] mAesGcmUnencryptedData;
+
+    private byte[] mAesGcmFragKey;
+    private byte[] mAesGcmFragMsg;
+    private byte[] mAesGcmFragUnencryptedData;
+
     @Before
     public void setUp() throws Exception {
         mDataToPadAndEncrypt =
@@ -137,6 +184,24 @@ public final class IkeEncryptedPayloadBodyTest {
                         new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),
                         IkeMessage.getSecurityProvider());
         mHmacSha1IntegrityKey = TestUtils.hexStringToByteArray(INTE_KEY_FROM_INIT_TO_RESP);
+
+        mAesGcm16Cipher =
+                (IkeCombinedModeCipher)
+                        IkeCipher.create(
+                                new EncryptionTransform(
+                                        SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16,
+                                        SaProposal.KEY_LEN_AES_256),
+                                IkeMessage.getSecurityProvider());
+
+        mAesGcmMsgKey = TestUtils.hexStringToByteArray(AES_GCM_MSG_ENCR_KEY);
+        mAesGcmMsg = TestUtils.hexStringToByteArray(AES_GCM_MSG_HEX_STRING);
+        mAesGcmUnencryptedData =
+                TestUtils.hexStringToByteArray(AES_GCM_MSG_DECRYPTED_BODY_HEX_STRING);
+
+        mAesGcmFragKey = TestUtils.hexStringToByteArray(AES_GCM_FRAG_ENCR_KEY);
+        mAesGcmFragMsg = TestUtils.hexStringToByteArray(AES_GCM_FRAG_HEX_STRING);
+        mAesGcmFragUnencryptedData =
+                TestUtils.hexStringToByteArray(AES_GCM_FRAG_DECRYPTED_BODY_HEX_STRING);
     }
 
     @Test
@@ -267,5 +332,35 @@ public final class IkeEncryptedPayloadBodyTest {
                         TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_ENCR_KEY));
 
         assertArrayEquals(expectedDecryptedData, payloadBody.getUnencryptedData());
+    }
+
+    @Test
+    public void testAuthAndDecodeFullMsgWithAesGcm() throws Exception {
+        IkeEncryptedPayloadBody encryptedBody =
+                new IkeEncryptedPayloadBody(
+                        mAesGcmMsg,
+                        IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH,
+                        null /*integrityMac*/,
+                        mAesGcm16Cipher,
+                        null /*integrityKey*/,
+                        mAesGcmMsgKey);
+
+        assertArrayEquals(mAesGcmUnencryptedData, encryptedBody.getUnencryptedData());
+    }
+
+    @Test
+    public void testAuthAndDecodeFragMsgWithAesGcm() throws Exception {
+        IkeEncryptedPayloadBody encryptedBody =
+                new IkeEncryptedPayloadBody(
+                        mAesGcmFragMsg,
+                        IkeHeader.IKE_HEADER_LENGTH
+                                + IkePayload.GENERIC_HEADER_LENGTH
+                                + IkeSkfPayload.SKF_HEADER_LEN,
+                        null /*integrityMac*/,
+                        mAesGcm16Cipher,
+                        null /*integrityKey*/,
+                        mAesGcmFragKey);
+
+        assertArrayEquals(mAesGcmFragUnencryptedData, encryptedBody.getUnencryptedData());
     }
 }
