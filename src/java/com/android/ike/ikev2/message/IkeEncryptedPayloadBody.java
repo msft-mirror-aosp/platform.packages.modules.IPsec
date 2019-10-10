@@ -123,6 +123,7 @@ final class IkeEncryptedPayloadBody {
     IkeEncryptedPayloadBody(
             IkeHeader ikeHeader,
             @IkePayload.PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
             byte[] unencryptedPayloads,
             IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
@@ -131,6 +132,7 @@ final class IkeEncryptedPayloadBody {
         this(
                 ikeHeader,
                 firstPayloadType,
+                skfHeaderBytes,
                 unencryptedPayloads,
                 integrityMac,
                 encryptCipher,
@@ -145,6 +147,7 @@ final class IkeEncryptedPayloadBody {
     IkeEncryptedPayloadBody(
             IkeHeader ikeHeader,
             @IkePayload.PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
             byte[] unencryptedPayloads,
             IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
@@ -172,6 +175,7 @@ final class IkeEncryptedPayloadBody {
                     generateOutboundChecksum(
                             ikeHeader,
                             firstPayloadType,
+                            skfHeaderBytes,
                             integrityMac,
                             iv,
                             mEncryptedAndPaddedData,
@@ -192,44 +196,30 @@ final class IkeEncryptedPayloadBody {
     static byte[] generateOutboundChecksum(
             IkeHeader ikeHeader,
             @IkePayload.PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
             IkeMacIntegrity integrityMac,
             byte[] iv,
             byte[] encryptedAndPaddedData,
             byte[] integrityKey) {
-        // Build authenticated section using ByteBuffer. Authenticated section includes bytes from
-        // beginning of IKE header to the pad length, which are concatenation of IKE header, current
-        // payload header, iv and encrypted and padded data.
-        int dataToAuthenticateLength =
-                IkeHeader.IKE_HEADER_LENGTH
-                        + IkePayload.GENERIC_HEADER_LENGTH
+        // Length from encrypted payload header to the Pad Length field
+        int encryptedPayloadHeaderToPadLen =
+                IkePayload.GENERIC_HEADER_LENGTH
+                        + skfHeaderBytes.length
                         + iv.length
                         + encryptedAndPaddedData.length;
+
+        // Calculate length of authentication data and allocate ByteBuffer.
+        int dataToAuthenticateLength = IkeHeader.IKE_HEADER_LENGTH + encryptedPayloadHeaderToPadLen;
         ByteBuffer authenticatedSectionBuffer = ByteBuffer.allocate(dataToAuthenticateLength);
 
-        // Encode IKE header
-        int checksumLen = integrityMac.getChecksumLen();
-        int encryptedPayloadLength =
-                IkePayload.GENERIC_HEADER_LENGTH
-                        + iv.length
-                        + encryptedAndPaddedData.length
-                        + checksumLen;
+        // Build data to authenticate.
+        int encryptedPayloadLength = encryptedPayloadHeaderToPadLen + integrityMac.getChecksumLen();
         ikeHeader.encodeToByteBuffer(authenticatedSectionBuffer, encryptedPayloadLength);
-
-        // Encode payload header. The next payload type field indicates the first payload nested in
-        // this SkPayload/SkfPayload.
-        int payloadLength =
-                IkePayload.GENERIC_HEADER_LENGTH
-                        + iv.length
-                        + encryptedAndPaddedData.length
-                        + checksumLen;
         IkePayload.encodePayloadHeaderToByteBuffer(
-                firstPayloadType, payloadLength, authenticatedSectionBuffer);
-
-        // Encode iv and padded encrypted data.
-        authenticatedSectionBuffer.put(iv).put(encryptedAndPaddedData);
+                firstPayloadType, encryptedPayloadLength, authenticatedSectionBuffer);
+        authenticatedSectionBuffer.put(skfHeaderBytes).put(iv).put(encryptedAndPaddedData);
 
         // Calculate checksum
-
         return integrityMac.generateChecksum(integrityKey, authenticatedSectionBuffer.array());
     }
 

@@ -83,6 +83,36 @@ public final class IkeEncryptedPayloadBodyTest {
     private static final String HMAC_SHA1_3DES_MSG_INTE_KEY =
             "867a0bd019108db856cf6984fc9fb62d70c0de74";
 
+    // TODO: b/142753861 Test IKE fragment protected by AES_CBC instead of 3DES
+
+    // Test vectors for IKE fragment protected by HmacSha1 and 3DES
+    private static final String HMAC_SHA1_3DES_FRAG_HEX_STRING =
+            "939ae1251d18eb9077a99551b15c6e933520232000000001"
+                    + "000000c0000000a400050005fd7c7931705af184b7be76bb"
+                    + "d45a8ecbb3ffd58b9438b93f67e9fe86b06229f80e9b52d2"
+                    + "ff6afde3f2c13ae93ce55a801f62e1a818c9003880a36bbe"
+                    + "986fe6979ba233b9f4f0ddc992d06dbad5a2b998be18fae9"
+                    + "47e5ccfb37775d069344e711fbf499bb289cf4cca245bd45"
+                    + "0ad89d18689207759507ba18d47247e920b9e000a25a7596"
+                    + "e4130929e5cdc37d5c1b0d90bbaae946c260f4d3cf815f6d";
+    private static final String HMAC_SHA1_3DES_FRAG_DECRYPTED_BODY_HEX_STRING =
+            "54ebd95c572100002002000000000100040a0a0a01000300"
+                    + "040808080800030004080804042c00002c00000028020304"
+                    + "03cc86090a0300000c0100000c800e010003000008030000"
+                    + "0200000008050000002d00001801000000070000100000ff"
+                    + "ff0a0a0a010a0a0a010000001801000000070000100000ff"
+                    + "ff00000000ffffffff";
+    private static final String HMAC_SHA1_3DES_FRAG_IV = "fd7c7931705af184";
+    private static final String HMAC_SHA1_3DES_FRAG_PADDING = "dcf0fa5e2b64";
+
+    private static final int HMAC_SHA1_3DES_FRAGMENT_NUM = 5;
+    private static final int HMAC_SHA1_3DES_TOTAL_FRAGMENTS = 5;
+
+    private static final String HMAC_SHA1_3DES_FRAG_ENCR_KEY =
+            "6BBF6CB3526D6492F4DA0AF45E9B9FD3E1FF534280352073";
+    private static final String HMAC_SHA1_3DES_FRAG_INTE_KEY =
+            "293449E8E518060780B9C06F15838A06EEF57814";
+
     // Test vectors for IKE message protected by AES_GCM_16
     private static final String AES_GCM_MSG_HEX_STRING =
             "77c708b4523e39a471dc683c1d4f21362e20230800000005"
@@ -136,6 +166,8 @@ public final class IkeEncryptedPayloadBodyTest {
     private byte[] mIv;
     private byte[] mPadding;
 
+    private IkeNormalModeCipher m3DesCipher;
+
     private IkeCombinedModeCipher mAesGcm16Cipher;
 
     private byte[] mAesGcmMsgKey;
@@ -169,6 +201,12 @@ public final class IkeEncryptedPayloadBodyTest {
         mChecksum = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_CHECKSUM);
         mIv = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_IV);
         mPadding = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_PADDING);
+
+        m3DesCipher =
+                (IkeNormalModeCipher)
+                        IkeCipher.create(
+                                new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES),
+                                IkeMessage.getSecurityProvider());
 
         mAesCbcCipher =
                 (IkeNormalModeCipher)
@@ -282,6 +320,7 @@ public final class IkeEncryptedPayloadBodyTest {
                 new IkeEncryptedPayloadBody(
                         ikeHeader,
                         IkePayload.PAYLOAD_TYPE_ID_INITIATOR,
+                        new byte[0] /*skfHeader*/,
                         mDataToPadAndEncrypt,
                         mHmacSha1IntegrityMac,
                         mAesCbcCipher,
@@ -317,21 +356,50 @@ public final class IkeEncryptedPayloadBodyTest {
         byte[] message = TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_HEX_STRING);
         byte[] expectedDecryptedData =
                 TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_DECRYPTED_BODY_HEX_STRING);
-        IkeCipher tripleDesCipher =
-                IkeCipher.create(
-                        new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES),
-                        IkeMessage.getSecurityProvider());
 
         IkeEncryptedPayloadBody payloadBody =
                 new IkeEncryptedPayloadBody(
                         message,
                         IkeHeader.IKE_HEADER_LENGTH + IkePayload.GENERIC_HEADER_LENGTH,
                         mHmacSha1IntegrityMac,
-                        tripleDesCipher,
+                        m3DesCipher,
                         TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_INTE_KEY),
                         TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_MSG_ENCR_KEY));
 
         assertArrayEquals(expectedDecryptedData, payloadBody.getUnencryptedData());
+    }
+
+    @Test
+    public void testBuildAndEncodeWithHmacSha13Des() throws Exception {
+        byte[] message = TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_FRAG_HEX_STRING);
+        IkeHeader ikeHeader = new IkeHeader(message);
+
+        byte[] skfHeaderBytes =
+                IkeSkfPayload.encodeSkfHeader(
+                        HMAC_SHA1_3DES_FRAGMENT_NUM, HMAC_SHA1_3DES_TOTAL_FRAGMENTS);
+
+        IkeEncryptedPayloadBody payloadBody =
+                new IkeEncryptedPayloadBody(
+                        ikeHeader,
+                        IkePayload.PAYLOAD_TYPE_NO_NEXT,
+                        skfHeaderBytes,
+                        TestUtils.hexStringToByteArray(
+                                HMAC_SHA1_3DES_FRAG_DECRYPTED_BODY_HEX_STRING),
+                        mHmacSha1IntegrityMac,
+                        m3DesCipher,
+                        TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_FRAG_INTE_KEY),
+                        TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_FRAG_ENCR_KEY),
+                        TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_FRAG_IV),
+                        TestUtils.hexStringToByteArray(HMAC_SHA1_3DES_FRAG_PADDING));
+
+        int encryptedBodyOffset =
+                IkeHeader.IKE_HEADER_LENGTH
+                        + IkePayload.GENERIC_HEADER_LENGTH
+                        + IkeSkfPayload.SKF_HEADER_LEN;
+        byte[] expectedEncodedData =
+                Arrays.copyOfRange(message, encryptedBodyOffset, message.length);
+
+        assertArrayEquals(expectedEncodedData, payloadBody.encode());
     }
 
     @Test
