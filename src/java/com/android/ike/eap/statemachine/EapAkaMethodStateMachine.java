@@ -66,6 +66,7 @@ import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -215,7 +216,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                                 "IMSI for subId (" + mEapUiccConfig.subId + ") not available"));
             }
             String identityString = "0" + imsi;
-            mIdentity = identityString.getBytes();
+            mIdentity = identityString.getBytes(StandardCharsets.US_ASCII);
             LOG.d(mTAG, "EAP-AKA/Identity=" + LOG.pii(identityString));
 
             AtIdentity atIdentity;
