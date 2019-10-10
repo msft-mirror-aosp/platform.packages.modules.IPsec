@@ -81,17 +81,22 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
     @VisibleForTesting boolean mHasReceivedSimAkaNotification = false;
 
     final TelephonyManager mTelephonyManager;
+    final byte[] mEapIdentity;
     final EapUiccConfig mEapUiccConfig;
 
     @VisibleForTesting Mac mMacAlgorithm;
 
-    EapSimAkaMethodStateMachine(TelephonyManager telephonyManager, EapUiccConfig eapUiccConfig) {
+    EapSimAkaMethodStateMachine(
+            TelephonyManager telephonyManager, byte[] eapIdentity, EapUiccConfig eapUiccConfig) {
         if (telephonyManager == null) {
             throw new IllegalArgumentException("TelephonyManager must be non-null");
+        } else if (eapIdentity == null) {
+            throw new IllegalArgumentException("EapIdentity must be non-null");
         } else if (eapUiccConfig == null) {
             throw new IllegalArgumentException("EapUiccConfig must be non-null");
         }
         this.mTelephonyManager = telephonyManager;
+        this.mEapIdentity = eapIdentity;
         this.mEapUiccConfig = eapUiccConfig;
 
         LOG.d(
