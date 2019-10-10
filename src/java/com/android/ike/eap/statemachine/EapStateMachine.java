@@ -321,10 +321,12 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 case EAP_TYPE_SIM:
                     EapSimConfig eapSimConfig = (EapSimConfig) eapMethodConfig;
-                    return new EapSimMethodStateMachine(mContext, eapSimConfig, mSecureRandom);
+                    return new EapSimMethodStateMachine(
+                            mContext, mEapSessionConfig.eapIdentity, eapSimConfig, mSecureRandom);
                 case EAP_TYPE_AKA:
                     EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
-                    return new EapAkaMethodStateMachine(mContext, eapAkaConfig);
+                    return new EapAkaMethodStateMachine(
+                            mContext, mEapSessionConfig.eapIdentity, eapAkaConfig);
                 case EAP_TYPE_MSCHAP_V2:
                     EapMsChapV2Config eapMsChapV2Config = (EapMsChapV2Config) eapMethodConfig;
                     return new EapMsChapV2MethodStateMachine(eapMsChapV2Config, mSecureRandom);

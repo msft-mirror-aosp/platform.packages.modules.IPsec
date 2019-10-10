@@ -98,9 +98,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
     private final EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
 
-    EapAkaMethodStateMachine(Context context, EapAkaConfig eapAkaConfig) {
+    EapAkaMethodStateMachine(Context context, byte[] eapIdentity, EapAkaConfig eapAkaConfig) {
         this(
                 (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE),
+                eapIdentity,
                 eapAkaConfig,
                 EapAkaTypeData.getEapAkaTypeDataDecoder());
     }
@@ -108,9 +109,13 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
     @VisibleForTesting
     protected EapAkaMethodStateMachine(
             TelephonyManager telephonyManager,
+            byte[] eapIdentity,
             EapAkaConfig eapAkaConfig,
             EapAkaTypeDataDecoder eapAkaTypeDataDecoder) {
-        super(telephonyManager.createForSubscriptionId(eapAkaConfig.subId), eapAkaConfig);
+        super(
+                telephonyManager.createForSubscriptionId(eapAkaConfig.subId),
+                eapIdentity,
+                eapAkaConfig);
         mEapAkaTypeDataDecoder = eapAkaTypeDataDecoder;
 
         transitionTo(new CreatedState());
@@ -261,7 +266,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final String mTAG = ChallengeState.class.getSimpleName();
 
         @VisibleForTesting boolean mHadSuccessfulChallenge = false;
-        private final byte[] mIdentity;
+        @VisibleForTesting final byte[] mIdentity;
 
         // IK and CK lengths defined as 16B (RFC 4187#1)
         private final int mIkLenBytes = 16;
@@ -272,8 +277,8 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final byte mSynchronization = (byte) 0xDC;
 
         ChallengeState() {
-            // TODO(b/140173530): replace with EAP-Identity
-            this(new byte[0]);
+            // use the EAP-Identity for the default value (RFC 4187#7)
+            this(mEapIdentity);
         }
 
         ChallengeState(byte[] identity) {
