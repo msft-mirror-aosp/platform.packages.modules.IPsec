@@ -19,7 +19,6 @@ package com.android.ike.eap;
 import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -108,7 +107,7 @@ public class EapMsChapV2Test extends EapMethodEndToEndTest {
     public void testEapMsChapV2EndToEndSuccess() {
         verifyEapMsChapV2Challenge();
         verifyEapMsChapV2SuccessRequest();
-        verifyEapSuccess();
+        verifyEapSuccess(MSK, new byte[0]);
     }
 
     @Test
@@ -129,7 +128,7 @@ public class EapMsChapV2Test extends EapMethodEndToEndTest {
 
         verifyEapMsChapV2Challenge();
         verifyEapMsChapV2SuccessRequest();
-        verifyEapSuccess();
+        verifyEapSuccess(MSK, new byte[0]);
     }
 
     @Test
@@ -142,7 +141,7 @@ public class EapMsChapV2Test extends EapMethodEndToEndTest {
         verifyEapMsChapV2SuccessRequest();
         verifyEapNotification(3);
 
-        verifyEapSuccess();
+        verifyEapSuccess(MSK, new byte[0]);
     }
 
     private void verifyEapMsChapV2Challenge() {
@@ -165,14 +164,6 @@ public class EapMsChapV2Test extends EapMethodEndToEndTest {
         mTestLooper.dispatchAll();
 
         verify(mMockCallback).onResponse(eq(EAP_MSCHAP_V2_SUCCESS_RESPONSE));
-        verifyNoMoreInteractions(mMockCallback);
-    }
-
-    private void verifyEapSuccess() {
-        mEapAuthenticator.processEapMessage(EAP_SUCCESS);
-        mTestLooper.dispatchAll();
-
-        verify(mMockCallback).onSuccess(eq(MSK), eq(new byte[0]));
         verifyNoMoreInteractions(mMockCallback);
     }
 
