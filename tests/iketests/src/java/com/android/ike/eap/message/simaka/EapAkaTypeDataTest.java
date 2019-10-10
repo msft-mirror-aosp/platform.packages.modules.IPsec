@@ -27,6 +27,8 @@ import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RES;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RES_BYTES;
 
+import static junit.framework.TestCase.fail;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -41,12 +43,14 @@ import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map.Entry;
 
 public class EapAkaTypeDataTest {
     private static final int UNABLE_TO_PROCESS_CODE = 0;
+    private static final int INVALID_SUBTYPE_INT = -1;
 
     private EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
 
@@ -93,5 +97,23 @@ public class EapAkaTypeDataTest {
 
         byte[] result = eapAkaTypeData.encode();
         assertArrayEquals(EAP_AKA_IDENTITY_REQUEST, result);
+    }
+
+    @Test
+    public void testConstructorInvalidSubtype() throws Exception {
+        try {
+            new EapAkaTypeData(INVALID_SUBTYPE_INT, Arrays.asList(new AtAnyIdReq()));
+            fail("Expected IllegalArgumentException for invalid subtype");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testConstructorDuplicateAttributes() throws Exception {
+        try {
+            new EapAkaTypeData(EAP_AKA_IDENTITY, Arrays.asList(new AtAnyIdReq(), new AtAnyIdReq()));
+            fail("Expected IllegalArgumentException for duplicate attributes");
+        } catch (IllegalArgumentException expected) {
+        }
     }
 }

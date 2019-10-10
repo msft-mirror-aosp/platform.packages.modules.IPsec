@@ -32,6 +32,8 @@ import java.util.Set;
  * EapAkaTypeData represents the Type Data for an {@link EapMessage} during an EAP-AKA session.
  */
 public class EapAkaTypeData extends EapSimAkaTypeData {
+    private static final String TAG = EapAkaTypeData.class.getSimpleName();
+
     // EAP-AKA Subtype values defined by IANA
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
     public static final int EAP_AKA_CHALLENGE = 1;
@@ -80,8 +82,15 @@ public class EapAkaTypeData extends EapSimAkaTypeData {
     public EapAkaTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
         super(eapSubtype, new LinkedHashMap<>());
 
+        if (!SUPPORTED_SUBTYPES.contains(eapSubtype)) {
+            throw new IllegalArgumentException("Invalid subtype for EAP-AKA: " + eapSubtype);
+        }
+
         for (EapSimAkaAttribute attribute : attributes) {
-            // TODO(b/139805493): check for duplicate attributes
+            if (attributeMap.containsKey(attribute.attributeType)) {
+                throw new IllegalArgumentException(
+                        "Duplicate attribute in attributes: " + attribute.attributeType);
+            }
             attributeMap.put(attribute.attributeType, attribute);
         }
     }
