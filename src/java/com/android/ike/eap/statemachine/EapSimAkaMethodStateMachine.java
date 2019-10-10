@@ -93,6 +93,12 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
         }
         this.mTelephonyManager = telephonyManager;
         this.mEapUiccConfig = eapUiccConfig;
+
+        LOG.d(
+                this.getClass().getSimpleName(),
+                mEapUiccConfig.getClass().getSimpleName() + ":"
+                        + " subId=" + mEapUiccConfig.subId
+                        + " apptype=" + mEapUiccConfig.apptype);
     }
 
     @Override
@@ -196,10 +202,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
             LOG.e(
                     tag,
                     "Received message with invalid Mac."
-                            + " expected="
-                            + Arrays.toString(mac)
-                            + ", actual="
-                            + Arrays.toString(atMac.mac));
+                            + " expected=" + Log.byteArrayToHexString(mac)
+                            + ", actual=" + Log.byteArrayToHexString(atMac.mac));
         }
 
         return isValidMac;
@@ -260,7 +264,10 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
 
     @VisibleForTesting
     EapResult handleEapSimAkaNotification(
-            boolean isPreChallengeState, int identifier, EapSimAkaTypeData eapSimAkaTypeData) {
+            String tag,
+            boolean isPreChallengeState,
+            int identifier,
+            EapSimAkaTypeData eapSimAkaTypeData) {
         // EAP-SIM exchanges must not include more than one EAP-SIM notification round
         // (RFC 4186#6.1, RFC 4187#6.1)
         if (mHasReceivedSimAkaNotification) {
@@ -271,6 +278,13 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
         mHasReceivedSimAkaNotification = true;
         AtNotification atNotification =
                 (AtNotification) eapSimAkaTypeData.attributeMap.get(EAP_AT_NOTIFICATION);
+
+        LOG.d(
+                tag,
+                "Received AtNotification:"
+                        + " S=" + (atNotification.isSuccessCode ? "1" : "0")
+                        + " P=" + (atNotification.isPreSuccessfulChallenge ? "1" : "0")
+                        + " Code=" + atNotification.notificationCode);
 
         // P bit of notification code is only allowed after a successful challenge round. This is
         // only possible in the ChallengeState (RFC 4186#6.1, RFC 4187#6.1)
