@@ -69,6 +69,8 @@ public class EapTestMessageDefinitions {
     // EAP-SIM response containing SELECTED_VERSION (1) and IDENTITY attributes
     public static final byte[] EAP_SIM_RESPONSE_PACKET = hexStringToByteArray(
             "02" + ID + "0024120A0000100100010E060011" + IDENTITY_STRING + "000000");
+    public static final byte[] EAP_SIM_RESPONSE_WITHOUT_IDENTITY =
+            hexStringToByteArray("02" + ID + "0020120A000007050000" + NONCE_MT_STRING + "10010001");
     public static final byte[] EAP_SIM_NOTIFICATION_RESPONSE = hexStringToByteArray(
             "02" + ID + "0008120C0000");
     public static final byte[] EAP_AKA_NOTIFICATION_RESPONSE =

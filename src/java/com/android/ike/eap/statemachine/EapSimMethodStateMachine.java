@@ -96,9 +96,13 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
     private final EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
     EapSimMethodStateMachine(
-            Context context, EapSimConfig eapSimConfig, SecureRandom secureRandom) {
+            Context context,
+            byte[] eapIdentity,
+            EapSimConfig eapSimConfig,
+            SecureRandom secureRandom) {
         this(
                 (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE),
+                eapIdentity,
                 eapSimConfig,
                 secureRandom,
                 EapSimTypeData.getEapSimTypeDataDecoder());
@@ -107,10 +111,14 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
     @VisibleForTesting
     EapSimMethodStateMachine(
             TelephonyManager telephonyManager,
+            byte[] eapIdentity,
             EapSimConfig eapSimConfig,
             SecureRandom secureRandom,
             EapSimTypeDataDecoder eapSimTypeDataDecoder) {
-        super(telephonyManager.createForSubscriptionId(eapSimConfig.subId), eapSimConfig);
+        super(
+                telephonyManager.createForSubscriptionId(eapSimConfig.subId),
+                eapIdentity,
+                eapSimConfig);
 
         if (eapSimTypeDataDecoder == null) {
             throw new IllegalArgumentException("EapSimTypeDataDecoder must be non-null");
@@ -180,7 +188,9 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final AtNonceMt mAtNonceMt;
 
         private List<Integer> mVersions;
-        @VisibleForTesting byte[] mIdentity;
+
+        // use the EAP-Identity for the default value (RFC 4186#7)
+        @VisibleForTesting byte[] mIdentity = mEapIdentity;
 
         protected StartState(AtNonceMt atNonceMt) {
             this.mAtNonceMt = atNonceMt;
@@ -348,7 +358,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         private final List<Integer> mVersions;
         private final byte[] mNonce;
-        private final byte[] mIdentity;
+        @VisibleForTesting final byte[] mIdentity;
 
         protected ChallengeState(List<Integer> versions, AtNonceMt atNonceMt, byte[] identity) {
             mVersions = versions;
