@@ -67,6 +67,8 @@ import java.security.SecureRandom;
  *
  */
 public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
+    private static final String TAG = EapStateMachine.class.getSimpleName();
+
     private final Context mContext;
     private final EapSessionConfig mEapSessionConfig;
     private final SecureRandom mSecureRandom;
@@ -78,6 +80,13 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         this.mContext = context;
         this.mEapSessionConfig = eapSessionConfig;
         this.mSecureRandom = secureRandom;
+
+        LOG.d(
+                TAG,
+                "Starting EapStateMachine with EAP-Identity="
+                        + LOG.pii(eapSessionConfig.eapIdentity)
+                        + " and configs=" + eapSessionConfig.eapConfigs.keySet());
+
         transitionTo(new CreatedState());
     }
 
@@ -88,6 +97,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
     @VisibleForTesting
     protected void transitionTo(EapState newState) {
+        LOG.d(
+                TAG,
+                "Transitioning from " + mState.getClass().getSimpleName()
+                        + " to " + newState.getClass().getSimpleName());
         super.transitionTo(newState);
     }
 
@@ -110,8 +123,12 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 EapMessage eapMessage = EapMessage.decode(packet);
 
                 // Log inbound message in the format "EAP-<Code>/<Type>"
-                String eapDataString = (eapMessage.eapData == null) ? "" :
-                        "/" + EAP_TYPE_STRING.getOrDefault(eapMessage.eapData.eapType, "UNKNOWN");
+                String eapDataString =
+                        (eapMessage.eapData == null)
+                                ? ""
+                                : "/" + EAP_TYPE_STRING.getOrDefault(
+                                        eapMessage.eapData.eapType,
+                                        "UNKNOWN (" + eapMessage.eapData.eapType + ")");
                 String msg = "Decoded message: EAP-"
                         + EAP_CODE_STRING.getOrDefault(eapMessage.eapCode, "UNKNOWN")
                         + eapDataString;
@@ -166,9 +183,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
-                EapResult result = decodeResult.eapResult;
-                LOG.i(mTAG, "Returning " + result.getClass().getSimpleName());
-                return result;
+                return decodeResult.eapResult;
             }
             EapMessage message = decodeResult.eapMessage;
 
@@ -199,9 +214,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
-                EapResult result = decodeResult.eapResult;
-                LOG.i(mTAG, "Returning " + result.getClass().getSimpleName());
-                return result;
+                return decodeResult.eapResult;
             }
             EapMessage message = decodeResult.eapMessage;
 
@@ -252,9 +265,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         public EapResult process(@NonNull byte[] packet) {
             DecodeResult decodeResult = decode(packet);
             if (!decodeResult.isValidEapMessage()) {
-                EapResult result = decodeResult.eapResult;
-                LOG.i(mTAG, "Returning " + result.getClass().getSimpleName());
-                return result;
+                return decodeResult.eapResult;
             }
             EapMessage eapMessage = decodeResult.eapMessage;
 
@@ -298,7 +309,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         private EapMethodStateMachine buildEapMethodStateMachine(@EapMethod int eapType) {
             EapMethodConfig eapMethodConfig = mEapSessionConfig.eapConfigs.get(eapType);
             if (eapMethodConfig == null) {
-                // no configs available for selected method
+                LOG.e(
+                        mTAG,
+                        "No configs provided for method: "
+                                + EAP_TYPE_STRING.getOrDefault(
+                                        eapType, "Unknown (" + eapType + ")"));
                 return null;
             }
 

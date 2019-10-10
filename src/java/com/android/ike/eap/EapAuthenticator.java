@@ -147,9 +147,18 @@ public class EapAuthenticator extends Handler {
                                     if (finalProcessResponse instanceof EapResponse) {
                                         mCb.onResponse(((EapResponse) finalProcessResponse).packet);
                                     } else if (finalProcessResponse instanceof EapError) {
-                                        mCb.onError(((EapError) finalProcessResponse).cause);
+                                        EapError eapError = (EapError) finalProcessResponse;
+                                        LOG.e(
+                                                TAG,
+                                                "EapError returned with cause=" + eapError.cause);
+                                        mCb.onError(eapError.cause);
                                     } else if (finalProcessResponse instanceof EapSuccess) {
                                         EapSuccess eapSuccess = (EapSuccess) finalProcessResponse;
+                                        LOG.d(
+                                                TAG,
+                                                "EapSuccess with"
+                                                        + " MSK=" + LOG.pii(eapSuccess.msk)
+                                                        + " EMSK=" + LOG.pii(eapSuccess.msk));
                                         mCb.onSuccess(eapSuccess.msk, eapSuccess.emsk);
                                     } else { // finalProcessResponse instanceof EapFailure
                                         mCb.onFail();
