@@ -22,6 +22,7 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_IDENTITY;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_RESPONSE_WITHOUT_IDENTITY;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.IMSI;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
@@ -30,12 +31,17 @@ import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IV;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_START;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -43,6 +49,7 @@ import static org.mockito.Mockito.when;
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
+import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.message.EapData;
@@ -51,12 +58,15 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAnyIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNonceMt;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
 import com.android.ike.eap.statemachine.EapMethodStateMachine.FinalState;
+import com.android.ike.eap.statemachine.EapSimMethodStateMachine.ChallengeState;
 import com.android.ike.eap.statemachine.EapSimMethodStateMachine.StartState;
+import com.android.ike.utils.Log;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -72,7 +82,15 @@ public class EapSimStartStateTest extends EapSimStateTest {
     @Before
     public void setUp() {
         super.setUp();
-        mStartState = mEapSimMethodStateMachine.new StartState(null);
+
+        AtNonceMt atNonceMt = null;
+        try {
+            atNonceMt = new AtNonceMt(NONCE_MT);
+        } catch (Exception e) {
+            fail("Failed to create AtNonceMt attribute in setUp()");
+        }
+
+        mStartState = mEapSimMethodStateMachine.new StartState(atNonceMt);
         mEapSimMethodStateMachine.transitionTo(mStartState);
 
         mAttributes = new LinkedHashMap<>();
@@ -192,5 +210,45 @@ public class EapSimStartStateTest extends EapSimStateTest {
         AtIdentity atIdentity = mStartState.getIdentityResponse(eapSimTypeData);
         assertNull(atIdentity);
         verifyNoMoreInteractions(mMockTelephonyManager);
+    }
+
+    @Test
+    public void testProcessWithoutIdentityRequest() throws Exception {
+        EapMessage eapMessage =
+                new EapMessage(
+                        EAP_CODE_REQUEST, ID_INT, new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA));
+
+        // Send EAP-SIM/Start message without Identity request
+        mAttributes.put(EAP_AT_VERSION_LIST, new AtVersionList(8, 1));
+        DecodeResult eapSimStartDecodeResult =
+                new DecodeResult(new EapSimTypeData(EAP_SIM_START, mAttributes));
+        when(mMockEapSimTypeDataDecoder.decode(DUMMY_EAP_TYPE_DATA))
+                .thenReturn(eapSimStartDecodeResult);
+
+        EapResult result = mEapSimMethodStateMachine.process(eapMessage);
+        EapResponse eapResponse = (EapResponse) result;
+        assertArrayEquals(
+                Log.byteArrayToHexString(eapResponse.packet),
+                EAP_SIM_RESPONSE_WITHOUT_IDENTITY,
+                eapResponse.packet);
+
+        verify(mMockEapSimTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+
+        // Send EAP-SIM/Challenge message
+        DecodeResult eapSimChallengeDecodeResult =
+                new DecodeResult(new EapSimTypeData(EAP_SIM_CHALLENGE, new LinkedHashMap<>()));
+        when(mMockEapSimTypeDataDecoder.decode(DUMMY_EAP_TYPE_DATA))
+                .thenReturn(eapSimChallengeDecodeResult);
+
+        // We only care about the transition to ChallengeState - the response doesn't matter
+        mEapSimMethodStateMachine.process(eapMessage);
+        ChallengeState challengeState = (ChallengeState) mEapSimMethodStateMachine.getState();
+        assertArrayEquals(EAP_IDENTITY_BYTES, challengeState.mIdentity);
+
+        // verify decode called 3x times:
+        // 1. decode in EAP-SIM/Start test above
+        // 2. decode in EAP-SIM/Challenge test for StartState
+        // 3. decode in EAP-SIM/Challenge test for ChallengeState
+        verify(mMockEapSimTypeDataDecoder, times(3)).decode(eq(DUMMY_EAP_TYPE_DATA));
     }
 }
