@@ -230,4 +230,19 @@ public final class IkeNotifyPayloadTest {
         } catch (IllegalArgumentException expected) {
         }
     }
+
+    @Test
+    public void testGetNotifyTypeString() throws Exception {
+        IkeNotifyPayload payload = new IkeNotifyPayload(ERROR_TYPE_AUTHENTICATION_FAILED);
+
+        assertEquals("Notify(Authentication failed)", payload.getTypeString());
+    }
+
+    @Test
+    public void testGetNotifyTypeStringForUnrecoginizedNotify() throws Exception {
+        int unrecognizedType = 0;
+        IkeNotifyPayload payload = new IkeNotifyPayload(unrecognizedType);
+
+        assertEquals("Notify(0)", payload.getTypeString());
+    }
 }

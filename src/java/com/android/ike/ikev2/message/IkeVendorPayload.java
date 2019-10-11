@@ -71,6 +71,6 @@ public final class IkeVendorPayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "Vendor ID Payload";
+        return "Vendor";
     }
 }

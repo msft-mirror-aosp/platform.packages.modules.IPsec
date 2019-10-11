@@ -14,32 +14,29 @@
  * limitations under the License.
  */
 
-package com.android.ike.eap.exceptions.simaka;
-
-import android.telephony.TelephonyManager;
+package com.android.ike.eap.exceptions.mschapv2;
 
 /**
- * EapSimInvalidLengthException is thrown when
- * {@link TelephonyManager#getIccAuthentication(int, int, String)} returns responses with the wrong
- * lengths.
+ * EapMsChapV2ParsingException is thrown when an invalid MS-CHAPv2 Type Data is attempted to be
+ * processed.
  */
-public class EapSimInvalidLengthException extends Exception {
+public class EapMsChapV2ParsingException extends Exception {
     /**
-     * Construct an instance of EapSimInvalidLengthException with the specified detail message.
+     * Construct an instance of EapMsChapV2ParsingException with the specified detail message.
      *
      * @param message the detail message.
      */
-    public EapSimInvalidLengthException(String message) {
+    public EapMsChapV2ParsingException(String message) {
         super(message);
     }
 
     /**
-     * Construct an instance of EapSimInvalidLengthException with the specified message and cause.
+     * Construct an instance of EapMsChapV2ParsingException with the specified message and cause.
      *
      * @param message the detail message.
      * @param cause the cause.
      */
-    public EapSimInvalidLengthException(String message, Throwable cause) {
+    public EapMsChapV2ParsingException(String message, Throwable cause) {
         super(message, cause);
     }
 }

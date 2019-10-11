@@ -22,6 +22,7 @@ import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -33,7 +34,7 @@ import java.security.GeneralSecurityException;
  *     Version 2 (IKEv2) Message Fragmentation</a>
  */
 public final class IkeSkfPayload extends IkeSkPayload {
-    private static final int SKF_HEADER_LEN = 4;
+    public static final int SKF_HEADER_LEN = 4;
 
     /** Current Fragment message number, starting from 1 */
     public final int fragmentNum;
@@ -51,7 +52,7 @@ public final class IkeSkfPayload extends IkeSkPayload {
      * @param integrityMac the negotiated integrity algorithm.
      * @param decryptCipher the negotiated encryption algorithm.
      * @param integrityKey the negotiated integrity algorithm key.
-     * @param decryptKey the negotiated decryption key.
+     * @param decryptionKey the negotiated decryption key.
      */
     IkeSkfPayload(
             boolean critical,
@@ -59,7 +60,7 @@ public final class IkeSkfPayload extends IkeSkPayload {
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher decryptCipher,
             byte[] integrityKey,
-            byte[] decryptKey)
+            byte[] decryptionKey)
             throws IkeProtocolException, GeneralSecurityException {
         super(
                 true /*isSkf*/,
@@ -69,7 +70,7 @@ public final class IkeSkfPayload extends IkeSkPayload {
                 integrityMac,
                 decryptCipher,
                 integrityKey,
-                decryptKey);
+                decryptionKey);
 
         // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
@@ -88,9 +89,72 @@ public final class IkeSkfPayload extends IkeSkPayload {
         }
     }
 
-    // TODO: Support constructing outbound SKF Payload.
+    /**
+     * Construct an instance of IkeSkfPayload for building outbound packet.
+     *
+     * @param ikeHeader the IKE header.
+     * @param firstPayloadType the type of first payload nested in SkPayload.
+     * @param unencryptedPayloads the encoded payload list to protect.
+     * @param integrityMac the negotiated integrity algorithm.
+     * @param encryptCipher the negotiated encryption algorithm.
+     * @param integrityKey the negotiated integrity algorithm key.
+     * @param encryptionKey the negotiated encryption key.
+     */
+    IkeSkfPayload(
+            IkeHeader ikeHeader,
+            @PayloadType int firstPayloadType,
+            byte[] unencryptedPayloads,
+            @Nullable IkeMacIntegrity integrityMac,
+            IkeCipher encryptCipher,
+            byte[] integrityKey,
+            byte[] encryptionKey,
+            int fragNum,
+            int totalFrags) {
+        super(
+                true /*isSkf*/,
+                ikeHeader,
+                firstPayloadType,
+                unencryptedPayloads,
+                integrityMac,
+                encryptCipher,
+                integrityKey,
+                encryptionKey);
+        fragmentNum = fragNum;
+        totalFragments = totalFrags;
+    }
 
-    // TODO: Override encodeToByteBuffer and getPayloadLength
+    /** Construct an instance of IkeSkfPayload for testing. */
+    @VisibleForTesting
+    IkeSkfPayload(IkeEncryptedPayloadBody encryptedPayloadBody, int fragNum, int totalFrags) {
+        super(true /*isSkf*/, encryptedPayloadBody);
+        fragmentNum = fragNum;
+        totalFragments = totalFrags;
+    }
+
+    /**
+     * Encode this payload to a ByteBuffer.
+     *
+     * @param nextPayload type of payload that follows this payload.
+     * @param byteBuffer destination ByteBuffer that stores encoded payload.
+     */
+    @Override
+    protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+        byteBuffer
+                .putShort((short) fragmentNum)
+                .putShort((short) totalFragments)
+                .put(mIkeEncryptedPayloadBody.encode());
+    }
+
+    /**
+     * Get entire payload length.
+     *
+     * @return entire payload length.
+     */
+    @Override
+    protected int getPayloadLength() {
+        return GENERIC_HEADER_LENGTH + SKF_HEADER_LEN + mIkeEncryptedPayloadBody.getLength();
+    }
 
     /**
      * Return the payload type as a String.
@@ -99,6 +163,6 @@ public final class IkeSkfPayload extends IkeSkPayload {
      */
     @Override
     public String getTypeString() {
-        return "Encrypted and Authenticated Fragment Payload";
+        return "SKF";
     }
 }

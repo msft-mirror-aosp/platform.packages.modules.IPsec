@@ -20,16 +20,17 @@ import static android.system.OsConstants.F_SETFL;
 import static android.system.OsConstants.SOCK_DGRAM;
 import static android.system.OsConstants.SOCK_NONBLOCK;
 
+import static com.android.ike.ikev2.IkeManager.getIkeLog;
+
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
-import android.util.Log;
 import android.util.LongSparseArray;
 
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeHeader;
-import com.android.ike.utils.PacketReader;
+import com.android.ike.ikev2.utils.PacketReader;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
@@ -155,10 +156,6 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
     static final class PacketReceiver implements IPacketReceiver {
         public void handlePacket(
                 byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession) {
-            // TODO: b/129708574 Consider only logging the error some % of the time it happens, or
-            // only logging the error the first time it happens and then keep a count to prevent
-            // logspam.
-
             ByteBuffer byteBuffer = ByteBuffer.wrap(recvbuf);
 
             // Check the existence of the Non-ESP Marker. A received packet can be either an IKE
@@ -168,7 +165,7 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
             byteBuffer.get(espMarker);
             if (!Arrays.equals(NON_ESP_MARKER, espMarker)) {
                 // Drop the received ESP packet.
-                Log.e(TAG, "Receive an ESP packet.");
+                getIkeLog().e(TAG, "Receive an ESP packet.");
                 return;
             }
 
@@ -177,6 +174,11 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
                 // IKE SPI.
                 byte[] ikePacketBytes = new byte[byteBuffer.remaining()];
                 byteBuffer.get(ikePacketBytes);
+
+                // TODO: Retrieve and log the source address
+                getIkeLog().d(TAG, "Receive packet of " + ikePacketBytes.length + " bytes)");
+                getIkeLog().d(TAG, getIkeLog().pii(ikePacketBytes));
+
                 IkeHeader ikeHeader = new IkeHeader(ikePacketBytes);
 
                 long localGeneratedSpi =
@@ -186,14 +188,14 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
 
                 IkeSessionStateMachine ikeStateMachine = spiToIkeSession.get(localGeneratedSpi);
                 if (ikeStateMachine == null) {
-                    Log.e(TAG, "Unrecognized IKE SPI.");
+                    getIkeLog().w(TAG, "Unrecognized IKE SPI.");
                     // TODO: Handle invalid IKE SPI error
                 } else {
                     ikeStateMachine.receiveIkePacket(ikeHeader, ikePacketBytes);
                 }
             } catch (IkeProtocolException e) {
                 // Handle invalid IKE header
-                Log.e(TAG, "Can't parse malformed IKE packet header.");
+                getIkeLog().i(TAG, "Can't parse malformed IKE packet header.");
             }
         }
     }
@@ -220,6 +222,14 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
      * @param serverAddress IP address of remote server
      */
     public void sendIkePacket(byte[] ikePacket, InetAddress serverAddress) {
+        getIkeLog()
+                .d(
+                        TAG,
+                        "Send packet to "
+                                + serverAddress.getHostAddress()
+                                + "( "
+                                + ikePacket.length
+                                + " bytes)");
         try {
             ByteBuffer buffer = ByteBuffer.allocate(NON_ESP_MARKER_LEN + ikePacket.length);
 

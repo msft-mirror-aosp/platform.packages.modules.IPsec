@@ -51,6 +51,7 @@ import com.android.ike.ikev2.message.IkeMessage;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
+import com.android.ike.ikev2.testutils.MockIpSecTestUtils;
 import com.android.server.IpSecService;
 
 import libcore.net.InetAddressUtils;
@@ -252,8 +253,8 @@ public final class SaRecordTest {
 
         byte[] initAuthKey = TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_INIT_HEX_STRING);
         byte[] respAuthKey = TestUtils.hexStringToByteArray(FIRST_CHILD_AUTH_RESP_HEX_STRING);
-        byte[] initEncryptKey = TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_INIT_HEX_STRING);
-        byte[] respEncryptKey = TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_RESP_HEX_STRING);
+        byte[] initEncryptionKey = TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_INIT_HEX_STRING);
+        byte[] respEncryptionKey = TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_RESP_HEX_STRING);
 
         IIpSecTransformHelper mockIpSecHelper;
         mockIpSecHelper = mock(IIpSecTransformHelper.class);
@@ -271,7 +272,7 @@ public final class SaRecordTest {
                         eq(mHmacSha1IntegrityMac),
                         eq(mAesCbcCipher),
                         aryEq(initAuthKey),
-                        aryEq(initEncryptKey),
+                        aryEq(initEncryptionKey),
                         eq(false)))
                 .thenReturn(mockOutTransform);
 
@@ -283,7 +284,7 @@ public final class SaRecordTest {
                         eq(mHmacSha1IntegrityMac),
                         eq(mAesCbcCipher),
                         aryEq(respAuthKey),
-                        aryEq(respEncryptKey),
+                        aryEq(respEncryptionKey),
                         eq(false)))
                 .thenReturn(mockInTransform);
 

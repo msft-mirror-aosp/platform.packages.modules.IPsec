@@ -15,14 +15,10 @@
  */
 package com.android.ike.ikev2;
 
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
+import static com.android.ike.ikev2.IkeManager.getIkeLog;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
-import static com.android.ike.ikev2.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
 import static com.android.ike.ikev2.SaProposal.DH_GROUP_NONE;
-import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
@@ -49,8 +45,8 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Looper;
 import android.os.Message;
-import android.util.Log;
 import android.util.Pair;
+import android.util.SparseArray;
 
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeExchangeSubType;
@@ -79,7 +75,6 @@ import com.android.ike.ikev2.message.IkeSaPayload.DhGroupTransform;
 import com.android.ike.ikev2.message.IkeTsPayload;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
-import com.android.internal.util.StateMachine;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -110,7 +105,7 @@ import java.util.concurrent.TimeUnit;
  *      Exchange Type = {Create | Delete}
  * </pre>
  */
-public class ChildSessionStateMachine extends StateMachine {
+public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private static final String TAG = "ChildSessionStateMachine";
 
     private static final int SPI_NOT_REGISTERED = 0;
@@ -118,18 +113,26 @@ public class ChildSessionStateMachine extends StateMachine {
     // Time after which Child SA needs to be rekeyed
     @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(2L);
 
+    private static final int CMD_GENERAL_BASE = CMD_PRIVATE_BASE;
+
     /** Receive request for negotiating first Child SA. */
-    private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = 1;
+    private static final int CMD_HANDLE_FIRST_CHILD_EXCHANGE = CMD_GENERAL_BASE + 1;
     /** Receive a request from the remote. */
-    private static final int CMD_HANDLE_RECEIVED_REQUEST = 2;
+    private static final int CMD_HANDLE_RECEIVED_REQUEST = CMD_GENERAL_BASE + 2;
     /** Receive a reponse from the remote. */
-    private static final int CMD_HANDLE_RECEIVED_RESPONSE = 3;
+    private static final int CMD_HANDLE_RECEIVED_RESPONSE = CMD_GENERAL_BASE + 3;
     /** Kill Session and close all alive Child SAs immediately. */
-    private static final int CMD_KILL_SESSION = 4;
-    /** Timeout when the remote side fails to send a Rekey-Delete request. */
-    @VisibleForTesting static final int TIMEOUT_REKEY_REMOTE_DELETE = 5;
-    /** Force state machine to a target state for testing purposes. */
-    @VisibleForTesting static final int CMD_FORCE_TRANSITION = 99;
+    private static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 4;
+
+    private static final SparseArray<String> CMD_TO_STR;
+
+    static {
+        CMD_TO_STR = new SparseArray<>();
+        CMD_TO_STR.put(CMD_HANDLE_FIRST_CHILD_EXCHANGE, "Handle First Child");
+        CMD_TO_STR.put(CMD_HANDLE_RECEIVED_REQUEST, "Rcv request");
+        CMD_TO_STR.put(CMD_HANDLE_RECEIVED_RESPONSE, "Rcv response");
+        CMD_TO_STR.put(CMD_KILL_SESSION, "Kill session");
+    }
 
     private final Context mContext;
     private final IpSecManager mIpSecManager;
@@ -161,8 +164,8 @@ public class ChildSessionStateMachine extends StateMachine {
 
     @VisibleForTesting byte[] mSkD;
 
-    /** Package private SaProposal that represents the negotiated Child SA proposal. */
-    @VisibleForTesting SaProposal mSaProposal;
+    /** Package private ChildSaProposal that represents the negotiated Child SA proposal. */
+    @VisibleForTesting ChildSaProposal mSaProposal;
 
     /** Negotiated local Traffic Selector. */
     @VisibleForTesting IkeTrafficSelector[] mLocalTs;
@@ -559,44 +562,12 @@ public class ChildSessionStateMachine extends StateMachine {
         }
     }
 
-    /**
-     * Top level state for handling uncaught exceptions for all subclasses.
-     *
-     * <p>All other state MUST extend this state.
-     *
-     * <p>Only errors this state should catch are unexpected internal failures. Since this may be
-     * run in critical processes, it must never take down the process if it fails
-     */
-    abstract class ExceptionHandler extends State {
+    /** Top level state for handling uncaught exceptions for all subclasses. */
+    abstract class ExceptionHandler extends ExceptionHandlerBase {
         @Override
-        public final void enter() {
-            try {
-                enterState();
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-            }
-        }
-
-        @Override
-        public final boolean processMessage(Message message) {
-            try {
-                return processStateMessage(message);
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-                return HANDLED;
-            }
-        }
-
-        @Override
-        public final void exit() {
-            try {
-                exitState();
-            } catch (RuntimeException e) {
-                cleanUpAndQuit(e);
-            }
-        }
-
         protected void cleanUpAndQuit(RuntimeException e) {
+            // TODO: b/140123526 Send a response if exception was caught when processing a request.
+
             // Clean up all SaRecords.
             closeAllSaRecords(false /*expectSaClosed*/);
 
@@ -604,20 +575,13 @@ public class ChildSessionStateMachine extends StateMachine {
                     () -> {
                         mUserCallback.onError(new IkeInternalException(e));
                     });
-            Log.wtf(TAG, "Unexpected exception in " + getCurrentState().getName(), e);
+            logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
         }
 
-        protected void enterState() {
-            // Do nothing. Subclasses MUST override it if they are.
-        }
-
-        protected boolean processStateMessage(Message message) {
-            return NOT_HANDLED;
-        }
-
-        protected void exitState() {
-            // Do nothing. Subclasses MUST override it if they are.
+        @Override
+        protected String getCmdString(int cmd) {
+            return CMD_TO_STR.get(cmd);
         }
     }
 
@@ -654,8 +618,7 @@ public class ChildSessionStateMachine extends StateMachine {
 
         if (!expectSaClosed) return;
 
-        Log.wtf(
-                TAG,
+        logWtf(
                 "ChildSaRecord with local SPI: "
                         + childSaRecord.getLocalSpi()
                         + " is not correctly closed.");
@@ -793,13 +756,13 @@ public class ChildSessionStateMachine extends StateMachine {
         }
 
         private void setUpNegotiatedResult(CreateChildResult createChildResult) {
-            // Build crypto tools using negotiated SaProposal. It is ensured by {@link
-            // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that the negotiated SaProposal
-            // is valid. The negotiated SaProposal has exactly one encryption algorithm. When it has
-            // a combined-mode encryption algorithm, it either does not have integrity
-            // algorithm or only has one NONE value integrity algorithm. When the negotiated
-            // SaProposal has a normal encryption algorithm, it either does not have integrity
-            // algorithm or has one integrity algorithm with any supported value.
+            // Build crypto tools using negotiated ChildSaProposal. It is ensured by {@link
+            // IkeSaPayload#getVerifiedNegotiatedChildProposalPair} that the negotiated
+            // ChildSaProposal is valid. The negotiated ChildSaProposal has exactly one encryption
+            // algorithm. When it has a combined-mode encryption algorithm, it either does not have
+            // integrity algorithm or only has one NONE value integrity algorithm. When the
+            // negotiated ChildSaProposal has a normal encryption algorithm, it either does not have
+            // integrity algorithm or has one integrity algorithm with any supported value.
 
             mSaProposal = createChildResult.negotiatedProposal;
             Provider provider = IkeMessage.getSecurityProvider();
@@ -1002,10 +965,10 @@ public class ChildSessionStateMachine extends StateMachine {
          */
         protected void handleDeleteSessionRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
-                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
-                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
-                mChildSmCallback.onFatalIkeSessionError(false /*needsNotifyRemote*/);
-
+                cleanUpAndQuit(
+                        new IllegalStateException(
+                                "Found no remote SPI for mCurrentChildSaRecord in a Delete Child"
+                                        + " request."));
             } else {
 
                 mUserCbExecutor.execute(
@@ -1133,11 +1096,11 @@ public class ChildSessionStateMachine extends StateMachine {
                             // request can be ONLY for mCurrentChildSaRecord at this point.
                             if (!hasRemoteChildSpiForDelete(
                                     req.requestPayloads, mCurrentChildSaRecord)) {
-                                Log.wtf(TAG, "Found no remote SPI for mCurrentChildSaRecord");
-
-                                replyErrorNotification(ERROR_TYPE_INVALID_SYNTAX);
-                                mChildSmCallback.onFatalIkeSessionError(
-                                        false /*needsNotifyRemote*/);
+                                // Program error
+                                cleanUpAndQuit(
+                                        new IllegalStateException(
+                                                "Found no remote SPI for mCurrentChildSaRecord in"
+                                                        + " a Delete request"));
 
                             } else {
                                 mChildSmCallback.onOutboundPayloadsReady(
@@ -1152,9 +1115,11 @@ public class ChildSessionStateMachine extends StateMachine {
                             replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
                             return HANDLED;
                         default:
-                            throw new IllegalArgumentException(
-                                    "Invalid exchange subtype for Child Session: "
-                                            + req.exchangeSubtype);
+                            cleanUpAndQuit(
+                                    new IllegalStateException(
+                                            "Invalid exchange subtype for Child Session: "
+                                                    + req.exchangeSubtype));
+                            return HANDLED;
                     }
                 default:
                     return NOT_HANDLED;
@@ -1664,7 +1629,7 @@ public class ChildSessionStateMachine extends StateMachine {
 
         private void handleDeleteRequest(List<IkePayload> payloads) {
             if (!hasRemoteChildSpiForDelete(payloads, mCurrentChildSaRecord)) {
-                // Response received on incorrect SA
+                // Request received on incorrect SA
                 cleanUpAndQuit(
                         new IllegalStateException(
                                 "Found no remote SPI for current SA in received Delete"
@@ -1707,7 +1672,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 boolean isFirstChild)
                 throws ResourceUnavailableException {
 
-            SaProposal[] saProposals = childSessionOptions.getSaProposals();
+            ChildSaProposal[] saProposals = childSessionOptions.getSaProposals();
 
             if (isFirstChild) {
                 for (int i = 0; i < saProposals.length; i++) {
@@ -1728,7 +1693,7 @@ public class ChildSessionStateMachine extends StateMachine {
         public static List<IkePayload> getRekeyChildCreateReqPayloads(
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
-                SaProposal currentProposal,
+                ChildSaProposal currentProposal,
                 IkeTrafficSelector[] currentLocalTs,
                 IkeTrafficSelector[] currentRemoteTs,
                 int localSpi,
@@ -1737,7 +1702,9 @@ public class ChildSessionStateMachine extends StateMachine {
             List<IkePayload> payloads =
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
-                                    new SaProposal[] {currentProposal}, ipSecManager, localAddress),
+                                    new ChildSaProposal[] {currentProposal},
+                                    ipSecManager,
+                                    localAddress),
                             currentLocalTs,
                             currentRemoteTs,
                             isTransport);
@@ -1753,7 +1720,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
                 byte proposalNumber,
-                SaProposal currentProposal,
+                ChildSaProposal currentProposal,
                 IkeTrafficSelector[] currentLocalTs,
                 IkeTrafficSelector[] currentRemoteTs,
                 int localSpi,
@@ -1788,7 +1755,8 @@ public class ChildSessionStateMachine extends StateMachine {
             payloadList.add(new IkeNoncePayload());
 
             DhGroupTransform[] dhGroups =
-                    saPayload.proposalList.get(0).saProposal.getDhGroupTransforms();
+                    ((ChildProposal) saPayload.proposalList.get(0))
+                            .saProposal.getDhGroupTransforms();
             if (dhGroups.length != 0 && dhGroups[0].id != DH_GROUP_NONE) {
                 payloadList.add(new IkeKePayload(dhGroups[0].id));
             }
@@ -1937,9 +1905,7 @@ public class ChildSessionStateMachine extends StateMachine {
                             return new CreateChildResult(
                                     CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY, exception);
                         } else {
-                            Log.w(
-                                    TAG,
-                                    "Received unexpected error notification: " + notify.notifyType);
+                            logw("Received unexpected error notification: " + notify.notifyType);
                         }
                     } catch (InvalidSyntaxException e) {
                         return new CreateChildResult(CREATE_STATUS_CHILD_ERROR_INVALID_MSG, e);
@@ -1962,8 +1928,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         break;
                     default:
                         // Unknown and unexpected status notifications are ignored as per RFC7296.
-                        Log.w(
-                                TAG,
+                        logw(
                                 "Received unknown or unexpected status notifications with notify"
                                         + " type: "
                                         + notify.notifyType);
@@ -1985,7 +1950,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 childProposalPair =
                         IkeSaPayload.getVerifiedNegotiatedChildProposalPair(
                                 reqSaPayload, respSaPayload, ipSecManager, remoteAddress);
-                SaProposal saProposal = childProposalPair.second.saProposal;
+                ChildSaProposal saProposal = childProposalPair.second.saProposal;
 
                 validateKePayloads(inboundPayloads, isLocalInit /*isResp*/, saProposal);
 
@@ -2065,8 +2030,7 @@ public class ChildSessionStateMachine extends StateMachine {
                         // together in higher layer.
                         break;
                     default:
-                        Log.w(
-                                TAG,
+                        logw(
                                 "Received unexpected payload in Create Child SA message. Payload"
                                         + " type: "
                                         + payload.payloadType);
@@ -2087,8 +2051,7 @@ public class ChildSessionStateMachine extends StateMachine {
                             || hasNoncePayload
                             || hasTsInitPayload
                             || hasTsRespPayload)) {
-                Log.w(
-                        TAG,
+                logw(
                         "Unexpected payload found in an INFORMATIONAL message: SA, KE, Nonce,"
                                 + " TS-Initiator or TS-Responder");
             }
@@ -2138,7 +2101,9 @@ public class ChildSessionStateMachine extends StateMachine {
 
         @VisibleForTesting
         static void validateKePayloads(
-                List<IkePayload> inboundPayloads, boolean isResp, SaProposal negotiatedProposal)
+                List<IkePayload> inboundPayloads,
+                boolean isResp,
+                ChildSaProposal negotiatedProposal)
                 throws IkeProtocolException {
             DhGroupTransform[] dhTransforms = negotiatedProposal.getDhGroupTransforms();
 
@@ -2168,6 +2133,10 @@ public class ChildSessionStateMachine extends StateMachine {
                 throw new InvalidSyntaxException("Received unexpected KE Payload.");
             }
         }
+
+        private static void logw(String s) {
+            getIkeLog().w(TAG, s);
+        }
     }
 
     @Retention(RetentionPolicy.SOURCE)
@@ -2189,7 +2158,7 @@ public class ChildSessionStateMachine extends StateMachine {
         @CreateStatus public final int status;
         public final SecurityParameterIndex initSpi;
         public final SecurityParameterIndex respSpi;
-        public final SaProposal negotiatedProposal;
+        public final ChildSaProposal negotiatedProposal;
         public final IkeTrafficSelector[] initTs;
         public final IkeTrafficSelector[] respTs;
         public final IkeException exception;
@@ -2198,7 +2167,7 @@ public class ChildSessionStateMachine extends StateMachine {
                 @CreateStatus int status,
                 SecurityParameterIndex initSpi,
                 SecurityParameterIndex respSpi,
-                SaProposal negotiatedProposal,
+                ChildSaProposal negotiatedProposal,
                 IkeTrafficSelector[] initTs,
                 IkeTrafficSelector[] respTs,
                 IkeException exception) {
@@ -2215,7 +2184,7 @@ public class ChildSessionStateMachine extends StateMachine {
         CreateChildResult(
                 SecurityParameterIndex initSpi,
                 SecurityParameterIndex respSpi,
-                SaProposal negotiatedProposal,
+                ChildSaProposal negotiatedProposal,
                 IkeTrafficSelector[] initTs,
                 IkeTrafficSelector[] respTs) {
             this(

@@ -29,6 +29,8 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
 
+import com.android.ike.ikev2.testutils.MockIpSecTestUtils;
+
 import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
@@ -40,7 +42,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionTest {
-    private static final int TIMEOUT_MS = 100;
+    private static final int TIMEOUT_MS = 500;
 
     private static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));

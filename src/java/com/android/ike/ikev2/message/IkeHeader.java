@@ -19,6 +19,7 @@ package com.android.ike.ikev2.message;
 import static com.android.ike.ikev2.message.IkePayload.PayloadType;
 
 import android.annotation.IntDef;
+import android.util.SparseArray;
 
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidMajorVersionException;
@@ -45,6 +46,8 @@ public final class IkeHeader {
     // Indicate whether this message is sent from the original IKE initiator
     private static final byte IKE_HEADER_FLAG_FROM_IKE_INITIATOR = (byte) 0x08;
 
+    private static final SparseArray<String> EXCHANGE_TYPE_TO_STRING;
+
     public static final int IKE_HEADER_LENGTH = 28;
 
     @Retention(RetentionPolicy.SOURCE)
@@ -60,6 +63,14 @@ public final class IkeHeader {
     public static final int EXCHANGE_TYPE_IKE_AUTH = 35;
     public static final int EXCHANGE_TYPE_CREATE_CHILD_SA = 36;
     public static final int EXCHANGE_TYPE_INFORMATIONAL = 37;
+
+    static {
+        EXCHANGE_TYPE_TO_STRING = new SparseArray<>();
+        EXCHANGE_TYPE_TO_STRING.put(EXCHANGE_TYPE_IKE_SA_INIT, "IKE INIT");
+        EXCHANGE_TYPE_TO_STRING.put(EXCHANGE_TYPE_IKE_AUTH, "IKE AUTH");
+        EXCHANGE_TYPE_TO_STRING.put(EXCHANGE_TYPE_CREATE_CHILD_SA, "Create Child");
+        EXCHANGE_TYPE_TO_STRING.put(EXCHANGE_TYPE_INFORMATIONAL, "Informational");
+    }
 
     public final long ikeInitiatorSpi;
     public final long ikeResponderSpi;
@@ -145,6 +156,21 @@ public final class IkeHeader {
         mEncodedMessageLength = buffer.getInt();
     }
 
+    /** Packet private method to build header of an IKE fragemnt from current IKE header. */
+    IkeHeader makeSkfHeaderFromSkHeader() {
+        if (nextPayloadType != IkePayload.PAYLOAD_TYPE_SK) {
+            throw new IllegalArgumentException("Next payload type is not SK.");
+        }
+        return new IkeHeader(
+                ikeInitiatorSpi,
+                ikeResponderSpi,
+                IkePayload.PAYLOAD_TYPE_SKF,
+                exchangeType,
+                isResponseMsg,
+                fromIkeInitiator,
+                messageId);
+    }
+
     /*Package private*/
     @VisibleForTesting
     int getInboundMessageLength() {
@@ -155,8 +181,8 @@ public final class IkeHeader {
         return mEncodedMessageLength;
     }
 
-    /** Validate syntax and major version of inbound IKE header. */
-    public void checkInboundValidOrThrow(int packetLength) throws IkeProtocolException {
+    /** Validate major version of inbound IKE header. */
+    public void validateMajorVersion() throws IkeProtocolException {
         if (majorVersion > 2) {
             // Receive higher version of protocol. Stop parsing.
             throw new InvalidMajorVersionException(majorVersion);
@@ -168,6 +194,15 @@ public final class IkeHeader {
             // error.
             throw new InvalidSyntaxException("Major version is smaller than 2.");
         }
+    }
+
+    /**
+     * Validate syntax of inbound IKE header.
+     *
+     * <p>It MUST only be used for an inbound IKE header because we don't know the outbound message
+     * length before we encode it.
+     */
+    public void validateInboundHeader(int packetLength) throws IkeProtocolException {
         if (exchangeType < EXCHANGE_TYPE_IKE_SA_INIT
                 || exchangeType > EXCHANGE_TYPE_INFORMATIONAL) {
             throw new InvalidSyntaxException("Invalid IKE Exchange Type.");
@@ -195,5 +230,15 @@ public final class IkeHeader {
         }
 
         byteBuffer.put(flag).putInt(messageId).putInt(IKE_HEADER_LENGTH + encodedMessageBodyLen);
+    }
+
+    /** Returns basic information for logging. */
+    public String getBasicInfoString() {
+        String exchangeStr = EXCHANGE_TYPE_TO_STRING.get(exchangeType);
+        if (exchangeStr == null) exchangeStr = "Unknown exchange (" + exchangeType + ")";
+
+        String reqOrResp = isResponseMsg ? "response" : "request";
+
+        return exchangeStr + " " + reqOrResp + " " + messageId;
     }
 }

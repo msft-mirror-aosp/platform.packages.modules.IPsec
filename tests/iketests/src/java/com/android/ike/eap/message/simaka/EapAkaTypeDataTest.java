@@ -16,25 +16,41 @@
 
 package com.android.ike.eap.message.simaka;
 
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_CHALLENGE_RESPONSE_MAC_BYTES;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_CHALLENGE_RESPONSE_TYPE_DATA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_IDENTITY_REQUEST;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.INVALID_SUBTYPE;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RES;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RES_BYTES;
+
+import static junit.framework.TestCase.fail;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAnyIdReq;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRes;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.Map.Entry;
 
 public class EapAkaTypeDataTest {
     private static final int UNABLE_TO_PROCESS_CODE = 0;
+    private static final int INVALID_SUBTYPE_INT = -1;
 
     private EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
 
@@ -45,13 +61,30 @@ public class EapAkaTypeDataTest {
 
     @Test
     public void testDecode() {
+        DecodeResult<EapAkaTypeData> result =
+                mEapAkaTypeDataDecoder.decode(EAP_AKA_CHALLENGE_RESPONSE_TYPE_DATA);
 
+        assertTrue(result.isSuccessfulDecode());
+        EapAkaTypeData eapAkaTypeData = result.eapTypeData;
+        assertEquals(EAP_AKA_CHALLENGE, eapAkaTypeData.eapSubtype);
+
+        // also check Map entries (needs to match input order)
+        Iterator<Entry<Integer, EapSimAkaAttribute>> itr =
+                eapAkaTypeData.attributeMap.entrySet().iterator();
+        Entry<Integer, EapSimAkaAttribute> entry = itr.next();
+        assertEquals(EAP_AT_RES, (int) entry.getKey());
+        assertArrayEquals(RES_BYTES, ((AtRes) entry.getValue()).res);
+
+        entry = itr.next();
+        assertEquals(EAP_AT_MAC, (int) entry.getKey());
+        assertArrayEquals(EAP_AKA_CHALLENGE_RESPONSE_MAC_BYTES, ((AtMac) entry.getValue()).mac);
+
+        assertFalse(itr.hasNext());
     }
 
     @Test
     public void testDecodeInvalidSubtype() {
-        EapSimAkaTypeData.DecodeResult<EapAkaTypeData> result =
-                mEapAkaTypeDataDecoder.decode(INVALID_SUBTYPE);
+        DecodeResult<EapAkaTypeData> result = mEapAkaTypeDataDecoder.decode(INVALID_SUBTYPE);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
     }
@@ -64,5 +97,23 @@ public class EapAkaTypeDataTest {
 
         byte[] result = eapAkaTypeData.encode();
         assertArrayEquals(EAP_AKA_IDENTITY_REQUEST, result);
+    }
+
+    @Test
+    public void testConstructorInvalidSubtype() throws Exception {
+        try {
+            new EapAkaTypeData(INVALID_SUBTYPE_INT, Arrays.asList(new AtAnyIdReq()));
+            fail("Expected IllegalArgumentException for invalid subtype");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testConstructorDuplicateAttributes() throws Exception {
+        try {
+            new EapAkaTypeData(EAP_AKA_IDENTITY, Arrays.asList(new AtAnyIdReq(), new AtAnyIdReq()));
+            fail("Expected IllegalArgumentException for duplicate attributes");
+        } catch (IllegalArgumentException expected) {
+        }
     }
 }

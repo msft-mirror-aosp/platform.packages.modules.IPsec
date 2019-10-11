@@ -19,9 +19,15 @@ package com.android.ike.eap.statemachine;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_CLIENT_ERROR_INSUFFICIENT_CHALLENGES;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SIM_NOTIFICATION_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification.GENERAL_FAILURE_PRE_CHALLENGE;
+import static com.android.ike.eap.message.simaka.EapSimTypeData.EAP_SIM_NOTIFICATION;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -40,23 +46,26 @@ import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtNotification;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.ike.eap.message.simaka.EapSimTypeData;
 import com.android.ike.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
-import com.android.ike.eap.statemachine.EapSimMethodStateMachine.EapSimState;
+import com.android.ike.eap.statemachine.EapMethodStateMachine.EapMethodState;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import java.security.SecureRandom;
+import java.util.Arrays;
 
 public class EapSimStateTest {
-    protected static final int EAP_CODE_REQUEST = 1;
-    protected static final int EAP_NOTIFICATION = 2;
-    protected static final int EAP_TYPE_SIM = 18;
     protected static final int SUB_ID = 1;
     protected static final String NOTIFICATION_MESSAGE = "test";
     protected static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
+
+    // EAP-Identity = hex("test@android.net")
+    protected static final byte[] EAP_IDENTITY_BYTES =
+            hexStringToByteArray("7465737440616E64726F69642E6E6574");
 
     protected TelephonyManager mMockTelephonyManager;
     protected EapSimTypeDataDecoder mMockEapSimTypeDataDecoder;
@@ -75,6 +84,7 @@ public class EapSimStateTest {
         mEapSimMethodStateMachine =
                 new EapSimMethodStateMachine(
                         mMockTelephonyManager,
+                        EAP_IDENTITY_BYTES,
                         mEapSimConfig,
                         new SecureRandom(),
                         mMockEapSimTypeDataDecoder);
@@ -86,7 +96,7 @@ public class EapSimStateTest {
     public void testProcessNotification() throws Exception {
         EapData eapData = new EapData(EAP_NOTIFICATION, NOTIFICATION_MESSAGE.getBytes());
         EapMessage notification = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
-        EapSimState preNotification = (EapSimState) mEapSimMethodStateMachine.getState();
+        EapMethodState preNotification = (EapMethodState) mEapSimMethodStateMachine.getState();
 
         EapResult result = mEapSimMethodStateMachine.process(notification);
         assertEquals(preNotification, mEapSimMethodStateMachine.getState());
@@ -98,10 +108,30 @@ public class EapSimStateTest {
     }
 
     @Test
+    public void testProcessEapSimNotification() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+        EapMethodState preProcess = (EapMethodState) mEapSimMethodStateMachine.getState();
+        EapSimTypeData typeData =
+                new EapSimTypeData(
+                        EAP_SIM_NOTIFICATION,
+                        Arrays.asList(new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE)));
+
+        DecodeResult<EapSimTypeData> decodeResult = new DecodeResult<>(typeData);
+        when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+
+        EapResponse eapResponse = (EapResponse) mEapSimMethodStateMachine.process(eapMessage);
+        assertArrayEquals(EAP_SIM_NOTIFICATION_RESPONSE, eapResponse.packet);
+        assertEquals(preProcess, mEapSimMethodStateMachine.getState());
+        verify(mMockEapSimTypeDataDecoder).decode(DUMMY_EAP_TYPE_DATA);
+        verifyNoMoreInteractions(mMockTelephonyManager, mMockEapSimTypeDataDecoder);
+    }
+
+    @Test
     public void testProcessInvalidDecodeResult() throws Exception {
         EapData eapData = new EapData(EAP_TYPE_SIM, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
-        EapSimState preProcess = (EapSimState) mEapSimMethodStateMachine.getState();
+        EapMethodState preProcess = (EapMethodState) mEapSimMethodStateMachine.getState();
 
         AtClientErrorCode atClientErrorCode = AtClientErrorCode.INSUFFICIENT_CHALLENGES;
         DecodeResult<EapSimTypeData> decodeResult = new DecodeResult<>(atClientErrorCode);

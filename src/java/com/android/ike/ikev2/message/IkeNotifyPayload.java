@@ -18,18 +18,24 @@ package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_FAILED_CP_REQUIRED;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_IKE_SPI;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MESSAGE_ID;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SELECTORS;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
+import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_SINGLE_PAIR_REQUIRED;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
 import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
 import android.annotation.IntDef;
 import android.util.ArraySet;
+import android.util.SparseArray;
 
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
@@ -116,7 +122,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      * being negotiated. Only allowed in the request/response for negotiating a Child SA.
      */
     public static final int NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED = 16394;
-    // TODO: List all supported notify types.
+    /** Indicates that the sender supports IKE fragmentation. */
+    public static final int NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED = 16430;
 
     private static final int NOTIFY_HEADER_LEN = 4;
     private static final int ERROR_NOTIFY_TYPE_MAX = 16383;
@@ -125,6 +132,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
 
     private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA;
     private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA;
+
+    private static final SparseArray<String> NOTIFY_TYPE_TO_STRING;
 
     static {
         VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA = new ArraySet<>();
@@ -149,6 +158,39 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(NOTIFY_TYPE_IPCOMP_SUPPORTED);
         VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(NOTIFY_TYPE_USE_TRANSPORT_MODE);
         VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA.add(NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED);
+    }
+
+    static {
+        NOTIFY_TYPE_TO_STRING = new SparseArray<>();
+        NOTIFY_TYPE_TO_STRING.put(
+                ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD, "Unsupported critical payload");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_INVALID_IKE_SPI, "Invalid IKE SPI");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_INVALID_MAJOR_VERSION, "Invalid major version");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_INVALID_SYNTAX, "Invalid syntax");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_INVALID_MESSAGE_ID, "Invalid message ID");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_NO_PROPOSAL_CHOSEN, "No proposal chosen");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_INVALID_KE_PAYLOAD, "Invalid KE payload");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_AUTHENTICATION_FAILED, "Authentication failed");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_SINGLE_PAIR_REQUIRED, "Single pair required");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_NO_ADDITIONAL_SAS, "No additional SAs");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE, "Internal address failure");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_FAILED_CP_REQUIRED, "Failed CP required");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_TS_UNACCEPTABLE, "TS unacceptable");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_INVALID_SELECTORS, "Invalid selectors");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_TEMPORARY_FAILURE, "Temporary failure");
+        NOTIFY_TYPE_TO_STRING.put(ERROR_TYPE_CHILD_SA_NOT_FOUND, "Child SA not found");
+
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_ADDITIONAL_TS_POSSIBLE, "Additional TS possible");
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_IPCOMP_SUPPORTED, "IPCOMP supported");
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP, "NAT detection source IP");
+        NOTIFY_TYPE_TO_STRING.put(
+                NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP, "NAT detection destination IP");
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_USE_TRANSPORT_MODE, "Use transport mode");
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_REKEY_SA, "Rekey SA");
+        NOTIFY_TYPE_TO_STRING.put(
+                NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED, "ESP TCP Padding not supported");
+        NOTIFY_TYPE_TO_STRING.put(
+                NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED, "Fragmentation supported");
     }
 
     public final int protocolId;
@@ -410,6 +452,11 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      */
     @Override
     public String getTypeString() {
-        return "Notify Payload";
+        String notifyTypeString = NOTIFY_TYPE_TO_STRING.get(notifyType);
+
+        if (notifyTypeString == null) {
+            return "Notify(" + notifyType + ")";
+        }
+        return "Notify(" + notifyTypeString + ")";
     }
 }

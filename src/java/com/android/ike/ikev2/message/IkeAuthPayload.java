@@ -19,6 +19,7 @@ package com.android.ike.ikev2.message;
 import android.annotation.IntDef;
 
 import com.android.ike.ikev2.crypto.IkeMacPrf;
+import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 
 import java.lang.annotation.Retention;
@@ -75,7 +76,6 @@ public abstract class IkeAuthPayload extends IkePayload {
         byte[] authData = new byte[payloadBody.length - AUTH_HEADER_LEN];
         inputBuffer.get(authData);
         switch (authMethod) {
-                // TODO: Handle RSA and generic signature-based authentication.
             case AUTH_METHOD_PRE_SHARED_KEY:
                 return new IkeAuthPskPayload(critical, authData);
             case AUTH_METHOD_RSA_DIGITAL_SIGN:
@@ -85,8 +85,7 @@ public abstract class IkeAuthPayload extends IkePayload {
                 return new IkeAuthDigitalSignPayload(
                         critical, AUTH_METHOD_GENERIC_DIGITAL_SIGN, authData);
             default:
-                // TODO: Throw AuthenticationFailedException
-                throw new UnsupportedOperationException("Unsupported authentication method");
+                throw new AuthenticationFailedException("Unsupported authentication method");
         }
     }
 
@@ -121,11 +120,6 @@ public abstract class IkeAuthPayload extends IkePayload {
     @Override
     protected int getPayloadLength() {
         return GENERIC_HEADER_LENGTH + AUTH_HEADER_LEN + getAuthDataLength();
-    }
-
-    @Override
-    public String getTypeString() {
-        return "Authentication Payload";
     }
 
     protected abstract void encodeAuthDataToByteBuffer(ByteBuffer byteBuffer);

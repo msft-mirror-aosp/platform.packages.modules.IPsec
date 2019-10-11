@@ -32,6 +32,8 @@ import java.util.Set;
  * EapAkaTypeData represents the Type Data for an {@link EapMessage} during an EAP-AKA session.
  */
 public class EapAkaTypeData extends EapSimAkaTypeData {
+    private static final String TAG = EapAkaTypeData.class.getSimpleName();
+
     // EAP-AKA Subtype values defined by IANA
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
     public static final int EAP_AKA_CHALLENGE = 1;
@@ -80,8 +82,15 @@ public class EapAkaTypeData extends EapSimAkaTypeData {
     public EapAkaTypeData(int eapSubtype, List<EapSimAkaAttribute> attributes) {
         super(eapSubtype, new LinkedHashMap<>());
 
+        if (!SUPPORTED_SUBTYPES.contains(eapSubtype)) {
+            throw new IllegalArgumentException("Invalid subtype for EAP-AKA: " + eapSubtype);
+        }
+
         for (EapSimAkaAttribute attribute : attributes) {
-            // TODO(b/139805493): check for duplicate attributes
+            if (attributeMap.containsKey(attribute.attributeType)) {
+                throw new IllegalArgumentException(
+                        "Duplicate attribute in attributes: " + attribute.attributeType);
+            }
             attributeMap.put(attribute.attributeType, attribute);
         }
     }
@@ -91,7 +100,7 @@ public class EapAkaTypeData extends EapSimAkaTypeData {
     }
 
     /**
-     * EapSimTypeDataDecoder will be used for decoding {@link EapAkaTypeData} objects.
+     * EapAkaTypeDataDecoder will be used for decoding {@link EapAkaTypeData} objects.
      */
     public static class EapAkaTypeDataDecoder extends EapSimAkaTypeDataDecoder<EapAkaTypeData> {
         private static final String TAG = EapAkaTypeDataDecoder.class.getSimpleName();
@@ -102,14 +111,14 @@ public class EapAkaTypeData extends EapSimAkaTypeData {
                     TAG,
                     EAP_METHOD,
                     SUPPORTED_SUBTYPES,
-                    EapSimAttributeFactory.getInstance(),
+                    EapAkaAttributeFactory.getInstance(),
                     EAP_AKA_SUBTYPE_STRING);
         }
 
         /**
          * Decodes the given byte-array into a DecodeResult object.
          *
-         * @param typeData the byte-encoding of the EapSimTypeData to be parsed
+         * @param typeData the byte-encoding of the EapAkaTypeData to be parsed
          * @return a DecodeResult object. If the decoding is successful, this will encapsulate an
          *         EapAkaTypeData instance representing the data stored in typeData. Otherwise, it
          *         will contain the relevant AtClientErrorCode for the decoding error.

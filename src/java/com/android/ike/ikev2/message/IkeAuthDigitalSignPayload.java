@@ -18,6 +18,7 @@ package com.android.ike.ikev2.message;
 
 import android.annotation.StringDef;
 
+import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeAuthPayload.AuthMethod;
@@ -25,6 +26,12 @@ import com.android.ike.ikev2.message.IkeAuthPayload.AuthMethod;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
+import java.security.InvalidKeyException;
+import java.security.NoSuchAlgorithmException;
+import java.security.ProviderException;
+import java.security.Signature;
+import java.security.SignatureException;
+import java.security.cert.X509Certificate;
 import java.util.Arrays;
 
 /**
@@ -136,7 +143,51 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
         }
     }
 
-    // TODO: Add methods for generating and validating signature.
+    /**
+     * Verify received signature in an inbound IKE packet.
+     *
+     * <p>Since IKE library is always a client, inbound IkeAuthDigitalSignPayload always signs IKE
+     * responder's SignedOctets, which is concatenation of the IKE_INIT response message, the Nonce
+     * of IKE initiator and the signed ID-Responder payload body.
+     *
+     * @param certificate received end certificate to verify the signature.
+     * @param ikeInitBytes IKE_INIT response for calculating IKE responder's SignedOctets.
+     * @param nonce nonce of IKE initiator for calculating IKE responder's SignedOctets.
+     * @param idPayloadBodyBytes ID-Responder payload body for calculating IKE responder's
+     *     SignedOctets.
+     * @param ikePrf the negotiated PRF.
+     * @param prfKeyBytes the negotiated PRF responder key.
+     * @throws AuthenticationFailedException if received signature verification failed.
+     */
+    public void verifyInboundSignature(
+            X509Certificate certificate,
+            byte[] ikeInitBytes,
+            byte[] nonce,
+            byte[] idPayloadBodyBytes,
+            IkeMacPrf ikePrf,
+            byte[] prfKeyBytes)
+            throws AuthenticationFailedException {
+        byte[] dataToSignBytes =
+                getSignedOctets(ikeInitBytes, nonce, idPayloadBodyBytes, ikePrf, prfKeyBytes);
+
+        try {
+            Signature signValidator =
+                    Signature.getInstance(signatureAlgoAndHash, IkeMessage.getSecurityProvider());
+            signValidator.initVerify(certificate);
+            signValidator.update(dataToSignBytes);
+
+            if (!signValidator.verify(signature)) {
+                throw new AuthenticationFailedException("Signature verification failed.");
+            }
+        } catch (SignatureException | InvalidKeyException e) {
+            throw new AuthenticationFailedException(e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new ProviderException(
+                    "Security Provider does not support " + signatureAlgoAndHash);
+        }
+    }
+
+    // TODO: Add methods for generating signature.
 
     @Override
     protected void encodeAuthDataToByteBuffer(ByteBuffer byteBuffer) {
@@ -154,6 +205,6 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
 
     @Override
     public String getTypeString() {
-        return "Authentication-Digital-Signature Payload";
+        return "Auth(Digital Sign)";
     }
 }

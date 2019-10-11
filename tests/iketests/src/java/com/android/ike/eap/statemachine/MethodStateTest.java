@@ -22,10 +22,13 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapMessage.EAP_HEADER_LENGTH;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MSCHAP_V2;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EMSK;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
@@ -40,10 +43,12 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult;
+import com.android.ike.eap.EapResult.EapError;
 import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig;
+import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.statemachine.EapStateMachine.FailureState;
 import com.android.ike.eap.statemachine.EapStateMachine.MethodState;
@@ -56,6 +61,9 @@ import org.mockito.ArgumentMatcher;
 import java.security.SecureRandom;
 
 public class MethodStateTest extends EapStateTest {
+    private static final String USERNAME = "username";
+    private static final String PASSWORD = "password";
+
     @Before
     @Override
     public void setUp() {
@@ -89,16 +97,25 @@ public class MethodStateTest extends EapStateTest {
                 .setEapAkaConfig(0, APPTYPE_USIM).build();
         mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
 
-        try {
-            mEapStateMachine.process(EAP_REQUEST_AKA_IDENTITY_PACKET);
-        } catch (UnsupportedOperationException ex) {
-            // TODO(b/133878992): remove once EAP-AKA is fully implemented.
-            // Could be thrown while all EapAkaMethodStateMachine states aren't fully implemented
-        }
+        mEapStateMachine.process(EAP_REQUEST_AKA);
 
         assertTrue(mEapStateMachine.getState() instanceof MethodState);
         MethodState methodState = (MethodState) mEapStateMachine.getState();
         assertTrue(methodState.mEapMethodStateMachine instanceof EapAkaMethodStateMachine);
+    }
+
+    @Test
+    public void testProcessTransitionToEapMsChapV2() {
+        // make EapStateMachine with EAP MSCHAPv2 configurations
+        EapSessionConfig eapSessionConfig =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
+        mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
+
+        mEapStateMachine.process(EAP_REQUEST_MSCHAP_V2);
+
+        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+        MethodState methodState = (MethodState) mEapStateMachine.getState();
+        assertTrue(methodState.mEapMethodStateMachine instanceof EapMsChapV2MethodStateMachine);
     }
 
     @Test
@@ -139,5 +156,28 @@ public class MethodStateTest extends EapStateTest {
         verify(mockEapMethodStateMachine).process(argThat(eapSuccessMatcher));
         assertTrue(mEapStateMachine.getState() instanceof FailureState);
         verifyNoMoreInteractions(mockEapMethodStateMachine);
+    }
+
+    @Test
+    public void testProcessEapFailureWithNoEapMethodState() {
+        EapResult result = mEapStateMachine.process(EAP_FAILURE_PACKET);
+        assertTrue(result instanceof EapFailure);
+        assertTrue(mEapStateMachine.getState() instanceof FailureState);
+    }
+
+    @Test
+    public void testProcessEapSuccessWithNoEapMethodState() {
+        EapResult result = mEapStateMachine.process(EAP_SUCCESS_PACKET);
+        EapError eapError = (EapError) result;
+        assertTrue(eapError.cause instanceof EapInvalidRequestException);
+        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+    }
+
+    @Test
+    public void testProcessEapNotificationWithNoEapMethodState() {
+        EapResult result = mEapStateMachine.process(EAP_REQUEST_NOTIFICATION_PACKET);
+        EapResponse eapResponse = (EapResponse) result;
+        assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
+        assertTrue(mEapStateMachine.getState() instanceof MethodState);
     }
 }

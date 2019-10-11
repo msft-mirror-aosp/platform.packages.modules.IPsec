@@ -303,9 +303,11 @@ public abstract class EapSimAkaAttribute {
         @VisibleForTesting
         public AtNonceMt(byte[] nonceMt) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_NONCE_MT, LENGTH);
-            for (int i = 0; i < nonceMt.length; i++) {
-                this.nonceMt[i] = nonceMt[i];
+
+            if (nonceMt.length != NONCE_MT_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("NonceMt length must be 16B");
             }
+            System.arraycopy(nonceMt, 0, this.nonceMt, 0, NONCE_MT_LENGTH);
         }
 
         @Override
@@ -536,13 +538,11 @@ public abstract class EapSimAkaAttribute {
         }
 
         @VisibleForTesting
-        public AtRandAka(int lengthInBytes, byte[] rand)
+        public AtRandAka(byte[] rand)
                 throws EapSimAkaInvalidAttributeException {
-            super(EAP_AT_RAND, lengthInBytes);
+            super(EAP_AT_RAND, ATTR_LENGTH);
 
-            if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimAkaInvalidAttributeException("Length must be 20B");
-            } else if (rand.length != RAND_LENGTH) {
+            if (rand.length != RAND_LENGTH) {
                 throw new EapSimAkaInvalidAttributeException("Rand must be 16B");
             }
 
@@ -711,7 +711,7 @@ public abstract class EapSimAkaAttribute {
         private static final int NONCE_S_LENGTH = 4 * LENGTH_SCALING;
         private static final int RESERVED_BYTES = 2;
 
-        public final byte[] nonceS;
+        public final byte[] nonceS = new byte[NONCE_S_LENGTH];
 
         public AtNonceS(int lengthInBytes, ByteBuffer byteBuffer)
                 throws EapSimAkaInvalidAttributeException {
@@ -723,15 +723,18 @@ public abstract class EapSimAkaAttribute {
 
             // next two bytes are reserved (RFC 4186 Section 10.17)
             byteBuffer.get(new byte[RESERVED_BYTES]);
-
-            nonceS = new byte[NONCE_S_LENGTH];
             byteBuffer.get(nonceS);
         }
 
         @VisibleForTesting
         public AtNonceS(byte[] nonceS) throws EapSimAkaInvalidAttributeException {
             super(EAP_AT_NONCE_S, ATTR_LENGTH);
-            this.nonceS = nonceS;
+
+            if (nonceS.length != NONCE_S_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("NonceS length must be 16B");
+            }
+
+            System.arraycopy(nonceS, 0, this.nonceS, 0, NONCE_S_LENGTH);
         }
 
         @Override
@@ -903,12 +906,10 @@ public abstract class EapSimAkaAttribute {
         }
 
         @VisibleForTesting
-        public AtAutn(int lengthInBytes, byte[] autn) throws EapSimAkaInvalidAttributeException {
-            super(EAP_AT_AUTN, lengthInBytes);
+        public AtAutn(byte[] autn) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_AUTN, ATTR_LENGTH);
 
-            if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimAkaInvalidAttributeException("Length must be 20B");
-            } else if (autn.length != AUTN_LENGTH) {
+            if (autn.length != AUTN_LENGTH) {
                 throw new EapSimAkaInvalidAttributeException("Autn must be 16B");
             }
 
@@ -979,6 +980,33 @@ public abstract class EapSimAkaAttribute {
             int bytesUsed = MIN_ATTR_LENGTH + res.length;
             addPadding(bytesUsed, byteBuffer);
         }
+
+        /**
+         * Creates and returns an AtRes instance with the given res value.
+         *
+         * @param res byte-array RES value to be used for this
+         * @return AtRes instance for the given RES value
+         * @throws EapSimAkaInvalidAttributeException if the given res value has an invalid length
+         */
+        public static AtRes getAtRes(byte[] res) throws EapSimAkaInvalidAttributeException {
+            // Attributes must be 4B-aligned, so there can be 0 to 3 padding bytes added
+            int resLenBytes = MIN_ATTR_LENGTH + res.length;
+            if (resLenBytes % LENGTH_SCALING != 0) {
+                resLenBytes += LENGTH_SCALING - (resLenBytes % LENGTH_SCALING);
+            }
+
+            return new AtRes(resLenBytes, res);
+        }
+
+        /**
+         * Checks whether the given RES length is valid.
+         *
+         * @param resLenBytes the RES length to be checked
+         * @return true iff the given resLen is valid
+         */
+        public static boolean isValidResLen(int resLenBytes) {
+            return resLenBytes >= MIN_RES_LEN_BYTES && resLenBytes <= MAX_RES_LEN_BYTES;
+        }
     }
 
     /**
@@ -986,7 +1014,7 @@ public abstract class EapSimAkaAttribute {
      */
     public static class AtAuts extends EapSimAkaAttribute {
         private static final int ATTR_LENGTH = 4 * LENGTH_SCALING;
-        private static final int AUTS_LENGTH = 14;
+        public static final int AUTS_LENGTH = 14;
 
         public final byte[] auts = new byte[AUTS_LENGTH];
 
@@ -1001,12 +1029,10 @@ public abstract class EapSimAkaAttribute {
             byteBuffer.get(auts);
         }
 
-        public AtAuts(int lengthInBytes, byte[] auts) throws EapSimAkaInvalidAttributeException {
-            super(EAP_AT_AUTS, lengthInBytes);
+        public AtAuts(byte[] auts) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_AUTS, ATTR_LENGTH);
 
-            if (lengthInBytes != ATTR_LENGTH) {
-                throw new EapSimAkaInvalidAttributeException("Length must be 16B");
-            } else if (auts.length != AUTS_LENGTH) {
+            if (auts.length != AUTS_LENGTH) {
                 throw new EapSimAkaInvalidAttributeException("Auts must be 14B");
             }
 

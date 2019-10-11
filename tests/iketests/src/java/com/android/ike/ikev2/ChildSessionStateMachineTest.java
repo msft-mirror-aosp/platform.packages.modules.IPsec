@@ -49,6 +49,7 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyLong;
 import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -63,7 +64,6 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
-import android.os.Looper;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -97,6 +97,8 @@ import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 import com.android.ike.ikev2.message.IkeTestUtils;
 import com.android.ike.ikev2.message.IkeTsPayload;
+import com.android.ike.ikev2.testutils.MockIpSecTestUtils;
+import com.android.ike.utils.Log;
 import com.android.server.IpSecService;
 
 import libcore.net.InetAddressUtils;
@@ -116,6 +118,8 @@ import java.util.List;
 import java.util.concurrent.Executor;
 
 public final class ChildSessionStateMachineTest {
+    private static final String TAG = "ChildSessionStateMachineTest";
+
     private static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
@@ -165,6 +169,8 @@ public final class ChildSessionStateMachineTest {
     private ChildSaRecord mSpyLocalInitNewChildSaRecord;
     private ChildSaRecord mSpyRemoteInitNewChildSaRecord;
 
+    private Log mSpyIkeLog;
+
     private ISaRecordHelper mMockSaRecordHelper;
 
     private ChildSessionOptions mChildSessionOptions;
@@ -172,7 +178,7 @@ public final class ChildSessionStateMachineTest {
     private IntegrityTransform mChildIntegrityTransform;
     private DhGroupTransform mChildDhGroupTransform;
 
-    private SaProposal mMockNegotiatedProposal;
+    private ChildSaProposal mMockNegotiatedProposal;
 
     private Executor mSpyUserCbExecutor;
     private IChildSessionCallback mMockChildSessionCallback;
@@ -203,7 +209,8 @@ public final class ChildSessionStateMachineTest {
 
     @Before
     public void setup() throws Exception {
-        if (Looper.myLooper() == null) Looper.prepare();
+        mSpyIkeLog = TestUtils.makeSpyLogThrowExceptionForWtf(TAG);
+        IkeManager.setIkeLog(mSpyIkeLog);
 
         mIkePrf =
                 IkeMacPrf.create(
@@ -215,7 +222,7 @@ public final class ChildSessionStateMachineTest {
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
         mMockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
 
-        mMockNegotiatedProposal = mock(SaProposal.class);
+        mMockNegotiatedProposal = mock(ChildSaProposal.class);
 
         mSpyUserCbExecutor =
                 spy(
@@ -249,11 +256,12 @@ public final class ChildSessionStateMachineTest {
     @After
     public void tearDown() {
         mChildSessionStateMachine.setDbg(false);
+        IkeManager.resetIkeLog();
         SaRecord.setSaRecordHelper(new SaRecordHelper());
     }
 
-    private SaProposal buildSaProposal() throws Exception {
-        return SaProposal.Builder.newChildSaProposalBuilder()
+    private ChildSaProposal buildSaProposal() throws Exception {
+        return new ChildSaProposal.Builder()
                 .addEncryptionAlgorithm(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                 .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
@@ -261,7 +269,7 @@ public final class ChildSessionStateMachineTest {
     }
 
     private ChildSessionOptions buildChildSessionOptions() throws Exception {
-        return new ChildSessionOptions.Builder().addSaProposal(buildSaProposal()).build();
+        return new TunnelModeChildSessionOptions.Builder().addSaProposal(buildSaProposal()).build();
     }
 
     private void setUpChildSaRecords() {
@@ -400,7 +408,7 @@ public final class ChildSessionStateMachineTest {
                         instanceof ChildSessionStateMachine.Idle);
 
         // Validate negotiated SA proposal.
-        SaProposal negotiatedProposal = mChildSessionStateMachine.mSaProposal;
+        ChildSaProposal negotiatedProposal = mChildSessionStateMachine.mSaProposal;
         assertNotNull(negotiatedProposal);
         assertEquals(
                 new EncryptionTransform[] {mChildEncryptionTransform},
@@ -677,6 +685,23 @@ public final class ChildSessionStateMachineTest {
         assertNull(mChildSessionStateMachine.getCurrentState());
 
         verifyNotifyUsersDeleteSession();
+    }
+
+    @Test
+    public void testDeleteChildLocalHandlesInvalidResp() throws Exception {
+        setupIdleStateMachine();
+
+        // Test initiating Delete request
+        mChildSessionStateMachine.deleteChildSession();
+        mLooper.dispatchAll();
+
+        // Test receiving response with no Delete Payload
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
+        mLooper.dispatchAll();
+
+        assertNull(mChildSessionStateMachine.getCurrentState());
+        verify(mMockChildSessionCallback).onError(any(InvalidSyntaxException.class));
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
     }
 
     @Test
@@ -1103,8 +1128,7 @@ public final class ChildSessionStateMachineTest {
 
         // Test receiving Delete response with missing Delete payload
         mChildSessionStateMachine.receiveResponse(
-                EXCHANGE_TYPE_INFORMATIONAL,
-                new ArrayList<IkePayload>());
+                EXCHANGE_TYPE_INFORMATIONAL, new ArrayList<IkePayload>());
         mLooper.dispatchAll();
 
         // Verify rekey has finished
@@ -1537,10 +1561,14 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testHandleUnexpectedException() throws Exception {
+        Log spyIkeLog = TestUtils.makeSpyLogDoLogErrorForWtf(TAG);
+        IkeManager.setIkeLog(spyIkeLog);
+
         mChildSessionStateMachine.createChildSession(
                 null /*localAddress*/, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
         mLooper.dispatchAll();
 
         verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 }
