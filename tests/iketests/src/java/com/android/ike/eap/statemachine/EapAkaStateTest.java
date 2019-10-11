@@ -62,6 +62,10 @@ public class EapAkaStateTest {
     protected static final String NOTIFICATION_MESSAGE = "test";
     protected static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
 
+    // EAP-Identity = hex("test@android.net")
+    protected static final byte[] EAP_IDENTITY_BYTES =
+            hexStringToByteArray("7465737440616E64726F69642E6E6574");
+
     protected TelephonyManager mMockTelephonyManager;
     protected EapAkaTypeDataDecoder mMockEapAkaTypeDataDecoder;
 
@@ -79,6 +83,7 @@ public class EapAkaStateTest {
         mEapAkaMethodStateMachine =
                 new EapAkaMethodStateMachine(
                         mMockTelephonyManager,
+                        EAP_IDENTITY_BYTES,
                         mEapAkaConfig,
                         mMockEapAkaTypeDataDecoder);
 

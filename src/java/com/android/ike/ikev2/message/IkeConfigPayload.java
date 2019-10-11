@@ -19,6 +19,7 @@ package com.android.ike.ikev2.message;
 import android.annotation.IntDef;
 import android.net.LinkAddress;
 
+import com.android.ike.ikev2.IkeManager;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 
 import java.lang.annotation.Retention;
@@ -53,12 +54,10 @@ public final class IkeConfigPayload extends IkePayload {
         CONFIG_ATTR_INTERNAL_IP4_ADDRESS,
         CONFIG_ATTR_INTERNAL_IP4_NETMASK,
         CONFIG_ATTR_INTERNAL_IP4_DNS,
-        CONFIG_ATTR_INTERNAL_IP4_NBNS,
         CONFIG_ATTR_INTERNAL_IP4_DHCP,
         CONFIG_ATTR_APPLICATION_VERSION,
         CONFIG_ATTR_INTERNAL_IP6_ADDRESS,
         CONFIG_ATTR_INTERNAL_IP6_DNS,
-        CONFIG_ATTR_INTERNAL_IP6_DHCP,
         CONFIG_ATTR_INTERNAL_IP4_SUBNET,
         CONFIG_ATTR_SUPPORTED_ATTRIBUTES,
         CONFIG_ATTR_INTERNAL_IP6_SUBNET
@@ -68,12 +67,10 @@ public final class IkeConfigPayload extends IkePayload {
     public static final int CONFIG_ATTR_INTERNAL_IP4_ADDRESS = 1;
     public static final int CONFIG_ATTR_INTERNAL_IP4_NETMASK = 2;
     public static final int CONFIG_ATTR_INTERNAL_IP4_DNS = 3;
-    public static final int CONFIG_ATTR_INTERNAL_IP4_NBNS = 4;
     public static final int CONFIG_ATTR_INTERNAL_IP4_DHCP = 6;
     public static final int CONFIG_ATTR_APPLICATION_VERSION = 7;
     public static final int CONFIG_ATTR_INTERNAL_IP6_ADDRESS = 8;
     public static final int CONFIG_ATTR_INTERNAL_IP6_DNS = 10;
-    public static final int CONFIG_ATTR_INTERNAL_IP6_DHCP = 12;
     public static final int CONFIG_ATTR_INTERNAL_IP4_SUBNET = 13;
     public static final int CONFIG_ATTR_SUPPORTED_ATTRIBUTES = 14;
     public static final int CONFIG_ATTR_INTERNAL_IP6_SUBNET = 15;
@@ -98,6 +95,13 @@ public final class IkeConfigPayload extends IkePayload {
         inputBuffer.get(new byte[CONFIG_HEADER_RESERVED_LEN]);
 
         recognizedAttributeList = ConfigAttribute.decodeAttributeFrom(inputBuffer);
+
+        // For an inbound Config Payload, IKE library is only able to handle a Config Reply or IKE
+        // Session attribute requests in a Config Request. For interoperability, netmask validation
+        // will be skipped for Config(Request) and config payloads with unsupported config types.
+        if (configType == CONFIG_TYPE_REPLY) {
+            validateNetmaskInReply();
+        }
     }
 
     /** Build an IkeConfigPayload instance for an outbound IKE packet. */
@@ -105,6 +109,40 @@ public final class IkeConfigPayload extends IkePayload {
         super(PAYLOAD_TYPE_CP, false);
         this.configType = isReply ? CONFIG_TYPE_REPLY : CONFIG_TYPE_REQUEST;
         this.recognizedAttributeList = attributeList;
+    }
+
+    private void validateNetmaskInReply() throws InvalidSyntaxException {
+        boolean hasIpv4Address = false;
+        int numNetmask = 0;
+
+        for (ConfigAttribute attr : recognizedAttributeList) {
+            if (attr.isEmptyValue()) {
+                IkeManager.getIkeLog()
+                        .d(
+                                "IkeConfigPayload",
+                                "Found empty attribute in a Config Payload reply "
+                                        + attr.attributeType);
+            }
+            switch (attr.attributeType) {
+                case CONFIG_ATTR_INTERNAL_IP4_ADDRESS:
+                    if (!attr.isEmptyValue()) hasIpv4Address = true;
+                    break;
+                case CONFIG_ATTR_INTERNAL_IP4_NETMASK:
+                    if (!attr.isEmptyValue()) numNetmask++;
+                    break;
+                default:
+                    continue;
+            }
+        }
+
+        if (!hasIpv4Address && numNetmask > 0) {
+            throw new InvalidSyntaxException(
+                    "Found INTERNAL_IP4_NETMASK attribute but no INTERNAL_IP4_ADDRESS attribute");
+        }
+
+        if (numNetmask > 1) {
+            throw new InvalidSyntaxException("Found more than one INTERNAL_IP4_NETMASK");
+        }
     }
 
     // TODO: Create ConfigAttribute subclasses for each attribute.
@@ -156,9 +194,29 @@ public final class IkeConfigPayload extends IkePayload {
                     case CONFIG_ATTR_INTERNAL_IP4_ADDRESS:
                         configList.add(new ConfigAttributeIpv4Address(value));
                         break;
+                    case CONFIG_ATTR_INTERNAL_IP4_NETMASK:
+                        configList.add(new ConfigAttributeIpv4Netmask(value));
+                        break;
+                    case CONFIG_ATTR_INTERNAL_IP4_DNS:
+                        configList.add(new ConfigAttributeIpv4Dns(value));
+                        break;
+                    case CONFIG_ATTR_INTERNAL_IP6_ADDRESS:
+                        configList.add(new ConfigAttributeIpv6Address(value));
+                        break;
+                    case CONFIG_ATTR_INTERNAL_IP6_DNS:
+                        configList.add(new ConfigAttributeIpv6Dns(value));
+                        break;
+                    case CONFIG_ATTR_INTERNAL_IP4_SUBNET:
+                        configList.add(new ConfigAttributeIpv4Subnet(value));
+                        break;
+                    case CONFIG_ATTR_INTERNAL_IP6_SUBNET:
+                        configList.add(new ConfigAttributeIpv6Subnet(value));
+                        break;
                     default:
                         // Ignore unrecognized attribute type.
                 }
+
+                // TODO: Support DHCP4, App version and supported attribute list
             }
 
             return configList;
@@ -174,6 +232,11 @@ public final class IkeConfigPayload extends IkePayload {
         /** Get attribute length. */
         public int getAttributeLen() {
             return ATTRIBUTE_HEADER_LEN + getValueLength();
+        }
+
+        /** Returns if this attribute value is empty. */
+        public boolean isEmptyValue() {
+            return getValueLength() == VALUE_LEN_NOT_INCLUDED;
         }
 
         protected static int netmaskToPrefixLen(Inet4Address address) {
@@ -317,6 +380,11 @@ public final class IkeConfigPayload extends IkePayload {
             } catch (IllegalArgumentException e) {
                 throw new InvalidSyntaxException("Invalid attribute value", e);
             }
+        }
+
+        /** Convert netmask to prefix length. */
+        public int getPrefixLen() {
+            return netmaskToPrefixLen(address);
         }
     }
 
@@ -629,6 +697,13 @@ public final class IkeConfigPayload extends IkePayload {
      */
     @Override
     public String getTypeString() {
-        return "Configuration Payload";
+        switch (configType) {
+            case CONFIG_TYPE_REQUEST:
+                return "CP(Req)";
+            case CONFIG_TYPE_REPLY:
+                return "CP(Reply)";
+            default:
+                return "CP(" + configType + ")";
+        }
     }
 }

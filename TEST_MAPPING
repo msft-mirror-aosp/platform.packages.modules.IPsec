@@ -3,5 +3,10 @@
     {
       "name": "FrameworksIkeTests"
     }
+  ],
+  "postsubmit": [
+    {
+      "name": "FrameworksIkeTests"
+    }
   ]
 }

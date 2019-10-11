@@ -25,6 +25,8 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.TYPE_DATA_IN
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
 
+import static junit.framework.TestCase.fail;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -48,6 +50,7 @@ public class EapSimTypeDataTest {
     private static final int UNABLE_TO_PROCESS_CODE = 0;
     private static final int INSUFFICIENT_CHALLENGES_CODE = 2;
     private static final int EAP_SIM_START = 10;
+    private static final int INVALID_SUBTYPE_INT = -1;
 
     private EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
@@ -150,5 +153,24 @@ public class EapSimTypeDataTest {
                 mEapSimTypeDataDecoder.decode(EAP_SIM_START_DUPLICATE_ATTRIBUTES);
         assertFalse(result.isSuccessfulDecode());
         assertEquals(UNABLE_TO_PROCESS_CODE, result.atClientErrorCode.errorCode);
+    }
+
+    @Test
+    public void testConstructorInvalidSubtype() throws Exception {
+        try {
+            new EapSimTypeData(INVALID_SUBTYPE_INT, Arrays.asList(new AtPermanentIdReq()));
+            fail("Expected IllegalArgumentException for invalid subtype");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testConstructorDuplicateAttributes() throws Exception {
+        try {
+            new EapSimTypeData(
+                    EAP_SIM_START, Arrays.asList(new AtPermanentIdReq(), new AtPermanentIdReq()));
+            fail("Expected IllegalArgumentException for duplicate attributes");
+        } catch (IllegalArgumentException expected) {
+        }
     }
 }

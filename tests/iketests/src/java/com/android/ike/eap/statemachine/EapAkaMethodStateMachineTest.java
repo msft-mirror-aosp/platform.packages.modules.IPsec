@@ -64,6 +64,10 @@ public class EapAkaMethodStateMachineTest {
     private static final int SUB_ID = 1;
     private static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
 
+    // EAP-Identity = hex("test@android.net")
+    protected static final byte[] EAP_IDENTITY_BYTES =
+            hexStringToByteArray("7465737440616E64726F69642E6E6574");
+
     protected TelephonyManager mMockTelephonyManager;
     private EapAkaTypeDataDecoder mMockEapAkaTypeDataDecoder;
 
@@ -80,7 +84,10 @@ public class EapAkaMethodStateMachineTest {
 
         mEapAkaMethodStateMachine =
                 new EapAkaMethodStateMachine(
-                        mMockTelephonyManager, mEapAkaConfig, mMockEapAkaTypeDataDecoder);
+                        mMockTelephonyManager,
+                        EAP_IDENTITY_BYTES,
+                        mEapAkaConfig,
+                        mMockEapAkaTypeDataDecoder);
 
         verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
     }

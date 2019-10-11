@@ -55,6 +55,7 @@ import com.android.ike.ikev2.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
 import com.android.ike.ikev2.IkeSessionOptions.IkeAuthConfig;
+import com.android.ike.ikev2.IkeSessionOptions.IkeAuthDigitalSignRemoteConfig;
 import com.android.ike.ikev2.IkeSessionOptions.IkeAuthPskConfig;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
 import com.android.ike.ikev2.crypto.IkeCipher;
@@ -66,9 +67,11 @@ import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.message.IkeAuthDigitalSignPayload;
 import com.android.ike.ikev2.message.IkeAuthPayload;
 import com.android.ike.ikev2.message.IkeAuthPskPayload;
 import com.android.ike.ikev2.message.IkeCertPayload;
+import com.android.ike.ikev2.message.IkeCertX509CertPayload;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeEapPayload;
 import com.android.ike.ikev2.message.IkeHeader;
@@ -107,6 +110,8 @@ import java.net.SocketException;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.security.SecureRandom;
+import java.security.cert.TrustAnchor;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -306,8 +311,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
     @VisibleForTesting boolean mSupportFragment;
 
-    /** Package private SaProposal that represents the negotiated IKE SA proposal. */
-    @VisibleForTesting SaProposal mSaProposal;
+    /** Package private IkeSaProposal that represents the negotiated IKE SA proposal. */
+    @VisibleForTesting IkeSaProposal mSaProposal;
 
     @VisibleForTesting IkeCipher mIkeCipher;
     @VisibleForTesting IkeMacIntegrity mIkeIntegrity;
@@ -2441,8 +2446,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             long respSpi = 0;
 
             // It is validated in IkeSessionOptions.Builder to ensure IkeSessionOptions has at least
-            // one SaProposal and all SaProposals are valid for IKE SA negotiation.
-            SaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
+            // one IkeSaProposal and all SaProposals are valid for IKE SA negotiation.
+            IkeSaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getIkeInitSaRequestPayloads(
                             saProposals,
@@ -2977,13 +2982,66 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             respIdPayload);
                     break;
                 case IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
-                    // STOPSHIP: b/122685769 Validate received certificates and digital signature.
+                    authenticateDigitalSignature(
+                            certPayloads,
+                            ((IkeAuthDigitalSignRemoteConfig)
+                                            mIkeSessionOptions.getRemoteAuthConfig())
+                                    .mTrustAnchor,
+                            authPayload,
+                            respIdPayload);
                     break;
                 default:
                     cleanUpAndQuit(
                             new IllegalArgumentException(
                                     "Unrecognized auth method: " + authPayload.authMethod));
             }
+        }
+
+        private void authenticateDigitalSignature(
+                List<IkeCertPayload> certPayloads,
+                TrustAnchor trustAnchor,
+                IkeAuthPayload authPayload,
+                IkeIdPayload respIdPayload)
+                throws AuthenticationFailedException {
+            if (authPayload.authMethod != IkeAuthPayload.AUTH_METHOD_RSA_DIGITAL_SIGN
+                    && authPayload.authMethod != IkeAuthPayload.AUTH_METHOD_GENERIC_DIGITAL_SIGN) {
+                throw new AuthenticationFailedException(
+                        "Expected the remote/server to use digital-signature-based authentication"
+                                + " but they used: "
+                                + authPayload.authMethod);
+            }
+
+            X509Certificate endCert = null;
+            List<X509Certificate> certList = new LinkedList<>();
+
+            // TODO: b/122676944 Extract CRL from IkeCrlPayload when we support IkeCrlPayload
+            for (IkeCertPayload certPayload : certPayloads) {
+                X509Certificate cert = ((IkeCertX509CertPayload) certPayload).certificate;
+
+                // The first certificate MUST be the end entity certificate.
+                if (endCert == null) endCert = cert;
+                certList.add(cert);
+            }
+
+            if (endCert == null) {
+                throw new AuthenticationFailedException(
+                        "The remote/server failed to provide a end certificate");
+            }
+
+            Set<TrustAnchor> trustAnchorSet = new HashSet<>();
+            trustAnchorSet.add(trustAnchor);
+
+            IkeCertPayload.validateCertificates(
+                    endCert, certList, null /*crlList*/, trustAnchorSet);
+
+            IkeAuthDigitalSignPayload signPayload = (IkeAuthDigitalSignPayload) authPayload;
+            signPayload.verifyInboundSignature(
+                    endCert,
+                    mIkeInitResponseBytes,
+                    mCurrentIkeSaRecord.nonceInitiator,
+                    respIdPayload.getEncodedPayloadBody(),
+                    mIkePrf,
+                    mCurrentIkeSaRecord.getSkPr());
         }
 
         @Override
@@ -3482,7 +3540,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
          */
         private IkeMessage buildIkeRekeyReq() throws IOException {
             // TODO: Evaluate if we need to support different proposals for rekeys
-            SaProposal[] saProposals = new SaProposal[] {mSaProposal};
+            IkeSaProposal[] saProposals = new IkeSaProposal[] {mSaProposal};
 
             // No need to allocate SPIs; they will be allocated as part of the
             // getRekeyIkeSaRequestPayloads
@@ -4080,7 +4138,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      */
     private static class CreateIkeSaHelper {
         public static List<IkePayload> getIkeInitSaRequestPayloads(
-                SaProposal[] saProposals,
+                IkeSaProposal[] saProposals,
                 long initIkeSpi,
                 long respIkeSpi,
                 InetAddress localAddr,
@@ -4109,7 +4167,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         public static List<IkePayload> getRekeyIkeSaRequestPayloads(
-                SaProposal[] saProposals, InetAddress localAddr) throws IOException {
+                IkeSaProposal[] saProposals, InetAddress localAddr) throws IOException {
             if (localAddr == null) {
                 throw new IllegalArgumentException("Local address was null for rekey");
             }
@@ -4119,7 +4177,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         public static List<IkePayload> getRekeyIkeSaResponsePayloads(
-                byte respProposalNumber, SaProposal saProposal, InetAddress localAddr)
+                byte respProposalNumber, IkeSaProposal saProposal, InetAddress localAddr)
                 throws IOException {
             if (localAddr == null) {
                 throw new IllegalArgumentException("Local address was null for rekey");
@@ -4148,7 +4206,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
             DhGroupTransform dhGroupTransform =
-                    saPayload.proposalList.get(0).saProposal.getDhGroupTransforms()[0];
+                    ((IkeProposal) saPayload.proposalList.get(0))
+                            .saProposal
+                            .getDhGroupTransforms()[0];
             payloadList.add(new IkeKePayload(dhGroupTransform.id));
 
             return payloadList;

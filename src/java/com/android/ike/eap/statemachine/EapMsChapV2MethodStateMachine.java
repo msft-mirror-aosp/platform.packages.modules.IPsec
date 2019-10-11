@@ -25,6 +25,7 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_FAILURE;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_MSCHAP_V2_SUCCESS;
+import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EAP_OP_CODE_STRING;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureRequest.EAP_ERROR_CODE_STRING;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureResponse.getEapMsChapV2FailureResponse;
 import static com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessResponse.getEapMsChapV2SuccessResponse;
@@ -49,12 +50,14 @@ import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2Failu
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessRequest;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder;
 import com.android.ike.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
+import com.android.ike.utils.Log;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.org.bouncycastle.crypto.digests.MD4Digest;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -96,8 +99,6 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     private static final String SHA_ALG = "SHA-1";
     private static final String DES_ALG = "DES/ECB/NoPadding";
     private static final String DES_KEY_FACTORY = "DES";
-    private static final String USERNAME_CHARSET = "US-ASCII";
-    private static final String PASSWORD_CHARSET = "UTF-16LE";
     private static final int PEER_CHALLENGE_SIZE = 16;
     private static final int CHALLENGE_HASH_LEN = 8;
     private static final int PASSWORD_HASH_LEN = 16;
@@ -250,6 +251,12 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
             }
 
             EapMsChapV2ChallengeRequest challengeRequest = decodeResult.eapTypeData;
+            LOG.d(
+                    mTAG,
+                    "Received Challenge Request:"
+                            + " Challenge=" + LOG.pii(challengeRequest.challenge)
+                            + " Server-Name=" + Log.byteArrayToHexString(challengeRequest.name));
+
             byte[] peerChallenge = new byte[PEER_CHALLENGE_SIZE];
             mSecureRandom.nextBytes(peerChallenge);
 
@@ -261,10 +268,17 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                                 peerChallenge,
                                 mEapMsChapV2Config.username,
                                 mEapMsChapV2Config.password);
-            } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
+            } catch (GeneralSecurityException ex) {
                 LOG.e(mTAG, "Error generating EAP MSCHAPv2 Challenge response", ex);
                 return new EapError(ex);
             }
+
+            LOG.d(
+                    mTAG,
+                    "Generating Challenge Response:"
+                            + " Username=" + LOG.pii(mEapMsChapV2Config.username)
+                            + " Peer-Challenge=" + LOG.pii(peerChallenge)
+                            + " NT-Response=" + LOG.pii(ntResponse));
 
             try {
                 EapMsChapV2ChallengeResponse challengeResponse =
@@ -277,9 +291,9 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 transitionTo(
                         new ValidateAuthenticatorState(
                                 challengeRequest.challenge, peerChallenge, ntResponse));
-                LOG.e(mTAG, "transitioned to PostChallengeState");
+
                 return buildEapMessageResponse(mTAG, message.eapIdentifier, challengeResponse);
-            } catch (UnsupportedEncodingException | EapMsChapV2ParsingException ex) {
+            } catch (EapMsChapV2ParsingException ex) {
                 LOG.e(mTAG, "Error building response type data", ex);
                 return new EapError(ex);
             }
@@ -316,6 +330,12 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 return new EapError(ex);
             }
 
+            LOG.d(
+                    mTAG,
+                    "Received Op Code: "
+                            + EAP_OP_CODE_STRING.getOrDefault(opCode, "Unknown")
+                            + " (" + opCode + ")");
+
             switch (opCode) {
                 case EAP_MSCHAP_V2_SUCCESS:
                     DecodeResult<EapMsChapV2SuccessRequest> successDecodeResult =
@@ -326,7 +346,11 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                     }
 
                     EapMsChapV2SuccessRequest successRequest = successDecodeResult.eapTypeData;
-                    LOG.d(mTAG, "SuccessRequest message: " + successRequest.message);
+                    LOG.d(
+                            mTAG,
+                            "Received SuccessRequest:"
+                                    + " Auth-String=" + LOG.pii(successRequest.authBytes)
+                                    + " Message=" + successRequest.message);
 
                     boolean isSuccessfulAuth;
                     try {
@@ -379,7 +403,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                             mTAG, message.eapIdentifier, getEapMsChapV2FailureResponse());
 
                 default:
-                    LOG.e(mTAG, "Invalid OpCode received in ValidateAuthenticatorState: " + opCode);
+                    LOG.e(mTAG, "Invalid OpCode: " + opCode);
                     return new EapError(
                             new EapInvalidRequestException(
                                     "Unexpected request received in EAP MSCHAPv2"));
@@ -403,20 +427,21 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                 transitionTo(new FinalState());
                 return new EapFailure();
             } else if (message.eapCode != EAP_CODE_SUCCESS) {
-                if (message.eapData.eapType == EAP_NOTIFICATION) {
+                int eapType = message.eapData.eapType;
+                if (eapType == EAP_NOTIFICATION) {
                     return handleEapNotification(mTAG, message);
                 } else {
                     LOG.e(
                             mTAG,
                             "Received unexpected EAP message. Type="
                                     + EAP_TYPE_STRING.getOrDefault(
-                                            message.eapData.eapType, "UNKNOWN"));
+                                            eapType, "UNKNOWN (" + eapType + ")"));
                     return new EapError(
                             new EapInvalidRequestException(
                                     "Expected EAP Type "
                                             + getEapMethod()
                                             + ", received "
-                                            + message.eapData.eapType));
+                                            + eapType));
                 }
             }
 
@@ -440,17 +465,14 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
             if (result != null) {
                 return result;
             }
-
+            int eapType = message.eapData.eapType;
             LOG.e(
                     mTAG,
                     "Received unexpected EAP message. Type="
-                            + EAP_TYPE_STRING.getOrDefault(message.eapData.eapType, "UNKNOWN"));
+                            + EAP_TYPE_STRING.getOrDefault(eapType, "UNKNOWN (" + eapType + ")"));
             return new EapError(
                     new EapInvalidRequestException(
-                            "Expected EAP Type "
-                                    + getEapMethod()
-                                    + ", received "
-                                    + message.eapData.eapType));
+                            "Expected EAP Type " + getEapMethod() + ", received " + eapType));
         }
     }
 
@@ -468,8 +490,8 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
 
     /** Util for converting String username to "0-to-256 char username", as used in RFC 2759#8. */
     @VisibleForTesting
-    static byte[] usernameToBytes(String username) throws UnsupportedEncodingException {
-        return username.getBytes(USERNAME_CHARSET);
+    static byte[] usernameToBytes(String username) {
+        return username.getBytes(StandardCharsets.US_ASCII);
     }
 
     /**
@@ -477,15 +499,15 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
      * RFC 2759#8.
      */
     @VisibleForTesting
-    static byte[] passwordToBytes(String password) throws UnsupportedEncodingException {
-        return password.getBytes(PASSWORD_CHARSET);
+    static byte[] passwordToBytes(String password) {
+        return password.getBytes(StandardCharsets.UTF_16LE);
     }
 
     /* Implementation of RFC 2759#8.1: GenerateNTResponse() */
     @VisibleForTesting
     static byte[] generateNtResponse(
             byte[] authenticatorChallenge, byte[] peerChallenge, String username, String password)
-            throws GeneralSecurityException, UnsupportedEncodingException {
+            throws GeneralSecurityException {
         byte[] challenge = challengeHash(peerChallenge, authenticatorChallenge, username);
         byte[] passwordHash = ntPasswordHash(password);
         return challengeResponse(challenge, passwordHash);
@@ -495,7 +517,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     @VisibleForTesting
     static byte[] challengeHash(
             byte[] peerChallenge, byte[] authenticatorChallenge, String username)
-            throws GeneralSecurityException, UnsupportedEncodingException {
+            throws GeneralSecurityException {
         MessageDigest sha1 = MessageDigest.getInstance(SHA_ALG);
         sha1.update(peerChallenge);
         sha1.update(authenticatorChallenge);
@@ -505,7 +527,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
 
     /* Implementation of RFC 2759#8.3: NtPasswordHash() */
     @VisibleForTesting
-    static byte[] ntPasswordHash(String password) throws UnsupportedEncodingException {
+    static byte[] ntPasswordHash(String password) {
         MD4Digest md4 = new MD4Digest();
         byte[] passwordBytes = passwordToBytes(password);
         md4.update(passwordBytes, 0, passwordBytes.length);
