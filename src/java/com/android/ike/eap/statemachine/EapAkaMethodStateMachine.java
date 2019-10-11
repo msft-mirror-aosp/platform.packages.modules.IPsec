@@ -21,6 +21,7 @@ import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_AUTHENTICATION_REJECT;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_ERROR;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
@@ -46,6 +47,7 @@ import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
 import com.android.ike.eap.crypto.Fips186_2Prf;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
 import com.android.ike.eap.exceptions.EapSilentException;
+import com.android.ike.eap.exceptions.simaka.EapAkaInvalidAuthenticationResponse;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
@@ -70,6 +72,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -345,6 +348,8 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             RandChallengeResult result;
             try {
                 result = getRandChallengeResult(eapAkaTypeData);
+            } catch (EapAkaInvalidAuthenticationResponse ex) {
+                return new EapError(ex);
             } catch (EapSimAkaInvalidLengthException | BufferUnderflowException ex) {
                 LOG.e(mTAG, "Invalid response returned from SIM", ex);
                 return buildClientErrorResponse(
@@ -352,7 +357,13 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                         EAP_TYPE_AKA,
                         AtClientErrorCode.UNABLE_TO_PROCESS);
             } catch (EapSimAkaAuthenticationFailureException ex) {
-                return new EapError(ex);
+                // Return EAP-Response/AKA-Authentication-Reject when the AUTN is rejected
+                // (RFC 4187#6.3.1)
+                return buildResponseMessage(
+                        EAP_TYPE_AKA,
+                        EAP_AKA_AUTHENTICATION_REJECT,
+                        message.eapIdentifier,
+                        new ArrayList<>());
             }
 
             if (!result.isSuccessfulResult()) {
@@ -495,7 +506,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
                     return new RandChallengeResult(auts);
                 default:
-                    throw new EapSimAkaAuthenticationFailureException(
+                    throw new EapAkaInvalidAuthenticationResponse(
                             "Invalid tag for UICC response: " + String.format("%02X", tag));
             }
 
