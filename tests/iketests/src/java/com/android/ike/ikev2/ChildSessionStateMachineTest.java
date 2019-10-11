@@ -194,7 +194,7 @@ public final class ChildSessionStateMachineTest {
     private ChildSaProposal mMockNegotiatedProposal;
 
     private Executor mSpyUserCbExecutor;
-    private IChildSessionCallback mMockChildSessionCallback;
+    private ChildSessionCallback mMockChildSessionCallback;
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
     private ArgumentCaptor<ChildSaRecordConfig> mChildSaRecordConfigCaptor =
@@ -246,7 +246,7 @@ public final class ChildSessionStateMachineTest {
                             command.run();
                         });
 
-        mMockChildSessionCallback = mock(IChildSessionCallback.class);
+        mMockChildSessionCallback = mock(ChildSessionCallback.class);
         mChildSessionOptions = buildChildSessionOptions();
 
         // Setup thread and looper
@@ -587,7 +587,7 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
         verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
 
-        verify(mMockChildSessionCallback).onError(any(exceptionClass));
+        verify(mMockChildSessionCallback).onClosedExceptionally(any(exceptionClass));
     }
 
     @Test
@@ -764,7 +764,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         assertNull(mChildSessionStateMachine.getCurrentState());
-        verify(mMockChildSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockChildSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
         verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
     }
 
