@@ -126,6 +126,10 @@ public class EapSimAkaMethodStateMachineTest {
     private static final byte[] UICC_RESPONSE =
             hexStringToByteArray("04" + SRES_1 + "08" + KC_1);
 
+    // EAP-Identity = hex("test@android.net")
+    protected static final byte[] EAP_IDENTITY_BYTES =
+            hexStringToByteArray("7465737440616E64726F69642E6E6574");
+
     // K_encr + K_aut + MSK + EMSK
     private static final int PRF_OUTPUT_BYTES = (2 * KEY_LEN) + (2 * SESSION_KEY_LENGTH);
 
@@ -139,7 +143,8 @@ public class EapSimAkaMethodStateMachineTest {
         mEapSimConfig = new EapSimConfig(SUB_ID, TelephonyManager.APPTYPE_USIM);
 
         mStateMachine =
-                new EapSimAkaMethodStateMachine(mMockTelephonyManager, mEapSimConfig) {
+                new EapSimAkaMethodStateMachine(
+                        mMockTelephonyManager, EAP_IDENTITY_BYTES, mEapSimConfig) {
                     @Override
                     EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
                         return new EapSimTypeData(
@@ -362,7 +367,8 @@ public class EapSimAkaMethodStateMachineTest {
                         Arrays.asList(new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE)));
 
         EapResponse eapResponse =
-                (EapResponse) mStateMachine.handleEapSimAkaNotification(true, ID_INT, typeData);
+                (EapResponse)
+                        mStateMachine.handleEapSimAkaNotification(TAG, true, ID_INT, typeData);
         assertArrayEquals(EAP_SIM_NOTIFICATION_RESPONSE, eapResponse.packet);
         assertTrue(mStateMachine.mHasReceivedSimAkaNotification);
         verify(mStateMachine, never()).transitionTo(any(EapMethodState.class));
@@ -376,7 +382,8 @@ public class EapSimAkaMethodStateMachineTest {
                         Arrays.asList(new AtNotification(GENERAL_FAILURE_POST_CHALLENGE)));
 
         EapResponse eapResponse =
-                (EapResponse) mStateMachine.handleEapSimAkaNotification(true, ID_INT, typeData);
+                (EapResponse)
+                        mStateMachine.handleEapSimAkaNotification(TAG, true, ID_INT, typeData);
         assertArrayEquals(EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
         verify(mStateMachine, never())
                 .transitionTo(any(EapMethodStateMachine.EapMethodState.class));
@@ -389,10 +396,10 @@ public class EapSimAkaMethodStateMachineTest {
                         EAP_SIM_NOTIFICATION,
                         Arrays.asList(new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE)));
 
-        mStateMachine.handleEapSimAkaNotification(true, ID_INT, typeData);
+        mStateMachine.handleEapSimAkaNotification(TAG, true, ID_INT, typeData);
 
         EapError eapError =
-                (EapError) mStateMachine.handleEapSimAkaNotification(true, ID_INT, typeData);
+                (EapError) mStateMachine.handleEapSimAkaNotification(TAG, true, ID_INT, typeData);
         assertTrue(eapError.cause instanceof EapInvalidRequestException);
         assertTrue(mStateMachine.mHasReceivedSimAkaNotification);
         verify(mStateMachine, never())
@@ -408,7 +415,8 @@ public class EapSimAkaMethodStateMachineTest {
                                 new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE), new AtMac()));
 
         EapResponse eapResponse =
-                (EapResponse) mStateMachine.handleEapSimAkaNotification(true, ID_INT, typeData);
+                (EapResponse)
+                        mStateMachine.handleEapSimAkaNotification(TAG, true, ID_INT, typeData);
         assertArrayEquals(EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
         verify(mStateMachine, never())
                 .transitionTo(any(EapMethodStateMachine.EapMethodState.class));
@@ -431,7 +439,8 @@ public class EapSimAkaMethodStateMachineTest {
         mStateMachine.mMacAlgorithm = mockMac;
 
         EapResponse eapResponse =
-                (EapResponse) mStateMachine.handleEapSimAkaNotification(false, ID_INT, typeData);
+                (EapResponse)
+                        mStateMachine.handleEapSimAkaNotification(TAG, false, ID_INT, typeData);
         assertArrayEquals(EAP_SIM_NOTIFICATION_RESPONSE_WITH_MAC, eapResponse.packet);
         assertTrue(mStateMachine.mHasReceivedSimAkaNotification);
         verify(mStateMachine, never()).transitionTo(any(EapMethodState.class));
@@ -449,7 +458,8 @@ public class EapSimAkaMethodStateMachineTest {
                         Arrays.asList(new AtNotification(GENERAL_FAILURE_POST_CHALLENGE)));
 
         EapResponse eapResponse =
-                (EapResponse) mStateMachine.handleEapSimAkaNotification(false, ID_INT, typeData);
+                (EapResponse)
+                        mStateMachine.handleEapSimAkaNotification(TAG, false, ID_INT, typeData);
         assertArrayEquals(EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
         verify(mStateMachine, never()).transitionTo(any(EapMethodState.class));
     }

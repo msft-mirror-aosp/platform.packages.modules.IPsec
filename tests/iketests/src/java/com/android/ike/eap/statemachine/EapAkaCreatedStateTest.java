@@ -24,6 +24,7 @@ import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
@@ -81,7 +82,8 @@ public class EapAkaCreatedStateTest extends EapAkaStateTest {
 
         mEapAkaMethodStateMachine.process(eapMessage);
 
-        assertTrue(mEapAkaMethodStateMachine.getState() instanceof ChallengeState);
+        ChallengeState challengeState = (ChallengeState) mEapAkaMethodStateMachine.getState();
+        assertArrayEquals(EAP_IDENTITY_BYTES, challengeState.mIdentity);
 
         // decoded in CreatedState and ChallengeState
         verify(mMockEapAkaTypeDataDecoder, times(2)).decode(DUMMY_EAP_TYPE_DATA);

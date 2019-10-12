@@ -65,6 +65,10 @@ public class EapSimMethodStateMachineTest {
     private static final int SUB_ID = 1;
     private static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
 
+    // EAP-Identity = hex("test@android.net")
+    protected static final byte[] EAP_IDENTITY_BYTES =
+            hexStringToByteArray("7465737440616E64726F69642E6E6574");
+
     private TelephonyManager mMockTelephonyManager;
     private EapSimTypeDataDecoder mMockEapSimTypeDataDecoder;
 
@@ -83,6 +87,7 @@ public class EapSimMethodStateMachineTest {
         mEapSimMethodStateMachine =
                 new EapSimMethodStateMachine(
                         mMockTelephonyManager,
+                        EAP_IDENTITY_BYTES,
                         mEapSimConfig,
                         new SecureRandom(),
                         mMockEapSimTypeDataDecoder);
