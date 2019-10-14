@@ -201,6 +201,9 @@ public final class IkeConfigPayload extends IkePayload {
                     case CONFIG_ATTR_INTERNAL_IP4_DNS:
                         configList.add(new ConfigAttributeIpv4Dns(value));
                         break;
+                    case CONFIG_ATTR_INTERNAL_IP4_DHCP:
+                        configList.add(new ConfigAttributeIpv4Dhcp(value));
+                        break;
                     case CONFIG_ATTR_INTERNAL_IP6_ADDRESS:
                         configList.add(new ConfigAttributeIpv6Address(value));
                         break;
@@ -214,10 +217,13 @@ public final class IkeConfigPayload extends IkePayload {
                         configList.add(new ConfigAttributeIpv6Subnet(value));
                         break;
                     default:
-                        // Ignore unrecognized attribute type.
+                        IkeManager.getIkeLog()
+                                .i(
+                                        "IkeConfigPayload",
+                                        "Unrecognized attribute type: " + attributeType);
                 }
 
-                // TODO: Support DHCP4, App version and supported attribute list
+                // TODO: Support App version and supported attribute list
             }
 
             return configList;
@@ -388,6 +394,29 @@ public final class IkeConfigPayload extends IkePayload {
         /** Convert netmask to prefix length. */
         public int getPrefixLen() {
             return netmaskToPrefixLen(address);
+        }
+    }
+
+    /** This class represents Configuration Attribute for IPv4 DHCP server. */
+    public static class ConfigAttributeIpv4Dhcp extends ConfigAttrIpv4AddressBase {
+        /** Construct an instance with specified DHCP server address for an outbound packet. */
+        public ConfigAttributeIpv4Dhcp(Inet4Address ipv4Address) {
+            super(CONFIG_ATTR_INTERNAL_IP4_DHCP, ipv4Address);
+        }
+
+        /**
+         * Construct an instance without a specified DHCP server address for an outbound packet.
+         *
+         * <p>It must be only used in a configuration request.
+         */
+        public ConfigAttributeIpv4Dhcp() {
+            super(CONFIG_ATTR_INTERNAL_IP4_DHCP);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        @VisibleForTesting
+        ConfigAttributeIpv4Dhcp(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_INTERNAL_IP4_DHCP, value);
         }
     }
 
