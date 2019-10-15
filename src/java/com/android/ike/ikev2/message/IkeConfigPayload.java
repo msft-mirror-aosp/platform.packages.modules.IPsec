@@ -48,7 +48,6 @@ public final class IkeConfigPayload extends IkePayload {
     private static final int CONFIG_HEADER_RESERVED_LEN = 3;
     private static final int CONFIG_HEADER_LEN = 4;
 
-    // TODO: Move these constant definitions to API
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         CONFIG_ATTR_INTERNAL_IP4_ADDRESS,

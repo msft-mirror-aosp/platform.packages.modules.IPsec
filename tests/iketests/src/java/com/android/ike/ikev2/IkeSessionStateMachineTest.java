@@ -1929,7 +1929,8 @@ public final class IkeSessionStateMachineTest {
 
         // Validate that user has been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onOpened();
+        verify(mMockIkeSessionCallback).onOpened(any());
+        // TODO: Verify sessionConfiguration
 
         // Verify payload list pair for first Child negotiation
         ArgumentCaptor<List<IkePayload>> mReqPayloadListCaptor =
