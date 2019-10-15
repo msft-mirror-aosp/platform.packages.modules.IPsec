@@ -20,6 +20,7 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
@@ -51,6 +52,8 @@ public final class TunnelModeChildSessionOptionsTest {
     private static final int IP4_PREFIX_LEN = 32;
     private static final int IP6_PREFIX_LEN = 64;
 
+    private static final int INVALID_ADDR_FAMILY = 5;
+
     private static final Inet4Address IPV4_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
     private static final Inet6Address IPV6_ADDRESS =
@@ -61,6 +64,8 @@ public final class TunnelModeChildSessionOptionsTest {
     private static final Inet6Address IPV6_DNS_SERVER =
             (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:4860:4860::8888"));
 
+    private static final Inet4Address IPV4_DHCP_SERVER =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
     private ChildSaProposal mSaProposal;
 
     @Before
@@ -81,10 +86,10 @@ public final class TunnelModeChildSessionOptionsTest {
     }
 
     private void verifyAttrTypes(
-            SparseArray exptectedAttrCntMap, TunnelModeChildSessionOptions childOptions) {
+            SparseArray expectedAttrCntMap, TunnelModeChildSessionOptions childOptions) {
         ConfigAttribute[] configAttributes = childOptions.getConfigurationRequests();
 
-        SparseArray<Integer> atrrCntMap = exptectedAttrCntMap.clone();
+        SparseArray<Integer> atrrCntMap = expectedAttrCntMap.clone();
 
         for (int i = 0; i < configAttributes.length; i++) {
             int attType = configAttributes[i].attributeType;
@@ -119,12 +124,12 @@ public final class TunnelModeChildSessionOptionsTest {
 
         verifyCommon(childOptions);
 
-        SparseArray<Integer> exptectedAttrCntMap = new SparseArray<>();
-        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, 2);
-        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, 3);
-        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_NETMASK, 1);
+        SparseArray<Integer> expectedAttrCntMap = new SparseArray<>();
+        expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, 2);
+        expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, 3);
+        expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_NETMASK, 1);
 
-        verifyAttrTypes(exptectedAttrCntMap, childOptions);
+        verifyAttrTypes(expectedAttrCntMap, childOptions);
     }
 
     @Test
@@ -153,11 +158,11 @@ public final class TunnelModeChildSessionOptionsTest {
 
         verifyCommon(childOptions);
 
-        SparseArray<Integer> exptectedAttrCntMap = new SparseArray<>();
-        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_DNS, 2);
-        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_DNS, 2);
+        SparseArray<Integer> expectedAttrCntMap = new SparseArray<>();
+        expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_DNS, 2);
+        expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_DNS, 2);
 
-        verifyAttrTypes(exptectedAttrCntMap, childOptions);
+        verifyAttrTypes(expectedAttrCntMap, childOptions);
     }
 
     @Test
@@ -171,11 +176,54 @@ public final class TunnelModeChildSessionOptionsTest {
 
         verifyCommon(childOptions);
 
-        SparseArray<Integer> exptectedAttrCntMap = new SparseArray<>();
-        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_SUBNET, 1);
-        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_SUBNET, 1);
+        SparseArray<Integer> expectedAttrCntMap = new SparseArray<>();
+        expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_SUBNET, 1);
+        expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_SUBNET, 1);
 
-        verifyAttrTypes(exptectedAttrCntMap, childOptions);
+        verifyAttrTypes(expectedAttrCntMap, childOptions);
+    }
+
+    @Test
+    public void testBuildChildSessionOptionsWithDhcpServerReq() {
+        TunnelModeChildSessionOptions childOptions =
+                new TunnelModeChildSessionOptions.Builder()
+                        .addSaProposal(mSaProposal)
+                        .addInternalDhcpServerRequest(AF_INET, 3)
+                        .addInternalDhcpServerRequest(IPV4_DHCP_SERVER)
+                        .build();
+
+        verifyCommon(childOptions);
+
+        SparseArray<Integer> expectedAttrCntMap = new SparseArray<>();
+        expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_DHCP, 4);
+
+        verifyAttrTypes(expectedAttrCntMap, childOptions);
+    }
+
+    @Test
+    public void testBuildChildSessionOptionsWithDhcp6SeverReq() {
+        try {
+            new TunnelModeChildSessionOptions.Builder()
+                    .addSaProposal(mSaProposal)
+                    .addInternalDhcpServerRequest(AF_INET6, 3)
+                    .build();
+            fail("Expected to fail because DHCP6 is not supported.");
+        } catch (IllegalArgumentException expected) {
+
+        }
+    }
+
+    @Test
+    public void testBuildChildSessionOptionsWithInvalidDhcpReq() {
+        try {
+            new TunnelModeChildSessionOptions.Builder()
+                    .addSaProposal(mSaProposal)
+                    .addInternalDhcpServerRequest(INVALID_ADDR_FAMILY, 3)
+                    .build();
+            fail("Expected to fail due to invalid address family value");
+        } catch (IllegalArgumentException expected) {
+
+        }
     }
 }
 
