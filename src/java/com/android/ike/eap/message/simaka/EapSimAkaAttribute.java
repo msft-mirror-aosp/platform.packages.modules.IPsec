@@ -78,6 +78,7 @@ public abstract class EapSimAkaAttribute {
     public static final int EAP_AT_NEXT_REAUTH_ID = 133;
     public static final int EAP_AT_CHECKCODE = 134;
     public static final int EAP_AT_RESULT_IND = 135;
+    public static final int EAP_AT_BIDDING = 136;
 
     public static final Map<Integer, String> EAP_ATTRIBUTE_STRING = new HashMap<>();
     static {
@@ -108,6 +109,7 @@ public abstract class EapSimAkaAttribute {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NEXT_REAUTH_ID, "AT_NEXT_REAUTH_ID");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_CHECKCODE, "AT_CHECKCODE");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_RESULT_IND, "AT_RESULT_IND");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_BIDDING, "AT_BIDDING");
     }
 
     public final int attributeType;
@@ -782,12 +784,10 @@ public abstract class EapSimAkaAttribute {
             notificationCode = Short.toUnsignedInt(byteBuffer.getShort());
 
             // If Success bit == 0, failure is implied
-            isSuccessCode = (notificationCode & SUCCESS_MASK) == SUCCESS_MASK;
+            isSuccessCode = (notificationCode & SUCCESS_MASK) != 0;
 
             // if Phase bit == 0, notification code can only be used after a successful
-            isPreSuccessfulChallenge =
-                    (notificationCode & PRE_SUCCESSFUL_CHALLENGE_MASK)
-                            == PRE_SUCCESSFUL_CHALLENGE_MASK;
+            isPreSuccessfulChallenge = (notificationCode & PRE_SUCCESSFUL_CHALLENGE_MASK) != 0;
 
             if (isSuccessCode && isPreSuccessfulChallenge) {
                 throw new EapSimAkaInvalidAttributeException("Invalid state specified");
@@ -1119,6 +1119,44 @@ public abstract class EapSimAkaAttribute {
             encodeAttributeHeader(byteBuffer);
 
             byteBuffer.putShort((short) kdf);
+        }
+    }
+
+    /**
+     * AtBidding represents the AT_BIDDING attribute defined in RFC 5448#4
+     */
+    public static class AtBidding extends EapSimAkaAttribute {
+        private static final int ATTR_LENGTH = MIN_ATTR_LENGTH;
+        private static final int SUPPORTS_EAP_AKA_PRIME_MASK = 0x8000;
+
+        public final boolean doesServerSupportEapAkaPrime;
+
+        public AtBidding(int lengthInBytes, ByteBuffer buffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_BIDDING, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("AtBidding length must be 4B");
+            }
+
+            int serverFlag = Short.toUnsignedInt(buffer.getShort());
+            doesServerSupportEapAkaPrime = (serverFlag & SUPPORTS_EAP_AKA_PRIME_MASK) != 0;
+        }
+
+        @VisibleForTesting
+        public AtBidding(boolean doesServerSupportEapAkaPrime)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_BIDDING, ATTR_LENGTH);
+
+            this.doesServerSupportEapAkaPrime = doesServerSupportEapAkaPrime;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            int flagToWrite = doesServerSupportEapAkaPrime ? SUPPORTS_EAP_AKA_PRIME_MASK : 0;
+            byteBuffer.putShort((short) flagToWrite);
         }
     }
 }
