@@ -16,11 +16,13 @@
 
 package com.android.ike.eap.message.simaka;
 
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_KDF;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_KDF_INPUT;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.LENGTH_SCALING;
 
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaUnsupportedAttributeException;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtKdf;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtKdfInput;
 
 import java.nio.ByteBuffer;
@@ -65,6 +67,8 @@ public class EapAkaPrimeAttributeFactory extends EapAkaAttributeFactory {
         switch (attributeType) {
             case EAP_AT_KDF_INPUT:
                 return new AtKdfInput(lengthInBytes, byteBuffer);
+            case EAP_AT_KDF:
+                return new AtKdf(lengthInBytes, byteBuffer);
             default:
                 return super.getAttribute(attributeType, lengthInBytes, byteBuffer);
         }
