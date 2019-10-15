@@ -450,18 +450,6 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
-    public void testEncodeIpv4SubnetWithValue() throws Exception {
-        ConfigAttributeIpv4Subnet attributeIp4Subnet =
-                new ConfigAttributeIpv4Subnet(IPV4_LINK_ADDRESS);
-
-        verifyBuildAndEncodeAttributeCommon(
-                attributeIp4Subnet,
-                CONFIG_ATTR_INTERNAL_IP4_SUBNET,
-                IPV4_SUBNET_ATTRIBUTE_WITH_VALUE);
-        assertEquals(IPV4_LINK_ADDRESS, attributeIp4Subnet.linkAddress);
-    }
-
-    @Test
     public void testEncodeIpv4SubnetWithoutValue() throws Exception {
         ConfigAttributeIpv4Subnet attributeIp4Subnet = new ConfigAttributeIpv4Subnet();
 
@@ -556,18 +544,6 @@ public final class IkeConfigPayloadTest {
 
         assertEquals(CONFIG_ATTR_INTERNAL_IP6_SUBNET, attributeIp6Subnet.attributeType);
         assertNull(attributeIp6Subnet.linkAddress);
-    }
-
-    @Test
-    public void testEncodeIpv6SubnetWithValue() throws Exception {
-        ConfigAttributeIpv6Subnet attributeIp6Subnet =
-                new ConfigAttributeIpv6Subnet(IPV6_LINK_ADDRESS);
-
-        verifyEncodeIpv6RangeBaseAttribute(
-                attributeIp6Subnet,
-                CONFIG_ATTR_INTERNAL_IP6_SUBNET,
-                IPV6_SUBNET_ATTRIBUTE_WITH_VALUE,
-                IPV6_LINK_ADDRESS);
     }
 
     @Test

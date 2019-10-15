@@ -21,6 +21,7 @@ import android.net.LinkAddress;
 
 import com.android.ike.ikev2.IkeManager;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -342,14 +343,15 @@ public final class IkeConfigPayload extends IkePayload {
         /**
          * Construct an instance without a specified address for an outbound packet.
          *
-         * <p>It should be only used in a configuration request.
+         * <p>It must be only used in a configuration request.
          */
         public ConfigAttributeIpv4Address() {
             super(CONFIG_ATTR_INTERNAL_IP4_ADDRESS);
         }
 
         /** Construct an instance with a decoded inbound packet. */
-        public ConfigAttributeIpv4Address(byte[] value) throws InvalidSyntaxException {
+        @VisibleForTesting
+        ConfigAttributeIpv4Address(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, value);
         }
     }
@@ -362,15 +364,16 @@ public final class IkeConfigPayload extends IkePayload {
      */
     public static class ConfigAttributeIpv4Netmask extends ConfigAttrIpv4AddressBase {
         /**
-         * Construct an instance without a specified address for an outbound packet.
+         * Construct an instance without a specified netmask for an outbound packet.
          *
-         * <p>It should be only used in a configuration request.
+         * <p>It must be only used in a configuration request.
          */
         public ConfigAttributeIpv4Netmask() {
             super(CONFIG_ATTR_INTERNAL_IP4_NETMASK);
         }
 
         /** Construct an instance with a decoded inbound packet. */
+        @VisibleForTesting
         public ConfigAttributeIpv4Netmask(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP4_NETMASK, value);
 
@@ -395,17 +398,23 @@ public final class IkeConfigPayload extends IkePayload {
      * client, we will only support building an empty DNS attribute for an outbound IKE packet.
      */
     public static class ConfigAttributeIpv4Dns extends ConfigAttrIpv4AddressBase {
+        /** Construct an instance with specified DNS server address for an outbound packet. */
+        public ConfigAttributeIpv4Dns(Inet4Address ipv4Address) {
+            super(CONFIG_ATTR_INTERNAL_IP4_DNS, ipv4Address);
+        }
+
         /**
-         * Construct an instance without a specified address for an outbound packet.
+         * Construct an instance without a specified DNS server address for an outbound packet.
          *
-         * <p>It should be only used in a configuration request.
+         * <p>It must be only used in a configuration request.
          */
         public ConfigAttributeIpv4Dns() {
             super(CONFIG_ATTR_INTERNAL_IP4_DNS);
         }
 
         /** Construct an instance with a decoded inbound packet. */
-        public ConfigAttributeIpv4Dns(byte[] value) throws InvalidSyntaxException {
+        @VisibleForTesting
+        ConfigAttributeIpv4Dns(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP4_DNS, value);
         }
     }
@@ -416,7 +425,8 @@ public final class IkeConfigPayload extends IkePayload {
 
         public final LinkAddress linkAddress;
 
-        protected ConfigAttributeIpv4Subnet(LinkAddress ipv4LinkAddress) {
+        /** Construct an instance with specified subnet for an outbound packet. */
+        public ConfigAttributeIpv4Subnet(LinkAddress ipv4LinkAddress) {
             super(CONFIG_ATTR_INTERNAL_IP4_SUBNET);
 
             if (!ipv4LinkAddress.isIpv4()) {
@@ -426,12 +436,19 @@ public final class IkeConfigPayload extends IkePayload {
             this.linkAddress = ipv4LinkAddress;
         }
 
-        protected ConfigAttributeIpv4Subnet() {
+        /**
+         * Construct an instance without a specified subnet for an outbound packet.
+         *
+         * <p>It must be only used in a configuration request.
+         */
+        public ConfigAttributeIpv4Subnet() {
             super(CONFIG_ATTR_INTERNAL_IP4_SUBNET);
             this.linkAddress = null;
         }
 
-        protected ConfigAttributeIpv4Subnet(byte[] value) throws InvalidSyntaxException {
+        /** Construct an instance with a decoded inbound packet. */
+        @VisibleForTesting
+        ConfigAttributeIpv4Subnet(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP4_SUBNET, value.length);
 
             if (value.length == VALUE_LEN_NOT_INCLUDED) {
@@ -569,36 +586,38 @@ public final class IkeConfigPayload extends IkePayload {
         /**
          * Construct an instance without a specified address for an outbound packet.
          *
-         * <p>It should be only used in a configuration request.
+         * <p>It must be only used in a configuration request.
          */
         public ConfigAttributeIpv6Address() {
             super(CONFIG_ATTR_INTERNAL_IP6_ADDRESS);
         }
 
         /** Construct an instance with a decoded inbound packet. */
-        public ConfigAttributeIpv6Address(byte[] value) throws InvalidSyntaxException {
+        @VisibleForTesting
+        ConfigAttributeIpv6Address(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, value);
         }
     }
 
     /** This class represents Configuration Attribute for IPv6 subnets. */
     public static class ConfigAttributeIpv6Subnet extends ConfigAttrIpv6AddrRangeBase {
-        /** Construct an instance with specified address for an outbound packet. */
+        /** Construct an instance with specified subnet for an outbound packet. */
         public ConfigAttributeIpv6Subnet(LinkAddress ipv6LinkAddress) {
             super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, ipv6LinkAddress);
         }
 
         /**
-         * Construct an instance without a specified address for an outbound packet.
+         * Construct an instance without a specified subnet for an outbound packet.
          *
-         * <p>It should be only used in a configuration request.
+         * <p>It must be only used in a configuration request.
          */
         public ConfigAttributeIpv6Subnet() {
             super(CONFIG_ATTR_INTERNAL_IP6_SUBNET);
         }
 
         /** Construct an instance with a decoded inbound packet. */
-        public ConfigAttributeIpv6Subnet(byte[] value) throws InvalidSyntaxException {
+        @VisibleForTesting
+        ConfigAttributeIpv6Subnet(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, value);
         }
     }
@@ -612,7 +631,18 @@ public final class IkeConfigPayload extends IkePayload {
     public static class ConfigAttributeIpv6Dns extends ConfigAttribute {
         public final Inet6Address address;
 
-        protected ConfigAttributeIpv6Dns() {
+        /** Construct an instance with specified DNS server address for an outbound packet. */
+        public ConfigAttributeIpv6Dns(Inet6Address ipv6Address) {
+            super(CONFIG_ATTR_INTERNAL_IP6_DNS);
+            address = ipv6Address;
+        }
+
+        /**
+         * Construct an instance without a specified DNS server address for an outbound packet.
+         *
+         * <p>It must be only used in a configuration request.
+         */
+        public ConfigAttributeIpv6Dns() {
             super(CONFIG_ATTR_INTERNAL_IP6_DNS);
             this.address = null;
         }
