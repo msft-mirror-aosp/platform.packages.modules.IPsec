@@ -188,19 +188,8 @@ public class EapSimTest extends EapMethodEndToEndTest {
 
     @Test
     public void testEapSimUnsupportedType() {
-        // EAP-Request/AKA-Identity (unsupported type)
-        mEapAuthenticator.processEapMessage(EAP_REQUEST_AKA_IDENTITY_PACKET);
-        mTestLooper.dispatchAll();
+        verifyUnsupportedType(EAP_REQUEST_AKA_IDENTITY_PACKET, EAP_RESPONSE_NAK_PACKET);
 
-        // verify EAP-Response/Nak returned
-        verify(mMockCallback).onResponse(eq(EAP_RESPONSE_NAK_PACKET));
-        verifyNoMoreInteractions(
-                mMockContext,
-                mMockTelephonyManager,
-                mMockSecureRandom,
-                mMockCallback);
-
-        // Switch to EAP-SIM and go through protocol
         verifyEapSimStart(EAP_SIM_START_REQUEST, EAP_SIM_START_RESPONSE, true);
         verifyEapSimChallenge(EAP_SIM_CHALLENGE_REQUEST, EAP_SIM_CHALLENGE_RESPONSE);
         verifyEapSuccess(MSK, EMSK);
