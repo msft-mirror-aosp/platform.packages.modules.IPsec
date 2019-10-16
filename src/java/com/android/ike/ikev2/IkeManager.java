@@ -29,6 +29,17 @@ public final class IkeManager {
 
     private static Log sIkeLog = new Log(IKE_TAG, LOG_SENSITIVE);
 
+    private final Context mContext;
+
+    /**
+     * Construct an instance of {@link IkeManager}
+     *
+     * @param context the application context.
+     */
+    public IkeManager(Context context) {
+        mContext = context;
+    }
+
     /**
      * Construct an instance of {@link IkeSession} and start the IKE Session setup process.
      *
@@ -36,7 +47,6 @@ public final class IkeManager {
      * asynchronously initiate the IKE Session setup process. Users will be notified of the IKE
      * Session and Child Session negotiation results on the callback arguments.
      *
-     * @param context the application context for IKE and Child Sessions.
      * @param ikeSessionOptions the {@link IkeSessionOptions} that contains acceptable IKE Session
      *     configurations.
      * @param firstChildSessionOptions the {@link ChildSessionOptions} that contains acceptable
@@ -50,15 +60,14 @@ public final class IkeManager {
      *     the state changes of the Child Session.
      * @return an instance of {@link IkeSession}
      */
-    public static IkeSession openIkeSession(
-            Context context,
+    public IkeSession openIkeSession(
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
             Executor userCbExecutor,
             IIkeSessionCallback ikeSessionCallback,
             IChildSessionCallback firstChildSessionCallback) {
         return new IkeSession(
-                context,
+                mContext,
                 ikeSessionOptions,
                 firstChildSessionOptions,
                 userCbExecutor,
