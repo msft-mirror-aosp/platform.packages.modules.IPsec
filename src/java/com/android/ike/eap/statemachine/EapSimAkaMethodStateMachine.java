@@ -181,8 +181,7 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
                         base64Challenge);
 
         if (base64Response == null) {
-            String msg = "UICC authentication failed. Input: "
-                    + Log.byteArrayToHexString(formattedChallenge);
+            String msg = "UICC authentication failed. Input: " + LOG.pii(formattedChallenge);
             LOG.e(tag, msg);
             throw new EapSimAkaAuthenticationFailureException(msg);
         }
