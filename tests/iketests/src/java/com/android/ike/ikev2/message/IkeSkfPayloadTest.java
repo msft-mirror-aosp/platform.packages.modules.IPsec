@@ -27,6 +27,7 @@ import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.crypto.IkeNormalModeCipher;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
@@ -75,7 +76,7 @@ public final class IkeSkfPayloadTest {
     private byte[] mDecryptedData;
 
     private IkeMacIntegrity mSpyHmacSha256IntegrityMac;
-    private IkeCipher mSpyAesCbcCipher;
+    private IkeNormalModeCipher mSpyAesCbcCipher;
 
     @Before
     public void setUp() throws Exception {
@@ -94,11 +95,12 @@ public final class IkeSkfPayloadTest {
         // Set up encryption algorithm
         mSpyAesCbcCipher =
                 spy(
-                        IkeCipher.create(
-                                new EncryptionTransform(
-                                        SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
-                                        SaProposal.KEY_LEN_AES_128),
-                                IkeMessage.getSecurityProvider()));
+                        (IkeNormalModeCipher)
+                                IkeCipher.create(
+                                        new EncryptionTransform(
+                                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
+                                                SaProposal.KEY_LEN_AES_128),
+                                        IkeMessage.getSecurityProvider()));
         byte[] expectedDecryptedPaddedData =
                 TestUtils.hexStringToByteArray(
                         IKE_FRAG_MSG_DECRYPTED_BODY_HEX_STRING + IKE_FRAG_MSG_PADDING);
