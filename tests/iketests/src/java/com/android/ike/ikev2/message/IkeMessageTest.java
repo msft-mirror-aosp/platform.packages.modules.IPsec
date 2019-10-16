@@ -46,8 +46,8 @@ import static org.mockito.Mockito.when;
 
 import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaRecord.IkeSaRecord;
-import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.crypto.IkeNormalModeCipher;
 import com.android.ike.ikev2.exceptions.IkeException;
 import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.InvalidMessageIdException;
@@ -172,7 +172,7 @@ public final class IkeMessageTest {
     private IIkePayloadDecoder mSpyIkePayloadDecoder;
 
     private IkeMacIntegrity mMockIntegrity;
-    private IkeCipher mMockCipher;
+    private IkeNormalModeCipher mMockCipher;
     private IkeSaRecord mMockIkeSaRecord;
 
     private byte[] mIkeFragPacketOne;
@@ -243,7 +243,7 @@ public final class IkeMessageTest {
         when(mMockIntegrity.generateChecksum(any(), any())).thenReturn(expectedChecksum);
         when(mMockIntegrity.getChecksumLen()).thenReturn(expectedChecksum.length);
 
-        mMockCipher = mock(IkeCipher.class);
+        mMockCipher = mock(IkeNormalModeCipher.class);
         when(mMockCipher.getIvLen()).thenReturn(IKE_AUTH_CIPHER_IV_SIZE);
         when(mMockCipher.getBlockSize()).thenReturn(IKE_AUTH_CIPHER_BLOCK_SIZE);
         when(mMockCipher.decrypt(any(), any(), any())).thenReturn(mUnencryptedPaddedData);

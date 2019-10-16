@@ -23,6 +23,7 @@ import com.android.ike.TestUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.crypto.IkeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.crypto.IkeNormalModeCipher;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 import com.android.ike.ikev2.message.IkeSaPayload.IntegrityTransform;
 
@@ -82,7 +83,7 @@ public final class IkeEncryptedPayloadBodyTest {
     private static final String HMAC_SHA1_3DES_MSG_INTE_KEY =
             "867a0bd019108db856cf6984fc9fb62d70c0de74";
 
-    private IkeCipher mAesCbcCipher;
+    private IkeNormalModeCipher mAesCbcCipher;
     private byte[] mAesCbcKey;
 
     private IkeMacIntegrity mHmacSha1IntegrityMac;
@@ -123,11 +124,12 @@ public final class IkeEncryptedPayloadBodyTest {
         mPadding = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_PADDING);
 
         mAesCbcCipher =
-                IkeCipher.create(
-                        new EncryptionTransform(
-                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
-                                SaProposal.KEY_LEN_AES_128),
-                        IkeMessage.getSecurityProvider());
+                (IkeNormalModeCipher)
+                        IkeCipher.create(
+                                new EncryptionTransform(
+                                        SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
+                                        SaProposal.KEY_LEN_AES_128),
+                                IkeMessage.getSecurityProvider());
         mAesCbcKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
 
         mHmacSha1IntegrityMac =
@@ -139,7 +141,7 @@ public final class IkeEncryptedPayloadBodyTest {
 
     @Test
     public void testValidateChecksum() throws Exception {
-        IkeEncryptedPayloadBody.validateChecksumOrThrow(
+        IkeEncryptedPayloadBody.validateInboundChecksumOrThrow(
                 mDataToAuthenticate, mHmacSha1IntegrityMac, mHmacSha1IntegrityKey, mChecksum);
     }
 
@@ -149,7 +151,7 @@ public final class IkeEncryptedPayloadBodyTest {
         dataToAuthenticate[0]++;
 
         try {
-            IkeEncryptedPayloadBody.validateChecksumOrThrow(
+            IkeEncryptedPayloadBody.validateInboundChecksumOrThrow(
                     dataToAuthenticate, mHmacSha1IntegrityMac, mHmacSha1IntegrityKey, mChecksum);
             fail("Expected GeneralSecurityException due to mismatched checksum.");
         } catch (GeneralSecurityException expected) {
@@ -192,7 +194,7 @@ public final class IkeEncryptedPayloadBodyTest {
     @Test
     public void testEncrypt() throws Exception {
         byte[] calculatedData =
-                IkeEncryptedPayloadBody.encrypt(
+                IkeEncryptedPayloadBody.normalModeEncrypt(
                         mDataToPadAndEncrypt, mAesCbcCipher, mAesCbcKey, mIv, mPadding);
 
         assertArrayEquals(mEncryptedPaddedData, calculatedData);
@@ -201,7 +203,7 @@ public final class IkeEncryptedPayloadBodyTest {
     @Test
     public void testDecrypt() throws Exception {
         byte[] calculatedPlainText =
-                IkeEncryptedPayloadBody.decrypt(
+                IkeEncryptedPayloadBody.normalModeDecrypt(
                         mEncryptedPaddedData, mAesCbcCipher, mAesCbcKey, mIv);
 
         assertArrayEquals(mDataToPadAndEncrypt, calculatedPlainText);

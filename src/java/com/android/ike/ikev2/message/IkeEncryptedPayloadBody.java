@@ -17,7 +17,9 @@
 package com.android.ike.ikev2.message;
 
 import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeCombinedModeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.crypto.IkeNormalModeCipher;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -71,7 +73,7 @@ final class IkeEncryptedPayloadBody {
         int expectedIvLen = decryptCipher.getIvLen();
         mIv = new byte[expectedIvLen];
 
-        int checksumLen = integrityMac.getChecksumLen();
+        int checksumLen = getChecksum(integrityMac, decryptCipher);
         int encryptedDataLen = message.length - (encryptedBodyOffset + expectedIvLen + checksumLen);
         // IkeMessage will catch exception if encryptedDataLen is negative.
         mEncryptedAndPaddedData = new byte[encryptedDataLen];
@@ -79,10 +81,22 @@ final class IkeEncryptedPayloadBody {
         mIntegrityChecksum = new byte[checksumLen];
         inputBuffer.get(mIv).get(mEncryptedAndPaddedData).get(mIntegrityChecksum);
 
-        // Authenticate and decrypt.
-        byte[] dataToAuthenticate = Arrays.copyOfRange(message, 0, message.length - checksumLen);
-        validateChecksumOrThrow(dataToAuthenticate, integrityMac, integrityKey, mIntegrityChecksum);
-        mUnencryptedData = decrypt(mEncryptedAndPaddedData, decryptCipher, decryptionKey, mIv);
+        if (decryptCipher.isAead()) {
+            throw new UnsupportedOperationException("AEAD decryption not supported.");
+            // TODO: Support AEAD authentication and decryption.
+        } else {
+            byte[] dataToAuthenticate =
+                    Arrays.copyOfRange(message, 0, message.length - checksumLen);
+
+            validateInboundChecksumOrThrow(
+                    dataToAuthenticate, integrityMac, integrityKey, mIntegrityChecksum);
+            mUnencryptedData =
+                    normalModeDecrypt(
+                            mEncryptedAndPaddedData,
+                            (IkeNormalModeCipher) decryptCipher,
+                            decryptionKey,
+                            mIv);
+        }
     }
 
     /**
@@ -123,11 +137,48 @@ final class IkeEncryptedPayloadBody {
             byte[] padding) {
         mUnencryptedData = unencryptedPayloads;
 
-        // Encrypt data
         mIv = iv;
-        mEncryptedAndPaddedData =
-                encrypt(unencryptedPayloads, encryptCipher, encryptionKey, iv, padding);
+        if (encryptCipher.isAead()) {
+            throw new UnsupportedOperationException("AEAD encryption not supported.");
+            // TODO: Support AEAD encryption.
+        } else {
+            // Encrypt data
+            mEncryptedAndPaddedData =
+                    normalModeEncrypt(
+                            unencryptedPayloads,
+                            (IkeNormalModeCipher) encryptCipher,
+                            encryptionKey,
+                            iv,
+                            padding);
+            // Calculate checksum
+            mIntegrityChecksum =
+                    generateOutboundChecksum(
+                            ikeHeader,
+                            firstPayloadType,
+                            integrityMac,
+                            iv,
+                            mEncryptedAndPaddedData,
+                            integrityKey);
+        }
+    }
 
+    private int getChecksum(IkeMacIntegrity integrityMac, IkeCipher decryptCipher) {
+        if (decryptCipher.isAead()) {
+            return ((IkeCombinedModeCipher) decryptCipher).getChecksumLen();
+        } else {
+            return integrityMac.getChecksumLen();
+        }
+    }
+
+    /** Package private for testing */
+    @VisibleForTesting
+    static byte[] generateOutboundChecksum(
+            IkeHeader ikeHeader,
+            @IkePayload.PayloadType int firstPayloadType,
+            IkeMacIntegrity integrityMac,
+            byte[] iv,
+            byte[] encryptedAndPaddedData,
+            byte[] integrityKey) {
         // Build authenticated section using ByteBuffer. Authenticated section includes bytes from
         // beginning of IKE header to the pad length, which are concatenation of IKE header, current
         // payload header, iv and encrypted and padded data.
@@ -135,7 +186,7 @@ final class IkeEncryptedPayloadBody {
                 IkeHeader.IKE_HEADER_LENGTH
                         + IkePayload.GENERIC_HEADER_LENGTH
                         + iv.length
-                        + mEncryptedAndPaddedData.length;
+                        + encryptedAndPaddedData.length;
         ByteBuffer authenticatedSectionBuffer = ByteBuffer.allocate(dataToAuthenticateLength);
 
         // Encode IKE header
@@ -143,7 +194,7 @@ final class IkeEncryptedPayloadBody {
         int encryptedPayloadLength =
                 IkePayload.GENERIC_HEADER_LENGTH
                         + iv.length
-                        + mEncryptedAndPaddedData.length
+                        + encryptedAndPaddedData.length
                         + checksumLen;
         ikeHeader.encodeToByteBuffer(authenticatedSectionBuffer, encryptedPayloadLength);
 
@@ -152,24 +203,22 @@ final class IkeEncryptedPayloadBody {
         int payloadLength =
                 IkePayload.GENERIC_HEADER_LENGTH
                         + iv.length
-                        + mEncryptedAndPaddedData.length
+                        + encryptedAndPaddedData.length
                         + checksumLen;
         IkePayload.encodePayloadHeaderToByteBuffer(
                 firstPayloadType, payloadLength, authenticatedSectionBuffer);
 
         // Encode iv and padded encrypted data.
-        authenticatedSectionBuffer.put(iv).put(mEncryptedAndPaddedData);
+        authenticatedSectionBuffer.put(iv).put(encryptedAndPaddedData);
 
         // Calculate checksum
-        mIntegrityChecksum =
-                integrityMac.generateChecksum(integrityKey, authenticatedSectionBuffer.array());
-    }
 
-    // TODO: Add another constructor for AEAD protected payload.
+        return integrityMac.generateChecksum(integrityKey, authenticatedSectionBuffer.array());
+    }
 
     /** Package private for testing */
     @VisibleForTesting
-    static void validateChecksumOrThrow(
+    static void validateInboundChecksumOrThrow(
             byte[] dataToAuthenticate,
             IkeMacIntegrity integrityMac,
             byte[] integrityKey,
@@ -186,9 +235,9 @@ final class IkeEncryptedPayloadBody {
 
     /** Package private for testing */
     @VisibleForTesting
-    static byte[] encrypt(
+    static byte[] normalModeEncrypt(
             byte[] dataToEncrypt,
-            IkeCipher encryptCipher,
+            IkeNormalModeCipher encryptCipher,
             byte[] encryptionKey,
             byte[] iv,
             byte[] padding) {
@@ -203,8 +252,11 @@ final class IkeEncryptedPayloadBody {
 
     /** Package private for testing */
     @VisibleForTesting
-    static byte[] decrypt(
-            byte[] encryptedData, IkeCipher decryptCipher, byte[] decryptionKey, byte[] iv)
+    static byte[] normalModeDecrypt(
+            byte[] encryptedData,
+            IkeNormalModeCipher decryptCipher,
+            byte[] decryptionKey,
+            byte[] iv)
             throws IllegalBlockSizeException {
         byte[] decryptedPaddedData = decryptCipher.decrypt(encryptedData, decryptionKey, iv);
 
