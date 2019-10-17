@@ -16,10 +16,10 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.IkeFqdnIdentification;
 import com.android.ike.ikev2.IkeIdentification;
-import com.android.ike.ikev2.IkeIdentification.IkeFqdnIdentification;
-import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
-import com.android.ike.ikev2.IkeIdentification.IkeIpv6AddrIdentification;
+import com.android.ike.ikev2.IkeIpv4AddrIdentification;
+import com.android.ike.ikev2.IkeIpv6AddrIdentification;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
