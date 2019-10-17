@@ -16,6 +16,7 @@
 
 package com.android.ike.eap;
 
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
@@ -51,6 +52,15 @@ public class EapMethodEndToEndTest {
         mTestLooper = new TestLooper();
     }
 
+    protected void verifyUnsupportedType(byte[] invalidMessageType, byte[] nakResponse) {
+        mEapAuthenticator.processEapMessage(invalidMessageType);
+        mTestLooper.dispatchAll();
+
+        // verify EAP-Response/Nak returned
+        verify(mMockCallback).onResponse(eq(nakResponse));
+        verifyNoMoreInteractions(mMockCallback);
+    }
+
     protected void verifyEapNotification(int callsToVerify) {
         mEapAuthenticator.processEapMessage(EAP_REQUEST_NOTIFICATION_PACKET);
         mTestLooper.dispatchAll();
@@ -68,5 +78,13 @@ public class EapMethodEndToEndTest {
         // verify that onSuccess callback made
         verify(mMockCallback).onSuccess(eq(msk), eq(emsk));
         verifyNoMoreInteractions(mMockContext, mMockSecureRandom, mMockCallback);
+    }
+
+    protected void verifyEapFailure() {
+        mEapAuthenticator.processEapMessage(EAP_FAILURE_PACKET);
+        mTestLooper.dispatchAll();
+
+        verify(mMockCallback).onFail();
+        verifyNoMoreInteractions(mMockCallback);
     }
 }

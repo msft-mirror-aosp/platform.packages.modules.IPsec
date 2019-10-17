@@ -21,34 +21,20 @@ import android.net.IpSecAlgorithm;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.message.IkeSaPayload.EncryptionTransform;
 
-import java.nio.ByteBuffer;
-import java.security.InvalidAlgorithmParameterException;
-import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
 import java.security.SecureRandom;
 
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.NoSuchPaddingException;
-import javax.crypto.ShortBufferException;
-import javax.crypto.spec.IvParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
 
 /**
- * IkeCipher represents a negotiated encryption algorithm.
- *
- * <p>IkeCipher is either a combined-mode cipher(AEAD) or a normal-mode cipher. Users should call
- * the right decryption and encryption methods according to the IkeCipher mode.
+ * IkeCipher contains common information of normal and combined mode encryption algorithms.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3.2">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
-public class IkeCipher extends IkeCrypto {
-    // Authentication tag is only used in an AEAD.
-    private static final int AUTH_TAG_LEN_UNUSED = 0;
-
+public abstract class IkeCipher extends IkeCrypto {
     private static final int KEY_LEN_3DES = 24;
 
     private static final int IV_LEN_3DES = 8;
@@ -57,21 +43,19 @@ public class IkeCipher extends IkeCrypto {
 
     private final boolean mIsAead;
     private final int mIvLen;
-    private final int mAuthTagLen;
-    private final Cipher mCipher;
 
-    private IkeCipher(
+    protected final Cipher mCipher;
+
+    protected IkeCipher(
             int algorithmId,
             int keyLength,
             int ivLength,
             String algorithmName,
             boolean isAead,
-            int authTagLen,
             Provider provider) {
         super(algorithmId, keyLength, algorithmName);
         mIvLen = ivLength;
         mIsAead = isAead;
-        mAuthTagLen = authTagLen;
 
         try {
             mCipher = Cipher.getInstance(getAlgorithmName(), provider);
@@ -94,49 +78,26 @@ public class IkeCipher extends IkeCrypto {
         // specifiedKeyLength are encoded in bits, it needs to be converted to bytes.
         switch (algorithmId) {
             case SaProposal.ENCRYPTION_ALGORITHM_3DES:
-                return new IkeCipher(
-                        algorithmId,
-                        KEY_LEN_3DES,
-                        IV_LEN_3DES,
-                        "DESede/CBC/NoPadding",
-                        false /*isAead*/,
-                        AUTH_TAG_LEN_UNUSED,
-                        provider);
+                return new IkeNormalModeCipher(
+                        algorithmId, KEY_LEN_3DES, IV_LEN_3DES, "DESede/CBC/NoPadding", provider);
             case SaProposal.ENCRYPTION_ALGORITHM_AES_CBC:
-                return new IkeCipher(
+                return new IkeNormalModeCipher(
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
                         IV_LEN_AES_CBC,
                         "AES/CBC/NoPadding",
-                        false /*isAead*/,
-                        AUTH_TAG_LEN_UNUSED,
                         provider);
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
-                return new IkeCipher(
-                        algorithmId,
-                        encryptionTransform.getSpecifiedKeyLength() / 8,
-                        IV_LEN_AES_GCM,
-                        "AES/GCM/NoPadding",
-                        true /*isAead*/,
-                        8 /*authTagLen*/,
-                        provider);
+                // Fall through
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
-                return new IkeCipher(
-                        algorithmId,
-                        encryptionTransform.getSpecifiedKeyLength() / 8,
-                        IV_LEN_AES_GCM,
-                        "AES/GCM/NoPadding",
-                        true /*isAead*/,
-                        12 /*authTagLen*/,
-                        provider);
+                // Fall through
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
-                return new IkeCipher(
+                // Fall through
+                return new IkeCombinedModeCipher(
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
                         IV_LEN_AES_GCM,
                         "AES/GCM/NoPadding",
-                        true /*isAead*/,
-                        16 /*authTagLen*/,
                         provider);
             default:
                 throw new IllegalArgumentException(
@@ -184,69 +145,14 @@ public class IkeCipher extends IkeCrypto {
         return iv;
     }
 
-    private byte[] doCipherAction(byte[] data, byte[] keyBytes, byte[] ivBytes, int opmode)
-            throws IllegalBlockSizeException {
-        if (mIsAead) {
-            throw new IllegalArgumentException("This method cannot be applied to AEAD.");
-        }
-        if (getKeyLength() != keyBytes.length) {
+    protected void validateKeyLenOrThrow(byte[] key) {
+        if (key.length != getKeyLength()) {
             throw new IllegalArgumentException(
-                    "Expected key length: "
+                    "Expected key with length of : "
                             + getKeyLength()
-                            + " Received key length: "
-                            + keyBytes.length);
+                            + " Received key with length of : "
+                            + key.length);
         }
-        try {
-            SecretKeySpec key = new SecretKeySpec(keyBytes, getAlgorithmName());
-            IvParameterSpec iv = new IvParameterSpec(ivBytes);
-            mCipher.init(opmode, key, iv);
-
-            ByteBuffer inputBuffer = ByteBuffer.wrap(data);
-            ByteBuffer outputBuffer = ByteBuffer.allocate(data.length);
-
-            mCipher.doFinal(inputBuffer, outputBuffer);
-            return outputBuffer.array();
-        } catch (InvalidKeyException
-                | InvalidAlgorithmParameterException
-                | BadPaddingException
-                | ShortBufferException e) {
-            String errorMessage =
-                    Cipher.ENCRYPT_MODE == opmode
-                            ? "Failed to encrypt data: "
-                            : "Failed to decrypt data: ";
-            throw new IllegalArgumentException(errorMessage, e);
-        }
-    }
-
-    /**
-     * Encrypt padded data using normal-mode cipher.
-     *
-     * @param paddedData the padded data to encrypt.
-     * @param keyBytes the encryption key.
-     * @param ivBytes the initialization vector (IV).
-     * @return the encrypted and padded data.
-     */
-    public byte[] encrypt(byte[] paddedData, byte[] keyBytes, byte[] ivBytes) {
-        try {
-            return doCipherAction(paddedData, keyBytes, ivBytes, Cipher.ENCRYPT_MODE);
-        } catch (IllegalBlockSizeException e) {
-            throw new IllegalArgumentException("Failed to encrypt data: ", e);
-        }
-    }
-
-    /**
-     * Decrypt the encrypted and padded data.
-     *
-     * @param encryptedData the encrypted and padded data.
-     * @param keyBytes the decryption key.
-     * @param ivBytes the initialization vector (IV).
-     * @return the decrypted and padded data.
-     * @throws IllegalBlockSizeException if the total encryptedData length is not a multiple of
-     *     block size.
-     */
-    public byte[] decrypt(byte[] encryptedData, byte[] keyBytes, byte[] ivBytes)
-            throws IllegalBlockSizeException {
-        return doCipherAction(encryptedData, keyBytes, ivBytes, Cipher.DECRYPT_MODE);
     }
 
     /**
@@ -258,34 +164,7 @@ public class IkeCipher extends IkeCrypto {
      * @param key the encryption key in byte array.
      * @return the IpSecAlgorithm.
      */
-    public IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key) {
-        if (key.length != getKeyLength()) {
-            throw new IllegalArgumentException(
-                    "Expected key with length of : "
-                            + getKeyLength()
-                            + " Received key with length of : "
-                            + key.length);
-        }
-
-        switch (getAlgorithmId()) {
-            case SaProposal.ENCRYPTION_ALGORITHM_3DES:
-                // TODO: Consider supporting 3DES in IpSecTransform.
-                throw new UnsupportedOperationException("Do not support 3Des encryption.");
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_CBC:
-                return new IpSecAlgorithm(IpSecAlgorithm.CRYPT_AES_CBC, key);
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
-                // Fall through;
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
-                // Fall through;
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
-                return new IpSecAlgorithm(IpSecAlgorithm.AUTH_CRYPT_AES_GCM, key, mAuthTagLen * 8);
-            default:
-                throw new IllegalArgumentException(
-                        "Unrecognized Encryption Algorithm ID: " + getAlgorithmId());
-        }
-    }
-
-    // TODO: Support encryption and decryption of AEAD.
+    public abstract IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key);
 
     /**
      * Returns algorithm type as a String.
