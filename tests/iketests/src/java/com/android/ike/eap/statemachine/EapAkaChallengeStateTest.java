@@ -23,6 +23,7 @@ import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.CK_BYTES;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_AUTHENTICATION_REJECT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_CHALLENGE_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_SYNCHRONIZATION_FAILURE;
@@ -57,7 +58,7 @@ import com.android.ike.eap.EapResult.EapFailure;
 import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.exceptions.EapInvalidRequestException;
-import com.android.ike.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
+import com.android.ike.eap.exceptions.simaka.EapAkaInvalidAuthenticationResponse;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
@@ -269,8 +270,8 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
                         BASE_64_CHALLENGE))
                 .thenReturn(null);
 
-        EapError eapError = (EapError) mEapAkaMethodStateMachine.process(eapMessage);
-        assertTrue(eapError.cause instanceof EapSimAkaAuthenticationFailureException);
+        EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
+        assertArrayEquals(EAP_AKA_AUTHENTICATION_REJECT, eapResponse.packet);
 
         verify(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         verify(mMockTelephonyManager)
@@ -304,7 +305,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
                 .thenReturn(EAP_AKA_UICC_RESP_INVALID_TAG);
 
         EapError eapError = (EapError) mEapAkaMethodStateMachine.process(eapMessage);
-        assertTrue(eapError.cause instanceof EapSimAkaAuthenticationFailureException);
+        assertTrue(eapError.cause instanceof EapAkaInvalidAuthenticationResponse);
 
         verify(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         verify(mMockTelephonyManager)
