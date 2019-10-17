@@ -20,6 +20,7 @@ import com.android.ike.ikev2.IkeFqdnIdentification;
 import com.android.ike.ikev2.IkeIdentification;
 import com.android.ike.ikev2.IkeIpv4AddrIdentification;
 import com.android.ike.ikev2.IkeIpv6AddrIdentification;
+import com.android.ike.ikev2.IkeRfc822AddrIdentification;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -78,7 +79,8 @@ public final class IkeIdPayload extends IkePayload {
                 ikeId = new IkeFqdnIdentification(idData);
                 return;
             case IkeIdentification.ID_TYPE_RFC822_ADDR:
-                throw new UnsupportedOperationException("ID type is not supported currently.");
+                ikeId = new IkeRfc822AddrIdentification(idData);
+                return;
             case IkeIdentification.ID_TYPE_IPV6_ADDR:
                 ikeId = new IkeIpv6AddrIdentification(idData);
                 return;

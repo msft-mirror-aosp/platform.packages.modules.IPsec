@@ -25,6 +25,7 @@ import com.android.ike.ikev2.IkeFqdnIdentification;
 import com.android.ike.ikev2.IkeIdentification;
 import com.android.ike.ikev2.IkeIpv4AddrIdentification;
 import com.android.ike.ikev2.IkeIpv6AddrIdentification;
+import com.android.ike.ikev2.IkeRfc822AddrIdentification;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 
 import org.junit.Test;
@@ -51,6 +52,12 @@ public final class IkeIdPayloadTest {
     private static final String FQDN_ID_PAYLOAD_BODY_HEX_STRING =
             "02000000696B652E616E64726F69642E6E6574";
     private static final String FQDN = "ike.android.net";
+
+    private static final String RFC822_ADDR_ID_PAYLOAD_HEX_STRING =
+            "2500001e03000000616e64726f6964696b65406578616d706c652e636f6d";
+    private static final String RFC822_ADDR_ID_PAYLOAD_BODY_HEX_STRING =
+            "03000000616e64726f6964696b65406578616d706c652e636f6d";
+    private static final String RFC822_NAME = "androidike@example.com";
 
     private static final int ID_TYPE_OFFSET = 0;
 
@@ -91,6 +98,18 @@ public final class IkeIdPayloadTest {
         assertEquals(IkeIdentification.ID_TYPE_FQDN, payload.ikeId.idType);
         IkeFqdnIdentification ikeId = (IkeFqdnIdentification) payload.ikeId;
         assertEquals(FQDN, ikeId.fqdn);
+    }
+
+    @Test
+    public void testDecodeRfc822AddrIdPayload() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(RFC822_ADDR_ID_PAYLOAD_BODY_HEX_STRING);
+        IkeIdPayload payload =
+                new IkeIdPayload(false /*critical*/, inputPacket, true /*isInitiator*/);
+
+        assertEquals(IkePayload.PAYLOAD_TYPE_ID_INITIATOR, payload.payloadType);
+        assertEquals(IkeIdentification.ID_TYPE_RFC822_ADDR, payload.ikeId.idType);
+        IkeRfc822AddrIdentification ikeId = (IkeRfc822AddrIdentification) payload.ikeId;
+        assertEquals(RFC822_NAME, ikeId.rfc822Name);
     }
 
     @Test
@@ -141,6 +160,19 @@ public final class IkeIdPayloadTest {
         payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_CERT, inputBuffer);
 
         byte[] expectedBytes = TestUtils.hexStringToByteArray(FQDN_ID_PAYLOAD_HEX_STRING);
+        assertArrayEquals(expectedBytes, inputBuffer.array());
+    }
+
+    @Test
+    public void testConstructAndEncodeRfc822AddrIdPayload() throws Exception {
+        IkeIdPayload payload =
+                new IkeIdPayload(
+                        true /*isInitiator*/, new IkeRfc822AddrIdentification(RFC822_NAME));
+
+        ByteBuffer inputBuffer = ByteBuffer.allocate(payload.getPayloadLength());
+        payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_CERT, inputBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(RFC822_ADDR_ID_PAYLOAD_HEX_STRING);
         assertArrayEquals(expectedBytes, inputBuffer.array());
     }
 }
