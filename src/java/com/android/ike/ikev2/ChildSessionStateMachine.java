@@ -26,6 +26,7 @@ import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONA
 import static com.android.ike.ikev2.message.IkeHeader.ExchangeType;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_USE_TRANSPORT_MODE;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_DELETE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_KE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NONCE;
@@ -62,6 +63,8 @@ import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
 import com.android.ike.ikev2.exceptions.TemporaryFailureException;
 import com.android.ike.ikev2.exceptions.TsUnacceptableException;
+import com.android.ike.ikev2.message.IkeConfigPayload;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttribute;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
@@ -83,6 +86,7 @@ import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -716,6 +720,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
 
+                        ChildSessionConfiguration sessionConfig =
+                                buildChildSessionConfigFromResp(createChildResult, respPayloads);
                         mUserCbExecutor.execute(
                                 () -> {
                                     mUserCallback.onIpSecTransformCreated(
@@ -724,7 +730,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     mUserCallback.onIpSecTransformCreated(
                                             mCurrentChildSaRecord.getOutboundIpSecTransform(),
                                             IpSecManager.DIRECTION_OUT);
-                                    mUserCallback.onOpened();
+                                    mUserCallback.onOpened(sessionConfig);
                                 });
 
                         transitionTo(mIdle);
@@ -776,6 +782,30 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
             mLocalTs = createChildResult.initTs;
             mRemoteTs = createChildResult.respTs;
+        }
+
+        private ChildSessionConfiguration buildChildSessionConfigFromResp(
+                CreateChildResult createChildResult, List<IkePayload> respPayloads) {
+            IkeConfigPayload configPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            PAYLOAD_TYPE_CP, IkeConfigPayload.class, respPayloads);
+
+            if (mChildSessionOptions.isTransportMode()
+                    || configPayload == null
+                    || configPayload.configType != IkeConfigPayload.CONFIG_TYPE_REPLY) {
+                if (configPayload != null) {
+                    logw("Unexpected config payload. Config Type: " + configPayload.configType);
+                }
+
+                return new ChildSessionConfiguration(
+                        Arrays.asList(createChildResult.initTs),
+                        Arrays.asList(createChildResult.respTs));
+            } else {
+                return new ChildSessionConfiguration(
+                        Arrays.asList(createChildResult.initTs),
+                        Arrays.asList(createChildResult.respTs),
+                        configPayload);
+            }
         }
 
         private void handleCreationFailAndQuit(int registeredSpi, IkeException exception) {
@@ -1681,12 +1711,24 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 }
             }
 
-            return getChildCreatePayloads(
-                    IkeSaPayload.createChildSaRequestPayload(
-                            saProposals, ipSecManager, localAddress),
-                    childSessionOptions.getLocalTrafficSelectors(),
-                    childSessionOptions.getRemoteTrafficSelectors(),
-                    childSessionOptions.isTransportMode());
+            List<IkePayload> payloadList =
+                    getChildCreatePayloads(
+                            IkeSaPayload.createChildSaRequestPayload(
+                                    saProposals, ipSecManager, localAddress),
+                            childSessionOptions.getLocalTrafficSelectors(),
+                            childSessionOptions.getRemoteTrafficSelectors(),
+                            childSessionOptions.isTransportMode());
+
+            if (!childSessionOptions.isTransportMode()) {
+                ConfigAttribute[] attributes =
+                        ((TunnelModeChildSessionOptions) childSessionOptions)
+                                .getConfigurationRequests();
+                IkeConfigPayload configPayload =
+                        new IkeConfigPayload(false /*isReply*/, Arrays.asList(attributes));
+                payloadList.add(configPayload);
+            }
+
+            return payloadList;
         }
 
         /** Create payload list as a rekey Child Session request. */
@@ -2028,6 +2070,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         if (((IkeNotifyPayload) payload).isErrorNotify()) hasErrorNotify = true;
                         // Do not have enough context to handle all notifications. Handle them
                         // together in higher layer.
+                        break;
+                    case PAYLOAD_TYPE_CP:
+                        // Handled in child creation state. Note Child Session can only handle
+                        // Config Payload in initial creation and can only handle a Config Reply.
+                        // For interoperability, Config Payloads received in rekey creation
+                        // or with other config types will be ignored.
                         break;
                     default:
                         logw(
