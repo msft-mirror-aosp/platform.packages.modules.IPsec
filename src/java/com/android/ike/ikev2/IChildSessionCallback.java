@@ -23,8 +23,13 @@ import com.android.ike.ikev2.exceptions.IkeException;
 
 /** Callback interface for receiving state changes of a Child Session. */
 public interface IChildSessionCallback {
-    /** Called when Child Session setup succeeds. */
-    void onOpened();
+    /**
+     * Called when Child Session setup succeeds.
+     *
+     * @param sessionConfiguration the configuration information of Child Session negotiated during
+     *     Child creation.
+     */
+    void onOpened(ChildSessionConfiguration sessionConfiguration);
 
     /**
      * Called when either side has decided to close this Session and the deletion exchange
