@@ -20,7 +20,20 @@ import android.net.IpSecAlgorithm;
 
 import com.android.ike.ikev2.SaProposal;
 
+import java.nio.ByteBuffer;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
 import java.security.Provider;
+import java.security.spec.AlgorithmParameterSpec;
+import java.util.Arrays;
+
+import javax.crypto.AEADBadTagException;
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.ShortBufferException;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * IkeCipher represents a negotiated combined-mode cipher(AEAD) encryption algorithm.
@@ -35,7 +48,10 @@ import java.security.Provider;
  *     Protocol</a>
  */
 public final class IkeCombinedModeCipher extends IkeCipher {
+    private static final int SALT_LEN_GCM = 4;
+
     private final int mChecksumLen;
+    private final int mSaltLen;
 
     /** Package private */
     IkeCombinedModeCipher(
@@ -43,18 +59,138 @@ public final class IkeCombinedModeCipher extends IkeCipher {
         super(algorithmId, keyLength, ivLength, algorithmName, true /*isAead*/, provider);
         switch (algorithmId) {
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
+                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 8;
                 break;
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
+                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 12;
                 break;
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
+                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 16;
                 break;
             default:
                 throw new IllegalArgumentException(
                         "Unrecognized Encryption Algorithm ID: " + algorithmId);
         }
+    }
+
+    private byte[] doCipherAction(
+            byte[] data, byte[] additionalAuthData, byte[] keyBytes, byte[] ivBytes, int opmode)
+            throws AEADBadTagException {
+        try {
+            // Provided key consists of encryption/decryption key plus 4-byte salt. Salt is used
+            // with IV to build the nonce.
+            ByteBuffer secretKeyAndSaltBuffer = ByteBuffer.wrap(keyBytes);
+            byte[] secretKeyBytes = new byte[keyBytes.length - mSaltLen];
+            byte[] salt = new byte[mSaltLen];
+            secretKeyAndSaltBuffer.get(secretKeyBytes);
+            secretKeyAndSaltBuffer.get(salt);
+
+            SecretKeySpec key = new SecretKeySpec(secretKeyBytes, getAlgorithmName());
+
+            ByteBuffer nonceBuffer = ByteBuffer.allocate(mSaltLen + ivBytes.length);
+            nonceBuffer.put(salt);
+            nonceBuffer.put(ivBytes);
+
+            mCipher.init(opmode, key, getParamSpec(nonceBuffer.array()));
+            mCipher.updateAAD(additionalAuthData);
+
+            ByteBuffer inputBuffer = ByteBuffer.wrap(data);
+
+            int outputLen = data.length;
+            if (opmode == Cipher.ENCRYPT_MODE) outputLen += mChecksumLen;
+            ByteBuffer outputBuffer = ByteBuffer.allocate(outputLen);
+
+            mCipher.doFinal(inputBuffer, outputBuffer);
+            return outputBuffer.array();
+        } catch (AEADBadTagException e) {
+            // Checksum failed in decryption
+            throw (AEADBadTagException) e;
+        } catch (InvalidKeyException
+                | InvalidAlgorithmParameterException
+                | IllegalBlockSizeException
+                | BadPaddingException
+                | ShortBufferException e) {
+            String errorMessage =
+                    Cipher.ENCRYPT_MODE == opmode
+                            ? "Failed to encrypt data: "
+                            : "Failed to decrypt data: ";
+            throw new IllegalArgumentException(errorMessage, e);
+        }
+    }
+
+    private AlgorithmParameterSpec getParamSpec(byte[] nonce) {
+        switch (getAlgorithmId()) {
+            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
+                // Fall through
+            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
+                // Fall through
+            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
+                return new GCMParameterSpec(mChecksumLen * 8, nonce);
+            default:
+                throw new IllegalArgumentException(
+                        "Unrecognized Encryption Algorithm ID: " + getAlgorithmId());
+        }
+    }
+
+    /**
+     * Encrypt padded data and calculate checksum for it.
+     *
+     * @param paddedData the padded data to encrypt.
+     * @param additionalAuthData additional data to authenticate (also known as associated data).
+     * @param keyBytes the encryption key.
+     * @param ivBytes the initialization vector (IV).
+     * @return the encrypted and padded data with checksum.
+     */
+    public byte[] encrypt(
+            byte[] paddedData, byte[] additionalAuthData, byte[] keyBytes, byte[] ivBytes) {
+        try {
+            return doCipherAction(
+                    paddedData, additionalAuthData, keyBytes, ivBytes, Cipher.ENCRYPT_MODE);
+        } catch (AEADBadTagException e) {
+            throw new IllegalArgumentException("Failed to encrypt data: ", e);
+        }
+    }
+
+    /**
+     * Authenticate and decrypt the padded data with checksum.
+     *
+     * @param paddedDataWithChecksum the padded data with checksum.
+     * @param additionalAuthData additional data to authenticate (also known as associated data).
+     * @param keyBytes the decryption key.
+     * @param ivBytes the initialization vector (IV).
+     * @return the decrypted and padded data
+     * @throws AEADBadTagException if authentication or decryption fails
+     */
+    public byte[] decrypt(
+            byte[] paddedDataWithChecksum,
+            byte[] additionalAuthData,
+            byte[] keyBytes,
+            byte[] ivBytes)
+            throws AEADBadTagException {
+
+        byte[] decryptPaddedDataAndAuthTag =
+                doCipherAction(
+                        paddedDataWithChecksum,
+                        additionalAuthData,
+                        keyBytes,
+                        ivBytes,
+                        Cipher.DECRYPT_MODE);
+
+        int decryptPaddedDataLen = decryptPaddedDataAndAuthTag.length - mChecksumLen;
+        return Arrays.copyOf(decryptPaddedDataAndAuthTag, decryptPaddedDataLen);
+    }
+
+    /**
+     * Gets key length of this algorithm (in bytes).
+     *
+     * @return the key length (in bytes).
+     */
+    @Override
+    public int getKeyLength() {
+        return super.getKeyLength() + mSaltLen;
     }
 
     /**
@@ -71,6 +207,4 @@ public final class IkeCombinedModeCipher extends IkeCipher {
         validateKeyLenOrThrow(key);
         return new IpSecAlgorithm(IpSecAlgorithm.AUTH_CRYPT_AES_GCM, key, mChecksumLen * 8);
     }
-
-    // TODO: Support encryption and decryption.
 }
