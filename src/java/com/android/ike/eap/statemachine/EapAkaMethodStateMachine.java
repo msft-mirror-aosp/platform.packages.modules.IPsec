@@ -327,9 +327,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        decodeResult.atClientErrorCode);
+                        message.eapIdentifier, getEapMethod(), decodeResult.atClientErrorCode);
             }
 
             EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
@@ -345,18 +343,21 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
-                            EAP_TYPE_AKA,
+                            getEapMethod(),
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
             if (!isValidChallengeAttributes(eapAkaTypeData)) {
                 LOG.e(mTAG, "Invalid attributes: " + eapAkaTypeData.attributeMap.keySet());
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        AtClientErrorCode.UNABLE_TO_PROCESS);
+                        message.eapIdentifier, getEapMethod(), AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
+            return handleChallengeAuthentication(message, eapAkaTypeData);
+        }
+
+        protected EapResult handleChallengeAuthentication(
+                EapMessage message, EapAkaTypeData eapAkaTypeData) {
             RandChallengeResult result;
             try {
                 result = getRandChallengeResult(eapAkaTypeData);
