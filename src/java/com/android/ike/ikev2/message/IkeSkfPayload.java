@@ -111,9 +111,9 @@ public final class IkeSkfPayload extends IkeSkPayload {
             int fragNum,
             int totalFrags) {
         super(
-                true /*isSkf*/,
                 ikeHeader,
                 firstPayloadType,
+                encodeSkfHeader(fragNum, totalFrags),
                 unencryptedPayloads,
                 integrityMac,
                 encryptCipher,
@@ -129,6 +129,13 @@ public final class IkeSkfPayload extends IkeSkPayload {
         super(true /*isSkf*/, encryptedPayloadBody);
         fragmentNum = fragNum;
         totalFragments = totalFrags;
+    }
+
+    @VisibleForTesting
+    static byte[] encodeSkfHeader(int fragNum, int totalFrags) {
+        ByteBuffer buffer = ByteBuffer.allocate(SKF_HEADER_LEN);
+        buffer.putShort((short) fragNum).putShort((short) totalFrags);
+        return buffer.array();
     }
 
     /**
