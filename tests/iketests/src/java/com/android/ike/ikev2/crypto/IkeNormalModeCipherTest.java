@@ -39,7 +39,7 @@ import java.util.Arrays;
 import javax.crypto.IllegalBlockSizeException;
 
 @RunWith(JUnit4.class)
-public final class IkeCipherTest {
+public final class IkeNormalModeCipherTest {
     private static final String IKE_AUTH_INIT_REQUEST_IV = "b9132b7bb9f658dfdc648e5017a6322a";
     private static final String IKE_AUTH_INIT_REQUEST_ENCRYPT_PADDED_DATA =
             "030c316ce55f365760d46426ce5cfc78bd1ed9abff63eb9594c1bd58"
@@ -64,7 +64,7 @@ public final class IkeCipherTest {
 
     private static final int AES_BLOCK_SIZE = 16;
 
-    private IkeCipher mAesCbcCipher;
+    private IkeNormalModeCipher mAesCbcCipher;
     private byte[] mAesCbcKey;
 
     private byte[] mIv;
@@ -74,11 +74,12 @@ public final class IkeCipherTest {
     @Before
     public void setUp() throws Exception {
         mAesCbcCipher =
-                IkeCipher.create(
-                        new EncryptionTransform(
-                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
-                                SaProposal.KEY_LEN_AES_128),
-                        IkeMessage.getSecurityProvider());
+                (IkeNormalModeCipher)
+                        IkeCipher.create(
+                                new EncryptionTransform(
+                                        SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
+                                        SaProposal.KEY_LEN_AES_128),
+                                IkeMessage.getSecurityProvider());
         mAesCbcKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
 
         mIv = TestUtils.hexStringToByteArray(IKE_AUTH_INIT_REQUEST_IV);
@@ -118,7 +119,7 @@ public final class IkeCipherTest {
         byte[] encryptionKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP + "00");
 
         try {
-            mAesCbcCipher.decrypt(mEncryptedPaddedData, mAesCbcKey, encryptionKey);
+            mAesCbcCipher.encrypt(mEncryptedPaddedData, encryptionKey, mIv);
             fail("Expected to fail due to encryption key with wrong length.");
         } catch (IllegalArgumentException expected) {
 

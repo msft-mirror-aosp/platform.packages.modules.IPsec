@@ -161,8 +161,13 @@ public class EapAkaTest extends EapMethodEndToEndTest {
     private static final byte[] EAP_AKA_SYNC_FAIL_RESPONSE =
             hexStringToByteArray(
                     "02CE0018" // EAP-Response | ID | length in bytes
-                            + "17040000" // EAP-AKA | Challenge | 2B padding
+                            + "17040000" // EAP-AKA | Synchronization-Failure | 2B padding
                             + "0404" + AUTS);  // AT_AUTS attribute
+
+    private static final byte[] EAP_AKA_AUTHENTICATION_REJECT =
+            hexStringToByteArray(
+                    "02CE0008" // EAP-Response | ID | length in bytes
+                            + "17020000"); // EAP-AKA | Authentication-Reject | 2B padding
 
     private static final byte[] EAP_RESPONSE_NAK_PACKET =
             hexStringToByteArray("021000060317"); // NAK with EAP-AKA listed
@@ -198,7 +203,7 @@ public class EapAkaTest extends EapMethodEndToEndTest {
     @Test
     public void testEapAkaEndToEnd() {
         verifyEapAkaIdentity();
-        verifyEapAkaChallenge();
+        verifyEapAkaChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_CHALLENGE_RESPONSE);
         verifyEapSuccess(MSK, EMSK);
     }
 
@@ -214,7 +219,7 @@ public class EapAkaTest extends EapMethodEndToEndTest {
         verifyEapAkaIdentity();
 
         verifyEapNotification(2);
-        verifyEapAkaChallenge();
+        verifyEapAkaChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_CHALLENGE_RESPONSE);
 
         verifyEapNotification(3);
         verifyEapSuccess(MSK, EMSK);
@@ -222,17 +227,10 @@ public class EapAkaTest extends EapMethodEndToEndTest {
 
     @Test
     public void testEapAkaUnsupportedType() {
-        // EAP-Request/SIM/Start (unsupported type)
-        mEapAuthenticator.processEapMessage(EAP_REQUEST_SIM_START_PACKET);
-        mTestLooper.dispatchAll();
-
-        // verify EAP-Response/Nak returned
-        verify(mMockCallback).onResponse(eq(EAP_RESPONSE_NAK_PACKET));
-        verifyNoMoreInteractions(
-                mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
+        verifyUnsupportedType(EAP_REQUEST_SIM_START_PACKET, EAP_RESPONSE_NAK_PACKET);
 
         verifyEapAkaIdentity();
-        verifyEapAkaChallenge();
+        verifyEapAkaChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_CHALLENGE_RESPONSE);
         verifyEapSuccess(MSK, EMSK);
     }
 
@@ -240,8 +238,17 @@ public class EapAkaTest extends EapMethodEndToEndTest {
     public void testEapAkaSynchronizationFailure() {
         verifyEapAkaIdentity();
         verifyEapAkaSynchronizationFailure();
-        verifyEapAkaChallenge();
+        verifyEapAkaChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_CHALLENGE_RESPONSE);
         verifyEapSuccess(MSK, EMSK);
+    }
+
+    @Test
+    public void testEapAkaAuthenticationReject() {
+        verifyEapAkaIdentity();
+
+        // return null from TelephonyManager to simluate rejection of AUTN
+        verifyEapAkaChallenge(null, EAP_AKA_AUTHENTICATION_REJECT);
+        verifyEapFailure();
     }
 
     private void verifyEapAkaIdentity() {
@@ -284,12 +291,9 @@ public class EapAkaTest extends EapMethodEndToEndTest {
         verify(mMockCallback).onResponse(eq(outgoingEapPacket));
     }
 
-    private void verifyEapAkaChallenge() {
+    private void verifyEapAkaChallenge(String responseBase64, byte[] outgoingPacket) {
         verifyEapAkaChallenge(
-                BASE64_CHALLENGE_1,
-                BASE_64_RESPONSE_SUCCESS,
-                EAP_AKA_CHALLENGE_REQUEST,
-                EAP_AKA_CHALLENGE_RESPONSE);
+                BASE64_CHALLENGE_1, responseBase64, EAP_AKA_CHALLENGE_REQUEST, outgoingPacket);
         verifyNoMoreInteractions(
                 mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
     }

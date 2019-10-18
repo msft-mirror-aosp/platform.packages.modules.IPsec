@@ -17,7 +17,6 @@
 package com.android.ike.eap;
 
 import static com.android.ike.TestUtils.hexStringToByteArray;
-import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -119,12 +118,7 @@ public class EapMsChapV2Test extends EapMethodEndToEndTest {
 
     @Test
     public void testEapMsChapV2UnsupportedType() {
-        mEapAuthenticator.processEapMessage(EAP_REQUEST_AKA_IDENTITY_PACKET);
-        mTestLooper.dispatchAll();
-
-        // verify EAP-Response/Nak returned
-        verify(mMockCallback).onResponse(eq(EAP_RESPONSE_NAK_PACKET));
-        verifyNoMoreInteractions(mMockCallback);
+        verifyUnsupportedType(EAP_REQUEST_AKA_IDENTITY_PACKET, EAP_RESPONSE_NAK_PACKET);
 
         verifyEapMsChapV2Challenge();
         verifyEapMsChapV2SuccessRequest();
@@ -172,14 +166,6 @@ public class EapMsChapV2Test extends EapMethodEndToEndTest {
         mTestLooper.dispatchAll();
 
         verify(mMockCallback).onResponse(eq(EAP_MSCHAP_V2_FAILURE_RESPONSE));
-        verifyNoMoreInteractions(mMockCallback);
-    }
-
-    private void verifyEapFailure() {
-        mEapAuthenticator.processEapMessage(EAP_FAILURE_PACKET);
-        mTestLooper.dispatchAll();
-
-        verify(mMockCallback).onFail();
         verifyNoMoreInteractions(mMockCallback);
     }
 }
