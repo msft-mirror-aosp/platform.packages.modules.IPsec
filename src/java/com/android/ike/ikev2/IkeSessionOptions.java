@@ -26,8 +26,10 @@ import com.android.ike.ikev2.message.IkePayload;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.InetAddress;
+import java.security.PrivateKey;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPrivateKey;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -125,7 +127,7 @@ public final class IkeSessionOptions {
     }
 
     /**
-     * Package private class that contains configuration to do IKEv2 pre-shared-key-based
+     * Package private class that contains configuration for IKEv2 pre-shared-key-based
      * authentication of local or remote side.
      */
     static class IkeAuthPskConfig extends IkeAuthConfig {
@@ -138,8 +140,8 @@ public final class IkeSessionOptions {
     }
 
     /**
-     * Package private class that contains configuration to do IKEv2 public-key-based authentication
-     * of the remote side.
+     * Package private class that contains configuration for IKEv2 public-key-signature-based
+     * authentication of the remote side.
      */
     static class IkeAuthDigitalSignRemoteConfig extends IkeAuthConfig {
         final TrustAnchor mTrustAnchor;
@@ -150,8 +152,25 @@ public final class IkeSessionOptions {
         }
     }
 
-    // TODO: Create IkeAuthDigitalSignLocalConfig to store signature hash algorithm and
-    // certificates to do authentication of local side to the remote.
+    /**
+     * Package private class that contains configuration to do IKEv2 public-key-signature-based
+     * authentication of the local side.
+     */
+    static class IkeAuthDigitalSignLocalConfig extends IkeAuthConfig {
+        final X509Certificate mEndCert;
+        final List<X509Certificate> mIntermediateCerts;
+        final PrivateKey mPrivateKey;
+
+        private IkeAuthDigitalSignLocalConfig(
+                X509Certificate clientEndCert,
+                List<X509Certificate> clientIntermediateCerts,
+                PrivateKey privateKey) {
+            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
+            mEndCert = clientEndCert;
+            mIntermediateCerts = clientIntermediateCerts;
+            mPrivateKey = privateKey;
+        }
+    }
 
     /**
      * Package private class that contains configuration to do EAP authentication of the local side.
@@ -280,17 +299,13 @@ public final class IkeSessionOptions {
          * <p>Users MUST declare only one authentication method. Calling this function will override
          * the previously set authentication configuration.
          *
-         * <p>TODO: Add input to take EAP configucations.
-         *
-         * <p>TODO: Investigate if we need to support the name constraints extension.
-         *
          * @see <a href="https://tools.ietf.org/html/rfc5280">RFC 5280, Internet X.509 Public Key
          *     Infrastructure Certificate and Certificate Revocation List (CRL) Profile</a>
-         * @param caCert the CA certificate for validating the received server certificate(s).
+         * @param serverCaCert the CA certificate for validating the received server certificate(s).
          * @return Builder this, to facilitate chaining.
          */
         public Builder setAuthEap(
-                @NonNull X509Certificate caCert, @NonNull EapSessionConfig eapConfig) {
+                @NonNull X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
             mLocalAuthConfig = new IkeAuthEapConfig(eapConfig);
 
             // The name constraints extension, defined in RFC 5280, indicates a name space within
@@ -298,11 +313,77 @@ public final class IkeSessionOptions {
             // located.
             mRemoteAuthConfig =
                     new IkeAuthDigitalSignRemoteConfig(
-                            new TrustAnchor(caCert, null /*nameConstraints*/));
+                            new TrustAnchor(serverCaCert, null /*nameConstraints*/));
+
+            // TODO: Investigate if we need to support the name constraints extension.
+
             return this;
         }
 
-        // TODO: Add methods to set authentication method to public key signature and EAP.
+        /**
+         * Uses certificate and digital signature to do IKE authentication.
+         *
+         * <p>The public key included by the client end certificate and the signature private key
+         * MUST come from the same key pair.
+         *
+         * <p>The IKE library will use the strongest signature algorithm supported by both sides.
+         *
+         * <p>Currenly only RSA digital signature is supported.
+         *
+         * @param serverCaCert the CA certificate for validating the received server certificate(s).
+         * @param clientEndCert the end certificate for remote server to verify the locally
+         *     generated signature.
+         * @param clientPrivateKey private key to generate outbound digital signature. Only {@link
+         *     RSAPrivateKey} is supported.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder setAuthDigitalSignature(
+                @NonNull X509Certificate serverCaCert,
+                @NonNull X509Certificate clientEndCert,
+                @NonNull PrivateKey clientPrivateKey) {
+            return setAuthDigitalSignature(
+                    serverCaCert,
+                    clientEndCert,
+                    new LinkedList<X509Certificate>(),
+                    clientPrivateKey);
+        }
+
+        /**
+         * Uses certificate and digital signature to do IKE authentication.
+         *
+         * <p>The public key included by the client end certificate and the signature private key
+         * MUST come from the same key pair.
+         *
+         * <p>The IKE library will use the strongest signature algorithm supported by both sides.
+         *
+         * <p>Currenly only RSA digital signature is supported.
+         *
+         * @param serverCaCert the CA certificate for validating the received server certificate(s).
+         * @param clientEndCert the end certificate for remote server to verify locally generated
+         *     signature.
+         * @param clientIntermediateCerts intermediate certificates for the remote server to
+         *     validate the end certificate.
+         * @param clientPrivateKey private key to generate outbound digital signature. Only {@link
+         *     RSAPrivateKey} is supported.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder setAuthDigitalSignature(
+                @NonNull X509Certificate serverCaCert,
+                @NonNull X509Certificate clientEndCert,
+                @NonNull List<X509Certificate> clientIntermediateCerts,
+                @NonNull PrivateKey clientPrivateKey) {
+            if (!(clientPrivateKey instanceof RSAPrivateKey)) {
+                throw new IllegalArgumentException("Unsupported private key type");
+            }
+
+            mLocalAuthConfig =
+                    new IkeAuthDigitalSignLocalConfig(
+                            clientEndCert, clientIntermediateCerts, clientPrivateKey);
+            mRemoteAuthConfig =
+                    new IkeAuthDigitalSignRemoteConfig(
+                            new TrustAnchor(serverCaCert, null /*nameConstraints*/));
+            return this;
+        }
 
         /**
          * Validates, builds and returns the IkeSessionOptions
