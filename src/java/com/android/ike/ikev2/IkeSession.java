@@ -26,7 +26,24 @@ import dalvik.system.CloseGuard;
 
 import java.util.concurrent.Executor;
 
-/** This class represents an IKE Session management object. */
+/**
+ * This class represents an IKE Session management object that allows for keying and management of
+ * {@link IpSecTransform}s.
+ *
+ * <p>An IKE/Child Session represents an IKE/Child SA as well as its rekeyed successors. A Child
+ * Session is bounded by the lifecycle of the IKE Session under which it is set up. Closing an IKE
+ * Session implicitly closes any remaining Child Sessions under it.
+ *
+ * <p>An IKE procedure is one or multiple IKE message exchanges that are used to create, delete or
+ * rekey an IKE Session or Child Session.
+ *
+ * <p>This class provides methods for user to initiate IKE procedures, such as the Creation and
+ * Deletion of a Child Session, or the Deletion of the IKE session. All procedures (except for IKE
+ * deletion) will be initiated sequentially after IKE Session is set up.
+ *
+ * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
+ *     Version 2 (IKEv2)</a>
+ */
 public final class IkeSession implements AutoCloseable {
     private final CloseGuard mCloseGuard = CloseGuard.get();
 
@@ -97,10 +114,13 @@ public final class IkeSession implements AutoCloseable {
     // TODO: b/133340675 Destroy the worker thread when there is no more alive {@link IkeSession}.
 
     /**
-     * Initiate Create Child exchange on the IKE worker thread.
+     * Asynchronously request a new Child Session.
      *
      * <p>Users MUST provide a unique {@link ChildSessionCallback} instance for each new Child
      * Session.
+     *
+     * <p>Upon setup, the {@link ChildSessionCallback#onOpened(ChildSessionConfiguration)} will be
+     * fired.
      *
      * @param childSessionOptions the {@link ChildSessionOptions} that contains the Child Session
      *     configurations to negotiate.
@@ -114,10 +134,12 @@ public final class IkeSession implements AutoCloseable {
     }
 
     /**
-     * Initiate Delete Child exchange on the IKE worker thread.
+     * Asynchronously delete a Child Session.
      *
-     * @param childSessionCallback the callback of the Child Session to delete as well as the
-     *     interface to notify users the deletion result.
+     * <p>Upon closing, the {@link ChildSessionCallback#onClosed()} will be fired.
+     *
+     * @param childSessionCallback The {@link ChildSessionCallback} instance that uniquely identify
+     *     the Child Session.
      * @throws IllegalArgumentException if no Child Session found bound with this callback.
      */
     public void closeChildSession(ChildSessionCallback childSessionCallback) {
@@ -125,23 +147,21 @@ public final class IkeSession implements AutoCloseable {
     }
 
     /**
-     * Initiate Delete IKE exchange on the IKE worker thread.
+     * Close the IKE session gracefully.
      *
-     * <p>Users must stop all outbound traffic that uses the Child Sessions that under this IKE
-     * Session before calling this method.
-     */
-    public void closeSafely() {
-        mCloseGuard.close();
-        mIkeSessionStateMachine.closeSession();
-    }
-
-    /**
-     * Notify the remote server and close the IKE Session.
+     * <p>Implements {@link AutoCloseable#close()}
      *
-     * <p>Implement {@link AutoCloseable#close()}
+     * <p>Upon closing, the {@link IkeSessionCallback#onClosed()} will be fired.
      *
-     * <p>Users must stop all outbound traffic that uses the Child Sessions that under this IKE
-     * Session before calling this method.
+     * <p>Closing an IKE Session implicitly closes any remaining Child Sessions negotiated under it.
+     * Users SHOULD stop all outbound traffic that uses these Child Sessions({@link IpSecTransform}
+     * pairs) before calling this method. Otherwise IPsec packets will be dropped due to the lack of
+     * a valid {@link IpSecTransform}.
+     *
+     * <p>Closure of an IKE session will take priority over, and cancel other procedures waiting in
+     * the queue (but will wait for ongoing locally initiated procedures to complete). After sending
+     * the Delete request, the IKE library will wait until a Delete response is received or
+     * retransmission timeout occurs.
      */
     @Override
     public void close() throws Exception {
@@ -149,6 +169,21 @@ public final class IkeSession implements AutoCloseable {
         mIkeSessionStateMachine.closeSession();
     }
 
-    // TODO: Add methods to retrieve negotiable and non-negotiable configurations of IKE Session and
-    // its Child Sessions.
+    /**
+     * Terminate (forcibly close) the IKE session.
+     *
+     * <p>Upon closing, the {@link IkeSessionCallback#onClosed()} will be fired.
+     *
+     * <p>Closing an IKE Session implicitly closes any remaining Child Sessions negotiated under it.
+     * Users SHOULD stop all outbound traffic that uses these Child Sessions({@link IpSecTransform}
+     * pairs) before calling this method. Otherwise IPsec packets will be dropped due to the lack of
+     * a valid {@link IpSecTransform}.
+     *
+     * <p>Forcible closure of an IKE session will take priority over, and cancel other procedures
+     * waiting in the queue. It will also interrupt any ongoing locally initiated procedure.
+     */
+    public void kill() throws Exception {
+        mCloseGuard.close();
+        mIkeSessionStateMachine.killSession();
+    }
 }
