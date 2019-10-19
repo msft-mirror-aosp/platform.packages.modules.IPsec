@@ -177,9 +177,10 @@ public final class IkeSessionOptions {
 
     /** This class can be used to incrementally construct a IkeSessionOptions. */
     public static final class Builder {
-        private final InetAddress mServerAddress;
-        private final UdpEncapsulationSocket mUdpEncapSocket;
         private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
+
+        private InetAddress mServerAddress;
+        private UdpEncapsulationSocket mUdpEncapSocket;
 
         private IkeIdentification mLocalIdentification;
         private IkeIdentification mRemoteIdentification;
@@ -190,16 +191,27 @@ public final class IkeSessionOptions {
         private boolean mIsIkeFragmentationSupported = false;
 
         /**
-         * Returns a new Builder for an IkeSessionOptions.
+         * Sets server address
          *
          * @param serverAddress IP address of remote IKE server.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder setServerAddress(@NonNull InetAddress serverAddress) {
+            mServerAddress = serverAddress;
+            return this;
+        }
+
+        /**
+         * Sets UDP-Encapsulated socket
+         *
          * @param udpEncapsulationSocket {@link IpSecManager.UdpEncapsulationSocket} for sending and
          *     receiving IKE message.
-         * @return Builder for an IkeSessionOptions.
+         * @return Builder this, to facilitate chaining.
          */
-        public Builder(InetAddress serverAddress, UdpEncapsulationSocket udpEncapsulationSocket) {
-            mServerAddress = serverAddress;
+        public Builder setUdpEncapsulationSocket(
+                @NonNull UdpEncapsulationSocket udpEncapsulationSocket) {
             mUdpEncapSocket = udpEncapsulationSocket;
+            return this;
         }
 
         /**
@@ -302,12 +314,13 @@ public final class IkeSessionOptions {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
-            if (mLocalIdentification == null
+            if (mServerAddress == null
+                    || mUdpEncapSocket == null
+                    || mLocalIdentification == null
                     || mRemoteIdentification == null
                     || mLocalAuthConfig == null
                     || mRemoteAuthConfig == null) {
-                throw new IllegalArgumentException(
-                        "IKE identification or IKE authentication method is not set.");
+                throw new IllegalArgumentException("Necessary parameter missing.");
             }
 
             return new IkeSessionOptions(
