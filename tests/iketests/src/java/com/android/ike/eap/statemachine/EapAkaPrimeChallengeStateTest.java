@@ -18,6 +18,7 @@ package com.android.ike.eap.statemachine;
 
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_PRIME_IDENTITY_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_PRIME_IDENTITY_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.IMSI;
@@ -25,11 +26,9 @@ import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENG
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
 
 import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.android.ike.eap.EapResult.EapResponse;
@@ -47,16 +46,39 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 
-public class EapAkaPrimeIdentityStateTest extends EapAkaPrimeStateTest {
+public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
     @Before
     public void setUp() {
         super.setUp();
 
-        mStateMachine.transitionTo(mStateMachine.new IdentityState());
+        mStateMachine.transitionTo(mStateMachine.new ChallengeState());
     }
 
     @Test
-    public void testProcessIdentityRequest() throws Exception {
+    public void testTransitionWithEapIdentity() throws Exception {
+        mStateMachine.transitionTo(mStateMachine.new CreatedState());
+
+        EapData eapData = new EapData(EAP_TYPE_AKA_PRIME, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        DecodeResult<EapAkaTypeData> decodeResult =
+                new DecodeResult<>(new EapAkaPrimeTypeData(EAP_AKA_CHALLENGE, new ArrayList<>()));
+        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+
+        mStateMachine.process(eapMessage);
+
+        ChallengeState challengeState = (ChallengeState) mStateMachine.getState();
+        assertArrayEquals(EAP_IDENTITY_BYTES, challengeState.mIdentity);
+
+        // decode() is called in CreatedState and ChallengeState
+        verify(mMockTypeDataDecoder, times(2)).decode(eq(DUMMY_EAP_TYPE_DATA));
+    }
+
+    @Test
+    public void testTransitionWithEapAkaPrimeIdentity() throws Exception {
+        mStateMachine.transitionTo(mStateMachine.new CreatedState());
+
+        // Process AKA' Identity Request
         EapData eapData = new EapData(EAP_TYPE_AKA_PRIME, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
@@ -69,28 +91,21 @@ public class EapAkaPrimeIdentityStateTest extends EapAkaPrimeStateTest {
         EapResponse eapResponse = (EapResponse) mStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_PRIME_IDENTITY_RESPONSE, eapResponse.packet);
 
-        verify(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        // decode() is called in CreatedState and IdentityState
+        verify(mMockTypeDataDecoder, times(2)).decode(eq(DUMMY_EAP_TYPE_DATA));
         verify(mMockTelephonyManager).getSubscriberId();
-        verifyNoMoreInteractions(mMockTypeDataDecoder, mMockTelephonyManager);
-    }
 
-    @Test
-    public void testProcessTransitionToChallengeState() throws Exception {
-        EapData eapData = new EapData(EAP_TYPE_AKA_PRIME, DUMMY_EAP_TYPE_DATA);
-        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
-
-        // Don't actually need any attributes in the attributeMap, since we only care about the
-        // state transition here.
-        DecodeResult<EapAkaTypeData> decodeResult =
+        // Process AKA' Challenge Request
+        decodeResult =
                 new DecodeResult<>(new EapAkaPrimeTypeData(EAP_AKA_CHALLENGE, new ArrayList<>()));
         when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
 
         mStateMachine.process(eapMessage);
 
-        assertTrue(mStateMachine.getState() instanceof ChallengeState);
+        ChallengeState challengeState = (ChallengeState) mStateMachine.getState();
+        assertArrayEquals(EAP_AKA_PRIME_IDENTITY_BYTES, challengeState.mIdentity);
 
-        // decoded in IdentityState and ChallengeState
-        verify(mMockTypeDataDecoder, times(2)).decode(DUMMY_EAP_TYPE_DATA);
-        verifyNoMoreInteractions(mMockTelephonyManager, mMockTypeDataDecoder);
+        // decode() called again in IdentityState and ChallengeState
+        verify(mMockTypeDataDecoder, times(4)).decode(eq(DUMMY_EAP_TYPE_DATA));
     }
 }

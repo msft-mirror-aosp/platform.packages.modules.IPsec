@@ -35,7 +35,7 @@ import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
-import com.android.ike.eap.statemachine.EapAkaMethodStateMachine.ChallengeState;
+import com.android.ike.eap.statemachine.EapAkaPrimeMethodStateMachine.ChallengeState;
 
 import org.junit.Test;
 
