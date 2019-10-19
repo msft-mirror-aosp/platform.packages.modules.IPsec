@@ -22,12 +22,14 @@ import com.android.ike.ikev2.crypto.IkeMacPrf;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.message.IkeAuthPayload.AuthMethod;
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
 import java.security.ProviderException;
 import java.security.Signature;
 import java.security.SignatureException;
@@ -48,6 +50,7 @@ import java.util.Arrays;
  *     Internet Key Exchange Version 2 (IKEv2)</a>
  */
 public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
+    private static final String KEY_ALGO_NAME = "RSA";
 
     // Byte arrays of DER encoded identifier ASN.1 objects that indicates the algorithm used to
     // generate the signature, extracted from
@@ -89,13 +92,13 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
         SIGNATURE_ALGO_RSA_SHA2_384,
         SIGNATURE_ALGO_RSA_SHA2_512
     })
-    public @interface SignatureAlgo {}
+    @VisibleForTesting
+    @interface SignatureAlgo {}
 
-    public static final String SIGNATURE_ALGO_RSA_SHA1 = "SHA1withRSA";
-    public static final String SIGNATURE_ALGO_RSA_SHA2_256 = "SHA256withRSA";
-    public static final String SIGNATURE_ALGO_RSA_SHA2_384 = "SHA384withRSA";
-    public static final String SIGNATURE_ALGO_RSA_SHA2_512 = "SHA512withRSA";
-    // TODO: Allow users to configure authentication method using @SignatureAlgo
+    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA1 = "SHA1withRSA";
+    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_256 = "SHA256withRSA";
+    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_384 = "SHA384withRSA";
+    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_512 = "SHA512withRSA";
 
     public final String signatureAlgoAndHash;
     public final byte[] signature;
@@ -116,19 +119,71 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
                 int signAlgoLen = Byte.toUnsignedInt(inputBuffer.get());
                 byte[] signAlgoBytes = new byte[signAlgoLen];
                 inputBuffer.get(signAlgoBytes);
-                signatureAlgoAndHash = bytesToSignAlgoName(signAlgoBytes);
+                signatureAlgoAndHash = bytesToJavaStandardSignAlgoName(signAlgoBytes);
 
                 // Get signature.
                 signature = new byte[authData.length - SIGNATURE_ALGO_ASN1_LEN_LEN - signAlgoLen];
                 inputBuffer.get(signature);
                 break;
             default:
-                // Won't hit here.
                 throw new IllegalArgumentException("Unrecognized authentication method.");
         }
     }
 
-    private String bytesToSignAlgoName(byte[] signAlgoBytes) throws AuthenticationFailedException {
+    /**
+     * Construct IkeAuthDigitalSignPayload for an outbound IKE packet.
+     *
+     * <p>Since IKE library is always a client, outbound IkeAuthDigitalSignPayload always signs IKE
+     * initiator's SignedOctets, which is concatenation of the IKE_INIT request message, the Nonce
+     * of IKE responder and the signed ID-Initiator payload body.
+     *
+     * <p>Caller MUST validate that the signatureAlgoName is supported by IKE library.
+     *
+     * @param signatureAlgoName the name of the algorithm requested. See the Signature section in
+     *     the <a href= "{@docRoot}/../technotes/guides/security/StandardNames.html#Signature"> Java
+     *     Cryptography Architecture Standard Algorithm Name Documentation</a> for information about
+     *     standard algorithm names.
+     * @param privateKey the private key of the identity whose signature is going to be generated.
+     * @param ikeInitBytes IKE_INIT request for calculating IKE initiator's SignedOctets.
+     * @param nonce nonce of IKE responder for calculating IKE initiator's SignedOctets.
+     * @param idPayloadBodyBytes ID-Initiator payload body for calculating IKE initiator's
+     *     SignedOctets.
+     * @param ikePrf the negotiated PRF.
+     * @param prfKeyBytes the negotiated PRF initiator key.
+     */
+    public IkeAuthDigitalSignPayload(
+            String signatureAlgoName,
+            PrivateKey privateKey,
+            byte[] ikeInitBytes,
+            byte[] nonce,
+            byte[] idPayloadBodyBytes,
+            IkeMacPrf ikePrf,
+            byte[] prfKeyBytes) {
+        super(false, IkeAuthPayload.AUTH_METHOD_GENERIC_DIGITAL_SIGN);
+        byte[] dataToSignBytes =
+                getSignedOctets(ikeInitBytes, nonce, idPayloadBodyBytes, ikePrf, prfKeyBytes);
+
+        try {
+            Signature signGen =
+                    Signature.getInstance(signatureAlgoName, IkeMessage.getSecurityProvider());
+            signGen.initSign(privateKey);
+            signGen.update(dataToSignBytes);
+
+            signature = signGen.sign();
+            signatureAlgoAndHash = signatureAlgoName;
+        } catch (SignatureException | InvalidKeyException e) {
+            throw new IllegalArgumentException("Signature generation failed", e);
+        } catch (NoSuchAlgorithmException e) {
+            throw new ProviderException(
+                    "Security Provider does not support "
+                            + KEY_ALGO_NAME
+                            + " or "
+                            + signatureAlgoName);
+        }
+    }
+
+    private String bytesToJavaStandardSignAlgoName(byte[] signAlgoBytes)
+            throws AuthenticationFailedException {
         if (Arrays.equals(PKI_ALGO_ID_DER_BYTES_RSA_SHA1, signAlgoBytes)) {
             return SIGNATURE_ALGO_RSA_SHA1;
         } else if (Arrays.equals(PKI_ALGO_ID_DER_BYTES_RSA_SHA2_256, signAlgoBytes)) {

@@ -21,14 +21,21 @@ import android.content.Context;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.ike.ikev2.message.IkeMessage;
+import com.android.org.bouncycastle.util.io.pem.PemObject;
+import com.android.org.bouncycastle.util.io.pem.PemReader;
 
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.security.KeyFactory;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAPrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
 
-/** CertUtils provides utility methods for creating X509 certificate. */
+/** CertUtils provides utility methods for creating X509 certificate and private key. */
 public final class CertUtils {
     private static final String PEM_FOLDER_NAME = "pem";
+    private static final String KEY_FOLDER_NAME = "key";
 
     /** Creates an X509Certificate with a pem file */
     public static X509Certificate createCertFromPemFile(String fileName) throws Exception {
@@ -39,5 +46,18 @@ public final class CertUtils {
         CertificateFactory factory =
                 CertificateFactory.getInstance("X.509", IkeMessage.getSecurityProvider());
         return (X509Certificate) factory.generateCertificate(inputStream);
+    }
+
+    /** Creates an private key from a PKCS8 format key file */
+    public static RSAPrivateKey createRsaPrivateKeyFromKeyFile(String fileName) throws Exception {
+        Context context = InstrumentationRegistry.getContext();
+        InputStream inputStream =
+                context.getResources().getAssets().open(KEY_FOLDER_NAME + "/" + fileName);
+
+        PemObject pemObject = new PemReader(new InputStreamReader(inputStream)).readPemObject();
+
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        return (RSAPrivateKey)
+                keyFactory.generatePrivate(new PKCS8EncodedKeySpec(pemObject.getContent()));
     }
 }
