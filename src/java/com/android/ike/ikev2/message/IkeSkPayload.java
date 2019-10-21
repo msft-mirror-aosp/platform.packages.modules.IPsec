@@ -127,9 +127,9 @@ public class IkeSkPayload extends IkePayload {
             byte[] encryptionKey) {
 
         this(
-                false /*isSkf*/,
                 ikeHeader,
                 firstPayloadType,
+                new byte[0] /*skfHeaderBytes*/,
                 unencryptedPayloads,
                 integrityMac,
                 encryptCipher,
@@ -140,15 +140,15 @@ public class IkeSkPayload extends IkePayload {
     /** Construct an instance of IkeSkPayload for building outbound packet. */
     @VisibleForTesting
     protected IkeSkPayload(
-            boolean isSkf,
             IkeHeader ikeHeader,
             @PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
             byte[] unencryptedPayloads,
             @Nullable IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
             byte[] integrityKey,
             byte[] encryptionKey) {
-        super(isSkf ? PAYLOAD_TYPE_SKF : PAYLOAD_TYPE_SK, false);
+        super(skfHeaderBytes.length == 0 ? PAYLOAD_TYPE_SK : PAYLOAD_TYPE_SKF, false);
 
         // TODO: Support constructing IkeEncryptedPayloadBody using AEAD.
 
@@ -156,6 +156,7 @@ public class IkeSkPayload extends IkePayload {
                 new IkeEncryptedPayloadBody(
                         ikeHeader,
                         firstPayloadType,
+                        skfHeaderBytes,
                         unencryptedPayloads,
                         integrityMac,
                         encryptCipher,

@@ -16,6 +16,8 @@
 
 package com.android.ike.ikev2.message;
 
+import static com.android.ike.ikev2.message.IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_256;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -31,6 +33,7 @@ import com.android.ike.ikev2.testutils.CertUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
 public final class IkeAuthDigitalSignPayloadTest {
@@ -92,9 +95,7 @@ public final class IkeAuthDigitalSignPayloadTest {
 
         assertTrue(payload instanceof IkeAuthDigitalSignPayload);
         IkeAuthDigitalSignPayload dsPayload = (IkeAuthDigitalSignPayload) payload;
-        assertEquals(
-                IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_256,
-                dsPayload.signatureAlgoAndHash);
+        assertEquals(SIGNATURE_ALGO_RSA_SHA2_256, dsPayload.signatureAlgoAndHash);
         assertArrayEquals(dsPayload.signature, TestUtils.hexStringToByteArray(SIGNATURE));
     }
 
@@ -136,7 +137,24 @@ public final class IkeAuthDigitalSignPayloadTest {
                     PRF_RESP_KEY);
             fail("Expected to fail due to wrong certificate.");
         } catch (AuthenticationFailedException expected) {
-
         }
+    }
+
+    @Test
+    public void testGenerateSignature() throws Exception {
+        PrivateKey key = CertUtils.createRsaPrivateKeyFromKeyFile("end-cert-key-a.key");
+
+        IkeAuthDigitalSignPayload authPayload =
+                new IkeAuthDigitalSignPayload(
+                        SIGNATURE_ALGO_RSA_SHA2_256,
+                        key,
+                        IKE_INIT_RESP_REQUEST,
+                        NONCE_INIT_RESP,
+                        ID_RESP_PAYLOAD_BODY,
+                        mIkeHmacSha1Prf,
+                        PRF_RESP_KEY);
+
+        assertEquals(SIGNATURE_ALGO_RSA_SHA2_256, authPayload.signatureAlgoAndHash);
+        assertArrayEquals(authPayload.signature, TestUtils.hexStringToByteArray(SIGNATURE));
     }
 }
