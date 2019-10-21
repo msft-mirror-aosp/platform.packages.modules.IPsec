@@ -380,11 +380,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             } catch (EapSimAkaAuthenticationFailureException ex) {
                 // Return EAP-Response/AKA-Authentication-Reject when the AUTN is rejected
                 // (RFC 4187#6.3.1)
-                return buildResponseMessage(
-                        EAP_TYPE_AKA,
-                        EAP_AKA_AUTHENTICATION_REJECT,
-                        message.eapIdentifier,
-                        new ArrayList<>());
+                return buildAuthenticationRejectMessage(message.eapIdentifier);
             }
 
             if (!result.isSuccessfulResult()) {
@@ -549,6 +545,14 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                             + " CK=" + LOG.pii(ck));
 
             return new RandChallengeResult(res, ik, ck);
+        }
+
+        protected EapResult buildAuthenticationRejectMessage(int eapIdentifier) {
+            return buildResponseMessage(
+                    getEapMethod(),
+                    EAP_AKA_AUTHENTICATION_REJECT,
+                    eapIdentifier,
+                    new ArrayList<>());
         }
 
         private byte[] getMkInputData(RandChallengeResult result) {
