@@ -16,8 +16,6 @@
 
 package com.android.ike.ikev2;
 
-import static com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
-
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
