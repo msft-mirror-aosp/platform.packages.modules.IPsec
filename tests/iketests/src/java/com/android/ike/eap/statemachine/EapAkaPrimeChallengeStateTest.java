@@ -18,18 +18,22 @@ package com.android.ike.eap.statemachine;
 
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
+import static com.android.ike.TestUtils.hexStringToByteArray;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.CK_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_PRIME_AUTHENTICATION_REJECT;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_PRIME_IDENTITY_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_PRIME_IDENTITY_RESPONSE;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.IK_BYTES;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.IMSI;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_IDENTITY;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.AUTN_BYTES;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.MAC_BYTES;
 import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1_BYTES;
+import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefinitions.RES_BYTES;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -52,6 +56,7 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtKdfInput;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandAka;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
+import com.android.ike.eap.statemachine.EapAkaMethodStateMachine.ChallengeState.RandChallengeResult;
 import com.android.ike.eap.statemachine.EapAkaPrimeMethodStateMachine.ChallengeState;
 
 import org.junit.Before;
@@ -70,6 +75,10 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
             INCORRECT_NETWORK_NAME.getBytes(StandardCharsets.UTF_8);
     private static final int VALID_KDF = 1;
     private static final int INVALID_KDF = 10;
+
+    private static final byte[] EXPECTED_CK_IK_PRIME =
+            hexStringToByteArray(
+                    "A0B37E7C7E9CC4F37A5C0AAA55DC87BE51FDA70A9D8F37E62E23B15F1B3941E6");
 
     private ChallengeState mState;
 
@@ -268,5 +277,23 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
                 mState.hasMatchingNetworkNames(SERVER_NETWORK_NAME_STRING, INCORRECT_NETWORK_NAME));
         assertFalse(
                 mState.hasMatchingNetworkNames(INCORRECT_NETWORK_NAME, SERVER_NETWORK_NAME_STRING));
+    }
+
+    @Test
+    public void testDeriveCkIkPrime() throws Exception {
+        RandChallengeResult randChallengeResult =
+                mState.new RandChallengeResult(RES_BYTES, IK_BYTES, CK_BYTES);
+        AtKdfInput atKdfInput =
+                new AtKdfInput(0, PEER_NETWORK_NAME.getBytes(StandardCharsets.UTF_8));
+        AtAutn atAutn = new AtAutn(AUTN_BYTES);
+
+        // S = FC | Network Name | len(Network Name) | SQN ^ AK | len(SQN ^ AK)
+        //   = 20666F6F3A62617200070123456789AB0006
+        // K = CK | IK
+        //   = FFEEDDCCBBAA9988776655443322110000112233445566778899AABBCCDDEEFF
+        // CK' | IK' = HMAC-SHA256(K, S)
+        //           = A0B37E7C7E9CC4F37A5C0AAA55DC87BE51FDA70A9D8F37E62E23B15F1B3941E6
+        byte[] result = mState.deriveCkIkPrime(randChallengeResult, atKdfInput, atAutn);
+        assertArrayEquals(EXPECTED_CK_IK_PRIME, result);
     }
 }
