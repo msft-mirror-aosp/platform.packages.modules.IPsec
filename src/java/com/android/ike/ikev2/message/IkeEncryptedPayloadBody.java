@@ -159,8 +159,24 @@ final class IkeEncryptedPayloadBody {
 
         mIv = iv;
         if (encryptCipher.isAead()) {
-            throw new UnsupportedOperationException("AEAD encryption not supported.");
-            // TODO: Support AEAD encryption.
+            byte[] paddedDataWithChecksum =
+                    combinedModeEncrypt(
+                            (IkeCombinedModeCipher) encryptCipher,
+                            ikeHeader,
+                            firstPayloadType,
+                            skfHeaderBytes,
+                            unencryptedPayloads,
+                            encryptionKey,
+                            iv,
+                            padding);
+
+            int checkSumLen = ((IkeCombinedModeCipher) encryptCipher).getChecksumLen();
+            mIntegrityChecksum = new byte[checkSumLen];
+            mEncryptedAndPaddedData = new byte[paddedDataWithChecksum.length - checkSumLen];
+
+            ByteBuffer buffer = ByteBuffer.wrap(paddedDataWithChecksum);
+            buffer.get(mEncryptedAndPaddedData);
+            buffer.get(mIntegrityChecksum);
         } else {
             // Encrypt data
             mEncryptedAndPaddedData =
@@ -248,13 +264,10 @@ final class IkeEncryptedPayloadBody {
             byte[] encryptionKey,
             byte[] iv,
             byte[] padding) {
-        int padLength = padding.length;
-        int paddedDataLength = dataToEncrypt.length + padLength + PAD_LEN_LEN;
-        ByteBuffer inputBuffer = ByteBuffer.allocate(paddedDataLength);
-        inputBuffer.put(dataToEncrypt).put(padding).put((byte) padLength);
+        byte[] paddedData = getPaddedData(dataToEncrypt, padding);
 
         // Encrypt data.
-        return encryptCipher.encrypt(inputBuffer.array(), encryptionKey, iv);
+        return encryptCipher.encrypt(paddedData, encryptionKey, iv);
     }
 
     /** Package private for testing */
@@ -268,6 +281,39 @@ final class IkeEncryptedPayloadBody {
         byte[] paddedPlaintext = decryptCipher.decrypt(encryptedData, decryptionKey, iv);
 
         return stripPadding(paddedPlaintext);
+    }
+
+    /** Package private for testing */
+    @VisibleForTesting
+    static byte[] combinedModeEncrypt(
+            IkeCombinedModeCipher encryptCipher,
+            IkeHeader ikeHeader,
+            @IkePayload.PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
+            byte[] dataToEncrypt,
+            byte[] encryptionKey,
+            byte[] iv,
+            byte[] padding) {
+        int dataToAuthenticateLength =
+                IkeHeader.IKE_HEADER_LENGTH
+                        + IkePayload.GENERIC_HEADER_LENGTH
+                        + skfHeaderBytes.length;
+        ByteBuffer authenticatedSectionBuffer = ByteBuffer.allocate(dataToAuthenticateLength);
+
+        byte[] paddedData = getPaddedData(dataToEncrypt, padding);
+        int encryptedPayloadLength =
+                IkePayload.GENERIC_HEADER_LENGTH
+                        + skfHeaderBytes.length
+                        + iv.length
+                        + paddedData.length
+                        + encryptCipher.getChecksumLen();
+        ikeHeader.encodeToByteBuffer(authenticatedSectionBuffer, encryptedPayloadLength);
+        IkePayload.encodePayloadHeaderToByteBuffer(
+                firstPayloadType, encryptedPayloadLength, authenticatedSectionBuffer);
+        authenticatedSectionBuffer.put(skfHeaderBytes);
+
+        return encryptCipher.encrypt(
+                paddedData, authenticatedSectionBuffer.array(), encryptionKey, iv);
     }
 
     /** Package private for testing */
@@ -305,6 +351,15 @@ final class IkeEncryptedPayloadBody {
         new SecureRandom().nextBytes(padding);
 
         return padding;
+    }
+
+    private static byte[] getPaddedData(byte[] data, byte[] padding) {
+        int padLength = padding.length;
+        int paddedDataLength = data.length + padLength + PAD_LEN_LEN;
+        ByteBuffer padBuffer = ByteBuffer.allocate(paddedDataLength);
+        padBuffer.put(data).put(padding).put((byte) padLength);
+
+        return padBuffer.array();
     }
 
     private static byte[] stripPadding(byte[] paddedPlaintext) {
