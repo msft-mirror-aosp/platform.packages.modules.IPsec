@@ -74,9 +74,8 @@ public final class IkeSessionOptionsTest {
                         .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
-        mLocalIdentification = new IkeIdentification.IkeIpv4AddrIdentification(LOCAL_IPV4_ADDRESS);
-        mRemoteIdentification =
-                new IkeIdentification.IkeIpv4AddrIdentification(REMOTE_IPV4_ADDRESS);
+        mLocalIdentification = new IkeIpv4AddrIdentification(LOCAL_IPV4_ADDRESS);
+        mRemoteIdentification = new IkeIpv4AddrIdentification(REMOTE_IPV4_ADDRESS);
     }
 
     @After
