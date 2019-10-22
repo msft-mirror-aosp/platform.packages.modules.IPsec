@@ -24,8 +24,12 @@ import android.net.LinkAddress;
 
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttribute;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -127,6 +131,72 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
                 return this;
             } else {
                 throw new IllegalArgumentException("Invalid address " + address);
+            }
+        }
+
+        /**
+         * Adds internal DNS server requests to TunnelModeChildSessionOptions being built.
+         *
+         * @param addressFamily the address family. Only OsConstants.AF_INET and
+         *     OsConstants.AF_INET6 are allowed.
+         * @param numOfRequest the number of requests for this type of address.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder addInternalDnsServerRequest(int addressFamily, int numOfRequest) {
+            if (addressFamily == AF_INET) {
+                for (int i = 0; i < numOfRequest; i++) {
+                    mConfigRequestList.add(new ConfigAttributeIpv4Dns());
+                }
+                return this;
+            } else if (addressFamily == AF_INET6) {
+                for (int i = 0; i < numOfRequest; i++) {
+                    mConfigRequestList.add(new ConfigAttributeIpv6Dns());
+                }
+                return this;
+            } else {
+                throw new IllegalArgumentException("Invalid address family: " + addressFamily);
+            }
+        }
+
+        /**
+         * Adds internal DNS server requests to TunnelModeChildSessionOptions being built.
+         *
+         * @param address the requested DNS server address.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder addInternalDnsServerRequest(@NonNull InetAddress address) {
+            if (address instanceof Inet4Address) {
+                mConfigRequestList.add(new ConfigAttributeIpv4Dns((Inet4Address) address));
+                return this;
+            } else if (address instanceof Inet6Address) {
+                mConfigRequestList.add(new ConfigAttributeIpv6Dns((Inet6Address) address));
+                return this;
+            } else {
+                throw new IllegalArgumentException("Invalid address " + address);
+            }
+        }
+
+        /**
+         * Adds internal subnet requests to TunnelModeChildSessionOptions being built.
+         *
+         * @param addressFamily the address family. Only OsConstants.AF_INET and
+         *     OsConstants.AF_INET6 are allowed.
+         * @param numOfRequest the number of requests for this type of address.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder addInternalSubnetRequest(int addressFamily, int numOfRequest) {
+            if (addressFamily == AF_INET) {
+                for (int i = 0; i < numOfRequest; i++) {
+                    mConfigRequestList.add(new ConfigAttributeIpv4Subnet());
+                }
+                return this;
+            } else if (addressFamily == AF_INET6) {
+                for (int i = 0; i < numOfRequest; i++) {
+                    mConfigRequestList.add(new ConfigAttributeIpv6Subnet());
+                }
+                return this;
+            } else {
+                throw new IllegalArgumentException("Invalid address family: " + addressFamily);
             }
         }
 
