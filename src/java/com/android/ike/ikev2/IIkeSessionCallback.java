@@ -16,12 +16,19 @@
 
 package com.android.ike.ikev2;
 
+import android.annotation.NonNull;
+
 import com.android.ike.ikev2.exceptions.IkeException;
 
 /** Callback interface for receiving state changes of an IKE Session. */
 public interface IIkeSessionCallback {
-    /** Called when negotiation and authentication for this new IKE Session succeeds. */
-    void onOpened();
+    /**
+     * Called when negotiation and authentication for this new IKE Session succeeds.
+     *
+     * @param sessionConfiguration the configuration information of IKE Session negotiated during
+     *     IKE setup.
+     */
+    void onOpened(@NonNull IkeSessionConfiguration sessionConfiguration);
 
     /**
      * Called when either side has decided to close this Session and the deletion exchange
