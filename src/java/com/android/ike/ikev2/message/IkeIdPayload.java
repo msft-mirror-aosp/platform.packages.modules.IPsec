@@ -16,10 +16,12 @@
 
 package com.android.ike.ikev2.message;
 
+import com.android.ike.ikev2.IkeFqdnIdentification;
 import com.android.ike.ikev2.IkeIdentification;
-import com.android.ike.ikev2.IkeIdentification.IkeFqdnIdentification;
-import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
-import com.android.ike.ikev2.IkeIdentification.IkeIpv6AddrIdentification;
+import com.android.ike.ikev2.IkeIpv4AddrIdentification;
+import com.android.ike.ikev2.IkeIpv6AddrIdentification;
+import com.android.ike.ikev2.IkeKeyIdIdentification;
+import com.android.ike.ikev2.IkeRfc822AddrIdentification;
 import com.android.ike.ikev2.exceptions.AuthenticationFailedException;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
@@ -78,16 +80,17 @@ public final class IkeIdPayload extends IkePayload {
                 ikeId = new IkeFqdnIdentification(idData);
                 return;
             case IkeIdentification.ID_TYPE_RFC822_ADDR:
-                throw new UnsupportedOperationException("ID type is not supported currently.");
+                ikeId = new IkeRfc822AddrIdentification(idData);
+                return;
             case IkeIdentification.ID_TYPE_IPV6_ADDR:
                 ikeId = new IkeIpv6AddrIdentification(idData);
                 return;
-            case IkeIdentification.ID_TYPE_DER_ASN1_DN:
-                // Fall through
+            case IkeIdentification.ID_TYPE_DER_ASN1_DN: // Fall through
             case IkeIdentification.ID_TYPE_DER_ASN1_GN:
-                // Fall through
-            case IkeIdentification.ID_TYPE_KEY_ID:
                 throw new UnsupportedOperationException("ID type is not supported currently.");
+            case IkeIdentification.ID_TYPE_KEY_ID:
+                ikeId = new IkeKeyIdIdentification(idData);
+                return;
             default:
                 throw new AuthenticationFailedException("Unsupported ID type: " + idType);
         }
