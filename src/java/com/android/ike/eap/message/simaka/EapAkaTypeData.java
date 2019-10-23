@@ -55,7 +55,7 @@ public class EapAkaTypeData extends EapSimAkaTypeData {
         EAP_AKA_SUBTYPE_STRING.put(EAP_AKA_CLIENT_ERROR, "Client-Error");
     }
 
-    private static final Set<Integer> SUPPORTED_SUBTYPES = new HashSet<>();
+    protected static final Set<Integer> SUPPORTED_SUBTYPES = new HashSet<>();
     static {
         SUPPORTED_SUBTYPES.add(EAP_AKA_CHALLENGE);
         SUPPORTED_SUBTYPES.add(EAP_AKA_AUTHENTICATION_REJECT);
