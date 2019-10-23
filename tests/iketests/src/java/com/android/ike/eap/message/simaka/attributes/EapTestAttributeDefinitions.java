@@ -73,6 +73,9 @@ public class EapTestAttributeDefinitions {
     public static final String AUTS = "112233445566778899AABBCCDDEE";
     public static final byte[] AUTS_BYTES = hexStringToByteArray(AUTS);
     public static final byte[] AT_AUTS = hexStringToByteArray("0404" + AUTS);
+    public static final byte[] AT_BIDDING_SUPPORTS_AKA_PRIME = hexStringToByteArray("88018000");
+    public static final byte[] AT_BIDDING_DOES_NOT_SUPPORT_AKA_PRIME =
+            hexStringToByteArray("88010000");
 
     // Network Name = "android.net"
     public static final String NETWORK_NAME_HEX = "616E64726F69642E6E6574";
@@ -113,4 +116,5 @@ public class EapTestAttributeDefinitions {
             hexStringToByteArray("0306008800112233445566778899AABBCCDDEEFF11000000");
     public static final byte[] AT_AUTS_INVALID_LENGTH = hexStringToByteArray("03010000");
     public static final byte[] AT_KDF_INVALID_LENGTH = hexStringToByteArray("18020001");
+    public static final byte[] AT_BIDDING_INVALID_LENGTH = hexStringToByteArray("88020000");
 }
