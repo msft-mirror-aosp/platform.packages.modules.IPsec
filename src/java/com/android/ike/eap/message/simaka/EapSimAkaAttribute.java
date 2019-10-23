@@ -68,6 +68,7 @@ public abstract class EapSimAkaAttribute {
     public static final int EAP_AT_NONCE_S = 21;
     public static final int EAP_AT_CLIENT_ERROR_CODE = 22;
     public static final int EAP_AT_KDF_INPUT = 23;
+    public static final int EAP_AT_KDF = 24;
 
     // EAP Skippable Attribute values defined by IANA
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
@@ -99,6 +100,7 @@ public abstract class EapSimAkaAttribute {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_S, "AT_NONCE_S");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_CLIENT_ERROR_CODE, "AT_CLIENT_ERROR_CODE");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_KDF_INPUT, "AT_KDF_INPUT");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_KDF, "AT_KDF");
 
         EAP_ATTRIBUTE_STRING.put(EAP_AT_IV, "AT_IV");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_ENCR_DATA, "AT_ENCR_DATA");
@@ -1083,6 +1085,40 @@ public abstract class EapSimAkaAttribute {
 
             int bytesUsed = MIN_ATTR_LENGTH + networkName.length;
             addPadding(bytesUsed, byteBuffer);
+        }
+    }
+
+    /**
+     * AdKdf represents the AT_KDF attribute defined in RFC 5448#3.2
+     */
+    public static class AtKdf extends EapSimAkaAttribute {
+        private static final int ATTR_LENGTH = MIN_ATTR_LENGTH;
+
+        public final int kdf;
+
+        public AtKdf(int lengthInBytes, ByteBuffer buffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_KDF, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("AtKdf length must be 4B");
+            }
+
+            kdf = Short.toUnsignedInt(buffer.getShort());
+        }
+
+        @VisibleForTesting
+        public AtKdf(int kdf) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_KDF, ATTR_LENGTH);
+
+            this.kdf = kdf;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            byteBuffer.putShort((short) kdf);
         }
     }
 }
