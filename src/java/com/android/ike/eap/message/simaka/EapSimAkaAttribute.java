@@ -67,6 +67,7 @@ public abstract class EapSimAkaAttribute {
     public static final int EAP_AT_COUNTER_TOO_SMALL = 20;
     public static final int EAP_AT_NONCE_S = 21;
     public static final int EAP_AT_CLIENT_ERROR_CODE = 22;
+    public static final int EAP_AT_KDF_INPUT = 23;
 
     // EAP Skippable Attribute values defined by IANA
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
@@ -97,6 +98,7 @@ public abstract class EapSimAkaAttribute {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_COUNTER_TOO_SMALL, "AT_COUNTER_TOO_SMALL");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_S, "AT_NONCE_S");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_CLIENT_ERROR_CODE, "AT_CLIENT_ERROR_CODE");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_KDF_INPUT, "AT_KDF_INPUT");
 
         EAP_ATTRIBUTE_STRING.put(EAP_AT_IV, "AT_IV");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_ENCR_DATA, "AT_ENCR_DATA");
@@ -1044,6 +1046,43 @@ public abstract class EapSimAkaAttribute {
             encodeAttributeHeader(byteBuffer);
 
             byteBuffer.put(auts);
+        }
+    }
+
+    /**
+     * AtKdfInput represents the AT_KDF_INPUT attribute defined in RFC 5448#3.1
+     */
+    public static class AtKdfInput extends EapSimAkaAttribute {
+        public final byte[] networkName;
+
+        public AtKdfInput(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_KDF_INPUT, lengthInBytes);
+
+            int networkNameLength = Short.toUnsignedInt(byteBuffer.getShort());
+            networkName = new byte[networkNameLength];
+            byteBuffer.get(networkName);
+
+            int bytesUsed = MIN_ATTR_LENGTH + networkNameLength;
+            consumePadding(bytesUsed, byteBuffer);
+        }
+
+        @VisibleForTesting
+        public AtKdfInput(int lengthInbytes, byte[] networkName)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_KDF_INPUT, lengthInbytes);
+
+            this.networkName = networkName;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.putShort((short) networkName.length);
+            byteBuffer.put(networkName);
+
+            int bytesUsed = MIN_ATTR_LENGTH + networkName.length;
+            addPadding(bytesUsed, byteBuffer);
         }
     }
 }
