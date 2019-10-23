@@ -307,4 +307,7 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_MSCHAP_V2_FAILURE_RESPONSE =
             hexStringToByteArray("02" + ID + "0006" // EAP-Response | ID | length in bytes
                     + "1A04"); // EAP-MSCHAPv2 | Failure
+
+    public static final byte[] EAP_AKA_PRIME_REQUEST =
+            hexStringToByteArray("01" + ID + "000832050000");
 }
