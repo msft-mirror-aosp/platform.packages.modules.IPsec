@@ -57,6 +57,7 @@ public class EapAkaPrimeAttributeFactory extends EapAkaAttributeFactory {
      * @throws EapSimAkaUnsupportedAttributeException when an unsupported, unskippable Attribute is
      *     attempted to be decoded
      */
+    @Override
     public EapSimAkaAttribute getAttribute(ByteBuffer byteBuffer)
             throws EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
         int attributeType = Byte.toUnsignedInt(byteBuffer.get());
