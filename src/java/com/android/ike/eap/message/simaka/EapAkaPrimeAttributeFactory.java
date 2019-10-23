@@ -16,67 +16,55 @@
 
 package com.android.ike.eap.message.simaka;
 
-import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_AUTN;
-import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_AUTS;
-import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
-import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RES;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_KDF_INPUT;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.LENGTH_SCALING;
 
 import com.android.ike.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.ike.eap.exceptions.simaka.EapSimAkaUnsupportedAttributeException;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAutn;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAuts;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandAka;
-import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRes;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtKdfInput;
 
 import java.nio.ByteBuffer;
 
 /**
- * EapAkaAttributeFactory is used for creating EAP-AKA attributes according to their type.
+ * EapAkaPrimeAttributeFactory is used for creating EAP-AKA' attributes according to their type.
  *
- * @see <a href="https://tools.ietf.org/html/rfc4187">RFC 4187, Extensible Authentication
- * Protocol for Authentication and Key Agreement (EAP-AKA)</a>
+ * @see <a href="https://tools.ietf.org/html/rfc5448">RFC 5448, Improved Extensible Authentication
+ *     Protocol Method for 3rd Generation Authentication and Key Agreement (EAP-AKA')</a>
  * @see <a href="https://www.iana.org/assignments/eap-numbers/eap-numbers.xhtml">EAP SIM/AKA
- * Attributes</a>
+ *     Attributes</a>
  */
-public class EapAkaAttributeFactory extends EapSimAkaAttributeFactory {
-    private static EapAkaAttributeFactory sInstance = new EapAkaAttributeFactory();
+public class EapAkaPrimeAttributeFactory extends EapAkaAttributeFactory {
+    private static EapAkaPrimeAttributeFactory sInstance = new EapAkaPrimeAttributeFactory();
 
-    protected EapAkaAttributeFactory() {}
+    private EapAkaPrimeAttributeFactory() {}
 
-    public static EapAkaAttributeFactory getInstance() {
+    public static EapAkaPrimeAttributeFactory getInstance() {
         return sInstance;
     }
 
     /**
      * Decodes a single EapSimAkaAttribute object from the given ByteBuffer.
      *
-     * <p>Decoding logic is based on Attribute definitions in RFC 4187#10.
+     * <p>Decoding logic is based on Attribute definitions in RFC 5448#10.
      *
      * @param byteBuffer The ByteBuffer to parse the current attribute from
      * @return The current EapSimAkaAttribute to be parsed, or EapSimAkaUnsupportedAttribute if the
-     *         given attributeType is skippable and unsupported
+     *     given attributeType is skippable and unsupported
      * @throws EapSimAkaInvalidAttributeException when a malformatted attribute is attempted to be
-     *         decoded
+     *     decoded
      * @throws EapSimAkaUnsupportedAttributeException when an unsupported, unskippable Attribute is
-     *         attempted to be decoded
+     *     attempted to be decoded
      */
-    public EapSimAkaAttribute getAttribute(ByteBuffer byteBuffer) throws
-            EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
+    public EapSimAkaAttribute getAttribute(ByteBuffer byteBuffer)
+            throws EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
         int attributeType = Byte.toUnsignedInt(byteBuffer.get());
 
         // Length is given as a multiple of 4x bytes (RFC 4187#8.1)
         int lengthInBytes = Byte.toUnsignedInt(byteBuffer.get()) * LENGTH_SCALING;
 
         switch (attributeType) {
-            case EAP_AT_RAND:
-                return new AtRandAka(lengthInBytes, byteBuffer);
-            case EAP_AT_AUTN:
-                return new AtAutn(lengthInBytes, byteBuffer);
-            case EAP_AT_RES:
-                return new AtRes(lengthInBytes, byteBuffer);
-            case EAP_AT_AUTS:
-                return new AtAuts(lengthInBytes, byteBuffer);
+            case EAP_AT_KDF_INPUT:
+                return new AtKdfInput(lengthInBytes, byteBuffer);
             default:
                 return super.getAttribute(attributeType, lengthInBytes, byteBuffer);
         }
