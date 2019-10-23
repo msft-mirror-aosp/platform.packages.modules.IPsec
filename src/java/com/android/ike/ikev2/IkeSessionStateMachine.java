@@ -2757,7 +2757,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             mUserCbExecutor.execute(
                     () -> {
-                        mIkeSessionCallback.onOpened();
+                        mIkeSessionCallback.onOpened(null /*sessionConfiguration*/);
+                        // TODO: Construct and pass a real IkeSessionConfiguration
                     });
             transitionTo(mChildProcedureOngoing);
         }

@@ -20,8 +20,12 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -51,6 +55,11 @@ public final class TunnelModeChildSessionOptionsTest {
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
     private static final Inet6Address IPV6_ADDRESS =
             (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:db8::1"));
+
+    private static final Inet4Address IPV4_DNS_SERVER =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("8.8.8.8"));
+    private static final Inet6Address IPV6_DNS_SERVER =
+            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:4860:4860::8888"));
 
     private ChildSaProposal mSaProposal;
 
@@ -130,4 +139,43 @@ public final class TunnelModeChildSessionOptionsTest {
 
         }
     }
+
+    @Test
+    public void testBuildChildSessionOptionsWithDnsServerReq() {
+        TunnelModeChildSessionOptions childOptions =
+                new TunnelModeChildSessionOptions.Builder()
+                        .addSaProposal(mSaProposal)
+                        .addInternalDnsServerRequest(AF_INET, 1)
+                        .addInternalDnsServerRequest(AF_INET6, 1)
+                        .addInternalDnsServerRequest(IPV4_DNS_SERVER)
+                        .addInternalDnsServerRequest(IPV6_DNS_SERVER)
+                        .build();
+
+        verifyCommon(childOptions);
+
+        SparseArray<Integer> exptectedAttrCntMap = new SparseArray<>();
+        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_DNS, 2);
+        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_DNS, 2);
+
+        verifyAttrTypes(exptectedAttrCntMap, childOptions);
+    }
+
+    @Test
+    public void testBuildChildSessionOptionsWithSubnetReq() {
+        TunnelModeChildSessionOptions childOptions =
+                new TunnelModeChildSessionOptions.Builder()
+                        .addSaProposal(mSaProposal)
+                        .addInternalSubnetRequest(AF_INET, 1)
+                        .addInternalSubnetRequest(AF_INET6, 1)
+                        .build();
+
+        verifyCommon(childOptions);
+
+        SparseArray<Integer> exptectedAttrCntMap = new SparseArray<>();
+        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_SUBNET, 1);
+        exptectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_SUBNET, 1);
+
+        verifyAttrTypes(exptectedAttrCntMap, childOptions);
+    }
 }
+

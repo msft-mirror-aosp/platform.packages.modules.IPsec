@@ -77,7 +77,6 @@ import com.android.ike.eap.IEapCallback;
 import com.android.ike.ikev2.ChildSessionStateMachine.IChildSessionSmCallback;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
 import com.android.ike.ikev2.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
-import com.android.ike.ikev2.IkeIdentification.IkeIpv4AddrIdentification;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.ike.ikev2.IkeLocalRequestScheduler.LocalRequest;
 import com.android.ike.ikev2.IkeSessionStateMachine.IkeSecurityParameterIndex;
@@ -1929,7 +1928,8 @@ public final class IkeSessionStateMachineTest {
 
         // Validate that user has been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onOpened();
+        verify(mMockIkeSessionCallback).onOpened(any());
+        // TODO: Verify sessionConfiguration
 
         // Verify payload list pair for first Child negotiation
         ArgumentCaptor<List<IkePayload>> mReqPayloadListCaptor =

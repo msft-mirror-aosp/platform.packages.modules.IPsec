@@ -17,6 +17,7 @@
 package com.android.ike.ikev2.message;
 
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
 import static com.android.ike.ikev2.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
@@ -47,6 +48,7 @@ import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttrIpv4AddressBase;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttrIpv6AddrRangeBase;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttribute;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
@@ -103,6 +105,13 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("08080808");
     private static final byte[] IPV4_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00030000");
+
+    private static final Inet4Address IPV4_DHCP =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+    private static final byte[] IPV4_DHCP_ATTRIBUTE_WITH_VALUE =
+            TestUtils.hexStringToByteArray("00060004c00002c8");
+    private static final byte[] IPV4_DHCP_ATTRIBUTE_WITHOUT_VALUE =
+            TestUtils.hexStringToByteArray("00060000");
 
     private static final byte[] IPV4_SUBNET_ATTRIBUTE_VALUE =
             TestUtils.hexStringToByteArray("c0000264fffffff0");
@@ -420,6 +429,44 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
+    public void testDecodeIpv4DhcpWithValue() throws Exception {
+        ConfigAttributeIpv4Dhcp attribute = new ConfigAttributeIpv4Dhcp(IPV4_DHCP.getAddress());
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_DHCP, attribute.attributeType);
+        assertEquals(IPV4_DHCP, attribute.address);
+    }
+
+    @Test
+    public void testDecodeIpv4DhcpWithoutValue() throws Exception {
+        ConfigAttributeIpv4Dhcp attribute = new ConfigAttributeIpv4Dhcp(new byte[0]);
+
+        assertEquals(CONFIG_ATTR_INTERNAL_IP4_DHCP, attribute.attributeType);
+        assertNull(attribute.address);
+    }
+
+    @Test
+    public void testEncodeIpv4DhcpWithValue() throws Exception {
+        ConfigAttributeIpv4Dhcp attributeIp4Dhcp = new ConfigAttributeIpv4Dhcp(IPV4_DHCP);
+
+        verifyEncodeIpv4AddresBaseAttribute(
+                attributeIp4Dhcp,
+                CONFIG_ATTR_INTERNAL_IP4_DHCP,
+                IPV4_DHCP_ATTRIBUTE_WITH_VALUE,
+                IPV4_DHCP);
+    }
+
+    @Test
+    public void testEncodeIpv4DhcpWithoutValue() throws Exception {
+        ConfigAttributeIpv4Dhcp attribute = new ConfigAttributeIpv4Dhcp();
+
+        verifyEncodeIpv4AddresBaseAttribute(
+                attribute,
+                CONFIG_ATTR_INTERNAL_IP4_DHCP,
+                IPV4_DHCP_ATTRIBUTE_WITHOUT_VALUE,
+                null /*expectedAddress*/);
+    }
+
+    @Test
     public void testDecodeIpv4SubnetWithValue() throws Exception {
         ConfigAttributeIpv4Subnet attributeIp4Subnet =
                 new ConfigAttributeIpv4Subnet(IPV4_SUBNET_ATTRIBUTE_VALUE);
@@ -447,18 +494,6 @@ public final class IkeConfigPayloadTest {
             fail("Expected to fail due to invalid netmask.");
         } catch (InvalidSyntaxException expected) {
         }
-    }
-
-    @Test
-    public void testEncodeIpv4SubnetWithValue() throws Exception {
-        ConfigAttributeIpv4Subnet attributeIp4Subnet =
-                new ConfigAttributeIpv4Subnet(IPV4_LINK_ADDRESS);
-
-        verifyBuildAndEncodeAttributeCommon(
-                attributeIp4Subnet,
-                CONFIG_ATTR_INTERNAL_IP4_SUBNET,
-                IPV4_SUBNET_ATTRIBUTE_WITH_VALUE);
-        assertEquals(IPV4_LINK_ADDRESS, attributeIp4Subnet.linkAddress);
     }
 
     @Test
@@ -556,18 +591,6 @@ public final class IkeConfigPayloadTest {
 
         assertEquals(CONFIG_ATTR_INTERNAL_IP6_SUBNET, attributeIp6Subnet.attributeType);
         assertNull(attributeIp6Subnet.linkAddress);
-    }
-
-    @Test
-    public void testEncodeIpv6SubnetWithValue() throws Exception {
-        ConfigAttributeIpv6Subnet attributeIp6Subnet =
-                new ConfigAttributeIpv6Subnet(IPV6_LINK_ADDRESS);
-
-        verifyEncodeIpv6RangeBaseAttribute(
-                attributeIp6Subnet,
-                CONFIG_ATTR_INTERNAL_IP6_SUBNET,
-                IPV6_SUBNET_ATTRIBUTE_WITH_VALUE,
-                IPV6_LINK_ADDRESS);
     }
 
     @Test
