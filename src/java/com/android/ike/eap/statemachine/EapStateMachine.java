@@ -21,6 +21,7 @@ import static com.android.ike.eap.message.EapData.EAP_IDENTITY;
 import static com.android.ike.eap.message.EapData.EAP_NAK;
 import static com.android.ike.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_STRING;
@@ -41,6 +42,7 @@ import com.android.ike.eap.EapResult.EapResponse;
 import com.android.ike.eap.EapResult.EapSuccess;
 import com.android.ike.eap.EapSessionConfig;
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
+import com.android.ike.eap.EapSessionConfig.EapAkaPrimeConfig;
 import com.android.ike.eap.EapSessionConfig.EapMethodConfig;
 import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
@@ -317,8 +319,6 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             }
 
             switch (eapType) {
-                // TODO(b/133878093): implement EapAkaPrimeStateMachine
-
                 case EAP_TYPE_SIM:
                     EapSimConfig eapSimConfig = (EapSimConfig) eapMethodConfig;
                     return new EapSimMethodStateMachine(
@@ -327,6 +327,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                     EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
                     return new EapAkaMethodStateMachine(
                             mContext, mEapSessionConfig.eapIdentity, eapAkaConfig);
+                case EAP_TYPE_AKA_PRIME:
+                    EapAkaPrimeConfig eapAkaPrimeConfig = (EapAkaPrimeConfig) eapMethodConfig;
+                    return new EapAkaPrimeMethodStateMachine(
+                            mContext, mEapSessionConfig.eapIdentity, eapAkaPrimeConfig);
                 case EAP_TYPE_MSCHAP_V2:
                     EapMsChapV2Config eapMsChapV2Config = (EapMsChapV2Config) eapMethodConfig;
                     return new EapMsChapV2MethodStateMachine(eapMsChapV2Config, mSecureRandom);
