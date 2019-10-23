@@ -80,6 +80,8 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_KDF_INPUT =
             hexStringToByteArray("1704000B" + NETWORK_NAME_HEX + "00");
     public static final byte[] AT_KDF_INPUT_EMPTY_NETWORK_NAME = hexStringToByteArray("17010000");
+    public static final int KDF_VERSION = 1;
+    public static final byte[] AT_KDF = hexStringToByteArray("18010001");
 
     public static final byte[] AT_VERSION_LIST_INVALID_LENGTH = hexStringToByteArray("0F020003");
     public static final byte[] AT_SELECTED_VERSION_INVALID_LENGTH =
@@ -110,4 +112,5 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_RES_LONG_RES =
             hexStringToByteArray("0306008800112233445566778899AABBCCDDEEFF11000000");
     public static final byte[] AT_AUTS_INVALID_LENGTH = hexStringToByteArray("03010000");
+    public static final byte[] AT_KDF_INVALID_LENGTH = hexStringToByteArray("18020001");
 }
