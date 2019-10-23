@@ -57,19 +57,26 @@ public class EapAkaAttributeFactory extends EapSimAkaAttributeFactory {
      *
      * @param byteBuffer The ByteBuffer to parse the current attribute from
      * @return The current EapSimAkaAttribute to be parsed, or EapSimAkaUnsupportedAttribute if the
-     *         given attributeType is skippable and unsupported
+     *     given attributeType is skippable and unsupported
      * @throws EapSimAkaInvalidAttributeException when a malformatted attribute is attempted to be
-     *         decoded
+     *     decoded
      * @throws EapSimAkaUnsupportedAttributeException when an unsupported, unskippable Attribute is
-     *         attempted to be decoded
+     *     attempted to be decoded
      */
-    public EapSimAkaAttribute getAttribute(ByteBuffer byteBuffer) throws
-            EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
+    public EapSimAkaAttribute getAttribute(ByteBuffer byteBuffer)
+            throws EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
         int attributeType = Byte.toUnsignedInt(byteBuffer.get());
 
         // Length is given as a multiple of 4x bytes (RFC 4187#8.1)
         int lengthInBytes = Byte.toUnsignedInt(byteBuffer.get()) * LENGTH_SCALING;
 
+        return getAttribute(attributeType, lengthInBytes, byteBuffer);
+    }
+
+    @Override
+    protected EapSimAkaAttribute getAttribute(
+            int attributeType, int lengthInBytes, ByteBuffer byteBuffer)
+            throws EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
         switch (attributeType) {
             case EAP_AT_RAND:
                 return new AtRandAka(lengthInBytes, byteBuffer);
