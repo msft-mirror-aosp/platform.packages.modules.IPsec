@@ -724,7 +724,9 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeSessionOptions.Builder buildIkeSessionOptionsCommon() throws Exception {
-        return new IkeSessionOptions.Builder(REMOTE_ADDRESS, mUdpEncapSocket)
+        return new IkeSessionOptions.Builder()
+                .setServerAddress(REMOTE_ADDRESS)
+                .setUdpEncapsulationSocket(mUdpEncapSocket)
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
                 .setRemoteIdentification(
