@@ -37,7 +37,7 @@ final class ChildSessionStateMachineFactory {
             Context context,
             ChildSessionOptions sessionOptions,
             Executor userCbExecutor,
-            IChildSessionCallback userCallbacks,
+            ChildSessionCallback userCallbacks,
             IChildSessionSmCallback childSmCallback) {
         return sChildSessionHelper.makeChildSessionStateMachine(
                 looper, context, sessionOptions, userCbExecutor, userCallbacks, childSmCallback);
@@ -60,7 +60,7 @@ final class ChildSessionStateMachineFactory {
                 Context context,
                 ChildSessionOptions sessionOptions,
                 Executor userCbExecutor,
-                IChildSessionCallback userCallbacks,
+                ChildSessionCallback userCallbacks,
                 IChildSessionSmCallback childSmCallback);
     }
 
@@ -75,7 +75,7 @@ final class ChildSessionStateMachineFactory {
                 Context context,
                 ChildSessionOptions sessionOptions,
                 Executor userCbExecutor,
-                IChildSessionCallback userCallbacks,
+                ChildSessionCallback userCallbacks,
                 IChildSessionSmCallback childSmCallback) {
             ChildSessionStateMachine childSession =
                     new ChildSessionStateMachine(

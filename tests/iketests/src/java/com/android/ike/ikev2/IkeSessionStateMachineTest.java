@@ -257,8 +257,8 @@ public final class IkeSessionStateMachineTest {
     private ChildSessionOptions mChildSessionOptions;
 
     private Executor mSpyUserCbExecutor;
-    private IIkeSessionCallback mMockIkeSessionCallback;
-    private IChildSessionCallback mMockChildSessionCallback;
+    private IkeSessionCallback mMockIkeSessionCallback;
+    private ChildSessionCallback mMockChildSessionCallback;
 
     private EncryptionTransform mIkeEncryptionTransform;
     private IntegrityTransform mIkeIntegrityTransform;
@@ -635,8 +635,8 @@ public final class IkeSessionStateMachineTest {
                             command.run();
                         });
 
-        mMockIkeSessionCallback = mock(IIkeSessionCallback.class);
-        mMockChildSessionCallback = mock(IChildSessionCallback.class);
+        mMockIkeSessionCallback = mock(IkeSessionCallback.class);
+        mMockChildSessionCallback = mock(ChildSessionCallback.class);
 
         mLooper = new TestLooper();
 
@@ -1288,7 +1288,7 @@ public final class IkeSessionStateMachineTest {
                         eq(mContext),
                         eq(mChildSessionOptions),
                         eq(mSpyUserCbExecutor),
-                        any(IChildSessionCallback.class),
+                        any(ChildSessionCallback.class),
                         any(IChildSessionSmCallback.class)))
                 .thenReturn(child);
     }
@@ -1303,7 +1303,7 @@ public final class IkeSessionStateMachineTest {
      * @param sm The ChildSessionStateMachine instance to be used.
      */
     private void registerChildStateMachine(
-            IChildSessionCallback callback, ChildSessionStateMachine sm) {
+            ChildSessionCallback callback, ChildSessionStateMachine sm) {
         setupChildStateMachineFactory(sm);
         mIkeSessionStateMachine.registerChildSessionCallback(
                 mChildSessionOptions, callback, false /*isFirstChild*/);
@@ -1313,7 +1313,7 @@ public final class IkeSessionStateMachineTest {
     public void testCreateAdditionalChild() throws Exception {
         setupIdleStateMachine();
 
-        IChildSessionCallback childCallback = mock(IChildSessionCallback.class);
+        ChildSessionCallback childCallback = mock(ChildSessionCallback.class);
         ChildSessionStateMachine childStateMachine = mock(ChildSessionStateMachine.class);
         registerChildStateMachine(childCallback, childStateMachine);
 
@@ -1422,7 +1422,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD,
-                        mock(IChildSessionCallback.class),
+                        mock(ChildSessionCallback.class),
                         null /*childOptions*/));
         mLooper.dispatchAll();
 
@@ -1472,11 +1472,11 @@ public final class IkeSessionStateMachineTest {
     private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
             ChildSessionStateMachine child, int remoteSpi) throws Exception {
         return createChildAndGetChildSessionSmCallback(
-                child, remoteSpi, mock(IChildSessionCallback.class));
+                child, remoteSpi, mock(ChildSessionCallback.class));
     }
 
     private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
-            ChildSessionStateMachine child, int remoteSpi, IChildSessionCallback childCallback)
+            ChildSessionStateMachine child, int remoteSpi, ChildSessionCallback childCallback)
             throws Exception {
         registerChildStateMachine(childCallback, child);
 
@@ -1845,8 +1845,8 @@ public final class IkeSessionStateMachineTest {
 
         ChildSessionStateMachine childOne = mock(ChildSessionStateMachine.class);
         ChildSessionStateMachine childTwo = mock(ChildSessionStateMachine.class);
-        registerChildStateMachine(mock(IChildSessionCallback.class), childOne);
-        registerChildStateMachine(mock(IChildSessionCallback.class), childTwo);
+        registerChildStateMachine(mock(ChildSessionCallback.class), childOne);
+        registerChildStateMachine(mock(ChildSessionCallback.class), childTwo);
 
         mIkeSessionStateMachine.mCurrentIkeSaRecord = null;
 
@@ -2073,7 +2073,8 @@ public final class IkeSessionStateMachineTest {
 
         // Verify IKE Session was closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(AuthenticationFailedException.class));
+        verify(mMockIkeSessionCallback)
+                .onClosedExceptionally(any(AuthenticationFailedException.class));
     }
 
     @Test
@@ -2096,7 +2097,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -2218,7 +2219,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify state machine quit properly
-        verify(mMockIkeSessionCallback).onError(any(AuthenticationFailedException.class));
+        verify(mMockIkeSessionCallback)
+                .onClosedExceptionally(any(AuthenticationFailedException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -2262,7 +2264,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Fires user error callbacks
-        verify(mMockIkeSessionCallback).onError(argThat(err -> err.getCause() == error));
+        verify(mMockIkeSessionCallback)
+                .onClosedExceptionally(argThat(err -> err.getCause() == error));
 
         // Verify state machine quit properly
         verify(mSpyCurrentIkeSaRecord).close();
@@ -2283,7 +2286,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Fires user error callbacks
-        verify(mMockIkeSessionCallback).onError(any(AuthenticationFailedException.class));
+        verify(mMockIkeSessionCallback)
+                .onClosedExceptionally(any(AuthenticationFailedException.class));
 
         // Verify state machine quit properly
         verify(mSpyCurrentIkeSaRecord).close();
@@ -2448,7 +2452,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
 
         // Collected response fragments are cleared
         assertNull(mSpyCurrentIkeSaRecord.getCollectedFragments(true /*isResp*/));
@@ -2563,7 +2567,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -2617,7 +2621,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -2648,7 +2652,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
     }
 
     @Test
@@ -3459,7 +3463,7 @@ public final class IkeSessionStateMachineTest {
         verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // Verify state machine quit properly
-        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -3483,7 +3487,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify state machine quit properly
-        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -3680,7 +3684,7 @@ public final class IkeSessionStateMachineTest {
     public void testOpenChildSession() throws Exception {
         setupIdleStateMachine();
 
-        IChildSessionCallback cb = mock(IChildSessionCallback.class);
+        ChildSessionCallback cb = mock(ChildSessionCallback.class);
         mIkeSessionStateMachine.openChildSession(mChildSessionOptions, cb);
 
         // Test that inserting the same cb returns an error, even before the state
@@ -3716,7 +3720,7 @@ public final class IkeSessionStateMachineTest {
 
         // Expect failure - callbacks not registered
         try {
-            mIkeSessionStateMachine.closeChildSession(mock(IChildSessionCallback.class));
+            mIkeSessionStateMachine.closeChildSession(mock(ChildSessionCallback.class));
         } catch (IllegalArgumentException expected) {
         }
     }
@@ -3737,7 +3741,7 @@ public final class IkeSessionStateMachineTest {
     public void testCloseImmediatelyAfterOpenChildSession() throws Exception {
         setupIdleStateMachine();
 
-        IChildSessionCallback cb = mock(IChildSessionCallback.class);
+        ChildSessionCallback cb = mock(ChildSessionCallback.class);
         mIkeSessionStateMachine.openChildSession(mChildSessionOptions, cb);
 
         // Verify that closing the session immediately still picks up the child callback
@@ -3783,7 +3787,7 @@ public final class IkeSessionStateMachineTest {
 
         assertNull(ikeSession.getCurrentState());
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 
@@ -3799,7 +3803,7 @@ public final class IkeSessionStateMachineTest {
 
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 
@@ -3827,7 +3831,8 @@ public final class IkeSessionStateMachineTest {
 
         // Fires user error callbacks
         verify(mMockIkeSessionCallback)
-                .onError(argThat(err -> err instanceof NoValidProposalChosenException));
+                .onClosedExceptionally(
+                        argThat(err -> err instanceof NoValidProposalChosenException));
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
@@ -3909,7 +3914,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
     }
 
     @Test
@@ -3970,7 +3975,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -3999,7 +4004,7 @@ public final class IkeSessionStateMachineTest {
 
         // Verify IKE Session has quit
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
     }
 
     @Test

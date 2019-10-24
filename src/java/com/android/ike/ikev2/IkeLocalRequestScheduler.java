@@ -93,11 +93,11 @@ public final class IkeLocalRequestScheduler {
      * initiated locally.
      */
     public static class ChildLocalRequest extends LocalRequest {
-        public final IChildSessionCallback childSessionCallback;
+        public final ChildSessionCallback childSessionCallback;
         public final ChildSessionOptions childSessionOptions;
 
         ChildLocalRequest(
-                int type, IChildSessionCallback childCallback, ChildSessionOptions childOptions) {
+                int type, ChildSessionCallback childCallback, ChildSessionOptions childOptions) {
             super(type);
             childSessionOptions = childOptions;
             childSessionCallback = childCallback;
