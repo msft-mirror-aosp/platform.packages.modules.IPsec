@@ -157,6 +157,5 @@ public class EapAkaIdentityStateTest extends EapAkaStateTest {
         // decoded in IdentityState and ChallengeState
         verify(mMockEapAkaTypeDataDecoder, times(2)).decode(DUMMY_EAP_TYPE_DATA);
         verifyNoMoreInteractions(mMockTelephonyManager, mMockEapAkaTypeDataDecoder);
-
     }
 }
