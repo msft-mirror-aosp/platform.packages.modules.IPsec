@@ -97,7 +97,9 @@ public final class IkeSessionOptionsTest {
     @Test
     public void testBuildWithPsk() throws Exception {
         IkeSessionOptions sessionOptions =
-                new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+                new IkeSessionOptions.Builder()
+                        .setServerAddress(REMOTE_IPV4_ADDRESS)
+                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -123,7 +125,9 @@ public final class IkeSessionOptionsTest {
         EapSessionConfig eapConfig = mock(EapSessionConfig.class);
 
         IkeSessionOptions sessionOptions =
-                new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+                new IkeSessionOptions.Builder()
+                        .setServerAddress(REMOTE_IPV4_ADDRESS)
+                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -148,7 +152,10 @@ public final class IkeSessionOptionsTest {
     @Test
     public void testBuildWithoutSaProposal() throws Exception {
         try {
-            new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket).build();
+            new IkeSessionOptions.Builder()
+                    .setServerAddress(REMOTE_IPV4_ADDRESS)
+                    .setUdpEncapsulationSocket(mUdpEncapSocket)
+                    .build();
             fail("Expected to fail due to absence of SA proposal.");
         } catch (IllegalArgumentException expected) {
         }
@@ -157,7 +164,9 @@ public final class IkeSessionOptionsTest {
     @Test
     public void testBuildWithoutLocalId() throws Exception {
         try {
-            new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+            new IkeSessionOptions.Builder()
+                    .setServerAddress(REMOTE_IPV4_ADDRESS)
+                    .setUdpEncapsulationSocket(mUdpEncapSocket)
                     .addSaProposal(mIkeSaProposal)
                     .setRemoteIdentification(mRemoteIdentification)
                     .setAuthPsk(PSK)
@@ -170,7 +179,9 @@ public final class IkeSessionOptionsTest {
     @Test
     public void testBuildWithoutSetAuth() throws Exception {
         try {
-            new IkeSessionOptions.Builder(REMOTE_IPV4_ADDRESS, mUdpEncapSocket)
+            new IkeSessionOptions.Builder()
+                    .setServerAddress(REMOTE_IPV4_ADDRESS)
+                    .setUdpEncapsulationSocket(mUdpEncapSocket)
                     .addSaProposal(mIkeSaProposal)
                     .setLocalIdentification(mLocalIdentification)
                     .setRemoteIdentification(mRemoteIdentification)
