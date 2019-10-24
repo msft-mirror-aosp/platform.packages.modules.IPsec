@@ -289,7 +289,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final String mTAG = ChallengeState.class.getSimpleName();
 
         @VisibleForTesting boolean mHadSuccessfulChallenge = false;
-        @VisibleForTesting final byte[] mIdentity;
+        @VisibleForTesting protected final byte[] mIdentity;
 
         // IK and CK lengths defined as 16B (RFC 4187#1)
         private final int mIkLenBytes = 16;
