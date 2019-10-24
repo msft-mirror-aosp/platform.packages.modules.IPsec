@@ -83,11 +83,11 @@ public class EapAkaPrimeTypeDataTest {
 
     @Test
     public void testDecode() {
-        DecodeResult<EapAkaPrimeTypeData> result =
+        DecodeResult<EapAkaTypeData> result =
                 mTypeDataDecoder.decode(EAP_AKA_PRIME_CHALLENGE_REQUEST);
 
         assertTrue(result.isSuccessfulDecode());
-        EapAkaPrimeTypeData eapAkaPrimeTypeData = result.eapTypeData;
+        EapAkaPrimeTypeData eapAkaPrimeTypeData = (EapAkaPrimeTypeData) result.eapTypeData;
         assertEquals(EAP_AKA_CHALLENGE, eapAkaPrimeTypeData.eapSubtype);
 
         // also check Map entries (needs to match input order)
@@ -118,7 +118,7 @@ public class EapAkaPrimeTypeDataTest {
 
     @Test
     public void testDecodeMultipleAtKdfAttributes() {
-        DecodeResult<EapAkaPrimeTypeData> result =
+        DecodeResult<EapAkaTypeData> result =
                 mTypeDataDecoder.decode(EAP_AKA_PRIME_MULTIPLE_AT_KDF);
 
         assertFalse(result.isSuccessfulDecode());

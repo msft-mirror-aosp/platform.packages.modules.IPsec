@@ -25,8 +25,10 @@ import com.android.ike.eap.EapSessionConfig.EapAkaPrimeConfig;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData;
 import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData.EapAkaPrimeTypeDataDecoder;
+import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
+import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Arrays;
@@ -81,6 +83,11 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
     @EapMethod
     int getEapMethod() {
         return EAP_TYPE_AKA_PRIME;
+    }
+
+    @Override
+    protected DecodeResult<EapAkaTypeData> decode(byte[] typeData) {
+        return mEapAkaPrimeTypeDataDecoder.decode(typeData);
     }
 
     EapAkaPrimeTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
