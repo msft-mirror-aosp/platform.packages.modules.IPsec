@@ -21,8 +21,10 @@ import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_E
 
 import android.content.Context;
 
+import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapSessionConfig.EapAkaPrimeConfig;
 import com.android.ike.eap.message.EapData.EapMethod;
+import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData;
 import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData.EapAkaPrimeTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
@@ -96,6 +98,32 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
     @Override
     protected String getIdentityPrefix() {
         return AKA_PRIME_IDENTITY_PREFIX;
+    }
+
+    @Override
+    protected ChallengeState buildChallengeState() {
+        return new ChallengeState();
+    }
+
+    @Override
+    protected ChallengeState buildChallengeState(byte[] identity) {
+        return new ChallengeState(identity);
+    }
+
+    protected class ChallengeState extends EapAkaMethodStateMachine.ChallengeState {
+        ChallengeState() {
+            super();
+        }
+
+        ChallengeState(byte[] identity) {
+            super(identity);
+        }
+
+        @Override
+        protected EapResult handleChallengeAuthentication(
+                EapMessage message, EapAkaTypeData eapAkaTypeData) {
+            return null;
+        }
     }
 
     EapAkaPrimeTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
