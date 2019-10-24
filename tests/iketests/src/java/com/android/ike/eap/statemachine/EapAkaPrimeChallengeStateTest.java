@@ -37,6 +37,7 @@ import static com.android.ike.eap.message.simaka.attributes.EapTestAttributeDefi
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
@@ -79,6 +80,21 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
     private static final byte[] EXPECTED_CK_IK_PRIME =
             hexStringToByteArray(
                     "A0B37E7C7E9CC4F37A5C0AAA55DC87BE51FDA70A9D8F37E62E23B15F1B3941E6");
+    private static final byte[] K_ENCR = hexStringToByteArray("15a5bb098528210cde9e8d4a1bd63850");
+    private static final byte[] K_AUT =
+            hexStringToByteArray(
+                    "957b3d518ac9ff028f2cc5177fedad841f5f812cb06e2b88aceaa98129680f35");
+    private static final byte[] K_RE =
+            hexStringToByteArray(
+                    "3c15cf7112935a8170d0904622ecbb67c49dcba5d50814bdd81958e045e42f9c");
+    private static final byte[] MSK =
+            hexStringToByteArray(
+                    "1dcca0351a58d2b858e6cf2380551470d67cc8749d1915409793171abd360118"
+                            + "e3ae271bf088ca5a41bb1b9b8f7028bcba888298bfbf64d7b8a4f53a6c2cdf18");
+    private static final byte[] EMSK =
+            hexStringToByteArray(
+                    "a5e6b66a9cb2daa9fe3867d41145848e7bf50d749bfd1bb0d090257402e6a555"
+                            + "da6d538e76b71e9f80afe60709965a63a355bdccc4e3a8b358e098e41545fa67");
 
     private ChallengeState mState;
 
@@ -295,5 +311,43 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
         //           = A0B37E7C7E9CC4F37A5C0AAA55DC87BE51FDA70A9D8F37E62E23B15F1B3941E6
         byte[] result = mState.deriveCkIkPrime(randChallengeResult, atKdfInput, atAutn);
         assertArrayEquals(EXPECTED_CK_IK_PRIME, result);
+    }
+
+    @Test
+    public void testGenerateAndPersistEapAkaKeys() throws Exception {
+        RandChallengeResult randChallengeResult =
+                mState.new RandChallengeResult(RES_BYTES, IK_BYTES, CK_BYTES);
+
+        AtRandAka atRandAka = new AtRandAka(RAND_1_BYTES);
+        AtAutn atAutn = new AtAutn(AUTN_BYTES);
+        AtMac atMac = new AtMac(MAC_BYTES);
+        AtKdfInput atKdfInput =
+                new AtKdfInput(0, PEER_NETWORK_NAME.getBytes(StandardCharsets.UTF_8));
+        AtKdf atKdf = new AtKdf(VALID_KDF);
+
+        EapAkaPrimeTypeData eapAkaPrimeTypeData =
+                new EapAkaPrimeTypeData(
+                        EAP_AKA_CHALLENGE,
+                        Arrays.asList(atRandAka, atAutn, atMac, atKdfInput, atKdf));
+
+        // CK' | IK' = A0B37E7C7E9CC4F37A5C0AAA55DC87BE51FDA70A9D8F37E62E23B15F1B3941E6
+        // data = "EAP-AKA'" | Identity
+        //      = 4541502D414B41277465737440616E64726F69642E6E6574
+        // prf+(CK' | IK', data) = T1 | T2 | T3 | T4 | T5 | T6 | T7
+        // T1 = 15a5bb098528210cde9e8d4a1bd63850957b3d518ac9ff028f2cc5177fedad84
+        // T2 = 1f5f812cb06e2b88aceaa98129680f353c15cf7112935a8170d0904622ecbb67
+        // T3 = c49dcba5d50814bdd81958e045e42f9c1dcca0351a58d2b858e6cf2380551470
+        // T4 = d67cc8749d1915409793171abd360118e3ae271bf088ca5a41bb1b9b8f7028bc
+        // T5 = ba888298bfbf64d7b8a4f53a6c2cdf18a5e6b66a9cb2daa9fe3867d41145848e
+        // T6 = 7bf50d749bfd1bb0d090257402e6a555da6d538e76b71e9f80afe60709965a63
+        // T7 = a355bdccc4e3a8b358e098e41545fa677897d8341c4a107a2343f393ec966181
+        // K_encr | K_aut | K_re | MSK | EMSK = prf+(CK' | IK', data)
+        assertNull(
+                mState.generateAndPersistEapAkaKeys(randChallengeResult, 0, eapAkaPrimeTypeData));
+        assertArrayEquals(K_ENCR, mStateMachine.mKEncr);
+        assertArrayEquals(K_AUT, mStateMachine.mKAut);
+        assertArrayEquals(K_RE, mStateMachine.mKRe);
+        assertArrayEquals(MSK, mStateMachine.mMsk);
+        assertArrayEquals(EMSK, mStateMachine.mEmsk);
     }
 }
