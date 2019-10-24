@@ -310,4 +310,6 @@ public class EapTestMessageDefinitions {
 
     public static final byte[] EAP_AKA_PRIME_REQUEST =
             hexStringToByteArray("01" + ID + "000832050000");
+    public static final byte[] EAP_AKA_PRIME_CLIENT_ERROR_UNABLE_TO_PROCESS =
+            hexStringToByteArray("02" + ID + "000C320E000016010000");
 }

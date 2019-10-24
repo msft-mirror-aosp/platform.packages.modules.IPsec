@@ -57,7 +57,7 @@ public class EapAkaPrimeTypeData extends EapAkaTypeData {
      * EapAkaTypeDataDecoder will be used for decoding {@link EapAkaPrimeTypeData} objects.
      */
     public static class EapAkaPrimeTypeDataDecoder
-            extends EapSimAkaTypeDataDecoder<EapAkaPrimeTypeData> {
+            extends EapSimAkaTypeDataDecoder<EapAkaTypeData> {
         private static final String TAG = EapAkaPrimeTypeDataDecoder.class.getSimpleName();
         private static final String EAP_METHOD = "EAP-AKA'";
 
@@ -82,7 +82,7 @@ public class EapAkaPrimeTypeData extends EapAkaTypeData {
          *     EapAkaPrimeTypeData instance representing the data stored in typeData. Otherwise, it
          *     will contain the relevant AtClientErrorCode for the decoding error.
          */
-        public DecodeResult<EapAkaPrimeTypeData> decode(@NonNull byte[] typeData) {
+        public DecodeResult<EapAkaTypeData> decode(@NonNull byte[] typeData) {
             return super.decode(typeData);
         }
 

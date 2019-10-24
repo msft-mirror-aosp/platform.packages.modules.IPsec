@@ -130,6 +130,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         return EAP_TYPE_AKA;
     }
 
+    protected DecodeResult<EapAkaTypeData> decode(byte[] typeData) {
+        return mEapAkaTypeDataDecoder.decode(typeData);
+    }
+
     protected class CreatedState extends EapMethodState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
@@ -139,13 +143,11 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 return result;
             }
 
-            DecodeResult<EapAkaTypeData> decodeResult =
-                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<? extends EapAkaTypeData> decodeResult =
+                    decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        decodeResult.atClientErrorCode);
+                        message.eapIdentifier, getEapMethod(), decodeResult.atClientErrorCode);
             }
 
             EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
@@ -163,7 +165,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
-                            EAP_TYPE_AKA,
+                            getEapMethod(),
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
         }
@@ -180,8 +182,8 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 return result;
             }
 
-            DecodeResult<EapAkaTypeData> decodeResult =
-                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<? extends EapAkaTypeData> decodeResult =
+                    decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(
                         message.eapIdentifier,
@@ -311,8 +313,8 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                                 + ", received " + message.eapData.eapType));
             }
 
-            DecodeResult<EapAkaTypeData> decodeResult =
-                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<? extends EapAkaTypeData> decodeResult =
+                    decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(
                         message.eapIdentifier,
