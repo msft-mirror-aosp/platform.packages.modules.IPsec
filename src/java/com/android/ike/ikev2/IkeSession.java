@@ -38,8 +38,8 @@ public final class IkeSession implements AutoCloseable {
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
             Executor userCbExecutor,
-            IIkeSessionCallback ikeSessionCallback,
-            IChildSessionCallback firstChildSessionCallback) {
+            IkeSessionCallback ikeSessionCallback,
+            ChildSessionCallback firstChildSessionCallback) {
         this(
                 IkeThreadHolder.IKE_WORKER_THREAD.getLooper(),
                 context,
@@ -60,8 +60,8 @@ public final class IkeSession implements AutoCloseable {
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
             Executor userCbExecutor,
-            IIkeSessionCallback ikeSessionCallback,
-            IChildSessionCallback firstChildSessionCallback) {
+            IkeSessionCallback ikeSessionCallback,
+            ChildSessionCallback firstChildSessionCallback) {
         mIkeSessionStateMachine =
                 new IkeSessionStateMachine(
                         looper,
@@ -99,17 +99,17 @@ public final class IkeSession implements AutoCloseable {
     /**
      * Initiate Create Child exchange on the IKE worker thread.
      *
-     * <p>Users MUST provide a unique {@link IChildSessionCallback} instance for each new Child
+     * <p>Users MUST provide a unique {@link ChildSessionCallback} instance for each new Child
      * Session.
      *
      * @param childSessionOptions the {@link ChildSessionOptions} that contains the Child Session
      *     configurations to negotiate.
-     * @param childSessionCallback the {@link IChildSessionCallback} interface to notify users the
+     * @param childSessionCallback the {@link ChildSessionCallback} interface to notify users the
      *     state changes of the Child Session.
-     * @throws IllegalArgumentException if the IChildSessionCallback is already in use.
+     * @throws IllegalArgumentException if the ChildSessionCallback is already in use.
      */
     public void openChildSession(
-            ChildSessionOptions childSessionOptions, IChildSessionCallback childSessionCallback) {
+            ChildSessionOptions childSessionOptions, ChildSessionCallback childSessionCallback) {
         mIkeSessionStateMachine.openChildSession(childSessionOptions, childSessionCallback);
     }
 
@@ -120,7 +120,7 @@ public final class IkeSession implements AutoCloseable {
      *     interface to notify users the deletion result.
      * @throws IllegalArgumentException if no Child Session found bound with this callback.
      */
-    public void closeChildSession(IChildSessionCallback childSessionCallback) {
+    public void closeChildSession(ChildSessionCallback childSessionCallback) {
         mIkeSessionStateMachine.closeChildSession(childSessionCallback);
     }
 
