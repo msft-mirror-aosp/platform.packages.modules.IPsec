@@ -146,6 +146,14 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         return AKA_IDENTITY_PREFIX;
     }
 
+    protected ChallengeState buildChallengeState() {
+        return new ChallengeState();
+    }
+
+    protected ChallengeState buildChallengeState(byte[] identity) {
+        return new ChallengeState(identity);
+    }
+
     protected class CreatedState extends EapMethodState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
@@ -167,7 +175,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_AKA_IDENTITY:
                     return transitionAndProcess(new IdentityState(), message);
                 case EAP_AKA_CHALLENGE:
-                    return transitionAndProcess(new ChallengeState(), message);
+                    return transitionAndProcess(buildChallengeState(), message);
                 case EAP_AKA_NOTIFICATION:
                     return handleEapSimAkaNotification(
                             mTAG,
@@ -206,7 +214,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_AKA_IDENTITY:
                     break;
                 case EAP_AKA_CHALLENGE:
-                    return transitionAndProcess(new ChallengeState(mIdentity), message);
+                    return transitionAndProcess(buildChallengeState(mIdentity), message);
                 case EAP_AKA_NOTIFICATION:
                     return handleEapSimAkaNotification(
                             mTAG,
