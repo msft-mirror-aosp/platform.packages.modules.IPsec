@@ -54,8 +54,8 @@ public final class IkeSessionTest {
     private IkeSessionOptions mIkeSessionOptions;
     private ChildSessionOptions mMockChildSessionOptions;
     private Executor mUserCbExecutor;
-    private IIkeSessionCallback mMockIkeSessionCb;
-    private IChildSessionCallback mMockChildSessionCb;
+    private IkeSessionCallback mMockIkeSessionCb;
+    private ChildSessionCallback mMockChildSessionCb;
 
     @Before
     public void setUp() throws Exception {
@@ -68,8 +68,8 @@ public final class IkeSessionTest {
         mIkeSessionOptions = buildIkeSessionOptions();
         mMockChildSessionOptions = mock(ChildSessionOptions.class);
         mUserCbExecutor = (r) -> r.run(); // Inline executor for testing purposes.
-        mMockIkeSessionCb = mock(IIkeSessionCallback.class);
-        mMockChildSessionCb = mock(IChildSessionCallback.class);
+        mMockIkeSessionCb = mock(IkeSessionCallback.class);
+        mMockChildSessionCb = mock(ChildSessionCallback.class);
     }
 
     private IkeSessionOptions buildIkeSessionOptions() throws Exception {
