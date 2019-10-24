@@ -313,6 +313,8 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_AKA_PRIME_CLIENT_ERROR_UNABLE_TO_PROCESS =
             hexStringToByteArray("02" + ID + "000C320E000016010000");
     public static final String EAP_AKA_PRIME_IDENTITY = "36313233343536373839303132333435";
+    public static final byte[] EAP_AKA_PRIME_IDENTITY_BYTES =
+            hexStringToByteArray(EAP_AKA_PRIME_IDENTITY);
     public static final byte[] EAP_AKA_PRIME_IDENTITY_RESPONSE =
             hexStringToByteArray(
                     "02" + ID + "001C" // EAP-Response | ID | length in bytes
