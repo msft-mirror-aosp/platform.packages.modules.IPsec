@@ -145,7 +145,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private final ChildSessionOptions mChildSessionOptions;
 
     private final Executor mUserCbExecutor;
-    private final IChildSessionCallback mUserCallback;
+    private final ChildSessionCallback mUserCallback;
 
     /** Callback to notify IKE Session the state changes. */
     private final IChildSessionSmCallback mChildSmCallback;
@@ -219,7 +219,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             IpSecManager ipSecManager,
             ChildSessionOptions sessionOptions,
             Executor userCbExecutor,
-            IChildSessionCallback userCallback,
+            ChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback) {
         super(TAG, looper);
 
@@ -293,7 +293,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
          * <p>This method MUST be called after the user callbacks have been fired, and MUST always
          * be called before the state machine can shut down.
          */
-        void onChildSessionClosed(IChildSessionCallback userCallbacks);
+        void onChildSessionClosed(ChildSessionCallback userCallbacks);
 
         /**
          * Notify that a Child procedure has been finished and the IKE Session should close itself
@@ -577,7 +577,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
             mUserCbExecutor.execute(
                     () -> {
-                        mUserCallback.onError(new IkeInternalException(e));
+                        mUserCallback.onClosedExceptionally(new IkeInternalException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
@@ -636,7 +636,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         mUserCbExecutor.execute(
                 () -> {
-                    mUserCallback.onError(ikeException);
+                    mUserCallback.onClosedExceptionally(ikeException);
                 });
         loge("Child Session fatal error", ikeException);
 
