@@ -26,6 +26,7 @@ import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
@@ -43,6 +44,7 @@ public class EapSessionConfigTest {
             "test@android.net".getBytes(StandardCharsets.US_ASCII);
     private static final int SUB_ID = 1;
     private static final String NETWORK_NAME = "android.net";
+    private static final boolean ALLOW_MISMATCHED_NETWORK_NAMES = true;
     private static final String USERNAME = "username";
     private static final String PASSWORD = "password";
 
@@ -79,7 +81,8 @@ public class EapSessionConfigTest {
     public void testBuildEapAkaPrime() {
         EapSessionConfig result =
                 new EapSessionConfig.Builder()
-                        .setEapAkaPrimeConfig(SUB_ID, APPTYPE_USIM, NETWORK_NAME)
+                        .setEapAkaPrimeConfig(
+                                SUB_ID, APPTYPE_USIM, NETWORK_NAME, ALLOW_MISMATCHED_NETWORK_NAMES)
                         .build();
 
         assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
@@ -88,6 +91,7 @@ public class EapSessionConfigTest {
         assertEquals(SUB_ID, eapAkaPrimeConfig.subId);
         assertEquals(APPTYPE_USIM, eapAkaPrimeConfig.apptype);
         assertEquals(NETWORK_NAME, eapAkaPrimeConfig.networkName);
+        assertTrue(eapAkaPrimeConfig.allowMismatchedNetworkNames);
     }
 
     @Test
