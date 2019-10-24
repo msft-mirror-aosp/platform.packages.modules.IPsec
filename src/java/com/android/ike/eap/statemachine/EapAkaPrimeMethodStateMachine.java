@@ -56,6 +56,9 @@ import java.util.List;
  *     Protocol Method for 3rd Generation Authentication and Key Agreement (EAP-AKA')</a>
  */
 public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
+    // EAP-AKA' identity prefix (RFC 5448#3)
+    private static final String AKA_PRIME_IDENTITY_PREFIX = "6";
+
     private final EapAkaPrimeTypeDataDecoder mEapAkaPrimeTypeDataDecoder;
 
     EapAkaPrimeMethodStateMachine(
@@ -88,6 +91,11 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
     @Override
     protected DecodeResult<EapAkaTypeData> decode(byte[] typeData) {
         return mEapAkaPrimeTypeDataDecoder.decode(typeData);
+    }
+
+    @Override
+    protected String getIdentityPrefix() {
+        return AKA_PRIME_IDENTITY_PREFIX;
     }
 
     EapAkaPrimeTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
