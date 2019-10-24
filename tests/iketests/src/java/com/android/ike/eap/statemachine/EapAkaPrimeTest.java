@@ -34,10 +34,14 @@ import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData;
 import org.junit.Before;
 
 public class EapAkaPrimeTest {
+
+    // newtork name example in RFC 5448#3.1
     protected static final int SUB_ID = 1;
-    protected static final String NETWORK_NAME = "android.net";
+    protected static final String PEER_NETWORK_NAME = "foo:bar";
+    protected static final boolean ALLOW_MISMATCHED_NETWORK_NAMES = false;
     protected static final EapAkaPrimeConfig EAP_AKA_PRIME_CONFIG =
-            new EapAkaPrimeConfig(SUB_ID, APPTYPE_USIM, NETWORK_NAME);
+            new EapAkaPrimeConfig(
+                    SUB_ID, APPTYPE_USIM, PEER_NETWORK_NAME, ALLOW_MISMATCHED_NETWORK_NAMES);
     protected static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
 
     // EAP-Identity = hex("test@android.net")
