@@ -65,6 +65,7 @@ public class MethodStateTest extends EapStateTest {
     private static final String USERNAME = "username";
     private static final String PASSWORD = "password";
     private static final String NETWORK_NAME = "android.net";
+    private static final boolean ALLOW_MISMATCHED_NETWORK_NAMES = true;
 
     @Before
     @Override
@@ -111,7 +112,8 @@ public class MethodStateTest extends EapStateTest {
         // make EapStateMachine with EAP-AKA' configurations
         EapSessionConfig eapSessionConfig =
                 new EapSessionConfig.Builder()
-                        .setEapAkaPrimeConfig(0, APPTYPE_USIM, NETWORK_NAME)
+                        .setEapAkaPrimeConfig(
+                                0, APPTYPE_USIM, NETWORK_NAME, ALLOW_MISMATCHED_NETWORK_NAMES)
                         .build();
         mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
 

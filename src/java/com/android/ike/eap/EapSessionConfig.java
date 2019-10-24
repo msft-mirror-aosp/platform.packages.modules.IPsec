@@ -106,11 +106,21 @@ public final class EapSessionConfig {
          * @param apptype the {@link UiccAppType} apptype to be used for authentication
          * @param networkName String the network name to be used for authentication. The String must
          *     be a UTF-8 String value
+         * @param allowMismatchedNetworkNames indicates whether the EAP library can ignore potential
+         *     mismatches between the given network name and that received in an EAP-AKA' session.
+         *     If false, mismatched network names will be handled as an Authentication Reject
+         *     message.
          * @return Builder this, to facilitate chaining
          */
         public Builder setEapAkaPrimeConfig(
-                int subId, @UiccAppType int apptype, String networkName) {
-            mEapConfigs.put(EAP_TYPE_AKA_PRIME, new EapAkaPrimeConfig(subId, apptype, networkName));
+                int subId,
+                @UiccAppType int apptype,
+                String networkName,
+                boolean allowMismatchedNetworkNames) {
+            mEapConfigs.put(
+                    EAP_TYPE_AKA_PRIME,
+                    new EapAkaPrimeConfig(
+                            subId, apptype, networkName, allowMismatchedNetworkNames));
             return this;
         }
 
@@ -191,12 +201,18 @@ public final class EapSessionConfig {
      */
     public static class EapAkaPrimeConfig extends EapAkaConfig {
         public final String networkName;
+        public final boolean allowMismatchedNetworkNames;
 
         @VisibleForTesting
-        public EapAkaPrimeConfig(int subId, @UiccAppType int apptype, String networkName) {
+        public EapAkaPrimeConfig(
+                int subId,
+                @UiccAppType int apptype,
+                String networkName,
+                boolean allowMismatchedNetworkNames) {
             super(subId, apptype);
 
             this.networkName = networkName;
+            this.allowMismatchedNetworkNames = allowMismatchedNetworkNames;
         }
     }
 
