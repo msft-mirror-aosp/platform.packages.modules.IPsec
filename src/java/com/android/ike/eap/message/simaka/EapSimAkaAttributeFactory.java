@@ -68,17 +68,14 @@ public abstract class EapSimAkaAttributeFactory {
      * @param lengthInBytes the length in bytes of the attribute to be decoded
      * @param byteBuffer The ByteBuffer to parse the current attribute from
      * @return The current EapSimAkaAttribute to be parsed, or EapSimAkaUnsupportedAttribute if the
-     *         given attributeType is skippable and unsupported
+     *     given attributeType is skippable and unsupported
      * @throws EapSimAkaInvalidAttributeException when a malformatted attribute is attempted to be
-     *         decoded
+     *     decoded
      * @throws EapSimAkaUnsupportedAttributeException when an unsupported, unskippable Attribute is
-     *         attempted to be decoded
+     *     attempted to be decoded
      */
-    protected EapSimAkaAttribute getAttribute(
-            int attributeType,
-            int lengthInBytes,
-            ByteBuffer byteBuffer) throws EapSimAkaInvalidAttributeException,
-            EapSimAkaUnsupportedAttributeException {
+    EapSimAkaAttribute getAttribute(int attributeType, int lengthInBytes, ByteBuffer byteBuffer)
+            throws EapSimAkaInvalidAttributeException, EapSimAkaUnsupportedAttributeException {
         switch (attributeType) {
             // TODO(b/139482157): define optional shared attributes
             case EAP_AT_PERMANENT_ID_REQ:
