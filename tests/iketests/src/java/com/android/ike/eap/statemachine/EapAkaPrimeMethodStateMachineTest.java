@@ -16,6 +16,11 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.TestUtils.hexStringToByteArray;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
+import static com.android.ike.eap.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
 import static com.android.ike.eap.statemachine.EapAkaPrimeMethodStateMachine.K_AUT_LEN;
 import static com.android.ike.eap.statemachine.EapAkaPrimeMethodStateMachine.K_RE_LEN;
 import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.KEY_LEN;
@@ -24,11 +29,23 @@ import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.SESSI
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import com.android.ike.eap.message.EapData;
+import com.android.ike.eap.message.EapMessage;
+import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.statemachine.EapAkaMethodStateMachine.CreatedState;
 
 import org.junit.Test;
 
+import java.util.Arrays;
+
 public class EapAkaPrimeMethodStateMachineTest extends EapAkaPrimeTest {
+    private static final String TAG = EapAkaPrimeMethodStateMachineTest.class.getSimpleName();
+    private static final byte[] K_AUT =
+            hexStringToByteArray(
+                    "000102030405060708090A0B0C0D0E0F000102030405060708090A0B0C0D0E0F");
+    private static final byte[] MAC = hexStringToByteArray("0322b08b59cae2df8f766162ac76f30b");
+
     @Test
     public void testEapAkaPrimeMethodStateMachineStartState() {
         assertTrue(mStateMachine.getState() instanceof CreatedState);
@@ -41,5 +58,17 @@ public class EapAkaPrimeMethodStateMachineTest extends EapAkaPrimeTest {
         assertEquals(K_RE_LEN, mStateMachine.getKReLen());
         assertEquals(SESSION_KEY_LENGTH, mStateMachine.getMskLength());
         assertEquals(SESSION_KEY_LENGTH, mStateMachine.getEmskLength());
+    }
+
+    @Test
+    public void testIsValidMacUsesHmacSha256() throws Exception {
+        System.arraycopy(K_AUT, 0, mStateMachine.mKAut, 0, K_AUT.length);
+
+        EapData eapData = new EapData(EAP_TYPE_AKA_PRIME, new byte[0]);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+        EapAkaPrimeTypeData eapAkaPrimeTypeData =
+                new EapAkaPrimeTypeData(EAP_AKA_CHALLENGE, Arrays.asList(new AtMac(MAC)));
+
+        assertTrue(mStateMachine.isValidMac(TAG, eapMessage, eapAkaPrimeTypeData, new byte[0]));
     }
 }
