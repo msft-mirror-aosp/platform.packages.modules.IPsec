@@ -99,6 +99,9 @@ import java.util.Set;
 class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
     private static final String TAG = EapAkaMethodStateMachine.class.getSimpleName();
 
+    // EAP-AKA identity prefix (RFC 4187#4.1.1.6)
+    private static final String AKA_IDENTITY_PREFIX = "0";
+
     private final EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
 
     EapAkaMethodStateMachine(Context context, byte[] eapIdentity, EapAkaConfig eapAkaConfig) {
@@ -132,6 +135,15 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
     protected DecodeResult<EapAkaTypeData> decode(byte[] typeData) {
         return mEapAkaTypeDataDecoder.decode(typeData);
+    }
+
+    /**
+     * This exists so we can override the identity prefix in the EapAkaPrimeMethodStateMachine.
+     *
+     * @return the Identity prefix for this EAP method
+     */
+    protected String getIdentityPrefix() {
+        return AKA_IDENTITY_PREFIX;
     }
 
     protected class CreatedState extends EapMethodState {
@@ -186,9 +198,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        decodeResult.atClientErrorCode);
+                        message.eapIdentifier, getEapMethod(), decodeResult.atClientErrorCode);
             }
 
             EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
@@ -206,7 +216,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
-                            EAP_TYPE_AKA,
+                            getEapMethod(),
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -225,7 +235,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                         new EapSimAkaIdentityUnavailableException(
                                 "IMSI for subId (" + mEapUiccConfig.subId + ") not available"));
             }
-            String identityString = "0" + imsi;
+            String identityString = getIdentityPrefix() + imsi;
             mIdentity = identityString.getBytes(StandardCharsets.US_ASCII);
             LOG.d(mTAG, "EAP-AKA/Identity=" + LOG.pii(identityString));
 
@@ -238,7 +248,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             return buildResponseMessage(
-                    EAP_TYPE_AKA,
+                    getEapMethod(),
                     EAP_AKA_IDENTITY,
                     message.eapIdentifier,
                     Arrays.asList(atIdentity));

@@ -312,4 +312,10 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("01" + ID + "000832050000");
     public static final byte[] EAP_AKA_PRIME_CLIENT_ERROR_UNABLE_TO_PROCESS =
             hexStringToByteArray("02" + ID + "000C320E000016010000");
+    public static final String EAP_AKA_PRIME_IDENTITY = "36313233343536373839303132333435";
+    public static final byte[] EAP_AKA_PRIME_IDENTITY_RESPONSE =
+            hexStringToByteArray(
+                    "02" + ID + "001C" // EAP-Response | ID | length in bytes
+                            + "32050000" // EAP-AKA | Identity | 2B padding
+                            + "0E050010" + EAP_AKA_PRIME_IDENTITY); // AT_IDENTITY ("6" + IMSI)
 }
