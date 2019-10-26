@@ -99,6 +99,9 @@ import java.util.Set;
 class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
     private static final String TAG = EapAkaMethodStateMachine.class.getSimpleName();
 
+    // EAP-AKA identity prefix (RFC 4187#4.1.1.6)
+    private static final String AKA_IDENTITY_PREFIX = "0";
+
     private final EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
 
     EapAkaMethodStateMachine(Context context, byte[] eapIdentity, EapAkaConfig eapAkaConfig) {
@@ -130,6 +133,27 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         return EAP_TYPE_AKA;
     }
 
+    protected DecodeResult<EapAkaTypeData> decode(byte[] typeData) {
+        return mEapAkaTypeDataDecoder.decode(typeData);
+    }
+
+    /**
+     * This exists so we can override the identity prefix in the EapAkaPrimeMethodStateMachine.
+     *
+     * @return the Identity prefix for this EAP method
+     */
+    protected String getIdentityPrefix() {
+        return AKA_IDENTITY_PREFIX;
+    }
+
+    protected ChallengeState buildChallengeState() {
+        return new ChallengeState();
+    }
+
+    protected ChallengeState buildChallengeState(byte[] identity) {
+        return new ChallengeState(identity);
+    }
+
     protected class CreatedState extends EapMethodState {
         private final String mTAG = CreatedState.class.getSimpleName();
 
@@ -139,13 +163,11 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 return result;
             }
 
-            DecodeResult<EapAkaTypeData> decodeResult =
-                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<? extends EapAkaTypeData> decodeResult =
+                    decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        decodeResult.atClientErrorCode);
+                        message.eapIdentifier, getEapMethod(), decodeResult.atClientErrorCode);
             }
 
             EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
@@ -153,7 +175,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_AKA_IDENTITY:
                     return transitionAndProcess(new IdentityState(), message);
                 case EAP_AKA_CHALLENGE:
-                    return transitionAndProcess(new ChallengeState(), message);
+                    return transitionAndProcess(buildChallengeState(), message);
                 case EAP_AKA_NOTIFICATION:
                     return handleEapSimAkaNotification(
                             mTAG,
@@ -163,7 +185,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
-                            EAP_TYPE_AKA,
+                            getEapMethod(),
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
         }
@@ -180,13 +202,11 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 return result;
             }
 
-            DecodeResult<EapAkaTypeData> decodeResult =
-                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<? extends EapAkaTypeData> decodeResult =
+                    decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        decodeResult.atClientErrorCode);
+                        message.eapIdentifier, getEapMethod(), decodeResult.atClientErrorCode);
             }
 
             EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
@@ -194,7 +214,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 case EAP_AKA_IDENTITY:
                     break;
                 case EAP_AKA_CHALLENGE:
-                    return transitionAndProcess(new ChallengeState(mIdentity), message);
+                    return transitionAndProcess(buildChallengeState(mIdentity), message);
                 case EAP_AKA_NOTIFICATION:
                     return handleEapSimAkaNotification(
                             mTAG,
@@ -204,7 +224,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
-                            EAP_TYPE_AKA,
+                            getEapMethod(),
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
@@ -223,7 +243,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                         new EapSimAkaIdentityUnavailableException(
                                 "IMSI for subId (" + mEapUiccConfig.subId + ") not available"));
             }
-            String identityString = "0" + imsi;
+            String identityString = getIdentityPrefix() + imsi;
             mIdentity = identityString.getBytes(StandardCharsets.US_ASCII);
             LOG.d(mTAG, "EAP-AKA/Identity=" + LOG.pii(identityString));
 
@@ -236,7 +256,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             return buildResponseMessage(
-                    EAP_TYPE_AKA,
+                    getEapMethod(),
                     EAP_AKA_IDENTITY,
                     message.eapIdentifier,
                     Arrays.asList(atIdentity));
@@ -269,7 +289,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
         private final String mTAG = ChallengeState.class.getSimpleName();
 
         @VisibleForTesting boolean mHadSuccessfulChallenge = false;
-        @VisibleForTesting final byte[] mIdentity;
+        @VisibleForTesting protected final byte[] mIdentity;
 
         // IK and CK lengths defined as 16B (RFC 4187#1)
         private final int mIkLenBytes = 16;
@@ -311,13 +331,11 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                                 + ", received " + message.eapData.eapType));
             }
 
-            DecodeResult<EapAkaTypeData> decodeResult =
-                    mEapAkaTypeDataDecoder.decode(message.eapData.eapTypeData);
+            DecodeResult<? extends EapAkaTypeData> decodeResult =
+                    decode(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        decodeResult.atClientErrorCode);
+                        message.eapIdentifier, getEapMethod(), decodeResult.atClientErrorCode);
             }
 
             EapAkaTypeData eapAkaTypeData = decodeResult.eapTypeData;
@@ -333,18 +351,21 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 default:
                     return buildClientErrorResponse(
                             message.eapIdentifier,
-                            EAP_TYPE_AKA,
+                            getEapMethod(),
                             AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
             if (!isValidChallengeAttributes(eapAkaTypeData)) {
                 LOG.e(mTAG, "Invalid attributes: " + eapAkaTypeData.attributeMap.keySet());
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        AtClientErrorCode.UNABLE_TO_PROCESS);
+                        message.eapIdentifier, getEapMethod(), AtClientErrorCode.UNABLE_TO_PROCESS);
             }
 
+            return handleChallengeAuthentication(message, eapAkaTypeData);
+        }
+
+        protected EapResult handleChallengeAuthentication(
+                EapMessage message, EapAkaTypeData eapAkaTypeData) {
             RandChallengeResult result;
             try {
                 result = getRandChallengeResult(eapAkaTypeData);

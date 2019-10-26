@@ -54,9 +54,9 @@ public final class IkeManager {
      * @param userCbExecutor the {@link Executor} upon which all callbacks will be posted. For
      *     security and consistency, the callbacks posted to this executor MUST be executed
      *     serially, in the order they were posted.
-     * @param ikeSessionCallback the {@link IIkeSessionCallback} interface to notify users the state
+     * @param ikeSessionCallback the {@link IkeSessionCallback} interface to notify users the state
      *     changes of the IKE Session.
-     * @param firstChildSessionCallback the {@link IChildSessionCallback} interface to notify users
+     * @param firstChildSessionCallback the {@link ChildSessionCallback} interface to notify users
      *     the state changes of the Child Session.
      * @return an instance of {@link IkeSession}
      */
@@ -64,8 +64,8 @@ public final class IkeManager {
             IkeSessionOptions ikeSessionOptions,
             ChildSessionOptions firstChildSessionOptions,
             Executor userCbExecutor,
-            IIkeSessionCallback ikeSessionCallback,
-            IChildSessionCallback firstChildSessionCallback) {
+            IkeSessionCallback ikeSessionCallback,
+            ChildSessionCallback firstChildSessionCallback) {
         return new IkeSession(
                 mContext,
                 ikeSessionOptions,
