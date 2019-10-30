@@ -32,16 +32,22 @@ import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData;
 import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData.EapAkaPrimeTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAutn;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtKdf;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtKdfInput;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * EapAkaPrimeMethodStateMachine represents the valid paths possible for the EAP-AKA' protocol.
@@ -68,6 +74,9 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
     // EAP-AKA' identity prefix (RFC 5448#3)
     private static final String AKA_PRIME_IDENTITY_PREFIX = "6";
     private static final int SUPPORTED_KDF = 1;
+    private static final int FC = 0x20; // Required by TS 133 402 Annex A.2
+    private static final int SQN_XOR_AK_LEN = 6;
+    private static final String MAC_ALGORITHM_STRING = "HmacSHA256";
 
     private final EapAkaPrimeConfig mEapAkaPrimeConfig;
     private final EapAkaPrimeTypeDataDecoder mEapAkaPrimeTypeDataDecoder;
@@ -202,6 +211,43 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
             }
 
             return true;
+        }
+
+        /**
+         * Derives CK' and IK' values from CK and IK
+         *
+         * <p>CK' and IK' generation is specified in TS 133 402 Annex A.2, which relies on the key
+         * derivation function KDF specified in TS 133 220 Annex B.2.
+         */
+        @VisibleForTesting
+        byte[] deriveCkIkPrime(
+                RandChallengeResult randChallengeResult, AtKdfInput atKdfInput, AtAutn atAutn)
+                throws GeneralSecurityException {
+            final int fcLen = 1;
+            int lengthFieldLen = 2;
+
+            // SQN ^ AK is the first 6B of the AUTN value
+            byte[] sqnXorAk = Arrays.copyOf(atAutn.autn, SQN_XOR_AK_LEN);
+            int sLength =
+                    fcLen
+                            + atKdfInput.networkName.length + lengthFieldLen
+                            + SQN_XOR_AK_LEN + lengthFieldLen;
+
+            ByteBuffer dataToSign = ByteBuffer.allocate(sLength);
+            dataToSign.put((byte) FC);
+            dataToSign.put(atKdfInput.networkName);
+            dataToSign.putShort((short) atKdfInput.networkName.length);
+            dataToSign.put(sqnXorAk);
+            dataToSign.putShort((short) SQN_XOR_AK_LEN);
+
+            int keyLen = randChallengeResult.ck.length + randChallengeResult.ik.length;
+            ByteBuffer key = ByteBuffer.allocate(keyLen);
+            key.put(randChallengeResult.ck);
+            key.put(randChallengeResult.ik);
+
+            Mac mac = Mac.getInstance(MAC_ALGORITHM_STRING);
+            mac.init(new SecretKeySpec(key.array(), MAC_ALGORITHM_STRING));
+            return mac.doFinal(dataToSign.array());
         }
     }
 
