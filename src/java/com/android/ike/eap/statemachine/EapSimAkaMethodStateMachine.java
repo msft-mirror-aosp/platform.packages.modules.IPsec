@@ -146,11 +146,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
     }
 
     @VisibleForTesting
-    void generateAndPersistKeys(
-            String tag,
-            MessageDigest sha1,
-            Fips186_2Prf prf,
-            byte[] mkInput) {
+    protected void generateAndPersistKeys(
+            String tag, MessageDigest sha1, Fips186_2Prf prf, byte[] mkInput) {
         byte[] mk = sha1.digest(mkInput);
 
         // run mk through FIPS 186-2
