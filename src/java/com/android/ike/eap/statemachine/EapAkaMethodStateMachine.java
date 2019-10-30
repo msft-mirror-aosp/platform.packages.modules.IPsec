@@ -36,6 +36,7 @@ import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_RAND;
 
+import android.annotation.Nullable;
 import android.content.Context;
 import android.telephony.TelephonyManager;
 
@@ -374,9 +375,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             } catch (EapSimAkaInvalidLengthException | BufferUnderflowException ex) {
                 LOG.e(mTAG, "Invalid response returned from SIM", ex);
                 return buildClientErrorResponse(
-                        message.eapIdentifier,
-                        EAP_TYPE_AKA,
-                        AtClientErrorCode.UNABLE_TO_PROCESS);
+                        message.eapIdentifier, getEapMethod(), AtClientErrorCode.UNABLE_TO_PROCESS);
             } catch (EapSimAkaAuthenticationFailureException ex) {
                 // Return EAP-Response/AKA-Authentication-Reject when the AUTN is rejected
                 // (RFC 4187#6.3.1)
@@ -386,7 +385,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             if (!result.isSuccessfulResult()) {
                 try {
                     return buildResponseMessage(
-                            EAP_TYPE_AKA,
+                            getEapMethod(),
                             EAP_AKA_SYNCHRONIZATION_FAILURE,
                             message.eapIdentifier,
                             Arrays.asList(new AtAuts(result.auts)));
@@ -396,14 +395,10 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 }
             }
 
-            try {
-                MessageDigest sha1 = MessageDigest.getInstance(MASTER_KEY_GENERATION_ALG);
-                byte[] mkInputData = getMkInputData(result);
-                generateAndPersistKeys(mTAG, sha1, new Fips186_2Prf(), mkInputData);
-            } catch (NoSuchAlgorithmException | BufferUnderflowException ex) {
-                LOG.e(mTAG, "Error while creating keys", ex);
-                return buildClientErrorResponse(
-                        message.eapIdentifier, EAP_TYPE_AKA, AtClientErrorCode.UNABLE_TO_PROCESS);
+            EapResult eapResult =
+                    generateAndPersistEapAkaKeys(result, message.eapIdentifier, eapAkaTypeData);
+            if (eapResult != null) {
+                return eapResult;
             }
 
             try {
@@ -553,6 +548,21 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     EAP_AKA_AUTHENTICATION_REJECT,
                     eapIdentifier,
                     new ArrayList<>());
+        }
+
+        @Nullable
+        protected EapResult generateAndPersistEapAkaKeys(
+                RandChallengeResult result, int eapIdentifier, EapAkaTypeData eapAkaTypeData) {
+            try {
+                MessageDigest sha1 = MessageDigest.getInstance(MASTER_KEY_GENERATION_ALG);
+                byte[] mkInputData = getMkInputData(result);
+                generateAndPersistKeys(mTAG, sha1, new Fips186_2Prf(), mkInputData);
+                return null;
+            } catch (NoSuchAlgorithmException | BufferUnderflowException ex) {
+                LOG.e(mTAG, "Error while creating keys", ex);
+                return buildClientErrorResponse(
+                        eapIdentifier, EAP_TYPE_AKA, AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
         }
 
         private byte[] getMkInputData(RandChallengeResult result) {
