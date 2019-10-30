@@ -16,6 +16,7 @@
 
 package com.android.ike.ikev2.crypto;
 
+import com.android.ike.crypto.KeyGenerationUtils;
 import com.android.ike.ikev2.SaProposal;
 import com.android.ike.ikev2.message.IkeSaPayload.PrfTransform;
 
@@ -135,26 +136,7 @@ public class IkeMacPrf extends IkeMac {
      * @return the byte array of keying materials
      */
     public byte[] generateKeyMat(byte[] keyBytes, byte[] dataToSign, int keyMaterialLen) {
-        ByteBuffer keyMatBuffer = ByteBuffer.allocate(keyMaterialLen);
-
-        byte[] previousMac = new byte[0];
-        final int padLen = 1;
-        byte padValue = 1;
-
-        while (keyMatBuffer.remaining() > 0) {
-            ByteBuffer dataToSignBuffer =
-                    ByteBuffer.allocate(previousMac.length + dataToSign.length + padLen);
-            dataToSignBuffer.put(previousMac).put(dataToSign).put(padValue);
-
-            previousMac = signBytes(keyBytes, dataToSignBuffer.array());
-
-            keyMatBuffer.put(
-                    previousMac, 0, Math.min(previousMac.length, keyMatBuffer.remaining()));
-
-            padValue++;
-        }
-
-        return keyMatBuffer.array();
+        return KeyGenerationUtils.prfPlus(this, keyBytes, dataToSign, keyMaterialLen);
     }
 
     /**
