@@ -318,6 +318,10 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_AKA_PRIME_IDENTITY_RESPONSE =
             hexStringToByteArray(
                     "02" + ID + "001C" // EAP-Response | ID | length in bytes
-                            + "32050000" // EAP-AKA | Identity | 2B padding
+                            + "32050000" // EAP-AKA' | Identity | 2B padding
                             + "0E050010" + EAP_AKA_PRIME_IDENTITY); // AT_IDENTITY ("6" + IMSI)
+    public static final byte[] EAP_AKA_PRIME_AUTHENTICATION_REJECT =
+            hexStringToByteArray(
+                    "02" + ID + "0008" // EAP-Response | ID | length in bytes
+                            + "32020000"); // EAP-AKA' | Authentication Reject | 2B padding
 }
