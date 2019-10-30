@@ -16,6 +16,8 @@
 
 package com.android.ike.ikev2.crypto;
 
+import com.android.ike.crypto.KeyGenerationUtils.ByteSigner;
+
 import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
@@ -30,7 +32,7 @@ import javax.crypto.spec.SecretKeySpec;
  * IkeMac is an abstract class that represents common information for all negotiated algorithms that
  * generates Message Authentication Code (MAC), e.g. PRF and integrity algorithm.
  */
-abstract class IkeMac extends IkeCrypto {
+abstract class IkeMac extends IkeCrypto implements ByteSigner {
     // STOPSHIP: b/130190639 Catch unchecked exceptions, notify users and close the IKE session.
     private final boolean mIsEncryptAlgo;
     private final Mac mMac;
@@ -69,6 +71,7 @@ abstract class IkeMac extends IkeCrypto {
      * @param dataToSign the data to be signed.
      * @return the calculated MAC.
      */
+    @Override
     public byte[] signBytes(byte[] keyBytes, byte[] dataToSign) {
         try {
             SecretKeySpec secretKey = new SecretKeySpec(keyBytes, getAlgorithmName());
