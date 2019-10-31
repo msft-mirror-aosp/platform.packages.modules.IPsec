@@ -154,6 +154,11 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
         return new ChallengeState(identity);
     }
 
+    @Override
+    protected String getMacAlgorithm() {
+        return MAC_ALGORITHM_STRING;
+    }
+
     protected class ChallengeState extends EapAkaMethodStateMachine.ChallengeState {
         private final String mTAG = ChallengeState.class.getSimpleName();
 
@@ -173,7 +178,7 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
             if (!isValidChallengeAttributes(eapAkaPrimeTypeData)) {
                 return buildAuthenticationRejectMessage(message.eapIdentifier);
             }
-            return null;
+            return super.handleChallengeAuthentication(message, eapAkaPrimeTypeData);
         }
 
         @VisibleForTesting
