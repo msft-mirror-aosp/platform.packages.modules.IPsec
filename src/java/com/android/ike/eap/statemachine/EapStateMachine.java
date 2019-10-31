@@ -325,8 +325,13 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                             mContext, mEapSessionConfig.eapIdentity, eapSimConfig, mSecureRandom);
                 case EAP_TYPE_AKA:
                     EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
+                    boolean supportsEapAkaPrime =
+                            mEapSessionConfig.eapConfigs.containsKey(EAP_TYPE_AKA_PRIME);
                     return new EapAkaMethodStateMachine(
-                            mContext, mEapSessionConfig.eapIdentity, eapAkaConfig);
+                            mContext,
+                            mEapSessionConfig.eapIdentity,
+                            eapAkaConfig,
+                            supportsEapAkaPrime);
                 case EAP_TYPE_AKA_PRIME:
                     EapAkaPrimeConfig eapAkaPrimeConfig = (EapAkaPrimeConfig) eapMethodConfig;
                     return new EapAkaPrimeMethodStateMachine(
