@@ -127,6 +127,10 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
         return EapStateMachine.handleNotification(tag, message);
     }
 
+    protected String getMacAlgorithm() {
+        return MAC_ALGORITHM_STRING;
+    }
+
     @VisibleForTesting
     EapResult buildClientErrorResponse(
             int eapIdentifier,
@@ -206,8 +210,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
     boolean isValidMac(String tag, EapMessage message, EapSimAkaTypeData typeData, byte[] extraData)
             throws GeneralSecurityException, EapSimAkaInvalidAttributeException,
                     EapSilentException {
-        mMacAlgorithm = Mac.getInstance(MAC_ALGORITHM_STRING);
-        mMacAlgorithm.init(new SecretKeySpec(mKAut, MAC_ALGORITHM_STRING));
+        mMacAlgorithm = Mac.getInstance(getMacAlgorithm());
+        mMacAlgorithm.init(new SecretKeySpec(mKAut, getMacAlgorithm()));
 
         byte[] mac = getMac(message.eapCode, message.eapIdentifier, typeData, extraData);
         // attributes are 'valid', so must have AtMac
