@@ -29,6 +29,7 @@ import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_NOTIFICA
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_SYNCHRONIZATION_FAILURE;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_AUTN;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_BIDDING;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_FULLAUTH_ID_REQ;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IV;
@@ -60,6 +61,7 @@ import com.android.ike.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAutn;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAuts;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtBidding;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandAka;
@@ -427,6 +429,18 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 // if the MAC can't be generated, we can't continue
                 LOG.e(mTAG, "Error computing MAC for EapMessage", ex);
                 return new EapError(ex);
+            }
+
+            // before sending a response, check for bidding-down attacks (RFC 5448#4)
+            if (mSupportsEapAkaPrime) {
+                AtBidding atBidding = (AtBidding) eapAkaTypeData.attributeMap.get(EAP_AT_BIDDING);
+                if (atBidding != null && atBidding.doesServerSupportEapAkaPrime) {
+                    LOG.w(
+                            mTAG,
+                            "Potential bidding down attack. AT_BIDDING attr included and EAP-AKA'"
+                                + " is supported");
+                    return buildAuthenticationRejectMessage(message.eapIdentifier);
+                }
             }
 
             // server has been authenticated, so we can send a response
