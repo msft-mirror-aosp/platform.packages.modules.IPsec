@@ -405,7 +405,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                 if (!isValidMac(mTAG, message, eapAkaTypeData, new byte[0])) {
                     return buildClientErrorResponse(
                             message.eapIdentifier,
-                            EAP_TYPE_AKA,
+                            getEapMethod(),
                             AtClientErrorCode.UNABLE_TO_PROCESS);
                 }
             } catch (GeneralSecurityException
