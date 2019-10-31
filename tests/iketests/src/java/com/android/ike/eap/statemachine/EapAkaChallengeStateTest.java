@@ -64,6 +64,7 @@ import com.android.ike.eap.message.EapData;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaTypeData;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtAutn;
+import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtBidding;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtRandAka;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
@@ -92,12 +93,23 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
      *              020500000123456789ABCDEFFEDCBA9876543210 | AT_AUTN
      *              0B05000000000000000000000000000000000000 | AT_MAC (zeroed out)
      *
-     * MK = SHA-1(message)
+     * MK = SHA-1(Identity | IK | CK)
      * K_encr, K_aut, MSK, EMSK = PRF(MK)
      * MAC = HMAC-SHA-1(K_aut, message)
      */
     private static final byte[] REQUEST_MAC_BYTES =
             hexStringToByteArray("3EB97A1D0E62894FD0DA384D24D8983C");
+
+    /**
+     * message =    01100048 | EAP-Request, ID, length in bytes
+     *              17010000 | EAP-AKA, AKA-Challenge, padding
+     *              0105000000112233445566778899AABBCCDDEEFF | AT_RAND
+     *              020500000123456789ABCDEFFEDCBA9876543210 | AT_AUTN
+     *              88018000 | AT_BIDDING
+     *              0B05000000000000000000000000000000000000 | AT_MAC (zeroed out)
+     */
+    private static final byte[] BIDDING_DOWN_MAC =
+            hexStringToByteArray("9CB543894A5EFDC32DF6A6CE1AB0E01A");
 
     @Before
     public void setUp() {
@@ -352,8 +364,6 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
 
     @Test
     public void testProcessValidChallenge() throws Exception {
-        // TODO(b/140258387): update test vectors with externally generated values
-
         EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
@@ -374,6 +384,40 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_CHALLENGE_RESPONSE, eapResponse.packet);
+
+        verify(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        verify(mMockTelephonyManager)
+                .getIccAuthentication(
+                        TelephonyManager.APPTYPE_USIM,
+                        TelephonyManager.AUTHTYPE_EAP_AKA,
+                        BASE_64_CHALLENGE);
+        verifyNoMoreInteractions(mMockEapAkaTypeDataDecoder, mMockTelephonyManager);
+    }
+
+    @Test
+    public void testProcessBiddingDownAttack() throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_AKA, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        AtRandAka atRandAka = new AtRandAka(RAND_1_BYTES);
+        AtAutn atAutn = new AtAutn(AUTN_BYTES);
+        AtBidding atBidding = new AtBidding(true);
+        AtMac atMac = new AtMac(BIDDING_DOWN_MAC);
+
+        DecodeResult<EapAkaTypeData> decodeResult =
+                new DecodeResult<>(
+                        new EapAkaTypeData(
+                                EAP_AKA_CHALLENGE,
+                                Arrays.asList(atRandAka, atAutn, atBidding, atMac)));
+        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        when(mMockTelephonyManager.getIccAuthentication(
+                TelephonyManager.APPTYPE_USIM,
+                TelephonyManager.AUTHTYPE_EAP_AKA,
+                BASE_64_CHALLENGE))
+                .thenReturn(EAP_AKA_UICC_RESP_SUCCESS_BASE_64);
+
+        EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
+        assertArrayEquals(EAP_AKA_AUTHENTICATION_REJECT, eapResponse.packet);
 
         verify(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         verify(mMockTelephonyManager)
