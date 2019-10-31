@@ -223,8 +223,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
             LOG.e(
                     tag,
                     "Received message with invalid Mac."
-                            + " expected=" + Log.byteArrayToHexString(mac)
-                            + ", actual=" + Log.byteArrayToHexString(atMac.mac));
+                            + " received=" + Log.byteArrayToHexString(atMac.mac)
+                            + ", computed=" + Log.byteArrayToHexString(mac));
         }
 
         return isValidMac;
