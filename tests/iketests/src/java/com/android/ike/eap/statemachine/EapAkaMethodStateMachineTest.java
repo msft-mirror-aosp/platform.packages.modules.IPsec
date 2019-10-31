@@ -87,7 +87,8 @@ public class EapAkaMethodStateMachineTest {
                         mMockTelephonyManager,
                         EAP_IDENTITY_BYTES,
                         mEapAkaConfig,
-                        mMockEapAkaTypeDataDecoder);
+                        mMockEapAkaTypeDataDecoder,
+                        false);
 
         verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
     }
