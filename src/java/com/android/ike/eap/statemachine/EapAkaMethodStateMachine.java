@@ -104,13 +104,24 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
     private static final String AKA_IDENTITY_PREFIX = "0";
 
     private final EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
+    private final boolean mSupportsEapAkaPrime;
 
-    EapAkaMethodStateMachine(Context context, byte[] eapIdentity, EapAkaConfig eapAkaConfig) {
+    protected EapAkaMethodStateMachine(
+            Context context, byte[] eapIdentity, EapAkaConfig eapAkaConfig) {
+        this(context, eapIdentity, eapAkaConfig, false);
+    }
+
+    EapAkaMethodStateMachine(
+            Context context,
+            byte[] eapIdentity,
+            EapAkaConfig eapAkaConfig,
+            boolean supportsEapAkaPrime) {
         this(
                 (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE),
                 eapIdentity,
                 eapAkaConfig,
-                EapAkaTypeData.getEapAkaTypeDataDecoder());
+                EapAkaTypeData.getEapAkaTypeDataDecoder(),
+                supportsEapAkaPrime);
     }
 
     @VisibleForTesting
@@ -118,12 +129,14 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             TelephonyManager telephonyManager,
             byte[] eapIdentity,
             EapAkaConfig eapAkaConfig,
-            EapAkaTypeDataDecoder eapAkaTypeDataDecoder) {
+            EapAkaTypeDataDecoder eapAkaTypeDataDecoder,
+            boolean supportsEapAkaPrime) {
         super(
                 telephonyManager.createForSubscriptionId(eapAkaConfig.subId),
                 eapIdentity,
                 eapAkaConfig);
         mEapAkaTypeDataDecoder = eapAkaTypeDataDecoder;
+        mSupportsEapAkaPrime = supportsEapAkaPrime;
 
         transitionTo(new CreatedState());
     }
