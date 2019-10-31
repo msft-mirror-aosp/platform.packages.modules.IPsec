@@ -19,13 +19,17 @@ package com.android.ike.eap.statemachine;
 import static com.android.ike.eap.EapAuthenticator.LOG;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.ike.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_ERROR;
+import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_AUTN;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_KDF;
 import static com.android.ike.eap.message.simaka.EapSimAkaAttribute.EAP_AT_KDF_INPUT;
 
+import android.annotation.Nullable;
 import android.content.Context;
 
+import com.android.ike.crypto.KeyGenerationUtils;
 import com.android.ike.eap.EapResult;
 import com.android.ike.eap.EapSessionConfig.EapAkaPrimeConfig;
+import com.android.ike.eap.crypto.HmacSha256ByteSigner;
 import com.android.ike.eap.message.EapData.EapMethod;
 import com.android.ike.eap.message.EapMessage;
 import com.android.ike.eap.message.simaka.EapAkaPrimeTypeData;
@@ -39,6 +43,8 @@ import com.android.ike.eap.message.simaka.EapSimAkaAttribute.AtKdfInput;
 import com.android.ike.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
 import com.android.internal.annotations.VisibleForTesting;
 
+import java.nio.BufferOverflowException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
@@ -71,12 +77,22 @@ import javax.crypto.spec.SecretKeySpec;
  *     Protocol Method for 3rd Generation Authentication and Key Agreement (EAP-AKA')</a>
  */
 public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
+    public static final int K_AUT_LEN = 32;
+    public static final int K_RE_LEN = 32;
+
     // EAP-AKA' identity prefix (RFC 5448#3)
     private static final String AKA_PRIME_IDENTITY_PREFIX = "6";
     private static final int SUPPORTED_KDF = 1;
     private static final int FC = 0x20; // Required by TS 133 402 Annex A.2
     private static final int SQN_XOR_AK_LEN = 6;
     private static final String MAC_ALGORITHM_STRING = "HmacSHA256";
+    private static final String MK_DATA_PREFIX = "EAP-AKA'";
+
+    // MK_LEN_BYTES = len(K_encr | K_aut | K_re | MSK | EMSK)
+    private static final int MK_LEN_BYTES =
+            KEY_LEN + K_AUT_LEN + K_RE_LEN + (2 * SESSION_KEY_LENGTH);
+
+    public final byte[] mKRe = new byte[getKReLen()];
 
     private final EapAkaPrimeConfig mEapAkaPrimeConfig;
     private final EapAkaPrimeTypeDataDecoder mEapAkaPrimeTypeDataDecoder;
@@ -107,6 +123,15 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
     @EapMethod
     int getEapMethod() {
         return EAP_TYPE_AKA_PRIME;
+    }
+
+    @Override
+    protected int getKAutLength() {
+        return K_AUT_LEN;
+    }
+
+    protected int getKReLen() {
+        return K_RE_LEN;
     }
 
     @Override
@@ -211,6 +236,51 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
             }
 
             return true;
+        }
+
+        @Nullable
+        @Override
+        protected EapResult generateAndPersistEapAkaKeys(
+                RandChallengeResult result, int eapIdentifier, EapAkaTypeData eapAkaTypeData) {
+            try {
+                AtKdfInput atKdfInput =
+                        (AtKdfInput) eapAkaTypeData.attributeMap.get(EAP_AT_KDF_INPUT);
+                AtAutn atAutn = (AtAutn) eapAkaTypeData.attributeMap.get(EAP_AT_AUTN);
+                byte[] ckIkPrime = deriveCkIkPrime(result, atKdfInput, atAutn);
+
+                int dataToSignLen = MK_DATA_PREFIX.length() + mIdentity.length;
+                ByteBuffer dataToSign = ByteBuffer.allocate(dataToSignLen);
+                dataToSign.put(MK_DATA_PREFIX.getBytes(StandardCharsets.US_ASCII));
+                dataToSign.put(mIdentity);
+
+                ByteBuffer mk =
+                        ByteBuffer.wrap(
+                                KeyGenerationUtils.prfPlus(
+                                        HmacSha256ByteSigner.getInstance(),
+                                        ckIkPrime,
+                                        dataToSign.array(),
+                                        MK_LEN_BYTES));
+
+                mk.get(mKEncr);
+                mk.get(mKAut);
+                mk.get(mKRe);
+                mk.get(mMsk);
+                mk.get(mEmsk);
+
+                // Log as hash unless PII debug mode enabled
+                LOG.d(mTAG, "K_encr=" + LOG.pii(mKEncr));
+                LOG.d(mTAG, "K_aut=" + LOG.pii(mKAut));
+                LOG.d(mTAG, "K_re=" + LOG.pii(mKRe));
+                LOG.d(mTAG, "MSK=" + LOG.pii(mMsk));
+                LOG.d(mTAG, "EMSK=" + LOG.pii(mEmsk));
+                return null;
+            } catch (GeneralSecurityException
+                    | BufferOverflowException
+                    | BufferUnderflowException ex) {
+                LOG.e(mTAG, "Error while generating keys", ex);
+                return buildClientErrorResponse(
+                        eapIdentifier, getEapMethod(), AtClientErrorCode.UNABLE_TO_PROCESS);
+            }
         }
 
         /**

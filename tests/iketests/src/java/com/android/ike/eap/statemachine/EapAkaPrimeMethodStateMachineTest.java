@@ -16,6 +16,12 @@
 
 package com.android.ike.eap.statemachine;
 
+import static com.android.ike.eap.statemachine.EapAkaPrimeMethodStateMachine.K_AUT_LEN;
+import static com.android.ike.eap.statemachine.EapAkaPrimeMethodStateMachine.K_RE_LEN;
+import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.KEY_LEN;
+import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.SESSION_KEY_LENGTH;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.android.ike.eap.statemachine.EapAkaMethodStateMachine.CreatedState;
@@ -26,5 +32,14 @@ public class EapAkaPrimeMethodStateMachineTest extends EapAkaPrimeTest {
     @Test
     public void testEapAkaPrimeMethodStateMachineStartState() {
         assertTrue(mStateMachine.getState() instanceof CreatedState);
+    }
+
+    @Test
+    public void testKeyLengths() {
+        assertEquals(KEY_LEN, mStateMachine.getKEncrLength());
+        assertEquals(K_AUT_LEN, mStateMachine.getKAutLength());
+        assertEquals(K_RE_LEN, mStateMachine.getKReLen());
+        assertEquals(SESSION_KEY_LENGTH, mStateMachine.getMskLength());
+        assertEquals(SESSION_KEY_LENGTH, mStateMachine.getEmskLength());
     }
 }
