@@ -73,10 +73,10 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
     // Session Key lengths are 64 bytes (RFC 4186#7, RFC 4187#7)
     public static final int SESSION_KEY_LENGTH = 64;
 
-    public final byte[] mKEncr = new byte[KEY_LEN];
-    public final byte[] mKAut = new byte[KEY_LEN];
-    public final byte[] mMsk = new byte[SESSION_KEY_LENGTH];
-    public final byte[] mEmsk = new byte[SESSION_KEY_LENGTH];
+    public final byte[] mKEncr = new byte[getKEncrLength()];
+    public final byte[] mKAut = new byte[getKAutLength()];
+    public final byte[] mMsk = new byte[getMskLength()];
+    public final byte[] mEmsk = new byte[getEmskLength()];
 
     @VisibleForTesting boolean mHasReceivedSimAkaNotification = false;
 
@@ -104,6 +104,22 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
                 mEapUiccConfig.getClass().getSimpleName() + ":"
                         + " subId=" + mEapUiccConfig.subId
                         + " apptype=" + mEapUiccConfig.apptype);
+    }
+
+    protected int getKEncrLength() {
+        return KEY_LEN;
+    }
+
+    protected int getKAutLength() {
+        return KEY_LEN;
+    }
+
+    protected int getMskLength() {
+        return SESSION_KEY_LENGTH;
+    }
+
+    protected int getEmskLength() {
+        return SESSION_KEY_LENGTH;
     }
 
     @Override
