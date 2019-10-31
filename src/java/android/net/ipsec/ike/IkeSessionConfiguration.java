@@ -22,13 +22,20 @@ import android.annotation.NonNull;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
-/** IkeSessionConfiguration represents the negotiated configuration for a IKE Session. */
+/**
+ * IkeSessionConfiguration represents the negotiated configuration for a IKE Session.
+ *
+ * @hide
+ */
 public final class IkeSessionConfiguration {
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({EXTENSION_TYPE_FRAGMENTATION, EXTENSION_TYPE_MOBIKE})
     public @interface ExtensionType {}
 
+    /** @hide */
     public static final int EXTENSION_TYPE_FRAGMENTATION = 1;
+    /** @hide */
     public static final int EXTENSION_TYPE_MOBIKE = 2;
 
     /**
@@ -36,6 +43,7 @@ public final class IkeSessionConfiguration {
      *
      * @return application version of the remote server, or an empty string if the remote server did
      *     not provide the application version.
+     * @hide
      */
     @NonNull
     public String getRemoteApplicationVersion() {
@@ -51,6 +59,7 @@ public final class IkeSessionConfiguration {
      *
      * @param extensionType the extension type.
      * @return {@code true} if this extension is enabled.
+     * @hide
      */
     public boolean isIkeExtensionEnabled(@ExtensionType int extensionType) {
         // TODO: Implement it.

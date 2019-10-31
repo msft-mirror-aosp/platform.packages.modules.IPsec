@@ -20,21 +20,27 @@ import android.annotation.NonNull;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
-/** Callback interface for receiving state changes of an IKE Session. */
+/**
+ * Callback interface for receiving state changes of an IKE Session.
+ *
+ * @hide
+ */
 public interface IkeSessionCallback {
     /**
      * Called when negotiation and authentication for this new IKE Session succeeds.
      *
      * @param sessionConfiguration the configuration information of IKE Session negotiated during
      *     IKE setup.
+     * @hide
      */
     void onOpened(@NonNull IkeSessionConfiguration sessionConfiguration);
 
     /**
-     * Called when either side has decided to close this Session and the deletion exchange
-     * finishes.
+     * Called when either side has decided to close this Session and the deletion exchange finishes.
      *
      * <p>This method will not be fired if this deletion is caused by a fatal error.
+     *
+     * @hide
      */
     void onClosed();
 
@@ -42,6 +48,7 @@ public interface IkeSessionCallback {
      * Called if IKE Session negotiation fails or IKE Session is closed because of a fatal error.
      *
      * @param exception the detailed error.
+     * @hide
      */
     void onClosedExceptionally(IkeException exception);
 
@@ -52,6 +59,7 @@ public interface IkeSessionCallback {
      * INVALID_MESSAGE_ID.
      *
      * @param exception the detailed error information.
+     * @hide
      */
     void onError(IkeProtocolException exception);
 }

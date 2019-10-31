@@ -21,6 +21,8 @@ import android.annotation.NonNull;
 /**
  * This class contains all user provided configuration options for negotiating a transport mode
  * Child Session.
+ *
+ * @hide
  */
 public final class TransportModeChildSessionOptions extends ChildSessionOptions {
     private TransportModeChildSessionOptions(
@@ -30,9 +32,17 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
         super(localTs, remoteTs, proposals, true /*isTransport*/);
     }
 
-    /** This class can be used to incrementally construct a TransportModeChildSessionOptions. */
+    /**
+     * This class can be used to incrementally construct a TransportModeChildSessionOptions.
+     *
+     * @hide
+     */
     public static final class Builder extends ChildSessionOptions.Builder {
-        /** Create a Builder for negotiating a transport mode Child Session. */
+        /**
+         * Create a Builder for negotiating a transport mode Child Session.
+         *
+         * @hide
+         */
         public Builder() {
             super();
         }
@@ -43,6 +53,7 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
          * @param proposal Child SA proposal.
          * @return Builder this, to facilitate chaining.
          * @throws IllegalArgumentException if input proposal is not a Child SA proposal.
+         * @hide
          */
         public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
             validateAndAddSaProposal(proposal);
@@ -58,6 +69,7 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
          *
          * @param trafficSelector the inbound {@link IkeTrafficSelector}.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             // TODO: Implement it.
@@ -73,6 +85,7 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
          *
          * @param trafficSelector the outbound {@link IkeTrafficSelector}.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             // TODO: Implement it.
@@ -84,6 +97,7 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
          *
          * @return the validated TransportModeChildSessionOptions.
          * @throws IllegalArgumentException if no Child SA proposal is provided.
+         * @hide
          */
         public TransportModeChildSessionOptions build() {
             validateOrThrow();

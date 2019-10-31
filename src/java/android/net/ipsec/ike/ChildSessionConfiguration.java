@@ -33,7 +33,11 @@ import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
-/** ChildSessionConfiguration represents the negotiated configuration for a Child Session. */
+/**
+ * ChildSessionConfiguration represents the negotiated configuration for a Child Session.
+ *
+ * @hide
+ */
 public final class ChildSessionConfiguration {
     private static final int IPv4_DEFAULT_PREFIX_LEN = 32;
 
@@ -46,6 +50,8 @@ public final class ChildSessionConfiguration {
      *
      * <p>It is only supported to build a {@link ChildSessionConfiguration} with a Configure(Reply)
      * Payload.
+     *
+     * @hide
      */
     public ChildSessionConfiguration(
             List<IkeTrafficSelector> inTs,
@@ -93,7 +99,11 @@ public final class ChildSessionConfiguration {
         }
     }
 
-    /** Construct an instance of {@link ChildSessionConfiguration}. */
+    /**
+     * Construct an instance of {@link ChildSessionConfiguration}.
+     *
+     * @hide
+     */
     public ChildSessionConfiguration(
             List<IkeTrafficSelector> inTs, List<IkeTrafficSelector> outTs) {
         mInboundTs = Collections.unmodifiableList(inTs);
@@ -105,6 +115,7 @@ public final class ChildSessionConfiguration {
      * Returns the negotiated inbound traffic selectors.
      *
      * @return the inbound traffic selector.
+     * @hide
      */
     public List<IkeTrafficSelector> getInboundTrafficSelectors() {
         return mInboundTs;
@@ -114,6 +125,7 @@ public final class ChildSessionConfiguration {
      * Returns the negotiated outbound traffic selectors.
      *
      * @return the outbound traffic selector.
+     * @hide
      */
     public List<IkeTrafficSelector> getOutboundTrafficSelectors() {
         return mOutboundTs;
@@ -124,6 +136,7 @@ public final class ChildSessionConfiguration {
      *
      * @return the assigned internal addresses, or an empty list when no addresses are assigned by
      *     the remote IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
     public List<LinkAddress> getInternalAddresses() {
         return mInternalAddressList;
@@ -134,6 +147,7 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal subnets, or an empty list when no information of protected subnets is
      *     provided by the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
     public List<LinkAddress> getInternalSubnets() {
         // TODO: Implement it.
@@ -145,6 +159,7 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal DNS server addresses, or an empty list when no DNS server is provided by
      *     the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
     public List<InetAddress> getInternalDnsServers() {
         // TODO: Implement it.
@@ -156,6 +171,7 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal DHCP server addresses, or an empty list when no DHCP server is provided
      *     by the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
     public List<InetAddress> getInternalDhcpServers() {
         // TODO: Implement it.

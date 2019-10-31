@@ -40,10 +40,12 @@ import java.util.Objects;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.13">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 public final class IkeTrafficSelector {
 
     // IpProtocolId consists of standard IP Protocol IDs.
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({IP_PROTOCOL_ID_UNSPEC, IP_PROTOCOL_ID_ICMP, IP_PROTOCOL_ID_TCP, IP_PROTOCOL_ID_UDP})
     public @interface IpProtocolId {}
@@ -69,15 +71,20 @@ public final class IkeTrafficSelector {
      * @see <a
      *     href="https://www.iana.org/assignments/ikev2-parameters/ikev2-parameters.xhtml">Internet
      *     Key Exchange Version 2 (IKEv2) Parameters</a>
+     * @hide
      */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE, TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE})
     public @interface TrafficSelectorType {}
 
+    /** @hide */
     public static final int TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE = 7;
+    /** @hide */
     public static final int TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE = 8;
 
+    /** @hide */
     public static final int PORT_NUMBER_MIN = 0;
+    /** @hide */
     public static final int PORT_NUMBER_MAX = 65535;
 
     // TODO: Consider defining these constants in a central place in Connectivity.
@@ -87,12 +94,19 @@ public final class IkeTrafficSelector {
     @VisibleForTesting static final int TRAFFIC_SELECTOR_IPV4_LEN = 16;
     @VisibleForTesting static final int TRAFFIC_SELECTOR_IPV6_LEN = 40;
 
+    /** @hide */
     public final int tsType;
+    /** @hide */
     public final int ipProtocolId;
+    /** @hide */
     public final int selectorLength;
+    /** @hide */
     public final int startPort;
+    /** @hide */
     public final int endPort;
+    /** @hide */
     public final InetAddress startingAddress;
+    /** @hide */
     public final InetAddress endingAddress;
 
     private IkeTrafficSelector(
@@ -119,6 +133,7 @@ public final class IkeTrafficSelector {
      * @param endPort the largest port number allowed by this Traffic Selector.
      * @param startingAddress the smallest address included in this Traffic Selector.
      * @param endingAddress the largest address included in this Traffic Selector.
+     * @hide
      */
     public IkeTrafficSelector(
             int startPort, int endPort, InetAddress startingAddress, InetAddress endingAddress) {
@@ -140,6 +155,7 @@ public final class IkeTrafficSelector {
      * @param endPort the largest port number allowed by this Traffic Selector.
      * @param startingAddress the smallest address included in this Traffic Selector.
      * @param endingAddress the largest address included in this Traffic Selector.
+     * @hide
      */
     public IkeTrafficSelector(
             @TrafficSelectorType int tsType,
@@ -193,6 +209,7 @@ public final class IkeTrafficSelector {
      * @param tsBytes encoded byte array of Traffic Selectors
      * @return an array of decoded IkeTrafficSelectors
      * @throws InvalidSyntaxException if received bytes are malformed.
+     * @hide
      */
     public static IkeTrafficSelector[] decodeIkeTrafficSelectors(int numTs, byte[] tsBytes)
             throws InvalidSyntaxException {
@@ -319,6 +336,7 @@ public final class IkeTrafficSelector {
      *
      * @param ts the provided IkeTrafficSelector to check.
      * @return true if the input IkeTrafficSelector is a subset of this instance, otherwise false.
+     * @hide
      */
     public boolean contains(IkeTrafficSelector ts) {
         if (tsType == ts.tsType
@@ -332,6 +350,7 @@ public final class IkeTrafficSelector {
         return false;
     }
 
+    /** @hide */
     @Override
     public int hashCode() {
         return Objects.hash(
@@ -344,6 +363,7 @@ public final class IkeTrafficSelector {
                 endingAddress);
     }
 
+    /** @hide */
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof IkeTrafficSelector)) return false;
@@ -379,6 +399,7 @@ public final class IkeTrafficSelector {
      * <p>This method will be only called by IkeTsPayload for building an outbound IKE message.
      *
      * @param byteBuffer destination ByteBuffer that stores encoded traffic selector.
+     * @hide
      */
     public void encodeToByteBuffer(ByteBuffer byteBuffer) {
         byteBuffer
