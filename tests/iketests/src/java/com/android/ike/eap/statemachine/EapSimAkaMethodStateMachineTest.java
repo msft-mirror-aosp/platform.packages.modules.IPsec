@@ -65,6 +65,7 @@ import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.MASTE
 import static com.android.ike.eap.statemachine.EapSimAkaMethodStateMachine.SESSION_KEY_LENGTH;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -462,5 +463,13 @@ public class EapSimAkaMethodStateMachineTest {
                         mStateMachine.handleEapSimAkaNotification(TAG, false, ID_INT, typeData);
         assertArrayEquals(EAP_SIM_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
         verify(mStateMachine, never()).transitionTo(any(EapMethodState.class));
+    }
+
+    @Test
+    public void testKeyLengths() {
+        assertEquals(KEY_LEN, mStateMachine.getKEncrLength());
+        assertEquals(KEY_LEN, mStateMachine.getKAutLength());
+        assertEquals(SESSION_KEY_LENGTH, mStateMachine.getMskLength());
+        assertEquals(SESSION_KEY_LENGTH, mStateMachine.getEmskLength());
     }
 }
