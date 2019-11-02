@@ -17,6 +17,7 @@
 package com.android.ike.ikev2;
 
 import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthConfig;
+import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthDigitalSignLocalConfig;
 import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthDigitalSignRemoteConfig;
 import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthEapConfig;
 import static com.android.ike.ikev2.IkeSessionOptions.IkeAuthPskConfig;
@@ -44,7 +45,10 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.net.Inet4Address;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.DSAPrivateKey;
+import java.security.interfaces.RSAPrivateKey;
 
 public final class IkeSessionOptionsTest {
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
@@ -59,6 +63,10 @@ public final class IkeSessionOptionsTest {
     private IkeSaProposal mIkeSaProposal;
     private IkeIdentification mLocalIdentification;
     private IkeIdentification mRemoteIdentification;
+
+    private X509Certificate mMockServerCaCert;
+    private X509Certificate mMockClientEndCert;
+    private PrivateKey mMockRsaPrivateKey;
 
     @Before
     public void setUp() throws Exception {
@@ -76,6 +84,10 @@ public final class IkeSessionOptionsTest {
                         .build();
         mLocalIdentification = new IkeIpv4AddrIdentification(LOCAL_IPV4_ADDRESS);
         mRemoteIdentification = new IkeIpv4AddrIdentification(REMOTE_IPV4_ADDRESS);
+
+        mMockServerCaCert = mock(X509Certificate.class);
+        mMockClientEndCert = mock(X509Certificate.class);
+        mMockRsaPrivateKey = mock(RSAPrivateKey.class);
     }
 
     @After
@@ -121,7 +133,6 @@ public final class IkeSessionOptionsTest {
 
     @Test
     public void testBuildWithEap() throws Exception {
-        X509Certificate mockCert = mock(X509Certificate.class);
         EapSessionConfig eapConfig = mock(EapSessionConfig.class);
 
         IkeSessionOptions sessionOptions =
@@ -131,7 +142,7 @@ public final class IkeSessionOptionsTest {
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
-                        .setAuthEap(mockCert, eapConfig)
+                        .setAuthEap(mMockServerCaCert, eapConfig)
                         .build();
 
         verifyIkeSessionOptionsCommon(sessionOptions);
@@ -145,8 +156,62 @@ public final class IkeSessionOptionsTest {
         assertTrue(remoteConfig instanceof IkeAuthDigitalSignRemoteConfig);
         assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, remoteConfig.mAuthMethod);
         assertEquals(
-                mockCert,
+                mMockServerCaCert,
                 ((IkeAuthDigitalSignRemoteConfig) remoteConfig).mTrustAnchor.getTrustedCert());
+    }
+
+    @Test
+    public void testBuildWithDigitalSignatureAuth() throws Exception {
+        IkeSessionOptions sessionOptions =
+                new IkeSessionOptions.Builder()
+                        .setServerAddress(REMOTE_IPV4_ADDRESS)
+                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthDigitalSignature(
+                                mMockServerCaCert, mMockClientEndCert, mMockRsaPrivateKey)
+                        .build();
+
+        verifyIkeSessionOptionsCommon(sessionOptions);
+
+        IkeAuthConfig localConfig = sessionOptions.getLocalAuthConfig();
+        assertTrue(localConfig instanceof IkeAuthDigitalSignLocalConfig);
+
+        IkeAuthDigitalSignLocalConfig localAuthConfig = (IkeAuthDigitalSignLocalConfig) localConfig;
+        assertEquals(
+                IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, localAuthConfig.mAuthMethod);
+        assertEquals(mMockClientEndCert, localAuthConfig.mEndCert);
+        assertTrue(localAuthConfig.mIntermediateCerts.isEmpty());
+        assertEquals(mMockRsaPrivateKey, localAuthConfig.mPrivateKey);
+
+        IkeAuthConfig remoteConfig = sessionOptions.getRemoteAuthConfig();
+        assertTrue(remoteConfig instanceof IkeAuthDigitalSignRemoteConfig);
+        assertEquals(IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, remoteConfig.mAuthMethod);
+        assertEquals(
+                mMockServerCaCert,
+                ((IkeAuthDigitalSignRemoteConfig) remoteConfig).mTrustAnchor.getTrustedCert());
+    }
+
+    @Test
+    public void testBuildWithDsaDigitalSignatureAuth() throws Exception {
+        try {
+            IkeSessionOptions sessionOptions =
+                    new IkeSessionOptions.Builder()
+                            .setServerAddress(REMOTE_IPV4_ADDRESS)
+                            .setUdpEncapsulationSocket(mUdpEncapSocket)
+                            .addSaProposal(mIkeSaProposal)
+                            .setLocalIdentification(mLocalIdentification)
+                            .setRemoteIdentification(mRemoteIdentification)
+                            .setAuthDigitalSignature(
+                                    mMockServerCaCert,
+                                    mMockClientEndCert,
+                                    mock(DSAPrivateKey.class))
+                            .build();
+            fail("Expected to fail because DSA is not supported");
+        } catch (IllegalArgumentException expected) {
+
+        }
     }
 
     @Test

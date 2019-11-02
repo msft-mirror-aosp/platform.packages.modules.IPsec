@@ -73,10 +73,10 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
     // Session Key lengths are 64 bytes (RFC 4186#7, RFC 4187#7)
     public static final int SESSION_KEY_LENGTH = 64;
 
-    public final byte[] mKEncr = new byte[KEY_LEN];
-    public final byte[] mKAut = new byte[KEY_LEN];
-    public final byte[] mMsk = new byte[SESSION_KEY_LENGTH];
-    public final byte[] mEmsk = new byte[SESSION_KEY_LENGTH];
+    public final byte[] mKEncr = new byte[getKEncrLength()];
+    public final byte[] mKAut = new byte[getKAutLength()];
+    public final byte[] mMsk = new byte[getMskLength()];
+    public final byte[] mEmsk = new byte[getEmskLength()];
 
     @VisibleForTesting boolean mHasReceivedSimAkaNotification = false;
 
@@ -106,9 +106,29 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
                         + " apptype=" + mEapUiccConfig.apptype);
     }
 
+    protected int getKEncrLength() {
+        return KEY_LEN;
+    }
+
+    protected int getKAutLength() {
+        return KEY_LEN;
+    }
+
+    protected int getMskLength() {
+        return SESSION_KEY_LENGTH;
+    }
+
+    protected int getEmskLength() {
+        return SESSION_KEY_LENGTH;
+    }
+
     @Override
     EapResult handleEapNotification(String tag, EapMessage message) {
         return EapStateMachine.handleNotification(tag, message);
+    }
+
+    protected String getMacAlgorithm() {
+        return MAC_ALGORITHM_STRING;
     }
 
     @VisibleForTesting
@@ -190,8 +210,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
     boolean isValidMac(String tag, EapMessage message, EapSimAkaTypeData typeData, byte[] extraData)
             throws GeneralSecurityException, EapSimAkaInvalidAttributeException,
                     EapSilentException {
-        mMacAlgorithm = Mac.getInstance(MAC_ALGORITHM_STRING);
-        mMacAlgorithm.init(new SecretKeySpec(mKAut, MAC_ALGORITHM_STRING));
+        mMacAlgorithm = Mac.getInstance(getMacAlgorithm());
+        mMacAlgorithm.init(new SecretKeySpec(mKAut, getMacAlgorithm()));
 
         byte[] mac = getMac(message.eapCode, message.eapIdentifier, typeData, extraData);
         // attributes are 'valid', so must have AtMac
@@ -203,8 +223,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
             LOG.e(
                     tag,
                     "Received message with invalid Mac."
-                            + " expected=" + Log.byteArrayToHexString(mac)
-                            + ", actual=" + Log.byteArrayToHexString(atMac.mac));
+                            + " received=" + Log.byteArrayToHexString(atMac.mac)
+                            + ", computed=" + Log.byteArrayToHexString(mac));
         }
 
         return isValidMac;
