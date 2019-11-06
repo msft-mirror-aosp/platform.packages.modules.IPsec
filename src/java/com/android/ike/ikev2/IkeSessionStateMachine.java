@@ -538,6 +538,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         sendMessage(CMD_LOCAL_REQUEST_DELETE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
     }
 
+    void killSession() {
+        // TODO: b/142977160 Support closing IKE Sesison immediately.
+    }
+
     private void scheduleRekeySession(LocalRequest rekeyRequest) {
         // TODO: Make rekey timeout fuzzy
         sendMessageDelayed(CMD_LOCAL_REQUEST_REKEY_IKE, rekeyRequest, SA_SOFT_LIFETIME_MS);

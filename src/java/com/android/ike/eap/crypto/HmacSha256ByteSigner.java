@@ -16,8 +16,6 @@
 
 package com.android.ike.eap.crypto;
 
-import static com.android.ike.eap.EapAuthenticator.LOG;
-
 import com.android.ike.crypto.KeyGenerationUtils;
 import com.android.ike.crypto.KeyGenerationUtils.ByteSigner;
 
@@ -52,7 +50,6 @@ public class HmacSha256ByteSigner implements KeyGenerationUtils.ByteSigner {
             mac.init(new SecretKeySpec(keyBytes, MAC_ALGORITHM_STRING));
             return mac.doFinal(dataToSign);
         } catch (NoSuchAlgorithmException | InvalidKeyException ex) {
-            LOG.wtf(TAG, "Error computing HMAC-SHA-256", ex);
             throw new IllegalArgumentException(ex);
         }
     }
