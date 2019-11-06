@@ -42,6 +42,7 @@ import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.EapResult.EapSuccess;
 import com.android.internal.net.eap.crypto.Fips186_2Prf;
+import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.exceptions.EapSilentException;
 import com.android.internal.net.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.internal.net.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
@@ -354,6 +355,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         private final List<Integer> mVersions;
         private final byte[] mNonce;
+        @VisibleForTesting boolean mHadSuccessfulChallenge = false;
         @VisibleForTesting final byte[] mIdentity;
 
         protected ChallengeState(List<Integer> versions, AtNonceMt atNonceMt, byte[] identity) {
@@ -364,6 +366,12 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
 
         public EapResult process(EapMessage message) {
             if (message.eapCode == EAP_CODE_SUCCESS) {
+                if (!mHadSuccessfulChallenge) {
+                    LOG.e(mTAG, "Received unexpected EAP-Success");
+                    return new EapError(
+                            new EapInvalidRequestException(
+                                    "Received an EAP-Success in the ChallengeState"));
+                }
                 transitionTo(new FinalState());
                 return new EapSuccess(mMsk, mEmsk);
             }
@@ -453,6 +461,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             }
 
             // server has been authenticated, so we can send a response
+            mHadSuccessfulChallenge = true;
             return buildResponseMessageWithMac(
                     message.eapIdentifier,
                     EAP_SIM_CHALLENGE,

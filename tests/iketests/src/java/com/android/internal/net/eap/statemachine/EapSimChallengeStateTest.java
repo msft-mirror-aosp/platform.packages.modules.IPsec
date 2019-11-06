@@ -136,6 +136,7 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
     public void testProcessSuccess() throws Exception {
         System.arraycopy(MSK, 0, mEapSimMethodStateMachine.mMsk, 0, MSK.length);
         System.arraycopy(EMSK, 0, mEapSimMethodStateMachine.mEmsk, 0, EMSK.length);
+        mChallengeState.mHadSuccessfulChallenge = true;
 
         EapMessage input = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
         EapResult result = mEapSimMethodStateMachine.process(input);
