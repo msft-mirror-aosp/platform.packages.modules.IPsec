@@ -21,6 +21,7 @@ import static android.telephony.TelephonyManager.APPTYPE_USIM;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.ike.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.ike.eap.message.EapMessage.EAP_HEADER_LENGTH;
+import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_AKA_PRIME_REQUEST;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA;
 import static com.android.ike.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
@@ -63,6 +64,8 @@ import java.security.SecureRandom;
 public class MethodStateTest extends EapStateTest {
     private static final String USERNAME = "username";
     private static final String PASSWORD = "password";
+    private static final String NETWORK_NAME = "android.net";
+    private static final boolean ALLOW_MISMATCHED_NETWORK_NAMES = true;
 
     @Before
     @Override
@@ -102,6 +105,23 @@ public class MethodStateTest extends EapStateTest {
         assertTrue(mEapStateMachine.getState() instanceof MethodState);
         MethodState methodState = (MethodState) mEapStateMachine.getState();
         assertTrue(methodState.mEapMethodStateMachine instanceof EapAkaMethodStateMachine);
+    }
+
+    @Test
+    public void testProcessTransitionToEapAkaPrime() {
+        // make EapStateMachine with EAP-AKA' configurations
+        EapSessionConfig eapSessionConfig =
+                new EapSessionConfig.Builder()
+                        .setEapAkaPrimeConfig(
+                                0, APPTYPE_USIM, NETWORK_NAME, ALLOW_MISMATCHED_NETWORK_NAMES)
+                        .build();
+        mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
+
+        mEapStateMachine.process(EAP_AKA_PRIME_REQUEST);
+
+        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+        MethodState methodState = (MethodState) mEapStateMachine.getState();
+        assertTrue(methodState.mEapMethodStateMachine instanceof EapAkaPrimeMethodStateMachine);
     }
 
     @Test

@@ -67,6 +67,8 @@ public abstract class EapSimAkaAttribute {
     public static final int EAP_AT_COUNTER_TOO_SMALL = 20;
     public static final int EAP_AT_NONCE_S = 21;
     public static final int EAP_AT_CLIENT_ERROR_CODE = 22;
+    public static final int EAP_AT_KDF_INPUT = 23;
+    public static final int EAP_AT_KDF = 24;
 
     // EAP Skippable Attribute values defined by IANA
     // https://www.iana.org/assignments/eapsimaka-numbers/eapsimaka-numbers.xhtml
@@ -76,6 +78,7 @@ public abstract class EapSimAkaAttribute {
     public static final int EAP_AT_NEXT_REAUTH_ID = 133;
     public static final int EAP_AT_CHECKCODE = 134;
     public static final int EAP_AT_RESULT_IND = 135;
+    public static final int EAP_AT_BIDDING = 136;
 
     public static final Map<Integer, String> EAP_ATTRIBUTE_STRING = new HashMap<>();
     static {
@@ -97,6 +100,8 @@ public abstract class EapSimAkaAttribute {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_COUNTER_TOO_SMALL, "AT_COUNTER_TOO_SMALL");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NONCE_S, "AT_NONCE_S");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_CLIENT_ERROR_CODE, "AT_CLIENT_ERROR_CODE");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_KDF_INPUT, "AT_KDF_INPUT");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_KDF, "AT_KDF");
 
         EAP_ATTRIBUTE_STRING.put(EAP_AT_IV, "AT_IV");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_ENCR_DATA, "AT_ENCR_DATA");
@@ -104,6 +109,7 @@ public abstract class EapSimAkaAttribute {
         EAP_ATTRIBUTE_STRING.put(EAP_AT_NEXT_REAUTH_ID, "AT_NEXT_REAUTH_ID");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_CHECKCODE, "AT_CHECKCODE");
         EAP_ATTRIBUTE_STRING.put(EAP_AT_RESULT_IND, "AT_RESULT_IND");
+        EAP_ATTRIBUTE_STRING.put(EAP_AT_BIDDING, "AT_BIDDING");
     }
 
     public final int attributeType;
@@ -778,12 +784,10 @@ public abstract class EapSimAkaAttribute {
             notificationCode = Short.toUnsignedInt(byteBuffer.getShort());
 
             // If Success bit == 0, failure is implied
-            isSuccessCode = (notificationCode & SUCCESS_MASK) == SUCCESS_MASK;
+            isSuccessCode = (notificationCode & SUCCESS_MASK) != 0;
 
             // if Phase bit == 0, notification code can only be used after a successful
-            isPreSuccessfulChallenge =
-                    (notificationCode & PRE_SUCCESSFUL_CHALLENGE_MASK)
-                            == PRE_SUCCESSFUL_CHALLENGE_MASK;
+            isPreSuccessfulChallenge = (notificationCode & PRE_SUCCESSFUL_CHALLENGE_MASK) != 0;
 
             if (isSuccessCode && isPreSuccessfulChallenge) {
                 throw new EapSimAkaInvalidAttributeException("Invalid state specified");
@@ -1044,6 +1048,115 @@ public abstract class EapSimAkaAttribute {
             encodeAttributeHeader(byteBuffer);
 
             byteBuffer.put(auts);
+        }
+    }
+
+    /**
+     * AtKdfInput represents the AT_KDF_INPUT attribute defined in RFC 5448#3.1
+     */
+    public static class AtKdfInput extends EapSimAkaAttribute {
+        public final byte[] networkName;
+
+        public AtKdfInput(int lengthInBytes, ByteBuffer byteBuffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_KDF_INPUT, lengthInBytes);
+
+            int networkNameLength = Short.toUnsignedInt(byteBuffer.getShort());
+            networkName = new byte[networkNameLength];
+            byteBuffer.get(networkName);
+
+            int bytesUsed = MIN_ATTR_LENGTH + networkNameLength;
+            consumePadding(bytesUsed, byteBuffer);
+        }
+
+        @VisibleForTesting
+        public AtKdfInput(int lengthInbytes, byte[] networkName)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_KDF_INPUT, lengthInbytes);
+
+            this.networkName = networkName;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+            byteBuffer.putShort((short) networkName.length);
+            byteBuffer.put(networkName);
+
+            int bytesUsed = MIN_ATTR_LENGTH + networkName.length;
+            addPadding(bytesUsed, byteBuffer);
+        }
+    }
+
+    /**
+     * AdKdf represents the AT_KDF attribute defined in RFC 5448#3.2
+     */
+    public static class AtKdf extends EapSimAkaAttribute {
+        private static final int ATTR_LENGTH = MIN_ATTR_LENGTH;
+
+        public final int kdf;
+
+        public AtKdf(int lengthInBytes, ByteBuffer buffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_KDF, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("AtKdf length must be 4B");
+            }
+
+            kdf = Short.toUnsignedInt(buffer.getShort());
+        }
+
+        @VisibleForTesting
+        public AtKdf(int kdf) throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_KDF, ATTR_LENGTH);
+
+            this.kdf = kdf;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            byteBuffer.putShort((short) kdf);
+        }
+    }
+
+    /**
+     * AtBidding represents the AT_BIDDING attribute defined in RFC 5448#4
+     */
+    public static class AtBidding extends EapSimAkaAttribute {
+        private static final int ATTR_LENGTH = MIN_ATTR_LENGTH;
+        private static final int SUPPORTS_EAP_AKA_PRIME_MASK = 0x8000;
+
+        public final boolean doesServerSupportEapAkaPrime;
+
+        public AtBidding(int lengthInBytes, ByteBuffer buffer)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_BIDDING, lengthInBytes);
+
+            if (lengthInBytes != ATTR_LENGTH) {
+                throw new EapSimAkaInvalidAttributeException("AtBidding length must be 4B");
+            }
+
+            int serverFlag = Short.toUnsignedInt(buffer.getShort());
+            doesServerSupportEapAkaPrime = (serverFlag & SUPPORTS_EAP_AKA_PRIME_MASK) != 0;
+        }
+
+        @VisibleForTesting
+        public AtBidding(boolean doesServerSupportEapAkaPrime)
+                throws EapSimAkaInvalidAttributeException {
+            super(EAP_AT_BIDDING, ATTR_LENGTH);
+
+            this.doesServerSupportEapAkaPrime = doesServerSupportEapAkaPrime;
+        }
+
+        @Override
+        public void encode(ByteBuffer byteBuffer) {
+            encodeAttributeHeader(byteBuffer);
+
+            int flagToWrite = doesServerSupportEapAkaPrime ? SUPPORTS_EAP_AKA_PRIME_MASK : 0;
+            byteBuffer.putShort((short) flagToWrite);
         }
     }
 }

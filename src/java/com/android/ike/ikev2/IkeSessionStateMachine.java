@@ -281,13 +281,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private final IpSecManager mIpSecManager;
     private final IkeLocalRequestScheduler mScheduler;
     private final Executor mUserCbExecutor;
-    private final IIkeSessionCallback mIkeSessionCallback;
+    private final IkeSessionCallback mIkeSessionCallback;
     private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
     private final TempFailureHandler mTempFailHandler;
 
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
-    final HashMap<IChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
+    final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
 
     /**
@@ -334,7 +334,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     // FIXME: b/131265898 Move into CreateIkeLocalIkeAuth, and pass through to
     // CreateIkeLocalIkeAuthPostEap once passing entry data is supported
     private ChildSessionOptions mFirstChildSessionOptions;
-    private IChildSessionCallback mFirstChildCallbacks;
+    private ChildSessionCallback mFirstChildCallbacks;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -384,8 +384,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeSessionOptions ikeOptions,
             ChildSessionOptions firstChildOptions,
             Executor userCbExecutor,
-            IIkeSessionCallback ikeSessionCallback,
-            IChildSessionCallback firstChildSessionCallback,
+            IkeSessionCallback ikeSessionCallback,
+            ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
         super(TAG, looper);
 
@@ -443,8 +443,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeSessionOptions ikeOptions,
             ChildSessionOptions firstChildOptions,
             Executor userCbExecutor,
-            IIkeSessionCallback ikeSessionCallback,
-            IChildSessionCallback firstChildSessionCallback) {
+            IkeSessionCallback ikeSessionCallback,
+            ChildSessionCallback firstChildSessionCallback) {
         this(
                 looper,
                 context,
@@ -457,7 +457,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 new IkeEapAuthenticatorFactory());
     }
 
-    private boolean hasChildSessionCallback(IChildSessionCallback callback) {
+    private boolean hasChildSessionCallback(ChildSessionCallback callback) {
         synchronized (mChildCbToSessions) {
             return mChildCbToSessions.containsKey(callback);
         }
@@ -478,7 +478,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting
     void registerChildSessionCallback(
             ChildSessionOptions childOptions,
-            IChildSessionCallback callbacks,
+            ChildSessionCallback callbacks,
             boolean isFirstChild) {
         synchronized (mChildCbToSessions) {
             if (!isFirstChild && getCurrentState() == null) {
@@ -503,7 +503,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     void openChildSession(
-            ChildSessionOptions childSessionOptions, IChildSessionCallback childSessionCallback) {
+            ChildSessionOptions childSessionOptions, ChildSessionCallback childSessionCallback) {
         if (childSessionCallback == null) {
             throw new IllegalArgumentException("Child Session Callback must be provided");
         }
@@ -520,7 +520,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         CMD_LOCAL_REQUEST_CREATE_CHILD, childSessionCallback, childSessionOptions));
     }
 
-    void closeChildSession(IChildSessionCallback childSessionCallback) {
+    void closeChildSession(ChildSessionCallback childSessionCallback) {
         if (childSessionCallback == null) {
             throw new IllegalArgumentException("Child Session Callback must be provided");
         }
@@ -536,6 +536,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     void closeSession() {
         sendMessage(CMD_LOCAL_REQUEST_DELETE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
+    }
+
+    void killSession() {
+        // TODO: b/142977160 Support closing IKE Sesison immediately.
     }
 
     private void scheduleRekeySession(LocalRequest rekeyRequest) {
@@ -576,7 +580,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                         + " of sync.");
                 mUserCbExecutor.execute(
                         () -> {
-                            mIkeSessionCallback.onError(new IkeInternalException(error));
+                            mIkeSessionCallback.onClosedExceptionally(
+                                    new IkeInternalException(error));
                         });
                 loge("Fatal error", error);
 
@@ -757,13 +762,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     /** Class to group parameters for negotiating the first Child SA. */
     private static class FirstChildNegotiationData {
         public final ChildSessionOptions childSessionOptions;
-        public final IChildSessionCallback childSessionCallback;
+        public final ChildSessionCallback childSessionCallback;
         public final List<IkePayload> reqPayloads;
         public final List<IkePayload> respPayloads;
 
         FirstChildNegotiationData(
                 ChildSessionOptions childSessionOptions,
-                IChildSessionCallback childSessionCallback,
+                ChildSessionCallback childSessionCallback,
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads) {
             this.childSessionOptions = childSessionOptions;
@@ -838,7 +843,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         @Override
-        public void onChildSessionClosed(IChildSessionCallback userCallbacks) {
+        public void onChildSessionClosed(ChildSessionCallback userCallbacks) {
             synchronized (mChildCbToSessions) {
                 mChildCbToSessions.remove(userCallbacks);
             }
@@ -860,7 +865,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             mUserCbExecutor.execute(
                     () -> {
-                        mIkeSessionCallback.onError(new IkeInternalException(e));
+                        mIkeSessionCallback.onClosedExceptionally(new IkeInternalException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
@@ -924,7 +929,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         closeAllSaRecords(false /*expectSaClosed*/);
         mUserCbExecutor.execute(
                 () -> {
-                    mIkeSessionCallback.onError(ikeException);
+                    mIkeSessionCallback.onClosedExceptionally(ikeException);
                 });
         loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
@@ -1970,7 +1975,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        private ChildSessionStateMachine getChildSession(IChildSessionCallback callbacks) {
+        private ChildSessionStateMachine getChildSession(ChildSessionCallback callbacks) {
             synchronized (mChildCbToSessions) {
                 return mChildCbToSessions.get(callbacks);
             }
@@ -2757,7 +2762,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             mUserCbExecutor.execute(
                     () -> {
-                        mIkeSessionCallback.onOpened();
+                        mIkeSessionCallback.onOpened(null /*sessionConfiguration*/);
+                        // TODO: Construct and pass a real IkeSessionConfiguration
                     });
             transitionTo(mChildProcedureOngoing);
         }

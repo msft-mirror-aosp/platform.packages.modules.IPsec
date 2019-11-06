@@ -22,9 +22,14 @@ import android.net.IpSecTransform;
 import com.android.ike.ikev2.exceptions.IkeException;
 
 /** Callback interface for receiving state changes of a Child Session. */
-public interface IChildSessionCallback {
-    /** Called when Child Session setup succeeds. */
-    void onOpened();
+public interface ChildSessionCallback {
+    /**
+     * Called when Child Session setup succeeds.
+     *
+     * @param sessionConfiguration the configuration information of Child Session negotiated during
+     *     Child creation.
+     */
+    void onOpened(ChildSessionConfiguration sessionConfiguration);
 
     /**
      * Called when either side has decided to close this Session and the deletion exchange
@@ -35,11 +40,11 @@ public interface IChildSessionCallback {
     void onClosed();
 
     /**
-     * Called if Child Session setup fails or Child Session is deleted because of a fatal error.
+     * Called if Child Session setup fails or Child Session is closed because of a fatal error.
      *
      * @param exception the detailed error.
      */
-    void onError(IkeException exception);
+    void onClosedExceptionally(IkeException exception);
 
     /**
      * Called when a new {@link IpSecTransform} is created for this Child Session.

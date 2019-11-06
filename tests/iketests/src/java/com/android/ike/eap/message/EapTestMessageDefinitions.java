@@ -225,6 +225,8 @@ public class EapTestMessageDefinitions {
     public static final String EAP_AKA_UICC_RESP_SUCCESS_BASE_64 =
             "2wURIjNEVRAAESIzRFVmd4iZqrvM3e7/EP/u3cy7qpmId2ZVRDMiEQA=";
 
+    public static final byte[] EAP_AKA_AUTHENTICATION_REJECT =
+            hexStringToByteArray("02" + ID + "000817020000");
     public static final String EAP_AKA_CHALLENGE_RESPONSE_MAC = "C70366512D9C5EBA8E3484509A25DCE4";
     public static final byte[] EAP_AKA_CHALLENGE_RESPONSE_MAC_BYTES =
             hexStringToByteArray(EAP_AKA_CHALLENGE_RESPONSE_MAC);
@@ -305,4 +307,21 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_MSCHAP_V2_FAILURE_RESPONSE =
             hexStringToByteArray("02" + ID + "0006" // EAP-Response | ID | length in bytes
                     + "1A04"); // EAP-MSCHAPv2 | Failure
+
+    public static final byte[] EAP_AKA_PRIME_REQUEST =
+            hexStringToByteArray("01" + ID + "000832050000");
+    public static final byte[] EAP_AKA_PRIME_CLIENT_ERROR_UNABLE_TO_PROCESS =
+            hexStringToByteArray("02" + ID + "000C320E000016010000");
+    public static final String EAP_AKA_PRIME_IDENTITY = "36313233343536373839303132333435";
+    public static final byte[] EAP_AKA_PRIME_IDENTITY_BYTES =
+            hexStringToByteArray(EAP_AKA_PRIME_IDENTITY);
+    public static final byte[] EAP_AKA_PRIME_IDENTITY_RESPONSE =
+            hexStringToByteArray(
+                    "02" + ID + "001C" // EAP-Response | ID | length in bytes
+                            + "32050000" // EAP-AKA' | Identity | 2B padding
+                            + "0E050010" + EAP_AKA_PRIME_IDENTITY); // AT_IDENTITY ("6" + IMSI)
+    public static final byte[] EAP_AKA_PRIME_AUTHENTICATION_REJECT =
+            hexStringToByteArray(
+                    "02" + ID + "0008" // EAP-Response | ID | length in bytes
+                            + "32020000"); // EAP-AKA' | Authentication Reject | 2B padding
 }

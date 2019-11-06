@@ -20,23 +20,31 @@ import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
 import static com.android.ike.eap.EapSessionConfig.DEFAULT_IDENTITY;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.android.ike.eap.EapSessionConfig.EapAkaConfig;
+import com.android.ike.eap.EapSessionConfig.EapAkaPrimeConfig;
 import com.android.ike.eap.EapSessionConfig.EapMethodConfig;
 import com.android.ike.eap.EapSessionConfig.EapMsChapV2Config;
 import com.android.ike.eap.EapSessionConfig.EapSimConfig;
 
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
+
 public class EapSessionConfigTest {
-    private static final byte[] EAP_IDENTITY = "test@android.net".getBytes();
+    private static final byte[] EAP_IDENTITY =
+            "test@android.net".getBytes(StandardCharsets.US_ASCII);
     private static final int SUB_ID = 1;
+    private static final String NETWORK_NAME = "android.net";
+    private static final boolean ALLOW_MISMATCHED_NETWORK_NAMES = true;
     private static final String USERNAME = "username";
     private static final String PASSWORD = "password";
 
@@ -67,6 +75,23 @@ public class EapSessionConfigTest {
         EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
         assertEquals(SUB_ID, eapAkaConfig.subId);
         assertEquals(APPTYPE_USIM, eapAkaConfig.apptype);
+    }
+
+    @Test
+    public void testBuildEapAkaPrime() {
+        EapSessionConfig result =
+                new EapSessionConfig.Builder()
+                        .setEapAkaPrimeConfig(
+                                SUB_ID, APPTYPE_USIM, NETWORK_NAME, ALLOW_MISMATCHED_NETWORK_NAMES)
+                        .build();
+
+        assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
+        EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_AKA_PRIME);
+        EapAkaPrimeConfig eapAkaPrimeConfig = (EapAkaPrimeConfig) eapMethodConfig;
+        assertEquals(SUB_ID, eapAkaPrimeConfig.subId);
+        assertEquals(APPTYPE_USIM, eapAkaPrimeConfig.apptype);
+        assertEquals(NETWORK_NAME, eapAkaPrimeConfig.networkName);
+        assertTrue(eapAkaPrimeConfig.allowMismatchedNetworkNames);
     }
 
     @Test

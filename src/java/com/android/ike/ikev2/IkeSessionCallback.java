@@ -16,12 +16,19 @@
 
 package com.android.ike.ikev2;
 
+import android.annotation.NonNull;
+
 import com.android.ike.ikev2.exceptions.IkeException;
 
 /** Callback interface for receiving state changes of an IKE Session. */
-public interface IIkeSessionCallback {
-    /** Called when negotiation and authentication for this new IKE Session succeeds. */
-    void onOpened();
+public interface IkeSessionCallback {
+    /**
+     * Called when negotiation and authentication for this new IKE Session succeeds.
+     *
+     * @param sessionConfiguration the configuration information of IKE Session negotiated during
+     *     IKE setup.
+     */
+    void onOpened(@NonNull IkeSessionConfiguration sessionConfiguration);
 
     /**
      * Called when either side has decided to close this Session and the deletion exchange
@@ -32,11 +39,11 @@ public interface IIkeSessionCallback {
     void onClosed();
 
     /**
-     * Called if IKE Session negotiation fails or IKE Session is deleted because of a fatal error.
+     * Called if IKE Session negotiation fails or IKE Session is closed because of a fatal error.
      *
      * @param exception the detailed error.
      */
-    void onError(IkeException exception);
+    void onClosedExceptionally(IkeException exception);
 
     /**
      * Called if a recoverable error is encountered in an established IKE Session.
@@ -47,5 +54,5 @@ public interface IIkeSessionCallback {
      *
      * @param exception the detailed error.
      */
-    void onInfo(IkeException exception);
+    void onError(IkeException exception);
 }

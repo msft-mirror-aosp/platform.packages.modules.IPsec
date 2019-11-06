@@ -17,7 +17,9 @@
 package com.android.ike.ikev2.message;
 
 import com.android.ike.ikev2.crypto.IkeCipher;
+import com.android.ike.ikev2.crypto.IkeCombinedModeCipher;
 import com.android.ike.ikev2.crypto.IkeMacIntegrity;
+import com.android.ike.ikev2.crypto.IkeNormalModeCipher;
 import com.android.ike.ikev2.exceptions.IkeProtocolException;
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -26,6 +28,7 @@ import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.util.Arrays;
 
+import javax.crypto.AEADBadTagException;
 import javax.crypto.IllegalBlockSizeException;
 
 /**
@@ -35,6 +38,15 @@ import javax.crypto.IllegalBlockSizeException;
  *
  * <p>Both an Encrypted Payload (IkeSkPayload) and an EncryptedFragmentPayload (IkeSkfPayload)
  * consists of an IkeEncryptedPayloadBody instance.
+ *
+ * <p>When using normal cipher with separate integrity algorithm, data to authenticate includes
+ * bytes from beginning of IKE header to the pad length, which are concatenation of IKE header,
+ * current payload header, iv and encrypted and padded data.
+ *
+ * <p>When using AEAD, additional authentication data(also known as) associated data is required. It
+ * MUST include bytes from beginning of IKE header to the last octet of the Payload Header of the
+ * Encrypted Payload. Note fragment number and total fragments are also included if Encrypted
+ * Payload is SKF.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#page-105">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
@@ -71,7 +83,7 @@ final class IkeEncryptedPayloadBody {
         int expectedIvLen = decryptCipher.getIvLen();
         mIv = new byte[expectedIvLen];
 
-        int checksumLen = integrityMac.getChecksumLen();
+        int checksumLen = getChecksum(integrityMac, decryptCipher);
         int encryptedDataLen = message.length - (encryptedBodyOffset + expectedIvLen + checksumLen);
         // IkeMessage will catch exception if encryptedDataLen is negative.
         mEncryptedAndPaddedData = new byte[encryptedDataLen];
@@ -79,10 +91,29 @@ final class IkeEncryptedPayloadBody {
         mIntegrityChecksum = new byte[checksumLen];
         inputBuffer.get(mIv).get(mEncryptedAndPaddedData).get(mIntegrityChecksum);
 
-        // Authenticate and decrypt.
-        byte[] dataToAuthenticate = Arrays.copyOfRange(message, 0, message.length - checksumLen);
-        validateChecksumOrThrow(dataToAuthenticate, integrityMac, integrityKey, mIntegrityChecksum);
-        mUnencryptedData = decrypt(mEncryptedAndPaddedData, decryptCipher, decryptionKey, mIv);
+        if (decryptCipher.isAead()) {
+            byte[] dataToAuthenticate = Arrays.copyOfRange(message, 0, encryptedBodyOffset);
+            mUnencryptedData =
+                    combinedModeDecrypt(
+                            (IkeCombinedModeCipher) decryptCipher,
+                            mEncryptedAndPaddedData,
+                            mIntegrityChecksum,
+                            dataToAuthenticate,
+                            decryptionKey,
+                            mIv);
+        } else {
+            byte[] dataToAuthenticate =
+                    Arrays.copyOfRange(message, 0, message.length - checksumLen);
+
+            validateInboundChecksumOrThrow(
+                    dataToAuthenticate, integrityMac, integrityKey, mIntegrityChecksum);
+            mUnencryptedData =
+                    normalModeDecrypt(
+                            mEncryptedAndPaddedData,
+                            (IkeNormalModeCipher) decryptCipher,
+                            decryptionKey,
+                            mIv);
+        }
     }
 
     /**
@@ -92,6 +123,7 @@ final class IkeEncryptedPayloadBody {
     IkeEncryptedPayloadBody(
             IkeHeader ikeHeader,
             @IkePayload.PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
             byte[] unencryptedPayloads,
             IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
@@ -100,6 +132,7 @@ final class IkeEncryptedPayloadBody {
         this(
                 ikeHeader,
                 firstPayloadType,
+                skfHeaderBytes,
                 unencryptedPayloads,
                 integrityMac,
                 encryptCipher,
@@ -114,6 +147,7 @@ final class IkeEncryptedPayloadBody {
     IkeEncryptedPayloadBody(
             IkeHeader ikeHeader,
             @IkePayload.PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
             byte[] unencryptedPayloads,
             IkeMacIntegrity integrityMac,
             IkeCipher encryptCipher,
@@ -123,53 +157,91 @@ final class IkeEncryptedPayloadBody {
             byte[] padding) {
         mUnencryptedData = unencryptedPayloads;
 
-        // Encrypt data
         mIv = iv;
-        mEncryptedAndPaddedData =
-                encrypt(unencryptedPayloads, encryptCipher, encryptionKey, iv, padding);
+        if (encryptCipher.isAead()) {
+            byte[] paddedDataWithChecksum =
+                    combinedModeEncrypt(
+                            (IkeCombinedModeCipher) encryptCipher,
+                            ikeHeader,
+                            firstPayloadType,
+                            skfHeaderBytes,
+                            unencryptedPayloads,
+                            encryptionKey,
+                            iv,
+                            padding);
 
-        // Build authenticated section using ByteBuffer. Authenticated section includes bytes from
-        // beginning of IKE header to the pad length, which are concatenation of IKE header, current
-        // payload header, iv and encrypted and padded data.
-        int dataToAuthenticateLength =
-                IkeHeader.IKE_HEADER_LENGTH
-                        + IkePayload.GENERIC_HEADER_LENGTH
-                        + iv.length
-                        + mEncryptedAndPaddedData.length;
-        ByteBuffer authenticatedSectionBuffer = ByteBuffer.allocate(dataToAuthenticateLength);
+            int checkSumLen = ((IkeCombinedModeCipher) encryptCipher).getChecksumLen();
+            mIntegrityChecksum = new byte[checkSumLen];
+            mEncryptedAndPaddedData = new byte[paddedDataWithChecksum.length - checkSumLen];
 
-        // Encode IKE header
-        int checksumLen = integrityMac.getChecksumLen();
-        int encryptedPayloadLength =
-                IkePayload.GENERIC_HEADER_LENGTH
-                        + iv.length
-                        + mEncryptedAndPaddedData.length
-                        + checksumLen;
-        ikeHeader.encodeToByteBuffer(authenticatedSectionBuffer, encryptedPayloadLength);
-
-        // Encode payload header. The next payload type field indicates the first payload nested in
-        // this SkPayload/SkfPayload.
-        int payloadLength =
-                IkePayload.GENERIC_HEADER_LENGTH
-                        + iv.length
-                        + mEncryptedAndPaddedData.length
-                        + checksumLen;
-        IkePayload.encodePayloadHeaderToByteBuffer(
-                firstPayloadType, payloadLength, authenticatedSectionBuffer);
-
-        // Encode iv and padded encrypted data.
-        authenticatedSectionBuffer.put(iv).put(mEncryptedAndPaddedData);
-
-        // Calculate checksum
-        mIntegrityChecksum =
-                integrityMac.generateChecksum(integrityKey, authenticatedSectionBuffer.array());
+            ByteBuffer buffer = ByteBuffer.wrap(paddedDataWithChecksum);
+            buffer.get(mEncryptedAndPaddedData);
+            buffer.get(mIntegrityChecksum);
+        } else {
+            // Encrypt data
+            mEncryptedAndPaddedData =
+                    normalModeEncrypt(
+                            unencryptedPayloads,
+                            (IkeNormalModeCipher) encryptCipher,
+                            encryptionKey,
+                            iv,
+                            padding);
+            // Calculate checksum
+            mIntegrityChecksum =
+                    generateOutboundChecksum(
+                            ikeHeader,
+                            firstPayloadType,
+                            skfHeaderBytes,
+                            integrityMac,
+                            iv,
+                            mEncryptedAndPaddedData,
+                            integrityKey);
+        }
     }
 
-    // TODO: Add another constructor for AEAD protected payload.
+    private int getChecksum(IkeMacIntegrity integrityMac, IkeCipher decryptCipher) {
+        if (decryptCipher.isAead()) {
+            return ((IkeCombinedModeCipher) decryptCipher).getChecksumLen();
+        } else {
+            return integrityMac.getChecksumLen();
+        }
+    }
 
     /** Package private for testing */
     @VisibleForTesting
-    static void validateChecksumOrThrow(
+    static byte[] generateOutboundChecksum(
+            IkeHeader ikeHeader,
+            @IkePayload.PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
+            IkeMacIntegrity integrityMac,
+            byte[] iv,
+            byte[] encryptedAndPaddedData,
+            byte[] integrityKey) {
+        // Length from encrypted payload header to the Pad Length field
+        int encryptedPayloadHeaderToPadLen =
+                IkePayload.GENERIC_HEADER_LENGTH
+                        + skfHeaderBytes.length
+                        + iv.length
+                        + encryptedAndPaddedData.length;
+
+        // Calculate length of authentication data and allocate ByteBuffer.
+        int dataToAuthenticateLength = IkeHeader.IKE_HEADER_LENGTH + encryptedPayloadHeaderToPadLen;
+        ByteBuffer authenticatedSectionBuffer = ByteBuffer.allocate(dataToAuthenticateLength);
+
+        // Build data to authenticate.
+        int encryptedPayloadLength = encryptedPayloadHeaderToPadLen + integrityMac.getChecksumLen();
+        ikeHeader.encodeToByteBuffer(authenticatedSectionBuffer, encryptedPayloadLength);
+        IkePayload.encodePayloadHeaderToByteBuffer(
+                firstPayloadType, encryptedPayloadLength, authenticatedSectionBuffer);
+        authenticatedSectionBuffer.put(skfHeaderBytes).put(iv).put(encryptedAndPaddedData);
+
+        // Calculate checksum
+        return integrityMac.generateChecksum(integrityKey, authenticatedSectionBuffer.array());
+    }
+
+    /** Package private for testing */
+    @VisibleForTesting
+    static void validateInboundChecksumOrThrow(
             byte[] dataToAuthenticate,
             IkeMacIntegrity integrityMac,
             byte[] integrityKey,
@@ -186,33 +258,85 @@ final class IkeEncryptedPayloadBody {
 
     /** Package private for testing */
     @VisibleForTesting
-    static byte[] encrypt(
+    static byte[] normalModeEncrypt(
             byte[] dataToEncrypt,
-            IkeCipher encryptCipher,
+            IkeNormalModeCipher encryptCipher,
             byte[] encryptionKey,
             byte[] iv,
             byte[] padding) {
-        int padLength = padding.length;
-        int paddedDataLength = dataToEncrypt.length + padLength + PAD_LEN_LEN;
-        ByteBuffer inputBuffer = ByteBuffer.allocate(paddedDataLength);
-        inputBuffer.put(dataToEncrypt).put(padding).put((byte) padLength);
+        byte[] paddedData = getPaddedData(dataToEncrypt, padding);
 
         // Encrypt data.
-        return encryptCipher.encrypt(inputBuffer.array(), encryptionKey, iv);
+        return encryptCipher.encrypt(paddedData, encryptionKey, iv);
     }
 
     /** Package private for testing */
     @VisibleForTesting
-    static byte[] decrypt(
-            byte[] encryptedData, IkeCipher decryptCipher, byte[] decryptionKey, byte[] iv)
+    static byte[] normalModeDecrypt(
+            byte[] encryptedData,
+            IkeNormalModeCipher decryptCipher,
+            byte[] decryptionKey,
+            byte[] iv)
             throws IllegalBlockSizeException {
-        byte[] decryptedPaddedData = decryptCipher.decrypt(encryptedData, decryptionKey, iv);
+        byte[] paddedPlaintext = decryptCipher.decrypt(encryptedData, decryptionKey, iv);
 
-        // Remove padding. Pad length value is the last byte of the padded unencrypted data.
-        int padLength = Byte.toUnsignedInt(decryptedPaddedData[encryptedData.length - 1]);
-        int decryptedDataLen = encryptedData.length - padLength - PAD_LEN_LEN;
+        return stripPadding(paddedPlaintext);
+    }
 
-        return Arrays.copyOfRange(decryptedPaddedData, 0, decryptedDataLen);
+    /** Package private for testing */
+    @VisibleForTesting
+    static byte[] combinedModeEncrypt(
+            IkeCombinedModeCipher encryptCipher,
+            IkeHeader ikeHeader,
+            @IkePayload.PayloadType int firstPayloadType,
+            byte[] skfHeaderBytes,
+            byte[] dataToEncrypt,
+            byte[] encryptionKey,
+            byte[] iv,
+            byte[] padding) {
+        int dataToAuthenticateLength =
+                IkeHeader.IKE_HEADER_LENGTH
+                        + IkePayload.GENERIC_HEADER_LENGTH
+                        + skfHeaderBytes.length;
+        ByteBuffer authenticatedSectionBuffer = ByteBuffer.allocate(dataToAuthenticateLength);
+
+        byte[] paddedData = getPaddedData(dataToEncrypt, padding);
+        int encryptedPayloadLength =
+                IkePayload.GENERIC_HEADER_LENGTH
+                        + skfHeaderBytes.length
+                        + iv.length
+                        + paddedData.length
+                        + encryptCipher.getChecksumLen();
+        ikeHeader.encodeToByteBuffer(authenticatedSectionBuffer, encryptedPayloadLength);
+        IkePayload.encodePayloadHeaderToByteBuffer(
+                firstPayloadType, encryptedPayloadLength, authenticatedSectionBuffer);
+        authenticatedSectionBuffer.put(skfHeaderBytes);
+
+        return encryptCipher.encrypt(
+                paddedData, authenticatedSectionBuffer.array(), encryptionKey, iv);
+    }
+
+    /** Package private for testing */
+    @VisibleForTesting
+    static byte[] combinedModeDecrypt(
+            IkeCombinedModeCipher decryptCipher,
+            byte[] encryptedData,
+            byte[] checksum,
+            byte[] dataToAuthenticate,
+            byte[] decryptionKey,
+            byte[] iv)
+            throws AEADBadTagException {
+        ByteBuffer dataWithChecksumBuffer =
+                ByteBuffer.allocate(encryptedData.length + checksum.length);
+        dataWithChecksumBuffer.put(encryptedData);
+        dataWithChecksumBuffer.put(checksum);
+        dataWithChecksumBuffer.rewind();
+
+        byte[] paddedPlaintext =
+                decryptCipher.decrypt(
+                        dataWithChecksumBuffer.array(), dataToAuthenticate, decryptionKey, iv);
+
+        return stripPadding(paddedPlaintext);
     }
 
     /** Package private for testing */
@@ -227,6 +351,23 @@ final class IkeEncryptedPayloadBody {
         new SecureRandom().nextBytes(padding);
 
         return padding;
+    }
+
+    private static byte[] getPaddedData(byte[] data, byte[] padding) {
+        int padLength = padding.length;
+        int paddedDataLength = data.length + padLength + PAD_LEN_LEN;
+        ByteBuffer padBuffer = ByteBuffer.allocate(paddedDataLength);
+        padBuffer.put(data).put(padding).put((byte) padLength);
+
+        return padBuffer.array();
+    }
+
+    private static byte[] stripPadding(byte[] paddedPlaintext) {
+        // Remove padding. Pad length value is the last byte of the padded unencrypted data.
+        int padLength = Byte.toUnsignedInt(paddedPlaintext[paddedPlaintext.length - 1]);
+        int decryptedDataLen = paddedPlaintext.length - padLength - PAD_LEN_LEN;
+
+        return Arrays.copyOfRange(paddedPlaintext, 0, decryptedDataLen);
     }
 
     /** Package private */

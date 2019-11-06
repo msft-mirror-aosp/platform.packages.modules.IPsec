@@ -17,6 +17,7 @@
 package com.android.ike.eap;
 
 import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA;
+import static com.android.ike.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.ike.eap.message.EapData.EAP_TYPE_SIM;
 
@@ -99,6 +100,31 @@ public final class EapSessionConfig {
         }
 
         /**
+         * Sets the configuration for EAP AKA'.
+         *
+         * @param subId int the client's subId to be authenticated
+         * @param apptype the {@link UiccAppType} apptype to be used for authentication
+         * @param networkName String the network name to be used for authentication. The String must
+         *     be a UTF-8 String value
+         * @param allowMismatchedNetworkNames indicates whether the EAP library can ignore potential
+         *     mismatches between the given network name and that received in an EAP-AKA' session.
+         *     If false, mismatched network names will be handled as an Authentication Reject
+         *     message.
+         * @return Builder this, to facilitate chaining
+         */
+        public Builder setEapAkaPrimeConfig(
+                int subId,
+                @UiccAppType int apptype,
+                String networkName,
+                boolean allowMismatchedNetworkNames) {
+            mEapConfigs.put(
+                    EAP_TYPE_AKA_PRIME,
+                    new EapAkaPrimeConfig(
+                            subId, apptype, networkName, allowMismatchedNetworkNames));
+            return this;
+        }
+
+        /**
          * Sets the configuration for EAP MSCHAPv2.
          *
          * @param username String the client account's username to be authenticated
@@ -167,6 +193,26 @@ public final class EapSessionConfig {
         @VisibleForTesting
         public EapAkaConfig(int subId, @UiccAppType int apptype) {
             super(EAP_TYPE_AKA, subId, apptype);
+        }
+    }
+
+    /**
+     * EapAkaPrimeConfig represents the configs needed for an EAP-AKA' session.
+     */
+    public static class EapAkaPrimeConfig extends EapAkaConfig {
+        public final String networkName;
+        public final boolean allowMismatchedNetworkNames;
+
+        @VisibleForTesting
+        public EapAkaPrimeConfig(
+                int subId,
+                @UiccAppType int apptype,
+                String networkName,
+                boolean allowMismatchedNetworkNames) {
+            super(subId, apptype);
+
+            this.networkName = networkName;
+            this.allowMismatchedNetworkNames = allowMismatchedNetworkNames;
         }
     }
 

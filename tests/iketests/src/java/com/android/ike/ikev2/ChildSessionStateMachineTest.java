@@ -16,6 +16,8 @@
 
 package com.android.ike.ikev2;
 
+import static android.system.OsConstants.AF_INET;
+
 import static com.android.ike.ikev2.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.ike.ikev2.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
 import static com.android.ike.ikev2.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
@@ -27,6 +29,7 @@ import static com.android.ike.ikev2.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.ike.ikev2.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.ike.ikev2.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
+import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_CP;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_DELETE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_KE;
 import static com.android.ike.ikev2.message.IkePayload.PAYLOAD_TYPE_NONCE;
@@ -64,6 +67,7 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
+import android.net.LinkAddress;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -84,6 +88,10 @@ import com.android.ike.ikev2.exceptions.IkeInternalException;
 import com.android.ike.ikev2.exceptions.InvalidKeException;
 import com.android.ike.ikev2.exceptions.InvalidSyntaxException;
 import com.android.ike.ikev2.exceptions.NoValidProposalChosenException;
+import com.android.ike.ikev2.message.IkeConfigPayload;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttribute;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.ike.ikev2.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.ike.ikev2.message.IkeDeletePayload;
 import com.android.ike.ikev2.message.IkeKePayload;
 import com.android.ike.ikev2.message.IkeMessage;
@@ -113,6 +121,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -124,6 +133,10 @@ public final class ChildSessionStateMachineTest {
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+    private static final Inet4Address INTERNAL_ADDRESS =
+            (Inet4Address) (InetAddressUtils.parseNumericAddress("203.0.113.100"));
+
+    private static final int IPV4_PREFIX_LEN = 32;
 
     private static final String IKE_AUTH_RESP_SA_PAYLOAD =
             "2c00002c0000002801030403cae7019f0300000c0100000c800e0080"
@@ -181,13 +194,16 @@ public final class ChildSessionStateMachineTest {
     private ChildSaProposal mMockNegotiatedProposal;
 
     private Executor mSpyUserCbExecutor;
-    private IChildSessionCallback mMockChildSessionCallback;
+    private ChildSessionCallback mMockChildSessionCallback;
     private IChildSessionSmCallback mMockChildSessionSmCallback;
 
     private ArgumentCaptor<ChildSaRecordConfig> mChildSaRecordConfigCaptor =
             ArgumentCaptor.forClass(ChildSaRecordConfig.class);
     private ArgumentCaptor<List<IkePayload>> mPayloadListCaptor =
             ArgumentCaptor.forClass(List.class);
+    private ArgumentCaptor<ChildSessionConfiguration> mChildConfigCaptor =
+            ArgumentCaptor.forClass(ChildSessionConfiguration.class);
+
     private ArgumentMatcher<ChildLocalRequest> mRekeyChildLocalReqMatcher =
             (argument) -> {
                 return CMD_LOCAL_REQUEST_REKEY_CHILD == argument.procedureType
@@ -230,7 +246,7 @@ public final class ChildSessionStateMachineTest {
                             command.run();
                         });
 
-        mMockChildSessionCallback = mock(IChildSessionCallback.class);
+        mMockChildSessionCallback = mock(ChildSessionCallback.class);
         mChildSessionOptions = buildChildSessionOptions();
 
         // Setup thread and looper
@@ -269,7 +285,11 @@ public final class ChildSessionStateMachineTest {
     }
 
     private ChildSessionOptions buildChildSessionOptions() throws Exception {
-        return new TunnelModeChildSessionOptions.Builder().addSaProposal(buildSaProposal()).build();
+        return new TunnelModeChildSessionOptions.Builder()
+                .addSaProposal(buildSaProposal())
+                .addInternalAddressRequest(AF_INET, 1)
+                .addInternalAddressRequest(INTERNAL_ADDRESS, IPV4_PREFIX_LEN)
+                .build();
     }
 
     private void setUpChildSaRecords() {
@@ -321,6 +341,17 @@ public final class ChildSessionStateMachineTest {
         // Build Nonce Payloads
         mFirstSaReqPayloads.add(new IkeNoncePayload());
         mFirstSaRespPayloads.add(new IkeNoncePayload());
+
+        // Build Config Request Payload
+        List<ConfigAttribute> attrReqList = new LinkedList<>();
+        attrReqList.add(new ConfigAttributeIpv4Address(INTERNAL_ADDRESS));
+        attrReqList.add(new ConfigAttributeIpv4Netmask());
+        mFirstSaReqPayloads.add(new IkeConfigPayload(false /*isReply*/, attrReqList));
+
+        // Build Config Reply Payload
+        List<ConfigAttribute> attrRespList = new LinkedList<>();
+        attrRespList.add(new ConfigAttributeIpv4Address(INTERNAL_ADDRESS));
+        mFirstSaRespPayloads.add(new IkeConfigPayload(true /*isReply*/, attrRespList));
     }
 
     private ChildSaRecord makeSpyChildSaRecord(int inboundSpi, int outboundSpi) {
@@ -444,7 +475,29 @@ public final class ChildSessionStateMachineTest {
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verifyNotifyUsersCreateIpSecSa(mSpyCurrentChildSaRecord, true /*expectInbound*/);
         verifyNotifyUsersCreateIpSecSa(mSpyCurrentChildSaRecord, false /*expectInbound*/);
-        verify(mMockChildSessionCallback).onOpened();
+        verify(mMockChildSessionCallback).onOpened(mChildConfigCaptor.capture());
+
+        // Verify Child Session Configuration
+        ChildSessionConfiguration sessionConfig = mChildConfigCaptor.getValue();
+        verifyTsList(
+                Arrays.asList(mChildSessionOptions.getLocalTrafficSelectors()),
+                sessionConfig.getInboundTrafficSelectors());
+        verifyTsList(
+                Arrays.asList(mChildSessionOptions.getRemoteTrafficSelectors()),
+                sessionConfig.getOutboundTrafficSelectors());
+
+        List<LinkAddress> addrList = sessionConfig.getInternalAddressList();
+        assertEquals(1, addrList.size());
+        assertEquals(INTERNAL_ADDRESS, addrList.get(0).getAddress());
+        assertEquals(IPV4_PREFIX_LEN, addrList.get(0).getPrefixLength());
+    }
+
+    private void verifyTsList(
+            List<IkeTrafficSelector> expectedList, List<IkeTrafficSelector> tsList) {
+        assertEquals(expectedList.size(), tsList.size());
+        for (int i = 0; i < expectedList.size(); i++) {
+            assertEquals(expectedList.get(i), tsList.get(i));
+        }
     }
 
     @Test
@@ -467,7 +520,8 @@ public final class ChildSessionStateMachineTest {
         quitAndVerify();
     }
 
-    private void verifyOutboundCreatePayloadTypes(List<IkePayload> outboundPayloads) {
+    private void verifyOutboundCreatePayloadTypes(
+            List<IkePayload> outboundPayloads, boolean isRekey) {
         assertNotNull(
                 IkePayload.getPayloadForTypeInProvidedList(
                         PAYLOAD_TYPE_SA, IkeSaPayload.class, outboundPayloads));
@@ -483,6 +537,16 @@ public final class ChildSessionStateMachineTest {
         assertNull(
                 IkePayload.getPayloadForTypeInProvidedList(
                         PAYLOAD_TYPE_KE, IkeKePayload.class, outboundPayloads));
+
+        IkeConfigPayload configPayload =
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_CP, IkeConfigPayload.class, outboundPayloads);
+        if (isRekey) {
+            assertNull(configPayload);
+        } else {
+            assertNotNull(configPayload);
+            assertEquals(IkeConfigPayload.CONFIG_TYPE_REQUEST, configPayload.configType);
+        }
     }
 
     @Test
@@ -503,7 +567,7 @@ public final class ChildSessionStateMachineTest {
                         eq(mChildSessionStateMachine));
 
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
-        verifyOutboundCreatePayloadTypes(reqPayloadList);
+        verifyOutboundCreatePayloadTypes(reqPayloadList, false /*isRekey*/);
         assertTrue(
                 IkePayload.getPayloadListForTypeInProvidedList(
                                 PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, reqPayloadList)
@@ -523,7 +587,7 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
         verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
 
-        verify(mMockChildSessionCallback).onError(any(exceptionClass));
+        verify(mMockChildSessionCallback).onClosedExceptionally(any(exceptionClass));
     }
 
     @Test
@@ -700,7 +764,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         assertNull(mChildSessionStateMachine.getCurrentState());
-        verify(mMockChildSessionCallback).onError(any(InvalidSyntaxException.class));
+        verify(mMockChildSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
         verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
     }
 
@@ -841,7 +905,7 @@ public final class ChildSessionStateMachineTest {
 
         // Verify outbound payload list
         List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
-        verifyOutboundCreatePayloadTypes(reqPayloadList);
+        verifyOutboundCreatePayloadTypes(reqPayloadList, true /*isRekey*/);
 
         verifyOutboundRekeySaPayload(reqPayloadList, false /*isResp*/);
         verifyOutboundRekeyNotifyPayload(reqPayloadList);
@@ -1177,7 +1241,7 @@ public final class ChildSessionStateMachineTest {
                         mPayloadListCaptor.capture(),
                         eq(mChildSessionStateMachine));
         List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
-        verifyOutboundCreatePayloadTypes(respPayloadList);
+        verifyOutboundCreatePayloadTypes(respPayloadList, true /*isRekey*/);
 
         verifyOutboundRekeySaPayload(respPayloadList, true /*isResp*/);
         verifyOutboundRekeyNotifyPayload(respPayloadList);

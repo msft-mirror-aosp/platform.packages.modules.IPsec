@@ -100,6 +100,7 @@ public class EapData {
         SUPPORTED_TYPES.add(EAP_TYPE_SIM);
         SUPPORTED_TYPES.add(EAP_TYPE_AKA);
         SUPPORTED_TYPES.add(EAP_TYPE_MSCHAP_V2);
+        SUPPORTED_TYPES.add(EAP_TYPE_AKA_PRIME);
     }
 
     @EapType public final int eapType;
