@@ -54,8 +54,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         mConfigRequests = configRequests;
     }
 
-    /** Package private */
-    ConfigAttribute[] getConfigurationRequests() {
+    public ConfigAttribute[] getConfigurationRequests() {
         return mConfigRequests;
     }
 

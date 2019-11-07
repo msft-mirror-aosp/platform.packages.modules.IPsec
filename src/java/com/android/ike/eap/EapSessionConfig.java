@@ -46,7 +46,7 @@ public final class EapSessionConfig {
     public final byte[] eapIdentity;
 
     @VisibleForTesting
-    EapSessionConfig(Map<Integer, EapMethodConfig> eapConfigs, byte[] eapIdentity) {
+    public EapSessionConfig(Map<Integer, EapMethodConfig> eapConfigs, byte[] eapIdentity) {
         this.eapConfigs = Collections.unmodifiableMap(eapConfigs);
         this.eapIdentity = eapIdentity;
     }

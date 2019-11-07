@@ -80,13 +80,15 @@ public final class IkeManager {
         return sIkeLog;
     }
 
+    /** Injects IKE logger for testing. */
     @VisibleForTesting
-    static void setIkeLog(Log log) {
+    public static void setIkeLog(Log log) {
         sIkeLog = log;
     }
 
+    /** Resets IKE logger. */
     @VisibleForTesting
-    static void resetIkeLog() {
+    public static void resetIkeLog() {
         sIkeLog = new Log(IKE_TAG, LOG_SENSITIVE);
     }
 }
