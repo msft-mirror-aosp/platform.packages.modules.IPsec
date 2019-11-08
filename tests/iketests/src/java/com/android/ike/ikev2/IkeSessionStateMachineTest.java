@@ -713,7 +713,7 @@ public final class IkeSessionStateMachineTest {
         return ikeSession;
     }
 
-    static IkeSaProposal buildSaProposal() throws Exception {
+    public static IkeSaProposal buildSaProposal() throws Exception {
         return new IkeSaProposal.Builder()
                 .addEncryptionAlgorithm(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)

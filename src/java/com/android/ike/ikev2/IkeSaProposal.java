@@ -62,8 +62,8 @@ public final class IkeSaProposal extends SaProposal {
         mPseudorandomFunctions = prfs;
     }
 
-    /** Package private method to get all PRFs. */
-    PrfTransform[] getPrfTransforms() {
+    /** Gets all PRFs. */
+    public PrfTransform[] getPrfTransforms() {
         return mPseudorandomFunctions;
     }
 

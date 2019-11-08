@@ -53,23 +53,19 @@ public abstract class ChildSessionOptions {
         mIsTransport = isTransport;
     }
 
-    /** Package private */
-    IkeTrafficSelector[] getLocalTrafficSelectors() {
+    public IkeTrafficSelector[] getLocalTrafficSelectors() {
         return mLocalTrafficSelectors;
     }
 
-    /** Package private */
-    IkeTrafficSelector[] getRemoteTrafficSelectors() {
+    public IkeTrafficSelector[] getRemoteTrafficSelectors() {
         return mRemoteTrafficSelectors;
     }
 
-    /** Package private */
-    ChildSaProposal[] getSaProposals() {
+    public ChildSaProposal[] getSaProposals() {
         return mSaProposals;
     }
 
-    /** Package private */
-    boolean isTransportMode() {
+    public boolean isTransportMode() {
         return mIsTransport;
     }
 

@@ -59,17 +59,17 @@ public final class ChildSaProposal extends SaProposal {
         mEsns = esns;
     }
 
-    /** Package private method to get ESN policies. */
-    EsnTransform[] getEsnTransforms() {
+    /** Gets all ESN policies. */
+    public EsnTransform[] getEsnTransforms() {
         return mEsns;
     }
 
     /**
-     * Package private method to get a copy of proposal without all proposed DH groups.
+     * Gets a copy of proposal without all proposed DH groups.
      *
      * <p>This is used to avoid negotiating DH Group for negotiating first Child SA.
      */
-    ChildSaProposal getCopyWithoutDhTransform() {
+    public ChildSaProposal getCopyWithoutDhTransform() {
         return new ChildSaProposal(
                 getEncryptionTransforms(),
                 getIntegrityTransforms(),
