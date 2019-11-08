@@ -43,10 +43,10 @@ public final class IkeSessionOptions {
     @IntDef({IKE_AUTH_METHOD_PSK, IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, IKE_AUTH_METHOD_EAP})
     public @interface IkeAuthMethod {}
 
-    // Package private constants to describe user configured authentication methods.
-    static final int IKE_AUTH_METHOD_PSK = 1;
-    static final int IKE_AUTH_METHOD_PUB_KEY_SIGNATURE = 2;
-    static final int IKE_AUTH_METHOD_EAP = 3;
+    // Constants to describe user configured authentication methods.
+    public static final int IKE_AUTH_METHOD_PSK = 1;
+    public static final int IKE_AUTH_METHOD_PUB_KEY_SIGNATURE = 2;
+    public static final int IKE_AUTH_METHOD_EAP = 3;
 
     private final InetAddress mServerAddress;
     private final UdpEncapsulationSocket mUdpEncapSocket;
@@ -82,44 +82,40 @@ public final class IkeSessionOptions {
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
 
-    /** Package private */
-    InetAddress getServerAddress() {
+    public InetAddress getServerAddress() {
         return mServerAddress;
     }
-    /** Package private */
-    UdpEncapsulationSocket getUdpEncapsulationSocket() {
+
+    public UdpEncapsulationSocket getUdpEncapsulationSocket() {
         return mUdpEncapSocket;
     }
-    /** Package private */
-    IkeSaProposal[] getSaProposals() {
+
+    public IkeSaProposal[] getSaProposals() {
         return mSaProposals;
     }
-    /** Package private */
-    IkeIdentification getLocalIdentification() {
+
+    public IkeIdentification getLocalIdentification() {
         return mLocalIdentification;
     }
-    /** Package private */
-    IkeIdentification getRemoteIdentification() {
+
+    public IkeIdentification getRemoteIdentification() {
         return mRemoteIdentification;
     }
-    /** Package private */
-    IkeAuthConfig getLocalAuthConfig() {
+
+    public IkeAuthConfig getLocalAuthConfig() {
         return mLocalAuthConfig;
     }
-    /** Package private */
-    IkeAuthConfig getRemoteAuthConfig() {
+
+    public IkeAuthConfig getRemoteAuthConfig() {
         return mRemoteAuthConfig;
     }
-    /** Package private */
-    boolean isIkeFragmentationSupported() {
+
+    public boolean isIkeFragmentationSupported() {
         return mIsIkeFragmentationSupported;
     }
-    /**
-     * Package private class that contains common information of an IKEv2 authentication
-     * configuration.
-     */
-    abstract static class IkeAuthConfig {
-        @IkeAuthMethod final int mAuthMethod;
+    /** This class contains common information of an IKEv2 authentication configuration. */
+    public abstract static class IkeAuthConfig {
+        @IkeAuthMethod public final int mAuthMethod;
 
         protected IkeAuthConfig(@IkeAuthMethod int authMethod) {
             mAuthMethod = authMethod;
@@ -127,11 +123,11 @@ public final class IkeSessionOptions {
     }
 
     /**
-     * Package private class that contains configuration for IKEv2 pre-shared-key-based
-     * authentication of local or remote side.
+     * This class represents the configuration to support IKEv2 pre-shared-key-based authentication
+     * of local or remote side.
      */
-    static class IkeAuthPskConfig extends IkeAuthConfig {
-        final byte[] mPsk;
+    public static class IkeAuthPskConfig extends IkeAuthConfig {
+        public final byte[] mPsk;
 
         private IkeAuthPskConfig(byte[] psk) {
             super(IKE_AUTH_METHOD_PSK);
@@ -140,11 +136,11 @@ public final class IkeSessionOptions {
     }
 
     /**
-     * Package private class that contains configuration for IKEv2 public-key-signature-based
+     * This class represents the configuration to support IKEv2 public-key-signature-based
      * authentication of the remote side.
      */
-    static class IkeAuthDigitalSignRemoteConfig extends IkeAuthConfig {
-        final TrustAnchor mTrustAnchor;
+    public static class IkeAuthDigitalSignRemoteConfig extends IkeAuthConfig {
+        public final TrustAnchor mTrustAnchor;
 
         private IkeAuthDigitalSignRemoteConfig(TrustAnchor trustAnchor) {
             super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
@@ -153,13 +149,13 @@ public final class IkeSessionOptions {
     }
 
     /**
-     * Package private class that contains configuration to do IKEv2 public-key-signature-based
+     * This class represents the configuration to support IKEv2 public-key-signature-based
      * authentication of the local side.
      */
-    static class IkeAuthDigitalSignLocalConfig extends IkeAuthConfig {
-        final X509Certificate mEndCert;
-        final List<X509Certificate> mIntermediateCerts;
-        final PrivateKey mPrivateKey;
+    public static class IkeAuthDigitalSignLocalConfig extends IkeAuthConfig {
+        public final X509Certificate mEndCert;
+        public final List<X509Certificate> mIntermediateCerts;
+        public final PrivateKey mPrivateKey;
 
         private IkeAuthDigitalSignLocalConfig(
                 X509Certificate clientEndCert,
@@ -173,7 +169,7 @@ public final class IkeSessionOptions {
     }
 
     /**
-     * Package private class that contains configuration to do EAP authentication of the local side.
+     * This class represents the configuration to support EAP authentication of the local side.
      *
      * <p>EAP MUST be used with IKEv2 public-key-based authentication of the responder to the
      * initiator. Currently IKE library does not support the IKEv2 protocol extension(RFC 5998)
@@ -184,8 +180,8 @@ public final class IkeSessionOptions {
      * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
      *     Authentication in IKEv2</a>
      */
-    static class IkeAuthEapConfig extends IkeAuthConfig {
-        final EapSessionConfig mEapConfig;
+    public static class IkeAuthEapConfig extends IkeAuthConfig {
+        public final EapSessionConfig mEapConfig;
 
         private IkeAuthEapConfig(EapSessionConfig eapConfig) {
             super(IKE_AUTH_METHOD_EAP);

@@ -192,18 +192,15 @@ public abstract class SaProposal {
         return mProtocolId;
     }
 
-    /*Package private*/
-    EncryptionTransform[] getEncryptionTransforms() {
+    public EncryptionTransform[] getEncryptionTransforms() {
         return mEncryptionAlgorithms;
     }
 
-    /*Package private*/
-    IntegrityTransform[] getIntegrityTransforms() {
+    public IntegrityTransform[] getIntegrityTransforms() {
         return mIntegrityAlgorithms;
     }
 
-    /*Package private*/
-    DhGroupTransform[] getDhGroupTransforms() {
+    public DhGroupTransform[] getDhGroupTransforms() {
         return mDhGroups;
     }
 

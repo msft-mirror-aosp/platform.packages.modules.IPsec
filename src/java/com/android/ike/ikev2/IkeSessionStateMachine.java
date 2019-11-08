@@ -375,9 +375,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
     // TODO: Add InfoLocal.
 
-    // Testing constructor
+    /** Constructor for testing. */
     @VisibleForTesting
-    IkeSessionStateMachine(
+    public IkeSessionStateMachine(
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
@@ -435,8 +435,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         start();
     }
 
-    /** Package private constructor */
-    IkeSessionStateMachine(
+    /** Construct an instance of IkeSessionStateMachine. */
+    public IkeSessionStateMachine(
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
@@ -498,11 +498,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
     }
 
-    void openSession() {
+    /** Initiates IKE setup procedure. */
+    public void openSession() {
         sendMessage(CMD_LOCAL_REQUEST_CREATE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
     }
 
-    void openChildSession(
+    /** Schedules a Create Child procedure. */
+    public void openChildSession(
             ChildSessionOptions childSessionOptions, ChildSessionCallback childSessionCallback) {
         if (childSessionCallback == null) {
             throw new IllegalArgumentException("Child Session Callback must be provided");
@@ -520,7 +522,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         CMD_LOCAL_REQUEST_CREATE_CHILD, childSessionCallback, childSessionOptions));
     }
 
-    void closeChildSession(ChildSessionCallback childSessionCallback) {
+    /** Schedules a Delete Child procedure. */
+    public void closeChildSession(ChildSessionCallback childSessionCallback) {
         if (childSessionCallback == null) {
             throw new IllegalArgumentException("Child Session Callback must be provided");
         }
@@ -534,11 +537,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 new ChildLocalRequest(CMD_LOCAL_REQUEST_DELETE_CHILD, childSessionCallback, null));
     }
 
-    void closeSession() {
+    /** Initiates Delete IKE procedure. */
+    public void closeSession() {
         sendMessage(CMD_LOCAL_REQUEST_DELETE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
     }
 
-    void killSession() {
+    /** Forcibly close IKE Session. */
+    public void killSession() {
         // TODO: b/142977160 Support closing IKE Sesison immediately.
     }
 
@@ -2308,7 +2313,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     /** CreateIkeLocalIkeInit represents state when IKE library initiates IKE_INIT exchange. */
-    class CreateIkeLocalIkeInit extends BusyState {
+    @VisibleForTesting
+    public class CreateIkeLocalIkeInit extends BusyState {
         private IkeSecurityParameterIndex mLocalIkeSpiResource;
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
         private Retransmitter mRetransmitter;
@@ -2957,7 +2963,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                             + " notify type: "
                                             + notifyPayload.notifyType);
                         }
-
+                        break;
                     default:
                         logw(
                                 "Received unexpected payload in IKE AUTH response. Payload"

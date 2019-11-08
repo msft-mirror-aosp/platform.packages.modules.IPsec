@@ -41,11 +41,12 @@ public final class ChildSessionConfiguration {
     private final List<LinkAddress> mInternalAddressList;
 
     /**
-     * Package private constructor for building an ChildSessionConfiguration
+     * Construct an instance of {@link ChildSessionConfiguration}.
      *
-     * <p>It is only supported to build a ChildSessionConfiguration with a Configure(Reply) Payload.
+     * <p>It is only supported to build a {@link ChildSessionConfiguration} with a Configure(Reply)
+     * Payload.
      */
-    ChildSessionConfiguration(
+    public ChildSessionConfiguration(
             List<IkeTrafficSelector> inTs,
             List<IkeTrafficSelector> outTs,
             IkeConfigPayload configPayload) {
@@ -91,8 +92,9 @@ public final class ChildSessionConfiguration {
         }
     }
 
-    /** Package private constructor for building an ChildSessionConfiguration */
-    ChildSessionConfiguration(List<IkeTrafficSelector> inTs, List<IkeTrafficSelector> outTs) {
+    /** Construct an instance of {@link ChildSessionConfiguration}. */
+    public ChildSessionConfiguration(
+            List<IkeTrafficSelector> inTs, List<IkeTrafficSelector> outTs) {
         mInboundTs = Collections.unmodifiableList(inTs);
         mOutboundTs = Collections.unmodifiableList(outTs);
         mInternalAddressList = new LinkedList<>();
