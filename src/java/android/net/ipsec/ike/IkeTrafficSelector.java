@@ -113,6 +113,26 @@ public final class IkeTrafficSelector {
     }
 
     /**
+     * Construct an instance of {@link IkeTrafficSelector} for negotiating a Child Session.
+     *
+     * @param startPort the smallest port number allowed by this Traffic Selector.
+     * @param endPort the largest port number allowed by this Traffic Selector.
+     * @param startingAddress the smallest address included in this Traffic Selector.
+     * @param endingAddress the largest address included in this Traffic Selector.
+     */
+    public IkeTrafficSelector(
+            int startPort, int endPort, InetAddress startingAddress, InetAddress endingAddress) {
+        this(getTsType(startingAddress), startPort, endPort, startingAddress, endingAddress);
+    }
+
+    private static int getTsType(InetAddress address) {
+        if (address instanceof Inet4Address) {
+            return TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE;
+        }
+        return TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE;
+    }
+
+    /**
      * Construct an instance of IkeTrafficSelector for building an outbound IKE message.
      *
      * @param tsType the Traffic Selector type.

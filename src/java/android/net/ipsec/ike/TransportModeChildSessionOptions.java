@@ -50,6 +50,36 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
         }
 
         /**
+         * Adds an inbound {@link IkeTrafficSelector} to the {@link
+         * TransportModeChildSessionOptions} being built.
+         *
+         * <p>If no inbound {@link IkeTrafficSelector} is provided, a default value will be used
+         * that covers all IP addresses and ports.
+         *
+         * @param trafficSelector the inbound {@link IkeTrafficSelector}.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
+            // TODO: Implement it.
+            throw new UnsupportedOperationException("Not yet supported");
+        }
+
+        /**
+         * Adds an outbound {@link IkeTrafficSelector} to the {@link
+         * TransportModeChildSessionOptions} being built.
+         *
+         * <p>If no outbound {@link IkeTrafficSelector} is provided, a default value will be used
+         * that covers all IP addresses and ports.
+         *
+         * @param trafficSelector the outbound {@link IkeTrafficSelector}.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
+            // TODO: Implement it.
+            throw new UnsupportedOperationException("Not yet supported");
+        }
+
+        /**
          * Validates, builds and returns the TransportModeChildSessionOptions.
          *
          * @return the validated TransportModeChildSessionOptions.

@@ -28,6 +28,7 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 
+import java.net.InetAddress;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
@@ -121,10 +122,43 @@ public final class ChildSessionConfiguration {
     /**
      * Returns the assigned internal addresses.
      *
-     * @return assigned internal addresses, or empty list when no addresses are assigned by the
-     *     remote IKE server.
+     * @return the assigned internal addresses, or an empty list when no addresses are assigned by
+     *     the remote IKE server (e.g. for a non-tunnel mode Child Session).
      */
-    public List<LinkAddress> getInternalAddressList() {
+    public List<LinkAddress> getInternalAddresses() {
         return mInternalAddressList;
+    }
+
+    /**
+     * Returns the internal subnets protected by the IKE server.
+     *
+     * @return the internal subnets, or an empty list when no information of protected subnets is
+     *     provided by the IKE server (e.g. for a non-tunnel mode Child Session).
+     */
+    public List<LinkAddress> getInternalSubnets() {
+        // TODO: Implement it.
+        throw new UnsupportedOperationException("Not yet supported");
+    }
+
+    /**
+     * Returns the internal DNS server addresses.
+     *
+     * @return the internal DNS server addresses, or an empty list when no DNS server is provided by
+     *     the IKE server (e.g. for a non-tunnel mode Child Session).
+     */
+    public List<InetAddress> getInternalDnsServers() {
+        // TODO: Implement it.
+        throw new UnsupportedOperationException("Not yet supported");
+    }
+
+    /**
+     * Returns the internal DHCP server addresses.
+     *
+     * @return the internal DHCP server addresses, or an empty list when no DHCP server is provided
+     *     by the IKE server (e.g. for a non-tunnel mode Child Session).
+     */
+    public List<InetAddress> getInternalDhcpServers() {
+        // TODO: Implement it.
+        throw new UnsupportedOperationException("Not yet supported");
     }
 }

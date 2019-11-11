@@ -85,6 +85,44 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
+         * Adds an inbound {@link IkeTrafficSelector} to the {@link TunnelModeChildSessionOptions}
+         * being built.
+         *
+         * <p>This method allows callers to limit the inbound traffic transmitted over the Child
+         * Session to the given range. the IKE server may further narrow the range. Callers should
+         * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
+         *
+         * <p>If no inbound {@link IkeTrafficSelector} is provided, a default value will be used
+         * that covers all IP addresses and ports.
+         *
+         * @param trafficSelector the inbound {@link IkeTrafficSelector}.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
+            // TODO: Implement it.
+            throw new UnsupportedOperationException("Not yet supported");
+        }
+
+        /**
+         * Adds an outbound {@link IkeTrafficSelector} to the {@link TunnelModeChildSessionOptions}
+         * being built.
+         *
+         * <p>This method allows callers to limit the outbound traffic transmitted over the Child
+         * Session to the given range. the IKE server may further narrow the range. Callers should
+         * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
+         *
+         * <p>If no outbound {@link IkeTrafficSelector} is provided, a default value will be used
+         * that covers all IP addresses and ports.
+         *
+         * @param trafficSelector the outbound {@link IkeTrafficSelector}.
+         * @return Builder this, to facilitate chaining.
+         */
+        public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
+            // TODO: Implement it.
+            throw new UnsupportedOperationException("Not yet supported");
+        }
+
+        /**
          * Adds internal IP address requests to TunnelModeChildSessionOptions being built.
          *
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link

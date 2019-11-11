@@ -18,6 +18,7 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.net.ipsec.ike.exceptions.IkeException;
+import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /** Callback interface for receiving state changes of an IKE Session. */
 public interface IkeSessionCallback {
@@ -45,13 +46,12 @@ public interface IkeSessionCallback {
     void onClosedExceptionally(IkeException exception);
 
     /**
-     * Called if a recoverable error is encountered in an established IKE Session.
+     * Called if a recoverable error is encountered in an established {@link IkeSession}.
      *
-     * <p>A potential risk is usually detected when IKE library receives a non-protected error
-     * notification (e.g. INVALID_IKE_SPI) or a non-fatal error notification (e.g.
-     * INVALID_MESSAGE_ID).
+     * <p>This method may be triggered by protocol errors such as an INVALID_IKE_SPI or
+     * INVALID_MESSAGE_ID.
      *
-     * @param exception the detailed error.
+     * @param exception the detailed error information.
      */
-    void onError(IkeException exception);
+    void onError(IkeProtocolException exception);
 }

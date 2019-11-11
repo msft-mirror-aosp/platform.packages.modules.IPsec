@@ -32,28 +32,28 @@ public final class IkeSessionConfiguration {
     public static final int EXTENSION_TYPE_MOBIKE = 2;
 
     /**
-     * Gets remote(server) version information.
+     * Gets remote (server) version information.
      *
-     * @return application version of the remote server, or empty string if the remote server did
-     *     not provide the application version
+     * @return application version of the remote server, or an empty string if the remote server did
+     *     not provide the application version.
      */
     @NonNull
     public String getRemoteApplicationVersion() {
-        return "";
+        // TODO: Implement it.
+        throw new UnsupportedOperationException("Not yet supported");
     }
 
     /**
      * Checks if an IKE extension is enabled.
      *
      * <p>An IKE extension is enabled when both sides can support it. This negotiation always
-     * happens in IKE initial changes(IKE INIT and IKE AUTH).
+     * happens in IKE initial exchanges (IKE INIT and IKE AUTH).
      *
-     * @param extensionType the extension type
-     * @return {@code true} if this extension is enabled
+     * @param extensionType the extension type.
+     * @return {@code true} if this extension is enabled.
      */
     public boolean isIkeExtensionEnabled(@ExtensionType int extensionType) {
-        return false;
+        // TODO: Implement it.
+        throw new UnsupportedOperationException("Not yet supported");
     }
-
-    // TODO: Implement IkeSessionConfiguration.
 }

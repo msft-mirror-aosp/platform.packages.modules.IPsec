@@ -113,11 +113,10 @@ public final class ChildSessionConfigurationTest {
         expectedInternalAddrList.add(IPV4_LINK_ADDRESS);
         expectedInternalAddrList.add(IPV6_LINK_ADDRESS);
 
-        assertEquals(
-                expectedInternalAddrList.size(), sessionConfig.getInternalAddressList().size());
+        assertEquals(expectedInternalAddrList.size(), sessionConfig.getInternalAddresses().size());
         for (int i = 0; i < expectedInternalAddrList.size(); i++) {
             assertEquals(
-                    expectedInternalAddrList.get(i), sessionConfig.getInternalAddressList().get(i));
+                    expectedInternalAddrList.get(i), sessionConfig.getInternalAddresses().get(i));
         }
     }
 
@@ -138,11 +137,10 @@ public final class ChildSessionConfigurationTest {
         expectedInternalAddrList.add(new LinkAddress(IPV4_ADDRESS, 32));
         expectedInternalAddrList.add(IPV6_LINK_ADDRESS);
 
-        assertEquals(
-                expectedInternalAddrList.size(), sessionConfig.getInternalAddressList().size());
+        assertEquals(expectedInternalAddrList.size(), sessionConfig.getInternalAddresses().size());
         for (int i = 0; i < expectedInternalAddrList.size(); i++) {
             assertEquals(
-                    expectedInternalAddrList.get(i), sessionConfig.getInternalAddressList().get(i));
+                    expectedInternalAddrList.get(i), sessionConfig.getInternalAddresses().get(i));
         }
     }
 
