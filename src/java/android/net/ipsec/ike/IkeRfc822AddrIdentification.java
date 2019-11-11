@@ -17,25 +17,26 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 
 import java.nio.charset.Charset;
 import java.util.Objects;
 
 /**
- * This class represents IKE ID information in fully-qualified RFC 822 email address ID type.
+ * IkeRfc822AddrIdentification represents an IKE entity identification based on a fully-qualified
+ * RFC 822 email address ID (e.g. ike@android.com).
  *
  * @hide
  */
+@SystemApi
 public final class IkeRfc822AddrIdentification extends IkeIdentification {
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
-    /** @hide */
-    public final String rfc822Name;
+    /** The fully-qualified RFC 822 email addres. */
+    @NonNull public final String rfc822Name;
 
     /**
      * Construct an instance of IkeRfc822AddrIdentification from a decoded inbound packet.
-     *
-     * <p>All characters in the RFC 822 email address are UTF-8.
      *
      * @param rfc822NameBytes fully-qualified RFC 822 email address in byte array.
      * @hide
@@ -46,13 +47,10 @@ public final class IkeRfc822AddrIdentification extends IkeIdentification {
     }
 
     /**
-     * Construct an instance of IkeRfc822AddrIdentification with user provided fully-qualified RFC
-     * 822 email address for building outbound packet.
+     * Construct an instance of {@link IkeRfc822AddrIdentification} with a fully-qualified RFC 822
+     * email address.
      *
-     * <p>rfc822Name will be formatted as UTF-8.
-     *
-     * @param rfc822Name user provided fully-qualified RFC 822 email address.
-     * @hide
+     * @param rfc822Name the fully-qualified RFC 822 email address.
      */
     public IkeRfc822AddrIdentification(@NonNull String rfc822Name) {
         super(ID_TYPE_RFC822_ADDR);
@@ -62,6 +60,7 @@ public final class IkeRfc822AddrIdentification extends IkeIdentification {
     /** @hide */
     @Override
     public int hashCode() {
+        // idType is also hashed to prevent collisions with other IkeAuthentication subtypes
         return Objects.hash(idType, rfc822Name);
     }
 
@@ -70,6 +69,7 @@ public final class IkeRfc822AddrIdentification extends IkeIdentification {
     public boolean equals(Object o) {
         if (!(o instanceof IkeRfc822AddrIdentification)) return false;
 
+        // idType already verified based on class type; no need to check again.
         return rfc822Name.equals(((IkeRfc822AddrIdentification) o).rfc822Name);
     }
 

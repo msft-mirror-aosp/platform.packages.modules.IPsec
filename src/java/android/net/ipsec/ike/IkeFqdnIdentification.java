@@ -17,25 +17,26 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 
 import java.nio.charset.Charset;
 import java.util.Objects;
 
 /**
- * IkeFqdnIdentification represents ID information using a fully-qualified domain name (FQDN).
+ * IkeFqdnIdentification represents an IKE entity identification based on a fully-qualified domain
+ * name (FQDN). An example might be ike.android.com
  *
  * @hide
  */
+@SystemApi
 public class IkeFqdnIdentification extends IkeIdentification {
     private static final Charset ASCII = Charset.forName("US-ASCII");
 
-    /** @hide */
-    public final String fqdn;
+    /** The fully-qualified domain name(FQDN). */
+    @NonNull public final String fqdn;
 
     /**
      * Construct an instance of IkeFqdnIdentification from a decoded inbound packet.
-     *
-     * <p>All characters in the FQDN are ASCII.
      *
      * @param fqdnBytes FQDN in byte array.
      * @hide
@@ -46,22 +47,24 @@ public class IkeFqdnIdentification extends IkeIdentification {
     }
 
     /**
-     * Construct an instance of IkeFqdnIdentification with user provided fully-qualified domain name
-     * (FQDN) for building outbound packet.
+     * Construct an instance of {@link IkeFqdnIdentification} with a fully-qualified domain name.
      *
-     * <p>FQDN will be formatted as US-ASCII.
-     *
-     * @param fqdn user provided fully-qualified domain name (FQDN)
-     * @hide
+     * @param fqdn the fully-qualified domain name (FQDN).  Must contain only US-ASCII characters,
+     * otherwise an IllegalArugmentException will be thrown.
      */
     public IkeFqdnIdentification(@NonNull String fqdn) {
         super(ID_TYPE_FQDN);
+        if (!ASCII.newEncoder().canEncode(fqdn)) {
+            throw new IllegalArgumentException("Non US-ASCII character set used");
+        }
+
         this.fqdn = fqdn;
     }
 
     /** @hide */
     @Override
     public int hashCode() {
+        // idType is also hashed to prevent collisions with other IkeAuthentication subtypes
         return Objects.hash(idType, fqdn);
     }
 
@@ -70,6 +73,7 @@ public class IkeFqdnIdentification extends IkeIdentification {
     public boolean equals(Object o) {
         if (!(o instanceof IkeFqdnIdentification)) return false;
 
+        // idType already verified based on class type; no need to check again.
         return fqdn.equals(((IkeFqdnIdentification) o).fqdn);
     }
 

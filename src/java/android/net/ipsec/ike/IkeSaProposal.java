@@ -16,6 +16,8 @@
 
 package android.net.ipsec.ike;
 
+import android.annotation.NonNull;
+import android.annotation.SystemApi;
 import android.util.ArraySet;
 
 import com.android.internal.net.ipsec.ike.message.IkePayload;
@@ -25,20 +27,24 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransfor
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
 /**
- * IkeSaProposal represents a user configured set contains cryptograhic algorithms and key
- * generating materials for negotiating an IKE SA.
+ * IkeSaProposal represents a proposed configuration to negotiate an IKE SA.
  *
- * <p>User must provide at least a valid IkeSaProposal when they are creating a new IKE SA.
+ * <p>IkeSaProposal will contain cryptograhic algorithms and key generation materials for the
+ * negotiation of an IKE SA.
+ *
+ * <p>User must provide at least one valid IkeSaProposal when they are creating a new IKE SA.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+@SystemApi
 public final class IkeSaProposal extends SaProposal {
     private final PrfTransform[] mPseudorandomFunctions;
 
@@ -65,7 +71,21 @@ public final class IkeSaProposal extends SaProposal {
     }
 
     /**
-     * Gets all PRFs.
+     * Gets all proposed Pseudorandom Functions
+     *
+     * @return A list of the IANA-defined IDs for the proposed Pseudorandom Functions
+     */
+    @NonNull
+    public List<Integer> getPseudorandomFunctions() {
+        final List<Integer> result = new ArrayList<>();
+        for (Transform transform : mPseudorandomFunctions) {
+            result.add(transform.id);
+        }
+        return result;
+    }
+
+    /**
+     * Gets all PRF Transforms
      *
      * @hide
      */
@@ -92,63 +112,60 @@ public final class IkeSaProposal extends SaProposal {
     }
 
     /**
-     * This class can be used to incrementally construct a IkeSaProposal. IkeSaProposal instances
-     * are immutable once built.
-     *
-     * <p>TODO: Support users to add algorithms from most preferred to least preferred.
-     *
-     * @hide
+     * This class is used to incrementally construct a IkeSaProposal. IkeSaProposal instances are
+     * immutable once built.
      */
     public static final class Builder extends SaProposal.Builder {
+        // TODO: Support users to add algorithms from most preferred to least preferred.
+
         // Use set to avoid adding repeated algorithms.
         private final Set<PrfTransform> mProposedPrfs = new ArraySet<>();
 
         /**
-         * Adds an encryption algorithm with specific key length to SA proposal being built.
+         * Adds an encryption algorithm with a specific key length to the SA proposal being built.
          *
          * @param algorithm encryption algorithm to add to IkeSaProposal.
-         * @param keyLength key length of algorithm. For algorithm that has fixed key length (e.g.
-         *     3DES) only KEY_LEN_UNUSED is allowed.
+         * @param keyLength key length of algorithm. For algorithms that have fixed key length (e.g.
+         *     3DES) only {@link SaProposal.KEY_LEN_UNUSED} is allowed.
          * @return Builder of IkeSaProposal.
-         * @throws IllegalArgumentException if AEAD and non-combined mode algorithms are mixed.
-         * @hide
          */
+        @NonNull
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
             validateAndAddEncryptAlgo(algorithm, keyLength);
             return this;
         }
 
         /**
-         * Adds an integrity algorithm to SA proposal being built.
+         * Adds an integrity algorithm to the SA proposal being built.
          *
          * @param algorithm integrity algorithm to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
-         * @hide
          */
+        @NonNull
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
             addIntegrityAlgo(algorithm);
             return this;
         }
 
         /**
-         * Adds a Diffie-Hellman Group to SA proposal being built.
+         * Adds a Diffie-Hellman Group to the SA proposal being built.
          *
          * @param dhGroup to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
-         * @hide
          */
+        @NonNull
         public Builder addDhGroup(@DhGroup int dhGroup) {
             addDh(dhGroup);
             return this;
         }
 
         /**
-         * Adds a pseudorandom function to SA proposal being built.
+         * Adds a pseudorandom function to the SA proposal being built.
          *
          * @param algorithm pseudorandom function to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
-         * @hide
          */
+        @NonNull
         public Builder addPseudorandomFunction(@PseudorandomFunction int algorithm) {
             // Construct PrfTransform and validate proposed algorithm during construction.
             mProposedPrfs.add(new PrfTransform(algorithm));
@@ -205,12 +222,11 @@ public final class IkeSaProposal extends SaProposal {
         }
 
         /**
-         * Validates, builds and returns the IkeSaProposal
+         * Validates and builds the IkeSaProposal.
          *
          * @return the validated IkeSaProposal.
-         * @throws IllegalArgumentException if IkeSaProposal is invalid.
-         * @hide
          */
+        @NonNull
         public IkeSaProposal build() {
             EncryptionTransform[] encryptionTransforms = buildEncryptAlgosOrThrow();
             PrfTransform[] prfTransforms = buildPrfsOrThrow();

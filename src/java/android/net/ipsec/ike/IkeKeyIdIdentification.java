@@ -17,26 +17,27 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 
 import java.util.Objects;
 
 /**
- * This class represents IKE ID information in Key ID type.
+ * IkeKeyIdIdentification represents an IKE entity identification based on a Key ID.
  *
- * <p>This is an octet stream that may be used to pass vendor-specific information necessary to do
+ * <p>Key ID is an octet stream that may be used to pass vendor-specific information necessary to do
  * certain proprietary types of identification.
  *
  * @hide
  */
+@SystemApi
 public final class IkeKeyIdIdentification extends IkeIdentification {
-    /** @hide */
-    public final byte[] keyId;
+    /** The KEY ID in octet stream. */
+    @NonNull public final byte[] keyId;
 
     /**
-     * Construct an instance of IkeKeyIdIdentification with provided Key ID
+     * Construct an instance of {@link IkeKeyIdIdentification} with a Key ID.
      *
-     * @param keyId Key ID in bytes
-     * @hide
+     * @param keyId the Key ID in bytes.
      */
     public IkeKeyIdIdentification(@NonNull byte[] keyId) {
         super(ID_TYPE_KEY_ID);
@@ -46,6 +47,7 @@ public final class IkeKeyIdIdentification extends IkeIdentification {
     /** @hide */
     @Override
     public int hashCode() {
+        // idType is also hashed to prevent collisions with other IkeAuthentication subtypes
         return Objects.hash(idType, keyId);
     }
 
@@ -54,13 +56,14 @@ public final class IkeKeyIdIdentification extends IkeIdentification {
     public boolean equals(Object o) {
         if (!(o instanceof IkeKeyIdIdentification)) return false;
 
+        // idType already verified based on class type; no need to check again.
         return keyId.equals(((IkeKeyIdIdentification) o).keyId);
     }
 
     /**
-     * Retrieve the byte-representation of the FQDN.
+     * Retrieve the byte-representation of the ID data.
      *
-     * @return the byte-representation of the FQDN.
+     * @return the byte-representation of the ID data.
      * @hide
      */
     @Override
