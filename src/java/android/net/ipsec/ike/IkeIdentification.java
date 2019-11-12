@@ -29,11 +29,13 @@ import java.util.Set;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 public abstract class IkeIdentification {
     // Set of supported ID types.
     private static final Set<Integer> SUPPORTED_ID_TYPES;
 
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         ID_TYPE_IPV4_ADDR,
@@ -46,12 +48,19 @@ public abstract class IkeIdentification {
     })
     public @interface IdType {}
 
+    /** @hide */
     public static final int ID_TYPE_IPV4_ADDR = 1;
+    /** @hide */
     public static final int ID_TYPE_FQDN = 2;
+    /** @hide */
     public static final int ID_TYPE_RFC822_ADDR = 3;
+    /** @hide */
     public static final int ID_TYPE_IPV6_ADDR = 5;
+    /** @hide */
     public static final int ID_TYPE_DER_ASN1_DN = 9;
+    /** @hide */
     public static final int ID_TYPE_DER_ASN1_GN = 10;
+    /** @hide */
     public static final int ID_TYPE_KEY_ID = 11;
 
     static {
@@ -65,8 +74,10 @@ public abstract class IkeIdentification {
         SUPPORTED_ID_TYPES.add(ID_TYPE_KEY_ID);
     }
 
+    /** @hide */
     public final int idType;
 
+    /** @hide */
     protected IkeIdentification(@IdType int type) {
         idType = type;
     }
@@ -75,6 +86,7 @@ public abstract class IkeIdentification {
      * Return the encoded identification data in a byte array.
      *
      * @return the encoded identification data.
+     * @hide
      */
     public abstract byte[] getEncodedIdData();
 }

@@ -25,6 +25,8 @@ import java.util.List;
 /**
  * This abstract class is the superclass of all classes representing a set of user configurations
  * for Child Session negotiation.
+ *
+ * @hide
  */
 public abstract class ChildSessionOptions {
     private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
@@ -41,6 +43,7 @@ public abstract class ChildSessionOptions {
     private final ChildSaProposal[] mSaProposals;
     private final boolean mIsTransport;
 
+    /** @hide */
     protected ChildSessionOptions(
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
@@ -52,23 +55,31 @@ public abstract class ChildSessionOptions {
         mIsTransport = isTransport;
     }
 
+    /** @hide */
     public IkeTrafficSelector[] getLocalTrafficSelectors() {
         return mLocalTrafficSelectors;
     }
 
+    /** @hide */
     public IkeTrafficSelector[] getRemoteTrafficSelectors() {
         return mRemoteTrafficSelectors;
     }
 
+    /** @hide */
     public ChildSaProposal[] getSaProposals() {
         return mSaProposals;
     }
 
+    /** @hide */
     public boolean isTransportMode() {
         return mIsTransport;
     }
 
-    /** This class represents common information for Child Sesison Options Builders. */
+    /**
+     * This class represents common information for Child Sesison Options Builders.
+     *
+     * @hide
+     */
     protected abstract static class Builder {
         protected final List<IkeTrafficSelector> mLocalTsList = new LinkedList<>();
         protected final List<IkeTrafficSelector> mRemoteTsList = new LinkedList<>();

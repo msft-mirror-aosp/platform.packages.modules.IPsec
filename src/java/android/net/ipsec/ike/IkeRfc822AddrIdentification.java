@@ -21,10 +21,15 @@ import android.annotation.NonNull;
 import java.nio.charset.Charset;
 import java.util.Objects;
 
-/** This class represents IKE ID information in fully-qualified RFC 822 email address ID type. */
+/**
+ * This class represents IKE ID information in fully-qualified RFC 822 email address ID type.
+ *
+ * @hide
+ */
 public final class IkeRfc822AddrIdentification extends IkeIdentification {
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
+    /** @hide */
     public final String rfc822Name;
 
     /**
@@ -33,6 +38,7 @@ public final class IkeRfc822AddrIdentification extends IkeIdentification {
      * <p>All characters in the RFC 822 email address are UTF-8.
      *
      * @param rfc822NameBytes fully-qualified RFC 822 email address in byte array.
+     * @hide
      */
     public IkeRfc822AddrIdentification(byte[] rfc822NameBytes) {
         super(ID_TYPE_RFC822_ADDR);
@@ -46,17 +52,20 @@ public final class IkeRfc822AddrIdentification extends IkeIdentification {
      * <p>rfc822Name will be formatted as UTF-8.
      *
      * @param rfc822Name user provided fully-qualified RFC 822 email address.
+     * @hide
      */
     public IkeRfc822AddrIdentification(@NonNull String rfc822Name) {
         super(ID_TYPE_RFC822_ADDR);
         this.rfc822Name = rfc822Name;
     }
 
+    /** @hide */
     @Override
     public int hashCode() {
         return Objects.hash(idType, rfc822Name);
     }
 
+    /** @hide */
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof IkeRfc822AddrIdentification)) return false;
@@ -68,6 +77,7 @@ public final class IkeRfc822AddrIdentification extends IkeIdentification {
      * Retrieve the byte-representation of the the RFC 822 email address.
      *
      * @return the byte-representation of the RFC 822 email address.
+     * @hide
      */
     @Override
     public byte[] getEncodedIdData() {
