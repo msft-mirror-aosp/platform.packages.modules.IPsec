@@ -21,6 +21,7 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -30,6 +31,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import android.content.Context;
 import android.net.eap.EapSessionConfig;
 import android.os.test.TestLooper;
+
+import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 
 import org.junit.Before;
 
@@ -87,5 +90,16 @@ public class EapMethodEndToEndTest {
 
         verify(mMockCallback).onFail();
         verifyNoMoreInteractions(mMockCallback);
+    }
+
+    /**
+     * To be used for verifying that non-EAP-Failure messages receive EapError responses after
+     * EAP-Failure messages are expected.
+     */
+    protected void verifyExpectsEapFailure(byte[] incomingEapPacket) {
+        mEapAuthenticator.processEapMessage(incomingEapPacket);
+        mTestLooper.dispatchAll();
+
+        verify(mMockCallback).onError(any(EapInvalidRequestException.class));
     }
 }

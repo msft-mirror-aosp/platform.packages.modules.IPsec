@@ -145,6 +145,21 @@ public class EapSimTest extends EapMethodEndToEndTest {
                             + "120b0000" // EAP-SIM | Challenge | 2B padding
                             + "0b050000DAC3C1B7D9DBFBC923464A94F186E410"); // AT_MAC attribute
 
+    private static final byte[] EAP_SIM_CHALLENGE_REQUEST_INVALID_MAC =
+            hexStringToByteArray(
+                    "01860050" // EAP-Request | ID | length in bytes
+                            + "120b0000" // EAP-SIM | Challenge | 2B padding
+                            + "010d0000" // AT_RAND attribute
+                            + "0123456789abcdef1123456789abcdef" // Rand 1
+                            + "1123456789abcdef1123456789abcdef" // Rand 2
+                            + "2123456789abcdef1123456789abcdef" // Rand 3
+                            + "0b05000000112233445566778899AABBCCDDEEFF"); // AT_MAC attribute
+    private static final byte[] EAP_SIM_CLIENT_ERROR_RESPONSE =
+            hexStringToByteArray(
+                    "0286000C" // EAP-Response | ID | length in bytes
+                            + "120E0000" // EAP-SIM | Client-Error | 2B padding
+                            + "16010000"); // AT_CLIENT_ERROR_CODE attribute
+
     private TelephonyManager mMockTelephonyManager;
 
     @Before
@@ -205,6 +220,14 @@ public class EapSimTest extends EapMethodEndToEndTest {
         verifyEapSimChallenge(EAP_SIM_CHALLENGE_REQUEST, EAP_SIM_CHALLENGE_RESPONSE);
         verifyEapNotification(3);
         verifyEapSuccess(MSK, EMSK);
+    }
+
+    @Test
+    public void testEapSimInvalidMac() {
+        verifyEapSimStart(EAP_SIM_START_REQUEST, EAP_SIM_START_RESPONSE, true);
+        verifyEapSimChallenge(EAP_SIM_CHALLENGE_REQUEST_INVALID_MAC, EAP_SIM_CLIENT_ERROR_RESPONSE);
+        verifyExpectsEapFailure(EAP_SIM_CHALLENGE_REQUEST);
+        verifyEapFailure();
     }
 
     private void verifyEapSimStart(

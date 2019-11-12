@@ -136,6 +136,7 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
             int eapIdentifier,
             int eapMethodType,
             AtClientErrorCode clientErrorCode) {
+        mIsExpectingEapFailure = true;
         EapSimAkaTypeData eapSimAkaTypeData = getEapSimAkaTypeData(clientErrorCode);
         byte[] encodedTypeData = eapSimAkaTypeData.encode();
 
