@@ -37,6 +37,7 @@ import java.util.Set;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 public final class IkeSaProposal extends SaProposal {
     private final PrfTransform[] mPseudorandomFunctions;
@@ -52,6 +53,7 @@ public final class IkeSaProposal extends SaProposal {
      * @param prfs pseudorandom functions
      * @param integrityAlgos integrity algorithms
      * @param dhGroups Diffie-Hellman Groups
+     * @hide
      */
     public IkeSaProposal(
             EncryptionTransform[] encryptionAlgos,
@@ -62,11 +64,16 @@ public final class IkeSaProposal extends SaProposal {
         mPseudorandomFunctions = prfs;
     }
 
-    /** Gets all PRFs. */
+    /**
+     * Gets all PRFs.
+     *
+     * @hide
+     */
     public PrfTransform[] getPrfTransforms() {
         return mPseudorandomFunctions;
     }
 
+    /** @hide */
     @Override
     public Transform[] getAllTransforms() {
         List<Transform> transformList = getAllTransformsAsList();
@@ -75,6 +82,7 @@ public final class IkeSaProposal extends SaProposal {
         return transformList.toArray(new Transform[transformList.size()]);
     }
 
+    /** @hide */
     @Override
     public boolean isNegotiatedFrom(SaProposal reqProposal) {
         return super.isNegotiatedFrom(reqProposal)
@@ -88,6 +96,8 @@ public final class IkeSaProposal extends SaProposal {
      * are immutable once built.
      *
      * <p>TODO: Support users to add algorithms from most preferred to least preferred.
+     *
+     * @hide
      */
     public static final class Builder extends SaProposal.Builder {
         // Use set to avoid adding repeated algorithms.
@@ -101,6 +111,7 @@ public final class IkeSaProposal extends SaProposal {
          *     3DES) only KEY_LEN_UNUSED is allowed.
          * @return Builder of IkeSaProposal.
          * @throws IllegalArgumentException if AEAD and non-combined mode algorithms are mixed.
+         * @hide
          */
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
             validateAndAddEncryptAlgo(algorithm, keyLength);
@@ -112,6 +123,7 @@ public final class IkeSaProposal extends SaProposal {
          *
          * @param algorithm integrity algorithm to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
+         * @hide
          */
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
             addIntegrityAlgo(algorithm);
@@ -123,6 +135,7 @@ public final class IkeSaProposal extends SaProposal {
          *
          * @param dhGroup to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
+         * @hide
          */
         public Builder addDhGroup(@DhGroup int dhGroup) {
             addDh(dhGroup);
@@ -134,6 +147,7 @@ public final class IkeSaProposal extends SaProposal {
          *
          * @param algorithm pseudorandom function to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
+         * @hide
          */
         public Builder addPseudorandomFunction(@PseudorandomFunction int algorithm) {
             // Construct PrfTransform and validate proposed algorithm during construction.
@@ -195,6 +209,7 @@ public final class IkeSaProposal extends SaProposal {
          *
          * @return the validated IkeSaProposal.
          * @throws IllegalArgumentException if IkeSaProposal is invalid.
+         * @hide
          */
         public IkeSaProposal build() {
             EncryptionTransform[] encryptionTransforms = buildEncryptAlgosOrThrow();

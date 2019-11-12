@@ -21,10 +21,15 @@ import android.annotation.NonNull;
 import java.nio.charset.Charset;
 import java.util.Objects;
 
-/** IkeFqdnIdentification represents ID information using a fully-qualified domain name (FQDN) */
+/**
+ * IkeFqdnIdentification represents ID information using a fully-qualified domain name (FQDN).
+ *
+ * @hide
+ */
 public class IkeFqdnIdentification extends IkeIdentification {
     private static final Charset ASCII = Charset.forName("US-ASCII");
 
+    /** @hide */
     public final String fqdn;
 
     /**
@@ -33,6 +38,7 @@ public class IkeFqdnIdentification extends IkeIdentification {
      * <p>All characters in the FQDN are ASCII.
      *
      * @param fqdnBytes FQDN in byte array.
+     * @hide
      */
     public IkeFqdnIdentification(byte[] fqdnBytes) {
         super(ID_TYPE_FQDN);
@@ -46,17 +52,20 @@ public class IkeFqdnIdentification extends IkeIdentification {
      * <p>FQDN will be formatted as US-ASCII.
      *
      * @param fqdn user provided fully-qualified domain name (FQDN)
+     * @hide
      */
     public IkeFqdnIdentification(@NonNull String fqdn) {
         super(ID_TYPE_FQDN);
         this.fqdn = fqdn;
     }
 
+    /** @hide */
     @Override
     public int hashCode() {
         return Objects.hash(idType, fqdn);
     }
 
+    /** @hide */
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof IkeFqdnIdentification)) return false;
@@ -68,6 +77,7 @@ public class IkeFqdnIdentification extends IkeIdentification {
      * Retrieve the byte-representation of the FQDN.
      *
      * @return the byte-representation of the FQDN.
+     * @hide
      */
     @Override
     public byte[] getEncodedIdData() {

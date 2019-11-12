@@ -25,25 +25,31 @@ import java.util.Objects;
  *
  * <p>This is an octet stream that may be used to pass vendor-specific information necessary to do
  * certain proprietary types of identification.
+ *
+ * @hide
  */
 public final class IkeKeyIdIdentification extends IkeIdentification {
+    /** @hide */
     public final byte[] keyId;
 
     /**
      * Construct an instance of IkeKeyIdIdentification with provided Key ID
      *
      * @param keyId Key ID in bytes
+     * @hide
      */
     public IkeKeyIdIdentification(@NonNull byte[] keyId) {
         super(ID_TYPE_KEY_ID);
         this.keyId = keyId;
     }
 
+    /** @hide */
     @Override
     public int hashCode() {
         return Objects.hash(idType, keyId);
     }
 
+    /** @hide */
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof IkeKeyIdIdentification)) return false;
@@ -55,6 +61,7 @@ public final class IkeKeyIdIdentification extends IkeIdentification {
      * Retrieve the byte-representation of the FQDN.
      *
      * @return the byte-representation of the FQDN.
+     * @hide
      */
     @Override
     public byte[] getEncodedIdData() {

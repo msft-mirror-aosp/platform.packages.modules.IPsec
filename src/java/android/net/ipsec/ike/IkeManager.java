@@ -22,7 +22,11 @@ import com.android.internal.net.utils.Log;
 
 import java.util.concurrent.Executor;
 
-/** This class contains methods for managing IKE sessions. */
+/**
+ * This class contains methods for managing IKE sessions.
+ *
+ * @hide
+ */
 public final class IkeManager {
     private static final String IKE_TAG = "IKE";
     private static final boolean LOG_SENSITIVE = false;
@@ -35,6 +39,7 @@ public final class IkeManager {
      * Construct an instance of {@link IkeManager}
      *
      * @param context the application context.
+     * @hide
      */
     public IkeManager(Context context) {
         mContext = context;
@@ -59,6 +64,7 @@ public final class IkeManager {
      * @param firstChildSessionCallback the {@link ChildSessionCallback} interface to notify users
      *     the state changes of the Child Session.
      * @return an instance of {@link IkeSession}
+     * @hide
      */
     public IkeSession openIkeSession(
             IkeSessionOptions ikeSessionOptions,
@@ -75,18 +81,30 @@ public final class IkeManager {
                 firstChildSessionCallback);
     }
 
-    /** Returns IKE logger. */
+    /**
+     * Returns IKE logger.
+     *
+     * @hide
+     */
     public static Log getIkeLog() {
         return sIkeLog;
     }
 
-    /** Injects IKE logger for testing. */
+    /**
+     * Injects IKE logger for testing.
+     *
+     * @hide
+     */
     @VisibleForTesting
     public static void setIkeLog(Log log) {
         sIkeLog = log;
     }
 
-    /** Resets IKE logger. */
+    /**
+     * Resets IKE logger.
+     *
+     * @hide
+     */
     @VisibleForTesting
     public static void resetIkeLog() {
         sIkeLog = new Log(IKE_TAG, LOG_SENSITIVE);

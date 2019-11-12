@@ -18,20 +18,26 @@ package android.net.ipsec.ike.exceptions;
 /**
  * IkeException is a generic IKE library exception class that provides type safety for all the
  * IKE-library-related exception classes that extend from it.
+ *
+ * @hide
  */
 public abstract class IkeException extends Exception {
+    /** @hide */
     protected IkeException() {
         super();
     }
 
+    /** @hide */
     protected IkeException(String message) {
         super(message);
     }
 
+    /** @hide */
     protected IkeException(Throwable cause) {
         super(cause);
     }
 
+    /** @hide */
     protected IkeException(String message, Throwable cause) {
         super(message, cause);
     }
@@ -40,6 +46,7 @@ public abstract class IkeException extends Exception {
      * Returns if this exception is caused by an IKE protocol error.
      *
      * @return true if this exception is caused by an IKE protocol error, false otherwise.
+     * @hide
      */
     public boolean isProtocolException() {
         return this instanceof IkeProtocolException;

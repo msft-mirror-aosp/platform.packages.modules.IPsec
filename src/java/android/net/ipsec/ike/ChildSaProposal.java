@@ -34,6 +34,7 @@ import java.util.List;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 public final class ChildSaProposal extends SaProposal {
     private final EsnTransform[] mEsns;
@@ -49,6 +50,7 @@ public final class ChildSaProposal extends SaProposal {
      * @param integrityAlgos integrity algorithms
      * @param dhGroups Diffie-Hellman Groups
      * @param esns ESN policies
+     * @hide
      */
     public ChildSaProposal(
             EncryptionTransform[] encryptionAlgos,
@@ -59,7 +61,11 @@ public final class ChildSaProposal extends SaProposal {
         mEsns = esns;
     }
 
-    /** Gets all ESN policies. */
+    /**
+     * Gets all ESN policies.
+     *
+     * @hide
+     */
     public EsnTransform[] getEsnTransforms() {
         return mEsns;
     }
@@ -68,6 +74,8 @@ public final class ChildSaProposal extends SaProposal {
      * Gets a copy of proposal without all proposed DH groups.
      *
      * <p>This is used to avoid negotiating DH Group for negotiating first Child SA.
+     *
+     * @hide
      */
     public ChildSaProposal getCopyWithoutDhTransform() {
         return new ChildSaProposal(
@@ -77,6 +85,7 @@ public final class ChildSaProposal extends SaProposal {
                 getEsnTransforms());
     }
 
+    /** @hide */
     @Override
     public Transform[] getAllTransforms() {
         List<Transform> transformList = getAllTransformsAsList();
@@ -85,6 +94,7 @@ public final class ChildSaProposal extends SaProposal {
         return transformList.toArray(new Transform[transformList.size()]);
     }
 
+    /** @hide */
     @Override
     public boolean isNegotiatedFrom(SaProposal reqProposal) {
         return super.isNegotiatedFrom(reqProposal)
@@ -96,6 +106,8 @@ public final class ChildSaProposal extends SaProposal {
      * instances are immutable once built.
      *
      * <p>TODO: Support users to add algorithms from most preferred to least preferred.
+     *
+     * @hide
      */
     public static final class Builder extends SaProposal.Builder {
         /**
@@ -106,6 +118,7 @@ public final class ChildSaProposal extends SaProposal {
          *     3DES) only KEY_LEN_UNUSED is allowed.
          * @return Builder of ChildSaProposal.
          * @throws IllegalArgumentException if AEAD and non-combined mode algorithms are mixed.
+         * @hide
          */
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
             validateAndAddEncryptAlgo(algorithm, keyLength);
@@ -117,6 +130,7 @@ public final class ChildSaProposal extends SaProposal {
          *
          * @param algorithm integrity algorithm to add to ChildSaProposal.
          * @return Builder of ChildSaProposal.
+         * @hide
          */
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
             addIntegrityAlgo(algorithm);
@@ -128,6 +142,7 @@ public final class ChildSaProposal extends SaProposal {
          *
          * @param dhGroup to add to ChildSaProposal.
          * @return Builder of ChildSaProposal.
+         * @hide
          */
         public Builder addDhGroup(@DhGroup int dhGroup) {
             addDh(dhGroup);
@@ -156,6 +171,7 @@ public final class ChildSaProposal extends SaProposal {
          *
          * @return the validated ChildSaProposal.
          * @throws IllegalArgumentException if ChildSaProposal is invalid.
+         * @hide
          */
         public ChildSaProposal build() {
             EncryptionTransform[] encryptionTransforms = buildEncryptAlgosOrThrow();

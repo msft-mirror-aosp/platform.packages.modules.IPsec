@@ -494,7 +494,7 @@ public final class ChildSessionStateMachineTest {
                 Arrays.asList(mChildSessionOptions.getRemoteTrafficSelectors()),
                 sessionConfig.getOutboundTrafficSelectors());
 
-        List<LinkAddress> addrList = sessionConfig.getInternalAddressList();
+        List<LinkAddress> addrList = sessionConfig.getInternalAddresses();
         assertEquals(1, addrList.size());
         assertEquals(INTERNAL_ADDRESS, addrList.get(0).getAddress());
         assertEquals(IPV4_PREFIX_LEN, addrList.get(0).getPrefixLength());

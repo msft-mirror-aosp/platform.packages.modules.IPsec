@@ -20,21 +20,27 @@ import android.net.IpSecManager.PolicyDirection;
 import android.net.IpSecTransform;
 import android.net.ipsec.ike.exceptions.IkeException;
 
-/** Callback interface for receiving state changes of a Child Session. */
+/**
+ * Callback interface for receiving state changes of a Child Session.
+ *
+ * @hide
+ */
 public interface ChildSessionCallback {
     /**
      * Called when Child Session setup succeeds.
      *
      * @param sessionConfiguration the configuration information of Child Session negotiated during
      *     Child creation.
+     * @hide
      */
     void onOpened(ChildSessionConfiguration sessionConfiguration);
 
     /**
-     * Called when either side has decided to close this Session and the deletion exchange
-     * finishes.
+     * Called when either side has decided to close this Session and the deletion exchange finishes.
      *
      * <p>This method will not be fired if this deletion is caused by a fatal error.
+     *
+     * @hide
      */
     void onClosed();
 
@@ -42,6 +48,7 @@ public interface ChildSessionCallback {
      * Called if Child Session setup fails or Child Session is closed because of a fatal error.
      *
      * @param exception the detailed error.
+     * @hide
      */
     void onClosedExceptionally(IkeException exception);
 
@@ -50,6 +57,7 @@ public interface ChildSessionCallback {
      *
      * @param ipSecTransform the created {@link IpSecTransform}
      * @param direction the direction of this {@link IpSecTransform}
+     * @hide
      */
     void onIpSecTransformCreated(IpSecTransform ipSecTransform, @PolicyDirection int direction);
 
@@ -61,6 +69,7 @@ public interface ChildSessionCallback {
      *
      * @param ipSecTransform the deleted {@link IpSecTransform}
      * @param direction the direction of this {@link IpSecTransform}
+     * @hide
      */
     void onIpSecTransformDeleted(IpSecTransform ipSecTransform, @PolicyDirection int direction);
 }

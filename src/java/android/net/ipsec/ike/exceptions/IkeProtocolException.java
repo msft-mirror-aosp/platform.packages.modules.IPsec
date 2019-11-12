@@ -29,8 +29,10 @@ import java.nio.ByteBuffer;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 public abstract class IkeProtocolException extends IkeException {
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD,
@@ -52,23 +54,40 @@ public abstract class IkeProtocolException extends IkeException {
     })
     public @interface ErrorType {}
 
+    /** @hide */
     public static final int ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1;
+    /** @hide */
     public static final int ERROR_TYPE_INVALID_IKE_SPI = 4;
+    /** @hide */
     public static final int ERROR_TYPE_INVALID_MAJOR_VERSION = 5;
+    /** @hide */
     public static final int ERROR_TYPE_INVALID_SYNTAX = 7;
+    /** @hide */
     public static final int ERROR_TYPE_INVALID_MESSAGE_ID = 9;
+    /** @hide */
     public static final int ERROR_TYPE_NO_PROPOSAL_CHOSEN = 14;
+    /** @hide */
     public static final int ERROR_TYPE_INVALID_KE_PAYLOAD = 17;
+    /** @hide */
     public static final int ERROR_TYPE_AUTHENTICATION_FAILED = 24;
+    /** @hide */
     public static final int ERROR_TYPE_SINGLE_PAIR_REQUIRED = 34;
+    /** @hide */
     public static final int ERROR_TYPE_NO_ADDITIONAL_SAS = 35;
+    /** @hide */
     public static final int ERROR_TYPE_INTERNAL_ADDRESS_FAILURE = 36;
+    /** @hide */
     public static final int ERROR_TYPE_FAILED_CP_REQUIRED = 37;
+    /** @hide */
     public static final int ERROR_TYPE_TS_UNACCEPTABLE = 38;
+    /** @hide */
     public static final int ERROR_TYPE_INVALID_SELECTORS = 39;
+    /** @hide */
     public static final int ERROR_TYPE_TEMPORARY_FAILURE = 43;
+    /** @hide */
     public static final int ERROR_TYPE_CHILD_SA_NOT_FOUND = 44;
 
+    /** @hide */
     public static final byte[] ERROR_DATA_NOT_INCLUDED = new byte[0];
 
     private static final int INTEGER_BYTE_SIZE = 4;
@@ -76,31 +95,39 @@ public abstract class IkeProtocolException extends IkeException {
     @ErrorType private final int mErrorType;
     private final byte[] mErrorData;
 
+    /** @hide */
     protected IkeProtocolException(@ErrorType int code) {
         super();
         mErrorType = code;
         mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
+    /** @hide */
     protected IkeProtocolException(@ErrorType int code, String message) {
         super(message);
         mErrorType = code;
         mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
+    /** @hide */
     protected IkeProtocolException(@ErrorType int code, Throwable cause) {
         super(cause);
         mErrorType = code;
         mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
+    /** @hide */
     protected IkeProtocolException(@ErrorType int code, String message, Throwable cause) {
         super(message, cause);
         mErrorType = code;
         mErrorData = ERROR_DATA_NOT_INCLUDED;
     }
 
-    // Construct an instance from a notify Payload.
+    /**
+     * Construct an instance from a notify Payload.
+     *
+     * @hide
+     */
     protected IkeProtocolException(@ErrorType int code, byte[] notifyData) {
         super();
 
@@ -116,8 +143,10 @@ public abstract class IkeProtocolException extends IkeException {
         mErrorData = notifyData;
     }
 
+    /** @hide */
     protected abstract boolean isValidDataLength(int dataLen);
 
+    /** @hide */
     protected static byte[] integerToByteArray(int integer, int arraySize) {
         if (arraySize > INTEGER_BYTE_SIZE) {
             throw new IllegalArgumentException(
@@ -135,6 +164,7 @@ public abstract class IkeProtocolException extends IkeException {
         return byteData;
     }
 
+    /** @hide */
     protected static int byteArrayToInteger(byte[] byteArray) {
         if (byteArray == null || byteArray.length > INTEGER_BYTE_SIZE) {
             throw new IllegalArgumentException("Cannot convert the byte array to integer");
@@ -152,6 +182,7 @@ public abstract class IkeProtocolException extends IkeException {
      * Returns the IKE standard protocol error type of this {@link IkeProtocolException} instance.
      *
      * @return the IKE standard protocol error type.
+     * @hide
      */
     @ErrorType
     public int getErrorType() {
@@ -166,6 +197,7 @@ public abstract class IkeProtocolException extends IkeException {
      * call this method.
      *
      * @return the included error data in byte array.
+     * @hide
      */
     public byte[] getErrorData() {
         return mErrorData;
@@ -175,6 +207,7 @@ public abstract class IkeProtocolException extends IkeException {
      * Build an IKE Notification Payload for this {@link IkeProtocolException} instance.
      *
      * @return the notification payload.
+     * @hide
      */
     public IkeNotifyPayload buildNotifyPayload() {
         return new IkeNotifyPayload(mErrorType, mErrorData);
