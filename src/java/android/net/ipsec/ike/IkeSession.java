@@ -44,6 +44,7 @@ import java.util.concurrent.Executor;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
  *     Version 2 (IKEv2)</a>
+ * @hide
  */
 public final class IkeSession implements AutoCloseable {
     private final CloseGuard mCloseGuard = CloseGuard.get();
@@ -95,6 +96,7 @@ public final class IkeSession implements AutoCloseable {
         mCloseGuard.open("open");
     }
 
+    /** @hide */
     @Override
     public void finalize() {
         if (mCloseGuard != null) {
@@ -128,6 +130,7 @@ public final class IkeSession implements AutoCloseable {
      * @param childSessionCallback the {@link ChildSessionCallback} interface to notify users the
      *     state changes of the Child Session.
      * @throws IllegalArgumentException if the ChildSessionCallback is already in use.
+     * @hide
      */
     public void openChildSession(
             ChildSessionOptions childSessionOptions, ChildSessionCallback childSessionCallback) {
@@ -142,6 +145,7 @@ public final class IkeSession implements AutoCloseable {
      * @param childSessionCallback The {@link ChildSessionCallback} instance that uniquely identify
      *     the Child Session.
      * @throws IllegalArgumentException if no Child Session found bound with this callback.
+     * @hide
      */
     public void closeChildSession(ChildSessionCallback childSessionCallback) {
         mIkeSessionStateMachine.closeChildSession(childSessionCallback);
@@ -163,6 +167,8 @@ public final class IkeSession implements AutoCloseable {
      * the queue (but will wait for ongoing locally initiated procedures to complete). After sending
      * the Delete request, the IKE library will wait until a Delete response is received or
      * retransmission timeout occurs.
+     *
+     * @hide
      */
     @Override
     public void close() throws Exception {
@@ -182,6 +188,8 @@ public final class IkeSession implements AutoCloseable {
      *
      * <p>Forcible closure of an IKE session will take priority over, and cancel other procedures
      * waiting in the queue. It will also interrupt any ongoing locally initiated procedure.
+     *
+     * @hide
      */
     public void kill() throws Exception {
         mCloseGuard.close();
