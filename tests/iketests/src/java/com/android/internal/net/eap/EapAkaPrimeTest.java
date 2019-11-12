@@ -272,6 +272,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
         // return null from TelephonyManager to simluate rejection of AUTN
         verifyEapAkaPrimeChallenge(null, EAP_AKA_PRIME_AUTHENTICATION_REJECT);
+        verifyExpectsEapFailure(EAP_AKA_PRIME_CHALLENGE_REQUEST);
         verifyEapFailure();
     }
 

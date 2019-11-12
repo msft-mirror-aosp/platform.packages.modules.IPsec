@@ -17,9 +17,7 @@
 package com.android.internal.net.eap.statemachine;
 
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
-import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
-import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ANY_ID_REQ;
 import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
@@ -42,10 +40,8 @@ import android.telephony.TelephonyManager;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
-import com.android.internal.net.eap.EapResult.EapFailure;
 import com.android.internal.net.eap.EapResult.EapSuccess;
 import com.android.internal.net.eap.crypto.Fips186_2Prf;
-import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.exceptions.EapSilentException;
 import com.android.internal.net.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.internal.net.eap.exceptions.simaka.EapSimAkaIdentityUnavailableException;
@@ -370,17 +366,11 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             if (message.eapCode == EAP_CODE_SUCCESS) {
                 transitionTo(new FinalState());
                 return new EapSuccess(mMsk, mEmsk);
-            } else if (message.eapCode == EAP_CODE_FAILURE) {
-                transitionTo(new FinalState());
-                return new EapFailure();
-            } else if (message.eapData.eapType == EAP_NOTIFICATION) {
-                return handleEapNotification(mTAG, message);
             }
 
-            if (message.eapData.eapType != getEapMethod()) {
-                return new EapError(new EapInvalidRequestException(
-                        "Expected EAP Type " + getEapMethod()
-                                + ", received " + message.eapData.eapType));
+            EapResult eapResult = handleEapSuccessFailureNotification(mTAG, message);
+            if (eapResult != null) {
+                return eapResult;
             }
 
             DecodeResult<EapSimTypeData> decodeResult =
