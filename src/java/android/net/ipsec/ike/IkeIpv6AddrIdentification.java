@@ -24,8 +24,13 @@ import java.net.Inet6Address;
 import java.net.UnknownHostException;
 import java.util.Objects;
 
-/** IkeIpv6AddrIdentification represents ID information in IPv6 address ID type. */
+/**
+ * IkeIpv6AddrIdentification represents ID information in IPv6 address ID type.
+ *
+ * @hide
+ */
 public class IkeIpv6AddrIdentification extends IkeIdentification {
+    /** @hide */
     public final Inet6Address ipv6Address;
 
     /**
@@ -33,6 +38,7 @@ public class IkeIpv6AddrIdentification extends IkeIdentification {
      *
      * @param ipv6AddrBytes IPv6 address in byte array.
      * @throws AuthenticationFailedException for decoding bytes error.
+     * @hide
      */
     public IkeIpv6AddrIdentification(byte[] ipv6AddrBytes) throws AuthenticationFailedException {
         super(ID_TYPE_IPV6_ADDR);
@@ -48,17 +54,20 @@ public class IkeIpv6AddrIdentification extends IkeIdentification {
      * building outbound packet.
      *
      * @param address user provided IPv6 address
+     * @hide
      */
     public IkeIpv6AddrIdentification(@NonNull Inet6Address address) {
         super(ID_TYPE_IPV6_ADDR);
         ipv6Address = address;
     }
 
+    /** @hide */
     @Override
     public int hashCode() {
         return Objects.hash(idType, ipv6Address);
     }
 
+    /** @hide */
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof IkeIpv6AddrIdentification)) return false;
@@ -70,6 +79,7 @@ public class IkeIpv6AddrIdentification extends IkeIdentification {
      * Retrieve the byte-representation of the IPv6 address.
      *
      * @return the byte-representation of the IPv6 address.
+     * @hide
      */
     @Override
     public byte[] getEncodedIdData() {

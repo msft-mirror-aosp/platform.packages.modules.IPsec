@@ -24,8 +24,13 @@ import java.net.Inet4Address;
 import java.net.UnknownHostException;
 import java.util.Objects;
 
-/** IkeIpv4AddrIdentification represents ID information in IPv4 address ID type. */
+/**
+ * IkeIpv4AddrIdentification represents ID information in IPv4 address ID type.
+ *
+ * @hide
+ */
 public final class IkeIpv4AddrIdentification extends IkeIdentification {
+    /** @hide */
     public final Inet4Address ipv4Address;
 
     /**
@@ -33,6 +38,7 @@ public final class IkeIpv4AddrIdentification extends IkeIdentification {
      *
      * @param ipv4AddrBytes IPv4 address in byte array.
      * @throws AuthenticationFailedException for decoding bytes error.
+     * @hide
      */
     public IkeIpv4AddrIdentification(byte[] ipv4AddrBytes) throws AuthenticationFailedException {
         super(ID_TYPE_IPV4_ADDR);
@@ -48,17 +54,20 @@ public final class IkeIpv4AddrIdentification extends IkeIdentification {
      * building outbound packet.
      *
      * @param address user provided IPv4 address
+     * @hide
      */
     public IkeIpv4AddrIdentification(@NonNull Inet4Address address) {
         super(ID_TYPE_IPV4_ADDR);
         ipv4Address = address;
     }
 
+    /** @hide */
     @Override
     public int hashCode() {
         return Objects.hash(idType, ipv4Address);
     }
 
+    /** @hide */
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof IkeIpv4AddrIdentification)) return false;
@@ -70,6 +79,7 @@ public final class IkeIpv4AddrIdentification extends IkeIdentification {
      * Retrieve the byte-representation of the IPv4 address.
      *
      * @return the byte-representation of the IPv4 address.
+     * @hide
      */
     @Override
     public byte[] getEncodedIdData() {
