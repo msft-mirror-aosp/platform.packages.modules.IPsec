@@ -249,6 +249,7 @@ public class EapAkaTest extends EapMethodEndToEndTest {
 
         // return null from TelephonyManager to simluate rejection of AUTN
         verifyEapAkaChallenge(null, EAP_AKA_AUTHENTICATION_REJECT);
+        verifyExpectsEapFailure(EAP_AKA_CHALLENGE_REQUEST);
         verifyEapFailure();
     }
 

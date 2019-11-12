@@ -35,7 +35,7 @@ import org.junit.Before;
 
 public class EapAkaPrimeTest {
 
-    // newtork name example in RFC 5448#3.1
+    // network name example in RFC 5448#3.1
     protected static final int SUB_ID = 1;
     protected static final String PEER_NETWORK_NAME = "foo:bar";
     protected static final boolean ALLOW_MISMATCHED_NETWORK_NAMES = false;

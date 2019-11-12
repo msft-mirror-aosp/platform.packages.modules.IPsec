@@ -37,6 +37,13 @@ import com.android.internal.net.utils.SimpleStateMachine;
  * implementations.
  */
 public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessage, EapResult> {
+    /*
+     * Used for transitioning to a state where EAP-Failure messages are expected next. This
+     * allows all EAP methods to easily transition to a pre-failure state in the event of errors,
+     * failed authentication, etc.
+     */
+    protected boolean mIsExpectingEapFailure = false;
+
     /**
      * Returns the EAP Method type for this EapMethodStateMachine implementation.
      *
@@ -81,10 +88,18 @@ public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessag
                         new EapInvalidRequestException(
                                 "Received an EAP-Success in the " + tag));
             } else if (message.eapCode == EAP_CODE_FAILURE) {
-                transitionTo(new EapAkaMethodStateMachine.FinalState());
+                transitionTo(new FinalState());
                 return new EapFailure();
             } else if (message.eapData.eapType == EAP_NOTIFICATION) {
                 return handleEapNotification(tag, message);
+            } else if (mIsExpectingEapFailure) {
+                // Expecting EAP-Failure message. Didn't receive EAP-Failure or EAP-Notification,
+                // so log and return EAP-Error.
+                LOG.e(tag, "Expecting EAP-Failure. Received non-Failure/Notification message");
+                return new EapError(
+                        new EapInvalidRequestException(
+                                "Expecting EAP-Failure. Received received "
+                                        + message.eapData.eapType));
             } else if (message.eapData.eapType != getEapMethod()) {
                 return new EapError(new EapInvalidRequestException(
                         "Expected EAP Type " + getEapMethod()
