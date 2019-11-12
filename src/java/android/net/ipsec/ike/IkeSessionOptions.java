@@ -18,6 +18,8 @@ package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
+import android.annotation.SystemApi;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.eap.EapSessionConfig;
 
@@ -34,13 +36,17 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * IkeSessionOptions contains all user provided configurations for negotiating an IKE SA.
+ * IkeSessionOptions contains all user provided configurations for negotiating an {@link
+ * IkeSession}.
  *
- * <p>TODO: Make this doc more user-friendly.
+ * <p>Note that all negotiated configurations will be reused during rekey including SA Proposal and
+ * lifetime.
  *
  * @hide
  */
+@SystemApi
 public final class IkeSessionOptions {
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({IKE_AUTH_METHOD_PSK, IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, IKE_AUTH_METHOD_EAP})
     public @interface IkeAuthMethod {}
@@ -214,45 +220,41 @@ public final class IkeSessionOptions {
         }
     }
 
-    /**
-     * This class can be used to incrementally construct a IkeSessionOptions.
-     *
-     * @hide
-     */
+    /** This class can be used to incrementally construct a {@link IkeSessionOptions}. */
     public static final class Builder {
-        private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
+        @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
 
-        private InetAddress mServerAddress;
-        private UdpEncapsulationSocket mUdpEncapSocket;
+        @Nullable private InetAddress mServerAddress;
+        @Nullable private UdpEncapsulationSocket mUdpEncapSocket;
 
-        private IkeIdentification mLocalIdentification;
-        private IkeIdentification mRemoteIdentification;
+        @Nullable private IkeIdentification mLocalIdentification;
+        @Nullable private IkeIdentification mRemoteIdentification;
 
-        private IkeAuthConfig mLocalAuthConfig;
-        private IkeAuthConfig mRemoteAuthConfig;
+        @Nullable private IkeAuthConfig mLocalAuthConfig;
+        @Nullable private IkeAuthConfig mRemoteAuthConfig;
 
         private boolean mIsIkeFragmentationSupported = false;
 
         /**
-         * Sets server address
+         * Sets the server address for the {@link IkeSessionOptions} being built.
          *
-         * @param serverAddress IP address of remote IKE server.
+         * @param serverAddress the IP address of the IKE server.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder setServerAddress(@NonNull InetAddress serverAddress) {
             mServerAddress = serverAddress;
             return this;
         }
 
         /**
-         * Sets UDP-Encapsulated socket
+         * Sets the UDP Encapsulation socket for the {@link IkeSessionOptions} being built.
          *
-         * @param udpEncapsulationSocket {@link IpSecManager.UdpEncapsulationSocket} for sending and
-         *     receiving IKE message.
+         * @param udpEncapsulationSocket the {@link IpSecManager.UdpEncapsulationSocket} for sending
+         *     and receiving IKE messages.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder setUdpEncapsulationSocket(
                 @NonNull UdpEncapsulationSocket udpEncapsulationSocket) {
             mUdpEncapSocket = udpEncapsulationSocket;
@@ -260,38 +262,37 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Sets local IKE identification.
+         * Sets local IKE identification for the {@link IkeSessionOptions} being built.
          *
          * @param identification the local IKE identification.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
-        public Builder setLocalIdentification(IkeIdentification identification) {
+        @NonNull
+        public Builder setLocalIdentification(@NonNull IkeIdentification identification) {
             mLocalIdentification = identification;
             return this;
         }
 
         /**
-         * Sets remote IKE identification.
+         * Sets remote IKE identification for the {@link IkeSessionOptions} being built.
          *
          * @param identification the remote IKE identification.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
-        public Builder setRemoteIdentification(IkeIdentification identification) {
+        @NonNull
+        public Builder setRemoteIdentification(@NonNull IkeIdentification identification) {
             mRemoteIdentification = identification;
             return this;
         }
 
         /**
-         * Adds an IKE SA proposal to IkeSessionOptions being built.
+         * Adds an IKE SA proposal to the {@link IkeSessionOptions} being built.
          *
          * @param proposal IKE SA proposal.
          * @return Builder this, to facilitate chaining.
-         * @throws IllegalArgumentException if input proposal is not IKE SA proposal.
-         * @hide
          */
-        public Builder addSaProposal(IkeSaProposal proposal) {
+        @NonNull
+        public Builder addSaProposal(@NonNull IkeSaProposal proposal) {
             if (proposal.getProtocolId() != IkePayload.PROTOCOL_ID_IKE) {
                 throw new IllegalArgumentException(
                         "Expected IKE SA Proposal but received Child SA proposal");
@@ -301,18 +302,21 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Uses pre-shared key to do IKE authentication.
+         * Configures the {@link IkeSession} to use pre-shared-key-based authentication.
          *
          * <p>Both client and server MUST be authenticated using the provided shared key. IKE
          * authentication will fail if the remote peer tries to use other authentication methods.
          *
-         * <p>Users MUST declare only one authentication method. Calling this function will override
-         * the previously set authentication configuration.
+         * <p>Callers MUST declare only one authentication method. Calling this function will
+         * override the previously set authentication configuration.
+         *
+         * <p>Callers SHOULD NOT use this if any other authentication methods can be used; PSK-based
+         * authentication is generally considered insecure.
          *
          * @param sharedKey the shared key.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder setAuthPsk(@NonNull byte[] sharedKey) {
             mLocalAuthConfig = new IkeAuthPskConfig(sharedKey);
             mRemoteAuthConfig = new IkeAuthPskConfig(sharedKey);
@@ -320,21 +324,22 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Uses EAP to do IKE authentication.
+         * Configures the {@link IkeSession} to use EAP authentication.
          *
-         * <p>EAP are typically used to authenticate the IKE client to the server. It MUST be used
-         * in conjunction with a public-key-signature-based authentication of the server to the
-         * client.
+         * <p>Not all EAP methods provide mutual authentication. As such EAP MUST be used in
+         * conjunction with a public-key-signature-based authentication of the server to the client.
          *
-         * <p>Users MUST declare only one authentication method. Calling this function will override
-         * the previously set authentication configuration.
+         * <p>Callers MUST declare only one authentication method. Calling this function will
+         * override the previously set authentication configuration.
          *
          * @see <a href="https://tools.ietf.org/html/rfc5280">RFC 5280, Internet X.509 Public Key
          *     Infrastructure Certificate and Certificate Revocation List (CRL) Profile</a>
+         * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
+         *     Authentication in IKEv2
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder setAuthEap(
                 @NonNull X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
             mLocalAuthConfig = new IkeAuthEapConfig(eapConfig);
@@ -352,10 +357,10 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Uses certificate and digital signature to do IKE authentication.
+         * Configures the {@link IkeSession} to use public-key-signature-based authentication.
          *
-         * <p>The public key included by the client end certificate and the signature private key
-         * MUST come from the same key pair.
+         * <p>The public key included by the client end certificate and the private key used for
+         * signing MUST be a matching key pair.
          *
          * <p>The IKE library will use the strongest signature algorithm supported by both sides.
          *
@@ -367,8 +372,8 @@ public final class IkeSessionOptions {
          * @param clientPrivateKey private key to generate outbound digital signature. Only {@link
          *     RSAPrivateKey} is supported.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder setAuthDigitalSignature(
                 @NonNull X509Certificate serverCaCert,
                 @NonNull X509Certificate clientEndCert,
@@ -381,10 +386,10 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Uses certificate and digital signature to do IKE authentication.
+         * Configures the {@link IkeSession} to use public-key-signature-based authentication.
          *
-         * <p>The public key included by the client end certificate and the signature private key
-         * MUST come from the same key pair.
+         * <p>The public key included by the client end certificate and the private key used for
+         * signing MUST be a matching key pair.
          *
          * <p>The IKE library will use the strongest signature algorithm supported by both sides.
          *
@@ -398,8 +403,8 @@ public final class IkeSessionOptions {
          * @param clientPrivateKey private key to generate outbound digital signature. Only {@link
          *     RSAPrivateKey} is supported.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder setAuthDigitalSignature(
                 @NonNull X509Certificate serverCaCert,
                 @NonNull X509Certificate clientEndCert,
@@ -419,12 +424,11 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Validates, builds and returns the IkeSessionOptions
+         * Validates and builds the {@link IkeSessionOptions}.
          *
-         * @return IkeSessionOptions the validated IkeSessionOptions
-         * @throws IllegalArgumentException if no IKE SA proposal is provided
-         * @hide
+         * @return IkeSessionOptions the validated IkeSessionOptions.
          */
+        @NonNull
         public IkeSessionOptions build() {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException("IKE SA proposal not found");
