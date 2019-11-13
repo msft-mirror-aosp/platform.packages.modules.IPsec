@@ -36,28 +36,39 @@ import java.util.Map;
  *
  * <p>The EAP authentication server decides which EAP method is used, so clients are encouraged to
  * provide configs for several EAP methods.
+ *
+ * @hide
  */
 public final class EapSessionConfig {
     @VisibleForTesting
     static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     // IANA -> EapMethodConfig for that method
+    /** @hide */
     public final Map<Integer, EapMethodConfig> eapConfigs;
+    /** @hide */
     public final byte[] eapIdentity;
 
+    /** @hide */
     @VisibleForTesting
     public EapSessionConfig(Map<Integer, EapMethodConfig> eapConfigs, byte[] eapIdentity) {
         this.eapConfigs = Collections.unmodifiableMap(eapConfigs);
         this.eapIdentity = eapIdentity;
     }
 
-    /** This class can be used to incrementally construct an EapSessionConfig. */
+    /**
+     * This class can be used to incrementally construct an EapSessionConfig.
+     *
+     * @hide
+     */
     public static final class Builder {
         private final Map<Integer, EapMethodConfig> mEapConfigs;
         private byte[] mEapIdentity;
 
         /**
          * Constructs and returns a new Builder for constructing an EapSessionConfig.
+         *
+         * @hide
          */
         public Builder() {
             mEapConfigs = new HashMap<>();
@@ -69,6 +80,7 @@ public final class EapSessionConfig {
          *
          * @param eapIdentity byte[] representing the client's EAP Identity
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         public Builder setEapIdentity(byte[] eapIdentity) {
             this.mEapIdentity = eapIdentity.clone();
@@ -81,6 +93,7 @@ public final class EapSessionConfig {
          * @param subId int the client's subId to be authenticated
          * @param apptype the {@link UiccAppType} apptype to be used for authentication
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         public Builder setEapSimConfig(int subId, @UiccAppType int apptype) {
             mEapConfigs.put(EAP_TYPE_SIM, new EapSimConfig(subId, apptype));
@@ -93,6 +106,7 @@ public final class EapSessionConfig {
          * @param subId int the client's subId to be authenticated
          * @param apptype the {@link UiccAppType} apptype to be used for authentication
          * @return Builder this, to facilitate chaining
+         * @hide
          */
         public Builder setEapAkaConfig(int subId, @UiccAppType int apptype) {
             mEapConfigs.put(EAP_TYPE_AKA, new EapAkaConfig(subId, apptype));
@@ -111,6 +125,7 @@ public final class EapSessionConfig {
          *     If false, mismatched network names will be handled as an Authentication Reject
          *     message.
          * @return Builder this, to facilitate chaining
+         * @hide
          */
         public Builder setEapAkaPrimeConfig(
                 int subId,
@@ -130,6 +145,7 @@ public final class EapSessionConfig {
          * @param username String the client account's username to be authenticated
          * @param password String the client account's password to be authenticated
          * @return Builder this, to faciliate chaining
+         * @hide
          */
         public Builder setEapMsChapV2Config(String username, String password) {
             mEapConfigs.put(EAP_TYPE_MSCHAP_V2, new EapMsChapV2Config(username, password));
@@ -142,6 +158,7 @@ public final class EapSessionConfig {
          *
          * @return the EapSessionConfig constructed by this Builder
          * @throws IllegalStateException iff no EAP methods have been configured
+         * @hide
          */
         public EapSessionConfig build() {
             if (mEapConfigs.isEmpty()) {
@@ -152,7 +169,11 @@ public final class EapSessionConfig {
         }
     }
 
-    /** EapMethodConfig represents a generic EAP method configuration. */
+    /**
+     * EapMethodConfig represents a generic EAP method configuration.
+     *
+     * @hide
+     */
     public abstract static class EapMethodConfig {
         @EapMethod public final int methodType;
 
@@ -164,6 +185,8 @@ public final class EapSessionConfig {
     /**
      * EapUiccConfig represents the configs needed for EAP methods that rely on UICC cards for
      * authentication.
+     *
+     * @hide
      */
     public abstract static class EapUiccConfig extends EapMethodConfig {
         public final int subId;
@@ -178,6 +201,8 @@ public final class EapSessionConfig {
 
     /**
      * EapSimConfig represents the configs needed for an EAP SIM session.
+     *
+     * @hide
      */
     public static class EapSimConfig extends EapUiccConfig {
         @VisibleForTesting
@@ -188,6 +213,8 @@ public final class EapSessionConfig {
 
     /**
      * EapAkaConfig represents the configs needed for an EAP AKA session.
+     *
+     * @hide
      */
     public static class EapAkaConfig extends EapUiccConfig {
         @VisibleForTesting
@@ -198,6 +225,8 @@ public final class EapSessionConfig {
 
     /**
      * EapAkaPrimeConfig represents the configs needed for an EAP-AKA' session.
+     *
+     * @hide
      */
     public static class EapAkaPrimeConfig extends EapAkaConfig {
         public final String networkName;
@@ -218,6 +247,8 @@ public final class EapSessionConfig {
 
     /**
      * EapMsChapV2Config represents the configs needed for an EAP MSCHAPv2 session.
+     *
+     * @hide
      */
     public static class EapMsChapV2Config extends EapMethodConfig {
         public final String username;

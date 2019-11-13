@@ -43,9 +43,10 @@ import java.util.Set;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 public abstract class SaProposal {
-
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         ENCRYPTION_ALGORITHM_3DES,
@@ -56,10 +57,15 @@ public abstract class SaProposal {
     })
     public @interface EncryptionAlgorithm {}
 
+    /** @hide */
     public static final int ENCRYPTION_ALGORITHM_3DES = 3;
+    /** @hide */
     public static final int ENCRYPTION_ALGORITHM_AES_CBC = 12;
+    /** @hide */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_8 = 18;
+    /** @hide */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_12 = 19;
+    /** @hide */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_16 = 20;
 
     private static final SparseArray<String> SUPPORTED_ENCRYPTION_ALGO_TO_STR;
@@ -73,16 +79,23 @@ public abstract class SaProposal {
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_16, "ENCR_AES_GCM_16");
     }
 
+    /** @hide */
     public static final int KEY_LEN_UNUSED = 0;
+    /** @hide */
     public static final int KEY_LEN_AES_128 = 128;
+    /** @hide */
     public static final int KEY_LEN_AES_192 = 192;
+    /** @hide */
     public static final int KEY_LEN_AES_256 = 256;
 
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({PSEUDORANDOM_FUNCTION_HMAC_SHA1, PSEUDORANDOM_FUNCTION_AES128_XCBC})
     public @interface PseudorandomFunction {}
 
+    /** @hide */
     public static final int PSEUDORANDOM_FUNCTION_HMAC_SHA1 = 2;
+    /** @hide */
     public static final int PSEUDORANDOM_FUNCTION_AES128_XCBC = 4;
 
     private static final SparseArray<String> SUPPORTED_PRF_TO_STR;
@@ -93,6 +106,7 @@ public abstract class SaProposal {
         SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_AES128_XCBC, "PRF_AES128_XCBC");
     }
 
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         INTEGRITY_ALGORITHM_NONE,
@@ -104,11 +118,17 @@ public abstract class SaProposal {
     })
     public @interface IntegrityAlgorithm {}
 
+    /** @hide */
     public static final int INTEGRITY_ALGORITHM_NONE = 0;
+    /** @hide */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA1_96 = 2;
+    /** @hide */
     public static final int INTEGRITY_ALGORITHM_AES_XCBC_96 = 5;
+    /** @hide */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_256_128 = 12;
+    /** @hide */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_384_192 = 13;
+    /** @hide */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_512_256 = 14;
 
     private static final SparseArray<String> SUPPORTED_INTEGRITY_ALGO_TO_STR;
@@ -126,12 +146,16 @@ public abstract class SaProposal {
                 INTEGRITY_ALGORITHM_HMAC_SHA2_512_256, "AUTH_HMAC_SHA2_512_256");
     }
 
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({DH_GROUP_NONE, DH_GROUP_1024_BIT_MODP, DH_GROUP_2048_BIT_MODP})
     public @interface DhGroup {}
 
+    /** @hide */
     public static final int DH_GROUP_NONE = 0;
+    /** @hide */
     public static final int DH_GROUP_1024_BIT_MODP = 2;
+    /** @hide */
     public static final int DH_GROUP_2048_BIT_MODP = 14;
 
     private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
@@ -148,6 +172,7 @@ public abstract class SaProposal {
     private final IntegrityTransform[] mIntegrityAlgorithms;
     private final DhGroupTransform[] mDhGroups;
 
+    /** @hide */
     protected SaProposal(
             @IkePayload.ProtocolId int protocol,
             EncryptionTransform[] encryptionAlgos,
@@ -166,6 +191,7 @@ public abstract class SaProposal {
      * @param reqProposal selected SaProposal from SA initiator
      * @return if current SaProposal from SA responder is consistent with the selected reqProposal
      *     from SA initiator.
+     * @hide
      */
     public boolean isNegotiatedFrom(SaProposal reqProposal) {
         return this.mProtocolId == reqProposal.mProtocolId
@@ -187,23 +213,28 @@ public abstract class SaProposal {
         return Arrays.asList(selectFrom).contains(selected[0]);
     }
 
+    /** @hide */
     @IkePayload.ProtocolId
     public int getProtocolId() {
         return mProtocolId;
     }
 
+    /** @hide */
     public EncryptionTransform[] getEncryptionTransforms() {
         return mEncryptionAlgorithms;
     }
 
+    /** @hide */
     public IntegrityTransform[] getIntegrityTransforms() {
         return mIntegrityAlgorithms;
     }
 
+    /** @hide */
     public DhGroupTransform[] getDhGroupTransforms() {
         return mDhGroups;
     }
 
+    /** @hide */
     protected List<Transform> getAllTransformsAsList() {
         List<Transform> transformList = new LinkedList<>();
 
@@ -221,10 +252,15 @@ public abstract class SaProposal {
      * <p>This method should be called by only IKE library.
      *
      * @return Array of Transforms to be encoded.
+     * @hide
      */
     public abstract Transform[] getAllTransforms();
 
-    /** This class is an abstract Builder for building a SaProposal */
+    /**
+     * This class is an abstract Builder for building a SaProposal.
+     *
+     * @hide
+     */
     protected abstract static class Builder {
         protected static final String ERROR_TAG = "Invalid SA Proposal: ";
 
@@ -296,6 +332,7 @@ public abstract class SaProposal {
         }
     }
 
+    /** @hide */
     @Override
     @NonNull
     public String toString() {
@@ -317,6 +354,7 @@ public abstract class SaProposal {
      *
      * @param algorithm IKE standard encryption algorithm id.
      * @return true if the provided algorithm is a supported encryption algorithm.
+     * @hide
      */
     public static boolean isSupportedEncryptionAlgorithm(@EncryptionAlgorithm int algorithm) {
         return SUPPORTED_ENCRYPTION_ALGO_TO_STR.get(algorithm) != null;
@@ -327,6 +365,7 @@ public abstract class SaProposal {
      *
      * @param algorithm IKE standard pseudorandom function id.
      * @return true if the provided algorithm is a supported pseudorandom function.
+     * @hide
      */
     public static boolean isSupportedPseudorandomFunction(@PseudorandomFunction int algorithm) {
         return SUPPORTED_PRF_TO_STR.get(algorithm) != null;
@@ -337,6 +376,7 @@ public abstract class SaProposal {
      *
      * @param algorithm IKE standard integrity algorithm id.
      * @return true if the provided algorithm is a supported integrity algorithm.
+     * @hide
      */
     public static boolean isSupportedIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
         return SUPPORTED_INTEGRITY_ALGO_TO_STR.get(algorithm) != null;
@@ -347,12 +387,17 @@ public abstract class SaProposal {
      *
      * @param dhGroup IKE standard DH Group id.
      * @return true if the provided number is for a supported Diffie-Hellman Group.
+     * @hide
      */
     public static boolean isSupportedDhGroup(@DhGroup int dhGroup) {
         return SUPPORTED_DH_GROUP_TO_STR.get(dhGroup) != null;
     }
 
-    /** Return the encryption algorithm as a String. */
+    /**
+     * Return the encryption algorithm as a String.
+     *
+     * @hide
+     */
     public static String getEncryptionAlgorithmString(int algorithm) {
         if (isSupportedEncryptionAlgorithm(algorithm)) {
             return SUPPORTED_ENCRYPTION_ALGO_TO_STR.get(algorithm);
@@ -360,7 +405,11 @@ public abstract class SaProposal {
         return "ENC_Unknown_" + algorithm;
     }
 
-    /** Return the pseudorandom function as a String. */
+    /**
+     * Return the pseudorandom function as a String.
+     *
+     * @hide
+     */
     public static String getPseudorandomFunctionString(int algorithm) {
         if (isSupportedPseudorandomFunction(algorithm)) {
             return SUPPORTED_PRF_TO_STR.get(algorithm);
@@ -368,7 +417,11 @@ public abstract class SaProposal {
         return "PRF_Unknown_" + algorithm;
     }
 
-    /** Return the integrity algorithm as a String. */
+    /**
+     * Return the integrity algorithm as a String.
+     *
+     * @hide
+     */
     public static String getIntegrityAlgorithmString(int algorithm) {
         if (isSupportedIntegrityAlgorithm(algorithm)) {
             return SUPPORTED_INTEGRITY_ALGO_TO_STR.get(algorithm);
@@ -376,7 +429,11 @@ public abstract class SaProposal {
         return "AUTH_Unknown_" + algorithm;
     }
 
-    /** Return Diffie-Hellman Group as a String. */
+    /**
+     * Return Diffie-Hellman Group as a String.
+     *
+     * @hide
+     */
     public static String getDhGroupString(int dhGroup) {
         if (isSupportedDhGroup(dhGroup)) {
             return SUPPORTED_DH_GROUP_TO_STR.get(dhGroup);

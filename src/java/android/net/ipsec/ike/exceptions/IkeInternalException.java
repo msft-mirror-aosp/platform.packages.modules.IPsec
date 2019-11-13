@@ -18,6 +18,8 @@ package android.net.ipsec.ike.exceptions;
 /**
  * IkeInternalException represents all IKE-library-related exceptions that are not IKE protocol
  * error.
+ *
+ * @hide
  */
 public final class IkeInternalException extends IkeException {
     /**
@@ -25,6 +27,7 @@ public final class IkeInternalException extends IkeException {
      *
      * @param cause the cause (which is saved for later retrieval by the {@link #getCause()}
      *     method).
+     * @hide
      */
     public IkeInternalException(Throwable cause) {
         super(cause);
@@ -36,6 +39,7 @@ public final class IkeInternalException extends IkeException {
      * @param message the descriptive message.
      * @param cause the cause (which is saved for later retrieval by the {@link #getCause()}
      *     method).
+     * @hide
      */
     public IkeInternalException(String message, Throwable cause) {
         super(message, cause);
