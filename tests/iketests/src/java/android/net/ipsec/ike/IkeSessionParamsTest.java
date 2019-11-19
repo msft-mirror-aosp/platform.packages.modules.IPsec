@@ -98,7 +98,8 @@ public final class IkeSessionParamsTest {
     private void verifyIkeSessionParamsCommon(IkeSessionParams sessionParams) {
         assertEquals(REMOTE_IPV4_ADDRESS, sessionParams.getServerAddress());
         assertEquals(mUdpEncapSocket, sessionParams.getUdpEncapsulationSocket());
-        assertArrayEquals(new SaProposal[] {mIkeSaProposal}, sessionParams.getSaProposals());
+        assertArrayEquals(
+                new SaProposal[] {mIkeSaProposal}, sessionParams.getSaProposalsInternal());
 
         assertEquals(mLocalIdentification, sessionParams.getLocalIdentification());
         assertEquals(mRemoteIdentification, sessionParams.getRemoteIdentification());

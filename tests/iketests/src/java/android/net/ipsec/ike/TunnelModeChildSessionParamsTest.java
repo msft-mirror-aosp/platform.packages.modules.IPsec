@@ -79,15 +79,15 @@ public final class TunnelModeChildSessionParamsTest {
     }
 
     private void verifyCommon(TunnelModeChildSessionParams childParams) {
-        assertArrayEquals(new SaProposal[] {mSaProposal}, childParams.getSaProposals());
-        assertEquals(NUM_TS, childParams.getLocalTrafficSelectors().length);
-        assertEquals(NUM_TS, childParams.getRemoteTrafficSelectors().length);
+        assertArrayEquals(new SaProposal[] {mSaProposal}, childParams.getSaProposalsInternal());
+        assertEquals(NUM_TS, childParams.getLocalTrafficSelectorsInternal().length);
+        assertEquals(NUM_TS, childParams.getRemoteTrafficSelectorsInternal().length);
         assertFalse(childParams.isTransportMode());
     }
 
     private void verifyAttrTypes(
             SparseArray expectedAttrCntMap, TunnelModeChildSessionParams childParams) {
-        ConfigAttribute[] configAttributes = childParams.getConfigurationRequests();
+        ConfigAttribute[] configAttributes = childParams.getConfigurationAttributesInternal();
 
         SparseArray<Integer> atrrCntMap = expectedAttrCntMap.clone();
 
@@ -108,7 +108,7 @@ public final class TunnelModeChildSessionParamsTest {
                 new TunnelModeChildSessionParams.Builder().addSaProposal(mSaProposal).build();
 
         verifyCommon(childParams);
-        assertEquals(0, childParams.getConfigurationRequests().length);
+        assertEquals(0, childParams.getConfigurationAttributesInternal().length);
     }
 
     @Test

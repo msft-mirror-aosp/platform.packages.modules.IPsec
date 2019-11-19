@@ -19,6 +19,15 @@ package com.android.internal.net.ipsec.ike.message;
 import android.annotation.IntDef;
 import android.net.LinkAddress;
 import android.net.ipsec.ike.IkeManager;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequest;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Address;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4DhcpServer;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4DnsServer;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Netmask;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Subnet;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6Address;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6DnsServer;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6Subnet;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -148,7 +157,7 @@ public final class IkeConfigPayload extends IkePayload {
     // TODO: Create ConfigAttribute subclasses for each attribute.
 
     /** This class represents common information of all Configuration Attributes. */
-    public abstract static class ConfigAttribute {
+    public abstract static class ConfigAttribute implements ConfigRequest {
         private static final int ATTRIBUTE_TYPE_MASK = 0x7fff;
 
         private static final int ATTRIBUTE_HEADER_LEN = 4;
@@ -339,7 +348,8 @@ public final class IkeConfigPayload extends IkePayload {
     }
 
     /** This class represents Configuration Attribute for IPv4 internal address. */
-    public static class ConfigAttributeIpv4Address extends ConfigAttrIpv4AddressBase {
+    public static class ConfigAttributeIpv4Address extends ConfigAttrIpv4AddressBase
+            implements ConfigRequestIpv4Address {
         /** Construct an instance with specified address for an outbound packet. */
         public ConfigAttributeIpv4Address(Inet4Address ipv4Address) {
             super(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, ipv4Address);
@@ -359,6 +369,11 @@ public final class IkeConfigPayload extends IkePayload {
         ConfigAttributeIpv4Address(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, value);
         }
+
+        @Override
+        public Inet4Address getAddress() {
+            return address;
+        }
     }
 
     /**
@@ -367,7 +382,8 @@ public final class IkeConfigPayload extends IkePayload {
      * <p>Non-empty values for this attribute in a CFG_REQUEST do not make sense and thus MUST NOT
      * be included
      */
-    public static class ConfigAttributeIpv4Netmask extends ConfigAttrIpv4AddressBase {
+    public static class ConfigAttributeIpv4Netmask extends ConfigAttrIpv4AddressBase
+            implements ConfigRequestIpv4Netmask {
         /**
          * Construct an instance without a specified netmask for an outbound packet.
          *
@@ -397,7 +413,8 @@ public final class IkeConfigPayload extends IkePayload {
     }
 
     /** This class represents Configuration Attribute for IPv4 DHCP server. */
-    public static class ConfigAttributeIpv4Dhcp extends ConfigAttrIpv4AddressBase {
+    public static class ConfigAttributeIpv4Dhcp extends ConfigAttrIpv4AddressBase
+            implements ConfigRequestIpv4DhcpServer {
         /** Construct an instance with specified DHCP server address for an outbound packet. */
         public ConfigAttributeIpv4Dhcp(Inet4Address ipv4Address) {
             super(CONFIG_ATTR_INTERNAL_IP4_DHCP, ipv4Address);
@@ -417,6 +434,11 @@ public final class IkeConfigPayload extends IkePayload {
         ConfigAttributeIpv4Dhcp(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP4_DHCP, value);
         }
+
+        @Override
+        public Inet4Address getAddress() {
+            return address;
+        }
     }
 
     /**
@@ -425,7 +447,8 @@ public final class IkeConfigPayload extends IkePayload {
      * <p>There is no use case to create a DNS request for a specfic DNS server address. As an IKE
      * client, we will only support building an empty DNS attribute for an outbound IKE packet.
      */
-    public static class ConfigAttributeIpv4Dns extends ConfigAttrIpv4AddressBase {
+    public static class ConfigAttributeIpv4Dns extends ConfigAttrIpv4AddressBase
+            implements ConfigRequestIpv4DnsServer {
         /** Construct an instance with specified DNS server address for an outbound packet. */
         public ConfigAttributeIpv4Dns(Inet4Address ipv4Address) {
             super(CONFIG_ATTR_INTERNAL_IP4_DNS, ipv4Address);
@@ -445,10 +468,16 @@ public final class IkeConfigPayload extends IkePayload {
         ConfigAttributeIpv4Dns(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP4_DNS, value);
         }
+
+        @Override
+        public Inet4Address getAddress() {
+            return address;
+        }
     }
 
     /** This class represents Configuration Attribute for IPv4 subnets. */
-    public static class ConfigAttributeIpv4Subnet extends ConfigAttribute {
+    public static class ConfigAttributeIpv4Subnet extends ConfigAttribute
+            implements ConfigRequestIpv4Subnet {
         private static final int VALUE_LEN = 2 * IPV4_ADDRESS_LEN;
 
         public final LinkAddress linkAddress;
@@ -605,7 +634,8 @@ public final class IkeConfigPayload extends IkePayload {
     }
 
     /** This class represents Configuration Attribute for IPv6 internal addresses. */
-    public static class ConfigAttributeIpv6Address extends ConfigAttrIpv6AddrRangeBase {
+    public static class ConfigAttributeIpv6Address extends ConfigAttrIpv6AddrRangeBase
+            implements ConfigRequestIpv6Address {
         /** Construct an instance with specified address for an outbound packet. */
         public ConfigAttributeIpv6Address(LinkAddress ipv6LinkAddress) {
             super(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, ipv6LinkAddress);
@@ -625,10 +655,21 @@ public final class IkeConfigPayload extends IkePayload {
         ConfigAttributeIpv6Address(byte[] value) throws InvalidSyntaxException {
             super(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, value);
         }
+
+        @Override
+        public Inet6Address getAddress() {
+            return linkAddress == null ? null : (Inet6Address) linkAddress.getAddress();
+        }
+
+        @Override
+        public int getPrefixLength() {
+            return linkAddress == null ? null : linkAddress.getPrefixLength();
+        }
     }
 
     /** This class represents Configuration Attribute for IPv6 subnets. */
-    public static class ConfigAttributeIpv6Subnet extends ConfigAttrIpv6AddrRangeBase {
+    public static class ConfigAttributeIpv6Subnet extends ConfigAttrIpv6AddrRangeBase
+            implements ConfigRequestIpv6Subnet {
         /** Construct an instance with specified subnet for an outbound packet. */
         public ConfigAttributeIpv6Subnet(LinkAddress ipv6LinkAddress) {
             super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, ipv6LinkAddress);
@@ -656,7 +697,8 @@ public final class IkeConfigPayload extends IkePayload {
      * <p>There is no use case to create a DNS request for a specfic DNS server address. As an IKE
      * client, we will only support building an empty DNS attribute for an outbound IKE packet.
      */
-    public static class ConfigAttributeIpv6Dns extends ConfigAttribute {
+    public static class ConfigAttributeIpv6Dns extends ConfigAttribute
+            implements ConfigRequestIpv6DnsServer {
         public final Inet6Address address;
 
         /** Construct an instance with specified DNS server address for an outbound packet. */
@@ -713,6 +755,11 @@ public final class IkeConfigPayload extends IkePayload {
         @Override
         protected boolean isLengthValid(int length) {
             return length == IPV6_ADDRESS_LEN || length == VALUE_LEN_NOT_INCLUDED;
+        }
+
+        @Override
+        public Inet6Address getAddress() {
+            return address;
         }
     }
 

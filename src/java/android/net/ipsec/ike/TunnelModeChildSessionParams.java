@@ -20,6 +20,7 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.annotation.SystemApi;
 import android.net.LinkAddress;
 
@@ -36,6 +37,8 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -47,20 +50,101 @@ import java.util.List;
  */
 @SystemApi
 public final class TunnelModeChildSessionParams extends ChildSessionParams {
-    private final ConfigAttribute[] mConfigRequests;
+    @NonNull private final ConfigAttribute[] mConfigRequests;
 
     private TunnelModeChildSessionParams(
-            IkeTrafficSelector[] localTs,
-            IkeTrafficSelector[] remoteTs,
-            ChildSaProposal[] proposals,
-            ConfigAttribute[] configRequests) {
+            @NonNull IkeTrafficSelector[] localTs,
+            @NonNull IkeTrafficSelector[] remoteTs,
+            @NonNull ChildSaProposal[] proposals,
+            @NonNull ConfigAttribute[] configRequests) {
         super(localTs, remoteTs, proposals, false /*isTransport*/);
         mConfigRequests = configRequests;
     }
 
     /** @hide */
-    public ConfigAttribute[] getConfigurationRequests() {
+    public ConfigAttribute[] getConfigurationAttributesInternal() {
         return mConfigRequests;
+    }
+
+    /** Retrieves the list of Configuration Requests */
+    @NonNull
+    public List<ConfigRequest> getConfigurationRequests() {
+        return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
+    }
+
+    /** Represents a generic configuration request type */
+    public interface ConfigRequest {}
+
+    /** Represents an IPv4 Internal Address request */
+    public interface ConfigRequestIpv4Address extends ConfigRequest {
+        /**
+         * Retrieves the requested internal IPv4 address
+         *
+         * @return The requested IPv4 address, or null if no specific internal address was requested
+         */
+        @Nullable
+        Inet4Address getAddress();
+    }
+
+    /** Represents an IPv4 DHCP server request */
+    public interface ConfigRequestIpv4DhcpServer extends ConfigRequest {
+        /**
+         * Retrieves the requested IPv4 DHCP server address
+         *
+         * @return The requested DHCP server address, or null if no specific DHCP server was
+         *     requested
+         */
+        @Nullable
+        Inet4Address getAddress();
+    }
+
+    /** Represents an IPv4 DNS Server request */
+    public interface ConfigRequestIpv4DnsServer extends ConfigRequest {
+        /**
+         * Retrieves the requested IPv4 DNS server address
+         *
+         * @return The requested DNS server address, or null if no specific DNS server was requested
+         */
+        @Nullable
+        Inet4Address getAddress();
+    }
+
+    /** Represents an IPv4 Subnet request */
+    public interface ConfigRequestIpv4Subnet extends ConfigRequest {}
+
+    /** Represents an IPv4 Netmask request */
+    public interface ConfigRequestIpv4Netmask extends ConfigRequest {}
+
+    /** Represents an IPv6 Internal Address request */
+    public interface ConfigRequestIpv6Address extends ConfigRequest {
+        /**
+         * Retrieves the requested internal IPv6 address
+         *
+         * @return The requested IPv6 address, or null if no specific internal address was requested
+         */
+        @Nullable
+        Inet6Address getAddress();
+
+        /**
+         * Retrieves the prefix length
+         *
+         * @return The requested prefix length, or -1 if no specific IPv6 address was requested
+         */
+        int getPrefixLength();
+    }
+
+    /** Represents an IPv6 Subnet request */
+    public interface ConfigRequestIpv6Subnet extends ConfigRequest {}
+
+    /** Represents an IPv6 DNS Server request */
+    public interface ConfigRequestIpv6DnsServer extends ConfigRequest {
+        /**
+         * Retrieves the requested IPv6 DNS server address
+         *
+         * @return The requested DNS server address, or null if no specific DNS server was requested
+         */
+        @Nullable
+        Inet6Address getAddress();
     }
 
     /** This class can be used to incrementally construct a {@link TunnelModeChildSessionParams}. */
