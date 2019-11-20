@@ -21,3 +21,9 @@ java_library {
     },
     srcs: ["src/java/**/*.java"],
 }
+
+filegroup {
+    name: "ike-api-srcs",
+    srcs: ["src/java/android/**/*.java"],
+    path: "src/java/",
+}
