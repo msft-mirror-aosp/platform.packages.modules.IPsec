@@ -26,7 +26,7 @@ android_test {
     libs: ["android.test.runner"],
 
     static_libs: [
-        "ike",
+        "ike_test", // Runs against a test version of the IKE library, not on the system's copy.
         "androidx.test.rules",
         "frameworks-base-testutils",
         "mockito-target-inline-minus-junit4",
@@ -38,6 +38,12 @@ android_test {
         "libstaticjvmtiagent",
         "libmultiplejvmtiagentsinterferenceagent",
     ],
+}
+
+java_library {
+    name: "ike_test",
+    installable: false, // Used only for testing; never installed alone.
+    srcs: [":ike-srcs"],
 
     jarjar_rules: "jarjar-rules-test.txt",
 }

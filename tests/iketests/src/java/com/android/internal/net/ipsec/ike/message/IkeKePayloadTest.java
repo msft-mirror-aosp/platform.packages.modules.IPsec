@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.test.ipsec.ike.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -22,12 +22,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.test.ike.SaProposal;
 
-import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.IkeDhParams;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.utils.BigIntegerUtils;
+import com.android.internal.net.test.TestUtils;
+import com.android.internal.net.test.ipsec.ike.IkeDhParams;
+import com.android.internal.net.test.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.test.utils.BigIntegerUtils;
 
 import org.junit.Before;
 import org.junit.Test;

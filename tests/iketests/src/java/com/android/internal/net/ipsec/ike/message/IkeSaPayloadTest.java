@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.test.ipsec.ike.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -35,31 +35,31 @@ import static org.mockito.Mockito.when;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecSpiResponse;
-import android.net.ipsec.ike.ChildSaProposal;
-import android.net.ipsec.ike.IkeSaProposal;
-import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.ChildSaProposal;
+import android.net.ipsec.test.ike.IkeSaProposal;
+import android.net.ipsec.test.ike.SaProposal;
+import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
 import android.util.Pair;
 
-import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Attribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.AttributeDecoder;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EsnTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.KeyLengthAttribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Proposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.TransformDecoder;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.UnrecognizedAttribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.UnrecognizedTransform;
-import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.test.TestUtils;
+import com.android.internal.net.test.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.test.ipsec.ike.exceptions.NoValidProposalChosenException;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.Attribute;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.AttributeDecoder;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.ChildProposal;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.EsnTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.IkeProposal;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.KeyLengthAttribute;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.Proposal;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.TransformDecoder;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.UnrecognizedAttribute;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.UnrecognizedTransform;
+import com.android.internal.net.test.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.server.IpSecService;
 
 import org.junit.Before;

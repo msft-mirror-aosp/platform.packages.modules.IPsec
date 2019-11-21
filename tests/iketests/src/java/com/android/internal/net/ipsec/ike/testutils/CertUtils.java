@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.testutils;
+package com.android.internal.net.test.ipsec.ike.testutils;
 
 import android.content.Context;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.internal.net.ipsec.ike.message.IkeMessage;
+import com.android.internal.net.test.ipsec.ike.message.IkeMessage;
 import com.android.org.bouncycastle.util.io.pem.PemObject;
 import com.android.org.bouncycastle.util.io.pem.PemReader;
 

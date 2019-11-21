@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.statemachine;
+package com.android.internal.net.test.eap.statemachine;
 
-import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
-import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
-import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
-import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.internal.net.test.eap.message.EapData.EAP_IDENTITY;
+import static com.android.internal.net.test.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.internal.net.test.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.internal.net.test.eap.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.internal.net.test.eap.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
@@ -30,20 +30,20 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import com.android.internal.net.eap.EapResult;
-import com.android.internal.net.eap.EapResult.EapError;
-import com.android.internal.net.eap.EapResult.EapFailure;
-import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
-import com.android.internal.net.eap.message.EapData;
-import com.android.internal.net.eap.message.EapMessage;
-import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute;
-import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
-import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
-import com.android.internal.net.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
-import com.android.internal.net.eap.message.simaka.EapSimTypeData;
-import com.android.internal.net.eap.statemachine.EapMethodStateMachine.FinalState;
-import com.android.internal.net.eap.statemachine.EapSimMethodStateMachine.CreatedState;
-import com.android.internal.net.eap.statemachine.EapSimMethodStateMachine.StartState;
+import com.android.internal.net.test.eap.EapResult;
+import com.android.internal.net.test.eap.EapResult.EapError;
+import com.android.internal.net.test.eap.EapResult.EapFailure;
+import com.android.internal.net.test.eap.exceptions.EapInvalidRequestException;
+import com.android.internal.net.test.eap.message.EapData;
+import com.android.internal.net.test.eap.message.EapMessage;
+import com.android.internal.net.test.eap.message.simaka.EapSimAkaAttribute;
+import com.android.internal.net.test.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
+import com.android.internal.net.test.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.internal.net.test.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
+import com.android.internal.net.test.eap.message.simaka.EapSimTypeData;
+import com.android.internal.net.test.eap.statemachine.EapMethodStateMachine.FinalState;
+import com.android.internal.net.test.eap.statemachine.EapSimMethodStateMachine.CreatedState;
+import com.android.internal.net.test.eap.statemachine.EapSimMethodStateMachine.StartState;
 
 import org.junit.Before;
 import org.junit.Test;

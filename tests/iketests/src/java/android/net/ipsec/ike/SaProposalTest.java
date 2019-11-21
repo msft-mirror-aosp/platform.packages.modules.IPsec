@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike;
+package android.net.ipsec.test.ike;
 
-import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_128;
-import static android.net.ipsec.ike.SaProposal.KEY_LEN_UNUSED;
+import static android.net.ipsec.test.ike.SaProposal.KEY_LEN_AES_128;
+import static android.net.ipsec.test.ike.SaProposal.KEY_LEN_UNUSED;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -25,12 +25,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.android.internal.net.ipsec.ike.message.IkePayload;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.internal.net.test.ipsec.ike.message.IkePayload;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.Transform;
 
 import org.junit.Test;
 
