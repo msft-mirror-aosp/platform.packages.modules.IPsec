@@ -16,6 +16,9 @@
 
 package android.net.ipsec.ike;
 
+import android.annotation.NonNull;
+import android.annotation.SystemApi;
+
 import libcore.net.InetAddressUtils;
 
 import java.net.InetAddress;
@@ -23,11 +26,16 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * This abstract class is the superclass of all classes representing a set of user configurations
- * for Child Session negotiation.
+ * ChildSessionOptions is an abstract class that represents proposed configurations for negotiating
+ * a Child Session.
  *
+ * <p>Note that references to negotiated configurations will be held, and the same options will be
+ * reused during rekey. This includes SA Proposals, lifetimes and traffic selectors.
+ *
+ * @see {@link TunnelModeChildSessionOptions} and {@link TransportModeChildSessionOptions}
  * @hide
  */
+@SystemApi
 public abstract class ChildSessionOptions {
     private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
     // TODO: b/130765172 Add TRAFFIC_SELECTOR_IPV6 and instantiate it.
@@ -81,9 +89,9 @@ public abstract class ChildSessionOptions {
      * @hide
      */
     protected abstract static class Builder {
-        protected final List<IkeTrafficSelector> mLocalTsList = new LinkedList<>();
-        protected final List<IkeTrafficSelector> mRemoteTsList = new LinkedList<>();
-        protected final List<SaProposal> mSaProposalList = new LinkedList<>();
+        @NonNull protected final List<IkeTrafficSelector> mLocalTsList = new LinkedList<>();
+        @NonNull protected final List<IkeTrafficSelector> mRemoteTsList = new LinkedList<>();
+        @NonNull protected final List<SaProposal> mSaProposalList = new LinkedList<>();
 
         protected Builder() {
             // Currently IKE library only accepts setting up Child SA that all ports and all
@@ -95,7 +103,7 @@ public abstract class ChildSessionOptions {
             // TODO: add IPv6 TS to ChildSessionOptions.
         }
 
-        protected void validateAndAddSaProposal(ChildSaProposal proposal) {
+        protected void validateAndAddSaProposal(@NonNull ChildSaProposal proposal) {
             mSaProposalList.add(proposal);
         }
 
