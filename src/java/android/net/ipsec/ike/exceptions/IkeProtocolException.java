@@ -16,6 +16,8 @@
 package android.net.ipsec.ike.exceptions;
 
 import android.annotation.IntDef;
+import android.annotation.Nullable;
+import android.annotation.SystemApi;
 
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 
@@ -27,10 +29,13 @@ import java.nio.ByteBuffer;
  * IkeProtocolException is an abstract class that represents the common information for all IKE
  * protocol errors.
  *
+ * <p>Error types are as defined by RFC 7296.
+ *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+@SystemApi
 public abstract class IkeProtocolException extends IkeException {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -54,37 +59,40 @@ public abstract class IkeProtocolException extends IkeException {
     })
     public @interface ErrorType {}
 
-    /** @hide */
+    /** Unsupported critical payload */
     public static final int ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1;
-    /** @hide */
+    /** Unrecognized destination IKE SPI */
     public static final int ERROR_TYPE_INVALID_IKE_SPI = 4;
-    /** @hide */
+    /** Invalid major version */
     public static final int ERROR_TYPE_INVALID_MAJOR_VERSION = 5;
-    /** @hide */
+    /** Invalid syntax */
     public static final int ERROR_TYPE_INVALID_SYNTAX = 7;
-    /** @hide */
+    /** Invalid message ID */
     public static final int ERROR_TYPE_INVALID_MESSAGE_ID = 9;
-    /** @hide */
+    /** No SA Proposal Chosen is acceptable */
     public static final int ERROR_TYPE_NO_PROPOSAL_CHOSEN = 14;
-    /** @hide */
+    /** Invalid Key Exchaneg Payload */
     public static final int ERROR_TYPE_INVALID_KE_PAYLOAD = 17;
-    /** @hide */
+    /** IKE authentication failed */
     public static final int ERROR_TYPE_AUTHENTICATION_FAILED = 24;
-    /** @hide */
+    /** Only Traffic Selectors specifying a single pair of addresses are acceptable */
     public static final int ERROR_TYPE_SINGLE_PAIR_REQUIRED = 34;
-    /** @hide */
+    /** No additional SAa are acceptable */
     public static final int ERROR_TYPE_NO_ADDITIONAL_SAS = 35;
-    /** @hide */
+    /** No internal addresses can be assigned */
     public static final int ERROR_TYPE_INTERNAL_ADDRESS_FAILURE = 36;
-    /** @hide */
+    /** Configuration Payload required but not found in IKE setup */
     public static final int ERROR_TYPE_FAILED_CP_REQUIRED = 37;
-    /** @hide */
+    /** No Traffic Selectors are acceptable */
     public static final int ERROR_TYPE_TS_UNACCEPTABLE = 38;
-    /** @hide */
+    /**
+     * An IPsec Packet was found to have mismatched Traffic Selectors of the IPsec SA on which it
+     * was delivered
+     */
     public static final int ERROR_TYPE_INVALID_SELECTORS = 39;
-    /** @hide */
+    /** Temporary failure */
     public static final int ERROR_TYPE_TEMPORARY_FAILURE = 43;
-    /** @hide */
+    /** Child SA in the received packet does not exist */
     public static final int ERROR_TYPE_CHILD_SA_NOT_FOUND = 44;
 
     /** @hide */
@@ -182,7 +190,6 @@ public abstract class IkeProtocolException extends IkeException {
      * Returns the IKE standard protocol error type of this {@link IkeProtocolException} instance.
      *
      * @return the IKE standard protocol error type.
-     * @hide
      */
     @ErrorType
     public int getErrorType() {
@@ -193,12 +200,12 @@ public abstract class IkeProtocolException extends IkeException {
      * Returns the included error data of this {@link IkeProtocolException} instance.
      *
      * <p>Note that only few error types will go with an error data. This data has different meaning
-     * with different error types. Users should first check if an error data is included before they
-     * call this method.
+     * with different error types. Callers should first check if an error data is included before
+     * they call this method.
      *
-     * @return the included error data in byte array.
-     * @hide
+     * @return the included error data in byte array, or {@code null} if no error data is available.
      */
+    @Nullable
     public byte[] getErrorData() {
         return mErrorData;
     }

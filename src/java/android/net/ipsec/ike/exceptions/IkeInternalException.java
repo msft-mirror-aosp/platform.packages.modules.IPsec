@@ -15,12 +15,17 @@
  */
 package android.net.ipsec.ike.exceptions;
 
+import android.annotation.SystemApi;
+
 /**
- * IkeInternalException represents all IKE-library-related exceptions that are not IKE protocol
- * error.
+ * IkeInternalException encapsulates all local implementation or resource related exceptions.
+ *
+ * <p>Causes may include exceptions such as {@link IpSecManager.SpiUnavailableException} when the
+ * requested SPI resources failed to be allocated.
  *
  * @hide
  */
+@SystemApi
 public final class IkeInternalException extends IkeException {
     /**
      * Constructs a new exception with the specified cause.
