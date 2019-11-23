@@ -255,4 +255,13 @@ public final class IkeSessionOptionsTest {
         } catch (IllegalArgumentException expected) {
         }
     }
+
+    @Test
+    public void testNonAsciiFqdnAuthentication() throws Exception {
+        try {
+            new IkeFqdnIdentification("¯\\_(ツ)_/¯");
+            fail("Expected failure based on non-ASCII characters.");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
 }

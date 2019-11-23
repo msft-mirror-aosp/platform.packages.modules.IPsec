@@ -17,6 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 
 import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
@@ -25,13 +26,14 @@ import java.net.UnknownHostException;
 import java.util.Objects;
 
 /**
- * IkeIpv4AddrIdentification represents ID information in IPv4 address ID type.
+ * IkeIpv4AddrIdentification represents an IKE entity identification based on IPv4 address.
  *
  * @hide
  */
+@SystemApi
 public final class IkeIpv4AddrIdentification extends IkeIdentification {
-    /** @hide */
-    public final Inet4Address ipv4Address;
+    /** The IPv4 address. */
+    @NonNull public final Inet4Address ipv4Address;
 
     /**
      * Construct an instance of IkeIpv4AddrIdentification from a decoded inbound packet.
@@ -50,11 +52,9 @@ public final class IkeIpv4AddrIdentification extends IkeIdentification {
     }
 
     /**
-     * Construct an instance of IkeIpv4AddrIdentification with user provided IPv4 address for
-     * building outbound packet.
+     * Construct an instance of {@link IkeIpv4AddrIdentification} with a IPv4 address.
      *
-     * @param address user provided IPv4 address
-     * @hide
+     * @param address the IPv4 address.
      */
     public IkeIpv4AddrIdentification(@NonNull Inet4Address address) {
         super(ID_TYPE_IPV4_ADDR);
@@ -64,6 +64,7 @@ public final class IkeIpv4AddrIdentification extends IkeIdentification {
     /** @hide */
     @Override
     public int hashCode() {
+        // idType is also hashed to prevent collisions with other IkeAuthentication subtypes
         return Objects.hash(idType, ipv4Address);
     }
 
@@ -72,6 +73,7 @@ public final class IkeIpv4AddrIdentification extends IkeIdentification {
     public boolean equals(Object o) {
         if (!(o instanceof IkeIpv4AddrIdentification)) return false;
 
+        // idType already verified based on class type; no need to check again.
         return ipv4Address.equals(((IkeIpv4AddrIdentification) o).ipv4Address);
     }
 
