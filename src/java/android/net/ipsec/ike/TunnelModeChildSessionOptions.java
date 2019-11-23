@@ -20,6 +20,7 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 import android.net.LinkAddress;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
@@ -39,11 +40,12 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * This class contains all user provided configuration options for negotiating a tunnel mode Child
- * Session.
+ * TunnelModeChildSessionOptions represents proposed configurations for negotiating a tunnel mode
+ * Child Session.
  *
  * @hide
  */
+@SystemApi
 public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
     private final ConfigAttribute[] mConfigRequests;
 
@@ -62,9 +64,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
     }
 
     /**
-     * This class can be used to incrementally construct a TunnelModeChildSessionOptions.
-     *
-     * @hide
+     * This class can be used to incrementally construct a {@link TunnelModeChildSessionOptions}.
      */
     public static final class Builder extends ChildSessionOptions.Builder {
         private static final int IPv4_DEFAULT_PREFIX_LEN = 32;
@@ -72,11 +72,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         private boolean mHasIp4AddressRequest;
         private List<ConfigAttribute> mConfigRequestList;
 
-        /**
-         * Create a Builder for negotiating a transport mode Child Session.
-         *
-         * @hide
-         */
+        /** Create a Builder for negotiating a transport mode Child Session. */
         public Builder() {
             super();
             mHasIp4AddressRequest = false;
@@ -84,13 +80,12 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds an Child SA proposal to TunnelModeChildSessionOptions being built.
+         * Adds an Child SA proposal to the {@link TunnelModeChildSessionOptions} being built.
          *
          * @param proposal Child SA proposal.
          * @return Builder this, to facilitate chaining.
-         * @throws IllegalArgumentException if input proposal is not a Child SA proposal.
-         * @hide
          */
+        @NonNull
         public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
             validateAndAddSaProposal(proposal);
             return this;
@@ -109,8 +104,8 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
          *
          * @param trafficSelector the inbound {@link IkeTrafficSelector}.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             // TODO: Implement it.
             throw new UnsupportedOperationException("Not yet supported");
@@ -129,33 +124,29 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
          *
          * @param trafficSelector the outbound {@link IkeTrafficSelector}.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             // TODO: Implement it.
             throw new UnsupportedOperationException("Not yet supported");
         }
 
         /**
-         * Adds internal IP address requests to TunnelModeChildSessionOptions being built.
+         * Adds an internal IP address request to the {@link TunnelModeChildSessionOptions} being
+         * built.
          *
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
          *     OsConstants.AF_INET6} are allowed.
-         * @param numOfRequest the number of requests for this type of address.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
-        public Builder addInternalAddressRequest(int addressFamily, int numOfRequest) {
+        @NonNull
+        public Builder addInternalAddressRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
                 mHasIp4AddressRequest = true;
-                for (int i = 0; i < numOfRequest; i++) {
-                    mConfigRequestList.add(new ConfigAttributeIpv4Address());
-                }
+                mConfigRequestList.add(new ConfigAttributeIpv4Address());
                 return this;
             } else if (addressFamily == AF_INET6) {
-                for (int i = 0; i < numOfRequest; i++) {
-                    mConfigRequestList.add(new ConfigAttributeIpv6Address());
-                }
+                mConfigRequestList.add(new ConfigAttributeIpv6Address());
                 return this;
             } else {
                 throw new IllegalArgumentException("Invalid address family: " + addressFamily);
@@ -163,14 +154,15 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds specific internal IP address request to TunnelModeChildSessionOptions being built.
+         * Adds a specific internal IP address request to the {@link TunnelModeChildSessionOptions}
+         * being built.
          *
          * @param address the requested address.
          * @param prefixLen length of the InetAddress prefix. When requesting an IPv4 address,
          *     prefixLen MUST be 32.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder addInternalAddressRequest(@NonNull InetAddress address, int prefixLen) {
             if (address instanceof Inet4Address) {
                 if (prefixLen != IPv4_DEFAULT_PREFIX_LEN) {
@@ -189,24 +181,20 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds internal DNS server requests to TunnelModeChildSessionOptions being built.
+         * Adds an internal DNS server request to the {@link TunnelModeChildSessionOptions} being
+         * built.
          *
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
          *     OsConstants.AF_INET6} are allowed.
-         * @param numOfRequest the number of requests for this type of address.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
-        public Builder addInternalDnsServerRequest(int addressFamily, int numOfRequest) {
+        @NonNull
+        public Builder addInternalDnsServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
-                for (int i = 0; i < numOfRequest; i++) {
-                    mConfigRequestList.add(new ConfigAttributeIpv4Dns());
-                }
+                mConfigRequestList.add(new ConfigAttributeIpv4Dns());
                 return this;
             } else if (addressFamily == AF_INET6) {
-                for (int i = 0; i < numOfRequest; i++) {
-                    mConfigRequestList.add(new ConfigAttributeIpv6Dns());
-                }
+                mConfigRequestList.add(new ConfigAttributeIpv6Dns());
                 return this;
             } else {
                 throw new IllegalArgumentException("Invalid address family: " + addressFamily);
@@ -214,12 +202,13 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds internal DNS server requests to TunnelModeChildSessionOptions being built.
+         * Adds a specific internal DNS server request to the {@link TunnelModeChildSessionOptions}
+         * being built.
          *
          * @param address the requested DNS server address.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder addInternalDnsServerRequest(@NonNull InetAddress address) {
             if (address instanceof Inet4Address) {
                 mConfigRequestList.add(new ConfigAttributeIpv4Dns((Inet4Address) address));
@@ -233,24 +222,20 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds internal subnet requests to TunnelModeChildSessionOptions being built.
+         * Adds an internal subnet requests to the {@link TunnelModeChildSessionOptions} being
+         * built.
          *
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
          *     OsConstants.AF_INET6} are allowed.
-         * @param numOfRequest the number of requests for this type of address.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
-        public Builder addInternalSubnetRequest(int addressFamily, int numOfRequest) {
+        @NonNull
+        public Builder addInternalSubnetRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
-                for (int i = 0; i < numOfRequest; i++) {
-                    mConfigRequestList.add(new ConfigAttributeIpv4Subnet());
-                }
+                mConfigRequestList.add(new ConfigAttributeIpv4Subnet());
                 return this;
             } else if (addressFamily == AF_INET6) {
-                for (int i = 0; i < numOfRequest; i++) {
-                    mConfigRequestList.add(new ConfigAttributeIpv6Subnet());
-                }
+                mConfigRequestList.add(new ConfigAttributeIpv6Subnet());
                 return this;
             } else {
                 throw new IllegalArgumentException("Invalid address family: " + addressFamily);
@@ -258,20 +243,18 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds internal DHCP server requests to TunnelModeChildSessionOptions being built.
+         * Adds internal DHCP server requests to the {@link TunnelModeChildSessionOptions} being
+         * built.
          *
-         * <p>Only DHCP4 server requests are supported.
+         * <p>Only DHCPv4 server requests are supported.
          *
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} is allowed.
-         * @param numOfRequest the number of requests for this type of address.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
-        public Builder addInternalDhcpServerRequest(int addressFamily, int numOfRequest) {
+        @NonNull
+        public Builder addInternalDhcpServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
-                for (int i = 0; i < numOfRequest; i++) {
-                    mConfigRequestList.add(new ConfigAttributeIpv4Dhcp());
-                }
+                mConfigRequestList.add(new ConfigAttributeIpv4Dhcp());
                 return this;
             } else {
                 throw new IllegalArgumentException("Invalid address family: " + addressFamily);
@@ -279,14 +262,15 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds internal DHCP server requests to TunnelModeChildSessionOptions being built.
+         * Adds a specific internal DHCP server request to the {@link TunnelModeChildSessionOptions}
+         * being built.
          *
-         * <p>Only DHCP4 server requests are supported.
+         * <p>Only DHCPv4 server requests are supported.
          *
          * @param address the requested DHCP server address.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder addInternalDhcpServerRequest(@NonNull InetAddress address) {
             if (address instanceof Inet4Address) {
                 mConfigRequestList.add(new ConfigAttributeIpv4Dhcp((Inet4Address) address));
@@ -297,12 +281,11 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Validates, builds and returns the TunnelModeChildSessionOptions.
+         * Validates and builds the {@link TunnelModeChildSessionOptions}.
          *
-         * @return the validated TunnelModeChildSessionOptions.
-         * @throws IllegalArgumentException if no Child SA proposal is provided.
-         * @hide
+         * @return the validated {@link TunnelModeChildSessionOptions}.
          */
+        @NonNull
         public TunnelModeChildSessionOptions build() {
             validateOrThrow();
 
