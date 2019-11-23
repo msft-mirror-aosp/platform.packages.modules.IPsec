@@ -17,40 +17,47 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
- * Callback interface for receiving state changes of an IKE Session.
+ * Callback interface for receiving state changes of an {@link IkeSession}.
+ *
+ * <p>{@link IkeSessionCallback} MUST be unique to each {@link IkeSession}. It is registered when
+ * callers are requesting a new {@link IkeSession}. It is automatically unregistered when an {@link
+ * IkeSession} is closed.
  *
  * @hide
  */
+@SystemApi
 public interface IkeSessionCallback {
     /**
-     * Called when negotiation and authentication for this new IKE Session succeeds.
+     * Called when the {@link IkeSession} setup succeeds.
      *
-     * @param sessionConfiguration the configuration information of IKE Session negotiated during
-     *     IKE setup.
-     * @hide
+     * <p>This method does not indicate the first Child Session has been setup. Caller MUST refer to
+     * the corresponding {@link ChildSessionCallback} for the Child Session setup result.
+     *
+     * @param sessionConfiguration the configuration information of {@link IkeSession} negotiated
+     *     during IKE setup.
      */
     void onOpened(@NonNull IkeSessionConfiguration sessionConfiguration);
 
     /**
-     * Called when either side has decided to close this Session and the deletion exchange finishes.
+     * Called when the {@link IkeSession} is closed.
      *
-     * <p>This method will not be fired if this deletion is caused by a fatal error.
-     *
-     * @hide
+     * <p>When the closure is caused by a local, fatal error, {@link
+     * #onClosedExceptionally(IkeException)} will be fired instead of this method.
      */
     void onClosed();
 
     /**
-     * Called if IKE Session negotiation fails or IKE Session is closed because of a fatal error.
+     * Called if {@link IkeSession} setup failed or {@link IkeSession} is closed because of a fatal
+     * error.
      *
-     * @param exception the detailed error.
-     * @hide
+     * @param exception the detailed error information.
      */
-    void onClosedExceptionally(IkeException exception);
+    void onClosedExceptionally(@NonNull IkeException exception);
 
     /**
      * Called if a recoverable error is encountered in an established {@link IkeSession}.
@@ -59,7 +66,6 @@ public interface IkeSessionCallback {
      * INVALID_MESSAGE_ID.
      *
      * @param exception the detailed error information.
-     * @hide
      */
-    void onError(IkeProtocolException exception);
+    void onError(@NonNull IkeProtocolException exception);
 }
