@@ -36,4 +36,6 @@ android_test {
         "libstaticjvmtiagent",
         "libmultiplejvmtiagentsinterferenceagent",
     ],
+
+    jarjar_rules: "jarjar-rules-test.txt",
 }
