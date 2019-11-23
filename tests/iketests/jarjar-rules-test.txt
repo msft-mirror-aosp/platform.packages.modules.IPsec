@@ -1,0 +1,3 @@
+rule com.android.internal.net.** com.android.internal.net.test.@1
+rule android.net.eap.** android.net.eap.test.@1
+rule android.net.ipsec.** android.net.ipsec.test.@1
