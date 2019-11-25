@@ -16,6 +16,9 @@
 
 package android.net.ipsec.ike;
 
+import android.annotation.NonNull;
+import android.annotation.SystemApi;
+
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
@@ -27,15 +30,18 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * ChildSaProposal represents a user configured set contains cryptograhic algorithms and key
- * generating materials for negotiating an Child SA.
+ * ChildSaProposal represents a proposed configuration to negotiate a Child SA.
  *
- * <p>User must provide at least a valid ChildSaProposal when they are creating a new Child SA.
+ * <p>ChildSaProposal will contain cryptograhic algorithms and key generation materials for the
+ * negotiation of a Child SA.
+ *
+ * <p>User must provide at least one valid ChildSaProposal when they are creating a new Child SA.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+@SystemApi
 public final class ChildSaProposal extends SaProposal {
     private final EsnTransform[] mEsns;
 
@@ -102,48 +108,45 @@ public final class ChildSaProposal extends SaProposal {
     }
 
     /**
-     * This class can be used to incrementally construct a ChildSaProposal. ChildSaProposal
-     * instances are immutable once built.
-     *
-     * <p>TODO: Support users to add algorithms from most preferred to least preferred.
-     *
-     * @hide
+     * This class is used to incrementally construct a ChildSaProposal. ChildSaProposal instances
+     * are immutable once built.
      */
     public static final class Builder extends SaProposal.Builder {
+        // TODO: Support users to add algorithms from most preferred to least preferred.
+
         /**
-         * Adds an encryption algorithm with specific key length to SA proposal being built.
+         * Adds an encryption algorithm with a specific key length to the SA proposal being built.
          *
          * @param algorithm encryption algorithm to add to ChildSaProposal.
-         * @param keyLength key length of algorithm. For algorithm that has fixed key length (e.g.
-         *     3DES) only KEY_LEN_UNUSED is allowed.
+         * @param keyLength key length of algorithm. For algorithms that have fixed key length (e.g.
+         *     3DES) only {@link SaProposal.KEY_LEN_UNUSED} is allowed.
          * @return Builder of ChildSaProposal.
-         * @throws IllegalArgumentException if AEAD and non-combined mode algorithms are mixed.
-         * @hide
          */
+        @NonNull
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
             validateAndAddEncryptAlgo(algorithm, keyLength);
             return this;
         }
 
         /**
-         * Adds an integrity algorithm to SA proposal being built.
+         * Adds an integrity algorithm to the SA proposal being built.
          *
          * @param algorithm integrity algorithm to add to ChildSaProposal.
          * @return Builder of ChildSaProposal.
-         * @hide
          */
+        @NonNull
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
             addIntegrityAlgo(algorithm);
             return this;
         }
 
         /**
-         * Adds a Diffie-Hellman Group to SA proposal being built.
+         * Adds a Diffie-Hellman Group to the SA proposal being built.
          *
          * @param dhGroup to add to ChildSaProposal.
          * @return Builder of ChildSaProposal.
-         * @hide
          */
+        @NonNull
         public Builder addDhGroup(@DhGroup int dhGroup) {
             addDh(dhGroup);
             return this;
@@ -167,12 +170,11 @@ public final class ChildSaProposal extends SaProposal {
         }
 
         /**
-         * Validates, builds and returns the ChildSaProposal
+         * Validates and builds the ChildSaProposal.
          *
          * @return the validated ChildSaProposal.
-         * @throws IllegalArgumentException if ChildSaProposal is invalid.
-         * @hide
          */
+        @NonNull
         public ChildSaProposal build() {
             EncryptionTransform[] encryptionTransforms = buildEncryptAlgosOrThrow();
             IntegrityTransform[] integrityTransforms = buildIntegAlgosOrThrow();
