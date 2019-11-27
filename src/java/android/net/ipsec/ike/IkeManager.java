@@ -15,15 +15,11 @@
  */
 package android.net.ipsec.ike;
 
-import android.content.Context;
-
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.utils.Log;
 
-import java.util.concurrent.Executor;
-
 /**
- * This class contains methods for managing IKE sessions.
+ * This class provides global logging methods.
  *
  * @hide
  */
@@ -32,54 +28,6 @@ public final class IkeManager {
     private static final boolean LOG_SENSITIVE = false;
 
     private static Log sIkeLog = new Log(IKE_TAG, LOG_SENSITIVE);
-
-    private final Context mContext;
-
-    /**
-     * Construct an instance of {@link IkeManager}
-     *
-     * @param context the application context.
-     * @hide
-     */
-    public IkeManager(Context context) {
-        mContext = context;
-    }
-
-    /**
-     * Construct an instance of {@link IkeSession} and start the IKE Session setup process.
-     *
-     * <p>This method will immediately return a management object {@link IkeSession} and
-     * asynchronously initiate the IKE Session setup process. Users will be notified of the IKE
-     * Session and Child Session negotiation results on the callback arguments.
-     *
-     * @param ikeSessionOptions the {@link IkeSessionOptions} that contains acceptable IKE Session
-     *     configurations.
-     * @param firstChildSessionOptions the {@link ChildSessionOptions} that contains acceptable
-     *     first Child Session configurations.
-     * @param userCbExecutor the {@link Executor} upon which all callbacks will be posted. For
-     *     security and consistency, the callbacks posted to this executor MUST be executed
-     *     serially, in the order they were posted.
-     * @param ikeSessionCallback the {@link IkeSessionCallback} interface to notify users the state
-     *     changes of the IKE Session.
-     * @param firstChildSessionCallback the {@link ChildSessionCallback} interface to notify users
-     *     the state changes of the Child Session.
-     * @return an instance of {@link IkeSession}
-     * @hide
-     */
-    public IkeSession openIkeSession(
-            IkeSessionOptions ikeSessionOptions,
-            ChildSessionOptions firstChildSessionOptions,
-            Executor userCbExecutor,
-            IkeSessionCallback ikeSessionCallback,
-            ChildSessionCallback firstChildSessionCallback) {
-        return new IkeSession(
-                mContext,
-                ikeSessionOptions,
-                firstChildSessionOptions,
-                userCbExecutor,
-                ikeSessionCallback,
-                firstChildSessionCallback);
-    }
 
     /**
      * Returns IKE logger.

@@ -116,8 +116,9 @@ public final class TunnelModeChildSessionOptionsTest {
         TunnelModeChildSessionOptions childOptions =
                 new TunnelModeChildSessionOptions.Builder()
                         .addSaProposal(mSaProposal)
-                        .addInternalAddressRequest(AF_INET, 1)
-                        .addInternalAddressRequest(AF_INET6, 2)
+                        .addInternalAddressRequest(AF_INET)
+                        .addInternalAddressRequest(AF_INET6)
+                        .addInternalAddressRequest(AF_INET6)
                         .addInternalAddressRequest(IPV4_ADDRESS, IP4_PREFIX_LEN)
                         .addInternalAddressRequest(IPV6_ADDRESS, IP6_PREFIX_LEN)
                         .build();
@@ -150,8 +151,8 @@ public final class TunnelModeChildSessionOptionsTest {
         TunnelModeChildSessionOptions childOptions =
                 new TunnelModeChildSessionOptions.Builder()
                         .addSaProposal(mSaProposal)
-                        .addInternalDnsServerRequest(AF_INET, 1)
-                        .addInternalDnsServerRequest(AF_INET6, 1)
+                        .addInternalDnsServerRequest(AF_INET)
+                        .addInternalDnsServerRequest(AF_INET6)
                         .addInternalDnsServerRequest(IPV4_DNS_SERVER)
                         .addInternalDnsServerRequest(IPV6_DNS_SERVER)
                         .build();
@@ -170,8 +171,8 @@ public final class TunnelModeChildSessionOptionsTest {
         TunnelModeChildSessionOptions childOptions =
                 new TunnelModeChildSessionOptions.Builder()
                         .addSaProposal(mSaProposal)
-                        .addInternalSubnetRequest(AF_INET, 1)
-                        .addInternalSubnetRequest(AF_INET6, 1)
+                        .addInternalSubnetRequest(AF_INET)
+                        .addInternalSubnetRequest(AF_INET6)
                         .build();
 
         verifyCommon(childOptions);
@@ -188,7 +189,9 @@ public final class TunnelModeChildSessionOptionsTest {
         TunnelModeChildSessionOptions childOptions =
                 new TunnelModeChildSessionOptions.Builder()
                         .addSaProposal(mSaProposal)
-                        .addInternalDhcpServerRequest(AF_INET, 3)
+                        .addInternalDhcpServerRequest(AF_INET)
+                        .addInternalDhcpServerRequest(AF_INET)
+                        .addInternalDhcpServerRequest(AF_INET)
                         .addInternalDhcpServerRequest(IPV4_DHCP_SERVER)
                         .build();
 
@@ -205,7 +208,9 @@ public final class TunnelModeChildSessionOptionsTest {
         try {
             new TunnelModeChildSessionOptions.Builder()
                     .addSaProposal(mSaProposal)
-                    .addInternalDhcpServerRequest(AF_INET6, 3)
+                    .addInternalDhcpServerRequest(AF_INET6)
+                    .addInternalDhcpServerRequest(AF_INET6)
+                    .addInternalDhcpServerRequest(AF_INET6)
                     .build();
             fail("Expected to fail because DHCP6 is not supported.");
         } catch (IllegalArgumentException expected) {
@@ -218,7 +223,7 @@ public final class TunnelModeChildSessionOptionsTest {
         try {
             new TunnelModeChildSessionOptions.Builder()
                     .addSaProposal(mSaProposal)
-                    .addInternalDhcpServerRequest(INVALID_ADDR_FAMILY, 3)
+                    .addInternalDhcpServerRequest(INVALID_ADDR_FAMILY)
                     .build();
             fail("Expected to fail due to invalid address family value");
         } catch (IllegalArgumentException expected) {

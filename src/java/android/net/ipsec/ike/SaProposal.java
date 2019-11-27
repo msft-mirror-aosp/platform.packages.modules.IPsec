@@ -18,7 +18,9 @@ package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 import android.util.ArraySet;
+import android.util.Pair;
 import android.util.SparseArray;
 
 import com.android.internal.net.ipsec.ike.message.IkePayload;
@@ -30,21 +32,25 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
 /**
- * SaProposal represents a user configured set contains cryptograhic algorithms and key generating
- * materials for negotiating an IKE or Child SA.
+ * SaProposal represents a proposed configuration to negotiate an IKE or Child SA.
  *
- * <p>User must provide at least a valid SaProposal when they are creating a new IKE SA or Child SA.
+ * <p>SaProposal will contain cryptograhic algorithms and key generation materials for the
+ * negotiation of an IKE or Child SA.
+ *
+ * <p>User must provide at least one valid SaProposal when they are creating a new IKE or Child SA.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+@SystemApi
 public abstract class SaProposal {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -57,15 +63,24 @@ public abstract class SaProposal {
     })
     public @interface EncryptionAlgorithm {}
 
-    /** @hide */
+    /** 3DES Encryption/Ciphering Algorithm. */
     public static final int ENCRYPTION_ALGORITHM_3DES = 3;
-    /** @hide */
+    /** AES-CBC Encryption/Ciphering Algorithm. */
     public static final int ENCRYPTION_ALGORITHM_AES_CBC = 12;
-    /** @hide */
+    /**
+     * AES-GCM Authentication/Integrity + Encryption/Ciphering Algorithm with 8-octet ICV
+     * (truncation).
+     */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_8 = 18;
-    /** @hide */
+    /**
+     * AES-GCM Authentication/Integrity + Encryption/Ciphering Algorithm with 12-octet ICV
+     * (truncation).
+     */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_12 = 19;
-    /** @hide */
+    /**
+     * AES-GCM Authentication/Integrity + Encryption/Ciphering Algorithm with 16-octet ICV
+     * (truncation).
+     */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_16 = 20;
 
     private static final SparseArray<String> SUPPORTED_ENCRYPTION_ALGO_TO_STR;
@@ -79,13 +94,18 @@ public abstract class SaProposal {
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_16, "ENCR_AES_GCM_16");
     }
 
-    /** @hide */
+    /**
+     * Key length unused.
+     *
+     * <p>This value should only be used with the Encryption/Ciphering Algorithm that accepts a
+     * fixed key size such as {@link ENCRYPTION_ALGORITHM_3DES}.
+     */
     public static final int KEY_LEN_UNUSED = 0;
-    /** @hide */
+    /** AES Encryption/Ciphering Algorithm key length 128 bits. */
     public static final int KEY_LEN_AES_128 = 128;
-    /** @hide */
+    /** AES Encryption/Ciphering Algorithm key length 192 bits. */
     public static final int KEY_LEN_AES_192 = 192;
-    /** @hide */
+    /** AES Encryption/Ciphering Algorithm key length 256 bits. */
     public static final int KEY_LEN_AES_256 = 256;
 
     /** @hide */
@@ -93,9 +113,9 @@ public abstract class SaProposal {
     @IntDef({PSEUDORANDOM_FUNCTION_HMAC_SHA1, PSEUDORANDOM_FUNCTION_AES128_XCBC})
     public @interface PseudorandomFunction {}
 
-    /** @hide */
+    /** HMAC-SHA1 Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_HMAC_SHA1 = 2;
-    /** @hide */
+    /** AES128-XCBC Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_AES128_XCBC = 4;
 
     private static final SparseArray<String> SUPPORTED_PRF_TO_STR;
@@ -118,17 +138,17 @@ public abstract class SaProposal {
     })
     public @interface IntegrityAlgorithm {}
 
-    /** @hide */
+    /** None Authentication/Integrity Algorithm. */
     public static final int INTEGRITY_ALGORITHM_NONE = 0;
-    /** @hide */
+    /** HMAC-SHA1 Authentication/Integrity Algorithm. */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA1_96 = 2;
-    /** @hide */
+    /** AES-XCBC-96 Authentication/Integrity Algorithm. */
     public static final int INTEGRITY_ALGORITHM_AES_XCBC_96 = 5;
-    /** @hide */
+    /** HMAC-SHA256 Authentication/Integrity Algorithm with 128-bit truncation. */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_256_128 = 12;
-    /** @hide */
+    /** HMAC-SHA384 Authentication/Integrity Algorithm with 192-bit truncation. */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_384_192 = 13;
-    /** @hide */
+    /** HMAC-SHA512 Authentication/Integrity Algorithm with 256-bit truncation. */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_512_256 = 14;
 
     private static final SparseArray<String> SUPPORTED_INTEGRITY_ALGO_TO_STR;
@@ -151,11 +171,11 @@ public abstract class SaProposal {
     @IntDef({DH_GROUP_NONE, DH_GROUP_1024_BIT_MODP, DH_GROUP_2048_BIT_MODP})
     public @interface DhGroup {}
 
-    /** @hide */
+    /** None Diffie-Hellman Group. */
     public static final int DH_GROUP_NONE = 0;
-    /** @hide */
+    /** 1024-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_1024_BIT_MODP = 2;
-    /** @hide */
+    /** 2048-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_2048_BIT_MODP = 14;
 
     private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
@@ -217,6 +237,49 @@ public abstract class SaProposal {
     @IkePayload.ProtocolId
     public int getProtocolId() {
         return mProtocolId;
+    }
+
+    /**
+     * Gets all proposed encryption algorithms
+     *
+     * @return A list of Pairs, with the IANA-defined ID for the proposed encryption algorithm as
+     *     the first item, and the key length (in bits) as the second.
+     */
+    @NonNull
+    public List<Pair<Integer, Integer>> getEncryptionAlgorithms() {
+        final List<Pair<Integer, Integer>> result = new ArrayList<>();
+        for (EncryptionTransform transform : mEncryptionAlgorithms) {
+            result.add(new Pair(transform.id, transform.getSpecifiedKeyLength()));
+        }
+        return result;
+    }
+
+    /**
+     * Gets all proposed integrity algorithms
+     *
+     * @return A list of the IANA-defined IDs for the proposed integrity algorithms
+     */
+    @NonNull
+    public List<Integer> getIntegrityAlgorithms() {
+        final List<Integer> result = new ArrayList<>();
+        for (Transform transform : mIntegrityAlgorithms) {
+            result.add(transform.id);
+        }
+        return result;
+    }
+
+    /**
+     * Gets all proposed Diffie-Hellman groups
+     *
+     * @return A list of the IANA-defined IDs for the proposed Diffie-Hellman groups
+     */
+    @NonNull
+    public List<Integer> getDhGroups() {
+        final List<Integer> result = new ArrayList<>();
+        for (Transform transform : mDhGroups) {
+            result.add(transform.id);
+        }
+        return result;
     }
 
     /** @hide */

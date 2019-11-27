@@ -17,6 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
+import android.annotation.SystemApi;
 import android.util.ArraySet;
 
 import java.lang.annotation.Retention;
@@ -27,10 +28,13 @@ import java.util.Set;
  * IkeIdentification is abstract base class that represents the common information for all types of
  * IKE entity identification.
  *
+ * <p>{@link IkeIdentification} is used in IKE authentication.
+ *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+@SystemApi
 public abstract class IkeIdentification {
     // Set of supported ID types.
     private static final Set<Integer> SUPPORTED_ID_TYPES;
