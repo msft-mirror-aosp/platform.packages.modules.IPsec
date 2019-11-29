@@ -55,8 +55,8 @@ import java.util.List;
  *
  * <p>When doing rekey, there can be multiple SAs in the same IkeSessionStateMachine or
  * ChildSessionStateMachine, where they use same cryptographic algorithms but with different keys.
- * We store cryptographic algorithms and unchanged SA configurations in IkeSessionOptions or
- * ChildSessionOptions and store changed information including keys, SPIs, and nonces in SaRecord.
+ * We store cryptographic algorithms and unchanged SA configurations in IkeSessionParams or
+ * ChildSessionParams and store changed information including keys, SPIs, and nonces in SaRecord.
  *
  * <p>All keys are named by the key type plus the source of the traffic this key is protecting. For
  * example, "mSkAi" represents the integrity key that protects traffic from the SA initiator to the

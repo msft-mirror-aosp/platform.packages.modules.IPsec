@@ -46,7 +46,7 @@ import org.junit.Test;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 
-public final class TunnelModeChildSessionOptionsTest {
+public final class TunnelModeChildSessionParamsTest {
     private static final int NUM_TS = 1;
 
     private static final int IP4_PREFIX_LEN = 32;
@@ -78,16 +78,16 @@ public final class TunnelModeChildSessionOptionsTest {
                         .build();
     }
 
-    private void verifyCommon(TunnelModeChildSessionOptions childOptions) {
-        assertArrayEquals(new SaProposal[] {mSaProposal}, childOptions.getSaProposals());
-        assertEquals(NUM_TS, childOptions.getLocalTrafficSelectors().length);
-        assertEquals(NUM_TS, childOptions.getRemoteTrafficSelectors().length);
-        assertFalse(childOptions.isTransportMode());
+    private void verifyCommon(TunnelModeChildSessionParams childParams) {
+        assertArrayEquals(new SaProposal[] {mSaProposal}, childParams.getSaProposals());
+        assertEquals(NUM_TS, childParams.getLocalTrafficSelectors().length);
+        assertEquals(NUM_TS, childParams.getRemoteTrafficSelectors().length);
+        assertFalse(childParams.isTransportMode());
     }
 
     private void verifyAttrTypes(
-            SparseArray expectedAttrCntMap, TunnelModeChildSessionOptions childOptions) {
-        ConfigAttribute[] configAttributes = childOptions.getConfigurationRequests();
+            SparseArray expectedAttrCntMap, TunnelModeChildSessionParams childParams) {
+        ConfigAttribute[] configAttributes = childParams.getConfigurationRequests();
 
         SparseArray<Integer> atrrCntMap = expectedAttrCntMap.clone();
 
@@ -103,18 +103,18 @@ public final class TunnelModeChildSessionOptionsTest {
     }
 
     @Test
-    public void testBuildChildSessionOptionsWithoutConfigReq() {
-        TunnelModeChildSessionOptions childOptions =
-                new TunnelModeChildSessionOptions.Builder().addSaProposal(mSaProposal).build();
+    public void testBuildChildSessionParamsWithoutConfigReq() {
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder().addSaProposal(mSaProposal).build();
 
-        verifyCommon(childOptions);
-        assertEquals(0, childOptions.getConfigurationRequests().length);
+        verifyCommon(childParams);
+        assertEquals(0, childParams.getConfigurationRequests().length);
     }
 
     @Test
-    public void testBuildChildSessionOptionsWithAddressReq() {
-        TunnelModeChildSessionOptions childOptions =
-                new TunnelModeChildSessionOptions.Builder()
+    public void testBuildChildSessionParamsWithAddressReq() {
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder()
                         .addSaProposal(mSaProposal)
                         .addInternalAddressRequest(AF_INET)
                         .addInternalAddressRequest(AF_INET6)
@@ -123,20 +123,20 @@ public final class TunnelModeChildSessionOptionsTest {
                         .addInternalAddressRequest(IPV6_ADDRESS, IP6_PREFIX_LEN)
                         .build();
 
-        verifyCommon(childOptions);
+        verifyCommon(childParams);
 
         SparseArray<Integer> expectedAttrCntMap = new SparseArray<>();
         expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_ADDRESS, 2);
         expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, 3);
         expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_NETMASK, 1);
 
-        verifyAttrTypes(expectedAttrCntMap, childOptions);
+        verifyAttrTypes(expectedAttrCntMap, childParams);
     }
 
     @Test
-    public void testBuildChildSessionOptionsWithInvalidAddressReq() {
+    public void testBuildChildSessionParamsWithInvalidAddressReq() {
         try {
-            new TunnelModeChildSessionOptions.Builder()
+            new TunnelModeChildSessionParams.Builder()
                     .addSaProposal(mSaProposal)
                     .addInternalAddressRequest(IPV4_ADDRESS, 31)
                     .build();
@@ -147,9 +147,9 @@ public final class TunnelModeChildSessionOptionsTest {
     }
 
     @Test
-    public void testBuildChildSessionOptionsWithDnsServerReq() {
-        TunnelModeChildSessionOptions childOptions =
-                new TunnelModeChildSessionOptions.Builder()
+    public void testBuildChildSessionParamsWithDnsServerReq() {
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder()
                         .addSaProposal(mSaProposal)
                         .addInternalDnsServerRequest(AF_INET)
                         .addInternalDnsServerRequest(AF_INET6)
@@ -157,37 +157,37 @@ public final class TunnelModeChildSessionOptionsTest {
                         .addInternalDnsServerRequest(IPV6_DNS_SERVER)
                         .build();
 
-        verifyCommon(childOptions);
+        verifyCommon(childParams);
 
         SparseArray<Integer> expectedAttrCntMap = new SparseArray<>();
         expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_DNS, 2);
         expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_DNS, 2);
 
-        verifyAttrTypes(expectedAttrCntMap, childOptions);
+        verifyAttrTypes(expectedAttrCntMap, childParams);
     }
 
     @Test
-    public void testBuildChildSessionOptionsWithSubnetReq() {
-        TunnelModeChildSessionOptions childOptions =
-                new TunnelModeChildSessionOptions.Builder()
+    public void testBuildChildSessionParamsWithSubnetReq() {
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder()
                         .addSaProposal(mSaProposal)
                         .addInternalSubnetRequest(AF_INET)
                         .addInternalSubnetRequest(AF_INET6)
                         .build();
 
-        verifyCommon(childOptions);
+        verifyCommon(childParams);
 
         SparseArray<Integer> expectedAttrCntMap = new SparseArray<>();
         expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_SUBNET, 1);
         expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP6_SUBNET, 1);
 
-        verifyAttrTypes(expectedAttrCntMap, childOptions);
+        verifyAttrTypes(expectedAttrCntMap, childParams);
     }
 
     @Test
-    public void testBuildChildSessionOptionsWithDhcpServerReq() {
-        TunnelModeChildSessionOptions childOptions =
-                new TunnelModeChildSessionOptions.Builder()
+    public void testBuildChildSessionParamsWithDhcpServerReq() {
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder()
                         .addSaProposal(mSaProposal)
                         .addInternalDhcpServerRequest(AF_INET)
                         .addInternalDhcpServerRequest(AF_INET)
@@ -195,18 +195,18 @@ public final class TunnelModeChildSessionOptionsTest {
                         .addInternalDhcpServerRequest(IPV4_DHCP_SERVER)
                         .build();
 
-        verifyCommon(childOptions);
+        verifyCommon(childParams);
 
         SparseArray<Integer> expectedAttrCntMap = new SparseArray<>();
         expectedAttrCntMap.put(CONFIG_ATTR_INTERNAL_IP4_DHCP, 4);
 
-        verifyAttrTypes(expectedAttrCntMap, childOptions);
+        verifyAttrTypes(expectedAttrCntMap, childParams);
     }
 
     @Test
-    public void testBuildChildSessionOptionsWithDhcp6SeverReq() {
+    public void testBuildChildSessionParamsWithDhcp6SeverReq() {
         try {
-            new TunnelModeChildSessionOptions.Builder()
+            new TunnelModeChildSessionParams.Builder()
                     .addSaProposal(mSaProposal)
                     .addInternalDhcpServerRequest(AF_INET6)
                     .addInternalDhcpServerRequest(AF_INET6)
@@ -219,9 +219,9 @@ public final class TunnelModeChildSessionOptionsTest {
     }
 
     @Test
-    public void testBuildChildSessionOptionsWithInvalidDhcpReq() {
+    public void testBuildChildSessionParamsWithInvalidDhcpReq() {
         try {
-            new TunnelModeChildSessionOptions.Builder()
+            new TunnelModeChildSessionParams.Builder()
                     .addSaProposal(mSaProposal)
                     .addInternalDhcpServerRequest(INVALID_ADDR_FAMILY)
                     .build();

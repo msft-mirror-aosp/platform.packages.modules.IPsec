@@ -36,8 +36,7 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * IkeSessionOptions contains all user provided configurations for negotiating an {@link
- * IkeSession}.
+ * IkeSessionParams contains all user provided configurations for negotiating an {@link IkeSession}.
  *
  * <p>Note that all negotiated configurations will be reused during rekey including SA Proposal and
  * lifetime.
@@ -45,7 +44,7 @@ import java.util.List;
  * @hide
  */
 @SystemApi
-public final class IkeSessionOptions {
+public final class IkeSessionParams {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({IKE_AUTH_METHOD_PSK, IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, IKE_AUTH_METHOD_EAP})
@@ -71,7 +70,7 @@ public final class IkeSessionOptions {
 
     private final boolean mIsIkeFragmentationSupported;
 
-    private IkeSessionOptions(
+    private IkeSessionParams(
             InetAddress serverAddress,
             UdpEncapsulationSocket udpEncapsulationSocket,
             IkeSaProposal[] proposals,
@@ -220,7 +219,7 @@ public final class IkeSessionOptions {
         }
     }
 
-    /** This class can be used to incrementally construct a {@link IkeSessionOptions}. */
+    /** This class can be used to incrementally construct a {@link IkeSessionParams}. */
     public static final class Builder {
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
 
@@ -236,7 +235,7 @@ public final class IkeSessionOptions {
         private boolean mIsIkeFragmentationSupported = false;
 
         /**
-         * Sets the server address for the {@link IkeSessionOptions} being built.
+         * Sets the server address for the {@link IkeSessionParams} being built.
          *
          * @param serverAddress the IP address of the IKE server.
          * @return Builder this, to facilitate chaining.
@@ -248,7 +247,7 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Sets the UDP Encapsulation socket for the {@link IkeSessionOptions} being built.
+         * Sets the UDP Encapsulation socket for the {@link IkeSessionParams} being built.
          *
          * @param udpEncapsulationSocket the {@link IpSecManager.UdpEncapsulationSocket} for sending
          *     and receiving IKE messages.
@@ -262,7 +261,7 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Sets local IKE identification for the {@link IkeSessionOptions} being built.
+         * Sets local IKE identification for the {@link IkeSessionParams} being built.
          *
          * @param identification the local IKE identification.
          * @return Builder this, to facilitate chaining.
@@ -274,7 +273,7 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Sets remote IKE identification for the {@link IkeSessionOptions} being built.
+         * Sets remote IKE identification for the {@link IkeSessionParams} being built.
          *
          * @param identification the remote IKE identification.
          * @return Builder this, to facilitate chaining.
@@ -286,7 +285,7 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Adds an IKE SA proposal to the {@link IkeSessionOptions} being built.
+         * Adds an IKE SA proposal to the {@link IkeSessionParams} being built.
          *
          * @param proposal IKE SA proposal.
          * @return Builder this, to facilitate chaining.
@@ -424,12 +423,12 @@ public final class IkeSessionOptions {
         }
 
         /**
-         * Validates and builds the {@link IkeSessionOptions}.
+         * Validates and builds the {@link IkeSessionParams}.
          *
-         * @return IkeSessionOptions the validated IkeSessionOptions.
+         * @return IkeSessionParams the validated IkeSessionParams.
          */
         @NonNull
-        public IkeSessionOptions build() {
+        public IkeSessionParams build() {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
@@ -442,7 +441,7 @@ public final class IkeSessionOptions {
                 throw new IllegalArgumentException("Necessary parameter missing.");
             }
 
-            return new IkeSessionOptions(
+            return new IkeSessionParams(
                     mServerAddress,
                     mUdpEncapSocket,
                     mSaProposalList.toArray(new IkeSaProposal[mSaProposalList.size()]),
