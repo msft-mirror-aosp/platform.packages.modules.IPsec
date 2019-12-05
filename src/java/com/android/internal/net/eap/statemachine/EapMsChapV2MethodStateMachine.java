@@ -53,7 +53,8 @@ import com.android.internal.net.eap.message.mschapv2.EapMsChapV2TypeData.EapMsCh
 import com.android.internal.net.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder;
 import com.android.internal.net.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2TypeDataDecoder.DecodeResult;
 import com.android.internal.net.utils.Log;
-import com.android.org.bouncycastle.crypto.digests.MD4Digest;
+
+import org.bouncycastle.crypto.digests.MD4Digest;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.BufferUnderflowException;
