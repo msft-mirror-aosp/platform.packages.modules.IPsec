@@ -48,10 +48,10 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionConfiguration;
-import android.net.ipsec.ike.ChildSessionOptions;
+import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeTrafficSelector;
 import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.TunnelModeChildSessionOptions;
+import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -150,7 +150,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private final IpSecManager mIpSecManager;
 
     /** User provided configurations. */
-    private final ChildSessionOptions mChildSessionOptions;
+    private final ChildSessionParams mChildSessionParams;
 
     private final Executor mUserCbExecutor;
     private final ChildSessionCallback mUserCallback;
@@ -225,7 +225,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
-            ChildSessionOptions sessionOptions,
+            ChildSessionParams sessionParams,
             Executor userCbExecutor,
             ChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback) {
@@ -233,7 +233,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         mContext = context;
         mIpSecManager = ipSecManager;
-        mChildSessionOptions = sessionOptions;
+        mChildSessionParams = sessionParams;
 
         mUserCbExecutor = userCbExecutor;
         mUserCallback = userCallback;
@@ -406,7 +406,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private ChildLocalRequest makeRekeyLocalRequest() {
         return new ChildLocalRequest(
-                CMD_LOCAL_REQUEST_REKEY_CHILD, mUserCallback, null /*childOptions*/);
+                CMD_LOCAL_REQUEST_REKEY_CHILD, mUserCallback, null /*childParams*/);
     }
 
     private long getRekeyTimeout() {
@@ -698,7 +698,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             respPayloads,
                             exchangeType,
                             expectedExchangeType,
-                            mChildSessionOptions.isTransportMode(),
+                            mChildSessionParams.isTransportMode(),
                             mIpSecManager,
                             mRemoteAddress);
             switch (createChildResult.status) {
@@ -722,7 +722,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         mChildIntegrity,
                                         mChildCipher,
                                         mSkD,
-                                        mChildSessionOptions.isTransportMode(),
+                                        mChildSessionParams.isTransportMode(),
                                         true /*isLocalInit*/,
                                         rekeyLocalRequest);
 
@@ -798,7 +798,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     IkePayload.getPayloadForTypeInProvidedList(
                             PAYLOAD_TYPE_CP, IkeConfigPayload.class, respPayloads);
 
-            if (mChildSessionOptions.isTransportMode()
+            if (mChildSessionParams.isTransportMode()
                     || configPayload == null
                     || configPayload.configType != IkeConfigPayload.CONFIG_TYPE_REPLY) {
                 if (configPayload != null) {
@@ -879,7 +879,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         CreateChildSaHelper.getInitChildCreateReqPayloads(
                                 mIpSecManager,
                                 mLocalAddress,
-                                mChildSessionOptions,
+                                mChildSessionParams,
                                 false /*isFirstChild*/);
                 mChildSmCallback.onOutboundPayloadsReady(
                         EXCHANGE_TYPE_CREATE_CHILD_SA,
@@ -1208,7 +1208,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mLocalTs,
                                 mRemoteTs,
                                 mCurrentChildSaRecord.getLocalSpi(),
-                                mChildSessionOptions.isTransportMode());
+                                mChildSessionParams.isTransportMode());
                 mChildSmCallback.onOutboundPayloadsReady(
                         EXCHANGE_TYPE_CREATE_CHILD_SA,
                         false /*isResp*/,
@@ -1233,7 +1233,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     resp.responsePayloads,
                                     resp.exchangeType,
                                     EXCHANGE_TYPE_CREATE_CHILD_SA,
-                                    mChildSessionOptions.isTransportMode(),
+                                    mChildSessionParams.isTransportMode(),
                                     mCurrentChildSaRecord,
                                     mIpSecManager,
                                     mRemoteAddress);
@@ -1260,7 +1260,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                                 mChildIntegrity,
                                                 mChildCipher,
                                                 mSkD,
-                                                mChildSessionOptions.isTransportMode(),
+                                                mChildSessionParams.isTransportMode(),
                                                 true /*isLocalInit*/,
                                                 rekeyLocalRequest);
 
@@ -1391,7 +1391,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mLocalTs,
                                 mRemoteTs,
                                 mCurrentChildSaRecord.getLocalSpi(),
-                                mChildSessionOptions.isTransportMode());
+                                mChildSessionParams.isTransportMode());
             } catch (NoValidProposalChosenException e) {
                 handleCreationFailureAndBackToIdle(e);
                 return;
@@ -1407,7 +1407,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             respPayloads,
                             req.exchangeType /*exchangeType*/,
                             EXCHANGE_TYPE_CREATE_CHILD_SA /*expectedExchangeType*/,
-                            mChildSessionOptions.isTransportMode(),
+                            mChildSessionParams.isTransportMode(),
                             mIpSecManager,
                             mRemoteAddress);
 
@@ -1433,7 +1433,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         mChildIntegrity,
                                         mChildCipher,
                                         mSkD,
-                                        mChildSessionOptions.isTransportMode(),
+                                        mChildSessionParams.isTransportMode(),
                                         false /*isLocalInit*/,
                                         rekeyLocalRequest);
 
@@ -1706,16 +1706,16 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public static List<IkePayload> getInitChildCreateReqPayloads(
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
-                ChildSessionOptions childSessionOptions,
+                ChildSessionParams childSessionParams,
                 boolean isFirstChild)
                 throws ResourceUnavailableException {
 
-            ChildSaProposal[] saProposals = childSessionOptions.getSaProposals();
+            ChildSaProposal[] saProposals = childSessionParams.getSaProposals();
 
             if (isFirstChild) {
                 for (int i = 0; i < saProposals.length; i++) {
                     saProposals[i] =
-                            childSessionOptions.getSaProposals()[i].getCopyWithoutDhTransform();
+                            childSessionParams.getSaProposals()[i].getCopyWithoutDhTransform();
                 }
             }
 
@@ -1723,13 +1723,13 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
                                     saProposals, ipSecManager, localAddress),
-                            childSessionOptions.getLocalTrafficSelectors(),
-                            childSessionOptions.getRemoteTrafficSelectors(),
-                            childSessionOptions.isTransportMode());
+                            childSessionParams.getLocalTrafficSelectors(),
+                            childSessionParams.getRemoteTrafficSelectors(),
+                            childSessionParams.isTransportMode());
 
-            if (!childSessionOptions.isTransportMode()) {
+            if (!childSessionParams.isTransportMode()) {
                 ConfigAttribute[] attributes =
-                        ((TunnelModeChildSessionOptions) childSessionOptions)
+                        ((TunnelModeChildSessionParams) childSessionParams)
                                 .getConfigurationRequests();
                 IkeConfigPayload configPayload =
                         new IkeConfigPayload(false /*isReply*/, Arrays.asList(attributes));

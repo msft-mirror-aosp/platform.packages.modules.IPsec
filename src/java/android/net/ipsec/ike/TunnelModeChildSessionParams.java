@@ -40,16 +40,16 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * TunnelModeChildSessionOptions represents proposed configurations for negotiating a tunnel mode
+ * TunnelModeChildSessionParams represents proposed configurations for negotiating a tunnel mode
  * Child Session.
  *
  * @hide
  */
 @SystemApi
-public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
+public final class TunnelModeChildSessionParams extends ChildSessionParams {
     private final ConfigAttribute[] mConfigRequests;
 
-    private TunnelModeChildSessionOptions(
+    private TunnelModeChildSessionParams(
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
             ChildSaProposal[] proposals,
@@ -63,10 +63,8 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         return mConfigRequests;
     }
 
-    /**
-     * This class can be used to incrementally construct a {@link TunnelModeChildSessionOptions}.
-     */
-    public static final class Builder extends ChildSessionOptions.Builder {
+    /** This class can be used to incrementally construct a {@link TunnelModeChildSessionParams}. */
+    public static final class Builder extends ChildSessionParams.Builder {
         private static final int IPv4_DEFAULT_PREFIX_LEN = 32;
 
         private boolean mHasIp4AddressRequest;
@@ -80,7 +78,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds an Child SA proposal to the {@link TunnelModeChildSessionOptions} being built.
+         * Adds an Child SA proposal to the {@link TunnelModeChildSessionParams} being built.
          *
          * @param proposal Child SA proposal.
          * @return Builder this, to facilitate chaining.
@@ -92,7 +90,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds an inbound {@link IkeTrafficSelector} to the {@link TunnelModeChildSessionOptions}
+         * Adds an inbound {@link IkeTrafficSelector} to the {@link TunnelModeChildSessionParams}
          * being built.
          *
          * <p>This method allows callers to limit the inbound traffic transmitted over the Child
@@ -112,7 +110,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds an outbound {@link IkeTrafficSelector} to the {@link TunnelModeChildSessionOptions}
+         * Adds an outbound {@link IkeTrafficSelector} to the {@link TunnelModeChildSessionParams}
          * being built.
          *
          * <p>This method allows callers to limit the outbound traffic transmitted over the Child
@@ -132,7 +130,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds an internal IP address request to the {@link TunnelModeChildSessionOptions} being
+         * Adds an internal IP address request to the {@link TunnelModeChildSessionParams} being
          * built.
          *
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
@@ -154,7 +152,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds a specific internal IP address request to the {@link TunnelModeChildSessionOptions}
+         * Adds a specific internal IP address request to the {@link TunnelModeChildSessionParams}
          * being built.
          *
          * @param address the requested address.
@@ -181,7 +179,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds an internal DNS server request to the {@link TunnelModeChildSessionOptions} being
+         * Adds an internal DNS server request to the {@link TunnelModeChildSessionParams} being
          * built.
          *
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
@@ -202,7 +200,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds a specific internal DNS server request to the {@link TunnelModeChildSessionOptions}
+         * Adds a specific internal DNS server request to the {@link TunnelModeChildSessionParams}
          * being built.
          *
          * @param address the requested DNS server address.
@@ -222,8 +220,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds an internal subnet requests to the {@link TunnelModeChildSessionOptions} being
-         * built.
+         * Adds an internal subnet requests to the {@link TunnelModeChildSessionParams} being built.
          *
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
          *     OsConstants.AF_INET6} are allowed.
@@ -243,7 +240,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds internal DHCP server requests to the {@link TunnelModeChildSessionOptions} being
+         * Adds internal DHCP server requests to the {@link TunnelModeChildSessionParams} being
          * built.
          *
          * <p>Only DHCPv4 server requests are supported.
@@ -262,7 +259,7 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Adds a specific internal DHCP server request to the {@link TunnelModeChildSessionOptions}
+         * Adds a specific internal DHCP server request to the {@link TunnelModeChildSessionParams}
          * being built.
          *
          * <p>Only DHCPv4 server requests are supported.
@@ -281,19 +278,19 @@ public final class TunnelModeChildSessionOptions extends ChildSessionOptions {
         }
 
         /**
-         * Validates and builds the {@link TunnelModeChildSessionOptions}.
+         * Validates and builds the {@link TunnelModeChildSessionParams}.
          *
-         * @return the validated {@link TunnelModeChildSessionOptions}.
+         * @return the validated {@link TunnelModeChildSessionParams}.
          */
         @NonNull
-        public TunnelModeChildSessionOptions build() {
+        public TunnelModeChildSessionParams build() {
             validateOrThrow();
 
             if (mHasIp4AddressRequest) {
                 mConfigRequestList.add(new ConfigAttributeIpv4Netmask());
             }
 
-            return new TunnelModeChildSessionOptions(
+            return new TunnelModeChildSessionParams(
                     mLocalTsList.toArray(new IkeTrafficSelector[mLocalTsList.size()]),
                     mRemoteTsList.toArray(new IkeTrafficSelector[mRemoteTsList.size()]),
                     mSaProposalList.toArray(new ChildSaProposal[mSaProposalList.size()]),
