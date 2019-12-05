@@ -148,7 +148,7 @@ public final class IkeSaPayload extends IkePayload {
             throws IOException {
         super(IkePayload.PAYLOAD_TYPE_SA, false);
 
-        // TODO: Check that proposals.length <= 255 in IkeSessionOptions and ChildSessionOptions
+        // TODO: Check that proposals.length <= 255 in IkeSessionParams and ChildSessionParams
         isSaResponse = isResp;
 
         // TODO: Allocate IKE SPI and pass to IkeProposal.createIkeProposal()
@@ -170,7 +170,7 @@ public final class IkeSaPayload extends IkePayload {
             throw new IllegalArgumentException("Invalid SA payload.");
         }
 
-        // TODO: Check that saProposals.length <= 255 in IkeSessionOptions and ChildSessionOptions
+        // TODO: Check that saProposals.length <= 255 in IkeSessionParams and ChildSessionParams
 
         for (int i = 0; i < saProposals.length; i++) {
             // Proposal number must start from 1.

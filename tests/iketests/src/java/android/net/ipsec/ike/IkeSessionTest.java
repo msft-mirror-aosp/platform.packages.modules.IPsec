@@ -53,8 +53,8 @@ public final class IkeSessionTest {
     private IpSecManager mIpSecManager;
     private Context mContext;
 
-    private IkeSessionOptions mIkeSessionOptions;
-    private ChildSessionOptions mMockChildSessionOptions;
+    private IkeSessionParams mIkeSessionParams;
+    private ChildSessionParams mMockChildSessionParams;
     private Executor mUserCbExecutor;
     private IkeSessionCallback mMockIkeSessionCb;
     private ChildSessionCallback mMockChildSessionCb;
@@ -67,15 +67,15 @@ public final class IkeSessionTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
 
-        mIkeSessionOptions = buildIkeSessionOptions();
-        mMockChildSessionOptions = mock(ChildSessionOptions.class);
+        mIkeSessionParams = buildIkeSessionParams();
+        mMockChildSessionParams = mock(ChildSessionParams.class);
         mUserCbExecutor = (r) -> r.run(); // Inline executor for testing purposes.
         mMockIkeSessionCb = mock(IkeSessionCallback.class);
         mMockChildSessionCb = mock(ChildSessionCallback.class);
     }
 
-    private IkeSessionOptions buildIkeSessionOptions() throws Exception {
-        return new IkeSessionOptions.Builder()
+    private IkeSessionParams buildIkeSessionParams() throws Exception {
+        return new IkeSessionParams.Builder()
                 .setServerAddress(REMOTE_ADDRESS)
                 .setUdpEncapsulationSocket(mIpSecManager.openUdpEncapsulationSocket())
                 .addSaProposal(IkeSessionStateMachineTest.buildSaProposal())
@@ -91,8 +91,8 @@ public final class IkeSessionTest {
         IkeSession ikeSession =
                 new IkeSession(
                         mContext,
-                        mIkeSessionOptions,
-                        mMockChildSessionOptions,
+                        mIkeSessionParams,
+                        mMockChildSessionParams,
                         mUserCbExecutor,
                         mMockIkeSessionCb,
                         mMockChildSessionCb);
@@ -119,8 +119,8 @@ public final class IkeSessionTest {
                         sessions[index] =
                                 new IkeSession(
                                         mContext,
-                                        mIkeSessionOptions,
-                                        mMockChildSessionOptions,
+                                        mIkeSessionParams,
+                                        mMockChildSessionParams,
                                         mUserCbExecutor,
                                         mMockIkeSessionCb,
                                         mMockChildSessionCb);
@@ -148,8 +148,8 @@ public final class IkeSessionTest {
                         testLooper.getLooper(),
                         mContext,
                         mIpSecManager,
-                        mIkeSessionOptions,
-                        mMockChildSessionOptions,
+                        mIkeSessionParams,
+                        mMockChildSessionParams,
                         mUserCbExecutor,
                         mMockIkeSessionCb,
                         mMockChildSessionCb);
