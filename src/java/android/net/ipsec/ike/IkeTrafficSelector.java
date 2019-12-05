@@ -39,8 +39,8 @@ import java.util.Objects;
  *
  * <p>Traffic Selectors specify addresses that are acceptable within the IPsec SA.
  *
- * <p>Callers can propose {@link IkeTrafficSelector}s when building a {@link ChildSessionOptions}
- * and receive the negotiated {@link IkeTrafficSelector}s via a {@link ChildSessionConfiguration}.
+ * <p>Callers can propose {@link IkeTrafficSelector}s when building a {@link ChildSessionParams} and
+ * receive the negotiated {@link IkeTrafficSelector}s via a {@link ChildSessionConfiguration}.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.13">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
