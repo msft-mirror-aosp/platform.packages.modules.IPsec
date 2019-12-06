@@ -297,7 +297,7 @@ public final class ChildSessionStateMachineTest {
         return new TunnelModeChildSessionParams.Builder()
                 .addSaProposal(buildSaProposal())
                 .addInternalAddressRequest(AF_INET)
-                .addInternalAddressRequest(INTERNAL_ADDRESS, IPV4_PREFIX_LEN)
+                .addInternalAddressRequest(INTERNAL_ADDRESS)
                 .build();
     }
 
