@@ -16,6 +16,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.content.Context;
 import android.net.IpSecManager;
@@ -62,13 +63,13 @@ public final class IkeSession implements AutoCloseable {
      * Callers will be notified of these two setup results via the callback arguments.
      *
      * @param context a valid {@link Context} instance.
-     * @param ikeSessionOptions the {@link IkeSessionOptions} that contains a set of valid {@link
+     * @param ikeSessionParams the {@link IkeSessionParams} that contains a set of valid {@link
      *     IkeSession} configurations.
-     * @param firstChildSessionOptions the {@link ChildSessionOptions} that contains a set of valid
+     * @param firstChildSessionParams the {@link ChildSessionParams} that contains a set of valid
      *     configurations for the first Child Session.
      * @param userCbExecutor the {@link Executor} upon which all callbacks will be posted. For
-     *     security and consistency, the callbacks posted to this executor MUST be executed
-     *     serially and in the order they were posted, as guaranteed by executors such as {@link
+     *     security and consistency, the callbacks posted to this executor MUST be executed serially
+     *     and in the order they were posted, as guaranteed by executors such as {@link
      *     ExecutorService.newSingleThreadExecutor()}
      * @param ikeSessionCallback the {@link IkeSessionCallback} interface to notify callers of state
      *     changes within the {@link IkeSession}.
@@ -78,8 +79,8 @@ public final class IkeSession implements AutoCloseable {
      */
     public IkeSession(
             @NonNull Context context,
-            @NonNull IkeSessionOptions ikeSessionOptions,
-            @NonNull ChildSessionOptions firstChildSessionOptions,
+            @NonNull IkeSessionParams ikeSessionParams,
+            @NonNull ChildSessionParams firstChildSessionParams,
             @NonNull Executor userCbExecutor,
             @NonNull IkeSessionCallback ikeSessionCallback,
             @NonNull ChildSessionCallback firstChildSessionCallback) {
@@ -87,8 +88,8 @@ public final class IkeSession implements AutoCloseable {
                 IkeThreadHolder.IKE_WORKER_THREAD.getLooper(),
                 context,
                 (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
-                ikeSessionOptions,
-                firstChildSessionOptions,
+                ikeSessionParams,
+                firstChildSessionParams,
                 userCbExecutor,
                 ikeSessionCallback,
                 firstChildSessionCallback);
@@ -100,8 +101,8 @@ public final class IkeSession implements AutoCloseable {
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
-            IkeSessionOptions ikeSessionOptions,
-            ChildSessionOptions firstChildSessionOptions,
+            IkeSessionParams ikeSessionParams,
+            ChildSessionParams firstChildSessionParams,
             Executor userCbExecutor,
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback) {
@@ -110,8 +111,8 @@ public final class IkeSession implements AutoCloseable {
                         looper,
                         context,
                         ipSecManager,
-                        ikeSessionOptions,
-                        firstChildSessionOptions,
+                        ikeSessionParams,
+                        firstChildSessionParams,
                         userCbExecutor,
                         ikeSessionCallback,
                         firstChildSessionCallback);
@@ -149,16 +150,20 @@ public final class IkeSession implements AutoCloseable {
      * <p>Upon setup, {@link ChildSessionCallback#onOpened(ChildSessionConfiguration)} will be
      * fired.
      *
-     * @param childSessionOptions the {@link ChildSessionOptions} that contains the Child Session
+     * @param childSessionParams the {@link ChildSessionParams} that contains the Child Session
      *     configurations to negotiate.
      * @param childSessionCallback the {@link ChildSessionCallback} interface to notify users the
-     *     state changes of the Child Session.
+     *     state changes of the Child Session. It will be posted to the callback {@link Executor} of
+     *     this {@link IkeSession}.
      * @throws IllegalArgumentException if the ChildSessionCallback is already in use.
      */
+    // The childSessionCallback will be called on the same executor as was passed in the constructor
+    // or security reasons.
+    @SuppressLint("ExecutorRegistration")
     public void openChildSession(
-            @NonNull ChildSessionOptions childSessionOptions,
+            @NonNull ChildSessionParams childSessionParams,
             @NonNull ChildSessionCallback childSessionCallback) {
-        mIkeSessionStateMachine.openChildSession(childSessionOptions, childSessionCallback);
+        mIkeSessionStateMachine.openChildSession(childSessionParams, childSessionCallback);
     }
 
     /**
@@ -170,6 +175,9 @@ public final class IkeSession implements AutoCloseable {
      *     the Child Session.
      * @throws IllegalArgumentException if no Child Session found bound with this callback.
      */
+    // The childSessionCallback will be called on the same executor as was passed in the constructor
+    // or security reasons.
+    @SuppressLint("ExecutorRegistration")
     public void closeChildSession(@NonNull ChildSessionCallback childSessionCallback) {
         mIkeSessionStateMachine.closeChildSession(childSessionCallback);
     }

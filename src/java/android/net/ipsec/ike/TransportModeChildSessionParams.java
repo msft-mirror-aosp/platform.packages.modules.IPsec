@@ -20,14 +20,14 @@ import android.annotation.NonNull;
 import android.annotation.SystemApi;
 
 /**
- * TransportModeChildSessionOptions represents proposed configurations for negotiating a transport
+ * TransportModeChildSessionParams represents proposed configurations for negotiating a transport
  * mode Child Session.
  *
  * @hide
  */
 @SystemApi
-public final class TransportModeChildSessionOptions extends ChildSessionOptions {
-    private TransportModeChildSessionOptions(
+public final class TransportModeChildSessionParams extends ChildSessionParams {
+    private TransportModeChildSessionParams(
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
             ChildSaProposal[] proposals) {
@@ -35,16 +35,16 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
     }
 
     /**
-     * This class can be used to incrementally construct a {@link TransportModeChildSessionOptions}.
+     * This class can be used to incrementally construct a {@link TransportModeChildSessionParams}.
      */
-    public static final class Builder extends ChildSessionOptions.Builder {
+    public static final class Builder extends ChildSessionParams.Builder {
         /** Create a Builder for negotiating a transport mode Child Session. */
         public Builder() {
             super();
         }
 
         /**
-         * Adds a Child SA proposal to the {@link TransportModeChildSessionOptions} being built.
+         * Adds a Child SA proposal to the {@link TransportModeChildSessionParams} being built.
          *
          * @param proposal Child SA proposal.
          * @return Builder this, to facilitate chaining.
@@ -56,8 +56,8 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
         }
 
         /**
-         * Adds an inbound {@link IkeTrafficSelector} to the {@link
-         * TransportModeChildSessionOptions} being built.
+         * Adds an inbound {@link IkeTrafficSelector} to the {@link TransportModeChildSessionParams}
+         * being built.
          *
          * <p>If no inbound {@link IkeTrafficSelector} is provided, a default value will be used
          * that covers all IP addresses and ports.
@@ -73,7 +73,7 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
 
         /**
          * Adds an outbound {@link IkeTrafficSelector} to the {@link
-         * TransportModeChildSessionOptions} being built.
+         * TransportModeChildSessionParams} being built.
          *
          * <p>If no outbound {@link IkeTrafficSelector} is provided, a default value will be used
          * that covers all IP addresses and ports.
@@ -88,15 +88,15 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
         }
 
         /**
-         * Validates and builds the {@link TransportModeChildSessionOptions}.
+         * Validates and builds the {@link TransportModeChildSessionParams}.
          *
-         * @return the validated {@link TransportModeChildSessionOptions}.
+         * @return the validated {@link TransportModeChildSessionParams}.
          */
         @NonNull
-        public TransportModeChildSessionOptions build() {
+        public TransportModeChildSessionParams build() {
             validateOrThrow();
 
-            return new TransportModeChildSessionOptions(
+            return new TransportModeChildSessionParams(
                     mLocalTsList.toArray(new IkeTrafficSelector[mLocalTsList.size()]),
                     mRemoteTsList.toArray(new IkeTrafficSelector[mRemoteTsList.size()]),
                     mSaProposalList.toArray(new ChildSaProposal[mSaProposalList.size()]));

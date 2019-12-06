@@ -26,17 +26,17 @@ import java.util.LinkedList;
 import java.util.List;
 
 /**
- * ChildSessionOptions is an abstract class that represents proposed configurations for negotiating
- * a Child Session.
+ * ChildSessionParams is an abstract class that represents proposed configurations for negotiating a
+ * Child Session.
  *
- * <p>Note that references to negotiated configurations will be held, and the same options will be
- * reused during rekey. This includes SA Proposals, lifetimes and traffic selectors.
+ * <p>Note that references to negotiated configurations will be held, and the same parameters will
+ * be reused during rekey. This includes SA Proposals, lifetimes and traffic selectors.
  *
- * @see {@link TunnelModeChildSessionOptions} and {@link TransportModeChildSessionOptions}
+ * @see {@link TunnelModeChildSessionParams} and {@link TransportModeChildSessionParams}
  * @hide
  */
 @SystemApi
-public abstract class ChildSessionOptions {
+public abstract class ChildSessionParams {
     private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
     // TODO: b/130765172 Add TRAFFIC_SELECTOR_IPV6 and instantiate it.
 
@@ -52,7 +52,7 @@ public abstract class ChildSessionOptions {
     private final boolean mIsTransport;
 
     /** @hide */
-    protected ChildSessionOptions(
+    protected ChildSessionParams(
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
             ChildSaProposal[] proposals,
@@ -84,7 +84,7 @@ public abstract class ChildSessionOptions {
     }
 
     /**
-     * This class represents common information for Child Sesison Options Builders.
+     * This class represents common information for Child Session Parameters Builders.
      *
      * @hide
      */
@@ -100,7 +100,7 @@ public abstract class ChildSessionOptions {
             // TODO: b/130756765 Validate the current TS negotiation strategy.
             mLocalTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
             mRemoteTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
-            // TODO: add IPv6 TS to ChildSessionOptions.
+            // TODO: add IPv6 TS to ChildSessionParams.
         }
 
         protected void validateAndAddSaProposal(@NonNull ChildSaProposal proposal) {
@@ -110,7 +110,7 @@ public abstract class ChildSessionOptions {
         protected void validateOrThrow() {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException(
-                        "ChildSessionOptions requires at least one Child SA proposal.");
+                        "ChildSessionParams requires at least one Child SA proposal.");
             }
         }
     }
