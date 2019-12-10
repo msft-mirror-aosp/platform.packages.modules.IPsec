@@ -1710,12 +1710,13 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 boolean isFirstChild)
                 throws ResourceUnavailableException {
 
-            ChildSaProposal[] saProposals = childSessionParams.getSaProposals();
+            ChildSaProposal[] saProposals = childSessionParams.getSaProposalsInternal();
 
             if (isFirstChild) {
                 for (int i = 0; i < saProposals.length; i++) {
                     saProposals[i] =
-                            childSessionParams.getSaProposals()[i].getCopyWithoutDhTransform();
+                            childSessionParams.getSaProposalsInternal()[i]
+                                    .getCopyWithoutDhTransform();
                 }
             }
 
@@ -1723,14 +1724,14 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
                                     saProposals, ipSecManager, localAddress),
-                            childSessionParams.getLocalTrafficSelectors(),
-                            childSessionParams.getRemoteTrafficSelectors(),
+                            childSessionParams.getLocalTrafficSelectorsInternal(),
+                            childSessionParams.getRemoteTrafficSelectorsInternal(),
                             childSessionParams.isTransportMode());
 
             if (!childSessionParams.isTransportMode()) {
                 ConfigAttribute[] attributes =
                         ((TunnelModeChildSessionParams) childSessionParams)
-                                .getConfigurationRequests();
+                                .getConfigurationAttributesInternal();
                 IkeConfigPayload configPayload =
                         new IkeConfigPayload(false /*isReply*/, Arrays.asList(attributes));
                 payloadList.add(configPayload);

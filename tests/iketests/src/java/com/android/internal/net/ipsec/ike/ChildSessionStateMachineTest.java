@@ -322,7 +322,9 @@ public final class ChildSessionStateMachineTest {
         setUpSpiResource(LOCAL_ADDRESS, CURRENT_CHILD_SA_SPI_IN);
         IkeSaPayload reqSaPayload =
                 IkeSaPayload.createChildSaRequestPayload(
-                        mChildSessionParams.getSaProposals(), mMockIpSecManager, LOCAL_ADDRESS);
+                        mChildSessionParams.getSaProposalsInternal(),
+                        mMockIpSecManager,
+                        LOCAL_ADDRESS);
         mFirstSaReqPayloads.add(reqSaPayload);
 
         // Build a remotely generated SA payload whoes SPI resource has not been allocated.
@@ -336,10 +338,12 @@ public final class ChildSessionStateMachineTest {
         // Build TS Payloads
         IkeTsPayload tsInitPayload =
                 new IkeTsPayload(
-                        true /*isInitiator*/, mChildSessionParams.getLocalTrafficSelectors());
+                        true /*isInitiator*/,
+                        mChildSessionParams.getLocalTrafficSelectorsInternal());
         IkeTsPayload tsRespPayload =
                 new IkeTsPayload(
-                        false /*isInitiator*/, mChildSessionParams.getRemoteTrafficSelectors());
+                        false /*isInitiator*/,
+                        mChildSessionParams.getRemoteTrafficSelectorsInternal());
 
         mFirstSaReqPayloads.add(tsInitPayload);
         mFirstSaReqPayloads.add(tsRespPayload);
@@ -488,10 +492,10 @@ public final class ChildSessionStateMachineTest {
         // Verify Child Session Configuration
         ChildSessionConfiguration sessionConfig = mChildConfigCaptor.getValue();
         verifyTsList(
-                Arrays.asList(mChildSessionParams.getLocalTrafficSelectors()),
+                Arrays.asList(mChildSessionParams.getLocalTrafficSelectorsInternal()),
                 sessionConfig.getInboundTrafficSelectors());
         verifyTsList(
-                Arrays.asList(mChildSessionParams.getRemoteTrafficSelectors()),
+                Arrays.asList(mChildSessionParams.getRemoteTrafficSelectorsInternal()),
                 sessionConfig.getOutboundTrafficSelectors());
 
         List<LinkAddress> addrList = sessionConfig.getInternalAddresses();
@@ -679,8 +683,9 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.mSaProposal = buildSaProposal();
         mChildSessionStateMachine.mChildCipher = mock(IkeCipher.class);
         mChildSessionStateMachine.mChildIntegrity = mock(IkeMacIntegrity.class);
-        mChildSessionStateMachine.mLocalTs = mChildSessionParams.getLocalTrafficSelectors();
-        mChildSessionStateMachine.mRemoteTs = mChildSessionParams.getRemoteTrafficSelectors();
+        mChildSessionStateMachine.mLocalTs = mChildSessionParams.getLocalTrafficSelectorsInternal();
+        mChildSessionStateMachine.mRemoteTs =
+                mChildSessionParams.getRemoteTrafficSelectorsInternal();
 
         mChildSessionStateMachine.mCurrentChildSaRecord = mSpyCurrentChildSaRecord;
 
