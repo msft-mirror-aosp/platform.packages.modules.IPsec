@@ -22,6 +22,7 @@ import android.annotation.SystemApi;
 import libcore.net.InetAddressUtils;
 
 import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -37,7 +38,7 @@ import java.util.List;
  */
 @SystemApi
 public abstract class ChildSessionParams {
-    private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
+    @NonNull private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
     // TODO: b/130765172 Add TRAFFIC_SELECTOR_IPV6 and instantiate it.
 
     static {
@@ -46,9 +47,9 @@ public abstract class ChildSessionParams {
                         IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE);
     }
 
-    private final IkeTrafficSelector[] mLocalTrafficSelectors;
-    private final IkeTrafficSelector[] mRemoteTrafficSelectors;
-    private final ChildSaProposal[] mSaProposals;
+    @NonNull private final IkeTrafficSelector[] mLocalTrafficSelectors;
+    @NonNull private final IkeTrafficSelector[] mRemoteTrafficSelectors;
+    @NonNull private final ChildSaProposal[] mSaProposals;
     private final boolean mIsTransport;
 
     /** @hide */
@@ -63,18 +64,36 @@ public abstract class ChildSessionParams {
         mIsTransport = isTransport;
     }
 
+    /** Retrieves configured local (client) traffic selectors */
+    @NonNull
+    public List<IkeTrafficSelector> getLocalTrafficSelectors() {
+        return Arrays.asList(mLocalTrafficSelectors);
+    }
+
+    /** Retrieves configured remote (server) traffic selectors */
+    @NonNull
+    public List<IkeTrafficSelector> getRemoteTrafficSelectors() {
+        return Arrays.asList(mRemoteTrafficSelectors);
+    }
+
+    /** Retrieves all ChildSaProposals configured */
+    @NonNull
+    public List<ChildSaProposal> getSaProposals() {
+        return Arrays.asList(mSaProposals);
+    }
+
     /** @hide */
-    public IkeTrafficSelector[] getLocalTrafficSelectors() {
+    public IkeTrafficSelector[] getLocalTrafficSelectorsInternal() {
         return mLocalTrafficSelectors;
     }
 
     /** @hide */
-    public IkeTrafficSelector[] getRemoteTrafficSelectors() {
+    public IkeTrafficSelector[] getRemoteTrafficSelectorsInternal() {
         return mRemoteTrafficSelectors;
     }
 
     /** @hide */
-    public ChildSaProposal[] getSaProposals() {
+    public ChildSaProposal[] getSaProposalsInternal() {
         return mSaProposals;
     }
 

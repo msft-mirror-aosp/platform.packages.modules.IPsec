@@ -3779,7 +3779,7 @@ public final class IkeSessionStateMachineTest {
         IkeManager.setIkeLog(spyIkeLog);
 
         IkeSessionParams mockSessionParams = mock(IkeSessionParams.class);
-        when(mockSessionParams.getSaProposals()).thenThrow(mock(RuntimeException.class));
+        when(mockSessionParams.getSaProposalsInternal()).thenThrow(mock(RuntimeException.class));
 
         IkeSessionStateMachine ikeSession =
                 new IkeSessionStateMachine(

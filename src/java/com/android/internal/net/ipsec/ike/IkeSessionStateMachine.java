@@ -2462,7 +2462,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             // It is validated in IkeSessionParams.Builder to ensure IkeSessionParams has at least
             // one IkeSaProposal and all SaProposals are valid for IKE SA negotiation.
-            IkeSaProposal[] saProposals = mIkeSessionParams.getSaProposals();
+            IkeSaProposal[] saProposals = mIkeSessionParams.getSaProposalsInternal();
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getIkeInitSaRequestPayloads(
                             saProposals,
