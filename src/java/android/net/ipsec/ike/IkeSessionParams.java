@@ -32,6 +32,7 @@ import java.security.PrivateKey;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -58,26 +59,26 @@ public final class IkeSessionParams {
     /** @hide */
     public static final int IKE_AUTH_METHOD_EAP = 3;
 
-    private final InetAddress mServerAddress;
-    private final UdpEncapsulationSocket mUdpEncapSocket;
-    private final IkeSaProposal[] mSaProposals;
+    @NonNull private final InetAddress mServerAddress;
+    @NonNull private final UdpEncapsulationSocket mUdpEncapSocket;
+    @NonNull private final IkeSaProposal[] mSaProposals;
 
-    private final IkeIdentification mLocalIdentification;
-    private final IkeIdentification mRemoteIdentification;
+    @NonNull private final IkeIdentification mLocalIdentification;
+    @NonNull private final IkeIdentification mRemoteIdentification;
 
-    private final IkeAuthConfig mLocalAuthConfig;
-    private final IkeAuthConfig mRemoteAuthConfig;
+    @NonNull private final IkeAuthConfig mLocalAuthConfig;
+    @NonNull private final IkeAuthConfig mRemoteAuthConfig;
 
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
-            InetAddress serverAddress,
-            UdpEncapsulationSocket udpEncapsulationSocket,
-            IkeSaProposal[] proposals,
-            IkeIdentification localIdentification,
-            IkeIdentification remoteIdentification,
-            IkeAuthConfig localAuthConfig,
-            IkeAuthConfig remoteAuthConfig,
+            @NonNull InetAddress serverAddress,
+            @NonNull UdpEncapsulationSocket udpEncapsulationSocket,
+            @NonNull IkeSaProposal[] proposals,
+            @NonNull IkeIdentification localIdentification,
+            @NonNull IkeIdentification remoteIdentification,
+            @NonNull IkeAuthConfig localAuthConfig,
+            @NonNull IkeAuthConfig remoteAuthConfig,
             boolean isIkeFragmentationSupported) {
         mServerAddress = serverAddress;
         mUdpEncapSocket = udpEncapsulationSocket;
@@ -92,37 +93,49 @@ public final class IkeSessionParams {
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
 
-    /** @hide */
+    /** Retrieves the configured server address */
+    @NonNull
     public InetAddress getServerAddress() {
         return mServerAddress;
     }
 
-    /** @hide */
+    /** Retrieves the UDP encapsulation socket */
+    @NonNull
     public UdpEncapsulationSocket getUdpEncapsulationSocket() {
         return mUdpEncapSocket;
     }
 
-    /** @hide */
-    public IkeSaProposal[] getSaProposals() {
-        return mSaProposals;
+    /** Retrieves all ChildSaProposals configured */
+    @NonNull
+    public List<IkeSaProposal> getSaProposals() {
+        return Arrays.asList(mSaProposals);
     }
 
     /** @hide */
+    public IkeSaProposal[] getSaProposalsInternal() {
+        return mSaProposals;
+    }
+
+    /** Retrieves the local (client) identity */
+    @NonNull
     public IkeIdentification getLocalIdentification() {
         return mLocalIdentification;
     }
 
-    /** @hide */
+    /** Retrieves the required remote (server) identity */
+    @NonNull
     public IkeIdentification getRemoteIdentification() {
         return mRemoteIdentification;
     }
 
-    /** @hide */
+    /** Retrieves the local (client) authentication configuration */
+    @NonNull
     public IkeAuthConfig getLocalAuthConfig() {
         return mLocalAuthConfig;
     }
 
-    /** @hide */
+    /** Retrieves the remote (server) authentication configuration */
+    @NonNull
     public IkeAuthConfig getRemoteAuthConfig() {
         return mRemoteAuthConfig;
     }
@@ -133,13 +146,13 @@ public final class IkeSessionParams {
     }
     /**
      * This class contains common information of an IKEv2 authentication configuration.
-     *
-     * @hide
      */
     public abstract static class IkeAuthConfig {
+        /** @hide */
         @IkeAuthMethod public final int mAuthMethod;
 
-        protected IkeAuthConfig(@IkeAuthMethod int authMethod) {
+        /** @hide */
+        IkeAuthConfig(@IkeAuthMethod int authMethod) {
             mAuthMethod = authMethod;
         }
     }
@@ -147,52 +160,83 @@ public final class IkeSessionParams {
     /**
      * This class represents the configuration to support IKEv2 pre-shared-key-based authentication
      * of local or remote side.
-     *
-     * @hide
      */
     public static class IkeAuthPskConfig extends IkeAuthConfig {
-        public final byte[] mPsk;
+        /** @hide */
+        @NonNull public final byte[] mPsk;
 
         private IkeAuthPskConfig(byte[] psk) {
             super(IKE_AUTH_METHOD_PSK);
             mPsk = psk;
+        }
+
+        /** Retrieves the pre-shared key */
+        @NonNull
+        public byte[] getPsk() {
+            return Arrays.copyOf(mPsk, mPsk.length);
         }
     }
 
     /**
      * This class represents the configuration to support IKEv2 public-key-signature-based
      * authentication of the remote side.
-     *
-     * @hide
      */
     public static class IkeAuthDigitalSignRemoteConfig extends IkeAuthConfig {
-        public final TrustAnchor mTrustAnchor;
+        /** @hide */
+        @NonNull public final TrustAnchor mTrustAnchor;
 
         private IkeAuthDigitalSignRemoteConfig(TrustAnchor trustAnchor) {
             super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
             mTrustAnchor = trustAnchor;
+        }
+
+        /** Retrieves the CA certificate for validating the remote certificate(s) */
+        @NonNull
+        public X509Certificate getRemoteCaCert() {
+            return mTrustAnchor.getTrustedCert();
         }
     }
 
     /**
      * This class represents the configuration to support IKEv2 public-key-signature-based
      * authentication of the local side.
-     *
-     * @hide
      */
     public static class IkeAuthDigitalSignLocalConfig extends IkeAuthConfig {
-        public final X509Certificate mEndCert;
-        public final List<X509Certificate> mIntermediateCerts;
-        public final PrivateKey mPrivateKey;
+        /** @hide */
+        @NonNull public final X509Certificate mEndCert;
+
+        /** @hide */
+        @NonNull public final List<X509Certificate> mIntermediateCerts;
+
+        /** @hide */
+        @NonNull public final PrivateKey mPrivateKey;
 
         private IkeAuthDigitalSignLocalConfig(
-                X509Certificate clientEndCert,
-                List<X509Certificate> clientIntermediateCerts,
-                PrivateKey privateKey) {
+                @NonNull X509Certificate clientEndCert,
+                @NonNull List<X509Certificate> clientIntermediateCerts,
+                @NonNull PrivateKey privateKey) {
             super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
             mEndCert = clientEndCert;
             mIntermediateCerts = clientIntermediateCerts;
             mPrivateKey = privateKey;
+        }
+
+        /** Retrieves the client end certificate */
+        @NonNull
+        public X509Certificate getClientEndCertificate() {
+            return mEndCert;
+        }
+
+        /** Retrieves the intermediate certificates */
+        @NonNull
+        public List<X509Certificate> getIntermediateCertificates() {
+            return mIntermediateCerts;
+        }
+
+        /** Retrieves the private key */
+        @NonNull
+        public PrivateKey getPrivateKey() {
+            return mPrivateKey;
         }
     }
 
@@ -207,15 +251,21 @@ public final class IkeSessionParams {
      *
      * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
      *     Authentication in IKEv2</a>
-     * @hide
      */
     public static class IkeAuthEapConfig extends IkeAuthConfig {
-        public final EapSessionConfig mEapConfig;
+        /** @hide */
+        @NonNull public final EapSessionConfig mEapConfig;
 
         private IkeAuthEapConfig(EapSessionConfig eapConfig) {
             super(IKE_AUTH_METHOD_EAP);
 
             mEapConfig = eapConfig;
+        }
+
+        /** Retrieves EAP configuration */
+        @NonNull
+        public EapSessionConfig getEapConfig() {
+            return mEapConfig;
         }
     }
 
@@ -242,6 +292,10 @@ public final class IkeSessionParams {
          */
         @NonNull
         public Builder setServerAddress(@NonNull InetAddress serverAddress) {
+            if (serverAddress == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             mServerAddress = serverAddress;
             return this;
         }
@@ -256,6 +310,10 @@ public final class IkeSessionParams {
         @NonNull
         public Builder setUdpEncapsulationSocket(
                 @NonNull UdpEncapsulationSocket udpEncapsulationSocket) {
+            if (udpEncapsulationSocket == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             mUdpEncapSocket = udpEncapsulationSocket;
             return this;
         }
@@ -268,6 +326,10 @@ public final class IkeSessionParams {
          */
         @NonNull
         public Builder setLocalIdentification(@NonNull IkeIdentification identification) {
+            if (identification == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             mLocalIdentification = identification;
             return this;
         }
@@ -280,6 +342,10 @@ public final class IkeSessionParams {
          */
         @NonNull
         public Builder setRemoteIdentification(@NonNull IkeIdentification identification) {
+            if (identification == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             mRemoteIdentification = identification;
             return this;
         }
@@ -292,6 +358,10 @@ public final class IkeSessionParams {
          */
         @NonNull
         public Builder addSaProposal(@NonNull IkeSaProposal proposal) {
+            if (proposal == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             if (proposal.getProtocolId() != IkePayload.PROTOCOL_ID_IKE) {
                 throw new IllegalArgumentException(
                         "Expected IKE SA Proposal but received Child SA proposal");
@@ -317,6 +387,10 @@ public final class IkeSessionParams {
          */
         @NonNull
         public Builder setAuthPsk(@NonNull byte[] sharedKey) {
+            if (sharedKey == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             mLocalAuthConfig = new IkeAuthPskConfig(sharedKey);
             mRemoteAuthConfig = new IkeAuthPskConfig(sharedKey);
             return this;
@@ -341,6 +415,10 @@ public final class IkeSessionParams {
         @NonNull
         public Builder setAuthEap(
                 @NonNull X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
+            if (serverCaCert == null || eapConfig == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             mLocalAuthConfig = new IkeAuthEapConfig(eapConfig);
 
             // The name constraints extension, defined in RFC 5280, indicates a name space within
@@ -409,6 +487,13 @@ public final class IkeSessionParams {
                 @NonNull X509Certificate clientEndCert,
                 @NonNull List<X509Certificate> clientIntermediateCerts,
                 @NonNull PrivateKey clientPrivateKey) {
+            if (serverCaCert == null
+                    || clientEndCert == null
+                    || clientIntermediateCerts == null
+                    || clientPrivateKey == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             if (!(clientPrivateKey instanceof RSAPrivateKey)) {
                 throw new IllegalArgumentException("Unsupported private key type");
             }
