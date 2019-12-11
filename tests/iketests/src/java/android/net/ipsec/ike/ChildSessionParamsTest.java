@@ -37,9 +37,9 @@ public final class ChildSessionParamsTest {
         ChildSessionParams sessionParams =
                 new TunnelModeChildSessionParams.Builder().addSaProposal(saProposal).build();
 
-        assertArrayEquals(new SaProposal[] {saProposal}, sessionParams.getSaProposals());
-        assertEquals(NUM_TS, sessionParams.getLocalTrafficSelectors().length);
-        assertEquals(NUM_TS, sessionParams.getRemoteTrafficSelectors().length);
+        assertArrayEquals(new SaProposal[] {saProposal}, sessionParams.getSaProposalsInternal());
+        assertEquals(NUM_TS, sessionParams.getLocalTrafficSelectorsInternal().length);
+        assertEquals(NUM_TS, sessionParams.getRemoteTrafficSelectorsInternal().length);
         assertFalse(sessionParams.isTransportMode());
     }
 
