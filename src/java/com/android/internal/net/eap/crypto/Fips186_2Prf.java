@@ -18,7 +18,7 @@ package com.android.internal.net.eap.crypto;
 import static com.android.internal.net.utils.BigIntegerUtils.bigIntegerToUnsignedByteArray;
 import static com.android.internal.net.utils.BigIntegerUtils.unsignedByteArrayToBigInteger;
 
-import com.android.org.bouncycastle.crypto.digests.SHA1Digest;
+import org.bouncycastle.crypto.digests.SHA1Digest;
 
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
