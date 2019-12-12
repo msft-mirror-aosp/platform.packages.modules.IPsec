@@ -158,7 +158,7 @@ public final class IkeSession implements AutoCloseable {
      * @throws IllegalArgumentException if the ChildSessionCallback is already in use.
      */
     // The childSessionCallback will be called on the same executor as was passed in the constructor
-    // or security reasons.
+    // for security reasons.
     @SuppressLint("ExecutorRegistration")
     public void openChildSession(
             @NonNull ChildSessionParams childSessionParams,
@@ -176,7 +176,7 @@ public final class IkeSession implements AutoCloseable {
      * @throws IllegalArgumentException if no Child Session found bound with this callback.
      */
     // The childSessionCallback will be called on the same executor as was passed in the constructor
-    // or security reasons.
+    // for security reasons.
     @SuppressLint("ExecutorRegistration")
     public void closeChildSession(@NonNull ChildSessionCallback childSessionCallback) {
         mIkeSessionStateMachine.closeChildSession(childSessionCallback);
