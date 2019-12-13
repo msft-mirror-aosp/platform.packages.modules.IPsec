@@ -25,10 +25,10 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_
 
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
@@ -89,7 +89,7 @@ public class EapSimCreatedStateTest extends EapSimStateTest {
                 new AtVersionList(8, 1), new AtPermanentIdReq());
         DecodeResult<EapSimTypeData> decodeResult =
                 new DecodeResult<>(new EapSimTypeData(EAP_SIM_START, attributes));
-        when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapSimTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         mEapSimMethodStateMachine.process(eapMessage);
         assertTrue(mEapSimMethodStateMachine.getState() instanceof StartState);

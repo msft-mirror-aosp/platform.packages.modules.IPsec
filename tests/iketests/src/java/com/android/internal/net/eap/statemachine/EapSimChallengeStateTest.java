@@ -49,6 +49,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -335,7 +336,7 @@ public class EapSimChallengeStateTest extends EapSimStateTest {
                         new EapSimTypeData(
                                 EAP_SIM_CHALLENGE,
                                 Arrays.asList(atRandSim, new AtMac())));
-        when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapSimTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         when(mMockTelephonyManager
                 .getIccAuthentication(
                         TelephonyManager.APPTYPE_USIM,

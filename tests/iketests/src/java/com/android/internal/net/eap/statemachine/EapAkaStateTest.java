@@ -33,10 +33,10 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import android.net.eap.EapSessionConfig.EapAkaConfig;
 import android.telephony.TelephonyManager;
@@ -77,8 +77,7 @@ public class EapAkaStateTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockEapAkaTypeDataDecoder = mock(EapAkaTypeDataDecoder.class);
 
-        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
-                .thenReturn(mMockTelephonyManager);
+        doReturn(mMockTelephonyManager).when(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
 
         mEapAkaMethodStateMachine =
                 new EapAkaMethodStateMachine(
@@ -117,7 +116,7 @@ public class EapAkaStateTest {
                         Arrays.asList(new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE)));
 
         DecodeResult<EapAkaTypeData> decodeResult = new DecodeResult<>(typeData);
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_NOTIFICATION_RESPONSE, eapResponse.packet);
@@ -134,7 +133,7 @@ public class EapAkaStateTest {
 
         AtClientErrorCode atClientErrorCode = AtClientErrorCode.UNABLE_TO_PROCESS;
         DecodeResult<EapAkaTypeData> decodeResult = new DecodeResult<>(atClientErrorCode);
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResult result = mEapAkaMethodStateMachine.process(eapMessage);
         assertEquals(preProcess, mEapAkaMethodStateMachine.getState());
