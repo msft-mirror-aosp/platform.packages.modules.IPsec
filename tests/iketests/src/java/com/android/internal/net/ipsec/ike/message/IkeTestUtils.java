@@ -21,8 +21,8 @@ import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATU
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.util.Pair;
@@ -65,7 +65,7 @@ public final class IkeTestUtils {
     public static IkeSkfPayload makeDummySkfPayload(
             byte[] unencryptedData, int fragNum, int totalFrags) throws Exception {
         IkeEncryptedPayloadBody mockEncryptedBody = mock(IkeEncryptedPayloadBody.class);
-        when(mockEncryptedBody.getUnencryptedData()).thenReturn(unencryptedData);
+        doReturn(unencryptedData).when(mockEncryptedBody).getUnencryptedData();
         return new IkeSkfPayload(mockEncryptedBody, fragNum, totalFrags);
     }
 }

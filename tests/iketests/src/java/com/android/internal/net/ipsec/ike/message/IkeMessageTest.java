@@ -241,17 +241,17 @@ public final class IkeMessageTest {
         mMockIntegrity = mock(IkeMacIntegrity.class);
         byte[] expectedChecksum =
                 TestUtils.hexStringToByteArray(IKE_AUTH_EXPECTED_CHECKSUM_HEX_STRING);
-        when(mMockIntegrity.generateChecksum(any(), any())).thenReturn(expectedChecksum);
-        when(mMockIntegrity.getChecksumLen()).thenReturn(expectedChecksum.length);
+        doReturn(expectedChecksum).when(mMockIntegrity).generateChecksum(any(), any());
+        doReturn(expectedChecksum.length).when(mMockIntegrity).getChecksumLen();
 
         mMockCipher = mock(IkeNormalModeCipher.class);
-        when(mMockCipher.getIvLen()).thenReturn(IKE_AUTH_CIPHER_IV_SIZE);
-        when(mMockCipher.getBlockSize()).thenReturn(IKE_AUTH_CIPHER_BLOCK_SIZE);
-        when(mMockCipher.decrypt(any(), any(), any())).thenReturn(mUnencryptedPaddedData);
+        doReturn(IKE_AUTH_CIPHER_IV_SIZE).when(mMockCipher).getIvLen();
+        doReturn(IKE_AUTH_CIPHER_BLOCK_SIZE).when(mMockCipher).getBlockSize();
+        doReturn(mUnencryptedPaddedData).when(mMockCipher).decrypt(any(), any(), any());
 
         mMockIkeSaRecord = mock(IkeSaRecord.class);
-        when(mMockIkeSaRecord.getInboundDecryptionKey()).thenReturn(new byte[0]);
-        when(mMockIkeSaRecord.getInboundIntegrityKey()).thenReturn(new byte[0]);
+        doReturn(new byte[0]).when(mMockIkeSaRecord).getInboundDecryptionKey();
+        doReturn(new byte[0]).when(mMockIkeSaRecord).getInboundIntegrityKey();
 
         mIkeFragPacketOne = makeFragmentBytes(1 /*fragNum*/, 2 /*totalFragments*/);
         mIkeFragPacketTwo = makeFragmentBytes(2 /*fragNum*/, 2 /*totalFragments*/);
@@ -413,7 +413,7 @@ public final class IkeMessageTest {
 
     @Test
     public void testDecodeEncryptedMessageWithWrongChecksum() throws Exception {
-        when(mMockIntegrity.generateChecksum(any(), any())).thenReturn(new byte[0]);
+        doReturn(new byte[0]).when(mMockIntegrity).generateChecksum(any(), any());
 
         DecodeResult decodeResult =
                 IkeMessage.decode(
@@ -462,7 +462,7 @@ public final class IkeMessageTest {
                 Arrays.copyOfRange(mUnencryptedPaddedData, 0, mUnencryptedPaddedData.length);
         decryptedData[FIRST_PAYLOAD_LENGTH_OFFSET] = (byte) 0;
         decryptedData[FIRST_PAYLOAD_LENGTH_OFFSET + 1] = (byte) 0;
-        when(mMockCipher.decrypt(any(), any(), any())).thenReturn(decryptedData);
+        doReturn(decryptedData).when(mMockCipher).decrypt(any(), any(), any());
 
         DecodeResult decodeResult =
                 IkeMessage.decode(
@@ -499,16 +499,17 @@ public final class IkeMessageTest {
 
     @Test
     public void testEncodeAndEncryptEmptyMsg() throws Exception {
-        when(mMockCipher.generateIv())
-                .thenReturn(TestUtils.hexStringToByteArray(IKE_EMPTY_INFO_MSG_IV_HEX_STRING));
+        doReturn(TestUtils.hexStringToByteArray(IKE_EMPTY_INFO_MSG_IV_HEX_STRING))
+                .when(mMockCipher)
+                .generateIv();
         when(mMockCipher.encrypt(any(), any(), any()))
                 .thenReturn(
                         TestUtils.hexStringToByteArray(
                                 IKE_EMPTY_INFO_MSG_ENCRYPTED_DATA_HEX_STRING));
 
         byte[] checkSum = TestUtils.hexStringToByteArray(IKE_EMPTY_INFO_MSG_CHECKSUM_HEX_STRING);
-        when(mMockIntegrity.getChecksumLen()).thenReturn(checkSum.length);
-        when(mMockIntegrity.generateChecksum(any(), any())).thenReturn(checkSum);
+        doReturn(checkSum.length).when(mMockIntegrity).getChecksumLen();
+        doReturn(checkSum).when(mMockIntegrity).generateChecksum(any(), any());
 
         IkeHeader ikeHeader =
                 new IkeHeader(
@@ -863,7 +864,7 @@ public final class IkeMessageTest {
         byte[] encryptionKey = new byte[0];
         byte[] iv = new byte[IKE_AUTH_CIPHER_IV_SIZE];
 
-        when(mMockCipher.generateIv()).thenReturn(iv);
+        doReturn(iv).when(mMockCipher).generateIv();
         when(mMockCipher.encrypt(any(), any(), any()))
                 .thenAnswer(
                         (invocation) -> {

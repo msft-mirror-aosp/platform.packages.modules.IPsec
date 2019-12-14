@@ -38,10 +38,10 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSK
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import android.net.eap.EapSessionConfig;
 
@@ -150,7 +150,7 @@ public class MethodStateTest extends EapStateTest {
                         && msg.eapData == null;
 
         EapMethodStateMachine mockEapMethodStateMachine = mock(EapMethodStateMachine.class);
-        when(mockEapMethodStateMachine.process(argThat(eapSuccessMatcher))).thenReturn(eapSuccess);
+        doReturn(eapSuccess).when(mockEapMethodStateMachine).process(argThat(eapSuccessMatcher));
         ((MethodState) mEapState).mEapMethodStateMachine = mockEapMethodStateMachine;
 
         mEapState.process(EAP_SUCCESS_PACKET);
@@ -170,7 +170,7 @@ public class MethodStateTest extends EapStateTest {
                         && msg.eapData == null;
 
         EapMethodStateMachine mockEapMethodStateMachine = mock(EapMethodStateMachine.class);
-        when(mockEapMethodStateMachine.process(argThat(eapSuccessMatcher))).thenReturn(eapFailure);
+        doReturn(eapFailure).when(mockEapMethodStateMachine).process(argThat(eapSuccessMatcher));
         ((MethodState) mEapState).mEapMethodStateMachine = mockEapMethodStateMachine;
 
         mEapState.process(EAP_FAILURE_PACKET);

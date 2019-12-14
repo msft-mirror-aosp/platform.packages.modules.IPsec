@@ -55,6 +55,7 @@ import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -514,8 +515,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testCreateFirstChild() throws Exception {
-        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
-                .thenReturn(mSpyCurrentChildSaRecord);
+        doReturn(mSpyCurrentChildSaRecord)
+                .when(mMockSaRecordHelper)
+                .makeChildSaRecord(any(), any(), any());
 
         mChildSessionStateMachine.handleFirstChildExchange(
                 mFirstSaReqPayloads,
@@ -563,8 +565,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testCreateChild() throws Exception {
-        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
-                .thenReturn(mSpyCurrentChildSaRecord);
+        doReturn(mSpyCurrentChildSaRecord)
+                .when(mMockSaRecordHelper)
+                .makeChildSaRecord(any(), any(), any());
 
         mChildSessionStateMachine.createChildSession(
                 LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
@@ -1552,8 +1555,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testValidateExpectKeExistCase() throws Exception {
-        when(mMockNegotiatedProposal.getDhGroupTransforms())
-                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
+                .when(mMockNegotiatedProposal)
+                .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
         payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP));
 
@@ -1565,7 +1569,7 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testValidateExpectNoKeExistCase() throws Exception {
-        when(mMockNegotiatedProposal.getDhGroupTransforms()).thenReturn(new DhGroupTransform[0]);
+        doReturn(new DhGroupTransform[0]).when(mMockNegotiatedProposal).getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
 
         CreateChildSaHelper.validateKePayloads(
@@ -1576,8 +1580,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testThrowWhenKeMissing() throws Exception {
-        when(mMockNegotiatedProposal.getDhGroupTransforms())
-                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
+                .when(mMockNegotiatedProposal)
+                .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
 
         try {
@@ -1597,8 +1602,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testThrowWhenKeHasMismatchedDhGroup() throws Exception {
-        when(mMockNegotiatedProposal.getDhGroupTransforms())
-                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
+                .when(mMockNegotiatedProposal)
+                .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
         payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP));
 
@@ -1620,8 +1626,9 @@ public final class ChildSessionStateMachineTest {
     @Test
     public void testThrowForUnexpectedKe() throws Exception {
         DhGroupTransform noneGroup = new DhGroupTransform(SaProposal.DH_GROUP_NONE);
-        when(mMockNegotiatedProposal.getDhGroupTransforms())
-                .thenReturn(new DhGroupTransform[] {noneGroup});
+        doReturn(new DhGroupTransform[] {noneGroup})
+                .when(mMockNegotiatedProposal)
+                .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
         payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP));
 
