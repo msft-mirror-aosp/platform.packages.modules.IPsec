@@ -39,6 +39,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -85,9 +86,10 @@ public class EapMsChapV2ValidateAuthenticatorStateTest extends EapMsChapV2StateT
                 new EapMsChapV2SuccessRequest(
                         MSCHAP_V2_ID_INT, 0, MSCHAP_V2_AUTHENTICATOR_RESPONSE, MESSAGE);
 
-        when(mMockTypeDataDecoder.getOpCode(eq(DUMMY_TYPE_DATA))).thenReturn(EAP_MSCHAP_V2_SUCCESS);
-        when(mMockTypeDataDecoder.decodeSuccessRequest(any(String.class), eq(DUMMY_TYPE_DATA)))
-                .thenReturn(new DecodeResult<>(successRequest));
+        doReturn(EAP_MSCHAP_V2_SUCCESS).when(mMockTypeDataDecoder).getOpCode(eq(DUMMY_TYPE_DATA));
+        doReturn(new DecodeResult<>(successRequest))
+                .when(mMockTypeDataDecoder)
+                .decodeSuccessRequest(any(String.class), eq(DUMMY_TYPE_DATA));
 
         EapResult result = mStateMachine.process(eapMessage);
         EapResponse eapResponse = (EapResponse) result;
@@ -106,9 +108,10 @@ public class EapMsChapV2ValidateAuthenticatorStateTest extends EapMsChapV2StateT
                 new EapMsChapV2SuccessRequest(
                         MSCHAP_V2_ID_INT, 0, INVALID_AUTHENTICATOR_RESPONSE, MESSAGE);
 
-        when(mMockTypeDataDecoder.getOpCode(eq(DUMMY_TYPE_DATA))).thenReturn(EAP_MSCHAP_V2_SUCCESS);
-        when(mMockTypeDataDecoder.decodeSuccessRequest(any(String.class), eq(DUMMY_TYPE_DATA)))
-                .thenReturn(new DecodeResult<>(successRequest));
+        doReturn(EAP_MSCHAP_V2_SUCCESS).when(mMockTypeDataDecoder).getOpCode(eq(DUMMY_TYPE_DATA));
+        doReturn(new DecodeResult<>(successRequest))
+                .when(mMockTypeDataDecoder)
+                .decodeSuccessRequest(any(String.class), eq(DUMMY_TYPE_DATA));
 
         EapResult result = mStateMachine.process(eapMessage);
         assertTrue(result instanceof EapFailure);
@@ -132,9 +135,10 @@ public class EapMsChapV2ValidateAuthenticatorStateTest extends EapMsChapV2StateT
                         PASSWORD_CHANGE_PROTOCOL,
                         MESSAGE);
 
-        when(mMockTypeDataDecoder.getOpCode(eq(DUMMY_TYPE_DATA))).thenReturn(EAP_MSCHAP_V2_FAILURE);
-        when(mMockTypeDataDecoder.decodeFailureRequest(any(String.class), eq(DUMMY_TYPE_DATA)))
-                .thenReturn(new DecodeResult<>(failureRequest));
+        doReturn(EAP_MSCHAP_V2_FAILURE).when(mMockTypeDataDecoder).getOpCode(eq(DUMMY_TYPE_DATA));
+        doReturn(new DecodeResult<>(failureRequest))
+                .when(mMockTypeDataDecoder)
+                .decodeFailureRequest(any(String.class), eq(DUMMY_TYPE_DATA));
 
         EapResult result = mStateMachine.process(eapMessage);
         EapResponse eapResponse = (EapResponse) result;
@@ -163,7 +167,7 @@ public class EapMsChapV2ValidateAuthenticatorStateTest extends EapMsChapV2StateT
         EapData eapData = new EapData(EAP_TYPE_MSCHAP_V2, DUMMY_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
-        when(mMockTypeDataDecoder.getOpCode(eq(DUMMY_TYPE_DATA))).thenReturn(INVALID_OP_CODE);
+        doReturn(INVALID_OP_CODE).when(mMockTypeDataDecoder).getOpCode(eq(DUMMY_TYPE_DATA));
 
         EapResult result = mStateMachine.process(eapMessage);
         EapError eapError = (EapError) result;

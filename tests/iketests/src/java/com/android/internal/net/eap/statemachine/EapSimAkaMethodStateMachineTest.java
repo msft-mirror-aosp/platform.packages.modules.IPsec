@@ -205,11 +205,11 @@ public class EapSimAkaMethodStateMachineTest {
                         + VERSIONS_STRING
                         + SELECTED_VERSION);
         MessageDigest mockSha1 = mock(MessageDigest.class);
-        when(mockSha1.digest(eq(mkInput))).thenReturn(MK);
+        doReturn(MK).when(mockSha1).digest(eq(mkInput));
 
         byte[] keys = hexStringToByteArray(K_ENCR_STRING + K_AUT_STRING + MSK_STRING + EMSK_STRING);
         Fips186_2Prf mockFips186_2Prf = mock(Fips186_2Prf.class);
-        when(mockFips186_2Prf.getRandom(eq(MK), eq(PRF_OUTPUT_BYTES))).thenReturn(keys);
+        doReturn(keys).when(mockFips186_2Prf).getRandom(eq(MK), eq(PRF_OUTPUT_BYTES));
 
         mStateMachine.generateAndPersistKeys(TAG, mockSha1, mockFips186_2Prf, mkInput);
         assertArrayEquals(K_ENCR, mStateMachine.mKEncr);
@@ -299,7 +299,7 @@ public class EapSimAkaMethodStateMachineTest {
                 new EapSimTypeData(EAP_SIM_CHALLENGE, Arrays.asList(atRandSim, atMac));
 
         Mac mockMac = mock(Mac.class);
-        when(mockMac.doFinal(eq(MAC_INPUT))).thenReturn(COMPUTED_MAC);
+        doReturn(COMPUTED_MAC).when(mockMac).doFinal(eq(MAC_INPUT));
         mStateMachine.mMacAlgorithm = mockMac;
 
         byte[] mac = mStateMachine.getMac(EAP_CODE_REQUEST, ID_INT, eapSimTypeData, NONCE_MT);
@@ -348,7 +348,7 @@ public class EapSimAkaMethodStateMachineTest {
     @Test
     public void testBuildResponseMessageWithMac() {
         Mac mockMac = mock(Mac.class);
-        when(mockMac.doFinal(eq(EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT))).thenReturn(COMPUTED_MAC);
+        doReturn(COMPUTED_MAC).when(mockMac).doFinal(eq(EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT));
         mStateMachine.mMacAlgorithm = mockMac;
 
         EapResult result =
@@ -433,10 +433,12 @@ public class EapSimAkaMethodStateMachineTest {
                                 new AtMac(ORIGINAL_MAC)));
 
         Mac mockMac = mock(Mac.class);
-        when(mockMac.doFinal(eq(EAP_SIM_NOTIFICATION_REQUEST_WITH_EMPTY_MAC)))
-                .thenReturn(ORIGINAL_MAC);
-        when(mockMac.doFinal(eq(EAP_SIM_NOTIFICATION_RESPONSE_WITH_EMPTY_MAC)))
-                .thenReturn(COMPUTED_MAC);
+        doReturn(ORIGINAL_MAC)
+                .when(mockMac)
+                .doFinal(eq(EAP_SIM_NOTIFICATION_REQUEST_WITH_EMPTY_MAC));
+        doReturn(COMPUTED_MAC)
+                .when(mockMac)
+                .doFinal(eq(EAP_SIM_NOTIFICATION_RESPONSE_WITH_EMPTY_MAC));
         mStateMachine.mMacAlgorithm = mockMac;
 
         EapResponse eapResponse =
