@@ -33,11 +33,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import android.net.eap.EapSessionConfig.EapSimConfig;
 import android.telephony.TelephonyManager;
@@ -81,8 +81,7 @@ public class EapSimMethodStateMachineTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockEapSimTypeDataDecoder = mock(EapSimTypeDataDecoder.class);
 
-        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
-                .thenReturn(mMockTelephonyManager);
+        doReturn(mMockTelephonyManager).when(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
 
         mEapSimMethodStateMachine =
                 new EapSimMethodStateMachine(
@@ -116,7 +115,7 @@ public class EapSimMethodStateMachineTest {
                         EAP_SIM_NOTIFICATION,
                         Arrays.asList(new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE)));
         DecodeResult<EapSimTypeData> decodeResult = new DecodeResult<>(notificationTypeData);
-        when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapSimTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mEapSimMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_SIM_NOTIFICATION_RESPONSE, eapResponse.packet);
@@ -127,7 +126,7 @@ public class EapSimMethodStateMachineTest {
         decodeResult =
                 new DecodeResult<>(
                         new EapSimTypeData(EAP_SIM_START, Arrays.asList(new AtVersionList(8, 1))));
-        when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapSimTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         eapResponse = (EapResponse) mEapSimMethodStateMachine.process(eapMessage);
         assertFalse(
@@ -140,7 +139,7 @@ public class EapSimMethodStateMachineTest {
 
         // Second EAP-SIM/Notification
         decodeResult = new EapSimAkaTypeData.DecodeResult<>(notificationTypeData);
-        when(mMockEapSimTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapSimTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapError eapError = (EapError) mEapSimMethodStateMachine.process(eapMessage);
         assertTrue(eapError.cause instanceof EapInvalidRequestException);

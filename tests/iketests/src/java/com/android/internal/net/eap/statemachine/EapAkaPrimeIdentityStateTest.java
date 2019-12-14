@@ -27,10 +27,10 @@ import static com.android.internal.net.eap.message.simaka.EapAkaTypeData.EAP_AKA
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.android.internal.net.eap.EapResult.EapResponse;
 import com.android.internal.net.eap.message.EapData;
@@ -63,8 +63,8 @@ public class EapAkaPrimeIdentityStateTest extends EapAkaPrimeStateTest {
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(
                         new EapAkaPrimeTypeData(EAP_AKA_IDENTITY, Arrays.asList(new AtAnyIdReq())));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(IMSI);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        doReturn(IMSI).when(mMockTelephonyManager).getSubscriberId();
 
         EapResponse eapResponse = (EapResponse) mStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_PRIME_IDENTITY_RESPONSE, eapResponse.packet);
@@ -83,7 +83,7 @@ public class EapAkaPrimeIdentityStateTest extends EapAkaPrimeStateTest {
         // state transition here.
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(new EapAkaPrimeTypeData(EAP_AKA_CHALLENGE, new ArrayList<>()));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         mStateMachine.process(eapMessage);
 

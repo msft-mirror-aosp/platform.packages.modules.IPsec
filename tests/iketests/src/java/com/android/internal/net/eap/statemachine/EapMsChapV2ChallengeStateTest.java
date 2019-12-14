@@ -32,6 +32,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -68,8 +69,9 @@ public class EapMsChapV2ChallengeStateTest extends EapMsChapV2StateTest {
                         TYPE_DATA_HEADER_SIZE + VALUE_SIZE + SERVER_NAME_BYTES.length,
                         MSCHAP_V2_AUTHENTICATOR_CHALLENGE,
                         SERVER_NAME_BYTES);
-        when(mMockTypeDataDecoder.decodeChallengeRequest(any(String.class), eq(DUMMY_TYPE_DATA)))
-                .thenReturn(new DecodeResult<>(challengeRequest));
+        doReturn(new DecodeResult<>(challengeRequest))
+                .when(mMockTypeDataDecoder)
+                .decodeChallengeRequest(any(String.class), eq(DUMMY_TYPE_DATA));
 
         doAnswer(invocation -> {
             byte[] dst = invocation.getArgument(0);

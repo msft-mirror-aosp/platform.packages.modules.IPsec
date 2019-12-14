@@ -41,10 +41,10 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
@@ -172,7 +172,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
         EapSimTypeData eapSimTypeData = new EapSimTypeData(
                 EAP_SIM_START, Arrays.asList(new AtPermanentIdReq()));
 
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(IMSI);
+        doReturn(IMSI).when(mMockTelephonyManager).getSubscriberId();
 
         AtIdentity atIdentity = mStartState.getIdentityResponse(eapSimTypeData);
         assertArrayEquals(EAP_SIM_IDENTITY.getBytes(), mStartState.mIdentity);
@@ -192,8 +192,8 @@ public class EapSimStartStateTest extends EapSimStateTest {
         EapSimTypeData eapSimTypeData = new EapSimTypeData(EAP_SIM_START, mAttributes);
         DecodeResult decodeResult = new DecodeResult(eapSimTypeData);
 
-        when(mMockEapSimTypeDataDecoder.decode(DUMMY_EAP_TYPE_DATA)).thenReturn(decodeResult);
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(null);
+        doReturn(decodeResult).when(mMockEapSimTypeDataDecoder).decode(DUMMY_EAP_TYPE_DATA);
+        doReturn(null).when(mMockTelephonyManager).getSubscriberId();
 
         EapResult result = mStartState.process(eapMessage);
         EapError eapError = (EapError) result;
@@ -222,8 +222,9 @@ public class EapSimStartStateTest extends EapSimStateTest {
         mAttributes.put(EAP_AT_VERSION_LIST, new AtVersionList(8, 1));
         DecodeResult eapSimStartDecodeResult =
                 new DecodeResult(new EapSimTypeData(EAP_SIM_START, mAttributes));
-        when(mMockEapSimTypeDataDecoder.decode(DUMMY_EAP_TYPE_DATA))
-                .thenReturn(eapSimStartDecodeResult);
+        doReturn(eapSimStartDecodeResult)
+                .when(mMockEapSimTypeDataDecoder)
+                .decode(DUMMY_EAP_TYPE_DATA);
 
         EapResult result = mEapSimMethodStateMachine.process(eapMessage);
         EapResponse eapResponse = (EapResponse) result;
@@ -237,8 +238,9 @@ public class EapSimStartStateTest extends EapSimStateTest {
         // Send EAP-SIM/Challenge message
         DecodeResult eapSimChallengeDecodeResult =
                 new DecodeResult(new EapSimTypeData(EAP_SIM_CHALLENGE, new LinkedHashMap<>()));
-        when(mMockEapSimTypeDataDecoder.decode(DUMMY_EAP_TYPE_DATA))
-                .thenReturn(eapSimChallengeDecodeResult);
+        doReturn(eapSimChallengeDecodeResult)
+                .when(mMockEapSimTypeDataDecoder)
+                .decode(DUMMY_EAP_TYPE_DATA);
 
         // We only care about the transition to ChallengeState - the response doesn't matter
         mEapSimMethodStateMachine.process(eapMessage);
