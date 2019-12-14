@@ -27,6 +27,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -88,8 +89,7 @@ public class EapAuthenticatorTest {
         };
 
         EapResponse eapResponse = new EapResponse(EAP_SIM_RESPONSE_PACKET);
-        when(mMockEapStateMachine.process(eq(EAP_REQUEST_SIM_START_PACKET)))
-                .thenReturn(eapResponse);
+        doReturn(eapResponse).when(mMockEapStateMachine).process(eq(EAP_REQUEST_SIM_START_PACKET));
 
         getEapAuthenticatorWithCallback(eapCallback)
                 .processEapMessage(EAP_REQUEST_SIM_START_PACKET);
@@ -112,8 +112,7 @@ public class EapAuthenticatorTest {
         };
         Exception cause = new EapInvalidRequestException("Error");
         EapError eapError = new EapError(cause);
-        when(mMockEapStateMachine.process(eq(REQUEST_UNSUPPORTED_TYPE_PACKET)))
-                .thenReturn(eapError);
+        doReturn(eapError).when(mMockEapStateMachine).process(eq(REQUEST_UNSUPPORTED_TYPE_PACKET));
 
         getEapAuthenticatorWithCallback(eapCallback)
                 .processEapMessage(REQUEST_UNSUPPORTED_TYPE_PACKET);
@@ -136,8 +135,7 @@ public class EapAuthenticatorTest {
             }
         };
         EapSuccess eapSuccess = new EapSuccess(MSK, EMSK);
-        when(mMockEapStateMachine.process(eq(EAP_SUCCESS_PACKET)))
-                .thenReturn(eapSuccess);
+        doReturn(eapSuccess).when(mMockEapStateMachine).process(eq(EAP_SUCCESS_PACKET));
 
         getEapAuthenticatorWithCallback(eapCallback)
                 .processEapMessage(EAP_SUCCESS_PACKET);
@@ -158,8 +156,7 @@ public class EapAuthenticatorTest {
                 mCallbackFired = true;
             }
         };
-        when(mMockEapStateMachine.process(eq(EAP_FAILURE_PACKET)))
-                .thenReturn(new EapFailure());
+        doReturn(new EapFailure()).when(mMockEapStateMachine).process(eq(EAP_FAILURE_PACKET));
 
         getEapAuthenticatorWithCallback(eapCallback)
                 .processEapMessage(EAP_FAILURE_PACKET);

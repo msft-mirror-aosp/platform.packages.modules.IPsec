@@ -18,9 +18,9 @@ package com.android.internal.net.utils;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import com.android.internal.net.utils.SimpleStateMachine.SimpleState;
 
@@ -46,7 +46,7 @@ public class SimpleStateMachineTest {
 
     @Test
     public void testProcess() {
-        when(mMockStartState.process(INPUT)).thenReturn(OUTPUT);
+        doReturn(OUTPUT).when(mMockStartState).process(INPUT);
         String result = mSimpleStateMachine.process(INPUT);
         assertEquals(OUTPUT, result);
         verify(mMockStartState).process(INPUT);
@@ -69,7 +69,7 @@ public class SimpleStateMachineTest {
 
     @Test
     public void testTransitionAndProcess() {
-        when(mMockFinalState.process(INPUT)).thenReturn(OUTPUT);
+        doReturn(OUTPUT).when(mMockFinalState).process(INPUT);
         String result = mSimpleStateMachine.transitionAndProcess(mMockFinalState, INPUT);
         assertEquals(OUTPUT, result);
         verify(mMockFinalState).process(INPUT);

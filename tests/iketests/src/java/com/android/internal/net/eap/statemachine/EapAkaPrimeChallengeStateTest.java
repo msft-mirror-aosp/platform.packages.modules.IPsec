@@ -40,9 +40,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import android.net.eap.EapSessionConfig;
 
@@ -116,7 +116,7 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
 
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(new EapAkaPrimeTypeData(EAP_AKA_CHALLENGE, new ArrayList<>()));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         mStateMachine.process(eapMessage);
 
@@ -138,8 +138,8 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(
                         new EapAkaPrimeTypeData(EAP_AKA_IDENTITY, Arrays.asList(new AtAnyIdReq())));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(IMSI);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        doReturn(IMSI).when(mMockTelephonyManager).getSubscriberId();
 
         EapResponse eapResponse = (EapResponse) mStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_PRIME_IDENTITY_RESPONSE, eapResponse.packet);
@@ -151,7 +151,7 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
         // Process AKA' Challenge Request
         decodeResult =
                 new DecodeResult<>(new EapAkaPrimeTypeData(EAP_AKA_CHALLENGE, new ArrayList<>()));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         mStateMachine.process(eapMessage);
 
@@ -177,7 +177,7 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
                         new EapAkaPrimeTypeData(
                                 EAP_AKA_CHALLENGE,
                                 Arrays.asList(atRandAka, atAutn, atMac, atKdfInput)));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_PRIME_AUTHENTICATION_REJECT, eapResponse.packet);
@@ -198,7 +198,7 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
                 new DecodeResult<>(
                         new EapAkaPrimeTypeData(
                                 EAP_AKA_CHALLENGE, Arrays.asList(atRandAka, atAutn, atMac, atKdf)));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_PRIME_AUTHENTICATION_REJECT, eapResponse.packet);
@@ -221,7 +221,7 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
                         new EapAkaPrimeTypeData(
                                 EAP_AKA_CHALLENGE,
                                 Arrays.asList(atRandAka, atAutn, atMac, atKdfInput, atKdf)));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_PRIME_AUTHENTICATION_REJECT, eapResponse.packet);
@@ -244,7 +244,7 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
                         new EapAkaPrimeTypeData(
                                 EAP_AKA_CHALLENGE,
                                 Arrays.asList(atRandAka, atAutn, atMac, atKdfInput, atKdf)));
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_PRIME_AUTHENTICATION_REJECT, eapResponse.packet);

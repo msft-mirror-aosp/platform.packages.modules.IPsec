@@ -29,9 +29,9 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
@@ -73,7 +73,7 @@ public class EapAkaPrimeStateTest extends EapAkaPrimeTest {
 
         AtClientErrorCode atClientErrorCode = AtClientErrorCode.UNABLE_TO_PROCESS;
         DecodeResult<EapAkaTypeData> decodeResult = new DecodeResult<>(atClientErrorCode);
-        when(mMockTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResult result = mStateMachine.process(eapMessage);
         assertEquals(preProcess, mStateMachine.getState());

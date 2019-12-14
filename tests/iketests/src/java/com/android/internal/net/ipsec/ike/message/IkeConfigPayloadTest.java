@@ -37,8 +37,8 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import android.net.LinkAddress;
 
@@ -258,7 +258,7 @@ public final class IkeConfigPayloadTest {
     private ConfigAttribute makeMockAttribute(byte[] encodedAttribute) {
         ConfigAttribute mockAttribute = mock(ConfigAttribute.class);
 
-        when(mockAttribute.getAttributeLen()).thenReturn(encodedAttribute.length);
+        doReturn(encodedAttribute.length).when(mockAttribute).getAttributeLen();
 
         doAnswer(
                 (invocation) -> {
