@@ -46,6 +46,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -171,7 +172,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(
                         new EapAkaTypeData(EAP_AKA_CHALLENGE, Arrays.asList(atAutn, atMac)));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
@@ -191,7 +192,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(
                         new EapAkaTypeData(EAP_AKA_CHALLENGE, Arrays.asList(atRandAka, atMac)));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
@@ -211,7 +212,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(
                         new EapAkaTypeData(EAP_AKA_CHALLENGE, Arrays.asList(atRandAka, atAutn)));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
@@ -274,7 +275,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
                         new EapAkaTypeData(
                                 EAP_AKA_CHALLENGE,
                                 Arrays.asList(atRandAka, atAutn, atMac)));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         when(mMockTelephonyManager
                 .getIccAuthentication(
                         TelephonyManager.APPTYPE_USIM,
@@ -308,7 +309,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
                         new EapAkaTypeData(
                                 EAP_AKA_CHALLENGE,
                                 Arrays.asList(atRandAka, atAutn, atMac)));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         when(mMockTelephonyManager
                 .getIccAuthentication(
                         TelephonyManager.APPTYPE_USIM,
@@ -342,7 +343,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
                         new EapAkaTypeData(
                                 EAP_AKA_CHALLENGE,
                                 Arrays.asList(atRandAka, atAutn, atMac)));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         when(mMockTelephonyManager
                 .getIccAuthentication(
                         TelephonyManager.APPTYPE_USIM,
@@ -375,7 +376,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
                 new DecodeResult<>(
                         new EapAkaTypeData(
                                 EAP_AKA_CHALLENGE, Arrays.asList(atRandAka, atAutn, atMac)));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         when(mMockTelephonyManager.getIccAuthentication(
                         TelephonyManager.APPTYPE_USIM,
                         TelephonyManager.AUTHTYPE_EAP_AKA,
@@ -409,7 +410,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
                         new EapAkaTypeData(
                                 EAP_AKA_CHALLENGE,
                                 Arrays.asList(atRandAka, atAutn, atBidding, atMac)));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
         when(mMockTelephonyManager.getIccAuthentication(
                 TelephonyManager.APPTYPE_USIM,
                 TelephonyManager.AUTHTYPE_EAP_AKA,

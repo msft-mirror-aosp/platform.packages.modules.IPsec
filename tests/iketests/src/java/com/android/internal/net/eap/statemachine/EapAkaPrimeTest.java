@@ -21,9 +21,9 @@ import static android.telephony.TelephonyManager.APPTYPE_USIM;
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.net.eap.EapSessionConfig.EapAkaPrimeConfig;
@@ -60,10 +60,10 @@ public class EapAkaPrimeTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockTypeDataDecoder = mock(EapAkaPrimeTypeData.EapAkaPrimeTypeDataDecoder.class);
 
-        when(mMockContext.getSystemService(eq(Context.TELEPHONY_SERVICE)))
-                .thenReturn(mMockTelephonyManager);
-        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
-                .thenReturn(mMockTelephonyManager);
+        doReturn(mMockTelephonyManager)
+                .when(mMockContext)
+                .getSystemService(eq(Context.TELEPHONY_SERVICE));
+        doReturn(mMockTelephonyManager).when(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
 
         mStateMachine =
                 new EapAkaPrimeMethodStateMachine(

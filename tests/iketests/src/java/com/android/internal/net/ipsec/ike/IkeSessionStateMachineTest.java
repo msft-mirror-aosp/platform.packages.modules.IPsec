@@ -356,8 +356,9 @@ public final class IkeSessionStateMachineTest {
                         payloadList);
 
         byte[] dummyIkePacketBytes = new byte[0];
-        when(mMockIkeMessageHelper.decode(0, dummyIkeMessage.ikeHeader, dummyIkePacketBytes))
-                .thenReturn(new DecodeResultOk(dummyIkeMessage, dummyIkePacketBytes));
+        doReturn(new DecodeResultOk(dummyIkeMessage, dummyIkePacketBytes))
+                .when(mMockIkeMessageHelper)
+                .decode(0, dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
@@ -622,8 +623,9 @@ public final class IkeSessionStateMachineTest {
 
         mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
         mMockEapAuthenticator = mock(EapAuthenticator.class);
-        when(mMockEapAuthenticatorFactory.newEapAuthenticator(any(), any(), any(), any()))
-                .thenReturn(mMockEapAuthenticator);
+        doReturn(mMockEapAuthenticator)
+                .when(mMockEapAuthenticatorFactory)
+                .newEapAuthenticator(any(), any(), any(), any());
 
         mRootCertificate = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
         mServerEndCertificate = CertUtils.createCertFromPemFile("end-cert-a.pem");
@@ -659,8 +661,9 @@ public final class IkeSessionStateMachineTest {
 
         // Inject longer retransmission timeout
         mMockBackoffTimeoutCalculator = mock(IBackoffTimeoutCalculator.class);
-        when(mMockBackoffTimeoutCalculator.getExponentialBackoffTimeout(anyInt()))
-                .thenReturn(RETRANSMIT_BACKOFF_TIMEOUT_MS);
+        doReturn(RETRANSMIT_BACKOFF_TIMEOUT_MS)
+                .when(mMockBackoffTimeoutCalculator)
+                .getExponentialBackoffTimeout(anyInt());
         Retransmitter.setBackoffTimeoutCalculator(mMockBackoffTimeoutCalculator);
 
         // Setup state machine
@@ -1085,7 +1088,7 @@ public final class IkeSessionStateMachineTest {
 
     private void resetMockIkeMessageHelper() {
         reset(mMockIkeMessageHelper);
-        when(mMockIkeMessageHelper.encode(any())).thenReturn(new byte[0]);
+        doReturn(new byte[0]).when(mMockIkeMessageHelper).encode(any());
         when(mMockIkeMessageHelper.encryptAndEncode(
                         any(), any(), any(), any(), anyBoolean(), anyInt()))
                 .thenReturn(new byte[1][0]);
@@ -2248,8 +2251,7 @@ public final class IkeSessionStateMachineTest {
 
         // Setup dummy initIdPayload for next state.
         mIkeSessionStateMachine.mInitIdPayload = mock(IkeIdPayload.class);
-        when(mIkeSessionStateMachine.mInitIdPayload.getEncodedPayloadBody())
-                .thenReturn(new byte[0]);
+        doReturn(new byte[0]).when(mIkeSessionStateMachine.mInitIdPayload).getEncodedPayloadBody();
 
         callback.onSuccess(mPsk, new byte[0]); // use mPsk as MSK, eMSK does not matter
         mLooper.dispatchAll();
@@ -2314,8 +2316,7 @@ public final class IkeSessionStateMachineTest {
 
         // Setup dummy state from IkeAuthPreEap for next state.
         mIkeSessionStateMachine.mInitIdPayload = mock(IkeIdPayload.class);
-        when(mIkeSessionStateMachine.mInitIdPayload.getEncodedPayloadBody())
-                .thenReturn(new byte[0]);
+        doReturn(new byte[0]).when(mIkeSessionStateMachine.mInitIdPayload).getEncodedPayloadBody();
         mIkeSessionStateMachine.mRespIdPayload =
                 (IkeIdPayload)
                         IkeTestUtils.hexStringToIkePayload(
@@ -3078,7 +3079,7 @@ public final class IkeSessionStateMachineTest {
 
         // Prepare "rekeyed" SA
         setupRekeyedIkeSa(mSpyLocalInitIkeSaRecord);
-        when(mSpyLocalInitIkeSaRecord.compareTo(mSpyRemoteInitIkeSaRecord)).thenReturn(1);
+        doReturn(1).when(mSpyLocalInitIkeSaRecord).compareTo(mSpyRemoteInitIkeSaRecord);
 
         // Send Rekey request on mSpyCurrentIkeSaRecord
         mIkeSessionStateMachine.sendMessage(
