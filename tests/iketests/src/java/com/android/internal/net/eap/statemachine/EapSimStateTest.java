@@ -78,17 +78,20 @@ public class EapSimStateTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockEapSimTypeDataDecoder = mock(EapSimTypeDataDecoder.class);
 
-        doReturn(mMockTelephonyManager).when(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+        TelephonyManager mockInitialTelephonyManager = mock(TelephonyManager.class);
+        doReturn(mMockTelephonyManager)
+                .when(mockInitialTelephonyManager)
+                .createForSubscriptionId(SUB_ID);
 
         mEapSimMethodStateMachine =
                 new EapSimMethodStateMachine(
-                        mMockTelephonyManager,
+                        mockInitialTelephonyManager,
                         EAP_IDENTITY_BYTES,
                         mEapSimConfig,
                         new SecureRandom(),
                         mMockEapSimTypeDataDecoder);
 
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+        verify(mockInitialTelephonyManager).createForSubscriptionId(SUB_ID);
     }
 
     @Test
