@@ -60,10 +60,13 @@ public class EapAkaPrimeTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockTypeDataDecoder = mock(EapAkaPrimeTypeData.EapAkaPrimeTypeDataDecoder.class);
 
-        doReturn(mMockTelephonyManager)
+        TelephonyManager mockTelephonyManagerFromContext = mock(TelephonyManager.class);
+        doReturn(mockTelephonyManagerFromContext)
                 .when(mMockContext)
-                .getSystemService(eq(Context.TELEPHONY_SERVICE));
-        doReturn(mMockTelephonyManager).when(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+                .getSystemService(Context.TELEPHONY_SERVICE);
+        doReturn(mMockTelephonyManager)
+                .when(mockTelephonyManagerFromContext)
+                .createForSubscriptionId(SUB_ID);
 
         mStateMachine =
                 new EapAkaPrimeMethodStateMachine(
@@ -73,6 +76,6 @@ public class EapAkaPrimeTest {
                         mMockTypeDataDecoder);
 
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+        verify(mockTelephonyManagerFromContext).createForSubscriptionId(SUB_ID);
     }
 }
