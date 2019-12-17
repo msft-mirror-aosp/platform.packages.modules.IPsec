@@ -24,10 +24,8 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Addre
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4DhcpServer;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4DnsServer;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Netmask;
-import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Subnet;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6Address;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6DnsServer;
-import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6Subnet;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -475,9 +473,17 @@ public final class IkeConfigPayload extends IkePayload {
         }
     }
 
-    /** This class represents Configuration Attribute for IPv4 subnets. */
-    public static class ConfigAttributeIpv4Subnet extends ConfigAttribute
-            implements ConfigRequestIpv4Subnet {
+    // TODO: b/145454043 Remove constructors for building outbound
+    // INTERNAL_IP4_SUBNET/INTERNAL_IP6_SUBNET because they should never be in a config request and
+    // IKE library, as an IKE client, will never send them in a config reply either.
+
+    /**
+     * This class represents Configuration Attribute for IPv4 subnets.
+     *
+     * <p>According to RFC 7296, INTERNAL_IP4_SUBNET in configuration requests cannot be used
+     * reliably because the meaning is unclear.
+     */
+    public static class ConfigAttributeIpv4Subnet extends ConfigAttribute {
         private static final int VALUE_LEN = 2 * IPV4_ADDRESS_LEN;
 
         public final LinkAddress linkAddress;
@@ -667,9 +673,13 @@ public final class IkeConfigPayload extends IkePayload {
         }
     }
 
-    /** This class represents Configuration Attribute for IPv6 subnets. */
-    public static class ConfigAttributeIpv6Subnet extends ConfigAttrIpv6AddrRangeBase
-            implements ConfigRequestIpv6Subnet {
+    /**
+     * This class represents Configuration Attribute for IPv6 subnets.
+     *
+     * <p>According to RFC 7296, INTERNAL_IP6_SUBNET in configuration requests cannot be used
+     * reliably because the meaning is unclear.
+     */
+    public static class ConfigAttributeIpv6Subnet extends ConfigAttrIpv6AddrRangeBase {
         /** Construct an instance with specified subnet for an outbound packet. */
         public ConfigAttributeIpv6Subnet(LinkAddress ipv6LinkAddress) {
             super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, ipv6LinkAddress);

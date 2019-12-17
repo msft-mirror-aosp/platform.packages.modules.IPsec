@@ -29,10 +29,8 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -109,9 +107,6 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
         Inet4Address getAddress();
     }
 
-    /** Represents an IPv4 Subnet request */
-    public interface ConfigRequestIpv4Subnet extends ConfigRequest {}
-
     /** Represents an IPv4 Netmask request */
     public interface ConfigRequestIpv4Netmask extends ConfigRequest {}
 
@@ -132,9 +127,6 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          */
         int getPrefixLength();
     }
-
-    /** Represents an IPv6 Subnet request */
-    public interface ConfigRequestIpv6Subnet extends ConfigRequest {}
 
     /** Represents an IPv6 DNS Server request */
     public interface ConfigRequestIpv6DnsServer extends ConfigRequest {
@@ -169,6 +161,10 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
+            if (proposal == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             validateAndAddSaProposal(proposal);
             return this;
         }
@@ -236,30 +232,40 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
         }
 
         /**
-         * Adds a specific internal IP address request to the {@link TunnelModeChildSessionParams}
+         * Adds a specific internal IPv4 address request to the {@link TunnelModeChildSessionParams}
          * being built.
          *
-         * @param address the requested address.
-         * @param prefixLen length of the InetAddress prefix. When requesting an IPv4 address,
-         *     prefixLen MUST be 32.
+         * @param address the requested IPv4 address.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
-        public Builder addInternalAddressRequest(@NonNull InetAddress address, int prefixLen) {
-            if (address instanceof Inet4Address) {
-                if (prefixLen != IPv4_DEFAULT_PREFIX_LEN) {
-                    throw new IllegalArgumentException("Invalid IPv4 prefix length: " + prefixLen);
-                }
-                mHasIp4AddressRequest = true;
-                mConfigRequestList.add(new ConfigAttributeIpv4Address((Inet4Address) address));
-                return this;
-            } else if (address instanceof Inet6Address) {
-                mConfigRequestList.add(
-                        new ConfigAttributeIpv6Address(new LinkAddress(address, prefixLen)));
-                return this;
-            } else {
-                throw new IllegalArgumentException("Invalid address " + address);
+        public Builder addInternalAddressRequest(@NonNull Inet4Address address) {
+            if (address == null) {
+                throw new NullPointerException("Required argument not provided");
             }
+
+            mHasIp4AddressRequest = true;
+            mConfigRequestList.add(new ConfigAttributeIpv4Address((Inet4Address) address));
+            return this;
+        }
+
+        /**
+         * Adds a specific internal IPv6 address request to the {@link TunnelModeChildSessionParams}
+         * being built.
+         *
+         * @param address the requested IPv6 address.
+         * @param prefixLen length of the IPv6 address prefix length.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder addInternalAddressRequest(@NonNull Inet6Address address, int prefixLen) {
+            if (address == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
+            mConfigRequestList.add(
+                    new ConfigAttributeIpv6Address(new LinkAddress(address, prefixLen)));
+            return this;
         }
 
         /**
@@ -289,9 +295,14 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * @param address the requested DNS server address.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         @NonNull
         public Builder addInternalDnsServerRequest(@NonNull InetAddress address) {
+            if (address == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             if (address instanceof Inet4Address) {
                 mConfigRequestList.add(new ConfigAttributeIpv4Dns((Inet4Address) address));
                 return this;
@@ -300,26 +311,6 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
                 return this;
             } else {
                 throw new IllegalArgumentException("Invalid address " + address);
-            }
-        }
-
-        /**
-         * Adds an internal subnet requests to the {@link TunnelModeChildSessionParams} being built.
-         *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
-         *     OsConstants.AF_INET6} are allowed.
-         * @return Builder this, to facilitate chaining.
-         */
-        @NonNull
-        public Builder addInternalSubnetRequest(int addressFamily) {
-            if (addressFamily == AF_INET) {
-                mConfigRequestList.add(new ConfigAttributeIpv4Subnet());
-                return this;
-            } else if (addressFamily == AF_INET6) {
-                mConfigRequestList.add(new ConfigAttributeIpv6Subnet());
-                return this;
-            } else {
-                throw new IllegalArgumentException("Invalid address family: " + addressFamily);
             }
         }
 
@@ -350,9 +341,14 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * @param address the requested DHCP server address.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         @NonNull
         public Builder addInternalDhcpServerRequest(@NonNull InetAddress address) {
+            if (address == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
             if (address instanceof Inet4Address) {
                 mConfigRequestList.add(new ConfigAttributeIpv4Dhcp((Inet4Address) address));
                 return this;
