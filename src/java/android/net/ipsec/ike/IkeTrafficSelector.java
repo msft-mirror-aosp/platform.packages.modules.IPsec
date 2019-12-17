@@ -109,9 +109,9 @@ public final class IkeTrafficSelector {
     public final int ipProtocolId;
     /** @hide */
     public final int selectorLength;
-    /** The smallest port number allowed by this Traffic Selector. */
+    /** The smallest port number allowed by this Traffic Selector. Informational only. */
     public final int startPort;
-    /** The largest port number allowed by this Traffic Selector. */
+    /** The largest port number allowed by this Traffic Selector. Informational only. */
     public final int endPort;
     /** The smallest address included in this Traffic Selector. */
     @NonNull public final InetAddress startingAddress;
@@ -139,6 +139,9 @@ public final class IkeTrafficSelector {
 
     /**
      * Construct an instance of {@link IkeTrafficSelector} for negotiating a Child Session.
+     *
+     * <p>Android platform does not support port-based routing. The port range negotiation is only
+     * informational.
      *
      * @param startPort the smallest port number allowed by this Traffic Selector.
      * @param endPort the largest port number allowed by this Traffic Selector.
