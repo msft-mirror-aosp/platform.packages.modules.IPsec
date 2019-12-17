@@ -22,6 +22,7 @@ import android.annotation.SystemApi;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.List;
 
 /**
  * IkeSessionConfiguration represents the negotiated configuration for a {@link IkeSession}.
@@ -50,6 +51,18 @@ public final class IkeSessionConfiguration {
      */
     @NonNull
     public String getRemoteApplicationVersion() {
+        // TODO: Implement it.
+        throw new UnsupportedOperationException("Not yet supported");
+    }
+
+    /**
+     * Returns remote vendor IDs received during IKE Session setup.
+     *
+     * @return the vendor IDs of the remote server, or an empty list if no vendor ID is received
+     *     during IKE Session setup.
+     */
+    @NonNull
+    public List<byte[]> getRemoteVendorIDs() {
         // TODO: Implement it.
         throw new UnsupportedOperationException("Not yet supported");
     }

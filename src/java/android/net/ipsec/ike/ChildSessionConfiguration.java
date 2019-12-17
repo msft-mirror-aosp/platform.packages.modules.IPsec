@@ -22,6 +22,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
+import android.net.IpPrefix;
 import android.net.LinkAddress;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
@@ -121,6 +122,9 @@ public final class ChildSessionConfiguration {
      *
      * <p>Only inbound traffic within the range is acceptable to the Child Session.
      *
+     * <p>The Android platform does not support port-based routing. Port ranges of traffic selectors
+     * are only informational.
+     *
      * @return the inbound traffic selectors.
      */
     @NonNull
@@ -132,6 +136,9 @@ public final class ChildSessionConfiguration {
      * Returns the negotiated outbound traffic selectors.
      *
      * <p>Only outbound traffic within the range is acceptable to the Child Session.
+     *
+     * <p>The Android platform does not support port-based routing. Port ranges of traffic selectors
+     * are only informational.
      *
      * @return the outbound traffic selectors.
      */
@@ -158,7 +165,7 @@ public final class ChildSessionConfiguration {
      *     provided by the IKE server (e.g. for a non-tunnel mode Child Session).
      */
     @NonNull
-    public List<LinkAddress> getInternalSubnets() {
+    public List<IpPrefix> getInternalSubnets() {
         // TODO: Implement it.
         throw new UnsupportedOperationException("Not yet supported");
     }
