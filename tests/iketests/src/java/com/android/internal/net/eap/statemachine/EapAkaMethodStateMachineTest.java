@@ -79,17 +79,20 @@ public class EapAkaMethodStateMachineTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockEapAkaTypeDataDecoder = mock(EapAkaTypeDataDecoder.class);
 
-        doReturn(mMockTelephonyManager).when(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+        TelephonyManager mockInitialTelephonyManager = mock(TelephonyManager.class);
+        doReturn(mMockTelephonyManager)
+                .when(mockInitialTelephonyManager)
+                .createForSubscriptionId(SUB_ID);
 
         mEapAkaMethodStateMachine =
                 new EapAkaMethodStateMachine(
-                        mMockTelephonyManager,
+                        mockInitialTelephonyManager,
                         EAP_IDENTITY_BYTES,
                         mEapAkaConfig,
                         mMockEapAkaTypeDataDecoder,
                         false);
 
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+        verify(mockInitialTelephonyManager).createForSubscriptionId(SUB_ID);
     }
 
     @Test
