@@ -233,11 +233,15 @@ public class EapSimTest extends EapMethodEndToEndTest {
 
     private void verifyEapSimStart(
             byte[] incomingEapPacket, byte[] outgoingEapPacket, boolean expectIdentityRequest) {
-        // EAP-SIM/Start request
-        doReturn(mMockTelephonyManager)
+        TelephonyManager mockTelephonyManagerFromContext = mock(TelephonyManager.class);
+        doReturn(mockTelephonyManagerFromContext)
                 .when(mMockContext)
                 .getSystemService(Context.TELEPHONY_SERVICE);
-        doReturn(mMockTelephonyManager).when(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+        doReturn(mMockTelephonyManager)
+                .when(mockTelephonyManagerFromContext)
+                .createForSubscriptionId(SUB_ID);
+
+        // EAP-SIM/Start request
         doReturn(UNFORMATTED_IDENTITY).when(mMockTelephonyManager).getSubscriberId();
         doAnswer(invocation -> {
             byte[] dst = invocation.getArgument(0);
@@ -248,7 +252,6 @@ public class EapSimTest extends EapMethodEndToEndTest {
         mEapAuthenticator.processEapMessage(incomingEapPacket);
         mTestLooper.dispatchAll();
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
 
         if (expectIdentityRequest) {
             verify(mMockTelephonyManager).getSubscriberId();

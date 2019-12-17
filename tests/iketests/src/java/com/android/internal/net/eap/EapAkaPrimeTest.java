@@ -219,10 +219,13 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
                         (runnable) -> runnable.run(),
                         AUTHENTICATOR_TIMEOUT_MILLIS);
 
-        doReturn(mMockTelephonyManager)
+        TelephonyManager mockTelephonyManagerFromContext = mock(TelephonyManager.class);
+        doReturn(mockTelephonyManagerFromContext)
                 .when(mMockContext)
                 .getSystemService(Context.TELEPHONY_SERVICE);
-        doReturn(mMockTelephonyManager).when(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+        doReturn(mMockTelephonyManager)
+                .when(mockTelephonyManagerFromContext)
+                .createForSubscriptionId(SUB_ID);
     }
 
     @Test
@@ -303,7 +306,6 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
         // verify EAP-AKA'/Identity response
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
         verify(mMockTelephonyManager).getSubscriberId();
         verify(mMockCallback).onResponse(eq(EAP_AKA_PRIME_IDENTITY_RESPONSE));
         verifyNoMoreInteractions(
@@ -353,7 +355,6 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
         // also need to verify interactions with Context and TelephonyManager
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
         verifyNoMoreInteractions(
                 mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
     }
