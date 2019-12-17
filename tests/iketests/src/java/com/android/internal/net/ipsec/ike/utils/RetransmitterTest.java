@@ -65,9 +65,9 @@ public final class RetransmitterTest {
     @Before
     public void setUp() throws Exception {
         mMockHandler = mock(Handler.class);
-        doReturn(mock(Message.class))
-                .when(mMockHandler)
-                .obtainMessage(eq(CMD_RETRANSMIT), anyObject());
+
+        Message mockMessage = mock(Message.class);
+        doReturn(mockMessage).when(mMockHandler).obtainMessage(eq(CMD_RETRANSMIT), anyObject());
 
         mMockIkeMessage = mock(IkeMessage.class);
         mRetransmitter = new TestRetransmitter(mMockHandler, mMockIkeMessage);
