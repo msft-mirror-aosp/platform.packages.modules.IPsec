@@ -23,10 +23,10 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import android.net.InetAddresses;
+
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-
-import libcore.net.InetAddressUtils;
 
 import org.junit.Test;
 
@@ -39,17 +39,17 @@ public final class IkeTrafficSelectorTest {
     private static final int TS_ONE_START_PORT = 16;
     private static final int TS_ONE_END_PORT = 65520;
     private static final Inet4Address TS_ONE_START_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
     private static final Inet4Address TS_ONE_END_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.3.101"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.3.101"));
 
     private static final String TS_IPV4_TWO_HEX_STRING = "070000100000ffffc0000464c0000466";
     private static final int TS_TWO_START_PORT = 0;
     private static final int TS_TWO_END_PORT = 65535;
     private static final Inet4Address TS_TWO_START_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.4.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.4.100"));
     private static final Inet4Address TS_TWO_END_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.4.102"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.4.102"));
 
     private static final String TX_IPV4_INVALID_PORT_RANGE_HEX_STRING =
             "0700001022221111c0000464c0000466";
@@ -280,7 +280,7 @@ public final class IkeTrafficSelectorTest {
     @Test
     public void testBuildIkeTrafficSelectorWithMismatchedAddressType() throws Exception {
         Inet6Address inet6Address =
-                (Inet6Address) (InetAddressUtils.parseNumericAddress("0:2001:0:db8::1"));
+                (Inet6Address) (InetAddresses.parseNumericAddress("0:2001:0:db8::1"));
         try {
             IkeTrafficSelector ts =
                     new IkeTrafficSelector(

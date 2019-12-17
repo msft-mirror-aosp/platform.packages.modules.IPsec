@@ -40,6 +40,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
+import android.net.InetAddresses;
 import android.net.LinkAddress;
 
 import com.android.internal.net.TestUtils;
@@ -55,8 +56,6 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
-
-import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -84,9 +83,9 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray(CONFIG_RESP_PAYLOAD_HEX);
 
     private static final Inet4Address IPV4_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
     private static final Inet4Address IPV4_NETMASK =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("255.255.255.240"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.240"));
     private static final int IP4_PREFIX_LEN = 28;
     private static final LinkAddress IPV4_LINK_ADDRESS =
             new LinkAddress(IPV4_ADDRESS, IP4_PREFIX_LEN);
@@ -100,14 +99,14 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("00020000");
 
     private static final Inet4Address IPV4_DNS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("8.8.8.8"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("8.8.8.8"));
     private static final byte[] IPV4_DNS_ATTRIBUTE_VALUE =
             TestUtils.hexStringToByteArray("08080808");
     private static final byte[] IPV4_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00030000");
 
     private static final Inet4Address IPV4_DHCP =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final byte[] IPV4_DHCP_ATTRIBUTE_WITH_VALUE =
             TestUtils.hexStringToByteArray("00060004c00002c8");
     private static final byte[] IPV4_DHCP_ATTRIBUTE_WITHOUT_VALUE =
@@ -121,7 +120,7 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("000d0000");
 
     private static final Inet6Address IPV6_ADDRESS =
-            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:db8::1"));
+            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
     private static final int IP6_PREFIX_LEN = 64;
     private static final LinkAddress IPV6_LINK_ADDRESS =
             new LinkAddress(IPV6_ADDRESS, IP6_PREFIX_LEN);
@@ -140,7 +139,7 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("000f0000");
 
     private static final Inet6Address IPV6_DNS =
-            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:db8:100::1"));
+            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8:100::1"));
     private static final byte[] IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("000a0000");
 
@@ -151,9 +150,9 @@ public final class IkeConfigPayloadTest {
     public void setUp() throws Exception {
         mNetMasks =
                 new Inet4Address[] {
-                    (Inet4Address) (InetAddressUtils.parseNumericAddress("0.0.0.0")),
-                    (Inet4Address) (InetAddressUtils.parseNumericAddress("255.255.255.255")),
-                    (Inet4Address) (InetAddressUtils.parseNumericAddress("255.255.255.240"))
+                    (Inet4Address) (InetAddresses.parseNumericAddress("0.0.0.0")),
+                    (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.255")),
+                    (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.240"))
                 };
         mIpv4PrefixLens = new int[] {0, 32, 28};
     }
