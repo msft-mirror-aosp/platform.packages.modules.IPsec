@@ -25,6 +25,7 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -232,12 +233,16 @@ public class EapSimTest extends EapMethodEndToEndTest {
 
     private void verifyEapSimStart(
             byte[] incomingEapPacket, byte[] outgoingEapPacket, boolean expectIdentityRequest) {
+        TelephonyManager mockTelephonyManagerFromContext = mock(TelephonyManager.class);
+        doReturn(mockTelephonyManagerFromContext)
+                .when(mMockContext)
+                .getSystemService(Context.TELEPHONY_SERVICE);
+        doReturn(mMockTelephonyManager)
+                .when(mockTelephonyManagerFromContext)
+                .createForSubscriptionId(SUB_ID);
+
         // EAP-SIM/Start request
-        when(mMockContext.getSystemService(Context.TELEPHONY_SERVICE))
-                .thenReturn(mMockTelephonyManager);
-        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
-                .thenReturn(mMockTelephonyManager);
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(UNFORMATTED_IDENTITY);
+        doReturn(UNFORMATTED_IDENTITY).when(mMockTelephonyManager).getSubscriberId();
         doAnswer(invocation -> {
             byte[] dst = invocation.getArgument(0);
             System.arraycopy(NONCE, 0, dst, 0, NONCE.length);
@@ -247,7 +252,6 @@ public class EapSimTest extends EapMethodEndToEndTest {
         mEapAuthenticator.processEapMessage(incomingEapPacket);
         mTestLooper.dispatchAll();
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
 
         if (expectIdentityRequest) {
             verify(mMockTelephonyManager).getSubscriberId();

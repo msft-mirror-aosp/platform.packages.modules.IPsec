@@ -22,6 +22,7 @@ import static com.android.internal.net.TestUtils.hexStringToByteArray;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -195,10 +196,13 @@ public class EapAkaTest extends EapMethodEndToEndTest {
                         (runnable) -> runnable.run(),
                         AUTHENTICATOR_TIMEOUT_MILLIS);
 
-        when(mMockContext.getSystemService(Context.TELEPHONY_SERVICE))
-                .thenReturn(mMockTelephonyManager);
-        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
-                .thenReturn(mMockTelephonyManager);
+        TelephonyManager mockTelephonyManagerFromContext = mock(TelephonyManager.class);
+        doReturn(mockTelephonyManagerFromContext)
+                .when(mMockContext)
+                .getSystemService(Context.TELEPHONY_SERVICE);
+        doReturn(mMockTelephonyManager)
+                .when(mockTelephonyManagerFromContext)
+                .createForSubscriptionId(SUB_ID);
     }
 
     @Test
@@ -255,14 +259,13 @@ public class EapAkaTest extends EapMethodEndToEndTest {
 
     private void verifyEapAkaIdentity() {
         // EAP-AKA/Identity request
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(UNFORMATTED_IDENTITY);
+        doReturn(UNFORMATTED_IDENTITY).when(mMockTelephonyManager).getSubscriberId();
 
         mEapAuthenticator.processEapMessage(EAP_AKA_IDENTITY_REQUEST);
         mTestLooper.dispatchAll();
 
         // verify EAP-AKA/Identity response
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
         verify(mMockTelephonyManager).getSubscriberId();
         verify(mMockCallback).onResponse(eq(EAP_AKA_IDENTITY_RESPONSE));
         verifyNoMoreInteractions(
@@ -309,7 +312,6 @@ public class EapAkaTest extends EapMethodEndToEndTest {
 
         // also need to verify interactions with Context and TelephonyManager
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
         verifyNoMoreInteractions(
                 mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
     }

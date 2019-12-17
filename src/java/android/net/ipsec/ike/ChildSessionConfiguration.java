@@ -20,6 +20,9 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
 
+import android.annotation.NonNull;
+import android.annotation.SystemApi;
+import android.net.IpPrefix;
 import android.net.LinkAddress;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
@@ -36,8 +39,11 @@ import java.util.List;
 /**
  * ChildSessionConfiguration represents the negotiated configuration for a Child Session.
  *
+ * <p>Configurations include traffic selectors and internal network information.
+ *
  * @hide
  */
+@SystemApi
 public final class ChildSessionConfiguration {
     private static final int IPv4_DEFAULT_PREFIX_LEN = 32;
 
@@ -114,9 +120,14 @@ public final class ChildSessionConfiguration {
     /**
      * Returns the negotiated inbound traffic selectors.
      *
-     * @return the inbound traffic selector.
-     * @hide
+     * <p>Only inbound traffic within the range is acceptable to the Child Session.
+     *
+     * <p>The Android platform does not support port-based routing. Port ranges of traffic selectors
+     * are only informational.
+     *
+     * @return the inbound traffic selectors.
      */
+    @NonNull
     public List<IkeTrafficSelector> getInboundTrafficSelectors() {
         return mInboundTs;
     }
@@ -124,9 +135,14 @@ public final class ChildSessionConfiguration {
     /**
      * Returns the negotiated outbound traffic selectors.
      *
-     * @return the outbound traffic selector.
-     * @hide
+     * <p>Only outbound traffic within the range is acceptable to the Child Session.
+     *
+     * <p>The Android platform does not support port-based routing. Port ranges of traffic selectors
+     * are only informational.
+     *
+     * @return the outbound traffic selectors.
      */
+    @NonNull
     public List<IkeTrafficSelector> getOutboundTrafficSelectors() {
         return mOutboundTs;
     }
@@ -136,8 +152,8 @@ public final class ChildSessionConfiguration {
      *
      * @return the assigned internal addresses, or an empty list when no addresses are assigned by
      *     the remote IKE server (e.g. for a non-tunnel mode Child Session).
-     * @hide
      */
+    @NonNull
     public List<LinkAddress> getInternalAddresses() {
         return mInternalAddressList;
     }
@@ -147,9 +163,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal subnets, or an empty list when no information of protected subnets is
      *     provided by the IKE server (e.g. for a non-tunnel mode Child Session).
-     * @hide
      */
-    public List<LinkAddress> getInternalSubnets() {
+    @NonNull
+    public List<IpPrefix> getInternalSubnets() {
         // TODO: Implement it.
         throw new UnsupportedOperationException("Not yet supported");
     }
@@ -159,8 +175,8 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal DNS server addresses, or an empty list when no DNS server is provided by
      *     the IKE server (e.g. for a non-tunnel mode Child Session).
-     * @hide
      */
+    @NonNull
     public List<InetAddress> getInternalDnsServers() {
         // TODO: Implement it.
         throw new UnsupportedOperationException("Not yet supported");
@@ -171,8 +187,8 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal DHCP server addresses, or an empty list when no DHCP server is provided
      *     by the IKE server (e.g. for a non-tunnel mode Child Session).
-     * @hide
      */
+    @NonNull
     public List<InetAddress> getInternalDhcpServers() {
         // TODO: Implement it.
         throw new UnsupportedOperationException("Not yet supported");

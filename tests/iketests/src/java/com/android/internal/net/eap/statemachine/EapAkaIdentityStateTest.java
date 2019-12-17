@@ -28,10 +28,10 @@ import static com.android.internal.net.eap.message.simaka.EapAkaTypeData.EAP_AKA
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.EapResult.EapResponse;
@@ -70,8 +70,8 @@ public class EapAkaIdentityStateTest extends EapAkaStateTest {
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(
                         new EapAkaTypeData(EAP_AKA_IDENTITY, Arrays.asList(new AtAnyIdReq())));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(IMSI);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        doReturn(IMSI).when(mMockTelephonyManager).getSubscriberId();
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_IDENTITY_RESPONSE, eapResponse.packet);
@@ -88,7 +88,7 @@ public class EapAkaIdentityStateTest extends EapAkaStateTest {
 
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(new EapAkaTypeData(EAP_AKA_IDENTITY, new LinkedHashMap<>()));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
@@ -107,7 +107,7 @@ public class EapAkaIdentityStateTest extends EapAkaStateTest {
                         new EapAkaTypeData(
                                 EAP_AKA_IDENTITY,
                                 Arrays.asList(new AtAnyIdReq(), new AtPermanentIdReq())));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_CLIENT_ERROR_UNABLE_TO_PROCESS, eapResponse.packet);
@@ -124,8 +124,8 @@ public class EapAkaIdentityStateTest extends EapAkaStateTest {
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(
                         new EapAkaTypeData(EAP_AKA_IDENTITY, Arrays.asList(new AtAnyIdReq())));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(null);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        doReturn(null).when(mMockTelephonyManager).getSubscriberId();
 
         EapError eapError = (EapError) mEapAkaMethodStateMachine.process(eapMessage);
         assertTrue(eapError.cause instanceof EapSimAkaIdentityUnavailableException);
@@ -148,7 +148,7 @@ public class EapAkaIdentityStateTest extends EapAkaStateTest {
         // state transition here.
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(new EapAkaTypeData(EAP_AKA_CHALLENGE, new LinkedHashMap<>()));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         mEapAkaMethodStateMachine.process(eapMessage);
 

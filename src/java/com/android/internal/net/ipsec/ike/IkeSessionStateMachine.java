@@ -41,13 +41,13 @@ import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.ipsec.ike.ChildSessionCallback;
-import android.net.ipsec.ike.ChildSessionOptions;
+import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSessionCallback;
-import android.net.ipsec.ike.IkeSessionOptions;
-import android.net.ipsec.ike.IkeSessionOptions.IkeAuthConfig;
-import android.net.ipsec.ike.IkeSessionOptions.IkeAuthDigitalSignRemoteConfig;
-import android.net.ipsec.ike.IkeSessionOptions.IkeAuthPskConfig;
+import android.net.ipsec.ike.IkeSessionParams;
+import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
+import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
+import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -272,7 +272,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
     }
 
-    private final IkeSessionOptions mIkeSessionOptions;
+    private final IkeSessionParams mIkeSessionParams;
 
     /** Map that stores all IkeSaRecords, keyed by locally generated IKE SPI. */
     private final LongSparseArray<IkeSaRecord> mLocalSpiToIkeSaRecordMap;
@@ -339,7 +339,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     // FIXME: b/131265898 Move into CreateIkeLocalIkeAuth, and pass through to
     // CreateIkeLocalIkeAuthPostEap once passing entry data is supported
-    private ChildSessionOptions mFirstChildSessionOptions;
+    private ChildSessionParams mFirstChildSessionParams;
     private ChildSessionCallback mFirstChildCallbacks;
 
     /** Package */
@@ -387,15 +387,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
-            IkeSessionOptions ikeOptions,
-            ChildSessionOptions firstChildOptions,
+            IkeSessionParams ikeParams,
+            ChildSessionParams firstChildParams,
             Executor userCbExecutor,
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
         super(TAG, looper);
 
-        mIkeSessionOptions = ikeOptions;
+        mIkeSessionParams = ikeParams;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
 
         mTempFailHandler = new TempFailureHandler(looper);
@@ -410,9 +410,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         mUserCbExecutor = userCbExecutor;
         mIkeSessionCallback = ikeSessionCallback;
 
-        mFirstChildSessionOptions = firstChildOptions;
+        mFirstChildSessionParams = firstChildParams;
         mFirstChildCallbacks = firstChildSessionCallback;
-        registerChildSessionCallback(firstChildOptions, firstChildSessionCallback, true);
+        registerChildSessionCallback(firstChildParams, firstChildSessionCallback, true);
 
         addState(mInitial);
         addState(mCreateIkeLocalIkeInit);
@@ -446,8 +446,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
-            IkeSessionOptions ikeOptions,
-            ChildSessionOptions firstChildOptions,
+            IkeSessionParams ikeParams,
+            ChildSessionParams firstChildParams,
             Executor userCbExecutor,
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback) {
@@ -455,8 +455,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 looper,
                 context,
                 ipSecManager,
-                ikeOptions,
-                firstChildOptions,
+                ikeParams,
+                firstChildParams,
                 userCbExecutor,
                 ikeSessionCallback,
                 firstChildSessionCallback,
@@ -483,9 +483,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      */
     @VisibleForTesting
     void registerChildSessionCallback(
-            ChildSessionOptions childOptions,
-            ChildSessionCallback callbacks,
-            boolean isFirstChild) {
+            ChildSessionParams childParams, ChildSessionCallback callbacks, boolean isFirstChild) {
         synchronized (mChildCbToSessions) {
             if (!isFirstChild && getCurrentState() == null) {
                 throw new IllegalStateException(
@@ -497,7 +495,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     ChildSessionStateMachineFactory.makeChildSessionStateMachine(
                             getHandler().getLooper(),
                             mContext,
-                            childOptions,
+                            childParams,
                             mUserCbExecutor,
                             callbacks,
                             new ChildSessionSmCallback()));
@@ -511,7 +509,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Schedules a Create Child procedure. */
     public void openChildSession(
-            ChildSessionOptions childSessionOptions, ChildSessionCallback childSessionCallback) {
+            ChildSessionParams childSessionParams, ChildSessionCallback childSessionCallback) {
         if (childSessionCallback == null) {
             throw new IllegalArgumentException("Child Session Callback must be provided");
         }
@@ -521,11 +519,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         registerChildSessionCallback(
-                childSessionOptions, childSessionCallback, false /*isFirstChild*/);
+                childSessionParams, childSessionCallback, false /*isFirstChild*/);
         sendMessage(
                 CMD_LOCAL_REQUEST_CREATE_CHILD,
                 new ChildLocalRequest(
-                        CMD_LOCAL_REQUEST_CREATE_CHILD, childSessionCallback, childSessionOptions));
+                        CMD_LOCAL_REQUEST_CREATE_CHILD, childSessionCallback, childSessionParams));
     }
 
     /** Schedules a Delete Child procedure. */
@@ -772,17 +770,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Class to group parameters for negotiating the first Child SA. */
     private static class FirstChildNegotiationData {
-        public final ChildSessionOptions childSessionOptions;
+        public final ChildSessionParams childSessionParams;
         public final ChildSessionCallback childSessionCallback;
         public final List<IkePayload> reqPayloads;
         public final List<IkePayload> respPayloads;
 
         FirstChildNegotiationData(
-                ChildSessionOptions childSessionOptions,
+                ChildSessionParams childSessionParams,
                 ChildSessionCallback childSessionCallback,
                 List<IkePayload> reqPayloads,
                 List<IkePayload> respPayloads) {
-            this.childSessionOptions = childSessionOptions;
+            this.childSessionParams = childSessionParams;
             this.childSessionCallback = childSessionCallback;
             this.reqPayloads = reqPayloads;
             this.respPayloads = respPayloads;
@@ -952,7 +950,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void enterState() {
             try {
-                mRemoteAddress = mIkeSessionOptions.getServerAddress();
+                mRemoteAddress = mIkeSessionParams.getServerAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 FileDescriptor sock =
@@ -968,7 +966,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                 mIkeSocket =
                         IkeSocket.getIkeSocket(
-                                mIkeSessionOptions.getUdpEncapsulationSocket(),
+                                mIkeSessionParams.getUdpEncapsulationSocket(),
                                 IkeSessionStateMachine.this);
             } catch (ErrnoException | SocketException e) {
                 handleIkeFatalError(e);
@@ -1995,7 +1993,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         private UdpEncapsulationSocket getEncapSocketIfNeeded() {
             boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
 
-            return (isNatDetected ? mIkeSessionOptions.getUdpEncapsulationSocket() : null);
+            return (isNatDetected ? mIkeSessionParams.getUdpEncapsulationSocket() : null);
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
@@ -2462,9 +2460,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             long initSpi = mLocalIkeSpiResource.getSpi();
             long respSpi = 0;
 
-            // It is validated in IkeSessionOptions.Builder to ensure IkeSessionOptions has at least
+            // It is validated in IkeSessionParams.Builder to ensure IkeSessionParams has at least
             // one IkeSaProposal and all SaProposals are valid for IKE SA negotiation.
-            IkeSaProposal[] saProposals = mIkeSessionOptions.getSaProposals();
+            IkeSaProposal[] saProposals = mIkeSessionParams.getSaProposalsInternal();
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getIkeInitSaRequestPayloads(
                             saProposals,
@@ -2499,7 +2497,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
                     IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                            mIkeSessionOptions.getServerAddress(), respIkeHeader.ikeResponderSpi);
+                            mIkeSessionParams.getServerAddress(), respIkeHeader.ikeResponderSpi);
 
             int exchangeType = respIkeHeader.exchangeType;
             if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
@@ -2767,7 +2765,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     obtainMessage(
                             CMD_HANDLE_FIRST_CHILD_NEGOTIATION,
                             new FirstChildNegotiationData(
-                                    mFirstChildSessionOptions,
+                                    mFirstChildSessionParams,
                                     mFirstChildCallbacks,
                                     childReqList,
                                     childRespList)));
@@ -2796,8 +2794,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 super.enterState();
                 mRetransmitter = new EncryptedRetransmitter(buildIkeAuthReq());
                 mUseEap =
-                        (IkeSessionOptions.IKE_AUTH_METHOD_EAP
-                                == mIkeSessionOptions.getLocalAuthConfig().mAuthMethod);
+                        (IkeSessionParams.IKE_AUTH_METHOD_EAP
+                                == mIkeSessionParams.getLocalAuthConfig().mAuthMethod);
             } catch (ResourceUnavailableException e) {
                 // Handle IPsec SPI assigning failure.
                 handleIkeFatalError(e);
@@ -2862,17 +2860,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // Build Identification payloads
             mInitIdPayload =
                     new IkeIdPayload(
-                            true /*isInitiator*/, mIkeSessionOptions.getLocalIdentification());
+                            true /*isInitiator*/, mIkeSessionParams.getLocalIdentification());
             IkeIdPayload respIdPayload =
                     new IkeIdPayload(
-                            false /*isInitiator*/, mIkeSessionOptions.getRemoteIdentification());
+                            false /*isInitiator*/, mIkeSessionParams.getRemoteIdentification());
             payloadList.add(mInitIdPayload);
             payloadList.add(respIdPayload);
 
             // Build Authentication payload
-            IkeAuthConfig authConfig = mIkeSessionOptions.getLocalAuthConfig();
+            IkeAuthConfig authConfig = mIkeSessionParams.getLocalAuthConfig();
             switch (authConfig.mAuthMethod) {
-                case IkeSessionOptions.IKE_AUTH_METHOD_PSK:
+                case IkeSessionParams.IKE_AUTH_METHOD_PSK:
                     IkeAuthPskPayload pskPayload =
                             new IkeAuthPskPayload(
                                     ((IkeAuthPskConfig) authConfig).mPsk,
@@ -2883,11 +2881,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                     mCurrentIkeSaRecord.getSkPi());
                     payloadList.add(pskPayload);
                     break;
-                case IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
+                case IkeSessionParams.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
                     // TODO: Support authentication based on public key signature.
                     throw new UnsupportedOperationException(
                             "Do not support public-key based authentication.");
-                case IkeSessionOptions.IKE_AUTH_METHOD_EAP:
+                case IkeSessionParams.IKE_AUTH_METHOD_EAP:
                     // Do not include AUTH payload when using EAP.
                     break;
                 default:
@@ -2901,7 +2899,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     CreateChildSaHelper.getInitChildCreateReqPayloads(
                             mIpSecManager,
                             mLocalAddress,
-                            mFirstChildSessionOptions,
+                            mFirstChildSessionParams,
                             true /*isFirstChild*/));
 
             return buildIkeAuthReqMessage(payloadList);
@@ -2944,7 +2942,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
                         mRespIdPayload = (IkeIdPayload) payload;
-                        if (!mIkeSessionOptions
+                        if (!mIkeSessionParams
                                 .getRemoteIdentification()
                                 .equals(mRespIdPayload.ikeId)) {
                             throw new AuthenticationFailedException(
@@ -2992,18 +2990,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 IkeIdPayload respIdPayload,
                 List<IkeCertPayload> certPayloads)
                 throws AuthenticationFailedException {
-            switch (mIkeSessionOptions.getRemoteAuthConfig().mAuthMethod) {
-                case IkeSessionOptions.IKE_AUTH_METHOD_PSK:
+            switch (mIkeSessionParams.getRemoteAuthConfig().mAuthMethod) {
+                case IkeSessionParams.IKE_AUTH_METHOD_PSK:
                     authenticatePsk(
-                            ((IkeAuthPskConfig) mIkeSessionOptions.getRemoteAuthConfig()).mPsk,
+                            ((IkeAuthPskConfig) mIkeSessionParams.getRemoteAuthConfig()).mPsk,
                             authPayload,
                             respIdPayload);
                     break;
-                case IkeSessionOptions.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
+                case IkeSessionParams.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
                     authenticateDigitalSignature(
                             certPayloads,
                             ((IkeAuthDigitalSignRemoteConfig)
-                                            mIkeSessionOptions.getRemoteAuthConfig())
+                                            mIkeSessionParams.getRemoteAuthConfig())
                                     .mTrustAnchor,
                             authPayload,
                             respIdPayload);
@@ -3077,8 +3075,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void enterState() {
-            IkeSessionOptions.IkeAuthEapConfig ikeAuthEapConfig =
-                    (IkeSessionOptions.IkeAuthEapConfig) mIkeSessionOptions.getLocalAuthConfig();
+            IkeSessionParams.IkeAuthEapConfig ikeAuthEapConfig =
+                    (IkeSessionParams.IkeAuthEapConfig) mIkeSessionParams.getLocalAuthConfig();
 
             mEapAuthenticator =
                     mEapAuthenticatorFactory.newEapAuthenticator(

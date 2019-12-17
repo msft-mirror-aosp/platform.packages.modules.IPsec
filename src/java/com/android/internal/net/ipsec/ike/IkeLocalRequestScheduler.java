@@ -16,7 +16,7 @@
 package com.android.internal.net.ipsec.ike;
 
 import android.net.ipsec.ike.ChildSessionCallback;
-import android.net.ipsec.ike.ChildSessionOptions;
+import android.net.ipsec.ike.ChildSessionParams;
 
 import java.util.LinkedList;
 
@@ -97,12 +97,12 @@ public final class IkeLocalRequestScheduler {
      */
     public static class ChildLocalRequest extends LocalRequest {
         public final ChildSessionCallback childSessionCallback;
-        public final ChildSessionOptions childSessionOptions;
+        public final ChildSessionParams childSessionParams;
 
         ChildLocalRequest(
-                int type, ChildSessionCallback childCallback, ChildSessionOptions childOptions) {
+                int type, ChildSessionCallback childCallback, ChildSessionParams childParams) {
             super(type);
-            childSessionOptions = childOptions;
+            childSessionParams = childParams;
             childSessionCallback = childCallback;
         }
     }

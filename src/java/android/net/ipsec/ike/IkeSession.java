@@ -15,6 +15,9 @@
  */
 package android.net.ipsec.ike;
 
+import android.annotation.NonNull;
+import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.os.HandlerThread;
@@ -38,33 +41,55 @@ import java.util.concurrent.Executor;
  * <p>An IKE procedure is one or multiple IKE message exchanges that are used to create, delete or
  * rekey an IKE Session or Child Session.
  *
- * <p>This class provides methods for user to initiate IKE procedures, such as the Creation and
- * Deletion of a Child Session, or the Deletion of the IKE session. All procedures (except for IKE
- * deletion) will be initiated sequentially after IKE Session is set up.
+ * <p>This class provides methods for initiating IKE procedures, such as the Creation and Deletion
+ * of a Child Session, or the Deletion of the IKE session. All procedures (except for IKE deletion)
+ * will be initiated sequentially after IKE Session is set up.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
  *     Version 2 (IKEv2)</a>
  * @hide
  */
+@SystemApi
 public final class IkeSession implements AutoCloseable {
     private final CloseGuard mCloseGuard = CloseGuard.get();
 
     @VisibleForTesting final IkeSessionStateMachine mIkeSessionStateMachine;
 
-    /** Package private */
-    IkeSession(
-            Context context,
-            IkeSessionOptions ikeSessionOptions,
-            ChildSessionOptions firstChildSessionOptions,
-            Executor userCbExecutor,
-            IkeSessionCallback ikeSessionCallback,
-            ChildSessionCallback firstChildSessionCallback) {
+    /**
+     * Constructs a new IKE session.
+     *
+     * <p>This method will immediately return an instance of {@link IkeSession} and asynchronously
+     * initiate the setup procedure of {@link IkeSession} as well as its first Child Session.
+     * Callers will be notified of these two setup results via the callback arguments.
+     *
+     * @param context a valid {@link Context} instance.
+     * @param ikeSessionParams the {@link IkeSessionParams} that contains a set of valid {@link
+     *     IkeSession} configurations.
+     * @param firstChildSessionParams the {@link ChildSessionParams} that contains a set of valid
+     *     configurations for the first Child Session.
+     * @param userCbExecutor the {@link Executor} upon which all callbacks will be posted. For
+     *     security and consistency, the callbacks posted to this executor MUST be executed serially
+     *     and in the order they were posted, as guaranteed by executors such as {@link
+     *     ExecutorService.newSingleThreadExecutor()}
+     * @param ikeSessionCallback the {@link IkeSessionCallback} interface to notify callers of state
+     *     changes within the {@link IkeSession}.
+     * @param firstChildSessionCallback the {@link ChildSessionCallback} interface to notify callers
+     *     of state changes within the first Child Session.
+     * @return an instance of {@link IkeSession}.
+     */
+    public IkeSession(
+            @NonNull Context context,
+            @NonNull IkeSessionParams ikeSessionParams,
+            @NonNull ChildSessionParams firstChildSessionParams,
+            @NonNull Executor userCbExecutor,
+            @NonNull IkeSessionCallback ikeSessionCallback,
+            @NonNull ChildSessionCallback firstChildSessionCallback) {
         this(
                 IkeThreadHolder.IKE_WORKER_THREAD.getLooper(),
                 context,
                 (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
-                ikeSessionOptions,
-                firstChildSessionOptions,
+                ikeSessionParams,
+                firstChildSessionParams,
                 userCbExecutor,
                 ikeSessionCallback,
                 firstChildSessionCallback);
@@ -76,8 +101,8 @@ public final class IkeSession implements AutoCloseable {
             Looper looper,
             Context context,
             IpSecManager ipSecManager,
-            IkeSessionOptions ikeSessionOptions,
-            ChildSessionOptions firstChildSessionOptions,
+            IkeSessionParams ikeSessionParams,
+            ChildSessionParams firstChildSessionParams,
             Executor userCbExecutor,
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback) {
@@ -86,8 +111,8 @@ public final class IkeSession implements AutoCloseable {
                         looper,
                         context,
                         ipSecManager,
-                        ikeSessionOptions,
-                        firstChildSessionOptions,
+                        ikeSessionParams,
+                        firstChildSessionParams,
                         userCbExecutor,
                         ikeSessionCallback,
                         firstChildSessionCallback);
@@ -117,37 +142,43 @@ public final class IkeSession implements AutoCloseable {
     // TODO: b/133340675 Destroy the worker thread when there is no more alive {@link IkeSession}.
 
     /**
-     * Asynchronously request a new Child Session.
+     * Request a new Child Session.
      *
      * <p>Users MUST provide a unique {@link ChildSessionCallback} instance for each new Child
      * Session.
      *
-     * <p>Upon setup, the {@link ChildSessionCallback#onOpened(ChildSessionConfiguration)} will be
+     * <p>Upon setup, {@link ChildSessionCallback#onOpened(ChildSessionConfiguration)} will be
      * fired.
      *
-     * @param childSessionOptions the {@link ChildSessionOptions} that contains the Child Session
+     * @param childSessionParams the {@link ChildSessionParams} that contains the Child Session
      *     configurations to negotiate.
      * @param childSessionCallback the {@link ChildSessionCallback} interface to notify users the
-     *     state changes of the Child Session.
+     *     state changes of the Child Session. It will be posted to the callback {@link Executor} of
+     *     this {@link IkeSession}.
      * @throws IllegalArgumentException if the ChildSessionCallback is already in use.
-     * @hide
      */
+    // The childSessionCallback will be called on the same executor as was passed in the constructor
+    // for security reasons.
+    @SuppressLint("ExecutorRegistration")
     public void openChildSession(
-            ChildSessionOptions childSessionOptions, ChildSessionCallback childSessionCallback) {
-        mIkeSessionStateMachine.openChildSession(childSessionOptions, childSessionCallback);
+            @NonNull ChildSessionParams childSessionParams,
+            @NonNull ChildSessionCallback childSessionCallback) {
+        mIkeSessionStateMachine.openChildSession(childSessionParams, childSessionCallback);
     }
 
     /**
-     * Asynchronously delete a Child Session.
+     * Delete a Child Session.
      *
-     * <p>Upon closing, the {@link ChildSessionCallback#onClosed()} will be fired.
+     * <p>Upon closure, {@link ChildSessionCallback#onClosed()} will be fired.
      *
      * @param childSessionCallback The {@link ChildSessionCallback} instance that uniquely identify
      *     the Child Session.
      * @throws IllegalArgumentException if no Child Session found bound with this callback.
-     * @hide
      */
-    public void closeChildSession(ChildSessionCallback childSessionCallback) {
+    // The childSessionCallback will be called on the same executor as was passed in the constructor
+    // for security reasons.
+    @SuppressLint("ExecutorRegistration")
+    public void closeChildSession(@NonNull ChildSessionCallback childSessionCallback) {
         mIkeSessionStateMachine.closeChildSession(childSessionCallback);
     }
 
@@ -156,7 +187,8 @@ public final class IkeSession implements AutoCloseable {
      *
      * <p>Implements {@link AutoCloseable#close()}
      *
-     * <p>Upon closing, the {@link IkeSessionCallback#onClosed()} will be fired.
+     * <p>Upon closure, {@link IkeSessionCallback#onClosed()} or {@link
+     * IkeSessionCallback#onClosedExceptionally()} will be fired.
      *
      * <p>Closing an IKE Session implicitly closes any remaining Child Sessions negotiated under it.
      * Users SHOULD stop all outbound traffic that uses these Child Sessions({@link IpSecTransform}
@@ -167,11 +199,9 @@ public final class IkeSession implements AutoCloseable {
      * the queue (but will wait for ongoing locally initiated procedures to complete). After sending
      * the Delete request, the IKE library will wait until a Delete response is received or
      * retransmission timeout occurs.
-     *
-     * @hide
      */
     @Override
-    public void close() throws Exception {
+    public void close() {
         mCloseGuard.close();
         mIkeSessionStateMachine.closeSession();
     }
@@ -179,7 +209,7 @@ public final class IkeSession implements AutoCloseable {
     /**
      * Terminate (forcibly close) the IKE session.
      *
-     * <p>Upon closing, the {@link IkeSessionCallback#onClosed()} will be fired.
+     * <p>Upon closing, {@link IkeSessionCallback#onClosed()} will be fired.
      *
      * <p>Closing an IKE Session implicitly closes any remaining Child Sessions negotiated under it.
      * Users SHOULD stop all outbound traffic that uses these Child Sessions({@link IpSecTransform}
@@ -188,10 +218,8 @@ public final class IkeSession implements AutoCloseable {
      *
      * <p>Forcible closure of an IKE session will take priority over, and cancel other procedures
      * waiting in the queue. It will also interrupt any ongoing locally initiated procedure.
-     *
-     * @hide
      */
-    public void kill() throws Exception {
+    public void kill() {
         mCloseGuard.close();
         mIkeSessionStateMachine.killSession();
     }

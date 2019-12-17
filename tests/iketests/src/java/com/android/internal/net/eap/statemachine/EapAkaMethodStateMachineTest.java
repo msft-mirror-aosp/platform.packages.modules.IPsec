@@ -34,11 +34,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import android.net.eap.EapSessionConfig.EapAkaConfig;
 import android.telephony.TelephonyManager;
@@ -79,18 +79,20 @@ public class EapAkaMethodStateMachineTest {
         mMockTelephonyManager = mock(TelephonyManager.class);
         mMockEapAkaTypeDataDecoder = mock(EapAkaTypeDataDecoder.class);
 
-        when(mMockTelephonyManager.createForSubscriptionId(SUB_ID))
-                .thenReturn(mMockTelephonyManager);
+        TelephonyManager mockInitialTelephonyManager = mock(TelephonyManager.class);
+        doReturn(mMockTelephonyManager)
+                .when(mockInitialTelephonyManager)
+                .createForSubscriptionId(SUB_ID);
 
         mEapAkaMethodStateMachine =
                 new EapAkaMethodStateMachine(
-                        mMockTelephonyManager,
+                        mockInitialTelephonyManager,
                         EAP_IDENTITY_BYTES,
                         mEapAkaConfig,
                         mMockEapAkaTypeDataDecoder,
                         false);
 
-        verify(mMockTelephonyManager).createForSubscriptionId(SUB_ID);
+        verify(mockInitialTelephonyManager).createForSubscriptionId(SUB_ID);
     }
 
     @Test
@@ -114,7 +116,7 @@ public class EapAkaMethodStateMachineTest {
                         EAP_AKA_NOTIFICATION,
                         Arrays.asList(new AtNotification(GENERAL_FAILURE_PRE_CHALLENGE)));
         DecodeResult<EapAkaTypeData> decodeResult = new DecodeResult<>(notificationTypeData);
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapResponse eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertArrayEquals(EAP_AKA_NOTIFICATION_RESPONSE, eapResponse.packet);
@@ -125,8 +127,8 @@ public class EapAkaMethodStateMachineTest {
         decodeResult =
                 new DecodeResult<>(
                         new EapAkaTypeData(EAP_AKA_IDENTITY, Arrays.asList(new AtAnyIdReq())));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
-        when(mMockTelephonyManager.getSubscriberId()).thenReturn(IMSI);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
+        doReturn(IMSI).when(mMockTelephonyManager).getSubscriberId();
 
         eapResponse = (EapResponse) mEapAkaMethodStateMachine.process(eapMessage);
         assertFalse(
@@ -140,7 +142,7 @@ public class EapAkaMethodStateMachineTest {
 
         // Second EAP-AKA/Notification
         decodeResult = new DecodeResult<>(notificationTypeData);
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         EapError eapError = (EapError) mEapAkaMethodStateMachine.process(eapMessage);
         assertTrue(eapError.cause instanceof EapInvalidRequestException);

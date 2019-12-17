@@ -23,7 +23,7 @@ import static org.junit.Assert.fail;
 
 import org.junit.Test;
 
-public final class ChildSessionOptionsTest {
+public final class ChildSessionParamsTest {
     private static final int NUM_TS = 1;
 
     @Test
@@ -34,19 +34,19 @@ public final class ChildSessionOptionsTest {
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12,
                                 SaProposal.KEY_LEN_AES_128)
                         .build();
-        ChildSessionOptions sessionOptions =
-                new TunnelModeChildSessionOptions.Builder().addSaProposal(saProposal).build();
+        ChildSessionParams sessionParams =
+                new TunnelModeChildSessionParams.Builder().addSaProposal(saProposal).build();
 
-        assertArrayEquals(new SaProposal[] {saProposal}, sessionOptions.getSaProposals());
-        assertEquals(NUM_TS, sessionOptions.getLocalTrafficSelectors().length);
-        assertEquals(NUM_TS, sessionOptions.getRemoteTrafficSelectors().length);
-        assertFalse(sessionOptions.isTransportMode());
+        assertArrayEquals(new SaProposal[] {saProposal}, sessionParams.getSaProposalsInternal());
+        assertEquals(NUM_TS, sessionParams.getLocalTrafficSelectorsInternal().length);
+        assertEquals(NUM_TS, sessionParams.getRemoteTrafficSelectorsInternal().length);
+        assertFalse(sessionParams.isTransportMode());
     }
 
     @Test
     public void testBuildWithoutSaProposal() throws Exception {
         try {
-            new TunnelModeChildSessionOptions.Builder().build();
+            new TunnelModeChildSessionParams.Builder().build();
             fail("Expected to fail due to the absence of SA proposal.");
         } catch (IllegalArgumentException expected) {
         }

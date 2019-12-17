@@ -17,15 +17,17 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 
 /**
- * This class contains all user provided configuration options for negotiating a transport mode
- * Child Session.
+ * TransportModeChildSessionParams represents proposed configurations for negotiating a transport
+ * mode Child Session.
  *
  * @hide
  */
-public final class TransportModeChildSessionOptions extends ChildSessionOptions {
-    private TransportModeChildSessionOptions(
+@SystemApi
+public final class TransportModeChildSessionParams extends ChildSessionParams {
+    private TransportModeChildSessionParams(
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
             ChildSaProposal[] proposals) {
@@ -33,44 +35,37 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
     }
 
     /**
-     * This class can be used to incrementally construct a TransportModeChildSessionOptions.
-     *
-     * @hide
+     * This class can be used to incrementally construct a {@link TransportModeChildSessionParams}.
      */
-    public static final class Builder extends ChildSessionOptions.Builder {
-        /**
-         * Create a Builder for negotiating a transport mode Child Session.
-         *
-         * @hide
-         */
+    public static final class Builder extends ChildSessionParams.Builder {
+        /** Create a Builder for negotiating a transport mode Child Session. */
         public Builder() {
             super();
         }
 
         /**
-         * Adds an Child SA proposal to TransportModeChildSessionOptions being built.
+         * Adds a Child SA proposal to the {@link TransportModeChildSessionParams} being built.
          *
          * @param proposal Child SA proposal.
          * @return Builder this, to facilitate chaining.
-         * @throws IllegalArgumentException if input proposal is not a Child SA proposal.
-         * @hide
          */
+        @NonNull
         public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
             validateAndAddSaProposal(proposal);
             return this;
         }
 
         /**
-         * Adds an inbound {@link IkeTrafficSelector} to the {@link
-         * TransportModeChildSessionOptions} being built.
+         * Adds an inbound {@link IkeTrafficSelector} to the {@link TransportModeChildSessionParams}
+         * being built.
          *
          * <p>If no inbound {@link IkeTrafficSelector} is provided, a default value will be used
          * that covers all IP addresses and ports.
          *
          * @param trafficSelector the inbound {@link IkeTrafficSelector}.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             // TODO: Implement it.
             throw new UnsupportedOperationException("Not yet supported");
@@ -78,31 +73,30 @@ public final class TransportModeChildSessionOptions extends ChildSessionOptions 
 
         /**
          * Adds an outbound {@link IkeTrafficSelector} to the {@link
-         * TransportModeChildSessionOptions} being built.
+         * TransportModeChildSessionParams} being built.
          *
          * <p>If no outbound {@link IkeTrafficSelector} is provided, a default value will be used
          * that covers all IP addresses and ports.
          *
          * @param trafficSelector the outbound {@link IkeTrafficSelector}.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
+        @NonNull
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             // TODO: Implement it.
             throw new UnsupportedOperationException("Not yet supported");
         }
 
         /**
-         * Validates, builds and returns the TransportModeChildSessionOptions.
+         * Validates and builds the {@link TransportModeChildSessionParams}.
          *
-         * @return the validated TransportModeChildSessionOptions.
-         * @throws IllegalArgumentException if no Child SA proposal is provided.
-         * @hide
+         * @return the validated {@link TransportModeChildSessionParams}.
          */
-        public TransportModeChildSessionOptions build() {
+        @NonNull
+        public TransportModeChildSessionParams build() {
             validateOrThrow();
 
-            return new TransportModeChildSessionOptions(
+            return new TransportModeChildSessionParams(
                     mLocalTsList.toArray(new IkeTrafficSelector[mLocalTsList.size()]),
                     mRemoteTsList.toArray(new IkeTrafficSelector[mRemoteTsList.size()]),
                     mSaProposalList.toArray(new ChildSaProposal[mSaProposalList.size()]));

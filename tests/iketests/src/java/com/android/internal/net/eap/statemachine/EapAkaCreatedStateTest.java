@@ -27,10 +27,10 @@ import static com.android.internal.net.eap.message.simaka.EapAkaTypeData.EAP_AKA
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
@@ -58,7 +58,7 @@ public class EapAkaCreatedStateTest extends EapAkaStateTest {
         // state transition here.
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(new EapAkaTypeData(EAP_AKA_IDENTITY, new LinkedHashMap<>()));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         mEapAkaMethodStateMachine.process(eapMessage);
 
@@ -78,7 +78,7 @@ public class EapAkaCreatedStateTest extends EapAkaStateTest {
         // state transition here.
         DecodeResult<EapAkaTypeData> decodeResult =
                 new DecodeResult<>(new EapAkaTypeData(EAP_AKA_CHALLENGE, new LinkedHashMap<>()));
-        when(mMockEapAkaTypeDataDecoder.decode(eq(DUMMY_EAP_TYPE_DATA))).thenReturn(decodeResult);
+        doReturn(decodeResult).when(mMockEapAkaTypeDataDecoder).decode(eq(DUMMY_EAP_TYPE_DATA));
 
         mEapAkaMethodStateMachine.process(eapMessage);
 

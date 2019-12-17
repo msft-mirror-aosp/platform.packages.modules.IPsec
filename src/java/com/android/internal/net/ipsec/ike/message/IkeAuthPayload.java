@@ -42,6 +42,7 @@ public abstract class IkeAuthPayload extends IkePayload {
     // Length of reserved field in octets
     private static final int AUTH_RESERVED_FIELD_LEN = 3;
 
+    /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         AUTH_METHOD_RSA_DIGITAL_SIGN,

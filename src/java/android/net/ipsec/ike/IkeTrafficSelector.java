@@ -17,6 +17,8 @@
 package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
+import android.annotation.NonNull;
+import android.annotation.SystemApi;
 import android.util.ArraySet;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -33,15 +35,18 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 
 /**
- * IkeTrafficSelector represents a Traffic Selector of a Child SA.
+ * IkeTrafficSelector represents a Traffic Selector of a Child Session.
  *
- * <p>IkeTrafficSelector can be constructed by users for initiating Create Child exchange or be
- * constructed from a decoded inbound Traffic Selector Payload.
+ * <p>Traffic Selectors specify addresses that are acceptable within the IPsec SA.
+ *
+ * <p>Callers can propose {@link IkeTrafficSelector}s when building a {@link ChildSessionParams} and
+ * receive the negotiated {@link IkeTrafficSelector}s via a {@link ChildSessionConfiguration}.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.13">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+@SystemApi
 public final class IkeTrafficSelector {
 
     // IpProtocolId consists of standard IP Protocol IDs.
@@ -51,9 +56,13 @@ public final class IkeTrafficSelector {
     public @interface IpProtocolId {}
 
     // Zero value is re-defined by IKE to indicate that all IP protocols are acceptable.
+    /** @hide */
     @VisibleForTesting static final int IP_PROTOCOL_ID_UNSPEC = 0;
+    /** @hide */
     @VisibleForTesting static final int IP_PROTOCOL_ID_ICMP = 1;
+    /** @hide */
     @VisibleForTesting static final int IP_PROTOCOL_ID_TCP = 6;
+    /** @hide */
     @VisibleForTesting static final int IP_PROTOCOL_ID_UDP = 17;
 
     private static final ArraySet<Integer> IP_PROTOCOL_ID_SET = new ArraySet<>();
@@ -100,14 +109,14 @@ public final class IkeTrafficSelector {
     public final int ipProtocolId;
     /** @hide */
     public final int selectorLength;
-    /** @hide */
+    /** The smallest port number allowed by this Traffic Selector. Informational only. */
     public final int startPort;
-    /** @hide */
+    /** The largest port number allowed by this Traffic Selector. Informational only. */
     public final int endPort;
-    /** @hide */
-    public final InetAddress startingAddress;
-    /** @hide */
-    public final InetAddress endingAddress;
+    /** The smallest address included in this Traffic Selector. */
+    @NonNull public final InetAddress startingAddress;
+    /** The largest address included in this Traffic Selector. */
+    @NonNull public final InetAddress endingAddress;
 
     private IkeTrafficSelector(
             int tsType,
@@ -120,6 +129,8 @@ public final class IkeTrafficSelector {
         this.tsType = tsType;
         this.ipProtocolId = ipProtocolId;
         this.selectorLength = selectorLength;
+
+        // Ports & Addresses previously validated in decodeIkeTrafficSelectors()
         this.startPort = startPort;
         this.endPort = endPort;
         this.startingAddress = startingAddress;
@@ -129,14 +140,19 @@ public final class IkeTrafficSelector {
     /**
      * Construct an instance of {@link IkeTrafficSelector} for negotiating a Child Session.
      *
+     * <p>Android platform does not support port-based routing. The port range negotiation is only
+     * informational.
+     *
      * @param startPort the smallest port number allowed by this Traffic Selector.
      * @param endPort the largest port number allowed by this Traffic Selector.
      * @param startingAddress the smallest address included in this Traffic Selector.
      * @param endingAddress the largest address included in this Traffic Selector.
-     * @hide
      */
     public IkeTrafficSelector(
-            int startPort, int endPort, InetAddress startingAddress, InetAddress endingAddress) {
+            int startPort,
+            int endPort,
+            @NonNull InetAddress startingAddress,
+            @NonNull InetAddress endingAddress) {
         this(getTsType(startingAddress), startPort, endPort, startingAddress, endingAddress);
     }
 

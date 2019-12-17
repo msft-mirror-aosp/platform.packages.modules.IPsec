@@ -55,6 +55,7 @@ import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -71,11 +72,11 @@ import android.net.LinkAddress;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionConfiguration;
-import android.net.ipsec.ike.ChildSessionOptions;
+import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeManager;
 import android.net.ipsec.ike.IkeTrafficSelector;
 import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.TunnelModeChildSessionOptions;
+import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.os.test.TestLooper;
@@ -194,7 +195,7 @@ public final class ChildSessionStateMachineTest {
 
     private ISaRecordHelper mMockSaRecordHelper;
 
-    private ChildSessionOptions mChildSessionOptions;
+    private ChildSessionParams mChildSessionParams;
     private EncryptionTransform mChildEncryptionTransform;
     private IntegrityTransform mChildIntegrityTransform;
     private DhGroupTransform mChildDhGroupTransform;
@@ -255,7 +256,7 @@ public final class ChildSessionStateMachineTest {
                         });
 
         mMockChildSessionCallback = mock(ChildSessionCallback.class);
-        mChildSessionOptions = buildChildSessionOptions();
+        mChildSessionParams = buildChildSessionParams();
 
         // Setup thread and looper
         mLooper = new TestLooper();
@@ -264,7 +265,7 @@ public final class ChildSessionStateMachineTest {
                         mLooper.getLooper(),
                         mContext,
                         mMockIpSecManager,
-                        mChildSessionOptions,
+                        mChildSessionParams,
                         mSpyUserCbExecutor,
                         mMockChildSessionCallback,
                         mMockChildSessionSmCallback);
@@ -292,11 +293,11 @@ public final class ChildSessionStateMachineTest {
                 .build();
     }
 
-    private ChildSessionOptions buildChildSessionOptions() throws Exception {
-        return new TunnelModeChildSessionOptions.Builder()
+    private ChildSessionParams buildChildSessionParams() throws Exception {
+        return new TunnelModeChildSessionParams.Builder()
                 .addSaProposal(buildSaProposal())
-                .addInternalAddressRequest(AF_INET, 1)
-                .addInternalAddressRequest(INTERNAL_ADDRESS, IPV4_PREFIX_LEN)
+                .addInternalAddressRequest(AF_INET)
+                .addInternalAddressRequest(INTERNAL_ADDRESS)
                 .build();
     }
 
@@ -322,7 +323,9 @@ public final class ChildSessionStateMachineTest {
         setUpSpiResource(LOCAL_ADDRESS, CURRENT_CHILD_SA_SPI_IN);
         IkeSaPayload reqSaPayload =
                 IkeSaPayload.createChildSaRequestPayload(
-                        mChildSessionOptions.getSaProposals(), mMockIpSecManager, LOCAL_ADDRESS);
+                        mChildSessionParams.getSaProposalsInternal(),
+                        mMockIpSecManager,
+                        LOCAL_ADDRESS);
         mFirstSaReqPayloads.add(reqSaPayload);
 
         // Build a remotely generated SA payload whoes SPI resource has not been allocated.
@@ -336,10 +339,12 @@ public final class ChildSessionStateMachineTest {
         // Build TS Payloads
         IkeTsPayload tsInitPayload =
                 new IkeTsPayload(
-                        true /*isInitiator*/, mChildSessionOptions.getLocalTrafficSelectors());
+                        true /*isInitiator*/,
+                        mChildSessionParams.getLocalTrafficSelectorsInternal());
         IkeTsPayload tsRespPayload =
                 new IkeTsPayload(
-                        false /*isInitiator*/, mChildSessionOptions.getRemoteTrafficSelectors());
+                        false /*isInitiator*/,
+                        mChildSessionParams.getRemoteTrafficSelectorsInternal());
 
         mFirstSaReqPayloads.add(tsInitPayload);
         mFirstSaReqPayloads.add(tsRespPayload);
@@ -488,10 +493,10 @@ public final class ChildSessionStateMachineTest {
         // Verify Child Session Configuration
         ChildSessionConfiguration sessionConfig = mChildConfigCaptor.getValue();
         verifyTsList(
-                Arrays.asList(mChildSessionOptions.getLocalTrafficSelectors()),
+                Arrays.asList(mChildSessionParams.getLocalTrafficSelectorsInternal()),
                 sessionConfig.getInboundTrafficSelectors());
         verifyTsList(
-                Arrays.asList(mChildSessionOptions.getRemoteTrafficSelectors()),
+                Arrays.asList(mChildSessionParams.getRemoteTrafficSelectorsInternal()),
                 sessionConfig.getOutboundTrafficSelectors());
 
         List<LinkAddress> addrList = sessionConfig.getInternalAddresses();
@@ -510,8 +515,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testCreateFirstChild() throws Exception {
-        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
-                .thenReturn(mSpyCurrentChildSaRecord);
+        doReturn(mSpyCurrentChildSaRecord)
+                .when(mMockSaRecordHelper)
+                .makeChildSaRecord(any(), any(), any());
 
         mChildSessionStateMachine.handleFirstChildExchange(
                 mFirstSaReqPayloads,
@@ -559,8 +565,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testCreateChild() throws Exception {
-        when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
-                .thenReturn(mSpyCurrentChildSaRecord);
+        doReturn(mSpyCurrentChildSaRecord)
+                .when(mMockSaRecordHelper)
+                .makeChildSaRecord(any(), any(), any());
 
         mChildSessionStateMachine.createChildSession(
                 LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
@@ -679,8 +686,9 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.mSaProposal = buildSaProposal();
         mChildSessionStateMachine.mChildCipher = mock(IkeCipher.class);
         mChildSessionStateMachine.mChildIntegrity = mock(IkeMacIntegrity.class);
-        mChildSessionStateMachine.mLocalTs = mChildSessionOptions.getLocalTrafficSelectors();
-        mChildSessionStateMachine.mRemoteTs = mChildSessionOptions.getRemoteTrafficSelectors();
+        mChildSessionStateMachine.mLocalTs = mChildSessionParams.getLocalTrafficSelectorsInternal();
+        mChildSessionStateMachine.mRemoteTs =
+                mChildSessionParams.getRemoteTrafficSelectorsInternal();
 
         mChildSessionStateMachine.mCurrentChildSaRecord = mSpyCurrentChildSaRecord;
 
@@ -1547,8 +1555,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testValidateExpectKeExistCase() throws Exception {
-        when(mMockNegotiatedProposal.getDhGroupTransforms())
-                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
+                .when(mMockNegotiatedProposal)
+                .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
         payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP));
 
@@ -1560,7 +1569,7 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testValidateExpectNoKeExistCase() throws Exception {
-        when(mMockNegotiatedProposal.getDhGroupTransforms()).thenReturn(new DhGroupTransform[0]);
+        doReturn(new DhGroupTransform[0]).when(mMockNegotiatedProposal).getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
 
         CreateChildSaHelper.validateKePayloads(
@@ -1571,8 +1580,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testThrowWhenKeMissing() throws Exception {
-        when(mMockNegotiatedProposal.getDhGroupTransforms())
-                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
+                .when(mMockNegotiatedProposal)
+                .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
 
         try {
@@ -1592,8 +1602,9 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testThrowWhenKeHasMismatchedDhGroup() throws Exception {
-        when(mMockNegotiatedProposal.getDhGroupTransforms())
-                .thenReturn(new DhGroupTransform[] {mChildDhGroupTransform});
+        doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
+                .when(mMockNegotiatedProposal)
+                .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
         payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP));
 
@@ -1615,8 +1626,9 @@ public final class ChildSessionStateMachineTest {
     @Test
     public void testThrowForUnexpectedKe() throws Exception {
         DhGroupTransform noneGroup = new DhGroupTransform(SaProposal.DH_GROUP_NONE);
-        when(mMockNegotiatedProposal.getDhGroupTransforms())
-                .thenReturn(new DhGroupTransform[] {noneGroup});
+        doReturn(new DhGroupTransform[] {noneGroup})
+                .when(mMockNegotiatedProposal)
+                .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
         payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP));
 

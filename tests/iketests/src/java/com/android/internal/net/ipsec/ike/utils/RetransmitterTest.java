@@ -24,11 +24,11 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 import android.os.Handler;
 import android.os.Message;
@@ -65,8 +65,9 @@ public final class RetransmitterTest {
     @Before
     public void setUp() throws Exception {
         mMockHandler = mock(Handler.class);
-        when(mMockHandler.obtainMessage(eq(CMD_RETRANSMIT), anyObject()))
-                .thenReturn(mock(Message.class));
+
+        Message mockMessage = mock(Message.class);
+        doReturn(mockMessage).when(mMockHandler).obtainMessage(eq(CMD_RETRANSMIT), anyObject());
 
         mMockIkeMessage = mock(IkeMessage.class);
         mRetransmitter = new TestRetransmitter(mMockHandler, mMockIkeMessage);

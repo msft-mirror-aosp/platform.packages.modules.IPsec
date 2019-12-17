@@ -18,24 +18,29 @@ package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.List;
 
 /**
- * IkeSessionConfiguration represents the negotiated configuration for a IKE Session.
+ * IkeSessionConfiguration represents the negotiated configuration for a {@link IkeSession}.
+ *
+ * <p>Configurations include remote application version and enabled IKE extensions..
  *
  * @hide
  */
+@SystemApi
 public final class IkeSessionConfiguration {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({EXTENSION_TYPE_FRAGMENTATION, EXTENSION_TYPE_MOBIKE})
     public @interface ExtensionType {}
 
-    /** @hide */
+    /** IKE Message Fragmentation */
     public static final int EXTENSION_TYPE_FRAGMENTATION = 1;
-    /** @hide */
+    /** IKEv2 Mobility and Multihoming Protocol */
     public static final int EXTENSION_TYPE_MOBIKE = 2;
 
     /**
@@ -43,10 +48,21 @@ public final class IkeSessionConfiguration {
      *
      * @return application version of the remote server, or an empty string if the remote server did
      *     not provide the application version.
-     * @hide
      */
     @NonNull
     public String getRemoteApplicationVersion() {
+        // TODO: Implement it.
+        throw new UnsupportedOperationException("Not yet supported");
+    }
+
+    /**
+     * Returns remote vendor IDs received during IKE Session setup.
+     *
+     * @return the vendor IDs of the remote server, or an empty list if no vendor ID is received
+     *     during IKE Session setup.
+     */
+    @NonNull
+    public List<byte[]> getRemoteVendorIDs() {
         // TODO: Implement it.
         throw new UnsupportedOperationException("Not yet supported");
     }
@@ -59,7 +75,6 @@ public final class IkeSessionConfiguration {
      *
      * @param extensionType the extension type.
      * @return {@code true} if this extension is enabled.
-     * @hide
      */
     public boolean isIkeExtensionEnabled(@ExtensionType int extensionType) {
         // TODO: Implement it.

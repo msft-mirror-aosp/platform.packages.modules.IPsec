@@ -19,7 +19,7 @@ package com.android.internal.net.ipsec.ike;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.ipsec.ike.ChildSessionCallback;
-import android.net.ipsec.ike.ChildSessionOptions;
+import android.net.ipsec.ike.ChildSessionParams;
 import android.os.Looper;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -37,12 +37,12 @@ final class ChildSessionStateMachineFactory {
     static ChildSessionStateMachine makeChildSessionStateMachine(
             Looper looper,
             Context context,
-            ChildSessionOptions sessionOptions,
+            ChildSessionParams sessionParams,
             Executor userCbExecutor,
             ChildSessionCallback userCallbacks,
             IChildSessionSmCallback childSmCallback) {
         return sChildSessionHelper.makeChildSessionStateMachine(
-                looper, context, sessionOptions, userCbExecutor, userCallbacks, childSmCallback);
+                looper, context, sessionParams, userCbExecutor, userCallbacks, childSmCallback);
     }
 
     @VisibleForTesting
@@ -60,7 +60,7 @@ final class ChildSessionStateMachineFactory {
         ChildSessionStateMachine makeChildSessionStateMachine(
                 Looper looper,
                 Context context,
-                ChildSessionOptions sessionOptions,
+                ChildSessionParams sessionParams,
                 Executor userCbExecutor,
                 ChildSessionCallback userCallbacks,
                 IChildSessionSmCallback childSmCallback);
@@ -75,7 +75,7 @@ final class ChildSessionStateMachineFactory {
         public ChildSessionStateMachine makeChildSessionStateMachine(
                 Looper looper,
                 Context context,
-                ChildSessionOptions sessionOptions,
+                ChildSessionParams sessionParams,
                 Executor userCbExecutor,
                 ChildSessionCallback userCallbacks,
                 IChildSessionSmCallback childSmCallback) {
@@ -84,7 +84,7 @@ final class ChildSessionStateMachineFactory {
                             looper,
                             context,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
-                            sessionOptions,
+                            sessionParams,
                             userCbExecutor,
                             userCallbacks,
                             childSmCallback);

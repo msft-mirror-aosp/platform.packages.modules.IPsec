@@ -16,20 +16,29 @@
 
 package android.net.ipsec.ike;
 
+import android.annotation.NonNull;
+import android.annotation.SystemApi;
+
 import libcore.net.InetAddressUtils;
 
 import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 
 /**
- * This abstract class is the superclass of all classes representing a set of user configurations
- * for Child Session negotiation.
+ * ChildSessionParams is an abstract class that represents proposed configurations for negotiating a
+ * Child Session.
  *
+ * <p>Note that references to negotiated configurations will be held, and the same parameters will
+ * be reused during rekey. This includes SA Proposals, lifetimes and traffic selectors.
+ *
+ * @see {@link TunnelModeChildSessionParams} and {@link TransportModeChildSessionParams}
  * @hide
  */
-public abstract class ChildSessionOptions {
-    private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
+@SystemApi
+public abstract class ChildSessionParams {
+    @NonNull private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
     // TODO: b/130765172 Add TRAFFIC_SELECTOR_IPV6 and instantiate it.
 
     static {
@@ -38,13 +47,13 @@ public abstract class ChildSessionOptions {
                         IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE);
     }
 
-    private final IkeTrafficSelector[] mLocalTrafficSelectors;
-    private final IkeTrafficSelector[] mRemoteTrafficSelectors;
-    private final ChildSaProposal[] mSaProposals;
+    @NonNull private final IkeTrafficSelector[] mLocalTrafficSelectors;
+    @NonNull private final IkeTrafficSelector[] mRemoteTrafficSelectors;
+    @NonNull private final ChildSaProposal[] mSaProposals;
     private final boolean mIsTransport;
 
     /** @hide */
-    protected ChildSessionOptions(
+    protected ChildSessionParams(
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
             ChildSaProposal[] proposals,
@@ -55,18 +64,36 @@ public abstract class ChildSessionOptions {
         mIsTransport = isTransport;
     }
 
+    /** Retrieves configured local (client) traffic selectors */
+    @NonNull
+    public List<IkeTrafficSelector> getLocalTrafficSelectors() {
+        return Arrays.asList(mLocalTrafficSelectors);
+    }
+
+    /** Retrieves configured remote (server) traffic selectors */
+    @NonNull
+    public List<IkeTrafficSelector> getRemoteTrafficSelectors() {
+        return Arrays.asList(mRemoteTrafficSelectors);
+    }
+
+    /** Retrieves all ChildSaProposals configured */
+    @NonNull
+    public List<ChildSaProposal> getSaProposals() {
+        return Arrays.asList(mSaProposals);
+    }
+
     /** @hide */
-    public IkeTrafficSelector[] getLocalTrafficSelectors() {
+    public IkeTrafficSelector[] getLocalTrafficSelectorsInternal() {
         return mLocalTrafficSelectors;
     }
 
     /** @hide */
-    public IkeTrafficSelector[] getRemoteTrafficSelectors() {
+    public IkeTrafficSelector[] getRemoteTrafficSelectorsInternal() {
         return mRemoteTrafficSelectors;
     }
 
     /** @hide */
-    public ChildSaProposal[] getSaProposals() {
+    public ChildSaProposal[] getSaProposalsInternal() {
         return mSaProposals;
     }
 
@@ -76,14 +103,14 @@ public abstract class ChildSessionOptions {
     }
 
     /**
-     * This class represents common information for Child Sesison Options Builders.
+     * This class represents common information for Child Session Parameters Builders.
      *
      * @hide
      */
     protected abstract static class Builder {
-        protected final List<IkeTrafficSelector> mLocalTsList = new LinkedList<>();
-        protected final List<IkeTrafficSelector> mRemoteTsList = new LinkedList<>();
-        protected final List<SaProposal> mSaProposalList = new LinkedList<>();
+        @NonNull protected final List<IkeTrafficSelector> mLocalTsList = new LinkedList<>();
+        @NonNull protected final List<IkeTrafficSelector> mRemoteTsList = new LinkedList<>();
+        @NonNull protected final List<SaProposal> mSaProposalList = new LinkedList<>();
 
         protected Builder() {
             // Currently IKE library only accepts setting up Child SA that all ports and all
@@ -92,17 +119,17 @@ public abstract class ChildSessionOptions {
             // TODO: b/130756765 Validate the current TS negotiation strategy.
             mLocalTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
             mRemoteTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
-            // TODO: add IPv6 TS to ChildSessionOptions.
+            // TODO: add IPv6 TS to ChildSessionParams.
         }
 
-        protected void validateAndAddSaProposal(ChildSaProposal proposal) {
+        protected void validateAndAddSaProposal(@NonNull ChildSaProposal proposal) {
             mSaProposalList.add(proposal);
         }
 
         protected void validateOrThrow() {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException(
-                        "ChildSessionOptions requires at least one Child SA proposal.");
+                        "ChildSessionParams requires at least one Child SA proposal.");
             }
         }
     }

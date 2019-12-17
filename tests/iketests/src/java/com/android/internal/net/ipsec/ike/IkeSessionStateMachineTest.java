@@ -71,14 +71,14 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
-import android.net.ipsec.ike.ChildSessionOptions;
+import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeIpv4AddrIdentification;
 import android.net.ipsec.ike.IkeManager;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSessionCallback;
-import android.net.ipsec.ike.IkeSessionOptions;
+import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.TransportModeChildSessionOptions;
+import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -265,7 +265,7 @@ public final class IkeSessionStateMachineTest {
 
     private byte[] mPsk;
 
-    private ChildSessionOptions mChildSessionOptions;
+    private ChildSessionParams mChildSessionParams;
 
     private Executor mSpyUserCbExecutor;
     private IkeSessionCallback mMockIkeSessionCallback;
@@ -356,8 +356,9 @@ public final class IkeSessionStateMachineTest {
                         payloadList);
 
         byte[] dummyIkePacketBytes = new byte[0];
-        when(mMockIkeMessageHelper.decode(0, dummyIkeMessage.ikeHeader, dummyIkePacketBytes))
-                .thenReturn(new DecodeResultOk(dummyIkeMessage, dummyIkePacketBytes));
+        doReturn(new DecodeResultOk(dummyIkeMessage, dummyIkePacketBytes))
+                .when(mMockIkeMessageHelper)
+                .decode(0, dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
 
         return new ReceivedIkePacket(dummyIkeMessage.ikeHeader, dummyIkePacketBytes);
     }
@@ -622,15 +623,16 @@ public final class IkeSessionStateMachineTest {
 
         mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
         mMockEapAuthenticator = mock(EapAuthenticator.class);
-        when(mMockEapAuthenticatorFactory.newEapAuthenticator(any(), any(), any(), any()))
-                .thenReturn(mMockEapAuthenticator);
+        doReturn(mMockEapAuthenticator)
+                .when(mMockEapAuthenticatorFactory)
+                .newEapAuthenticator(any(), any(), any(), any());
 
         mRootCertificate = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
         mServerEndCertificate = CertUtils.createCertFromPemFile("end-cert-a.pem");
 
         mPsk = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
-        mChildSessionOptions = buildChildSessionOptions();
+        mChildSessionParams = buildChildSessionParams();
 
         mIkeEncryptionTransform =
                 new EncryptionTransform(
@@ -659,12 +661,13 @@ public final class IkeSessionStateMachineTest {
 
         // Inject longer retransmission timeout
         mMockBackoffTimeoutCalculator = mock(IBackoffTimeoutCalculator.class);
-        when(mMockBackoffTimeoutCalculator.getExponentialBackoffTimeout(anyInt()))
-                .thenReturn(RETRANSMIT_BACKOFF_TIMEOUT_MS);
+        doReturn(RETRANSMIT_BACKOFF_TIMEOUT_MS)
+                .when(mMockBackoffTimeoutCalculator)
+                .getExponentialBackoffTimeout(anyInt());
         Retransmitter.setBackoffTimeoutCalculator(mMockBackoffTimeoutCalculator);
 
         // Setup state machine
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsPsk(mPsk));
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsPsk(mPsk));
 
         mMockIkeMessageHelper = mock(IkeMessage.IIkeMessageHelper.class);
         IkeMessage.setIkeMessageHelper(mMockIkeMessageHelper);
@@ -699,15 +702,15 @@ public final class IkeSessionStateMachineTest {
                 new ChildSessionFactoryHelper());
     }
 
-    private IkeSessionStateMachine makeAndStartIkeSession(IkeSessionOptions ikeOptions)
+    private IkeSessionStateMachine makeAndStartIkeSession(IkeSessionParams ikeParams)
             throws Exception {
         IkeSessionStateMachine ikeSession =
                 new IkeSessionStateMachine(
                         mLooper.getLooper(),
                         mContext,
                         mIpSecManager,
-                        ikeOptions,
-                        mChildSessionOptions,
+                        ikeParams,
+                        mChildSessionParams,
                         mSpyUserCbExecutor,
                         mMockIkeSessionCallback,
                         mMockChildSessionCallback,
@@ -734,8 +737,8 @@ public final class IkeSessionStateMachineTest {
                 .build();
     }
 
-    private IkeSessionOptions.Builder buildIkeSessionOptionsCommon() throws Exception {
-        return new IkeSessionOptions.Builder()
+    private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
+        return new IkeSessionParams.Builder()
                 .setServerAddress(REMOTE_ADDRESS)
                 .setUdpEncapsulationSocket(mUdpEncapSocket)
                 .addSaProposal(buildSaProposal())
@@ -744,17 +747,17 @@ public final class IkeSessionStateMachineTest {
                         new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS));
     }
 
-    private IkeSessionOptions buildIkeSessionOptionsPsk(byte[] psk) throws Exception {
-        return buildIkeSessionOptionsCommon().setAuthPsk(psk).build();
+    private IkeSessionParams buildIkeSessionParamsPsk(byte[] psk) throws Exception {
+        return buildIkeSessionParamsCommon().setAuthPsk(psk).build();
     }
 
-    private IkeSessionOptions buildIkeSessionOptionsEap() throws Exception {
-        return buildIkeSessionOptionsCommon()
+    private IkeSessionParams buildIkeSessionParamsEap() throws Exception {
+        return buildIkeSessionParamsCommon()
                 .setAuthEap(mRootCertificate, mEapSessionConfig)
                 .build();
     }
 
-    private ChildSessionOptions buildChildSessionOptions() throws Exception {
+    private ChildSessionParams buildChildSessionParams() throws Exception {
         ChildSaProposal saProposal =
                 new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
@@ -762,7 +765,7 @@ public final class IkeSessionStateMachineTest {
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .build();
 
-        return new TransportModeChildSessionOptions.Builder().addSaProposal(saProposal).build();
+        return new TransportModeChildSessionParams.Builder().addSaProposal(saProposal).build();
     }
 
     private ReceivedIkePacket makeIkeInitResponse() throws Exception {
@@ -1085,7 +1088,7 @@ public final class IkeSessionStateMachineTest {
 
     private void resetMockIkeMessageHelper() {
         reset(mMockIkeMessageHelper);
-        when(mMockIkeMessageHelper.encode(any())).thenReturn(new byte[0]);
+        doReturn(new byte[0]).when(mMockIkeMessageHelper).encode(any());
         when(mMockIkeMessageHelper.encryptAndEncode(
                         any(), any(), any(), any(), anyBoolean(), anyInt()))
                 .thenReturn(new byte[1][0]);
@@ -1297,7 +1300,7 @@ public final class IkeSessionStateMachineTest {
         when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
-                        eq(mChildSessionOptions),
+                        eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         any(ChildSessionCallback.class),
                         any(IChildSessionSmCallback.class)))
@@ -1317,7 +1320,7 @@ public final class IkeSessionStateMachineTest {
             ChildSessionCallback callback, ChildSessionStateMachine sm) {
         setupChildStateMachineFactory(sm);
         mIkeSessionStateMachine.registerChildSessionCallback(
-                mChildSessionOptions, callback, false /*isFirstChild*/);
+                mChildSessionParams, callback, false /*isFirstChild*/);
     }
 
     @Test
@@ -1333,7 +1336,7 @@ public final class IkeSessionStateMachineTest {
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD,
                         childCallback,
-                        mChildSessionOptions));
+                        mChildSessionParams));
         mLooper.dispatchAll();
 
         assertTrue(
@@ -1352,7 +1355,7 @@ public final class IkeSessionStateMachineTest {
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
-                        eq(mChildSessionOptions),
+                        eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(childCallback),
                         mChildSessionSmCbCaptor.capture());
@@ -1416,7 +1419,7 @@ public final class IkeSessionStateMachineTest {
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD,
                         mMockChildSessionCallback,
-                        null /*childOptions*/));
+                        null /*childParams*/));
         mLooper.dispatchAll();
 
         assertTrue(
@@ -1434,7 +1437,7 @@ public final class IkeSessionStateMachineTest {
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD,
                         mock(ChildSessionCallback.class),
-                        null /*childOptions*/));
+                        null /*childParams*/));
         mLooper.dispatchAll();
 
         assertTrue(
@@ -1450,7 +1453,7 @@ public final class IkeSessionStateMachineTest {
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
                         mMockChildSessionCallback,
-                        null /*childOptions*/));
+                        null /*childParams*/));
         mLooper.dispatchAll();
 
         assertTrue(
@@ -1468,7 +1471,7 @@ public final class IkeSessionStateMachineTest {
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
                         mMockChildSessionCallback,
-                        null /*childOptions*/);
+                        null /*childParams*/);
         mDummyChildSmCallback.scheduleLocalRequest(rekeyRequest, dummyRekeyTimeout);
 
         mLooper.moveTimeForward(dummyRekeyTimeout);
@@ -1988,7 +1991,7 @@ public final class IkeSessionStateMachineTest {
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
-                        eq(mChildSessionOptions),
+                        eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(mMockChildSessionCallback),
                         mChildSessionSmCbCaptor.capture());
@@ -2114,7 +2117,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCreateIkeLocalIkeAuthPreEap() throws Exception {
         mIkeSessionStateMachine.quitNow();
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
 
         // Mock IKE INIT
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
@@ -2167,7 +2170,7 @@ public final class IkeSessionStateMachineTest {
     public void testCreateIkeLocalIkeAuthInEapStartsAuthenticatorAndProxiesMessage()
             throws Exception {
         mIkeSessionStateMachine.quitNow();
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
 
         // Setup state and go to IN_EAP state
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
@@ -2185,7 +2188,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCreateIkeLocalIkeAuthInEapHandlesOutboundResponse() throws Exception {
         mIkeSessionStateMachine.quitNow();
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
 
         // Setup state and go to IN_EAP state
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
@@ -2211,7 +2214,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCreateIkeLocalIkeAuthInEapHandlesMissingEapPacket() throws Exception {
         mIkeSessionStateMachine.quitNow();
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
 
         // Setup state and go to IN_EAP state
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
@@ -2238,7 +2241,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCreateIkeLocalIkeAuthInEapHandlesSuccess() throws Exception {
         mIkeSessionStateMachine.quitNow();
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
 
         // Setup state and go to IN_EAP state
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
@@ -2248,8 +2251,7 @@ public final class IkeSessionStateMachineTest {
 
         // Setup dummy initIdPayload for next state.
         mIkeSessionStateMachine.mInitIdPayload = mock(IkeIdPayload.class);
-        when(mIkeSessionStateMachine.mInitIdPayload.getEncodedPayloadBody())
-                .thenReturn(new byte[0]);
+        doReturn(new byte[0]).when(mIkeSessionStateMachine.mInitIdPayload).getEncodedPayloadBody();
 
         callback.onSuccess(mPsk, new byte[0]); // use mPsk as MSK, eMSK does not matter
         mLooper.dispatchAll();
@@ -2262,7 +2264,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCreateIkeLocalIkeAuthInEapHandlesError() throws Exception {
         mIkeSessionStateMachine.quitNow();
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
 
         // Setup state and go to IN_EAP state
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
@@ -2286,7 +2288,7 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testCreateIkeLocalIkeAuthInEapHandlesFailure() throws Exception {
         mIkeSessionStateMachine.quitNow();
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
 
         // Setup state and go to IN_EAP state
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
@@ -2310,12 +2312,11 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.quitNow();
         reset(mMockChildSessionFactoryHelper);
         setupChildStateMachineFactory(mMockChildSessionStateMachine);
-        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionOptionsEap());
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsEap());
 
         // Setup dummy state from IkeAuthPreEap for next state.
         mIkeSessionStateMachine.mInitIdPayload = mock(IkeIdPayload.class);
-        when(mIkeSessionStateMachine.mInitIdPayload.getEncodedPayloadBody())
-                .thenReturn(new byte[0]);
+        doReturn(new byte[0]).when(mIkeSessionStateMachine.mInitIdPayload).getEncodedPayloadBody();
         mIkeSessionStateMachine.mRespIdPayload =
                 (IkeIdPayload)
                         IkeTestUtils.hexStringToIkePayload(
@@ -3078,7 +3079,7 @@ public final class IkeSessionStateMachineTest {
 
         // Prepare "rekeyed" SA
         setupRekeyedIkeSa(mSpyLocalInitIkeSaRecord);
-        when(mSpyLocalInitIkeSaRecord.compareTo(mSpyRemoteInitIkeSaRecord)).thenReturn(1);
+        doReturn(1).when(mSpyLocalInitIkeSaRecord).compareTo(mSpyRemoteInitIkeSaRecord);
 
         // Send Rekey request on mSpyCurrentIkeSaRecord
         mIkeSessionStateMachine.sendMessage(
@@ -3679,14 +3680,14 @@ public final class IkeSessionStateMachineTest {
 
         // Expect failure - no callbacks provided
         try {
-            mIkeSessionStateMachine.openChildSession(mChildSessionOptions, null);
+            mIkeSessionStateMachine.openChildSession(mChildSessionParams, null);
         } catch (IllegalArgumentException expected) {
         }
 
         // Expect failure - callbacks already registered
         try {
             mIkeSessionStateMachine.openChildSession(
-                    mChildSessionOptions, mMockChildSessionCallback);
+                    mChildSessionParams, mMockChildSessionCallback);
         } catch (IllegalArgumentException expected) {
         }
     }
@@ -3696,12 +3697,12 @@ public final class IkeSessionStateMachineTest {
         setupIdleStateMachine();
 
         ChildSessionCallback cb = mock(ChildSessionCallback.class);
-        mIkeSessionStateMachine.openChildSession(mChildSessionOptions, cb);
+        mIkeSessionStateMachine.openChildSession(mChildSessionParams, cb);
 
         // Test that inserting the same cb returns an error, even before the state
         // machine has a chance to process it.
         try {
-            mIkeSessionStateMachine.openChildSession(mChildSessionOptions, cb);
+            mIkeSessionStateMachine.openChildSession(mChildSessionParams, cb);
         } catch (IllegalArgumentException expected) {
         }
 
@@ -3709,7 +3710,7 @@ public final class IkeSessionStateMachineTest {
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
-                        eq(mChildSessionOptions),
+                        eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(cb),
                         any());
@@ -3753,7 +3754,7 @@ public final class IkeSessionStateMachineTest {
         setupIdleStateMachine();
 
         ChildSessionCallback cb = mock(ChildSessionCallback.class);
-        mIkeSessionStateMachine.openChildSession(mChildSessionOptions, cb);
+        mIkeSessionStateMachine.openChildSession(mChildSessionParams, cb);
 
         // Verify that closing the session immediately still picks up the child callback
         // even before the looper has a chance to run.
@@ -3778,16 +3779,16 @@ public final class IkeSessionStateMachineTest {
         Log spyIkeLog = TestUtils.makeSpyLogDoLogErrorForWtf(TAG);
         IkeManager.setIkeLog(spyIkeLog);
 
-        IkeSessionOptions mockSessionOptions = mock(IkeSessionOptions.class);
-        when(mockSessionOptions.getSaProposals()).thenThrow(mock(RuntimeException.class));
+        IkeSessionParams mockSessionParams = mock(IkeSessionParams.class);
+        when(mockSessionParams.getSaProposalsInternal()).thenThrow(mock(RuntimeException.class));
 
         IkeSessionStateMachine ikeSession =
                 new IkeSessionStateMachine(
                         mLooper.getLooper(),
                         mContext,
                         mIpSecManager,
-                        mockSessionOptions,
-                        mChildSessionOptions,
+                        mockSessionParams,
+                        mChildSessionParams,
                         mSpyUserCbExecutor,
                         mMockIkeSessionCallback,
                         mMockChildSessionCallback,
@@ -3855,7 +3856,7 @@ public final class IkeSessionStateMachineTest {
                 new ChildLocalRequest(
                         IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
                         mMockChildSessionCallback,
-                        null /*childOptions*/);
+                        null /*childParams*/);
 
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ, childLocalRequest);
