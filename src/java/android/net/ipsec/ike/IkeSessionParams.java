@@ -183,16 +183,31 @@ public final class IkeSessionParams {
      */
     public static class IkeAuthDigitalSignRemoteConfig extends IkeAuthConfig {
         /** @hide */
-        @NonNull public final TrustAnchor mTrustAnchor;
+        @Nullable public final TrustAnchor mTrustAnchor;
 
-        private IkeAuthDigitalSignRemoteConfig(TrustAnchor trustAnchor) {
+        /**
+         * If a certificate is provided, it MUST be the root CA used by the remote (server), or
+         * authentication will fail. If no certificate is provided, any root CA in the system's
+         * truststore is considered acceptable.
+         */
+        private IkeAuthDigitalSignRemoteConfig(@Nullable X509Certificate caCert) {
             super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
-            mTrustAnchor = trustAnchor;
+            if (caCert == null) {
+                mTrustAnchor = null;
+            } else {
+                // The name constraints extension, defined in RFC 5280, indicates a name space
+                // within which all subject names in subsequent certificates in a certification path
+                // MUST be located.
+                mTrustAnchor = new TrustAnchor(caCert, null /*nameConstraints*/);
+
+                // TODO: Investigate if we need to support the name constraints extension.
+            }
         }
 
-        /** Retrieves the CA certificate for validating the remote certificate(s) */
-        @NonNull
+        /** Retrieves the provided CA certificate for validating the remote certificate(s) */
+        @Nullable
         public X509Certificate getRemoteCaCert() {
+            if (mTrustAnchor == null) return null;
             return mTrustAnchor.getTrustedCert();
         }
     }
@@ -400,7 +415,7 @@ public final class IkeSessionParams {
          * Configures the {@link IkeSession} to use EAP authentication.
          *
          * <p>Not all EAP methods provide mutual authentication. As such EAP MUST be used in
-         * conjunction with a public-key-signature-based authentication of the server to the client.
+         * conjunction with a public-key-signature-based authentication of the remote side.
          *
          * <p>Callers MUST declare only one authentication method. Calling this function will
          * override the previously set authentication configuration.
@@ -410,25 +425,20 @@ public final class IkeSessionParams {
          * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
          *     Authentication in IKEv2
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
+         *     If a certificate is provided, it MUST be the root CA used by the server, or
+         *     authentication will fail. If no certificate is provided, any root CA in the system's
+         *     truststore is considered acceptable.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
         public Builder setAuthEap(
-                @NonNull X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
-            if (serverCaCert == null || eapConfig == null) {
+                @Nullable X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
+            if (eapConfig == null) {
                 throw new NullPointerException("Required argument not provided");
             }
 
             mLocalAuthConfig = new IkeAuthEapConfig(eapConfig);
-
-            // The name constraints extension, defined in RFC 5280, indicates a name space within
-            // which all subject names in subsequent certificates in a certification path MUST be
-            // located.
-            mRemoteAuthConfig =
-                    new IkeAuthDigitalSignRemoteConfig(
-                            new TrustAnchor(serverCaCert, null /*nameConstraints*/));
-
-            // TODO: Investigate if we need to support the name constraints extension.
+            mRemoteAuthConfig = new IkeAuthDigitalSignRemoteConfig(serverCaCert);
 
             return this;
         }
@@ -444,6 +454,9 @@ public final class IkeSessionParams {
          * <p>Currenly only RSA digital signature is supported.
          *
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
+         *     If a certificate is provided, it MUST be the root CA used by the server, or
+         *     authentication will fail. If no certificate is provided, any root CA in the system's
+         *     truststore is considered acceptable.
          * @param clientEndCert the end certificate for remote server to verify the locally
          *     generated signature.
          * @param clientPrivateKey private key to generate outbound digital signature. Only {@link
@@ -452,7 +465,7 @@ public final class IkeSessionParams {
          */
         @NonNull
         public Builder setAuthDigitalSignature(
-                @NonNull X509Certificate serverCaCert,
+                @Nullable X509Certificate serverCaCert,
                 @NonNull X509Certificate clientEndCert,
                 @NonNull PrivateKey clientPrivateKey) {
             return setAuthDigitalSignature(
@@ -473,6 +486,9 @@ public final class IkeSessionParams {
          * <p>Currenly only RSA digital signature is supported.
          *
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
+         *     If a null value is provided, IKE library will try all default CA certificates stored
+         *     in Android system to do the validation. Otherwise, it will only use the provided CA
+         *     certificate.
          * @param clientEndCert the end certificate for remote server to verify locally generated
          *     signature.
          * @param clientIntermediateCerts intermediate certificates for the remote server to
@@ -483,12 +499,11 @@ public final class IkeSessionParams {
          */
         @NonNull
         public Builder setAuthDigitalSignature(
-                @NonNull X509Certificate serverCaCert,
+                @Nullable X509Certificate serverCaCert,
                 @NonNull X509Certificate clientEndCert,
                 @NonNull List<X509Certificate> clientIntermediateCerts,
                 @NonNull PrivateKey clientPrivateKey) {
-            if (serverCaCert == null
-                    || clientEndCert == null
+            if (clientEndCert == null
                     || clientIntermediateCerts == null
                     || clientPrivateKey == null) {
                 throw new NullPointerException("Required argument not provided");
@@ -501,9 +516,8 @@ public final class IkeSessionParams {
             mLocalAuthConfig =
                     new IkeAuthDigitalSignLocalConfig(
                             clientEndCert, clientIntermediateCerts, clientPrivateKey);
-            mRemoteAuthConfig =
-                    new IkeAuthDigitalSignRemoteConfig(
-                            new TrustAnchor(serverCaCert, null /*nameConstraints*/));
+            mRemoteAuthConfig = new IkeAuthDigitalSignRemoteConfig(serverCaCert);
+
             return this;
         }
 
