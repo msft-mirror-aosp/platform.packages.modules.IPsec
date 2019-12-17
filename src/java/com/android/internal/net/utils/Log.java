@@ -16,8 +16,6 @@
 
 package com.android.internal.net.utils;
 
-import android.os.Build;
-
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Locale;
@@ -27,6 +25,8 @@ import java.util.Objects;
  * Manages logging for all IKE packages. Wraps Android's Log class to prevent leakage of PII.
  */
 public class Log {
+    private static final boolean VDBG = false;
+
     private final String mTAG;
     private final boolean mIsEngBuild;
     private final boolean mLogSensitive;
@@ -38,7 +38,7 @@ public class Log {
      * @param logSensitive boolean flag marking whether sensitive data (PII) should be logged
      */
     public Log(String tag, boolean logSensitive) {
-        this(tag, Build.IS_ENG, logSensitive);
+        this(tag, VDBG, logSensitive);
     }
 
     @VisibleForTesting

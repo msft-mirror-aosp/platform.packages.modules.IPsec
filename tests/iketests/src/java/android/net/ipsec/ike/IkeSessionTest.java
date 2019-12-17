@@ -22,6 +22,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import android.content.Context;
+import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.os.Looper;
 import android.os.test.TestLooper;
@@ -30,8 +31,6 @@ import android.util.Log;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachineTest;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
-
-import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -45,9 +44,9 @@ public final class IkeSessionTest {
     private static final int TIMEOUT_MS = 500;
 
     private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("127.0.0.1"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
 
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private IpSecManager mIpSecManager;
