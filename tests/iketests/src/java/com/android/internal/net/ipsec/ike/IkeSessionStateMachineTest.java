@@ -66,6 +66,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.eap.EapSessionConfig;
@@ -142,8 +143,6 @@ import com.android.internal.net.ipsec.ike.utils.Retransmitter.IBackoffTimeoutCal
 import com.android.internal.net.utils.Log;
 import com.android.internal.util.State;
 
-import libcore.net.InetAddressUtils;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -163,9 +162,9 @@ public final class IkeSessionStateMachineTest {
     private static final String TAG = "IkeSessionStateMachineTest";
 
     private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("127.0.0.1"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
 
     private static final String IKE_INIT_RESP_HEX_STRING =
             "5f54bf6d8b48e6e1909232b3d1edcb5c21202220000000000000014c220000300000"

@@ -20,6 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
+import android.net.InetAddresses;
 import android.net.LinkAddress;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
@@ -27,8 +28,6 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
-
-import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -41,15 +40,15 @@ import java.util.List;
 public final class ChildSessionConfigurationTest {
     private static final int IP4_PREFIX_LEN = 28;
     private static final Inet4Address IPV4_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
     private static final Inet4Address IPV4_NETMASK =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("255.255.255.240"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.240"));
     private static final LinkAddress IPV4_LINK_ADDRESS =
             new LinkAddress(IPV4_ADDRESS, IP4_PREFIX_LEN);
 
     private static final int IP6_PREFIX_LEN = 64;
     private static final Inet6Address IPV6_ADDRESS =
-            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:db8::1"));
+            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
     private static final LinkAddress IPV6_LINK_ADDRESS =
             new LinkAddress(IPV6_ADDRESS, IP6_PREFIX_LEN);
 

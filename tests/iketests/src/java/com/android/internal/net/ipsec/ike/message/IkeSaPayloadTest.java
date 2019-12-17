@@ -32,6 +32,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecSpiResponse;
 import android.net.ipsec.ike.ChildSaProposal;
@@ -60,8 +61,6 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.UnrecognizedAttri
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.UnrecognizedTransform;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.server.IpSecService;
-
-import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -125,9 +124,9 @@ public final class IkeSaPayloadTest {
     private static final byte[] PROPOSAL_NUMBER_LIST = {1, 2};
 
     private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("8.8.4.4"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("8.8.4.4"));
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("8.8.8.8"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("8.8.8.8"));
 
     private static final int DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_ONE = 0x1234;
     private static final int DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_TWO = 0x1235;
