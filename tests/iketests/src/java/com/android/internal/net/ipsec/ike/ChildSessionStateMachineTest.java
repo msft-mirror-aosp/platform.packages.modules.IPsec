@@ -65,6 +65,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
@@ -118,8 +119,6 @@ import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.utils.Log;
 import com.android.server.IpSecService;
 
-import libcore.net.InetAddressUtils;
-
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -139,11 +138,11 @@ public final class ChildSessionStateMachineTest {
     private static final String TAG = "ChildSessionStateMachineTest";
 
     private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
     private static final Inet4Address INTERNAL_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("203.0.113.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("203.0.113.100"));
 
     private static final int IPV4_PREFIX_LEN = 32;
 
@@ -297,7 +296,7 @@ public final class ChildSessionStateMachineTest {
         return new TunnelModeChildSessionParams.Builder()
                 .addSaProposal(buildSaProposal())
                 .addInternalAddressRequest(AF_INET)
-                .addInternalAddressRequest(INTERNAL_ADDRESS, IPV4_PREFIX_LEN)
+                .addInternalAddressRequest(INTERNAL_ADDRESS)
                 .build();
     }
 

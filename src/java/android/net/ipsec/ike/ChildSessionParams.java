@@ -18,8 +18,7 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
-
-import libcore.net.InetAddressUtils;
+import android.net.InetAddresses;
 
 import java.net.InetAddress;
 import java.util.Arrays;
@@ -142,8 +141,8 @@ public abstract class ChildSessionParams {
         InetAddress endAddress = null;
         switch (tsType) {
             case IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE:
-                startAddress = InetAddressUtils.parseNumericAddress("0.0.0.0");
-                endAddress = InetAddressUtils.parseNumericAddress("255.255.255.255");
+                startAddress = InetAddresses.parseNumericAddress("0.0.0.0");
+                endAddress = InetAddresses.parseNumericAddress("255.255.255.255");
                 break;
             case IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE:
                 // TODO: Support it.

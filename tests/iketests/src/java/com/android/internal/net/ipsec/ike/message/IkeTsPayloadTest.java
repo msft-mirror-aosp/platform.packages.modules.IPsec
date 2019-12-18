@@ -21,11 +21,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.net.InetAddresses;
 import android.net.ipsec.ike.IkeTrafficSelector;
 
 import com.android.internal.net.TestUtils;
-
-import libcore.net.InetAddressUtils;
 
 import org.junit.Test;
 
@@ -41,16 +40,16 @@ public final class IkeTsPayloadTest {
     private static final int TS_ONE_START_PORT = 16;
     private static final int TS_ONE_END_PORT = 65520;
     private static final Inet4Address TS_ONE_START_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
     private static final Inet4Address TS_ONE_END_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.3.101"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.3.101"));
 
     private static final int TS_TWO_START_PORT = 0;
     private static final int TS_TWO_END_PORT = 65535;
     private static final Inet4Address TS_TWO_START_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.4.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.4.100"));
     private static final Inet4Address TS_TWO_END_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.4.102"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.4.102"));
 
     private IkeTrafficSelector mTsOne;
     private IkeTrafficSelector mTsTwo;
@@ -115,7 +114,7 @@ public final class IkeTsPayloadTest {
                         IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
                         TS_ONE_START_PORT,
                         TS_ONE_END_PORT,
-                        (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200")),
+                        (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200")),
                         TS_ONE_END_ADDRESS);
 
         IkeTsPayload tsPayload =
