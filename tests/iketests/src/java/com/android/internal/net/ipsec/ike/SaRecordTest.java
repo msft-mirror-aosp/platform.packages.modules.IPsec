@@ -28,6 +28,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -55,8 +56,6 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.server.IpSecService;
 
-import libcore.net.InetAddressUtils;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -67,9 +66,9 @@ import java.net.Inet4Address;
 @RunWith(JUnit4.class)
 public final class SaRecordTest {
     private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
 
     private static final String PRF_KEY_HEX_STRING = "094787780EE466E2CB049FA327B43908BC57E485";
     private static final String DATA_TO_SIGN_HEX_STRING = "010000000a50500d";

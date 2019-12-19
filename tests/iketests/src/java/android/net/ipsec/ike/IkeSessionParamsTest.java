@@ -30,6 +30,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import android.content.Context;
+import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.eap.EapSessionConfig;
@@ -37,8 +38,6 @@ import android.net.eap.EapSessionConfig;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.internal.net.TestUtils;
-
-import libcore.net.InetAddressUtils;
 
 import org.junit.After;
 import org.junit.Before;
@@ -55,9 +54,9 @@ public final class IkeSessionParamsTest {
     private static final byte[] PSK = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
     private static final Inet4Address LOCAL_IPV4_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_IPV4_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
 
     private UdpEncapsulationSocket mUdpEncapSocket;
     private IkeSaProposal mIkeSaProposal;

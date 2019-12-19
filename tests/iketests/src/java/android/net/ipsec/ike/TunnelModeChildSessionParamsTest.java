@@ -32,11 +32,10 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
+import android.net.InetAddresses;
 import android.util.SparseArray;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
-
-import libcore.net.InetAddressUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -52,17 +51,17 @@ public final class TunnelModeChildSessionParamsTest {
     private static final int INVALID_ADDR_FAMILY = 5;
 
     private static final Inet4Address IPV4_ADDRESS =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
     private static final Inet6Address IPV6_ADDRESS =
-            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:db8::1"));
+            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
 
     private static final Inet4Address IPV4_DNS_SERVER =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("8.8.8.8"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("8.8.8.8"));
     private static final Inet6Address IPV6_DNS_SERVER =
-            (Inet6Address) (InetAddressUtils.parseNumericAddress("2001:4860:4860::8888"));
+            (Inet6Address) (InetAddresses.parseNumericAddress("2001:4860:4860::8888"));
 
     private static final Inet4Address IPV4_DHCP_SERVER =
-            (Inet4Address) (InetAddressUtils.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private ChildSaProposal mSaProposal;
 
     @Before
