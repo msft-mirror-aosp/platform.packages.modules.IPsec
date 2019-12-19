@@ -22,7 +22,6 @@ import static org.junit.Assert.assertFalse;
 import android.net.ipsec.test.ike.SaProposal;
 
 import com.android.internal.net.test.TestUtils;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.PrfTransform;
 
 import org.junit.Before;
@@ -105,9 +104,7 @@ public final class IkeMacPrfTest {
     @Before
     public void setUp() throws Exception {
         mIkeHmacSha1Prf =
-                IkeMacPrf.create(
-                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
-                        IkeMessage.getSecurityProvider());
+                IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
     }
 
     @Test

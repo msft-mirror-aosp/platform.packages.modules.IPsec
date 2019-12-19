@@ -21,7 +21,6 @@ import android.net.ipsec.ike.SaProposal;
 
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 
-import java.security.Provider;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
@@ -45,9 +44,8 @@ public class IkeMacIntegrity extends IkeMac {
             int keyLength,
             String algorithmName,
             boolean isEncryptAlgo,
-            Provider provider,
             int checksumLength) {
-        super(algorithmId, keyLength, algorithmName, isEncryptAlgo, provider);
+        super(algorithmId, keyLength, algorithmName, isEncryptAlgo);
         mChecksumLength = checksumLength;
     }
 
@@ -55,10 +53,9 @@ public class IkeMacIntegrity extends IkeMac {
      * Construct an instance of IkeMacIntegrity.
      *
      * @param integrityTransform the valid negotiated IntegrityTransform.
-     * @param provider the security provider.
      * @return an instance of IkeMacIntegrity.
      */
-    public static IkeMacIntegrity create(IntegrityTransform integrityTransform, Provider provider) {
+    public static IkeMacIntegrity create(IntegrityTransform integrityTransform) {
         int algorithmId = integrityTransform.id;
 
         int keyLength = 0;
@@ -103,7 +100,7 @@ public class IkeMacIntegrity extends IkeMac {
         }
 
         return new IkeMacIntegrity(
-                algorithmId, keyLength, algorithmName, isEncryptAlgo, provider, checksumLength);
+                algorithmId, keyLength, algorithmName, isEncryptAlgo, checksumLength);
     }
 
     /**

@@ -292,8 +292,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
 
         try {
             MessageDigest natDetectionDataDigest =
-                    MessageDigest.getInstance(
-                            NAT_DETECTION_DIGEST_ALGORITHM, IkeMessage.getSecurityProvider());
+                    MessageDigest.getInstance(NAT_DETECTION_DIGEST_ALGORITHM);
             return natDetectionDataDigest.digest(byteBuffer.array());
         } catch (NoSuchAlgorithmException e) {
             throw new ProviderException(

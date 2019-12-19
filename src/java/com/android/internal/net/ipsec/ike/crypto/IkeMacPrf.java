@@ -22,7 +22,6 @@ import com.android.internal.net.crypto.KeyGenerationUtils;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 
 import java.nio.ByteBuffer;
-import java.security.Provider;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -47,19 +46,17 @@ public class IkeMacPrf extends IkeMac {
             @SaProposal.PseudorandomFunction int algorithmId,
             int keyLength,
             String algorithmName,
-            boolean isEncryptAlgo,
-            Provider provider) {
-        super(algorithmId, keyLength, algorithmName, isEncryptAlgo, provider);
+            boolean isEncryptAlgo) {
+        super(algorithmId, keyLength, algorithmName, isEncryptAlgo);
     }
 
     /**
      * Construct an instance of IkeMacPrf.
      *
      * @param prfTransform the valid negotiated PrfTransform.
-     * @param provider the security provider.
      * @return an instance of IkeMacPrf.
      */
-    public static IkeMacPrf create(PrfTransform prfTransform, Provider provider) {
+    public static IkeMacPrf create(PrfTransform prfTransform) {
         int algorithmId = prfTransform.id;
 
         int keyLength = 0;
@@ -82,7 +79,7 @@ public class IkeMacPrf extends IkeMac {
                 throw new IllegalArgumentException("Unrecognized PRF ID: " + algorithmId);
         }
 
-        return new IkeMacPrf(algorithmId, keyLength, algorithmName, isEncryptAlgo, provider);
+        return new IkeMacPrf(algorithmId, keyLength, algorithmName, isEncryptAlgo);
     }
 
     /**

@@ -164,8 +164,7 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
                 getSignedOctets(ikeInitBytes, nonce, idPayloadBodyBytes, ikePrf, prfKeyBytes);
 
         try {
-            Signature signGen =
-                    Signature.getInstance(signatureAlgoName, IkeMessage.getSecurityProvider());
+            Signature signGen = Signature.getInstance(signatureAlgoName);
             signGen.initSign(privateKey);
             signGen.update(dataToSignBytes);
 
@@ -226,8 +225,7 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
                 getSignedOctets(ikeInitBytes, nonce, idPayloadBodyBytes, ikePrf, prfKeyBytes);
 
         try {
-            Signature signValidator =
-                    Signature.getInstance(signatureAlgoAndHash, IkeMessage.getSecurityProvider());
+            Signature signValidator = Signature.getInstance(signatureAlgoAndHash);
             signValidator.initVerify(certificate);
             signValidator.update(dataToSignBytes);
 
