@@ -25,8 +25,7 @@ import android.os.Looper;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
-
-import dalvik.system.CloseGuard;
+import com.android.internal.net.utils.CloseGuard;
 
 import java.util.concurrent.Executor;
 
