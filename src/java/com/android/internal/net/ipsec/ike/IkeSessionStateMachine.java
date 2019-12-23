@@ -101,8 +101,8 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
-import com.android.internal.net.ipsec.ike.utils.State;
 import com.android.internal.net.utils.CloseGuard;
+import com.android.internal.util.State;
 
 import java.io.FileDescriptor;
 import java.io.IOException;

@@ -21,6 +21,8 @@ java_library {
     },
     srcs: [":ike-srcs"],
 
+    libs: ["unsupportedappusage"],
+
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // classpath conflicts. This is necessary to preserve access to these
     // statically included classes.
