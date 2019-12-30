@@ -23,7 +23,7 @@ import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
-import android.telephony.TelephonyManager.UiccAppType;
+import android.telephony.Annotation.UiccAppType;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.message.EapData.EapMethod;
