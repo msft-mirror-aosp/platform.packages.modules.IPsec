@@ -102,8 +102,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.net.ipsec.ike.utils.State;
-
-import dalvik.system.CloseGuard;
+import com.android.internal.net.utils.CloseGuard;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
