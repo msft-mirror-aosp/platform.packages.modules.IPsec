@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike;
+package com.android.internal.net.test.ipsec.ike;
 
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
+import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
@@ -26,8 +26,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IProcedureConsumer;
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
+import com.android.internal.net.test.ipsec.ike.IkeLocalRequestScheduler.IProcedureConsumer;
+import com.android.internal.net.test.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
 
 import org.junit.Before;
 import org.junit.Test;

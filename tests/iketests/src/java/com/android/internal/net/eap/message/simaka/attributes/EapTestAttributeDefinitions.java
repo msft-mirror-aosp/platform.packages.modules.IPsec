@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.message.simaka.attributes;
+package com.android.internal.net.test.eap.message.simaka.attributes;
 
-import static com.android.internal.net.TestUtils.hexStringToByteArray;
+import static com.android.internal.net.test.TestUtils.hexStringToByteArray;
 
 /**
  * EapTestAttributeDefinitions provides byte[] encodings of commonly used EAP Messages.

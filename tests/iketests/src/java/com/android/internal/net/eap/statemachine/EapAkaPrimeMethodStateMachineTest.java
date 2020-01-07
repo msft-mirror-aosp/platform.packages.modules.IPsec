@@ -14,26 +14,26 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.statemachine;
+package com.android.internal.net.test.eap.statemachine;
 
-import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA_PRIME;
-import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
-import static com.android.internal.net.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
-import static com.android.internal.net.eap.statemachine.EapAkaPrimeMethodStateMachine.K_AUT_LEN;
-import static com.android.internal.net.eap.statemachine.EapAkaPrimeMethodStateMachine.K_RE_LEN;
-import static com.android.internal.net.eap.statemachine.EapSimAkaMethodStateMachine.KEY_LEN;
-import static com.android.internal.net.eap.statemachine.EapSimAkaMethodStateMachine.SESSION_KEY_LENGTH;
+import static com.android.internal.net.test.TestUtils.hexStringToByteArray;
+import static com.android.internal.net.test.eap.message.EapData.EAP_TYPE_AKA_PRIME;
+import static com.android.internal.net.test.eap.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.internal.net.test.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
+import static com.android.internal.net.test.eap.statemachine.EapAkaPrimeMethodStateMachine.K_AUT_LEN;
+import static com.android.internal.net.test.eap.statemachine.EapAkaPrimeMethodStateMachine.K_RE_LEN;
+import static com.android.internal.net.test.eap.statemachine.EapSimAkaMethodStateMachine.KEY_LEN;
+import static com.android.internal.net.test.eap.statemachine.EapSimAkaMethodStateMachine.SESSION_KEY_LENGTH;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.android.internal.net.eap.message.EapData;
-import com.android.internal.net.eap.message.EapMessage;
-import com.android.internal.net.eap.message.simaka.EapAkaPrimeTypeData;
-import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtMac;
-import com.android.internal.net.eap.statemachine.EapAkaMethodStateMachine.CreatedState;
+import com.android.internal.net.test.eap.message.EapData;
+import com.android.internal.net.test.eap.message.EapMessage;
+import com.android.internal.net.test.eap.message.simaka.EapAkaPrimeTypeData;
+import com.android.internal.net.test.eap.message.simaka.EapSimAkaAttribute.AtMac;
+import com.android.internal.net.test.eap.statemachine.EapAkaMethodStateMachine.CreatedState;
 
 import org.junit.Test;
 
