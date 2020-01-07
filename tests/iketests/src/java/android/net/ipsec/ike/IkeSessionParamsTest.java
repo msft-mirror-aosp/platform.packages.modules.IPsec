@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike;
+package android.net.ipsec.test.ike;
 
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthEapConfig;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthEapConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthPskConfig;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -33,11 +33,11 @@ import android.content.Context;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.eap.EapSessionConfig;
+import android.net.eap.test.EapSessionConfig;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.internal.net.TestUtils;
+import com.android.internal.net.test.TestUtils;
 
 import org.junit.After;
 import org.junit.Before;

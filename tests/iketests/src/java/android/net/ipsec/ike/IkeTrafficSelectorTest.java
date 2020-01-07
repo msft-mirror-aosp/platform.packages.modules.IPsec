@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike;
+package android.net.ipsec.test.ike;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -25,8 +25,8 @@ import static org.junit.Assert.fail;
 
 import android.net.InetAddresses;
 
-import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.test.TestUtils;
+import com.android.internal.net.test.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import org.junit.Test;
 

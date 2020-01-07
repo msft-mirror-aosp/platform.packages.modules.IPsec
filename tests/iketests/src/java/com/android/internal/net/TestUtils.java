@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package com.android.internal.net;
+package com.android.internal.net.test;
 
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.spy;
 
-import com.android.internal.net.utils.Log;
+import com.android.internal.net.test.utils.Log;
 
 import java.nio.ByteBuffer;
 

@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.test.ipsec.ike.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-import android.net.ipsec.ike.IkeFqdnIdentification;
-import android.net.ipsec.ike.IkeIdentification;
-import android.net.ipsec.ike.IkeIpv4AddrIdentification;
-import android.net.ipsec.ike.IkeIpv6AddrIdentification;
-import android.net.ipsec.ike.IkeKeyIdIdentification;
-import android.net.ipsec.ike.IkeRfc822AddrIdentification;
+import android.net.ipsec.test.ike.IkeFqdnIdentification;
+import android.net.ipsec.test.ike.IkeIdentification;
+import android.net.ipsec.test.ike.IkeIpv4AddrIdentification;
+import android.net.ipsec.test.ike.IkeIpv6AddrIdentification;
+import android.net.ipsec.test.ike.IkeKeyIdIdentification;
+import android.net.ipsec.test.ike.IkeRfc822AddrIdentification;
 
-import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import com.android.internal.net.test.TestUtils;
+import com.android.internal.net.test.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import org.junit.Test;
 

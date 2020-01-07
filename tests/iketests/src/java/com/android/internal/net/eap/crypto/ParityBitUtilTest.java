@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.crypto;
+package com.android.internal.net.test.eap.crypto;
 
-import static com.android.internal.net.TestUtils.hexStringToByteArray;
+import static com.android.internal.net.test.TestUtils.hexStringToByteArray;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
