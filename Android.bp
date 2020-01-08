@@ -15,6 +15,7 @@
 java_library {
     name: "ike",
     installable: true,
+    sdk_version: "system_current",
 
     aidl: {
         local_include_dirs: ["src/java"],
@@ -44,6 +45,7 @@ filegroup {
         "src/java/**/*.java",
         ":bouncycastle_ike_digests",
         ":framework-ike-shared-srcs",
+        ":framework-annotations",
     ],
 }
 
