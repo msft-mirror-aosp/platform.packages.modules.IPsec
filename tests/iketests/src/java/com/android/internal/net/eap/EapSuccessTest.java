@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap;
+package com.android.internal.net.test.eap;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.fail;
 
-import com.android.internal.net.eap.EapResult.EapSuccess;
+import com.android.internal.net.test.eap.EapResult.EapSuccess;
 
 import org.junit.Test;
 
