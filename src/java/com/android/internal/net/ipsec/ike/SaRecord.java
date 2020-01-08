@@ -38,8 +38,7 @@ import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultPartial;
 import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
-
-import dalvik.system.CloseGuard;
+import com.android.internal.net.utils.CloseGuard;
 
 import java.io.IOException;
 import java.net.Inet4Address;
