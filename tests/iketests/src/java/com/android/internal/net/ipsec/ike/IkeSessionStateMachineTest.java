@@ -65,9 +65,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.Network;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ChildSaProposal;
 import android.net.ipsec.test.ike.ChildSessionCallback;
@@ -256,6 +258,8 @@ public final class IkeSessionStateMachineTest {
     private IpSecManager mIpSecManager;
     private UdpEncapsulationSocket mUdpEncapSocket;
 
+    private ConnectivityManager mMockConnectManager;
+    private Network mMockDefaultNetwork;
     private IkeUdpEncapSocket mSpyIkeUdpEncapSocket;
 
     private TestLooper mLooper;
@@ -614,6 +618,11 @@ public final class IkeSessionStateMachineTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
+
+        mMockConnectManager = mock(ConnectivityManager.class);
+        mMockDefaultNetwork = mock(Network.class);
+        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
+
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
                         .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
@@ -719,7 +728,10 @@ public final class IkeSessionStateMachineTest {
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
 
         mSpyIkeUdpEncapSocket =
-                spy(IkeUdpEncapSocket.getIkeUdpEncapSocket(mUdpEncapSocket, ikeSession));
+                spy(
+                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                mMockDefaultNetwork, mIpSecManager, ikeSession));
+
         doNothing().when(mSpyIkeUdpEncapSocket).sendIkePacket(any(), any());
         ikeSession.mIkeSocket = mSpyIkeUdpEncapSocket;
 
@@ -737,7 +749,7 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
-        return new IkeSessionParams.Builder()
+        return new IkeSessionParams.Builder(mMockConnectManager)
                 .setServerAddress(REMOTE_ADDRESS)
                 .setUdpEncapsulationSocket(mUdpEncapSocket)
                 .addSaProposal(buildSaProposal())
