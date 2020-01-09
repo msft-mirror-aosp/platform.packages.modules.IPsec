@@ -16,6 +16,9 @@
 
 package android.net.ipsec.ike;
 
+import static android.system.OsConstants.AF_INET;
+import static android.system.OsConstants.AF_INET6;
+
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -23,16 +26,23 @@ import android.annotation.SystemApi;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.eap.EapSessionConfig;
 
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.security.PrivateKey;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -69,6 +79,8 @@ public final class IkeSessionParams {
     @NonNull private final IkeAuthConfig mLocalAuthConfig;
     @NonNull private final IkeAuthConfig mRemoteAuthConfig;
 
+    @NonNull private final IkeConfigAttribute[] mConfigRequests;
+
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
@@ -79,6 +91,7 @@ public final class IkeSessionParams {
             @NonNull IkeIdentification remoteIdentification,
             @NonNull IkeAuthConfig localAuthConfig,
             @NonNull IkeAuthConfig remoteAuthConfig,
+            @NonNull IkeConfigAttribute[] configRequests,
             boolean isIkeFragmentationSupported) {
         mServerAddress = serverAddress;
         mUdpEncapSocket = udpEncapsulationSocket;
@@ -89,6 +102,8 @@ public final class IkeSessionParams {
 
         mLocalAuthConfig = localAuthConfig;
         mRemoteAuthConfig = remoteAuthConfig;
+
+        mConfigRequests = configRequests;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
@@ -144,6 +159,45 @@ public final class IkeSessionParams {
     public boolean isIkeFragmentationSupported() {
         return mIsIkeFragmentationSupported;
     }
+
+    /** @hide */
+    public IkeConfigAttribute[] getConfigurationAttributesInternal() {
+        return mConfigRequests;
+    }
+
+    /** Retrieves the list of Configuration Requests @hide */
+    @NonNull
+    public List<IkeConfigRequest> getConfigurationRequests() {
+        return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
+    }
+
+    /** Represents an IKE session configuration request type @hide */
+    public interface IkeConfigRequest {}
+
+    /** Represents an IPv4 P_CSCF request @hide */
+    public interface ConfigRequestIpv4PcscfServer extends IkeConfigRequest {
+        /**
+         * Retrieves the requested IPv4 P_CSCF server address
+         *
+         * @return The requested P_CSCF server address, or null if no specific P_CSCF server was
+         *     requested
+         */
+        @Nullable
+        Inet4Address getAddress();
+    }
+
+    /** Represents an IPv6 P_CSCF request @hide */
+    public interface ConfigRequestIpv6PcscfServer extends IkeConfigRequest {
+        /**
+         * Retrieves the requested IPv6 P_CSCF server address
+         *
+         * @return The requested P_CSCF server address, or null if no specific P_CSCF server was
+         *     requested
+         */
+        @Nullable
+        Inet6Address getAddress();
+    }
+
     /**
      * This class contains common information of an IKEv2 authentication configuration.
      */
@@ -287,6 +341,7 @@ public final class IkeSessionParams {
     /** This class can be used to incrementally construct a {@link IkeSessionParams}. */
     public static final class Builder {
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
+        @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
 
         @Nullable private InetAddress mServerAddress;
         @Nullable private UdpEncapsulationSocket mUdpEncapSocket;
@@ -522,6 +577,53 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Adds a specific internal P_CSCF server request to the {@link IkeSessionParams} being
+         * built.
+         *
+         * @param address the requested P_CSCF address.
+         * @return Builder this, to facilitate chaining.
+         *
+         * @hide
+         */
+        @NonNull
+        public Builder addPcscfServerRequest(@NonNull InetAddress address) {
+            if (address == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
+            if (address instanceof Inet4Address) {
+                mConfigRequestList.add(new ConfigAttributeIpv4Pcscf((Inet4Address) address));
+            } else if (address instanceof Inet6Address) {
+                mConfigRequestList.add(new ConfigAttributeIpv6Pcscf((Inet6Address) address));
+            } else {
+                throw new IllegalArgumentException("Invalid address family");
+            }
+            return this;
+        }
+
+        /**
+         * Adds a internal P_CSCF server request to the {@link IkeSessionParams} being built.
+         *
+         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
+         *     OsConstants.AF_INET6} are allowed.
+         * @return Builder this, to facilitate chaining.
+         *
+         * @hide
+         */
+        @NonNull
+        public Builder addPcscfServerRequest(int addressFamily) {
+            if (addressFamily == AF_INET) {
+                mConfigRequestList.add(new ConfigAttributeIpv4Pcscf());
+                return this;
+            } else if (addressFamily == AF_INET6) {
+                mConfigRequestList.add(new ConfigAttributeIpv6Pcscf());
+                return this;
+            } else {
+                throw new IllegalArgumentException("Invalid address family: " + addressFamily);
+            }
+        }
+
+        /**
          * Validates and builds the {@link IkeSessionParams}.
          *
          * @return IkeSessionParams the validated IkeSessionParams.
@@ -548,6 +650,7 @@ public final class IkeSessionParams {
                     mRemoteIdentification,
                     mLocalAuthConfig,
                     mRemoteAuthConfig,
+                    mConfigRequestList.toArray(new IkeConfigAttribute[0]),
                     mIsIkeFragmentationSupported);
         }
 
