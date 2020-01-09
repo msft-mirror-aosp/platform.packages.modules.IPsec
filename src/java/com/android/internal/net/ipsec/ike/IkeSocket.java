@@ -17,41 +17,25 @@
 package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
-import static android.system.OsConstants.F_SETFL;
-import static android.system.OsConstants.SOCK_DGRAM;
-import static android.system.OsConstants.SOCK_NONBLOCK;
 
-import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.os.Handler;
-import android.system.ErrnoException;
-import android.system.Os;
 import android.util.LongSparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
 import com.android.internal.net.ipsec.ike.utils.PacketReader;
 
-import java.io.FileDescriptor;
-import java.io.IOException;
 import java.net.InetAddress;
-import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Map;
 import java.util.Set;
 
 /**
- * IkeSocket sends and receives IKE packets via the user provided {@link UdpEncapsulationSocket}.
+ * IkeSocket is used for sending and receiving IKE packets for {@link IkeSessionStateMachine}s.
  *
- * <p>One UdpEncapsulationSocket instance can only be bound to one IkeSocket instance. IkeSocket
- * maintains a static map to cache all bound UdpEncapsulationSockets and their IkeSocket instances.
- * It returns the existing IkeSocket when it has been bound with user provided {@link
- * UdpEncapsulationSocket}.
- *
- * <p>As a packet receiver, IkeSocket registers a file descriptor with a thread's Looper and handles
- * read events (and errors). Users can expect a call life-cycle like the following:
+ * <p>To function as a packet receiver, a subclass MUST override #createFd() and #handlePacket() so
+ * that it can register a file descriptor with a thread's Looper and handle read events (and
+ * errors). Users can expect a call life-cycle like the following:
  *
  * <pre>
  * [1] when user gets a new initiated IkeSocket, start() is called and followed by createFd().
@@ -64,184 +48,53 @@ import java.util.Set;
  * IkeSessionStateMachine}. Since all {@link IkeSessionStateMachine}s run on the same working
  * thread, there will not be concurrent modification problems.
  */
-public final class IkeSocket extends PacketReader implements AutoCloseable {
+public abstract class IkeSocket extends PacketReader implements AutoCloseable {
     private static final String TAG = "IkeSocket";
 
-    // TODO: b/129358324 Consider supporting IKE exchange without UDP Encapsulation.
-    // UDP-encapsulated IKE packets MUST be sent to 4500.
-    @VisibleForTesting static final int IKE_SERVER_PORT = 4500;
+    /** Non-udp-encapsulated IKE packets MUST be sent to 500. */
+    public static final int SERVER_PORT_NON_UDP_ENCAPSULATED = 500;
+    /** UDP-encapsulated IKE packets MUST be sent to 4500. */
+    public static final int SERVER_PORT_UDP_ENCAPSULATED = 4500;
 
-    // A Non-ESP marker helps the recipient to distinguish IKE packets from ESP packets.
-    @VisibleForTesting static final int NON_ESP_MARKER_LEN = 4;
-    @VisibleForTesting static final byte[] NON_ESP_MARKER = new byte[NON_ESP_MARKER_LEN];
-
-    // Map from UdpEncapsulationSocket to IkeSocket instances.
-    private static Map<UdpEncapsulationSocket, IkeSocket> sFdToIkeSocketMap = new HashMap<>();
-
-    private static IPacketReceiver sPacketReceiver = new PacketReceiver();
-
-    // Package private map from locally generated IKE SPI to IkeSessionStateMachine instances.
+    // Map from locally generated IKE SPI to IkeSessionStateMachine instances.
     @VisibleForTesting
-    final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession = new LongSparseArray<>();
+    protected final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession =
+            new LongSparseArray<>();
 
-    // Package private set to store all running IKE Sessions that are using this IkeSocket instance.
-    @VisibleForTesting final Set<IkeSessionStateMachine> mAliveIkeSessions = new HashSet<>();
+    // Set to store all running IkeSessionStateMachines that are using this IkeSocket instance.
+    @VisibleForTesting
+    protected final Set<IkeSessionStateMachine> mAliveIkeSessions = new HashSet<>();
 
-    // UdpEncapsulationSocket for sending and receving IKE packet.
-    private final UdpEncapsulationSocket mUdpEncapSocket;
-
-    private IkeSocket(UdpEncapsulationSocket udpEncapSocket, Handler handler) {
+    protected IkeSocket(Handler handler) {
         super(handler);
-        mUdpEncapSocket = udpEncapSocket;
     }
 
-    /**
-     * Get an IkeSocket instance.
-     *
-     * <p>Return the existing IkeSocket instance if it has been created for the input
-     * udpEncapSocket. Otherwise, create and return a new IkeSocket instance.
-     *
-     * @param udpEncapSocket user provided UdpEncapsulationSocket
-     * @param ikeSession the IkeSessionStateMachine that is requesting an IkeSocket.
-     * @return an IkeSocket instance
-     */
-    public static IkeSocket getIkeSocket(
-            UdpEncapsulationSocket udpEncapSocket, IkeSessionStateMachine ikeSession)
-            throws ErrnoException {
-        FileDescriptor fd = udpEncapSocket.getFileDescriptor();
-        // All created IkeSocket has modified its FileDescriptor to non-blocking type for handling
-        // read events in a non-blocking way.
-        Os.fcntlInt(fd, F_SETFL, SOCK_DGRAM | SOCK_NONBLOCK);
-
-        IkeSocket ikeSocket = null;
-        if (sFdToIkeSocketMap.containsKey(udpEncapSocket)) {
-            ikeSocket = sFdToIkeSocketMap.get(udpEncapSocket);
-
-        } else {
-            ikeSocket = new IkeSocket(udpEncapSocket, new Handler());
-            // Create and register FileDescriptor for receiving IKE packet on current thread.
-            ikeSocket.start();
-
-            sFdToIkeSocketMap.put(udpEncapSocket, ikeSocket);
-        }
-
-        ikeSocket.mAliveIkeSessions.add(ikeSession);
-        return ikeSocket;
-    }
-
-    /**
-     * Get FileDecriptor of mUdpEncapSocket.
-     *
-     * <p>PacketReader registers a listener for this file descriptor on the thread where IkeSocket
-     * is constructed. When there is a read event, this listener is invoked and then calls {@link
-     * handlePacket} to handle the received packet.
-     */
-    @Override
-    protected FileDescriptor createFd() {
-        return mUdpEncapSocket.getFileDescriptor();
-    }
-
-    /**
-     * IPacketReceiver provides a package private interface for handling received packet.
-     *
-     * <p>IPacketReceiver exists so that the interface is injectable for testing.
-     */
-    interface IPacketReceiver {
-        void handlePacket(byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession);
-    }
-
-    /** Package private */
-    @VisibleForTesting
-    static final class PacketReceiver implements IPacketReceiver {
-        public void handlePacket(
-                byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession) {
-            ByteBuffer byteBuffer = ByteBuffer.wrap(recvbuf);
-
-            // Check the existence of the Non-ESP Marker. A received packet can be either an IKE
-            // packet starts with 4 zero-valued bytes Non-ESP Marker or an ESP packet starts with 4
-            // bytes ESP SPI. ESP SPI value can never be zero.
-            byte[] espMarker = new byte[NON_ESP_MARKER_LEN];
-            byteBuffer.get(espMarker);
-            if (!Arrays.equals(NON_ESP_MARKER, espMarker)) {
-                // Drop the received ESP packet.
-                getIkeLog().e(TAG, "Receive an ESP packet.");
-                return;
-            }
-
-            try {
-                // Re-direct IKE packet to IkeSessionStateMachine according to the locally generated
-                // IKE SPI.
-                byte[] ikePacketBytes = new byte[byteBuffer.remaining()];
-                byteBuffer.get(ikePacketBytes);
-
-                // TODO: Retrieve and log the source address
-                getIkeLog().d(TAG, "Receive packet of " + ikePacketBytes.length + " bytes)");
-                getIkeLog().d(TAG, getIkeLog().pii(ikePacketBytes));
-
-                IkeHeader ikeHeader = new IkeHeader(ikePacketBytes);
-
-                long localGeneratedSpi =
-                        ikeHeader.fromIkeInitiator
-                                ? ikeHeader.ikeResponderSpi
-                                : ikeHeader.ikeInitiatorSpi;
-
-                IkeSessionStateMachine ikeStateMachine = spiToIkeSession.get(localGeneratedSpi);
-                if (ikeStateMachine == null) {
-                    getIkeLog().w(TAG, "Unrecognized IKE SPI.");
-                    // TODO: Handle invalid IKE SPI error
-                } else {
-                    ikeStateMachine.receiveIkePacket(ikeHeader, ikePacketBytes);
-                }
-            } catch (IkeProtocolException e) {
-                // Handle invalid IKE header
-                getIkeLog().i(TAG, "Can't parse malformed IKE packet header.");
-            }
-        }
-    }
-
-    /** Package private */
-    @VisibleForTesting
-    static void setPacketReceiver(IPacketReceiver receiver) {
-        sPacketReceiver = receiver;
-    }
-
-    /**
-     * Handle received IKE packet. Invoked when there is a read event. Any desired copies of
-     * |recvbuf| should be made in here, as the underlying byte array is reused across all reads.
-     */
-    @Override
-    protected void handlePacket(byte[] recvbuf, int length) {
-        sPacketReceiver.handlePacket(Arrays.copyOfRange(recvbuf, 0, length), mSpiToIkeSession);
-    }
-
-    /**
-     * Send encoded IKE packet to destination address
-     *
-     * @param ikePacket encoded IKE packet
-     * @param serverAddress IP address of remote server
-     */
-    public void sendIkePacket(byte[] ikePacket, InetAddress serverAddress) {
-        getIkeLog()
-                .d(
-                        TAG,
-                        "Send packet to "
-                                + serverAddress.getHostAddress()
-                                + "( "
-                                + ikePacket.length
-                                + " bytes)");
+    protected static void parseAndDemuxIkePacket(
+            byte[] ikePacketBytes,
+            LongSparseArray<IkeSessionStateMachine> spiToIkeSession,
+            String tag) {
         try {
-            ByteBuffer buffer = ByteBuffer.allocate(NON_ESP_MARKER_LEN + ikePacket.length);
+            // TODO: Retrieve and log the source address
+            getIkeLog().d(tag, "Receive packet of " + ikePacketBytes.length + " bytes)");
+            getIkeLog().d(tag, getIkeLog().pii(ikePacketBytes));
 
-            // Build outbound UDP Encapsulation packet body for sending IKE message.
-            buffer.put(NON_ESP_MARKER).put(ikePacket);
-            buffer.rewind();
+            IkeHeader ikeHeader = new IkeHeader(ikePacketBytes);
 
-            // Use unconnected UDP socket because one {@UdpEncapsulationSocket} may be shared by
-            // multiple IKE sessions that send messages to different destinations.
-            Os.sendto(
-                    mUdpEncapSocket.getFileDescriptor(), buffer, 0, serverAddress, IKE_SERVER_PORT);
-        } catch (ErrnoException | IOException e) {
-            // TODO: Handle exception
+            long localGeneratedSpi =
+                    ikeHeader.fromIkeInitiator
+                            ? ikeHeader.ikeResponderSpi
+                            : ikeHeader.ikeInitiatorSpi;
+
+            IkeSessionStateMachine ikeStateMachine = spiToIkeSession.get(localGeneratedSpi);
+            if (ikeStateMachine == null) {
+                getIkeLog().w(tag, "Unrecognized IKE SPI.");
+                // TODO(b/148479270): Handle invalid IKE SPI error
+            } else {
+                ikeStateMachine.receiveIkePacket(ikeHeader, ikePacketBytes);
+            }
+        } catch (IkeProtocolException e) {
+            // Handle invalid IKE header
+            getIkeLog().i(tag, "Can't parse malformed IKE packet header.");
         }
     }
 
@@ -251,7 +104,7 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
      * @param spi the locally generated IKE SPI
      * @param ikeSession the IKE session this IKE SA belongs to
      */
-    public void registerIke(long spi, IkeSessionStateMachine ikeSession) {
+    public final void registerIke(long spi, IkeSessionStateMachine ikeSession) {
         mSpiToIkeSession.put(spi, ikeSession);
     }
 
@@ -260,22 +113,38 @@ public final class IkeSocket extends PacketReader implements AutoCloseable {
      *
      * @param spi the locally generated IKE SPI
      */
-    public void unregisterIke(long spi) {
+    public final void unregisterIke(long spi) {
         mSpiToIkeSession.remove(spi);
     }
 
-    /** Release reference of current IkeSocket when the IKE session is closed. */
-    public void releaseReference(IkeSessionStateMachine ikeSession) {
+    /**
+     * Release reference of current IkeSocket when the IKE session no longer needs it.
+     *
+     * @param ikeSession IKE session that is being closed.
+     */
+    public final void releaseReference(IkeSessionStateMachine ikeSession) {
         mAliveIkeSessions.remove(ikeSession);
         if (mAliveIkeSessions.isEmpty()) close();
     }
 
+    /**
+     * Send an encoded IKE packet to destination address
+     *
+     * @param ikePacket encoded IKE packet
+     * @param serverAddress IP address of remote server
+     */
+    public abstract void sendIkePacket(byte[] ikePacket, InetAddress serverAddress);
+
+    /**
+     * Returns port of remote IKE sever (destination port of outbound packet)
+     *
+     * @return destination port in remote IKE sever.
+     */
+    public abstract int getIkeServerPort();
+
     /** Implement {@link AutoCloseable#close()} */
     @Override
     public void close() {
-        sFdToIkeSocketMap.remove(mUdpEncapSocket);
-        // PackeReader unregisters file descriptor on thread with which the Handler constructor
-        // argument is associated.
         stop();
     }
 }

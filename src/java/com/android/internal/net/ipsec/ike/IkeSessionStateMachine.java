@@ -950,21 +950,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 mRemoteAddress = mIkeSessionParams.getServerAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
+                if (isIpv4) {
+                    mIkeSocket =
+                            IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                    mIkeSessionParams.getUdpEncapsulationSocket(),
+                                    IkeSessionStateMachine.this);
+                } else {
+                    throw new UnsupportedOperationException("Do not support IPv6 IKE sever");
+                    // TODO(b/146674994): Support IPv6 server address.
+                }
+
                 FileDescriptor sock =
                         Os.socket(
                                 isIpv4 ? OsConstants.AF_INET : OsConstants.AF_INET6,
                                 OsConstants.SOCK_DGRAM,
                                 OsConstants.IPPROTO_UDP);
-                Os.connect(sock, mRemoteAddress, IkeSocket.IKE_SERVER_PORT);
+                Os.connect(sock, mRemoteAddress, mIkeSocket.getIkeServerPort());
                 InetSocketAddress localAddr = (InetSocketAddress) Os.getsockname(sock);
                 mLocalAddress = localAddr.getAddress();
                 mLocalPort = localAddr.getPort();
                 Os.close(sock);
-
-                mIkeSocket =
-                        IkeSocket.getIkeSocket(
-                                mIkeSessionParams.getUdpEncapsulationSocket(),
-                                IkeSessionStateMachine.this);
             } catch (ErrnoException | SocketException e) {
                 handleIkeFatalError(e);
             }
@@ -2468,7 +2473,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mLocalAddress,
                             mRemoteAddress,
                             mLocalPort,
-                            IkeSocket.IKE_SERVER_PORT);
+                            mIkeSocket.getIkeServerPort());
             payloadList.add(
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
@@ -2625,7 +2630,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // Check if the remote node is behind NAT
             byte[] expectedRemoteNatData =
                     IkeNotifyPayload.generateNatDetectionData(
-                            initIkeSpi, respIkeSpi, mRemoteAddress, IkeSocket.IKE_SERVER_PORT);
+                            initIkeSpi, respIkeSpi, mRemoteAddress, mIkeSocket.getIkeServerPort());
             for (IkeNotifyPayload natPayload : natSourcePayloads) {
                 // If none of the received hash matches the expected value, the remote node is
                 // behind NAT.

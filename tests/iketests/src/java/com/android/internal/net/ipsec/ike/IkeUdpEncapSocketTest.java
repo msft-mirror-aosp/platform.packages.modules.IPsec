@@ -40,7 +40,7 @@ import android.util.LongSparseArray;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.internal.net.test.TestUtils;
-import com.android.internal.net.test.ipsec.ike.IkeSocket.PacketReceiver;
+import com.android.internal.net.test.ipsec.ike.IkeUdpEncapSocket.PacketReceiver;
 import com.android.internal.net.test.ipsec.ike.message.IkeHeader;
 
 import org.junit.After;
@@ -56,7 +56,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class IkeSocketTest {
+public final class IkeUdpEncapSocketTest {
     private static final int REMOTE_RECV_BUFF_SIZE = 2048;
     private static final int TIMEOUT = 1000;
 
@@ -122,37 +122,39 @@ public final class IkeSocketTest {
         mSpiToIkeStateMachineMap = new LongSparseArray<IkeSessionStateMachine>();
         mSpiToIkeStateMachineMap.put(mLocalSpi, mMockIkeSessionStateMachine);
 
-        mPacketReceiver = new IkeSocket.PacketReceiver();
+        mPacketReceiver = new IkeUdpEncapSocket.PacketReceiver();
     }
 
     @After
     public void tearDown() throws Exception {
         mClientUdpEncapSocket.close();
-        IkeSocket.setPacketReceiver(mPacketReceiver);
+        IkeUdpEncapSocket.setPacketReceiver(mPacketReceiver);
         Os.close(mDummyRemoteServerFd);
     }
 
     private static FileDescriptor getBoundUdpSocket(InetAddress address) throws Exception {
         FileDescriptor sock =
                 Os.socket(OsConstants.AF_INET, OsConstants.SOCK_DGRAM, OsConstants.IPPROTO_UDP);
-        Os.bind(sock, address, IkeSocket.IKE_SERVER_PORT);
+        Os.bind(sock, address, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         return sock;
     }
 
     @Test
-    public void testGetAndCloseIkeSocket() throws Exception {
+    public void testGetAndCloseIkeUdpEncapSocket() throws Exception {
         // Must be prepared here; AndroidJUnitRunner runs tests on different threads from the
-        // setUp() call. Since the new Handler() call is run in getIkeSocket, the Looper must be
-        // prepared here.
+        // setUp() call. Since the new Handler() call is run in getIkeUdpEncapSocket, the Looper
+        // must be prepared here.
         if (Looper.myLooper() == null) Looper.prepare();
 
         IkeSessionStateMachine mMockIkeSessionOne = mock(IkeSessionStateMachine.class);
         IkeSessionStateMachine mMockIkeSessionTwo = mock(IkeSessionStateMachine.class);
 
-        IkeSocket ikeSocketOne = IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionOne);
+        IkeUdpEncapSocket ikeSocketOne =
+                IkeUdpEncapSocket.getIkeUdpEncapSocket(mClientUdpEncapSocket, mMockIkeSessionOne);
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
-        IkeSocket ikeSocketTwo = IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionTwo);
+        IkeUdpEncapSocket ikeSocketTwo =
+                IkeUdpEncapSocket.getIkeUdpEncapSocket(mClientUdpEncapSocket, mMockIkeSessionTwo);
         assertEquals(ikeSocketOne, ikeSocketTwo);
         assertEquals(2, ikeSocketTwo.mAliveIkeSessions.size());
 
@@ -168,16 +170,17 @@ public final class IkeSocketTest {
         if (Looper.myLooper() == null) Looper.prepare();
 
         // Send IKE packet
-        IkeSocket ikeSocket =
-                IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionStateMachine);
+        IkeUdpEncapSocket ikeSocket =
+                IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                        mClientUdpEncapSocket, mMockIkeSessionStateMachine);
         ikeSocket.sendIkePacket(mDataOne, mLocalAddress);
 
         byte[] receivedData = receive(mDummyRemoteServerFd);
 
         // Verify received data
         ByteBuffer expectedBuffer =
-                ByteBuffer.allocate(IkeSocket.NON_ESP_MARKER_LEN + mDataOne.length);
-        expectedBuffer.put(IkeSocket.NON_ESP_MARKER).put(mDataOne);
+                ByteBuffer.allocate(IkeUdpEncapSocket.NON_ESP_MARKER_LEN + mDataOne.length);
+        expectedBuffer.put(IkeUdpEncapSocket.NON_ESP_MARKER).put(mDataOne);
 
         assertArrayEquals(expectedBuffer.array(), receivedData);
 
@@ -187,52 +190,55 @@ public final class IkeSocketTest {
     @Test
     public void testReceiveIkePacket() throws Exception {
         // Create working thread.
-        HandlerThread mIkeThread = new HandlerThread("IkeSocketTest");
+        HandlerThread mIkeThread = new HandlerThread("IkeUdpEncapSocketTest");
         mIkeThread.start();
 
-        // Create IkeSocket on working thread.
-        IkeSocketReceiver socketReceiver = new IkeSocketReceiver();
+        // Create IkeUdpEncapSocket on working thread.
+        IkeUdpEncapSocketReceiver socketReceiver = new IkeUdpEncapSocketReceiver();
         TestCountDownLatch createLatch = new TestCountDownLatch();
         mIkeThread
                 .getThreadHandler()
                 .post(
                         () -> {
                             try {
-                                socketReceiver.setIkeSocket(
-                                        IkeSocket.getIkeSocket(
+                                socketReceiver.setIkeUdpEncapSocket(
+                                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
                                                 mClientUdpEncapSocket,
                                                 mMockIkeSessionStateMachine));
                                 createLatch.countDown();
-                                Log.d("IkeSocketTest", "IkeSocket created.");
+                                Log.d("IkeUdpEncapSocketTest", "IkeUdpEncapSocket created.");
                             } catch (ErrnoException e) {
-                                Log.e("IkeSocketTest", "error encountered creating IkeSocket ", e);
+                                Log.e(
+                                        "IkeUdpEncapSocketTest",
+                                        "error encountered creating IkeUdpEncapSocket ",
+                                        e);
                             }
                         });
         createLatch.await();
 
-        IkeSocket ikeSocket = socketReceiver.getIkeSocket();
+        IkeUdpEncapSocket ikeSocket = socketReceiver.getIkeUdpEncapSocket();
         assertNotNull(ikeSocket);
 
-        // Configure IkeSocket
+        // Configure IkeUdpEncapSocket
         TestCountDownLatch receiveLatch = new TestCountDownLatch();
         DummyPacketReceiver packetReceiver = new DummyPacketReceiver(receiveLatch);
-        IkeSocket.setPacketReceiver(packetReceiver);
+        IkeUdpEncapSocket.setPacketReceiver(packetReceiver);
 
         // Send first packet.
-        sendToIkeSocket(mDummyRemoteServerFd, mDataOne, mLocalAddress);
+        sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataOne, mLocalAddress);
         receiveLatch.await();
 
         assertEquals(1, ikeSocket.numPacketsReceived());
         assertArrayEquals(mDataOne, packetReceiver.mReceivedData);
 
         // Send second packet.
-        sendToIkeSocket(mDummyRemoteServerFd, mDataTwo, mLocalAddress);
+        sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataTwo, mLocalAddress);
         receiveLatch.await();
 
         assertEquals(2, ikeSocket.numPacketsReceived());
         assertArrayEquals(mDataTwo, packetReceiver.mReceivedData);
 
-        // Close IkeSocket.
+        // Close IkeUdpEncapSocket.
         TestCountDownLatch closeLatch = new TestCountDownLatch();
         ikeSocket
                 .getHandler()
@@ -307,13 +313,13 @@ public final class IkeSocketTest {
                                                     null));
                                 } catch (Exception e) {
                                     Log.e(
-                                            "IkeSocketTest",
+                                            "IkeUdpEncapSocketTest",
                                             "Error encountered reading from socket",
                                             e);
                                 }
                             }
                             Log.d(
-                                    "IkeSocketTest",
+                                    "IkeUdpEncapSocketTest",
                                     "Packet received with size of " + bytesRead.get());
                         });
 
@@ -323,24 +329,24 @@ public final class IkeSocketTest {
         return Arrays.copyOfRange(receiveBuffer, 0, bytesRead.get());
     }
 
-    private void sendToIkeSocket(FileDescriptor fd, byte[] data, InetAddress destAddress)
+    private void sendToIkeUdpEncapSocket(FileDescriptor fd, byte[] data, InetAddress destAddress)
             throws Exception {
         Os.sendto(fd, data, 0, data.length, 0, destAddress, mClientUdpEncapSocket.getPort());
     }
 
-    private static class IkeSocketReceiver {
-        private IkeSocket mIkeSocket;
+    private static class IkeUdpEncapSocketReceiver {
+        private IkeUdpEncapSocket mIkeUdpEncapSocket;
 
-        void setIkeSocket(IkeSocket ikeSocket) {
-            mIkeSocket = ikeSocket;
+        void setIkeUdpEncapSocket(IkeUdpEncapSocket ikeSocket) {
+            mIkeUdpEncapSocket = ikeSocket;
         }
 
-        IkeSocket getIkeSocket() {
-            return mIkeSocket;
+        IkeUdpEncapSocket getIkeUdpEncapSocket() {
+            return mIkeUdpEncapSocket;
         }
     }
 
-    private static class DummyPacketReceiver implements IkeSocket.IPacketReceiver {
+    private static class DummyPacketReceiver implements IkeUdpEncapSocket.IPacketReceiver {
         byte[] mReceivedData = null;
         final TestCountDownLatch mLatch;
 
@@ -352,7 +358,7 @@ public final class IkeSocketTest {
                 byte[] revbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession) {
             mReceivedData = Arrays.copyOfRange(revbuf, 0, revbuf.length);
             mLatch.countDown();
-            Log.d("IkeSocketTest", "Packet received");
+            Log.d("IkeUdpEncapSocketTest", "Packet received");
         }
     }
 
