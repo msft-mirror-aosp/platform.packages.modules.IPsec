@@ -133,8 +133,7 @@ public abstract class IkeCertPayload extends IkePayload {
             // TODO: b/122676944 Support CRL checking
 
             // Create a new keyStore with all trusted anchors
-            KeyStore keyStore =
-                    KeyStore.getInstance(KEY_STORE_TYPE_PKCS12, IkeMessage.getSecurityProvider());
+            KeyStore keyStore = KeyStore.getInstance(KEY_STORE_TYPE_PKCS12);
             keyStore.load(null);
             for (TrustAnchor t : trustAnchorSet) {
                 X509Certificate trustedCert = t.getTrustedCert();

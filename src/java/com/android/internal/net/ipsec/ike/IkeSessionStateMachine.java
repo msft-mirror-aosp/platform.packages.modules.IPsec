@@ -113,7 +113,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketException;
 import java.security.GeneralSecurityException;
-import java.security.Provider;
 import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
@@ -2599,13 +2598,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // has exactly one Transform for each Transform type. Only exception is when
             // combined-mode cipher is used, there will be either no integrity algorithm or an
             // INTEGRITY_ALGORITHM_NONE type algorithm.
-            Provider provider = IkeMessage.getSecurityProvider();
-            mIkeCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
+            mIkeCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0]);
             if (!mIkeCipher.isAead()) {
-                mIkeIntegrity =
-                        IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
+                mIkeIntegrity = IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0]);
             }
-            mIkePrf = IkeMacPrf.create(mSaProposal.getPrfTransforms()[0], provider);
+            mIkePrf = IkeMacPrf.create(mSaProposal.getPrfTransforms()[0]);
 
             IkeKePayload reqKePayload =
                     reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
@@ -3474,20 +3471,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 IkeProposal reqProposal = negotiatedProposals.first;
                 IkeProposal respProposal = negotiatedProposals.second;
 
-                Provider provider = IkeMessage.getSecurityProvider();
                 IkeMacPrf newPrf;
                 IkeCipher newCipher;
                 IkeMacIntegrity newIntegrity = null;
 
-                newCipher =
-                        IkeCipher.create(
-                                respProposal.saProposal.getEncryptionTransforms()[0], provider);
+                newCipher = IkeCipher.create(respProposal.saProposal.getEncryptionTransforms()[0]);
                 if (!newCipher.isAead()) {
                     newIntegrity =
                             IkeMacIntegrity.create(
-                                    respProposal.saProposal.getIntegrityTransforms()[0], provider);
+                                    respProposal.saProposal.getIntegrityTransforms()[0]);
                 }
-                newPrf = IkeMacPrf.create(respProposal.saProposal.getPrfTransforms()[0], provider);
+                newPrf = IkeMacPrf.create(respProposal.saProposal.getPrfTransforms()[0]);
 
                 // Build new SaRecord
                 IkeSaRecord newSaRecord =

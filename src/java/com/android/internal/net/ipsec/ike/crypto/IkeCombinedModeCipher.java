@@ -22,7 +22,6 @@ import android.net.ipsec.ike.SaProposal;
 import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
-import java.security.Provider;
 import java.security.spec.AlgorithmParameterSpec;
 import java.util.Arrays;
 
@@ -53,9 +52,8 @@ public final class IkeCombinedModeCipher extends IkeCipher {
     private final int mSaltLen;
 
     /** Package private */
-    IkeCombinedModeCipher(
-            int algorithmId, int keyLength, int ivLength, String algorithmName, Provider provider) {
-        super(algorithmId, keyLength, ivLength, algorithmName, true /*isAead*/, provider);
+    IkeCombinedModeCipher(int algorithmId, int keyLength, int ivLength, String algorithmName) {
+        super(algorithmId, keyLength, ivLength, algorithmName, true /*isAead*/);
         switch (algorithmId) {
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
                 mSaltLen = SALT_LEN_GCM;

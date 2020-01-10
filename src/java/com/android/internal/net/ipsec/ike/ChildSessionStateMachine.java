@@ -76,7 +76,6 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.ipsec.ike.message.IkeKePayload;
-import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NotifyType;
@@ -92,7 +91,6 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
-import java.security.Provider;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -779,13 +777,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             // integrity algorithm or has one integrity algorithm with any supported value.
 
             mSaProposal = createChildResult.negotiatedProposal;
-            Provider provider = IkeMessage.getSecurityProvider();
-            mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
+            mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0]);
             if (mSaProposal.getIntegrityTransforms().length != 0
                     && mSaProposal.getIntegrityTransforms()[0].id
                             != SaProposal.INTEGRITY_ALGORITHM_NONE) {
-                mChildIntegrity =
-                        IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
+                mChildIntegrity = IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0]);
             }
 
             mLocalTs = createChildResult.initTs;

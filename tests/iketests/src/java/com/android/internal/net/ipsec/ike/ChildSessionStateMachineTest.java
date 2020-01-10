@@ -104,7 +104,6 @@ import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAt
 import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.internal.net.test.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeKePayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.test.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkePayload;
@@ -236,10 +235,7 @@ public final class ChildSessionStateMachineTest {
         mSpyIkeLog = TestUtils.makeSpyLogThrowExceptionForWtf(TAG);
         IkeManager.setIkeLog(mSpyIkeLog);
 
-        mIkePrf =
-                IkeMacPrf.create(
-                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
-                        IkeMessage.getSecurityProvider());
+        mIkePrf = IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
 
         mContext = InstrumentationRegistry.getContext();
         mMockIpSecService = mock(IpSecService.class);
