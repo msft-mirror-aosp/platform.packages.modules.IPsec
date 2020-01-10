@@ -22,7 +22,6 @@ import android.net.ipsec.ike.SaProposal;
 import java.nio.ByteBuffer;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
-import java.security.Provider;
 
 import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
@@ -39,9 +38,8 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public final class IkeNormalModeCipher extends IkeCipher {
     /** Package private */
-    IkeNormalModeCipher(
-            int algorithmId, int keyLength, int ivLength, String algorithmName, Provider provider) {
-        super(algorithmId, keyLength, ivLength, algorithmName, false /*isAead*/, provider);
+    IkeNormalModeCipher(int algorithmId, int keyLength, int ivLength, String algorithmName) {
+        super(algorithmId, keyLength, ivLength, algorithmName, false /*isAead*/);
     }
 
     private byte[] doCipherAction(byte[] data, byte[] keyBytes, byte[] ivBytes, int opmode)

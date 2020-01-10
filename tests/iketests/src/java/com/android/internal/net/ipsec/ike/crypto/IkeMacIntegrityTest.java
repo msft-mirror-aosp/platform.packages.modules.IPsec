@@ -25,7 +25,6 @@ import android.net.IpSecAlgorithm;
 import android.net.ipsec.test.ike.SaProposal;
 
 import com.android.internal.net.test.TestUtils;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 
 import org.junit.Before;
@@ -61,8 +60,7 @@ public final class IkeMacIntegrityTest {
     public void setUp() throws Exception {
         mHmacSha1IntegrityMac =
                 IkeMacIntegrity.create(
-                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),
-                        IkeMessage.getSecurityProvider());
+                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96));
         mHmacSha1IntegrityKey = TestUtils.hexStringToByteArray(INTEGRITY_KEY_HEX_STRING);
 
         mDataToAuthenticate = TestUtils.hexStringToByteArray(DATA_TO_AUTH_HEX_STRING);

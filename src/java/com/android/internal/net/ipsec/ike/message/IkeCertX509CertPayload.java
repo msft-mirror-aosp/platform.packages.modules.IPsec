@@ -50,8 +50,7 @@ public final class IkeCertX509CertPayload extends IkeCertPayload {
             throws IkeProtocolException {
         super(critical, CERTIFICATE_ENCODING_X509_CERT_SIGNATURE);
         try {
-            CertificateFactory factory =
-                    CertificateFactory.getInstance("X.509", IkeMessage.getSecurityProvider());
+            CertificateFactory factory = CertificateFactory.getInstance("X.509");
             certificate =
                     (X509Certificate)
                             factory.generateCertificate(new ByteArrayInputStream(certData));
