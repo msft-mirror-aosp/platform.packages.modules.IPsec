@@ -1,2 +1,3 @@
 rule android.net.annotations.PolicyDirection com.android.internal.net.ipsec.ike.annotations.PolicyDirection
+rule android.telephony.Annotation* com.android.internal.net.eap.telephony.Annotation@1
 rule org.bouncycastle.** com.android.internal.net.org.bouncycastle.@1
