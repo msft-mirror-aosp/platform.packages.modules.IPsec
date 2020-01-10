@@ -1,0 +1,2 @@
+rule android.net.annotations.PolicyDirection com.android.internal.net.ipsec.ike.annotations.PolicyDirection
+rule org.bouncycastle.** com.android.internal.net.org.bouncycastle.@1
