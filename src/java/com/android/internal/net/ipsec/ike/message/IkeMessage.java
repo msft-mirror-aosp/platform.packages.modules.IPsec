@@ -34,7 +34,6 @@ import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidMessageIdException;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
-import com.android.org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -63,11 +62,6 @@ public final class IkeMessage {
 
     private static IIkeMessageHelper sIkeMessageHelper = new IkeMessageHelper();
 
-    // Currently use Bouncy Castle as crypto security provider
-    static final Provider SECURITY_PROVIDER = new BouncyCastleProvider();
-
-    // TODO: b/142070035 Use Conscrypt as default security provider instead of BC
-
     // Currently use HarmonyJSSE as TrustManager provider
     static final Provider TRUST_MANAGER_PROVIDER = Security.getProvider("HarmonyJSSE");
 
@@ -94,18 +88,6 @@ public final class IkeMessage {
     public IkeMessage(IkeHeader header, List<IkePayload> payloadList) {
         ikeHeader = header;
         ikePayloadList = payloadList;
-    }
-
-    /**
-     * Get security provider for IKE library
-     *
-     * <p>Use BouncyCastleProvider as the default security provider.
-     *
-     * @return the security provider of IKE library.
-     */
-    public static Provider getSecurityProvider() {
-        // TODO: Move this getter out of IKE message package since not only this package uses it.
-        return SECURITY_PROVIDER;
     }
 
     /**
