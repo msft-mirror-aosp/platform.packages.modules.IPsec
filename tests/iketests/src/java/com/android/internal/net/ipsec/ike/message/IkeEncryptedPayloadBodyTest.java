@@ -217,22 +217,19 @@ public final class IkeEncryptedPayloadBodyTest {
         m3DesCipher =
                 (IkeNormalModeCipher)
                         IkeCipher.create(
-                                new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES),
-                                IkeMessage.getSecurityProvider());
+                                new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES));
 
         mAesCbcCipher =
                 (IkeNormalModeCipher)
                         IkeCipher.create(
                                 new EncryptionTransform(
                                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
-                                        SaProposal.KEY_LEN_AES_128),
-                                IkeMessage.getSecurityProvider());
+                                        SaProposal.KEY_LEN_AES_128));
         mAesCbcKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
 
         mHmacSha1IntegrityMac =
                 IkeMacIntegrity.create(
-                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),
-                        IkeMessage.getSecurityProvider());
+                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96));
         mHmacSha1IntegrityKey = TestUtils.hexStringToByteArray(INTE_KEY_FROM_INIT_TO_RESP);
 
         mAesGcm16Cipher =
@@ -240,8 +237,7 @@ public final class IkeEncryptedPayloadBodyTest {
                         IkeCipher.create(
                                 new EncryptionTransform(
                                         SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16,
-                                        SaProposal.KEY_LEN_AES_256),
-                                IkeMessage.getSecurityProvider());
+                                        SaProposal.KEY_LEN_AES_256));
 
         mAesGcmMsgKey = TestUtils.hexStringToByteArray(AES_GCM_MSG_ENCR_KEY);
         mAesGcmMsg = TestUtils.hexStringToByteArray(AES_GCM_MSG_HEX_STRING);

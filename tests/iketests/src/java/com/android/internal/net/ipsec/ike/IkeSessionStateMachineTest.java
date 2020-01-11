@@ -1281,9 +1281,7 @@ public final class IkeSessionStateMachineTest {
         // method stub for IkeMacPrf#signBytes. IkeMacPrf#signBytes is inheritted from a package
         // protected class IkePrf. We don't have the visibility to mock it.
         mIkeSessionStateMachine.mIkePrf =
-                IkeMacPrf.create(
-                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
-                        IkeMessage.getSecurityProvider());
+                IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
 
         mIkeSessionStateMachine.mIkeInitRequestBytes = new byte[0];
         mIkeSessionStateMachine.mIkeInitResponseBytes = new byte[0];

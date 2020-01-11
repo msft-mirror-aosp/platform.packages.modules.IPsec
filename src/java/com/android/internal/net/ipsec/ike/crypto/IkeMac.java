@@ -21,7 +21,6 @@ import com.android.internal.net.crypto.KeyGenerationUtils.ByteSigner;
 import java.nio.ByteBuffer;
 import java.security.InvalidKeyException;
 import java.security.NoSuchAlgorithmException;
-import java.security.Provider;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -38,12 +37,7 @@ abstract class IkeMac extends IkeCrypto implements ByteSigner {
     private final Mac mMac;
     private final Cipher mCipher;
 
-    protected IkeMac(
-            int algorithmId,
-            int keyLength,
-            String algorithmName,
-            boolean isEncryptAlgo,
-            Provider provider) {
+    protected IkeMac(int algorithmId, int keyLength, String algorithmName, boolean isEncryptAlgo) {
         super(algorithmId, keyLength, algorithmName);
 
         mIsEncryptAlgo = isEncryptAlgo;
@@ -51,9 +45,9 @@ abstract class IkeMac extends IkeCrypto implements ByteSigner {
         try {
             if (mIsEncryptAlgo) {
                 mMac = null;
-                mCipher = Cipher.getInstance(getAlgorithmName(), provider);
+                mCipher = Cipher.getInstance(getAlgorithmName());
             } else {
-                mMac = Mac.getInstance(getAlgorithmName(), provider);
+                mMac = Mac.getInstance(getAlgorithmName());
                 mCipher = null;
             }
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {

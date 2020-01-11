@@ -170,9 +170,7 @@ public final class IkeKePayload extends IkePayload {
             BigInteger baseGen = BigInteger.valueOf(IkeDhParams.BASE_GENERATOR_MODP);
             DHParameterSpec dhParams = new DHParameterSpec(prime, baseGen);
 
-            KeyPairGenerator dhKeyPairGen =
-                    KeyPairGenerator.getInstance(
-                            KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
+            KeyPairGenerator dhKeyPairGen = KeyPairGenerator.getInstance(KEY_EXCHANGE_ALGORITHM);
             // By default SecureRandom uses AndroidOpenSSL provided SHA1PRNG Algorithm, which takes
             // /dev/urandom as seed source.
             dhKeyPairGen.initialize(dhParams, new SecureRandom());
@@ -233,12 +231,8 @@ public final class IkeKePayload extends IkePayload {
         KeyFactory dhKeyFactory;
         try {
             // Apply local private key.
-            dhKeyAgreement =
-                    KeyAgreement.getInstance(
-                            KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
-            dhKeyFactory =
-                    KeyFactory.getInstance(
-                            KEY_EXCHANGE_ALGORITHM, IkeMessage.getSecurityProvider());
+            dhKeyAgreement = KeyAgreement.getInstance(KEY_EXCHANGE_ALGORITHM);
+            dhKeyFactory = KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM);
             DHPrivateKey privateKey = (DHPrivateKey) dhKeyFactory.generatePrivate(privateKeySpec);
             dhKeyAgreement.init(privateKey);
         } catch (NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException e) {

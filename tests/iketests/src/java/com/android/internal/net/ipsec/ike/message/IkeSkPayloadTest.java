@@ -75,13 +75,11 @@ public final class IkeSkPayloadTest {
                 IkeCipher.create(
                         new EncryptionTransform(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
-                                SaProposal.KEY_LEN_AES_128),
-                        IkeMessage.getSecurityProvider());
+                                SaProposal.KEY_LEN_AES_128));
         mAesCbcDecryptionKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP);
         mHmacSha1IntegrityMac =
                 IkeMacIntegrity.create(
-                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),
-                        IkeMessage.getSecurityProvider());
+                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96));
         mHmacSha1IntegrityKey = TestUtils.hexStringToByteArray(INTE_KEY_FROM_INIT_TO_RESP);
     }
 

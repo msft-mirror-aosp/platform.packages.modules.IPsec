@@ -18,8 +18,8 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
-import android.net.IpSecManager.PolicyDirection;
 import android.net.IpSecTransform;
+import android.net.annotations.PolicyDirection;
 import android.net.ipsec.ike.exceptions.IkeException;
 
 /**

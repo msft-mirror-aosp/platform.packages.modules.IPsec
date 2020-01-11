@@ -21,11 +21,19 @@ java_library {
     },
     srcs: [":ike-srcs"],
 
-    // Bouncycastle filegroup is jar-jar'ed to avoid classpath conflicts. This is necessary to
-    // preserve access to SHA1Digest and MD4Digest implementations for use by EAP.
-    jarjar_rules: "jarjar-bouncycastle-ike-digests.txt",
+    // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
+    // classpath conflicts. This is necessary to preserve access to these
+    // statically included classes.
+    jarjar_rules: "jarjar-rules-shared.txt",
 
     plugins: ["java_api_finder"],
+
+    hostdex: true, // for hiddenapi check
+    visibility: ["//frameworks/opt/net/ike:__subpackages__"],
+    apex_available: [
+        "com.android.ipsec",
+        "test_com.android.ipsec",
+    ],
 }
 
 filegroup {
@@ -33,6 +41,7 @@ filegroup {
     srcs: [
         "src/java/**/*.java",
         ":bouncycastle_ike_digests",
+        ":framework-ike-shared-srcs",
     ],
 }
 
