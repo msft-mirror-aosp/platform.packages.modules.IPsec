@@ -27,6 +27,13 @@ java_library {
     jarjar_rules: "jarjar-rules-shared.txt",
 
     plugins: ["java_api_finder"],
+
+    hostdex: true, // for hiddenapi check
+    visibility: ["//frameworks/opt/net/ike:__subpackages__"],
+    apex_available: [
+        "com.android.ipsec",
+        "test_com.android.ipsec",
+    ],
 }
 
 filegroup {
