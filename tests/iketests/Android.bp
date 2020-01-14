@@ -44,6 +44,7 @@ java_library {
     name: "ike_test",
     installable: false, // Used only for testing; never installed alone.
     srcs: [":ike-srcs"],
+    libs: ["unsupportedappusage"],
 
     jarjar_rules: "jarjar-rules-test.txt",
 }
