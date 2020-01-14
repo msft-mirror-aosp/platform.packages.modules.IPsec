@@ -140,8 +140,8 @@ import com.android.internal.net.test.ipsec.ike.testutils.CertUtils;
 import com.android.internal.net.test.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.test.ipsec.ike.utils.Retransmitter;
 import com.android.internal.net.test.ipsec.ike.utils.Retransmitter.IBackoffTimeoutCalculator;
-import com.android.internal.net.test.ipsec.ike.utils.State;
 import com.android.internal.net.test.utils.Log;
+import com.android.internal.util.State;
 
 import org.junit.After;
 import org.junit.Before;
