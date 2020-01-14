@@ -216,16 +216,16 @@ public final class IkeSessionParams {
         return mConfigRequests;
     }
 
-    /** Retrieves the list of Configuration Requests @hide */
+    /** Retrieves the list of Configuration Requests */
     @NonNull
     public List<IkeConfigRequest> getConfigurationRequests() {
         return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
     }
 
-    /** Represents an IKE session configuration request type @hide */
+    /** Represents an IKE session configuration request type */
     public interface IkeConfigRequest {}
 
-    /** Represents an IPv4 P_CSCF request @hide */
+    /** Represents an IPv4 P_CSCF request */
     public interface ConfigRequestIpv4PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv4 P_CSCF server address
@@ -237,7 +237,7 @@ public final class IkeSessionParams {
         Inet4Address getAddress();
     }
 
-    /** Represents an IPv6 P_CSCF request @hide */
+    /** Represents an IPv6 P_CSCF request */
     public interface ConfigRequestIpv6PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv6 P_CSCF server address
@@ -636,8 +636,6 @@ public final class IkeSessionParams {
          *
          * @param address the requested P_CSCF address.
          * @return Builder this, to facilitate chaining.
-         *
-         * @hide
          */
         @NonNull
         public Builder addPcscfServerRequest(@NonNull InetAddress address) {
@@ -661,8 +659,6 @@ public final class IkeSessionParams {
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
          *     OsConstants.AF_INET6} are allowed.
          * @return Builder this, to facilitate chaining.
-         *
-         * @hide
          */
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {

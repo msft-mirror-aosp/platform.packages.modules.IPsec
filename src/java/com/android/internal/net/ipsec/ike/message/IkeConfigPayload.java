@@ -23,13 +23,13 @@ import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.ConfigRequestIpv4PcscfServer;
 import android.net.ipsec.ike.IkeSessionParams.ConfigRequestIpv6PcscfServer;
 import android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest;
-import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Address;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4DhcpServer;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4DnsServer;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Netmask;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6Address;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6DnsServer;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -317,9 +317,9 @@ public final class IkeConfigPayload extends IkePayload {
         }
     }
 
-    /** This class supports strong typing for TunnelModeChildSessionParams.ConfigRequest(s) */
+    /** This class supports strong typing for TunnelModeChildConfigRequest(s) */
     public abstract static class TunnelModeChildConfigAttribute extends ConfigAttribute
-            implements TunnelModeChildSessionParams.ConfigRequest {
+            implements TunnelModeChildConfigRequest {
         protected TunnelModeChildConfigAttribute(int attributeType) {
             super(attributeType);
         }
@@ -335,8 +335,7 @@ public final class IkeConfigPayload extends IkePayload {
      * Attributes for which the value is one IPv4 address or empty.
      */
     abstract static class TunnelModeChildConfigAttrIpv4AddressBase
-            extends TunnelModeChildConfigAttribute
-            implements TunnelModeChildSessionParams.ConfigRequest {
+            extends TunnelModeChildConfigAttribute implements TunnelModeChildConfigRequest {
         public final Inet4Address address;
 
         protected TunnelModeChildConfigAttrIpv4AddressBase(
@@ -699,8 +698,7 @@ public final class IkeConfigPayload extends IkePayload {
      * Attributes for which the value is one IPv6 address or empty.
      */
     abstract static class TunnelModeChildConfigAttrIpv6AddressBase
-            extends TunnelModeChildConfigAttribute
-            implements TunnelModeChildSessionParams.ConfigRequest {
+            extends TunnelModeChildConfigAttribute implements TunnelModeChildConfigRequest {
         public final Inet6Address address;
 
         protected TunnelModeChildConfigAttrIpv6AddressBase(
