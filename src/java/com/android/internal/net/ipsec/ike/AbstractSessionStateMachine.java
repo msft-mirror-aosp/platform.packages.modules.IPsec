@@ -22,8 +22,8 @@ import android.os.Message;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.net.ipsec.ike.utils.State;
-import com.android.internal.net.ipsec.ike.utils.StateMachine;
+import com.android.internal.util.State;
+import com.android.internal.util.StateMachine;
 
 import java.util.concurrent.TimeUnit;
 
