@@ -84,7 +84,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
-import com.android.internal.net.ipsec.ike.utils.State;
+import com.android.internal.util.State;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
