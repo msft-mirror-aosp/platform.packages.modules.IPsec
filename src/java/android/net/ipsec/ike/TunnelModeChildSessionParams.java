@@ -24,13 +24,13 @@ import android.annotation.Nullable;
 import android.annotation.SystemApi;
 import android.net.LinkAddress;
 
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.TunnelModeChildConfigAttribute;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -48,19 +48,19 @@ import java.util.List;
  */
 @SystemApi
 public final class TunnelModeChildSessionParams extends ChildSessionParams {
-    @NonNull private final ConfigAttribute[] mConfigRequests;
+    @NonNull private final TunnelModeChildConfigAttribute[] mConfigRequests;
 
     private TunnelModeChildSessionParams(
             @NonNull IkeTrafficSelector[] localTs,
             @NonNull IkeTrafficSelector[] remoteTs,
             @NonNull ChildSaProposal[] proposals,
-            @NonNull ConfigAttribute[] configRequests) {
+            @NonNull TunnelModeChildConfigAttribute[] configRequests) {
         super(localTs, remoteTs, proposals, false /*isTransport*/);
         mConfigRequests = configRequests;
     }
 
     /** @hide */
-    public ConfigAttribute[] getConfigurationAttributesInternal() {
+    public TunnelModeChildConfigAttribute[] getConfigurationAttributesInternal() {
         return mConfigRequests;
     }
 
@@ -144,7 +144,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
         private static final int IPv4_DEFAULT_PREFIX_LEN = 32;
 
         private boolean mHasIp4AddressRequest;
-        private List<ConfigAttribute> mConfigRequestList;
+        private List<TunnelModeChildConfigAttribute> mConfigRequestList;
 
         /** Create a Builder for negotiating a transport mode Child Session. */
         public Builder() {
@@ -374,7 +374,8 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
                     mLocalTsList.toArray(new IkeTrafficSelector[mLocalTsList.size()]),
                     mRemoteTsList.toArray(new IkeTrafficSelector[mRemoteTsList.size()]),
                     mSaProposalList.toArray(new ChildSaProposal[mSaProposalList.size()]),
-                    mConfigRequestList.toArray(new ConfigAttribute[mConfigRequestList.size()]));
+                    mConfigRequestList.toArray(
+                            new TunnelModeChildConfigAttribute[mConfigRequestList.size()]));
         }
     }
 }
