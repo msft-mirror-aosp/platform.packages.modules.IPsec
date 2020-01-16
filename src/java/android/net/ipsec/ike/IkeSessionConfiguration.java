@@ -16,12 +16,23 @@
 
 package android.net.ipsec.ike;
 
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
+
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
 
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.net.InetAddress;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -42,6 +53,47 @@ public final class IkeSessionConfiguration {
     public static final int EXTENSION_TYPE_FRAGMENTATION = 1;
     /** IKEv2 Mobility and Multihoming Protocol */
     public static final int EXTENSION_TYPE_MOBIKE = 2;
+
+    private final List<InetAddress> mPcscfAddresses = new ArrayList<>();
+
+    /**
+     * Temporary constructor - deleteme.
+     */
+    public IkeSessionConfiguration() {
+    }
+
+    /**
+     * Construct an instance of {@link IkeSessionConfiguration}.
+     *
+     * <p>IkeSessionConfigurations may only be built with a with a Configure(Reply) Payload.
+     *
+     * @hide
+     */
+    public IkeSessionConfiguration(IkeConfigPayload configPayload) {
+        if (configPayload != null) {
+            if (configPayload.configType != IkeConfigPayload.CONFIG_TYPE_REPLY) {
+                throw new IllegalArgumentException(
+                        "Cannot build IkeSessionConfiguration with configuration type: "
+                                + configPayload.configType);
+            }
+
+            for (ConfigAttribute attr : configPayload.recognizedAttributeList) {
+                if (attr.isEmptyValue()) continue;
+                switch (attr.attributeType) {
+                    case CONFIG_ATTR_IP4_PCSCF:
+                        ConfigAttributeIpv4Pcscf ip4Pcscf = (ConfigAttributeIpv4Pcscf) attr;
+                        mPcscfAddresses.add(ip4Pcscf.getAddress());
+                        break;
+                    case CONFIG_ATTR_IP6_PCSCF:
+                        ConfigAttributeIpv6Pcscf ip6Pcscf = (ConfigAttributeIpv6Pcscf) attr;
+                        mPcscfAddresses.add(ip6Pcscf.getAddress());
+                        break;
+                    default:
+                        // Not relevant to IKE session
+                }
+            }
+        }
+    }
 
     /**
      * Gets remote (server) version information.
@@ -79,5 +131,17 @@ public final class IkeSessionConfiguration {
     public boolean isIkeExtensionEnabled(@ExtensionType int extensionType) {
         // TODO: Implement it.
         throw new UnsupportedOperationException("Not yet supported");
+    }
+
+    /**
+     * Returns the assigned P_CSCF addresses.
+     *
+     * @return the assigned P_CSCF addresses, or an empty list when no addresses are assigned by the
+     *     remote IKE server
+     * @hide
+     */
+    @NonNull
+    public List<InetAddress> getPcscfAddresses() {
+        return Collections.unmodifiableList(mPcscfAddresses);
     }
 }
