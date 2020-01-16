@@ -153,11 +153,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
 
-    // TODO: Add SA_HARD_LIFETIME_MS
-
-    // Time after which IKE SA needs to be rekeyed
-    @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(3L);
-
     // Default delay time for retrying a request
     @VisibleForTesting static final long RETRY_INTERVAL_MS = TimeUnit.SECONDS.toMillis(15L);
 
@@ -270,7 +265,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
     }
 
-    private final IkeSessionParams mIkeSessionParams;
+    /** Package */
+    @VisibleForTesting final IkeSessionParams mIkeSessionParams;
 
     /** Map that stores all IkeSaRecords, keyed by locally generated IKE SPI. */
     private final LongSparseArray<IkeSaRecord> mLocalSpiToIkeSaRecordMap;
@@ -551,7 +547,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     private void scheduleRekeySession(LocalRequest rekeyRequest) {
         // TODO: Make rekey timeout fuzzy
-        sendMessageDelayed(CMD_LOCAL_REQUEST_REKEY_IKE, rekeyRequest, SA_SOFT_LIFETIME_MS);
+        sendMessageDelayed(
+                CMD_LOCAL_REQUEST_REKEY_IKE,
+                rekeyRequest,
+                mIkeSessionParams.getSoftLifetimeMsInternal());
     }
 
     private void scheduleRetry(LocalRequest localRequest) {

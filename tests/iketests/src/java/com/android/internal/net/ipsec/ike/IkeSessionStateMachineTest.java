@@ -28,7 +28,6 @@ import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.CMD
 import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.RETRY_INTERVAL_MS;
-import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.SA_SOFT_LIFETIME_MS;
 import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
 import static com.android.internal.net.test.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.test.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -3152,7 +3151,8 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.mSaProposal = buildSaProposal();
 
         // Move time forward to trigger rekey
-        mLooper.moveTimeForward(SA_SOFT_LIFETIME_MS);
+        mLooper.moveTimeForward(
+                mIkeSessionStateMachine.mIkeSessionParams.getSoftLifetimeMsInternal());
         mLooper.dispatchAll();
 
         assertTrue(
@@ -3186,7 +3186,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Move time forward to trigger rekey
-        mLooper.moveTimeForward(SA_SOFT_LIFETIME_MS);
+        mLooper.moveTimeForward(
+                mIkeSessionStateMachine.mIkeSessionParams.getSoftLifetimeMsInternal());
         mLooper.dispatchAll();
 
         assertTrue(

@@ -16,6 +16,10 @@
 
 package android.net.ipsec.test.ike;
 
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthConfig;
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
@@ -57,6 +61,7 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.DSAPrivateKey;
 import java.security.interfaces.RSAPrivateKey;
+import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionParamsTest {
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
@@ -146,6 +151,31 @@ public final class IkeSessionParamsTest {
         assertTrue(remoteConfig instanceof IkeAuthPskConfig);
         assertEquals(IkeSessionParams.IKE_AUTH_METHOD_PSK, remoteConfig.mAuthMethod);
         assertArrayEquals(PSK, ((IkeAuthPskConfig) remoteConfig).mPsk);
+
+        assertEquals(IKE_HARD_LIFETIME_SEC_DEFAULT, sessionParams.getHardLifetime());
+        assertEquals(IKE_SOFT_LIFETIME_SEC_DEFAULT, sessionParams.getSoftLifetime());
+    }
+
+    @Test
+    public void testBuildWithPskAndLifetime() throws Exception {
+        long hardLifetimeSec = TimeUnit.HOURS.toSeconds(20L);
+        long softLifetimeSec = TimeUnit.HOURS.toSeconds(10L);
+
+        IkeSessionParams sessionParams =
+                new IkeSessionParams.Builder()
+                        .setServerAddress(REMOTE_IPV4_ADDRESS)
+                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .setLifetime(hardLifetimeSec, softLifetimeSec)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+
+        assertEquals(hardLifetimeSec, sessionParams.getHardLifetime());
+        assertEquals(softLifetimeSec, sessionParams.getSoftLifetime());
     }
 
     @Test
@@ -336,6 +366,45 @@ public final class IkeSessionParamsTest {
         try {
             new IkeFqdnIdentification("¯\\_(ツ)_/¯");
             fail("Expected failure based on non-ASCII characters.");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetHardLifetimeTooLong() throws Exception {
+        try {
+            new IkeSessionParams.Builder()
+                    .setLifetime(IKE_HARD_LIFETIME_SEC_MAXIMUM + 1, IKE_SOFT_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because hard lifetime is too long");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetHardLifetimeTooShort() throws Exception {
+        try {
+            new IkeSessionParams.Builder()
+                    .setLifetime(IKE_HARD_LIFETIME_SEC_MINIMUM - 1, IKE_SOFT_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because hard lifetime is too short");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetSoftLifetimeTooLong() throws Exception {
+        try {
+            new IkeSessionParams.Builder()
+                    .setLifetime(IKE_HARD_LIFETIME_SEC_DEFAULT, IKE_HARD_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because soft lifetime is too long");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetSoftLifetimeTooShort() throws Exception {
+        try {
+            new IkeSessionParams.Builder().setLifetime(IKE_HARD_LIFETIME_SEC_DEFAULT, 0L);
+            fail("Expected failure because soft lifetime is too short");
         } catch (IllegalArgumentException expected) {
         }
     }

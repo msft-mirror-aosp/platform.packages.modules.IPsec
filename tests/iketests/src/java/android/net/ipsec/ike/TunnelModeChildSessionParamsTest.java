@@ -16,6 +16,10 @@
 
 package android.net.ipsec.test.ike;
 
+import static android.net.ipsec.test.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.test.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_MAXIMUM;
+import static android.net.ipsec.test.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_MINIMUM;
+import static android.net.ipsec.test.ike.ChildSessionParams.CHILD_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
@@ -42,6 +46,7 @@ import org.junit.Test;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
+import java.util.concurrent.TimeUnit;
 
 public final class TunnelModeChildSessionParamsTest {
     private static final int NUM_TS = 1;
@@ -105,6 +110,27 @@ public final class TunnelModeChildSessionParamsTest {
 
         verifyCommon(childParams);
         assertEquals(0, childParams.getConfigurationAttributesInternal().length);
+
+        assertEquals(CHILD_HARD_LIFETIME_SEC_DEFAULT, childParams.getHardLifetime());
+        assertEquals(CHILD_SOFT_LIFETIME_SEC_DEFAULT, childParams.getSoftLifetime());
+    }
+
+    @Test
+    public void testBuildChildSessionParamsWithLifetime() {
+        long hardLifetimeSec = TimeUnit.HOURS.toSeconds(3L);
+        long softLifetimeSec = TimeUnit.HOURS.toSeconds(1L);
+
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder()
+                        .addSaProposal(mSaProposal)
+                        .setLifetime(hardLifetimeSec, softLifetimeSec)
+                        .build();
+
+        verifyCommon(childParams);
+        assertEquals(0, childParams.getConfigurationAttributesInternal().length);
+
+        assertEquals(hardLifetimeSec, childParams.getHardLifetime());
+        assertEquals(softLifetimeSec, childParams.getSoftLifetime());
     }
 
     @Test
@@ -193,6 +219,48 @@ public final class TunnelModeChildSessionParamsTest {
             fail("Expected to fail due to invalid address family value");
         } catch (IllegalArgumentException expected) {
 
+        }
+    }
+
+    @Test
+    public void testSetHardLifetimeTooLong() throws Exception {
+        try {
+            new TunnelModeChildSessionParams.Builder()
+                    .setLifetime(
+                            CHILD_HARD_LIFETIME_SEC_MAXIMUM + 1, CHILD_SOFT_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because hard lifetime is too long");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetHardLifetimeTooShort() throws Exception {
+        try {
+            new TunnelModeChildSessionParams.Builder()
+                    .setLifetime(
+                            CHILD_HARD_LIFETIME_SEC_MINIMUM - 1, CHILD_SOFT_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because hard lifetime is too short");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetSoftLifetimeTooLong() throws Exception {
+        try {
+            new TunnelModeChildSessionParams.Builder()
+                    .setLifetime(CHILD_HARD_LIFETIME_SEC_DEFAULT, CHILD_HARD_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because soft lifetime is too long");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetSoftLifetimeTooShort() throws Exception {
+        try {
+            new TunnelModeChildSessionParams.Builder()
+                    .setLifetime(CHILD_HARD_LIFETIME_SEC_DEFAULT, 0L);
+            fail("Expected failure because soft lifetime is too short");
+        } catch (IllegalArgumentException expected) {
         }
     }
 }
