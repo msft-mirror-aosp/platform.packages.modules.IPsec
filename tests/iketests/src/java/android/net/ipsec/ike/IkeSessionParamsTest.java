@@ -21,10 +21,17 @@ import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignLoca
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthEapConfig;
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthPskConfig;
+import static android.system.OsConstants.AF_INET;
+import static android.system.OsConstants.AF_INET6;
+
+import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
+import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
+import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
@@ -34,6 +41,7 @@ import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.eap.test.EapSessionConfig;
+import android.util.SparseArray;
 
 import androidx.test.InstrumentationRegistry;
 
@@ -44,6 +52,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.DSAPrivateKey;
@@ -57,6 +66,14 @@ public final class IkeSessionParamsTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_IPV4_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+    private static final Inet4Address PCSCF_IPV4_ADDRESS_1 =
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.1"));
+    private static final Inet4Address PCSCF_IPV4_ADDRESS_2 =
+            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.2"));
+    private static final Inet6Address PCSCF_IPV6_ADDRESS_1 =
+            (Inet6Address) (InetAddresses.parseNumericAddress("2001:DB8::1"));
+    private static final Inet6Address PCSCF_IPV6_ADDRESS_2 =
+            (Inet6Address) (InetAddresses.parseNumericAddress("2001:DB8::2"));
 
     private UdpEncapsulationSocket mUdpEncapSocket;
     private IkeSaProposal mIkeSaProposal;
@@ -212,6 +229,64 @@ public final class IkeSessionParamsTest {
         } catch (IllegalArgumentException expected) {
 
         }
+    }
+
+    private void verifyAttrTypes(SparseArray expectedAttrCntMap, IkeSessionParams ikeParams) {
+        ConfigAttribute[] configAttributes = ikeParams.getConfigurationAttributesInternal();
+
+        SparseArray<Integer> atrrCntMap = expectedAttrCntMap.clone();
+
+        for (int i = 0; i < configAttributes.length; i++) {
+            int attType = configAttributes[i].attributeType;
+            assertNotNull(atrrCntMap.get(attType));
+
+            atrrCntMap.put(attType, atrrCntMap.get(attType) - 1);
+            if (atrrCntMap.get(attType) == 0) atrrCntMap.remove(attType);
+        }
+
+        assertEquals(0, atrrCntMap.size());
+    }
+
+    @Test
+    public void testBuildWithPcscfAddress() throws Exception {
+        IkeSessionParams sessionParams =
+                new IkeSessionParams.Builder()
+                        .setServerAddress(REMOTE_IPV4_ADDRESS)
+                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .addPcscfServerRequest(AF_INET)
+                        .addPcscfServerRequest(PCSCF_IPV4_ADDRESS_1)
+                        .addPcscfServerRequest(PCSCF_IPV6_ADDRESS_2)
+                        .addPcscfServerRequest(AF_INET6)
+                        .addPcscfServerRequest(PCSCF_IPV4_ADDRESS_1)
+                        .addPcscfServerRequest(PCSCF_IPV6_ADDRESS_2)
+                        .build();
+
+        SparseArray<Integer> expectedAttrCounts = new SparseArray<>();
+        expectedAttrCounts.put(CONFIG_ATTR_IP4_PCSCF, 3);
+        expectedAttrCounts.put(CONFIG_ATTR_IP6_PCSCF, 3);
+
+        verifyAttrTypes(expectedAttrCounts, sessionParams);
+    }
+
+    @Test
+    public void testBuildWithoutPcscfAddress() throws Exception {
+        IkeSessionParams sessionParams =
+                new IkeSessionParams.Builder()
+                        .setServerAddress(REMOTE_IPV4_ADDRESS)
+                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .build();
+
+        SparseArray<Integer> expectedAttrCounts = new SparseArray<>();
+
+        verifyAttrTypes(expectedAttrCounts, sessionParams);
     }
 
     @Test
