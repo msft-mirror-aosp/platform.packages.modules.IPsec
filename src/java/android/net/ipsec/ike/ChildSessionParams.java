@@ -105,12 +105,12 @@ public abstract class ChildSessionParams {
         return Arrays.asList(mSaProposals);
     }
 
-    /** Retrieves hard lifetime in seconds @hide */
+    /** Retrieves hard lifetime in seconds */
     public long getHardLifetime() {
         return mHardLifetimeSec;
     }
 
-    /** Retrieves soft lifetime in seconds @hide */
+    /** Retrieves soft lifetime in seconds */
     public long getSoftLifetime() {
         return mSoftLifetimeSec;
     }
