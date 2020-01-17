@@ -186,12 +186,12 @@ public final class IkeSessionParams {
         return mRemoteAuthConfig;
     }
 
-    /** Retrieves hard lifetime in seconds @hide */
+    /** Retrieves hard lifetime in seconds */
     public long getHardLifetime() {
         return mHardLifetimeSec;
     }
 
-    /** Retrieves soft lifetime in seconds @hide */
+    /** Retrieves soft lifetime in seconds */
     public long getSoftLifetime() {
         return mSoftLifetimeSec;
     }
@@ -688,7 +688,6 @@ public final class IkeSessionParams {
          * @param softLifetimeSec number of seconds after which IKE SA will request rekey. Defaults
          *     to 7200 seconds (2 hours). MUST be at least 120 seconds (2 minutes), and at least 60
          *     seconds (1 minute) shorter than the hard lifetime.
-         * @hide
          */
         @NonNull
         public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {

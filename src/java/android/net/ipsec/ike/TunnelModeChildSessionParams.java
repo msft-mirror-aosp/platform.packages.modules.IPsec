@@ -229,7 +229,6 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * @param softLifetimeSec number of seconds after which Child SA will request rekey.
          *     Defaults to 3600 seconds (1 hour). MUST be at least 120 seconds (2 minutes), and at
          *     least 60 seconds (1 minute) shorter than the hard lifetime.
-         * @hide
          */
         @NonNull
         public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
