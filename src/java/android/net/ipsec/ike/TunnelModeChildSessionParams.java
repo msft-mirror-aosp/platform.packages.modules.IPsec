@@ -54,8 +54,16 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
             @NonNull IkeTrafficSelector[] localTs,
             @NonNull IkeTrafficSelector[] remoteTs,
             @NonNull ChildSaProposal[] proposals,
-            @NonNull TunnelModeChildConfigAttribute[] configRequests) {
-        super(localTs, remoteTs, proposals, false /*isTransport*/);
+            @NonNull TunnelModeChildConfigAttribute[] configRequests,
+            long hardLifetimeSec,
+            long softLifetimeSec) {
+        super(
+                localTs,
+                remoteTs,
+                proposals,
+                hardLifetimeSec,
+                softLifetimeSec,
+                false /*isTransport*/);
         mConfigRequests = configRequests;
     }
 
@@ -207,6 +215,28 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             // TODO: Implement it.
             throw new UnsupportedOperationException("Not yet supported");
+        }
+
+        /**
+         * Sets hard and soft lifetimes.
+         *
+         * <p>Lifetimes will not be negotiated with the remote IKE server.
+         *
+         * @param hardLifetimeSec number of seconds after which Child SA will expire. Defaults to
+         *     7200 seconds (2 hours). Considering IPsec packet lifetime, IKE library requires hard
+         *     lifetime to be a value from 300 seconds (5 minutes) to 14400 seconds (4 hours),
+         *     inclusive.
+         * @param softLifetimeSec number of seconds after which Child SA will request rekey.
+         *     Defaults to 3600 seconds (1 hour). MUST be at least 120 seconds (2 minutes), and at
+         *     least 60 seconds (1 minute) shorter than the hard lifetime.
+         * @hide
+         */
+        @NonNull
+        public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
+            validateAndSetLifetime(hardLifetimeSec, softLifetimeSec);
+            mHardLifetimeSec = hardLifetimeSec;
+            mSoftLifetimeSec = softLifetimeSec;
+            return this;
         }
 
         /**
@@ -371,11 +401,12 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
             }
 
             return new TunnelModeChildSessionParams(
-                    mLocalTsList.toArray(new IkeTrafficSelector[mLocalTsList.size()]),
-                    mRemoteTsList.toArray(new IkeTrafficSelector[mRemoteTsList.size()]),
-                    mSaProposalList.toArray(new ChildSaProposal[mSaProposalList.size()]),
-                    mConfigRequestList.toArray(
-                            new TunnelModeChildConfigAttribute[mConfigRequestList.size()]));
+                    mLocalTsList.toArray(new IkeTrafficSelector[0]),
+                    mRemoteTsList.toArray(new IkeTrafficSelector[0]),
+                    mSaProposalList.toArray(new ChildSaProposal[0]),
+                    mConfigRequestList.toArray(new TunnelModeChildConfigAttribute[0]),
+                    mHardLifetimeSec,
+                    mSoftLifetimeSec);
         }
     }
 }
