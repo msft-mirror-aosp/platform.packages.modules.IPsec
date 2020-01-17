@@ -120,9 +120,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private static final int SPI_NOT_REGISTERED = 0;
 
-    // Time after which Child SA needs to be rekeyed
-    @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(2L);
-
     private static final int CMD_GENERAL_BASE = CMD_PRIVATE_BASE;
 
     /** Receive request for negotiating first Child SA. */
@@ -148,7 +145,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private final IpSecManager mIpSecManager;
 
     /** User provided configurations. */
-    private final ChildSessionParams mChildSessionParams;
+    @VisibleForTesting final ChildSessionParams mChildSessionParams;
 
     private final Executor mUserCbExecutor;
     private final ChildSessionCallback mUserCallback;
@@ -409,7 +406,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private long getRekeyTimeout() {
         // TODO: Make rekey timout fuzzy
-        return SA_SOFT_LIFETIME_MS;
+        return TimeUnit.SECONDS.toMillis(mChildSessionParams.getSoftLifetime());
     }
 
     /**

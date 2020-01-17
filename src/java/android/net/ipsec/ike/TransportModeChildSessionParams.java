@@ -30,8 +30,10 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
     private TransportModeChildSessionParams(
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
-            ChildSaProposal[] proposals) {
-        super(localTs, remoteTs, proposals, true /*isTransport*/);
+            ChildSaProposal[] proposals,
+            long hardLifetimeSec,
+            long softLifetimeSec) {
+        super(localTs, remoteTs, proposals, hardLifetimeSec, softLifetimeSec, true /*isTransport*/);
     }
 
     /**
@@ -88,6 +90,28 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
         }
 
         /**
+         * Sets hard and soft lifetimes.
+         *
+         * <p>Lifetimes will not be negotiated with the remote IKE server.
+         *
+         * @param hardLifetimeSec number of seconds after which Child SA will expire. Defaults to
+         *     7200 seconds (2 hours). Considering IPsec packet lifetime, IKE library requires hard
+         *     lifetime to be a value from 300 seconds (5 minutes) to 14400 seconds (4 hours),
+         *     inclusive.
+         * @param softLifetimeSec number of seconds after which Child SA will request rekey.
+         *     Defaults to 3600 seconds (1 hour). MUST be at least 120 seconds (2 minutes), and at
+         *     least 60 seconds (1 minute) shorter than the hard lifetime.
+         * @hide
+         */
+        @NonNull
+        public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
+            validateAndSetLifetime(hardLifetimeSec, softLifetimeSec);
+            mHardLifetimeSec = hardLifetimeSec;
+            mSoftLifetimeSec = softLifetimeSec;
+            return this;
+        }
+
+        /**
          * Validates and builds the {@link TransportModeChildSessionParams}.
          *
          * @return the validated {@link TransportModeChildSessionParams}.
@@ -97,9 +121,11 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
             validateOrThrow();
 
             return new TransportModeChildSessionParams(
-                    mLocalTsList.toArray(new IkeTrafficSelector[mLocalTsList.size()]),
-                    mRemoteTsList.toArray(new IkeTrafficSelector[mRemoteTsList.size()]),
-                    mSaProposalList.toArray(new ChildSaProposal[mSaProposalList.size()]));
+                    mLocalTsList.toArray(new IkeTrafficSelector[0]),
+                    mRemoteTsList.toArray(new IkeTrafficSelector[0]),
+                    mSaProposalList.toArray(new ChildSaProposal[0]),
+                    mHardLifetimeSec,
+                    mSoftLifetimeSec);
         }
     }
 }

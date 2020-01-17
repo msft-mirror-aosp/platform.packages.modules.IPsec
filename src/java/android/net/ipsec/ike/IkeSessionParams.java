@@ -26,6 +26,7 @@ import android.annotation.SystemApi;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.eap.EapSessionConfig;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
@@ -45,6 +46,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * IkeSessionParams contains all user provided configurations for negotiating an {@link IkeSession}.
@@ -69,6 +71,27 @@ public final class IkeSessionParams {
     /** @hide */
     public static final int IKE_AUTH_METHOD_EAP = 3;
 
+    /** @hide */
+    @VisibleForTesting
+    static final long IKE_HARD_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(5L);
+    /** @hide */
+    @VisibleForTesting
+    static final long IKE_HARD_LIFETIME_SEC_MAXIMUM = TimeUnit.HOURS.toSeconds(24L);
+    /** @hide */
+    @VisibleForTesting
+    static final long IKE_HARD_LIFETIME_SEC_DEFAULT = TimeUnit.HOURS.toSeconds(4L);
+
+    /** @hide */
+    @VisibleForTesting
+    static final long IKE_SOFT_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(2L);
+    /** @hide */
+    @VisibleForTesting
+    static final long IKE_SOFT_LIFETIME_SEC_DEFAULT = TimeUnit.HOURS.toSeconds(2L);
+
+    /** @hide */
+    @VisibleForTesting
+    static final long IKE_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
+
     @NonNull private final InetAddress mServerAddress;
     @NonNull private final UdpEncapsulationSocket mUdpEncapSocket;
     @NonNull private final IkeSaProposal[] mSaProposals;
@@ -81,6 +104,9 @@ public final class IkeSessionParams {
 
     @NonNull private final IkeConfigAttribute[] mConfigRequests;
 
+    private final long mHardLifetimeSec;
+    private final long mSoftLifetimeSec;
+
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
@@ -92,6 +118,8 @@ public final class IkeSessionParams {
             @NonNull IkeAuthConfig localAuthConfig,
             @NonNull IkeAuthConfig remoteAuthConfig,
             @NonNull IkeConfigAttribute[] configRequests,
+            long hardLifetimeSec,
+            long softLifetimeSec,
             boolean isIkeFragmentationSupported) {
         mServerAddress = serverAddress;
         mUdpEncapSocket = udpEncapsulationSocket;
@@ -104,6 +132,9 @@ public final class IkeSessionParams {
         mRemoteAuthConfig = remoteAuthConfig;
 
         mConfigRequests = configRequests;
+
+        mHardLifetimeSec = hardLifetimeSec;
+        mSoftLifetimeSec = softLifetimeSec;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
@@ -153,6 +184,26 @@ public final class IkeSessionParams {
     @NonNull
     public IkeAuthConfig getRemoteAuthConfig() {
         return mRemoteAuthConfig;
+    }
+
+    /** Retrieves hard lifetime in seconds @hide */
+    public long getHardLifetime() {
+        return mHardLifetimeSec;
+    }
+
+    /** Retrieves soft lifetime in seconds @hide */
+    public long getSoftLifetime() {
+        return mSoftLifetimeSec;
+    }
+
+    /** @hide */
+    public long getHardLifetimeMsInternal() {
+        return TimeUnit.SECONDS.toMillis(mHardLifetimeSec);
+    }
+
+    /** @hide */
+    public long getSoftLifetimeMsInternal() {
+        return TimeUnit.SECONDS.toMillis(mSoftLifetimeSec);
     }
 
     /** @hide */
@@ -351,6 +402,9 @@ public final class IkeSessionParams {
 
         @Nullable private IkeAuthConfig mLocalAuthConfig;
         @Nullable private IkeAuthConfig mRemoteAuthConfig;
+
+        private long mHardLifetimeSec = IKE_HARD_LIFETIME_SEC_DEFAULT;
+        private long mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
 
         private boolean mIsIkeFragmentationSupported = false;
 
@@ -624,6 +678,33 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Sets hard and soft lifetimes.
+         *
+         * <p>Lifetimes will not be negotiated with the remote IKE server.
+         *
+         * @param hardLifetimeSec number of seconds after which IKE SA will expire. Defaults to
+         *     14400 seconds (4 hours). MUST be a value from 300 seconds (5 minutes) to 86400
+         *     seconds (24 hours), inclusive.
+         * @param softLifetimeSec number of seconds after which IKE SA will request rekey. Defaults
+         *     to 7200 seconds (2 hours). MUST be at least 120 seconds (2 minutes), and at least 60
+         *     seconds (1 minute) shorter than the hard lifetime.
+         * @hide
+         */
+        @NonNull
+        public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
+            if (hardLifetimeSec < IKE_HARD_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSec > IKE_HARD_LIFETIME_SEC_MAXIMUM
+                    || softLifetimeSec < IKE_SOFT_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSec - softLifetimeSec < IKE_LIFETIME_MARGIN_SEC_MINIMUM) {
+                throw new IllegalArgumentException("Invalid lifetime value");
+            }
+
+            mHardLifetimeSec = hardLifetimeSec;
+            mSoftLifetimeSec = softLifetimeSec;
+            return this;
+        }
+
+        /**
          * Validates and builds the {@link IkeSessionParams}.
          *
          * @return IkeSessionParams the validated IkeSessionParams.
@@ -645,12 +726,14 @@ public final class IkeSessionParams {
             return new IkeSessionParams(
                     mServerAddress,
                     mUdpEncapSocket,
-                    mSaProposalList.toArray(new IkeSaProposal[mSaProposalList.size()]),
+                    mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,
                     mRemoteIdentification,
                     mLocalAuthConfig,
                     mRemoteAuthConfig,
                     mConfigRequestList.toArray(new IkeConfigAttribute[0]),
+                    mHardLifetimeSec,
+                    mSoftLifetimeSec,
                     mIsIkeFragmentationSupported);
         }
 
