@@ -24,6 +24,7 @@ import java.net.InetAddress;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * ChildSessionParams is an abstract class that represents proposed configurations for negotiating a
@@ -37,6 +38,21 @@ import java.util.List;
  */
 @SystemApi
 public abstract class ChildSessionParams {
+    /** @hide */
+    protected static final long CHILD_HARD_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(5L);
+    /** @hide */
+    protected static final long CHILD_HARD_LIFETIME_SEC_MAXIMUM = TimeUnit.HOURS.toSeconds(4L);
+    /** @hide */
+    protected static final long CHILD_HARD_LIFETIME_SEC_DEFAULT = TimeUnit.HOURS.toSeconds(2L);
+
+    /** @hide */
+    protected static final long CHILD_SOFT_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(2L);
+    /** @hide */
+    protected static final long CHILD_SOFT_LIFETIME_SEC_DEFAULT = TimeUnit.HOURS.toSeconds(1L);
+
+    /** @hide */
+    protected static final long CHILD_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
+
     @NonNull private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
     // TODO: b/130765172 Add TRAFFIC_SELECTOR_IPV6 and instantiate it.
 
@@ -49,6 +65,10 @@ public abstract class ChildSessionParams {
     @NonNull private final IkeTrafficSelector[] mLocalTrafficSelectors;
     @NonNull private final IkeTrafficSelector[] mRemoteTrafficSelectors;
     @NonNull private final ChildSaProposal[] mSaProposals;
+
+    private final long mHardLifetimeSec;
+    private final long mSoftLifetimeSec;
+
     private final boolean mIsTransport;
 
     /** @hide */
@@ -56,10 +76,14 @@ public abstract class ChildSessionParams {
             IkeTrafficSelector[] localTs,
             IkeTrafficSelector[] remoteTs,
             ChildSaProposal[] proposals,
+            long hardLifetimeSec,
+            long softLifetimeSec,
             boolean isTransport) {
         mLocalTrafficSelectors = localTs;
         mRemoteTrafficSelectors = remoteTs;
         mSaProposals = proposals;
+        mHardLifetimeSec = hardLifetimeSec;
+        mSoftLifetimeSec = softLifetimeSec;
         mIsTransport = isTransport;
     }
 
@@ -81,6 +105,16 @@ public abstract class ChildSessionParams {
         return Arrays.asList(mSaProposals);
     }
 
+    /** Retrieves hard lifetime in seconds */
+    public long getHardLifetime() {
+        return mHardLifetimeSec;
+    }
+
+    /** Retrieves soft lifetime in seconds */
+    public long getSoftLifetime() {
+        return mSoftLifetimeSec;
+    }
+
     /** @hide */
     public IkeTrafficSelector[] getLocalTrafficSelectorsInternal() {
         return mLocalTrafficSelectors;
@@ -94,6 +128,16 @@ public abstract class ChildSessionParams {
     /** @hide */
     public ChildSaProposal[] getSaProposalsInternal() {
         return mSaProposals;
+    }
+
+    /** @hide */
+    public long getHardLifetimeMsInternal() {
+        return TimeUnit.SECONDS.toMillis(mHardLifetimeSec);
+    }
+
+    /** @hide */
+    public long getSoftLifetimeMsInternal() {
+        return TimeUnit.SECONDS.toMillis(mSoftLifetimeSec);
     }
 
     /** @hide */
@@ -111,6 +155,9 @@ public abstract class ChildSessionParams {
         @NonNull protected final List<IkeTrafficSelector> mRemoteTsList = new LinkedList<>();
         @NonNull protected final List<SaProposal> mSaProposalList = new LinkedList<>();
 
+        protected long mHardLifetimeSec = CHILD_HARD_LIFETIME_SEC_DEFAULT;
+        protected long mSoftLifetimeSec = CHILD_SOFT_LIFETIME_SEC_DEFAULT;
+
         protected Builder() {
             // Currently IKE library only accepts setting up Child SA that all ports and all
             // addresses are allowed on both sides. The protected traffic range is determined by the
@@ -123,6 +170,15 @@ public abstract class ChildSessionParams {
 
         protected void validateAndAddSaProposal(@NonNull ChildSaProposal proposal) {
             mSaProposalList.add(proposal);
+        }
+
+        protected void validateAndSetLifetime(long hardLifetimeSec, long softLifetimeSec) {
+            if (hardLifetimeSec < CHILD_HARD_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSec > CHILD_HARD_LIFETIME_SEC_MAXIMUM
+                    || softLifetimeSec < CHILD_SOFT_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSec - softLifetimeSec < CHILD_LIFETIME_MARGIN_SEC_MINIMUM) {
+                throw new IllegalArgumentException("Invalid lifetime value");
+            }
         }
 
         protected void validateOrThrow() {
