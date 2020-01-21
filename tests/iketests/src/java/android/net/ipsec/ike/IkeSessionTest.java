@@ -85,7 +85,7 @@ public final class IkeSessionTest {
 
     private IkeSessionParams buildIkeSessionParams() throws Exception {
         return new IkeSessionParams.Builder(mMockConnectManager)
-                .setServerAddress(REMOTE_ADDRESS)
+                .setServerAddress(REMOTE_ADDRESS.getHostAddress())
                 .setUdpEncapsulationSocket(mIpSecManager.openUdpEncapsulationSocket())
                 .addSaProposal(IkeSessionStateMachineTest.buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))

@@ -37,6 +37,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 
 import android.annotation.IntDef;
 import android.content.Context;
+import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -948,7 +949,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         public void enterState() {
             try {
                 Network network = mIkeSessionParams.getNetwork();
-                mRemoteAddress = mIkeSessionParams.getServerAddress();
+                String serverAddr = mIkeSessionParams.getServerAddressInternal();
+
+                if (InetAddresses.isNumericAddress(serverAddr)) {
+                    mRemoteAddress = InetAddresses.parseNumericAddress(serverAddr);
+                } else {
+                    mRemoteAddress = network.getByName(serverAddr);
+                }
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
@@ -2509,7 +2516,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
                     IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                            mIkeSessionParams.getServerAddress(), respIkeHeader.ikeResponderSpi);
+                            mRemoteAddress, respIkeHeader.ikeResponderSpi);
 
             int exchangeType = respIkeHeader.exchangeType;
             if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
