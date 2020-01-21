@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.eap;
+package com.android.internal.net.eap;
 
-import static com.android.internal.net.test.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.internal.net.TestUtils.hexStringToByteArray;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -25,9 +25,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import android.net.eap.test.EapSessionConfig;
+import android.net.eap.EapSessionConfig;
 
-import com.android.internal.net.test.eap.statemachine.EapStateMachine;
+import com.android.internal.net.eap.statemachine.EapStateMachine;
 
 import org.junit.Before;
 import org.junit.Test;

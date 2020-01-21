@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.ipsec.ike.message;
+package com.android.internal.net.ipsec.ike.message;
 
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -26,14 +26,14 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import android.net.ipsec.test.ike.SaProposal;
-import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
-import com.android.internal.net.test.TestUtils;
-import com.android.internal.net.test.ipsec.ike.exceptions.AuthenticationFailedException;
-import com.android.internal.net.test.ipsec.ike.exceptions.InvalidKeException;
-import com.android.internal.net.test.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.test.ipsec.ike.exceptions.UnrecognizedIkeProtocolException;
+import com.android.internal.net.TestUtils;
+import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.ipsec.ike.exceptions.UnrecognizedIkeProtocolException;
 
 import org.junit.Test;
 
