@@ -148,18 +148,10 @@ public final class IkeSessionParams {
      * Retrieves the configured server hostname
      *
      * <p>The configured server hostname will be resolved during IKE Session creation.
-     *
-     * @hide
      */
     @NonNull
     public String getServerHostname() {
         return mServerHostname;
-    }
-
-    /** Temporarily keep this method to avoid touching API surface. Delete it in the followup CL. */
-    @NonNull
-    public InetAddress getServerAddress() {
-        return InetAddress.getLoopbackAddress();
     }
 
     /** Retrieves the configured {@link Network} */
@@ -447,22 +439,12 @@ public final class IkeSessionParams {
          *
          * @param serverHostname the hostname of the IKE server, such as "ike.android.com".
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
         public Builder setServerHostname(@NonNull String serverHostname) {
             Objects.requireNonNull(serverHostname, "Required argument not provided");
 
             mServerHostname = serverHostname;
-            return this;
-        }
-
-        /**
-         * Temporarily keep this method to avoid touching API surface. Delete it in the followup CL.
-         */
-        @NonNull
-        public Builder setServerAddress(@NonNull InetAddress serverAddress) {
-            mServerHostname = serverAddress.getHostAddress();
             return this;
         }
 
