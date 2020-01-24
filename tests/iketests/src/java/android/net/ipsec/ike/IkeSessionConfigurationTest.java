@@ -41,7 +41,7 @@ public final class IkeSessionConfigurationTest {
             (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
 
     @Test
-    public void testGetPcscfAddresses() {
+    public void testGetPcscfServers() {
         List<ConfigAttribute> attributeList = new LinkedList<>();
         attributeList.add(new ConfigAttributeIpv4Pcscf(IPV4_ADDRESS));
         attributeList.add(new ConfigAttributeIpv6Pcscf(IPV6_ADDRESS));
@@ -49,6 +49,6 @@ public final class IkeSessionConfigurationTest {
         IkeConfigPayload configPayload = new IkeConfigPayload(true /*isReply*/, attributeList);
 
         IkeSessionConfiguration config = new IkeSessionConfiguration(configPayload);
-        assertEquals(Arrays.asList(IPV4_ADDRESS, IPV6_ADDRESS), config.getPcscfAddresses());
+        assertEquals(Arrays.asList(IPV4_ADDRESS, IPV6_ADDRESS), config.getPcscfServers());
     }
 }
