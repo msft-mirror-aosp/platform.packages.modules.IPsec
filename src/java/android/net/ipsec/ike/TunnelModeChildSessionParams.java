@@ -74,15 +74,15 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
 
     /** Retrieves the list of Configuration Requests */
     @NonNull
-    public List<ConfigRequest> getConfigurationRequests() {
+    public List<TunnelModeChildConfigRequest> getConfigurationRequests() {
         return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
     }
 
-    /** Represents a generic configuration request type */
-    public interface ConfigRequest {}
+    /** Represents a tunnel mode child session configuration request type */
+    public interface TunnelModeChildConfigRequest {}
 
     /** Represents an IPv4 Internal Address request */
-    public interface ConfigRequestIpv4Address extends ConfigRequest {
+    public interface ConfigRequestIpv4Address extends TunnelModeChildConfigRequest {
         /**
          * Retrieves the requested internal IPv4 address
          *
@@ -93,7 +93,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     }
 
     /** Represents an IPv4 DHCP server request */
-    public interface ConfigRequestIpv4DhcpServer extends ConfigRequest {
+    public interface ConfigRequestIpv4DhcpServer extends TunnelModeChildConfigRequest {
         /**
          * Retrieves the requested IPv4 DHCP server address
          *
@@ -105,7 +105,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     }
 
     /** Represents an IPv4 DNS Server request */
-    public interface ConfigRequestIpv4DnsServer extends ConfigRequest {
+    public interface ConfigRequestIpv4DnsServer extends TunnelModeChildConfigRequest {
         /**
          * Retrieves the requested IPv4 DNS server address
          *
@@ -116,10 +116,10 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     }
 
     /** Represents an IPv4 Netmask request */
-    public interface ConfigRequestIpv4Netmask extends ConfigRequest {}
+    public interface ConfigRequestIpv4Netmask extends TunnelModeChildConfigRequest {}
 
     /** Represents an IPv6 Internal Address request */
-    public interface ConfigRequestIpv6Address extends ConfigRequest {
+    public interface ConfigRequestIpv6Address extends TunnelModeChildConfigRequest {
         /**
          * Retrieves the requested internal IPv6 address
          *
@@ -137,7 +137,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     }
 
     /** Represents an IPv6 DNS Server request */
-    public interface ConfigRequestIpv6DnsServer extends ConfigRequest {
+    public interface ConfigRequestIpv6DnsServer extends TunnelModeChildConfigRequest {
         /**
          * Retrieves the requested IPv6 DNS server address
          *

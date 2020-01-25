@@ -54,13 +54,7 @@ public final class IkeSessionConfiguration {
     /** IKEv2 Mobility and Multihoming Protocol */
     public static final int EXTENSION_TYPE_MOBIKE = 2;
 
-    private final List<InetAddress> mPcscfAddresses = new ArrayList<>();
-
-    /**
-     * Temporary constructor - deleteme.
-     */
-    public IkeSessionConfiguration() {
-    }
+    private final List<InetAddress> mPcscfServers = new ArrayList<>();
 
     /**
      * Construct an instance of {@link IkeSessionConfiguration}.
@@ -82,11 +76,11 @@ public final class IkeSessionConfiguration {
                 switch (attr.attributeType) {
                     case CONFIG_ATTR_IP4_PCSCF:
                         ConfigAttributeIpv4Pcscf ip4Pcscf = (ConfigAttributeIpv4Pcscf) attr;
-                        mPcscfAddresses.add(ip4Pcscf.getAddress());
+                        mPcscfServers.add(ip4Pcscf.getAddress());
                         break;
                     case CONFIG_ATTR_IP6_PCSCF:
                         ConfigAttributeIpv6Pcscf ip6Pcscf = (ConfigAttributeIpv6Pcscf) attr;
-                        mPcscfAddresses.add(ip6Pcscf.getAddress());
+                        mPcscfServers.add(ip6Pcscf.getAddress());
                         break;
                     default:
                         // Not relevant to IKE session
@@ -134,14 +128,13 @@ public final class IkeSessionConfiguration {
     }
 
     /**
-     * Returns the assigned P_CSCF addresses.
+     * Returns the assigned P_CSCF servers.
      *
-     * @return the assigned P_CSCF addresses, or an empty list when no addresses are assigned by the
+     * @return the assigned P_CSCF servers, or an empty list when no servers are assigned by the
      *     remote IKE server
-     * @hide
      */
     @NonNull
-    public List<InetAddress> getPcscfAddresses() {
-        return Collections.unmodifiableList(mPcscfAddresses);
+    public List<InetAddress> getPcscfServers() {
+        return Collections.unmodifiableList(mPcscfServers);
     }
 }
