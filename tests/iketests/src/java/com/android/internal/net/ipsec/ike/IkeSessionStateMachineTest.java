@@ -22,6 +22,8 @@ import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_T
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static android.system.OsConstants.AF_INET;
+import static android.system.OsConstants.AF_INET6;
 
 import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
 import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
@@ -78,7 +80,7 @@ import android.net.ipsec.test.ike.IkeSaProposal;
 import android.net.ipsec.test.ike.IkeSessionCallback;
 import android.net.ipsec.test.ike.IkeSessionParams;
 import android.net.ipsec.test.ike.SaProposal;
-import android.net.ipsec.test.ike.TransportModeChildSessionParams;
+import android.net.ipsec.test.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.test.ike.exceptions.IkeException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
@@ -110,6 +112,7 @@ import com.android.internal.net.test.ipsec.ike.message.IkeAuthDigitalSignPayload
 import com.android.internal.net.test.ipsec.ike.message.IkeAuthPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeAuthPskPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeCertX509CertPayload;
+import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeEapPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeHeader;
@@ -742,7 +745,9 @@ public final class IkeSessionStateMachineTest {
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
                 .setRemoteIdentification(
-                        new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS));
+                        new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
+                .addPcscfServerRequest(AF_INET)
+                .addPcscfServerRequest(AF_INET6);
     }
 
     private IkeSessionParams buildIkeSessionParamsPsk(byte[] psk) throws Exception {
@@ -763,7 +768,11 @@ public final class IkeSessionStateMachineTest {
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .build();
 
-        return new TransportModeChildSessionParams.Builder().addSaProposal(saProposal).build();
+        return new TunnelModeChildSessionParams.Builder()
+                .addSaProposal(saProposal)
+                .addInternalAddressRequest(AF_INET)
+                .addInternalAddressRequest(AF_INET6)
+                .build();
     }
 
     private ReceivedIkePacket makeIkeInitResponse() throws Exception {
@@ -1897,6 +1906,20 @@ public final class IkeSessionStateMachineTest {
         assertNotNull(
                 ikeAuthReqMessage.getPayloadForType(
                         IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class));
+
+        IkeConfigPayload configPayload =
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_CP, IkeConfigPayload.class);
+        assertNotNull(configPayload);
+
+        configPayload.recognizedAttributeList.contains(
+                new IkeConfigPayload.ConfigAttributeIpv4Pcscf());
+        configPayload.recognizedAttributeList.contains(
+                new IkeConfigPayload.ConfigAttributeIpv6Pcscf());
+        configPayload.recognizedAttributeList.contains(
+                new IkeConfigPayload.ConfigAttributeIpv4Address());
+        configPayload.recognizedAttributeList.contains(
+                new IkeConfigPayload.ConfigAttributeIpv6Address());
 
         return ikeAuthReqMessage;
     }

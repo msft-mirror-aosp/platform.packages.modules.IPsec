@@ -80,6 +80,8 @@ import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPskPayload;
 import com.android.internal.net.ipsec.ike.message.IkeCertPayload;
 import com.android.internal.net.ipsec.ike.message.IkeCertX509CertPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.ipsec.ike.message.IkeEapPayload;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
@@ -2896,6 +2898,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mLocalAddress,
                             mFirstChildSessionParams,
                             true /*isFirstChild*/));
+
+            final List<ConfigAttribute> configAttributes = new ArrayList<>();
+            configAttributes.addAll(
+                    Arrays.asList(
+                            CreateChildSaHelper.getConfigAttributes(mFirstChildSessionParams)));
+            configAttributes.addAll(
+                    Arrays.asList(mIkeSessionParams.getConfigurationAttributesInternal()));
+            if (!configAttributes.isEmpty()) {
+                payloadList.add(new IkeConfigPayload(false /*isReply*/, configAttributes));
+            }
 
             return buildIkeAuthReqMessage(payloadList);
         }
