@@ -22,10 +22,10 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.util.CloseGuard;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
-import com.android.internal.net.utils.CloseGuard;
 
 import java.util.concurrent.Executor;
 
@@ -50,7 +50,7 @@ import java.util.concurrent.Executor;
  */
 @SystemApi
 public final class IkeSession implements AutoCloseable {
-    private final CloseGuard mCloseGuard = CloseGuard.get();
+    private final CloseGuard mCloseGuard = new CloseGuard();
 
     @VisibleForTesting final IkeSessionStateMachine mIkeSessionStateMachine;
 

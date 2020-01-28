@@ -57,6 +57,7 @@ import android.os.Message;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
+import android.util.CloseGuard;
 import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -101,7 +102,6 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
-import com.android.internal.net.utils.CloseGuard;
 import com.android.internal.util.State;
 
 import java.io.FileDescriptor;
@@ -642,7 +642,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         private final InetAddress mSourceAddress;
         private final long mSpi;
-        private final CloseGuard mCloseGuard = CloseGuard.get();
+        private final CloseGuard mCloseGuard = new CloseGuard();
 
         private IkeSecurityParameterIndex(InetAddress sourceAddress, long spi) {
             mSourceAddress = sourceAddress;
