@@ -75,6 +75,22 @@ public final class IkeSessionParams {
     public static final int IKE_AUTH_METHOD_EAP = 3;
 
     /** @hide */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID})
+    public @interface IkeOption {}
+
+    /**
+     * Indicates any remote (server) identity is accepted even if it is different from what has been
+     * configured.
+     *
+     * @hide
+     */
+    public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0;
+
+    private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
+
+    /** @hide */
     @VisibleForTesting
     static final long IKE_HARD_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(5L);
     /** @hide */
@@ -108,6 +124,8 @@ public final class IkeSessionParams {
 
     @NonNull private final IkeConfigAttribute[] mConfigRequests;
 
+    private final long mIkeOptions;
+
     private final long mHardLifetimeSec;
     private final long mSoftLifetimeSec;
 
@@ -122,6 +140,7 @@ public final class IkeSessionParams {
             @NonNull IkeAuthConfig localAuthConfig,
             @NonNull IkeAuthConfig remoteAuthConfig,
             @NonNull IkeConfigAttribute[] configRequests,
+            long ikeOptions,
             long hardLifetimeSec,
             long softLifetimeSec,
             boolean isIkeFragmentationSupported) {
@@ -138,10 +157,22 @@ public final class IkeSessionParams {
 
         mConfigRequests = configRequests;
 
+        mIkeOptions = ikeOptions;
+
         mHardLifetimeSec = hardLifetimeSec;
         mSoftLifetimeSec = softLifetimeSec;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
+    }
+
+    private static void validateIkeOptionOrThrow(@IkeOption int ikeOption) {
+        if (ikeOption < MIN_IKE_OPTION || ikeOption > MAX_IKE_OPTION) {
+            throw new IllegalArgumentException("Invalid IKE Option: " + ikeOption);
+        }
+    }
+
+    private static long getOptionBitValue(int ikeOption) {
+        return 1 << ikeOption;
     }
 
     /**
@@ -203,6 +234,12 @@ public final class IkeSessionParams {
     /** Retrieves soft lifetime in seconds */
     public long getSoftLifetime() {
         return mSoftLifetimeSec;
+    }
+
+    /** Checks if the given IKE Session negotiation option is set @hide */
+    public boolean hasIkeOption(@IkeOption int ikeOption) {
+        validateIkeOptionOrThrow(ikeOption);
+        return (mIkeOptions & getOptionBitValue(ikeOption)) != 0;
     }
 
     /** @hide */
@@ -413,6 +450,8 @@ public final class IkeSessionParams {
 
         @Nullable private IkeAuthConfig mLocalAuthConfig;
         @Nullable private IkeAuthConfig mRemoteAuthConfig;
+
+        private long mIkeOptions = 0;
 
         private long mHardLifetimeSec = IKE_HARD_LIFETIME_SEC_DEFAULT;
         private long mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
@@ -709,6 +748,7 @@ public final class IkeSessionParams {
          * @param softLifetimeSec number of seconds after which IKE SA will request rekey. Defaults
          *     to 7200 seconds (2 hours). MUST be at least 120 seconds (2 minutes), and at least 60
          *     seconds (1 minute) shorter than the hard lifetime.
+         * @return Builder this, to facilitate chaining.
          */
         @NonNull
         public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
@@ -721,6 +761,34 @@ public final class IkeSessionParams {
 
             mHardLifetimeSec = hardLifetimeSec;
             mSoftLifetimeSec = softLifetimeSec;
+            return this;
+        }
+
+        /**
+         * Sets the specified IKE Option as enabled.
+         *
+         * @param ikeOption the option to be enabled.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @NonNull
+        public Builder addIkeOption(@IkeOption int ikeOption) {
+            validateIkeOptionOrThrow(ikeOption);
+            mIkeOptions |= getOptionBitValue(ikeOption);
+            return this;
+        }
+
+        /**
+         * Resets (disables) the specified IKE Option.
+         *
+         * @param ikeOption the option to be disabled.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @NonNull
+        public Builder removeIkeOption(@IkeOption int ikeOption) {
+            validateIkeOptionOrThrow(ikeOption);
+            mIkeOptions &= ~getOptionBitValue(ikeOption);
             return this;
         }
 
@@ -757,6 +825,7 @@ public final class IkeSessionParams {
                     mLocalAuthConfig,
                     mRemoteAuthConfig,
                     mConfigRequestList.toArray(new IkeConfigAttribute[0]),
+                    mIkeOptions,
                     mHardLifetimeSec,
                     mSoftLifetimeSec,
                     mIsIkeFragmentationSupported);

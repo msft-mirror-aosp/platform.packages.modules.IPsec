@@ -3004,9 +3004,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
                         mRespIdPayload = (IkeIdPayload) payload;
-                        if (!mIkeSessionParams
-                                .getRemoteIdentification()
-                                .equals(mRespIdPayload.ikeId)) {
+                        if (!mIkeSessionParams.hasIkeOption(
+                                        IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
+                                && !mIkeSessionParams
+                                        .getRemoteIdentification()
+                                        .equals(mRespIdPayload.ikeId)) {
                             throw new AuthenticationFailedException(
                                     "Unrecognized Responder Identification.");
                         }
