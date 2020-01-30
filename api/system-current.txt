@@ -144,7 +144,7 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionConnectionInfo getIkeSessionConnectionInfo();
     method @NonNull public java.util.List<java.net.InetAddress> getPcscfServers();
     method @NonNull public String getRemoteApplicationVersion();
-    method @NonNull public java.util.List<byte[]> getRemoteVendorIDs();
+    method @NonNull public java.util.List<byte[]> getRemoteVendorIds();
     method public boolean isIkeExtensionEnabled(int);
     field public static final int EXTENSION_TYPE_FRAGMENTATION = 1; // 0x1
     field public static final int EXTENSION_TYPE_MOBIKE = 2; // 0x2
