@@ -501,11 +501,9 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 challengeResults.add(randChallengeResult);
 
                 // Log rand/challenge as PII
-                LOG.d(
-                        mTAG,
-                        "RAND=" + LOG.pii(rand)
-                                + " SRES=" + LOG.pii(randChallengeResult.sres)
-                                + " Kc=" + LOG.pii(randChallengeResult.kc));
+                LOG.d(mTAG, "RAND=" + LOG.pii(rand));
+                LOG.d(mTAG, "SRES=" + LOG.pii(randChallengeResult.sres));
+                LOG.d(mTAG, "Kc=" + LOG.pii(randChallengeResult.kc));
             }
 
             return challengeResults;

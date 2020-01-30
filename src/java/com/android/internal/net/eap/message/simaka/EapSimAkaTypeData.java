@@ -132,7 +132,7 @@ public abstract class EapSimAkaTypeData {
                     }
 
                     if (attribute instanceof EapSimAkaUnsupportedAttribute) {
-                        LOG.d(mTAG, "Unsupported EAP-SIM attribute during decoding: "
+                        LOG.d(mTAG, "Unsupported EAP attribute during decoding: "
                                 + attribute.attributeType);
                     }
                     attributeMap.put(attribute.attributeType, attribute);
@@ -140,7 +140,7 @@ public abstract class EapSimAkaTypeData {
 
                 T eapSimAkaTypeData = getInstance(eapSubType, attributeMap);
 
-                logDecodedEapSimTypeData(eapSimAkaTypeData);
+                logDecodedEapSimAkaTypeData(eapSimAkaTypeData);
 
                 return new DecodeResult<>(eapSimAkaTypeData);
             } catch (EapSimInvalidAtRandException ex) {
@@ -159,7 +159,7 @@ public abstract class EapSimAkaTypeData {
                 int eapSubType,
                 LinkedHashMap<Integer, EapSimAkaAttribute> attributeMap);
 
-        private void logDecodedEapSimTypeData(EapSimAkaTypeData eapSimAkaTypeData) {
+        private void logDecodedEapSimAkaTypeData(EapSimAkaTypeData eapSimAkaTypeData) {
             StringBuilder msg = new StringBuilder();
             msg.append("Decoded ");
             msg.append(mEapMethod);
