@@ -54,12 +54,15 @@ public abstract class ChildSessionParams {
     protected static final long CHILD_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
 
     @NonNull private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV4;
-    // TODO: b/130765172 Add TRAFFIC_SELECTOR_IPV6 and instantiate it.
+    @NonNull private static final IkeTrafficSelector DEFAULT_TRAFFIC_SELECTOR_IPV6;
 
     static {
         DEFAULT_TRAFFIC_SELECTOR_IPV4 =
                 buildDefaultTrafficSelector(
                         IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE);
+        DEFAULT_TRAFFIC_SELECTOR_IPV6 =
+                buildDefaultTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE);
     }
 
     @NonNull private final IkeTrafficSelector[] mLocalTrafficSelectors;
@@ -165,7 +168,8 @@ public abstract class ChildSessionParams {
             // TODO: b/130756765 Validate the current TS negotiation strategy.
             mLocalTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
             mRemoteTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
-            // TODO: add IPv6 TS to ChildSessionParams.
+            mLocalTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV6);
+            mRemoteTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV6);
         }
 
         protected void validateAndAddSaProposal(@NonNull ChildSaProposal proposal) {
@@ -201,8 +205,10 @@ public abstract class ChildSessionParams {
                 endAddress = InetAddresses.parseNumericAddress("255.255.255.255");
                 break;
             case IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE:
-                // TODO: Support it.
-                throw new UnsupportedOperationException("Do not support IPv6.");
+                startAddress = InetAddresses.parseNumericAddress("::");
+                endAddress = InetAddresses.parseNumericAddress(
+                        "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff");
+                break;
             default:
                 throw new IllegalArgumentException("Invalid Traffic Selector type: " + tsType);
         }

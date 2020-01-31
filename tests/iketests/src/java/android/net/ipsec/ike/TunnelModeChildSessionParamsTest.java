@@ -49,7 +49,7 @@ import java.net.Inet6Address;
 import java.util.concurrent.TimeUnit;
 
 public final class TunnelModeChildSessionParamsTest {
-    private static final int NUM_TS = 1;
+    private static final int NUM_TS = 2;
 
     private static final int IP6_PREFIX_LEN = 64;
 
