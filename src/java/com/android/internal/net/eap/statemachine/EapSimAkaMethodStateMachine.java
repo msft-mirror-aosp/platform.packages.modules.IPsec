@@ -182,6 +182,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
         prfResultBuffer.get(mEmsk);
 
         // Log as hash unless PII debug mode enabled
+        LOG.d(tag, "MK input=" + LOG.pii(mkInput));
+        LOG.d(tag, "MK=" + LOG.pii(mk));
         LOG.d(tag, "K_encr=" + LOG.pii(mKEncr));
         LOG.d(tag, "K_aut=" + LOG.pii(mKAut));
         LOG.d(tag, "MSK=" + LOG.pii(mMsk));
@@ -213,6 +215,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
                     EapSilentException {
         mMacAlgorithm = Mac.getInstance(getMacAlgorithm());
         mMacAlgorithm.init(new SecretKeySpec(mKAut, getMacAlgorithm()));
+
+        LOG.d(tag, "Computing MAC (raw msg): " + LOG.pii(message.encode()));
 
         byte[] mac = getMac(message.eapCode, message.eapIdentifier, typeData, extraData);
         // attributes are 'valid', so must have AtMac
@@ -246,6 +250,9 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
         byte[] typeDataWithEmptyMac = typeData.encode();
         EapData eapData = new EapData(getEapMethod(), typeDataWithEmptyMac);
         EapMessage messageForMac = new EapMessage(eapCode, eapIdentifier, eapData);
+
+        LOG.d(this.getClass().getSimpleName(),
+                "Computing MAC (mac cleared): " + LOG.pii(messageForMac.encode()));
 
         ByteBuffer buffer = ByteBuffer.allocate(messageForMac.eapLength + extraData.length);
         buffer.put(messageForMac.encode());
