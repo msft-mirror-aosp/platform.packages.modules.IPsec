@@ -502,7 +502,8 @@ public abstract class SaRecord implements AutoCloseable {
                 getIkeLog().wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
             }
             if (udpEncapSocket != null && sourceAddress instanceof Inet4Address) {
-                builder.setIpv4Encapsulation(udpEncapSocket, IkeSocket.IKE_SERVER_PORT);
+                builder.setIpv4Encapsulation(
+                        udpEncapSocket, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
             }
 
             if (isTransport) {
