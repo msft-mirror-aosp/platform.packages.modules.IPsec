@@ -77,6 +77,14 @@ public final class MockIpSecTestUtils {
         return new IpSecSpiResponse(IpSecManager.Status.OK, DUMMY_CHILD_SPI_RESOURCE_ID, spi);
     }
 
+    public static IpSecUdpEncapResponse buildDummyIpSecUdpEncapResponse(int port) throws Exception {
+        return new IpSecUdpEncapResponse(
+                IpSecManager.Status.OK,
+                DUMMY_UDP_ENCAP_RESOURCE_ID,
+                port,
+                Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP));
+    }
+
     public Context getContext() {
         return mContext;
     }
