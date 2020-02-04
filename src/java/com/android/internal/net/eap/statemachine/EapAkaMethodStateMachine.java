@@ -549,13 +549,11 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             byte[] ck = new byte[Byte.toUnsignedInt(buffer.get())];
             buffer.get(ck);
 
-            LOG.d(
-                    mTAG,
-                    "RAND=" + LOG.pii(atRandAka.rand)
-                            + " AUTN=" + LOG.pii(atAutn.autn)
-                            + " RES=" + LOG.pii(res)
-                            + " IK=" + LOG.pii(ik)
-                            + " CK=" + LOG.pii(ck));
+            LOG.d(mTAG, "RAND=" + LOG.pii(atRandAka.rand));
+            LOG.d(mTAG, "AUTN=" + LOG.pii(atAutn.autn));
+            LOG.d(mTAG, "RES=" + LOG.pii(res));
+            LOG.d(mTAG, "IK=" + LOG.pii(ik));
+            LOG.d(mTAG, "CK=" + LOG.pii(ck));
 
             return new RandChallengeResult(res, ik, ck);
         }
