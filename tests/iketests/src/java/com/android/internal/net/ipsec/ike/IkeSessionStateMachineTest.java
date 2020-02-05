@@ -65,9 +65,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.Network;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ChildSaProposal;
 import android.net.ipsec.test.ike.ChildSessionCallback;
@@ -164,6 +166,7 @@ public final class IkeSessionStateMachineTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
+    private static final String REMOTE_HOST_NAME = "ike.test.android";
 
     private static final String IKE_INIT_RESP_HEX_STRING =
             "5f54bf6d8b48e6e1909232b3d1edcb5c21202220000000000000014c220000300000"
@@ -256,7 +259,9 @@ public final class IkeSessionStateMachineTest {
     private IpSecManager mIpSecManager;
     private UdpEncapsulationSocket mUdpEncapSocket;
 
-    private IkeSocket mSpyIkeSocket;
+    private ConnectivityManager mMockConnectManager;
+    private Network mMockDefaultNetwork;
+    private IkeUdpEncapSocket mSpyIkeUdpEncapSocket;
 
     private TestLooper mLooper;
     private IkeSessionStateMachine mIkeSessionStateMachine;
@@ -328,7 +333,7 @@ public final class IkeSessionStateMachineTest {
                                 initiatorSpi,
                                 responderSpi,
                                 REMOTE_ADDRESS,
-                                IkeSocket.IKE_SERVER_PORT));
+                                IkeSocket.SERVER_PORT_UDP_ENCAPSULATED));
         payloadList.add(sourceNatPayload);
         return makeDummyUnencryptedReceivedIkePacket(
                 initiatorSpi, responderSpi, eType, isResp, fromIkeInit, payloadList);
@@ -614,6 +619,12 @@ public final class IkeSessionStateMachineTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
+
+        mMockConnectManager = mock(ConnectivityManager.class);
+        mMockDefaultNetwork = mock(Network.class);
+        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
+        when(mMockDefaultNetwork.getByName(REMOTE_HOST_NAME)).thenReturn(REMOTE_ADDRESS);
+
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
                         .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
@@ -717,10 +728,15 @@ public final class IkeSessionStateMachineTest {
 
         mLooper.dispatchAll();
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
+        assertEquals(REMOTE_ADDRESS, ikeSession.mRemoteAddress);
 
-        mSpyIkeSocket = spy(IkeSocket.getIkeSocket(mUdpEncapSocket, ikeSession));
-        doNothing().when(mSpyIkeSocket).sendIkePacket(any(), any());
-        ikeSession.mIkeSocket = mSpyIkeSocket;
+        mSpyIkeUdpEncapSocket =
+                spy(
+                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                mMockDefaultNetwork, mIpSecManager, ikeSession));
+
+        doNothing().when(mSpyIkeUdpEncapSocket).sendIkePacket(any(), any());
+        ikeSession.mIkeSocket = mSpyIkeUdpEncapSocket;
 
         return ikeSession;
     }
@@ -736,8 +752,8 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
-        return new IkeSessionParams.Builder()
-                .setServerAddress(REMOTE_ADDRESS)
+        return new IkeSessionParams.Builder(mMockConnectManager)
+                .setServerAddress(REMOTE_ADDRESS.getHostAddress())
                 .setUdpEncapsulationSocket(mUdpEncapSocket)
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
@@ -1097,8 +1113,8 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.quit();
         mLooper.dispatchAll();
 
-        verify(mSpyIkeSocket).releaseReference(eq(mIkeSessionStateMachine));
-        verify(mSpyIkeSocket).close();
+        verify(mSpyIkeUdpEncapSocket).releaseReference(eq(mIkeSessionStateMachine));
+        verify(mSpyIkeUdpEncapSocket).close();
     }
 
     @Test
@@ -1169,6 +1185,20 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testResolveRemoteHostName() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+
+        IkeSessionParams ikeParams =
+                buildIkeSessionParamsCommon()
+                        .setAuthPsk(mPsk)
+                        .setServerAddress(REMOTE_HOST_NAME)
+                        .build();
+        mIkeSessionStateMachine = makeAndStartIkeSession(ikeParams);
+
+        verify(mMockDefaultNetwork).getByName(REMOTE_HOST_NAME);
+    }
+
+    @Test
     public void testCreateIkeLocalIkeInit() throws Exception {
         setupFirstIkeSa();
 
@@ -1201,7 +1231,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
 
-        verify(mSpyIkeSocket)
+        verify(mSpyIkeUdpEncapSocket)
                 .registerIke(eq(mSpyCurrentIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
 
         verify(mMockIkeMessageHelper)
@@ -2542,7 +2572,7 @@ public final class IkeSessionStateMachineTest {
                         instanceof IkeSessionStateMachine.RekeyIkeLocalDelete);
         verifyRetransmissionStarted();
         assertEquals(mSpyLocalInitIkeSaRecord, mIkeSessionStateMachine.mLocalInitNewIkeSaRecord);
-        verify(mSpyIkeSocket)
+        verify(mSpyIkeUdpEncapSocket)
                 .registerIke(
                         eq(mSpyLocalInitIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
     }
@@ -2753,8 +2783,8 @@ public final class IkeSessionStateMachineTest {
 
     private void verifyRekeyReplaceSa(IkeSaRecord newSaRecord) {
         verify(mSpyCurrentIkeSaRecord).close();
-        verify(mSpyIkeSocket).unregisterIke(eq(mSpyCurrentIkeSaRecord.getLocalSpi()));
-        verify(mSpyIkeSocket, never()).unregisterIke(eq(newSaRecord.getLocalSpi()));
+        verify(mSpyIkeUdpEncapSocket).unregisterIke(eq(mSpyCurrentIkeSaRecord.getLocalSpi()));
+        verify(mSpyIkeUdpEncapSocket, never()).unregisterIke(eq(newSaRecord.getLocalSpi()));
 
         assertEquals(mIkeSessionStateMachine.mCurrentIkeSaRecord, newSaRecord);
 
@@ -2928,7 +2958,7 @@ public final class IkeSessionStateMachineTest {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeRemoteDelete);
-        verify(mSpyIkeSocket)
+        verify(mSpyIkeUdpEncapSocket)
                 .registerIke(
                         eq(mSpyRemoteInitIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
     }
@@ -3095,7 +3125,7 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyRekeyIkeRespReceivedPacket);
         mLooper.dispatchAll();
         verifyIncrementLocaReqMsgId();
-        verify(mSpyIkeSocket)
+        verify(mSpyIkeUdpEncapSocket)
                 .registerIke(
                         eq(mSpyLocalInitIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
 
@@ -3269,8 +3299,8 @@ public final class IkeSessionStateMachineTest {
 
         // Verify message is sent out, and that request does not change cached retransmit-response
         // mLastSentIkeResp.
-        verify(mSpyIkeSocket).sendIkePacket(eq(dummyReqBytesList[0]), eq(REMOTE_ADDRESS));
-        verify(mSpyIkeSocket).sendIkePacket(eq(dummyReqBytesList[1]), eq(REMOTE_ADDRESS));
+        verify(mSpyIkeUdpEncapSocket).sendIkePacket(eq(dummyReqBytesList[0]), eq(REMOTE_ADDRESS));
+        verify(mSpyIkeUdpEncapSocket).sendIkePacket(eq(dummyReqBytesList[1]), eq(REMOTE_ADDRESS));
         verifyLastSentRespAllPackets(dummyLastRespBytes, mSpyCurrentIkeSaRecord);
     }
 
@@ -3305,8 +3335,8 @@ public final class IkeSessionStateMachineTest {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyDpdRequest);
         mLooper.dispatchAll();
 
-        verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[0]), eq(REMOTE_ADDRESS));
-        verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[1]), eq(REMOTE_ADDRESS));
+        verify(mSpyIkeUdpEncapSocket).sendIkePacket(eq(dummyIkeResp[0]), eq(REMOTE_ADDRESS));
+        verify(mSpyIkeUdpEncapSocket).sendIkePacket(eq(dummyIkeResp[1]), eq(REMOTE_ADDRESS));
 
         verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
         assertTrue(mSpyCurrentIkeSaRecord.isRetransmittedRequest(dummyIkeReqFirstPacket));
@@ -3338,7 +3368,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
-        verify(mSpyIkeSocket).sendIkePacket(eq(dummyIkeResp[0]), eq(REMOTE_ADDRESS));
+        verify(mSpyIkeUdpEncapSocket).sendIkePacket(eq(dummyIkeResp[0]), eq(REMOTE_ADDRESS));
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
@@ -3365,7 +3395,7 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
 
         verifyLastSentRespAllPackets(dummyIkeResp, mSpyCurrentIkeSaRecord);
-        verify(mSpyIkeSocket, never()).sendIkePacket(any(), any());
+        verify(mSpyIkeUdpEncapSocket, never()).sendIkePacket(any(), any());
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
