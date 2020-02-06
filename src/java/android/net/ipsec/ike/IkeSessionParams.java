@@ -95,7 +95,7 @@ public final class IkeSessionParams {
     @VisibleForTesting
     static final long IKE_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
 
-    @NonNull private final String mServerAddress;
+    @NonNull private final InetAddress mServerAddress;
     @NonNull private final Network mNetwork;
 
     @NonNull private final UdpEncapsulationSocket mUdpEncapSocket;
@@ -115,7 +115,7 @@ public final class IkeSessionParams {
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
-            @Nullable String serverAddress,
+            @NonNull InetAddress serverAddress,
             @NonNull Network network,
             @NonNull UdpEncapsulationSocket udpEncapsulationSocket,
             @NonNull IkeSaProposal[] proposals,
@@ -148,16 +148,8 @@ public final class IkeSessionParams {
     }
 
     /** Retrieves the configured server address */
-    // TODO: Temporarily keep it to avoid changing API. Delete me.
     @NonNull
     public InetAddress getServerAddress() {
-        throw new UnsupportedOperationException("This method will be deleted");
-    }
-
-    /** Retrieves the configured server address @hide */
-    // TODO: Rename to #getServerAddress and expose it
-    @NonNull
-    public String getServerAddressInternal() {
         return mServerAddress;
     }
 
@@ -418,7 +410,7 @@ public final class IkeSessionParams {
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
         @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
 
-        @Nullable private String mServerAddress;
+        @Nullable private InetAddress mServerAddress;
         @Nullable private Network mNetwork;
 
         @Nullable private UdpEncapsulationSocket mUdpEncapSocket;
@@ -461,21 +453,8 @@ public final class IkeSessionParams {
          * @param serverAddress the IP address of the IKE server.
          * @return Builder this, to facilitate chaining.
          */
-        // TODO: Temporarily keep it to avoid changing API. Delete me.
         @NonNull
         public Builder setServerAddress(@NonNull InetAddress serverAddress) {
-            throw new UnsupportedOperationException("This method will be deleted");
-        }
-
-        /**
-         * Sets the server address for the {@link IkeSessionParams} being built.
-         *
-         * @param serverAddress the IP address or hostname of the IKE server.
-         * @return Builder this, to facilitate chaining.
-         * @hide
-         */
-        @NonNull
-        public Builder setServerAddress(@NonNull String serverAddress) {
             if (serverAddress == null) {
                 throw new NullPointerException("Required argument not provided");
             }
