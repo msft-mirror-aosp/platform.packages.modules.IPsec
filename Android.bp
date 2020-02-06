@@ -15,14 +15,19 @@
 java_library {
     name: "ike",
     installable: true,
-    sdk_version: "system_current",
+    // TODO (b/146757305): change to module API once available
+    sdk_version: "core_platform",
 
     aidl: {
         local_include_dirs: ["src/java"],
     },
     srcs: [":ike-srcs"],
 
-    libs: ["unsupportedappusage"],
+    libs: [
+        "unsupportedappusage",
+        "framework-annotations-lib",
+        "android_system_stubs_current",
+    ],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // classpath conflicts. This is necessary to preserve access to these
@@ -45,7 +50,6 @@ filegroup {
         "src/java/**/*.java",
         ":bouncycastle_ike_digests",
         ":framework-ike-shared-srcs",
-        ":framework-annotations",
     ],
 }
 
