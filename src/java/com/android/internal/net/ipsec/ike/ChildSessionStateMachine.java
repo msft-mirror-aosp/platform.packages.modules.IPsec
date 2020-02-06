@@ -874,6 +874,15 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mLocalAddress,
                                 mChildSessionParams,
                                 false /*isFirstChild*/);
+
+                final ConfigAttribute[] configAttributes =
+                        CreateChildSaHelper.getConfigAttributes(mChildSessionParams);
+                if (configAttributes.length > 0) {
+                    mRequestPayloads.add(
+                            new IkeConfigPayload(
+                                    false /*isReply*/, Arrays.asList(configAttributes)));
+                }
+
                 mChildSmCallback.onOutboundPayloadsReady(
                         EXCHANGE_TYPE_CREATE_CHILD_SA,
                         false /*isResp*/,
@@ -1721,16 +1730,14 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             childSessionParams.getRemoteTrafficSelectorsInternal(),
                             childSessionParams.isTransportMode());
 
-            if (!childSessionParams.isTransportMode()) {
-                ConfigAttribute[] attributes =
-                        ((TunnelModeChildSessionParams) childSessionParams)
-                                .getConfigurationAttributesInternal();
-                IkeConfigPayload configPayload =
-                        new IkeConfigPayload(false /*isReply*/, Arrays.asList(attributes));
-                payloadList.add(configPayload);
-            }
-
             return payloadList;
+        }
+
+        public static ConfigAttribute[] getConfigAttributes(ChildSessionParams params) {
+            if (!params.isTransportMode()) {
+                return ((TunnelModeChildSessionParams) params).getConfigurationAttributesInternal();
+            }
+            return new ConfigAttribute[0];
         }
 
         /** Create payload list as a rekey Child Session request. */
