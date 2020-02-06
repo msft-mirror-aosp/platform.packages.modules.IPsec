@@ -23,10 +23,7 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
-import android.content.Context;
-import android.net.ConnectivityManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.Network;
 import android.net.eap.EapSessionConfig;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -96,8 +93,6 @@ public final class IkeSessionParams {
     static final long IKE_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
 
     @NonNull private final InetAddress mServerAddress;
-    @NonNull private final Network mNetwork;
-
     @NonNull private final UdpEncapsulationSocket mUdpEncapSocket;
     @NonNull private final IkeSaProposal[] mSaProposals;
 
@@ -116,7 +111,6 @@ public final class IkeSessionParams {
 
     private IkeSessionParams(
             @NonNull InetAddress serverAddress,
-            @NonNull Network network,
             @NonNull UdpEncapsulationSocket udpEncapsulationSocket,
             @NonNull IkeSaProposal[] proposals,
             @NonNull IkeIdentification localIdentification,
@@ -128,8 +122,6 @@ public final class IkeSessionParams {
             long softLifetimeSec,
             boolean isIkeFragmentationSupported) {
         mServerAddress = serverAddress;
-        mNetwork = network;
-
         mUdpEncapSocket = udpEncapsulationSocket;
         mSaProposals = proposals;
 
@@ -151,12 +143,6 @@ public final class IkeSessionParams {
     @NonNull
     public InetAddress getServerAddress() {
         return mServerAddress;
-    }
-
-    /** Retrieves the configured {@link Network} @hide */
-    @NonNull
-    public Network getNetwork() {
-        return mNetwork;
     }
 
     /** Retrieves the UDP encapsulation socket */
@@ -405,14 +391,10 @@ public final class IkeSessionParams {
 
     /** This class can be used to incrementally construct a {@link IkeSessionParams}. */
     public static final class Builder {
-        @NonNull private final ConnectivityManager mConnectivityManager;
-
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
         @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
 
         @Nullable private InetAddress mServerAddress;
-        @Nullable private Network mNetwork;
-
         @Nullable private UdpEncapsulationSocket mUdpEncapSocket;
 
         @Nullable private IkeIdentification mLocalIdentification;
@@ -425,27 +407,6 @@ public final class IkeSessionParams {
         private long mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
 
         private boolean mIsIkeFragmentationSupported = false;
-
-        /** Temporary constructor for keeping API shape. Will be deleted in following CL. */
-        public Builder() {
-            mConnectivityManager = null;
-        }
-
-        /**
-         * Construct Builder
-         *
-         * @param context a valid {@link Context} instance.
-         * @hide
-         */
-        public Builder(@NonNull Context context) {
-            this((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
-        }
-
-        /** @hide */
-        @VisibleForTesting
-        public Builder(ConnectivityManager connectManager) {
-            mConnectivityManager = connectManager;
-        }
 
         /**
          * Sets the server address for the {@link IkeSessionParams} being built.
@@ -460,26 +421,6 @@ public final class IkeSessionParams {
             }
 
             mServerAddress = serverAddress;
-            return this;
-        }
-
-        /**
-         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
-         *
-         * <p>If no {@link Network} is provided, the default Network (as per {@link
-         * ConnectivityManager#getActiveNetwork()}) will be used.
-         *
-         * @param network the {@link Network} that IKE Session will use.
-         * @return Builder this, to facilitate chaining.
-         * @hide
-         */
-        @NonNull
-        public Builder setNetwork(@NonNull Network network) {
-            if (network == null) {
-                throw new NullPointerException("Required argument not provided");
-            }
-
-            mNetwork = network;
             return this;
         }
 
@@ -768,12 +709,6 @@ public final class IkeSessionParams {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
-
-            Network network = mNetwork != null ? mNetwork : mConnectivityManager.getActiveNetwork();
-            if (network == null) {
-                throw new IllegalArgumentException("Network not found");
-            }
-
             if (mServerAddress == null
                     || mUdpEncapSocket == null
                     || mLocalIdentification == null
@@ -785,7 +720,6 @@ public final class IkeSessionParams {
 
             return new IkeSessionParams(
                     mServerAddress,
-                    network,
                     mUdpEncapSocket,
                     mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,

@@ -20,13 +20,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
-import android.net.Network;
 import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
@@ -55,9 +52,6 @@ public final class IkeSessionTest {
     private IpSecManager mIpSecManager;
     private Context mContext;
 
-    private ConnectivityManager mMockConnectManager;
-    private Network mMockDefaultNetwork;
-
     private IkeSessionParams mIkeSessionParams;
     private ChildSessionParams mMockChildSessionParams;
     private Executor mUserCbExecutor;
@@ -72,10 +66,6 @@ public final class IkeSessionTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
 
-        mMockConnectManager = mock(ConnectivityManager.class);
-        mMockDefaultNetwork = mock(Network.class);
-        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
-
         mIkeSessionParams = buildIkeSessionParams();
         mMockChildSessionParams = mock(ChildSessionParams.class);
         mUserCbExecutor = (r) -> r.run(); // Inline executor for testing purposes.
@@ -84,7 +74,7 @@ public final class IkeSessionTest {
     }
 
     private IkeSessionParams buildIkeSessionParams() throws Exception {
-        return new IkeSessionParams.Builder(mMockConnectManager)
+        return new IkeSessionParams.Builder()
                 .setServerAddress(REMOTE_ADDRESS)
                 .setUdpEncapsulationSocket(mIpSecManager.openUdpEncapsulationSocket())
                 .addSaProposal(IkeSessionStateMachineTest.buildSaProposal())
@@ -100,7 +90,6 @@ public final class IkeSessionTest {
         IkeSession ikeSession =
                 new IkeSession(
                         mContext,
-                        mIpSecManager,
                         mIkeSessionParams,
                         mMockChildSessionParams,
                         mUserCbExecutor,
@@ -129,7 +118,6 @@ public final class IkeSessionTest {
                         sessions[index] =
                                 new IkeSession(
                                         mContext,
-                                        mIpSecManager,
                                         mIkeSessionParams,
                                         mMockChildSessionParams,
                                         mUserCbExecutor,
