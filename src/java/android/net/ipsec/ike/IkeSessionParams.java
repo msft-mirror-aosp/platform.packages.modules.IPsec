@@ -23,6 +23,7 @@ import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.content.Context;
 import android.net.ConnectivityManager;
@@ -92,25 +93,20 @@ public final class IkeSessionParams {
     private static final int MAX_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
 
     /** @hide */
-    @VisibleForTesting
-    static final long IKE_HARD_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(5L);
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
     /** @hide */
-    @VisibleForTesting
-    static final long IKE_HARD_LIFETIME_SEC_MAXIMUM = TimeUnit.HOURS.toSeconds(24L);
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MAXIMUM = 86400; // 24 hours
     /** @hide */
-    @VisibleForTesting
-    static final long IKE_HARD_LIFETIME_SEC_DEFAULT = TimeUnit.HOURS.toSeconds(4L);
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_DEFAULT = 14400; // 4 hours
+
+    /** @hide */
+    @VisibleForTesting static final int IKE_SOFT_LIFETIME_SEC_MINIMUM = 120; // 2 minutes
+    /** @hide */
+    @VisibleForTesting static final int IKE_SOFT_LIFETIME_SEC_DEFAULT = 7200; // 2 hours
 
     /** @hide */
     @VisibleForTesting
-    static final long IKE_SOFT_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(2L);
-    /** @hide */
-    @VisibleForTesting
-    static final long IKE_SOFT_LIFETIME_SEC_DEFAULT = TimeUnit.HOURS.toSeconds(2L);
-
-    /** @hide */
-    @VisibleForTesting
-    static final long IKE_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
+    static final int IKE_LIFETIME_MARGIN_SEC_MINIMUM = (int) TimeUnit.MINUTES.toSeconds(1L);
 
     /** @hide */
     @VisibleForTesting static final int IKE_DPD_DELAY_SEC_MIN = 20;
@@ -148,8 +144,8 @@ public final class IkeSessionParams {
 
     private final long mIkeOptions;
 
-    private final long mHardLifetimeSec;
-    private final long mSoftLifetimeSec;
+    private final int mHardLifetimeSec;
+    private final int mSoftLifetimeSec;
 
     private final int mDpdDelaySec;
 
@@ -166,8 +162,8 @@ public final class IkeSessionParams {
             @NonNull IkeConfigAttribute[] configRequests,
             @NonNull int[] retransTimeoutMsList,
             long ikeOptions,
-            long hardLifetimeSec,
-            long softLifetimeSec,
+            int hardLifetimeSec,
+            int softLifetimeSec,
             int dpdDelaySec,
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
@@ -257,12 +253,18 @@ public final class IkeSessionParams {
     }
 
     /** Retrieves hard lifetime in seconds */
-    public long getHardLifetime() {
+    // Use "second" because smaller unit won't make sense to describe a rekey interval.
+    @SuppressLint("MethodNameUnits")
+    @IntRange(from = IKE_HARD_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+    public int getHardLifetimeSeconds() {
         return mHardLifetimeSec;
     }
 
     /** Retrieves soft lifetime in seconds */
-    public long getSoftLifetime() {
+    // Use "second" because smaller unit does not make sense to a rekey interval.
+    @SuppressLint("MethodNameUnits")
+    @IntRange(from = IKE_SOFT_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+    public int getSoftLifetimeSeconds() {
         return mSoftLifetimeSec;
     }
 
@@ -289,12 +291,12 @@ public final class IkeSessionParams {
 
     /** @hide */
     public long getHardLifetimeMsInternal() {
-        return TimeUnit.SECONDS.toMillis(mHardLifetimeSec);
+        return TimeUnit.SECONDS.toMillis((long) mHardLifetimeSec);
     }
 
     /** @hide */
     public long getSoftLifetimeMsInternal() {
-        return TimeUnit.SECONDS.toMillis(mSoftLifetimeSec);
+        return TimeUnit.SECONDS.toMillis((long) mSoftLifetimeSec);
     }
 
     /** @hide */
@@ -504,8 +506,8 @@ public final class IkeSessionParams {
 
         private long mIkeOptions = 0;
 
-        private long mHardLifetimeSec = IKE_HARD_LIFETIME_SEC_DEFAULT;
-        private long mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
+        private int mHardLifetimeSec = IKE_HARD_LIFETIME_SEC_DEFAULT;
+        private int mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
 
         private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
 
@@ -795,25 +797,30 @@ public final class IkeSessionParams {
          *
          * <p>Lifetimes will not be negotiated with the remote IKE server.
          *
-         * @param hardLifetimeSec number of seconds after which IKE SA will expire. Defaults to
+         * @param hardLifetimeSeconds number of seconds after which IKE SA will expire. Defaults to
          *     14400 seconds (4 hours). MUST be a value from 300 seconds (5 minutes) to 86400
          *     seconds (24 hours), inclusive.
-         * @param softLifetimeSec number of seconds after which IKE SA will request rekey. Defaults
-         *     to 7200 seconds (2 hours). MUST be at least 120 seconds (2 minutes), and at least 60
-         *     seconds (1 minute) shorter than the hard lifetime.
+         * @param softLifetimeSeconds number of seconds after which IKE SA will request rekey.
+         *     Defaults to 7200 seconds (2 hours). MUST be at least 120 seconds (2 minutes), and at
+         *     least 60 seconds (1 minute) shorter than the hard lifetime.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
-        public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
-            if (hardLifetimeSec < IKE_HARD_LIFETIME_SEC_MINIMUM
-                    || hardLifetimeSec > IKE_HARD_LIFETIME_SEC_MAXIMUM
-                    || softLifetimeSec < IKE_SOFT_LIFETIME_SEC_MINIMUM
-                    || hardLifetimeSec - softLifetimeSec < IKE_LIFETIME_MARGIN_SEC_MINIMUM) {
+        public Builder setLifetimeSeconds(
+                @IntRange(from = IKE_HARD_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+                        int hardLifetimeSeconds,
+                @IntRange(from = IKE_SOFT_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+                        int softLifetimeSeconds) {
+            if (hardLifetimeSeconds < IKE_HARD_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSeconds > IKE_HARD_LIFETIME_SEC_MAXIMUM
+                    || softLifetimeSeconds < IKE_SOFT_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSeconds - softLifetimeSeconds
+                            < IKE_LIFETIME_MARGIN_SEC_MINIMUM) {
                 throw new IllegalArgumentException("Invalid lifetime value");
             }
 
-            mHardLifetimeSec = hardLifetimeSec;
-            mSoftLifetimeSec = softLifetimeSec;
+            mHardLifetimeSec = hardLifetimeSeconds;
+            mSoftLifetimeSec = softLifetimeSeconds;
             return this;
         }
 
