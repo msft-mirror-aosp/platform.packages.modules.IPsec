@@ -18,7 +18,10 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.android.ike.tests">
 
+    <!--Allow tests to create socket -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!--Allow tests to call ConnectivityManager#getActiveNetwork()-->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
 
     <!--
        'debuggable=true' is required to properly load mockito jvmti dependencies,
