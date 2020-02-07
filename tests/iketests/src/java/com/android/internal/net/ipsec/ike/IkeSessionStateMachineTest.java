@@ -67,11 +67,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.Network;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ChildSaProposal;
 import android.net.ipsec.test.ike.ChildSessionCallback;
@@ -169,7 +167,6 @@ public final class IkeSessionStateMachineTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
-    private static final String REMOTE_HOST_NAME = "ike.test.android";
 
     private static final String IKE_INIT_RESP_HEX_STRING =
             "5f54bf6d8b48e6e1909232b3d1edcb5c21202220000000000000014c220000300000"
@@ -262,8 +259,6 @@ public final class IkeSessionStateMachineTest {
     private IpSecManager mIpSecManager;
     private UdpEncapsulationSocket mUdpEncapSocket;
 
-    private ConnectivityManager mMockConnectManager;
-    private Network mMockDefaultNetwork;
     private IkeUdpEncapSocket mSpyIkeUdpEncapSocket;
 
     private TestLooper mLooper;
@@ -622,12 +617,6 @@ public final class IkeSessionStateMachineTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
-
-        mMockConnectManager = mock(ConnectivityManager.class);
-        mMockDefaultNetwork = mock(Network.class);
-        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
-        when(mMockDefaultNetwork.getByName(REMOTE_HOST_NAME)).thenReturn(REMOTE_ADDRESS);
-
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
                         .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
@@ -731,13 +720,9 @@ public final class IkeSessionStateMachineTest {
 
         mLooper.dispatchAll();
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
-        assertEquals(REMOTE_ADDRESS, ikeSession.mRemoteAddress);
 
         mSpyIkeUdpEncapSocket =
-                spy(
-                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                mMockDefaultNetwork, mIpSecManager, ikeSession));
-
+                spy(IkeUdpEncapSocket.getIkeUdpEncapSocket(mUdpEncapSocket, ikeSession));
         doNothing().when(mSpyIkeUdpEncapSocket).sendIkePacket(any(), any());
         ikeSession.mIkeSocket = mSpyIkeUdpEncapSocket;
 
@@ -755,8 +740,8 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
-        return new IkeSessionParams.Builder(mMockConnectManager)
-                .setServerAddress(REMOTE_ADDRESS.getHostAddress())
+        return new IkeSessionParams.Builder()
+                .setServerAddress(REMOTE_ADDRESS)
                 .setUdpEncapsulationSocket(mUdpEncapSocket)
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
@@ -1191,20 +1176,6 @@ public final class IkeSessionStateMachineTest {
         IkeSaRecordConfig config = (IkeSaRecordConfig) invocation.getArguments()[ikeConfigIndex];
         config.initSpi.close();
         config.respSpi.close();
-    }
-
-    @Test
-    public void testResolveRemoteHostName() throws Exception {
-        mIkeSessionStateMachine.quitNow();
-
-        IkeSessionParams ikeParams =
-                buildIkeSessionParamsCommon()
-                        .setAuthPsk(mPsk)
-                        .setServerAddress(REMOTE_HOST_NAME)
-                        .build();
-        mIkeSessionStateMachine = makeAndStartIkeSession(ikeParams);
-
-        verify(mMockDefaultNetwork).getByName(REMOTE_HOST_NAME);
     }
 
     @Test
