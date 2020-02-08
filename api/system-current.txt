@@ -162,14 +162,18 @@ package android.net.ipsec.ike {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getSaProposals();
     method @NonNull public String getServerHostname();
     method public long getSoftLifetime();
+    method public boolean hasIkeOption(int);
+    field public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0; // 0x0
   }
 
   public static final class IkeSessionParams.Builder {
     ctor public IkeSessionParams.Builder(@NonNull android.content.Context);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addIkeOption(int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(@NonNull java.net.InetAddress);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addSaProposal(@NonNull android.net.ipsec.ike.IkeSaProposal);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams build();
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder removeIkeOption(int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthDigitalSignature(@Nullable java.security.cert.X509Certificate, @NonNull java.security.cert.X509Certificate, @NonNull java.security.PrivateKey);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthDigitalSignature(@Nullable java.security.cert.X509Certificate, @NonNull java.security.cert.X509Certificate, @NonNull java.util.List<java.security.cert.X509Certificate>, @NonNull java.security.PrivateKey);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthEap(@Nullable java.security.cert.X509Certificate, @NonNull android.net.eap.EapSessionConfig);
