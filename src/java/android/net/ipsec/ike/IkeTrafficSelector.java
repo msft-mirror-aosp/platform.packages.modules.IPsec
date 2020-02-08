@@ -195,8 +195,14 @@ public final class IkeTrafficSelector {
 
                 break;
             case TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE:
-                throw new UnsupportedOperationException("Do not support IPv6 Traffic Selector.");
-                // TODO: Support IPv6 Traffic Selector.
+                this.selectorLength = TRAFFIC_SELECTOR_IPV6_LEN;
+
+                if (!(startingAddress instanceof Inet6Address)
+                        || !(endingAddress instanceof Inet6Address)) {
+                    throw new IllegalArgumentException(
+                            "Invalid address range: TS_IPV6_ADDR_RANGE requires IPv6 addresses.");
+                }
+                break;
             default:
                 throw new IllegalArgumentException("Unrecognized Traffic Selector type.");
         }
