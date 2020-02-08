@@ -113,7 +113,9 @@ public abstract class SaProposal {
     @IntDef({
         PSEUDORANDOM_FUNCTION_HMAC_SHA1,
         PSEUDORANDOM_FUNCTION_AES128_XCBC,
-        // TODO: Add PSEUDORANDOM_FUNCTION_SHA2_* here in the CL that exposes them
+        PSEUDORANDOM_FUNCTION_SHA2_256,
+        PSEUDORANDOM_FUNCTION_SHA2_384,
+        PSEUDORANDOM_FUNCTION_SHA2_512
     })
     public @interface PseudorandomFunction {}
 
@@ -121,11 +123,11 @@ public abstract class SaProposal {
     public static final int PSEUDORANDOM_FUNCTION_HMAC_SHA1 = 2;
     /** AES128-XCBC Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_AES128_XCBC = 4;
-    /** HMAC-SHA2-256 Pseudorandom Function. @hide */
+    /** HMAC-SHA2-256 Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_SHA2_256 = 5;
-    /** HMAC-SHA2-384 Pseudorandom Function. @hide */
+    /** HMAC-SHA2-384 Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_SHA2_384 = 6;
-    /** HMAC-SHA2-384 Pseudorandom Function. @hide */
+    /** HMAC-SHA2-384 Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_SHA2_512 = 7;
 
     private static final SparseArray<String> SUPPORTED_PRF_TO_STR;
