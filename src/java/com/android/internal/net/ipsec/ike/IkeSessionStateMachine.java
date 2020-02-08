@@ -37,11 +37,9 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 
 import android.annotation.IntDef;
 import android.content.Context;
-import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.Network;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
@@ -115,6 +113,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.SocketException;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
@@ -950,20 +949,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void enterState() {
             try {
-                Network network = mIkeSessionParams.getNetwork();
-                String serverAddr = mIkeSessionParams.getServerAddressInternal();
-
-                if (InetAddresses.isNumericAddress(serverAddr)) {
-                    mRemoteAddress = InetAddresses.parseNumericAddress(serverAddr);
-                } else {
-                    mRemoteAddress = network.getByName(serverAddr);
-                }
+                mRemoteAddress = mIkeSessionParams.getServerAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
                     mIkeSocket =
                             IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                    network, mIpSecManager, IkeSessionStateMachine.this);
+                                    mIkeSessionParams.getUdpEncapsulationSocket(),
+                                    IkeSessionStateMachine.this);
                 } else {
                     throw new UnsupportedOperationException("Do not support IPv6 IKE sever");
                     // TODO(b/146674994): Support IPv6 server address.
@@ -974,13 +967,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 isIpv4 ? OsConstants.AF_INET : OsConstants.AF_INET6,
                                 OsConstants.SOCK_DGRAM,
                                 OsConstants.IPPROTO_UDP);
-                network.bindSocket(sock);
                 Os.connect(sock, mRemoteAddress, mIkeSocket.getIkeServerPort());
                 InetSocketAddress localAddr = (InetSocketAddress) Os.getsockname(sock);
                 mLocalAddress = localAddr.getAddress();
                 mLocalPort = localAddr.getPort();
                 Os.close(sock);
-            } catch (ErrnoException | IOException | ResourceUnavailableException e) {
+            } catch (ErrnoException | SocketException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -1973,7 +1965,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             childData.respPayloads,
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNatDetected(),
+                            getEncapSocketIfNeeded(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     return HANDLED;
@@ -2002,19 +1994,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        // Returns the UDP-Encapsulation socket to the newly created ChildSessionStateMachine if
-        // a NAT is detected. It allows the ChildSessionStateMachine to build IPsec transforms that
-        // can send and receive IPsec traffic through a NAT.
-        private UdpEncapsulationSocket getEncapSocketIfNatDetected() {
+        private UdpEncapsulationSocket getEncapSocketIfNeeded() {
             boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
 
-            if (!isNatDetected) return null;
-
-            if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
-                throw new IllegalStateException(
-                        "NAT is detected but IKE packet is not UDP-Encapsulated.");
-            }
-            return ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket();
+            return (isNatDetected ? mIkeSessionParams.getUdpEncapsulationSocket() : null);
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
@@ -2038,7 +2021,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     mChildInLocalProcedure.createChildSession(
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNatDetected(),
+                            getEncapSocketIfNeeded(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     break;
@@ -2518,7 +2501,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
                     IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                            mRemoteAddress, respIkeHeader.ikeResponderSpi);
+                            mIkeSessionParams.getServerAddress(), respIkeHeader.ikeResponderSpi);
 
             int exchangeType = respIkeHeader.exchangeType;
             if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
