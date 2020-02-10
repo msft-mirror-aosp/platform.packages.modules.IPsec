@@ -16,10 +16,12 @@
 
 package android.net.ipsec.ike;
 
+import static android.net.ipsec.ike.IkeSessionParams.IKE_DPD_DELAY_SEC_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
@@ -121,9 +123,14 @@ public final class IkeSessionParamsTest {
     }
 
     private void verifyIkeParamsWithSeverIpAndDefaultValues(IkeSessionParams sessionParams) {
+        verifyIkeSessionParamsCommon(sessionParams);
+
         assertEquals(REMOTE_IPV4_HOST_ADDRESS, sessionParams.getServerHostname());
         assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
-        verifyIkeSessionParamsCommon(sessionParams);
+        assertEquals(IKE_DPD_DELAY_SEC_DEFAULT, sessionParams.getDpdDelaySeconds());
+        assertArrayEquals(
+                IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
+                sessionParams.getRetransmissionTimeoutMillis());
     }
 
     private void verifyIkeSessionParamsCommon(IkeSessionParams sessionParams) {
@@ -252,6 +259,84 @@ public final class IkeSessionParamsTest {
         try {
             sessionParams.hasIkeOption(IKE_OPTION_INVALID);
             fail("Expected to fail due to invalid ikeOption");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildWithPskAndDpdDelay() throws Exception {
+        final int dpdDelaySec = 100;
+
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setDpdDelaySeconds(dpdDelaySec)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+        assertEquals(REMOTE_IPV4_HOST_ADDRESS, sessionParams.getServerHostname());
+
+        // Verify default values
+        assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
+        assertArrayEquals(
+                IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
+                sessionParams.getRetransmissionTimeoutMillis());
+
+        // Verify DPD delay
+        assertEquals(dpdDelaySec, sessionParams.getDpdDelaySeconds());
+    }
+
+    @Test
+    public void testBuildWithInvalidDpdDelay() throws Exception {
+        final int invalidDpdDelay = 1;
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager).setDpdDelaySeconds(invalidDpdDelay);
+            fail("Expected to fail due to invalid DPD delay");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildWithPskAndRetransmission() throws Exception {
+        final int[] retransmissionTimeoutList = new int[] {1000, 2000, 3000, 4000};
+
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setRetransmissionTimeoutMillis(retransmissionTimeoutList)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+        assertEquals(REMOTE_IPV4_HOST_ADDRESS, sessionParams.getServerHostname());
+
+        // Verify default values
+        assertEquals(IKE_DPD_DELAY_SEC_DEFAULT, sessionParams.getDpdDelaySeconds());
+        assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
+
+        // Verify retransmission configuration
+        assertEquals(retransmissionTimeoutList, sessionParams.getRetransmissionTimeoutMillis());
+    }
+
+    @Test
+    public void testBuildWithInvalidRetransmissionTimeout() throws Exception {
+        final int[] invalidRetransTimeoutMsList = new int[] {1000, 2000, 3000, Integer.MAX_VALUE};
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setRetransmissionTimeoutMillis(invalidRetransTimeoutMsList);
+            fail("Expected to fail due to invalid retransmission timeout");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testBuildWithInvalidMaxRetransmissionAttempts() throws Exception {
+        final int[] invalidRetransTimeoutMsList = new int[20];
+        for (int t : invalidRetransTimeoutMsList) t = 500;
+
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setRetransmissionTimeoutMillis(invalidRetransTimeoutMsList);
+            fail("Expected to fail due to invalid max retransmission times");
         } catch (IllegalArgumentException expected) {
         }
     }
