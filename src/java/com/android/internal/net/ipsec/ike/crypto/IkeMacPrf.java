@@ -75,6 +75,18 @@ public class IkeMacPrf extends IkeMac {
                 // TODO:Set mAlgorithmName
                 throw new UnsupportedOperationException(
                         "Do not support PSEUDORANDOM_FUNCTION_AES128_XCBC.");
+            case SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256:
+                keyLength = 32;
+                algorithmName = "HmacSHA256";
+                break;
+            case SaProposal.PSEUDORANDOM_FUNCTION_SHA2_384:
+                keyLength = 48;
+                algorithmName = "HmacSHA384";
+                break;
+            case SaProposal.PSEUDORANDOM_FUNCTION_SHA2_512:
+                keyLength = 64;
+                algorithmName = "HmacSHA512";
+                break;
             default:
                 throw new IllegalArgumentException("Unrecognized PRF ID: " + algorithmId);
         }
