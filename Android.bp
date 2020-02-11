@@ -15,9 +15,60 @@
 java_library {
     name: "ike",
     installable: true,
+    // TODO (b/146757305): change to module API once available
+    sdk_version: "core_platform",
 
     aidl: {
         local_include_dirs: ["src/java"],
     },
-    srcs: ["src/java/**/*.java"],
+    srcs: [":ike-srcs"],
+
+    libs: [
+        "unsupportedappusage",
+        "framework-annotations-lib",
+        "android_system_stubs_current",
+    ],
+
+    // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
+    // classpath conflicts. This is necessary to preserve access to these
+    // statically included classes.
+    jarjar_rules: "jarjar-rules-shared.txt",
+
+    plugins: ["java_api_finder"],
+
+    hostdex: true, // for hiddenapi check
+    visibility: ["//frameworks/opt/net/ike:__subpackages__"],
+    apex_available: [
+        "com.android.ipsec",
+        "test_com.android.ipsec",
+    ],
+}
+
+filegroup {
+    name: "ike-srcs",
+    srcs: [
+        "src/java/**/*.java",
+        ":bouncycastle_ike_digests",
+        ":framework-ike-shared-srcs",
+    ],
+}
+
+filegroup {
+    name: "ike-api-srcs",
+    srcs: ["src/java/android/**/*.java"],
+    path: "src/java/",
+}
+
+droidstubs {
+    name: "ike-stubs-docs",
+    defaults:["framework-module-stubs-defaults-systemapi"],
+    libs: ["framework-all"],
+    srcs: [":ike-api-srcs"],
+    sdk_version: "system_current",
+}
+
+java_library {
+    name: "ike-stubs",
+    srcs: [":ike-stubs-docs"],
+    sdk_version: "system_current",
 }
