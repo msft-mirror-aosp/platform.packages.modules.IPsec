@@ -130,7 +130,7 @@ public final class IkeSessionParamsTest {
         assertEquals(IKE_DPD_DELAY_SEC_DEFAULT, sessionParams.getDpdDelaySeconds());
         assertArrayEquals(
                 IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
-                sessionParams.getRetransmissionTimeoutMillis());
+                sessionParams.getRetransmissionTimeoutsMillis());
     }
 
     private void verifyIkeSessionParamsCommon(IkeSessionParams sessionParams) {
@@ -280,7 +280,7 @@ public final class IkeSessionParamsTest {
         assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
         assertArrayEquals(
                 IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
-                sessionParams.getRetransmissionTimeoutMillis());
+                sessionParams.getRetransmissionTimeoutsMillis());
 
         // Verify DPD delay
         assertEquals(dpdDelaySec, sessionParams.getDpdDelaySeconds());
@@ -302,7 +302,7 @@ public final class IkeSessionParamsTest {
 
         IkeSessionParams sessionParams =
                 buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
-                        .setRetransmissionTimeoutMillis(retransmissionTimeoutList)
+                        .setRetransmissionTimeoutsMillis(retransmissionTimeoutList)
                         .build();
 
         verifyIkeSessionParamsCommon(sessionParams);
@@ -314,7 +314,7 @@ public final class IkeSessionParamsTest {
         assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
 
         // Verify retransmission configuration
-        assertEquals(retransmissionTimeoutList, sessionParams.getRetransmissionTimeoutMillis());
+        assertEquals(retransmissionTimeoutList, sessionParams.getRetransmissionTimeoutsMillis());
     }
 
     @Test
@@ -322,7 +322,7 @@ public final class IkeSessionParamsTest {
         final int[] invalidRetransTimeoutMsList = new int[] {1000, 2000, 3000, Integer.MAX_VALUE};
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setRetransmissionTimeoutMillis(invalidRetransTimeoutMsList);
+                    .setRetransmissionTimeoutsMillis(invalidRetransTimeoutMsList);
             fail("Expected to fail due to invalid retransmission timeout");
         } catch (IllegalArgumentException expected) {
         }
@@ -335,7 +335,7 @@ public final class IkeSessionParamsTest {
 
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setRetransmissionTimeoutMillis(invalidRetransTimeoutMsList);
+                    .setRetransmissionTimeoutsMillis(invalidRetransTimeoutMsList);
             fail("Expected to fail due to invalid max retransmission times");
         } catch (IllegalArgumentException expected) {
         }
