@@ -26,14 +26,17 @@ import android.net.LinkAddress;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
 
 import org.junit.Before;
 import org.junit.Test;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -58,6 +61,8 @@ public final class ChildSessionConfigurationTest {
     private ConfigAttributeIpv4Address mIpv4Attr;
     private ConfigAttributeIpv4Netmask mNetmaskAttr;
     private ConfigAttributeIpv6Address mIpv6Attr;
+    private ConfigAttributeIpv4Dns mIpv4Dns;
+    private ConfigAttributeIpv6Dns mIpv6Dns;
 
     @Before
     public void setUp() throws Exception {
@@ -71,6 +76,8 @@ public final class ChildSessionConfigurationTest {
         mIpv4Attr = new ConfigAttributeIpv4Address(IPV4_ADDRESS);
         mNetmaskAttr = new ConfigAttributeIpv4Netmask(IPV4_NETMASK.getAddress());
         mIpv6Attr = new ConfigAttributeIpv6Address(IPV6_LINK_ADDRESS);
+        mIpv4Dns = new ConfigAttributeIpv4Dns(IPV4_ADDRESS);
+        mIpv6Dns = new ConfigAttributeIpv6Dns(IPV6_ADDRESS);
     }
 
     private void verifySessionConfigCommon(ChildSessionConfiguration sessionConfig) {
@@ -156,6 +163,30 @@ public final class ChildSessionConfigurationTest {
             fail("Expected to fail because provided config paylaod is not a reply.");
         } catch (IllegalArgumentException expected) {
 
+        }
+    }
+
+    @Test
+    public void testBuildWithDnsAttr() {
+        List<ConfigAttribute> attributeList = new LinkedList<>();
+        attributeList.add(mIpv4Dns);
+        attributeList.add(mIpv6Dns);
+
+        IkeConfigPayload configPayload = new IkeConfigPayload(true /*isReply*/, attributeList);
+
+        ChildSessionConfiguration sessionConfig =
+                new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
+
+        verifySessionConfigCommon(sessionConfig);
+
+        List<InetAddress> expectedDnsAddrList = new LinkedList<>();
+        expectedDnsAddrList.add(IPV4_ADDRESS);
+        expectedDnsAddrList.add(IPV6_ADDRESS);
+
+        assertEquals(expectedDnsAddrList.size(), sessionConfig.getInternalDnsServers().size());
+        for (int i = 0; i < expectedDnsAddrList.size(); i++) {
+            assertEquals(
+                    expectedDnsAddrList.get(i), sessionConfig.getInternalDnsServers().get(i));
         }
     }
 }
