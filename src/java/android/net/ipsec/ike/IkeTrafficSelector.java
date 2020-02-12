@@ -243,11 +243,13 @@ public final class IkeTrafficSelector {
                 int tsType = Byte.toUnsignedInt(inputBuffer.get());
                 switch (tsType) {
                     case TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE:
-                        tsArray[i] = decodeIpv4TrafficSelector(inputBuffer);
+                        tsArray[i] = decodeTrafficSelector(inputBuffer,
+                                TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE);
                         break;
                     case TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE:
-                        // TODO: Support it.
-                        throw new UnsupportedOperationException("Cannot decode this type.");
+                        tsArray[i] = decodeTrafficSelector(inputBuffer,
+                                TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE);
+                        break;
                     default:
                         throw new InvalidSyntaxException(
                                 "Invalid Traffic Selector type: " + tsType);
@@ -266,9 +268,9 @@ public final class IkeTrafficSelector {
         return tsArray;
     }
 
-    // Decode Traffic Selector using IPv4 address range from a ByteBuffer. A BufferOverflowException
-    // will be thrown and caught by method caller if operation reaches the input ByteBuffer's limit.
-    private static IkeTrafficSelector decodeIpv4TrafficSelector(ByteBuffer inputBuffer)
+    // Decode Traffic Selector from a ByteBuffer. A BufferOverflowException will be thrown and
+    // caught by method caller if operation reaches the input ByteBuffer's limit.
+    private static IkeTrafficSelector decodeTrafficSelector(ByteBuffer inputBuffer, int tsType)
             throws InvalidSyntaxException {
         // Decode and validate IP Protocol ID
         int ipProtocolId = Byte.toUnsignedInt(inputBuffer.get());
@@ -277,8 +279,10 @@ public final class IkeTrafficSelector {
         }
 
         // Decode and validate Selector Length
+        boolean isTsIpv4 = tsType == TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE;
+        int expectedTsLen = isTsIpv4 ? TRAFFIC_SELECTOR_IPV4_LEN : TRAFFIC_SELECTOR_IPV6_LEN;
         int tsLength = Short.toUnsignedInt(inputBuffer.getShort());
-        if (TRAFFIC_SELECTOR_IPV4_LEN != tsLength) {
+        if (expectedTsLen != tsLength) {
             throw new InvalidSyntaxException("Invalid Traffic Selector Length.");
         }
 
@@ -293,25 +297,31 @@ public final class IkeTrafficSelector {
                             + endPort);
         }
 
-        // Decode and validate IPv4 addresses
-        byte[] startAddressBytes = new byte[IPV4_ADDR_LEN];
-        byte[] endAddressBytes = new byte[IPV4_ADDR_LEN];
+        // Decode and validate IP addresses
+        int expectedAddrLen = isTsIpv4 ? IPV4_ADDR_LEN : IPV6_ADDR_LEN;
+        byte[] startAddressBytes = new byte[expectedAddrLen];
+        byte[] endAddressBytes = new byte[expectedAddrLen];
         inputBuffer.get(startAddressBytes);
         inputBuffer.get(endAddressBytes);
         try {
-            Inet4Address startAddress =
-                    (Inet4Address) (Inet4Address.getByAddress(startAddressBytes));
-            Inet4Address endAddress = (Inet4Address) (Inet4Address.getByAddress(endAddressBytes));
+            InetAddress startAddress = InetAddress.getByAddress(startAddressBytes);
+            InetAddress endAddress = InetAddress.getByAddress(endAddressBytes);
+
+            boolean isStartAddrIpv4 = startAddress instanceof Inet4Address;
+            boolean isEndAddrIpv4 = endAddress instanceof Inet4Address;
+            if (isTsIpv4 != isStartAddrIpv4 || isTsIpv4 != isEndAddrIpv4) {
+                throw new InvalidSyntaxException("Invalid IP address family");
+            }
 
             // Validate address range.
             if (compareInetAddressTo(startAddress, endAddress) > 0) {
-                throw new InvalidSyntaxException("Received invalid IPv4 address range.");
+                throw new InvalidSyntaxException("Received invalid IP address range.");
             }
 
             return new IkeTrafficSelector(
-                    TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
+                    tsType,
                     ipProtocolId,
-                    TRAFFIC_SELECTOR_IPV4_LEN,
+                    expectedTsLen,
                     startPort,
                     endPort,
                     startAddress,
@@ -320,8 +330,6 @@ public final class IkeTrafficSelector {
             throw new InvalidSyntaxException(e);
         }
     }
-
-    // TODO: Add a method for decoding IPv6 traffic selector.
 
     // Validate port range.
     private static boolean isPortRangeValid(int startPort, int endPort) {
