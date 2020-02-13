@@ -113,9 +113,7 @@ public abstract class SaProposal {
     @IntDef({
         PSEUDORANDOM_FUNCTION_HMAC_SHA1,
         PSEUDORANDOM_FUNCTION_AES128_XCBC,
-        PSEUDORANDOM_FUNCTION_SHA2_256,
-        PSEUDORANDOM_FUNCTION_SHA2_384,
-        PSEUDORANDOM_FUNCTION_SHA2_512
+        // TODO: Add PSEUDORANDOM_FUNCTION_SHA2_* here in the CL that exposes them
     })
     public @interface PseudorandomFunction {}
 
