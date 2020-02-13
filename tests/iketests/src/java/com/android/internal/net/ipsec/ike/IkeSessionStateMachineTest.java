@@ -22,6 +22,8 @@ import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_T
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static android.system.OsConstants.AF_INET;
+import static android.system.OsConstants.AF_INET6;
 
 import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
 import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
@@ -65,11 +67,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
-import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.Network;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ChildSaProposal;
 import android.net.ipsec.test.ike.ChildSessionCallback;
@@ -80,7 +80,7 @@ import android.net.ipsec.test.ike.IkeSaProposal;
 import android.net.ipsec.test.ike.IkeSessionCallback;
 import android.net.ipsec.test.ike.IkeSessionParams;
 import android.net.ipsec.test.ike.SaProposal;
-import android.net.ipsec.test.ike.TransportModeChildSessionParams;
+import android.net.ipsec.test.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.test.ike.exceptions.IkeException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
@@ -112,6 +112,7 @@ import com.android.internal.net.test.ipsec.ike.message.IkeAuthDigitalSignPayload
 import com.android.internal.net.test.ipsec.ike.message.IkeAuthPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeAuthPskPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeCertX509CertPayload;
+import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeEapPayload;
 import com.android.internal.net.test.ipsec.ike.message.IkeHeader;
@@ -166,7 +167,6 @@ public final class IkeSessionStateMachineTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
-    private static final String REMOTE_HOST_NAME = "ike.test.android";
 
     private static final String IKE_INIT_RESP_HEX_STRING =
             "5f54bf6d8b48e6e1909232b3d1edcb5c21202220000000000000014c220000300000"
@@ -259,8 +259,6 @@ public final class IkeSessionStateMachineTest {
     private IpSecManager mIpSecManager;
     private UdpEncapsulationSocket mUdpEncapSocket;
 
-    private ConnectivityManager mMockConnectManager;
-    private Network mMockDefaultNetwork;
     private IkeUdpEncapSocket mSpyIkeUdpEncapSocket;
 
     private TestLooper mLooper;
@@ -619,12 +617,6 @@ public final class IkeSessionStateMachineTest {
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
         mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
-
-        mMockConnectManager = mock(ConnectivityManager.class);
-        mMockDefaultNetwork = mock(Network.class);
-        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
-        when(mMockDefaultNetwork.getByName(REMOTE_HOST_NAME)).thenReturn(REMOTE_ADDRESS);
-
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
                         .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
@@ -728,13 +720,9 @@ public final class IkeSessionStateMachineTest {
 
         mLooper.dispatchAll();
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
-        assertEquals(REMOTE_ADDRESS, ikeSession.mRemoteAddress);
 
         mSpyIkeUdpEncapSocket =
-                spy(
-                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                mMockDefaultNetwork, mIpSecManager, ikeSession));
-
+                spy(IkeUdpEncapSocket.getIkeUdpEncapSocket(mUdpEncapSocket, ikeSession));
         doNothing().when(mSpyIkeUdpEncapSocket).sendIkePacket(any(), any());
         ikeSession.mIkeSocket = mSpyIkeUdpEncapSocket;
 
@@ -752,13 +740,15 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
-        return new IkeSessionParams.Builder(mMockConnectManager)
-                .setServerAddress(REMOTE_ADDRESS.getHostAddress())
+        return new IkeSessionParams.Builder()
+                .setServerAddress(REMOTE_ADDRESS)
                 .setUdpEncapsulationSocket(mUdpEncapSocket)
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
                 .setRemoteIdentification(
-                        new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS));
+                        new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
+                .addPcscfServerRequest(AF_INET)
+                .addPcscfServerRequest(AF_INET6);
     }
 
     private IkeSessionParams buildIkeSessionParamsPsk(byte[] psk) throws Exception {
@@ -779,7 +769,11 @@ public final class IkeSessionStateMachineTest {
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                         .build();
 
-        return new TransportModeChildSessionParams.Builder().addSaProposal(saProposal).build();
+        return new TunnelModeChildSessionParams.Builder()
+                .addSaProposal(saProposal)
+                .addInternalAddressRequest(AF_INET)
+                .addInternalAddressRequest(AF_INET6)
+                .build();
     }
 
     private ReceivedIkePacket makeIkeInitResponse() throws Exception {
@@ -1182,20 +1176,6 @@ public final class IkeSessionStateMachineTest {
         IkeSaRecordConfig config = (IkeSaRecordConfig) invocation.getArguments()[ikeConfigIndex];
         config.initSpi.close();
         config.respSpi.close();
-    }
-
-    @Test
-    public void testResolveRemoteHostName() throws Exception {
-        mIkeSessionStateMachine.quitNow();
-
-        IkeSessionParams ikeParams =
-                buildIkeSessionParamsCommon()
-                        .setAuthPsk(mPsk)
-                        .setServerAddress(REMOTE_HOST_NAME)
-                        .build();
-        mIkeSessionStateMachine = makeAndStartIkeSession(ikeParams);
-
-        verify(mMockDefaultNetwork).getByName(REMOTE_HOST_NAME);
     }
 
     @Test
@@ -1927,6 +1907,20 @@ public final class IkeSessionStateMachineTest {
         assertNotNull(
                 ikeAuthReqMessage.getPayloadForType(
                         IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class));
+
+        IkeConfigPayload configPayload =
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_CP, IkeConfigPayload.class);
+        assertNotNull(configPayload);
+
+        configPayload.recognizedAttributeList.contains(
+                new IkeConfigPayload.ConfigAttributeIpv4Pcscf());
+        configPayload.recognizedAttributeList.contains(
+                new IkeConfigPayload.ConfigAttributeIpv6Pcscf());
+        configPayload.recognizedAttributeList.contains(
+                new IkeConfigPayload.ConfigAttributeIpv4Address());
+        configPayload.recognizedAttributeList.contains(
+                new IkeConfigPayload.ConfigAttributeIpv6Address());
 
         return ikeAuthReqMessage;
     }
