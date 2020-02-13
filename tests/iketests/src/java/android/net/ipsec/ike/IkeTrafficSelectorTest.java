@@ -377,4 +377,44 @@ public final class IkeTrafficSelectorTest {
         assertFalse(tsIpv6ThreeSubsetPortRange.contains(mTsIpv6Three));
         assertFalse(tsIpv6ThreeSubsetAddrRange.contains(mTsIpv6Three));
     }
+
+    @Test
+    public void testDecodeIpv6TS() throws Exception {
+        int numTs = 1;
+
+        byte[] tsBytes = TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS);
+        IkeTrafficSelector[] selectors =
+                IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+
+        assertEquals(numTs, selectors.length);
+        assertTrue(selectors[0].equals(mTsIpv6Three));
+    }
+
+    @Test
+    public void testDecodeWithBothIpv6AndIpv4TS() throws Exception {
+        int numTs = 2;
+        byte[] tsBytes =
+                TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS + TS_IPV4_ONE_HEX_STRING);
+        IkeTrafficSelector[] selectors =
+                IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+
+        assertEquals(numTs, selectors.length);
+        assertTrue(selectors[0].equals(mTsIpv6Three));
+        assertTrue(selectors[1].equals(mTsOne));
+    }
+
+    @Test
+    public void testDecodeIpv6TSWithInvalidLength() throws Exception {
+        int numTs = 2;
+        byte[] tsBytes =
+                TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS + "FFFF");
+
+        try {
+            IkeTrafficSelector[] selectors =
+                    IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+            fail("Expected to fail with invalid syntax exception");
+        } catch(InvalidSyntaxException e) {
+        }
+
+    }
 }
