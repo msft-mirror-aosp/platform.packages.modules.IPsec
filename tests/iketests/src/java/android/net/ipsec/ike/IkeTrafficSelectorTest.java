@@ -30,26 +30,32 @@ import com.android.internal.net.test.ipsec.ike.exceptions.InvalidSyntaxException
 
 import org.junit.Test;
 
-import java.net.Inet4Address;
-import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 
 public final class IkeTrafficSelectorTest {
     private static final String TS_IPV4_ONE_HEX_STRING = "070000100010fff0c0000264c0000365";
     private static final int TS_ONE_START_PORT = 16;
     private static final int TS_ONE_END_PORT = 65520;
-    private static final Inet4Address TS_ONE_START_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
-    private static final Inet4Address TS_ONE_END_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.3.101"));
+    private static final InetAddress TS_ONE_START_ADDRESS =
+            InetAddresses.parseNumericAddress("192.0.2.100");
+    private static final InetAddress TS_ONE_END_ADDRESS =
+            InetAddresses.parseNumericAddress("192.0.3.101");
 
     private static final String TS_IPV4_TWO_HEX_STRING = "070000100000ffffc0000464c0000466";
     private static final int TS_TWO_START_PORT = 0;
     private static final int TS_TWO_END_PORT = 65535;
-    private static final Inet4Address TS_TWO_START_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.4.100"));
-    private static final Inet4Address TS_TWO_END_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.4.102"));
+    private static final InetAddress TS_TWO_START_ADDRESS =
+            InetAddresses.parseNumericAddress("192.0.4.100");
+    private static final InetAddress TS_TWO_END_ADDRESS =
+            InetAddresses.parseNumericAddress("192.0.4.102");
+
+    private static final InetAddress TS_THREE_START_ADDRESS =
+            InetAddresses.parseNumericAddress("::");
+    private static final InetAddress TS_THREE_END_ADDRESS =
+            InetAddresses.parseNumericAddress("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff");
+    String TS_IPV6_THREE_HEX_ADDRESS =
+            "080000280000ffff00000000000000000000000000000000ffffffffffffffffffffffffffffffff";
 
     private static final String TX_IPV4_INVALID_PORT_RANGE_HEX_STRING =
             "0700001022221111c0000464c0000466";
@@ -62,6 +68,7 @@ public final class IkeTrafficSelectorTest {
 
     private IkeTrafficSelector mTsOne;
     private IkeTrafficSelector mTsTwo;
+    private IkeTrafficSelector mTsIpv6Three;
 
     public IkeTrafficSelectorTest() {
         mTsOne =
@@ -78,6 +85,13 @@ public final class IkeTrafficSelectorTest {
                         TS_TWO_END_PORT,
                         TS_TWO_START_ADDRESS,
                         TS_TWO_END_ADDRESS);
+        mTsIpv6Three =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE,
+                        TS_TWO_START_PORT,
+                        TS_TWO_END_PORT,
+                        TS_THREE_START_ADDRESS,
+                        TS_THREE_END_ADDRESS);
     }
 
     @Test
@@ -279,8 +293,7 @@ public final class IkeTrafficSelectorTest {
 
     @Test
     public void testBuildIkeTrafficSelectorWithMismatchedAddressType() throws Exception {
-        Inet6Address inet6Address =
-                (Inet6Address) (InetAddresses.parseNumericAddress("0:2001:0:db8::1"));
+        InetAddress inet6Address = InetAddresses.parseNumericAddress("0:2001:0:db8::1");
         try {
             IkeTrafficSelector ts =
                     new IkeTrafficSelector(
@@ -308,5 +321,100 @@ public final class IkeTrafficSelectorTest {
             fail("Expected to fail due to invalid address range.");
         } catch (IllegalArgumentException e) {
         }
+    }
+
+    @Test
+    public void testBuildAndEncodeIpv6TrafficSelector() throws Exception {
+        ByteBuffer byteBuffer = ByteBuffer.allocate(mTsIpv6Three.selectorLength);
+        mTsIpv6Three.encodeToByteBuffer(byteBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS);
+        assertArrayEquals(expectedBytes, byteBuffer.array());
+    }
+
+    @Test
+    public void testIpv6TsEquals() throws Exception {
+        IkeTrafficSelector tsThreeOther =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE,
+                        TS_TWO_START_PORT,
+                        TS_TWO_END_PORT,
+                        TS_THREE_START_ADDRESS,
+                        TS_THREE_END_ADDRESS);
+
+        IkeTrafficSelector tsThreeOtherDifferentPort =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE,
+                        TS_ONE_START_PORT,
+                        TS_ONE_END_PORT,
+                        TS_THREE_START_ADDRESS,
+                        TS_THREE_END_ADDRESS);
+
+        assertEquals(mTsIpv6Three, tsThreeOther);
+        assertNotEquals(mTsIpv6Three, tsThreeOtherDifferentPort);
+    }
+
+    @Test
+    public void testIpv6TsContains() throws Exception {
+        IkeTrafficSelector tsIpv6ThreeSubsetPortRange =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE,
+                        TS_ONE_START_PORT,
+                        TS_ONE_END_PORT,
+                        TS_THREE_START_ADDRESS,
+                        TS_THREE_END_ADDRESS);
+        IkeTrafficSelector tsIpv6ThreeSubsetAddrRange =
+                new IkeTrafficSelector(
+                        IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE,
+                        TS_TWO_START_PORT,
+                        TS_TWO_END_PORT,
+                        TS_THREE_START_ADDRESS,
+                        InetAddresses.parseNumericAddress(
+                                "2001:0db8:85a3:0000:0000:8a2e:0370:7334"));
+
+        assertTrue(mTsIpv6Three.contains(tsIpv6ThreeSubsetPortRange));
+        assertTrue(mTsIpv6Three.contains(tsIpv6ThreeSubsetAddrRange));
+        assertFalse(tsIpv6ThreeSubsetPortRange.contains(mTsIpv6Three));
+        assertFalse(tsIpv6ThreeSubsetAddrRange.contains(mTsIpv6Three));
+    }
+
+    @Test
+    public void testDecodeIpv6TS() throws Exception {
+        int numTs = 1;
+
+        byte[] tsBytes = TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS);
+        IkeTrafficSelector[] selectors =
+                IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+
+        assertEquals(numTs, selectors.length);
+        assertTrue(selectors[0].equals(mTsIpv6Three));
+    }
+
+    @Test
+    public void testDecodeWithBothIpv6AndIpv4TS() throws Exception {
+        int numTs = 2;
+        byte[] tsBytes =
+                TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS + TS_IPV4_ONE_HEX_STRING);
+        IkeTrafficSelector[] selectors =
+                IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+
+        assertEquals(numTs, selectors.length);
+        assertTrue(selectors[0].equals(mTsIpv6Three));
+        assertTrue(selectors[1].equals(mTsOne));
+    }
+
+    @Test
+    public void testDecodeIpv6TSWithInvalidLength() throws Exception {
+        int numTs = 2;
+        byte[] tsBytes =
+                TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS + "FFFF");
+
+        try {
+            IkeTrafficSelector[] selectors =
+                    IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+            fail("Expected to fail with invalid syntax exception");
+        } catch(InvalidSyntaxException e) {
+        }
+
     }
 }
