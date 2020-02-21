@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.eap.statemachine;
+package com.android.internal.net.eap.statemachine;
 
-import static com.android.internal.net.test.eap.EapTestUtils.getDummyEapSessionConfig;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_IDENTITY;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_IDENTITY_DEFAULT_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_IDENTITY_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
+import static com.android.internal.net.eap.EapTestUtils.getDummyEapSessionConfig;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_IDENTITY;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_IDENTITY_DEFAULT_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_IDENTITY_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
@@ -33,9 +33,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
-import com.android.internal.net.test.eap.EapResult;
-import com.android.internal.net.test.eap.EapResult.EapResponse;
-import com.android.internal.net.test.eap.statemachine.EapStateMachine.MethodState;
+import com.android.internal.net.eap.EapResult;
+import com.android.internal.net.eap.EapResult.EapResponse;
+import com.android.internal.net.eap.statemachine.EapStateMachine.MethodState;
 
 import org.junit.Before;
 import org.junit.Test;

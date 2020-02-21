@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.eap;
+package com.android.internal.net.eap;
 
-import static com.android.internal.net.test.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_SIM_RESPONSE_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.REQUEST_UNSUPPORTED_TYPE_PACKET;
+import static com.android.internal.net.TestUtils.hexStringToByteArray;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SIM_RESPONSE_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.REQUEST_UNSUPPORTED_TYPE_PACKET;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -36,12 +36,12 @@ import static org.mockito.Mockito.when;
 import android.os.Looper;
 import android.os.test.TestLooper;
 
-import com.android.internal.net.test.eap.EapResult.EapError;
-import com.android.internal.net.test.eap.EapResult.EapFailure;
-import com.android.internal.net.test.eap.EapResult.EapResponse;
-import com.android.internal.net.test.eap.EapResult.EapSuccess;
-import com.android.internal.net.test.eap.exceptions.EapInvalidRequestException;
-import com.android.internal.net.test.eap.statemachine.EapStateMachine;
+import com.android.internal.net.eap.EapResult.EapError;
+import com.android.internal.net.eap.EapResult.EapFailure;
+import com.android.internal.net.eap.EapResult.EapResponse;
+import com.android.internal.net.eap.EapResult.EapSuccess;
+import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
+import com.android.internal.net.eap.statemachine.EapStateMachine;
 
 import org.junit.Before;
 import org.junit.Test;
