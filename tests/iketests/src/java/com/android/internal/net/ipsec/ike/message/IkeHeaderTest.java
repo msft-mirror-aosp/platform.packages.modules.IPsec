@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.ipsec.ike.message;
+package com.android.internal.net.ipsec.ike.message;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.android.internal.net.test.TestUtils;
-import com.android.internal.net.test.ipsec.ike.exceptions.InvalidMajorVersionException;
-import com.android.internal.net.test.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.TestUtils;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidMajorVersionException;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import org.junit.Test;
 
