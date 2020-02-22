@@ -14,26 +14,26 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.eap.statemachine;
+package com.android.internal.net.eap.statemachine;
 
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
-import static com.android.internal.net.test.eap.message.EapMessage.EAP_CODE_FAILURE;
-import static com.android.internal.net.test.eap.message.EapMessage.EAP_CODE_SUCCESS;
-import static com.android.internal.net.test.eap.message.EapMessage.EAP_HEADER_LENGTH;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_AKA_PRIME_REQUEST;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MSCHAP_V2;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.EMSK;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.ID_INT;
-import static com.android.internal.net.test.eap.message.EapTestMessageDefinitions.MSK;
+import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
+import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.internal.net.eap.message.EapMessage.EAP_HEADER_LENGTH;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_AKA_PRIME_REQUEST;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_FAILURE_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MSCHAP_V2;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EMSK;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSK;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
@@ -43,18 +43,18 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import android.net.eap.test.EapSessionConfig;
+import android.net.eap.EapSessionConfig;
 
-import com.android.internal.net.test.eap.EapResult;
-import com.android.internal.net.test.eap.EapResult.EapError;
-import com.android.internal.net.test.eap.EapResult.EapFailure;
-import com.android.internal.net.test.eap.EapResult.EapResponse;
-import com.android.internal.net.test.eap.EapResult.EapSuccess;
-import com.android.internal.net.test.eap.exceptions.EapInvalidRequestException;
-import com.android.internal.net.test.eap.message.EapMessage;
-import com.android.internal.net.test.eap.statemachine.EapStateMachine.FailureState;
-import com.android.internal.net.test.eap.statemachine.EapStateMachine.MethodState;
-import com.android.internal.net.test.eap.statemachine.EapStateMachine.SuccessState;
+import com.android.internal.net.eap.EapResult;
+import com.android.internal.net.eap.EapResult.EapError;
+import com.android.internal.net.eap.EapResult.EapFailure;
+import com.android.internal.net.eap.EapResult.EapResponse;
+import com.android.internal.net.eap.EapResult.EapSuccess;
+import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
+import com.android.internal.net.eap.message.EapMessage;
+import com.android.internal.net.eap.statemachine.EapStateMachine.FailureState;
+import com.android.internal.net.eap.statemachine.EapStateMachine.MethodState;
+import com.android.internal.net.eap.statemachine.EapStateMachine.SuccessState;
 
 import org.junit.Before;
 import org.junit.Test;

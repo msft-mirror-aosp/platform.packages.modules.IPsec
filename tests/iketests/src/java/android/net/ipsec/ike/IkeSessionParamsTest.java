@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.test.ike;
+package android.net.ipsec.ike;
 
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthConfig;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthEapConfig;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthPskConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthEapConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
-import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
-import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
-import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -44,12 +44,12 @@ import android.content.Context;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.eap.test.EapSessionConfig;
+import android.net.eap.EapSessionConfig;
 import android.util.SparseArray;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.internal.net.test.TestUtils;
+import com.android.internal.net.TestUtils;
 
 import org.junit.After;
 import org.junit.Before;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.test.ike;
+package android.net.ipsec.ike;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -23,11 +23,11 @@ import static org.mockito.Mockito.mock;
 import android.net.InetAddresses;
 import android.net.LinkAddress;
 
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 
 import org.junit.Before;
 import org.junit.Test;
