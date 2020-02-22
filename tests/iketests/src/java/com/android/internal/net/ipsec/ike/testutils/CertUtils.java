@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.ipsec.ike.testutils;
+package com.android.internal.net.ipsec.ike.testutils;
 
 import android.content.Context;
 
