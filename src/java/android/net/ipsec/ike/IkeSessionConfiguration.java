@@ -108,7 +108,7 @@ public final class IkeSessionConfiguration {
      *     during IKE Session setup.
      */
     @NonNull
-    public List<byte[]> getRemoteVendorIDs() {
+    public List<byte[]> getRemoteVendorIds() {
         // TODO: Implement it.
         throw new UnsupportedOperationException("Not yet supported");
     }
