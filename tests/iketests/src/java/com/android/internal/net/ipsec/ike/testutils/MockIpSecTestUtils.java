@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.ipsec.ike.testutils;
+package com.android.internal.net.ipsec.ike.testutils;
 
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.IPPROTO_UDP;
@@ -75,14 +75,6 @@ public final class MockIpSecTestUtils {
 
     public static IpSecSpiResponse buildDummyIpSecSpiResponse(int spi) throws Exception {
         return new IpSecSpiResponse(IpSecManager.Status.OK, DUMMY_CHILD_SPI_RESOURCE_ID, spi);
-    }
-
-    public static IpSecUdpEncapResponse buildDummyIpSecUdpEncapResponse(int port) throws Exception {
-        return new IpSecUdpEncapResponse(
-                IpSecManager.Status.OK,
-                DUMMY_UDP_ENCAP_RESOURCE_ID,
-                port,
-                Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP));
     }
 
     public Context getContext() {

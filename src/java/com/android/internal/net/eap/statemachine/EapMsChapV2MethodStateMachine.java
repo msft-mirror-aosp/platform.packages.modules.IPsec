@@ -96,6 +96,7 @@ import javax.crypto.spec.DESKeySpec;
  *     Version 2 (MSCHAPv2)</a>
  * @see <a href="https://tools.ietf.org/html/rfc3079">RFC 3079, Deriving Keys for use with Microsoft
  *     Point-to-Point Encryption (MPPE)</a>
+ * @hide
  */
 public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     private static final String SHA_ALG = "SHA-1";

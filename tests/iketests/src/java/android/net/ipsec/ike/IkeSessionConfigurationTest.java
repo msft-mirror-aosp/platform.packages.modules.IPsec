@@ -14,18 +14,16 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.test.ike;
+package android.net.ipsec.ike;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.mock;
 
 import android.net.InetAddresses;
 
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 
 import org.junit.Test;
 
@@ -36,44 +34,21 @@ import java.util.LinkedList;
 import java.util.List;
 
 public final class IkeSessionConfigurationTest {
-    private static final Inet4Address PCSCF_IPV4_ADDRESS =
+    private static final Inet4Address IPV4_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
-    private static final Inet6Address PCSCF_IPV6_ADDRESS =
+
+    private static final Inet6Address IPV6_ADDRESS =
             (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
 
-    private static final IkeSessionConnectionInfo IKE_CONNECT_INFO =
-            mock(IkeSessionConnectionInfo.class);
-
     @Test
-    public void testBuildWithoutPcscfAddresses() {
-        IkeSessionConfiguration config =
-                new IkeSessionConfiguration(IKE_CONNECT_INFO, null /*configPayload*/);
-        assertEquals(IKE_CONNECT_INFO, config.getIkeSessionConnectionInfo());
-    }
-
-    @Test
-    public void testBuildWithPcscfAddresses() {
+    public void testGetPcscfServers() {
         List<ConfigAttribute> attributeList = new LinkedList<>();
-        attributeList.add(new ConfigAttributeIpv4Pcscf(PCSCF_IPV4_ADDRESS));
-        attributeList.add(new ConfigAttributeIpv6Pcscf(PCSCF_IPV6_ADDRESS));
+        attributeList.add(new ConfigAttributeIpv4Pcscf(IPV4_ADDRESS));
+        attributeList.add(new ConfigAttributeIpv6Pcscf(IPV6_ADDRESS));
 
         IkeConfigPayload configPayload = new IkeConfigPayload(true /*isReply*/, attributeList);
 
-        IkeSessionConfiguration config =
-                new IkeSessionConfiguration(IKE_CONNECT_INFO, configPayload);
-
-        assertEquals(IKE_CONNECT_INFO, config.getIkeSessionConnectionInfo());
-        assertEquals(
-                Arrays.asList(PCSCF_IPV4_ADDRESS, PCSCF_IPV6_ADDRESS), config.getPcscfServers());
-    }
-
-    @Test
-    public void testBuildWithoutConnectionInfo() {
-        try {
-            new IkeSessionConfiguration(null /*ikeConnInfo*/, null /*configPayload*/);
-            fail("Expected to fail due to null value ikeConnInfo");
-        } catch (NullPointerException expected) {
-
-        }
+        IkeSessionConfiguration config = new IkeSessionConfiguration(configPayload);
+        assertEquals(Arrays.asList(IPV4_ADDRESS, IPV6_ADDRESS), config.getPcscfServers());
     }
 }
