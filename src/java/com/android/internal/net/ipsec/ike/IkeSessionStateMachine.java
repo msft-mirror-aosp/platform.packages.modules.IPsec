@@ -2937,7 +2937,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mIpSecManager,
                             mLocalAddress,
                             mFirstChildSessionParams,
-                            true /*isFirstChild*/));
+                            true /*isFirstChildSa*/));
 
             final List<ConfigAttribute> configAttributes = new ArrayList<>();
             configAttributes.addAll(
