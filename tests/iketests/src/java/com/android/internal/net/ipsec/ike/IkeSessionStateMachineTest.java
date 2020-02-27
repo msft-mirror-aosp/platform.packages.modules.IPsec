@@ -1934,6 +1934,11 @@ public final class IkeSessionStateMachineTest {
         configPayload.recognizedAttributeList.contains(
                 new IkeConfigPayload.ConfigAttributeIpv6Address());
 
+        IkeNoncePayload noncePayload =
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
+        assertNull(noncePayload);
+
         return ikeAuthReqMessage;
     }
 
