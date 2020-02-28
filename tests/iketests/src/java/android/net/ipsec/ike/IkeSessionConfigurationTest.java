@@ -67,13 +67,6 @@ public final class IkeSessionConfigurationTest {
                 Arrays.asList(PCSCF_IPV4_ADDRESS, PCSCF_IPV6_ADDRESS), config.getPcscfServers());
     }
 
-    @Test
-    public void testBuildWithoutConnectionInfo() {
-        try {
-            new IkeSessionConfiguration(null /*ikeConnInfo*/, null /*configPayload*/);
-            fail("Expected to fail due to null value ikeConnInfo");
-        } catch (NullPointerException expected) {
-
-        }
-    }
+    // TODO(b/150466460): Test that constructing IkeSessionConfiguration without
+    // IkeSessionConnectionInfo will fail
 }
