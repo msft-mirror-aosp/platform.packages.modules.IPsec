@@ -34,7 +34,6 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * IkeSessionConfiguration represents the negotiated configuration for a {@link IkeSession}.
@@ -67,7 +66,7 @@ public final class IkeSessionConfiguration {
      */
     public IkeSessionConfiguration(
             IkeSessionConnectionInfo ikeConnInfo, IkeConfigPayload configPayload) {
-        Objects.requireNonNull(ikeConnInfo, "ikeConnInfo not provided");
+        // TODO(b/150466460): Throw exception if ikeConnInfo is null
         mIkeConnInfo = ikeConnInfo;
 
         if (configPayload != null) {
