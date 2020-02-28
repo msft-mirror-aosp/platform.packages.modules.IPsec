@@ -17,8 +17,10 @@
 package android.net.ipsec.ike;
 
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
 
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
@@ -28,8 +30,10 @@ import android.net.LinkAddress;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
 
 import java.net.InetAddress;
 import java.util.Collections;
@@ -50,6 +54,7 @@ public final class ChildSessionConfiguration {
     private final List<IkeTrafficSelector> mInboundTs;
     private final List<IkeTrafficSelector> mOutboundTs;
     private final List<LinkAddress> mInternalAddressList;
+    private final List<InetAddress> mInternalDnsAddressList;
 
     /**
      * Construct an instance of {@link ChildSessionConfiguration}.
@@ -99,8 +104,14 @@ public final class ChildSessionConfiguration {
                 case CONFIG_ATTR_INTERNAL_IP6_ADDRESS:
                     mInternalAddressList.add(((ConfigAttributeIpv6Address) att).linkAddress);
                     break;
+                case CONFIG_ATTR_INTERNAL_IP4_DNS:
+                    mInternalDnsAddressList.add(((ConfigAttributeIpv4Dns) att).address);
+                    break;
+                case CONFIG_ATTR_INTERNAL_IP6_DNS:
+                    mInternalDnsAddressList.add(((ConfigAttributeIpv6Dns) att).address);
+                    break;
                 default:
-                    // TODO: Support DNS,Subnet and Dhcp4 attributes
+                    // TODO: Subnet and Dhcp4 attributes
             }
         }
     }
@@ -115,6 +126,7 @@ public final class ChildSessionConfiguration {
         mInboundTs = Collections.unmodifiableList(inTs);
         mOutboundTs = Collections.unmodifiableList(outTs);
         mInternalAddressList = new LinkedList<>();
+        mInternalDnsAddressList = new LinkedList<>();
     }
 
     /**
@@ -155,7 +167,7 @@ public final class ChildSessionConfiguration {
      */
     @NonNull
     public List<LinkAddress> getInternalAddresses() {
-        return mInternalAddressList;
+        return Collections.unmodifiableList(mInternalAddressList);
     }
 
     /**
@@ -178,8 +190,7 @@ public final class ChildSessionConfiguration {
      */
     @NonNull
     public List<InetAddress> getInternalDnsServers() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException("Not yet supported");
+        return Collections.unmodifiableList(mInternalDnsAddressList);
     }
 
     /**
