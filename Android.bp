@@ -15,8 +15,7 @@
 java_sdk_library {
     name: "android.net.ipsec.ike",
     installable: true,
-    // TODO (b/146757305): change to module API once available
-    sdk_version: "core_platform",
+    sdk_version: "module_current",
 
     aidl: {
         local_include_dirs: ["src/java"],
@@ -26,7 +25,6 @@ java_sdk_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
-        "android_system_stubs_current",
     ],
 
     api_packages: [
