@@ -15,6 +15,7 @@
 // Defaults shared between production and test versions of the APEX.
 apex_defaults {
     name: "com.android.ipsec-defaults",
+    updatable: true,
     java_libs: ["android.net.ipsec.ike"],
     key: "com.android.ipsec.key",
     certificate: ":com.android.ipsec.certificate",
