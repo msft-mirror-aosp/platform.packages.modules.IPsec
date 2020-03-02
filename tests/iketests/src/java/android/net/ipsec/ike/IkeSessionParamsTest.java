@@ -66,7 +66,7 @@ public final class IkeSessionParamsTest {
 
     private static final String LOCAL_IPV4_HOST_ADDRESS = "192.0.2.100";
     private static final String REMOTE_IPV4_HOST_ADDRESS = "192.0.2.100";
-    private static final String REMOTE_HOST_NAME = "server.test.android.net";
+    private static final String REMOTE_HOSTNAME = "server.test.android.net";
 
     private static final Inet4Address LOCAL_IPV4_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress(LOCAL_IPV4_HOST_ADDRESS));
@@ -118,7 +118,7 @@ public final class IkeSessionParamsTest {
     }
 
     private void verifyIkeSessionParamsWithSeverIpCommon(IkeSessionParams sessionParams) {
-        assertEquals(REMOTE_IPV4_HOST_ADDRESS, sessionParams.getServerAddressInternal());
+        assertEquals(REMOTE_IPV4_HOST_ADDRESS, sessionParams.getServerHostname());
         verifyIkeSessionParamsCommon(sessionParams);
     }
 
@@ -148,7 +148,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithPsk() throws Exception {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -171,7 +171,7 @@ public final class IkeSessionParamsTest {
 
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -190,7 +190,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithPskAndHostname() throws Exception {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerAddress(REMOTE_HOST_NAME)
+                        .setServerHostname(REMOTE_HOSTNAME)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -200,7 +200,7 @@ public final class IkeSessionParamsTest {
         verifyIkeSessionParamsCommon(sessionParams);
         verifyAuthPskConfig(sessionParams);
 
-        assertEquals(REMOTE_HOST_NAME, sessionParams.getServerAddressInternal());
+        assertEquals(REMOTE_HOSTNAME, sessionParams.getServerHostname());
     }
 
     @Test
@@ -209,7 +209,7 @@ public final class IkeSessionParamsTest {
 
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -236,7 +236,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithDigitalSignatureAuth() throws Exception {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .setNetwork(mMockUserConfigNetwork)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
@@ -271,7 +271,7 @@ public final class IkeSessionParamsTest {
         try {
             IkeSessionParams sessionParams =
                     new IkeSessionParams.Builder(mMockConnectManager)
-                            .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                            .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                             .addSaProposal(mIkeSaProposal)
                             .setLocalIdentification(mLocalIdentification)
                             .setRemoteIdentification(mRemoteIdentification)
@@ -307,7 +307,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithPcscfAddress() throws Exception {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -331,7 +331,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithoutPcscfAddress() throws Exception {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -347,7 +347,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithoutSaProposal() throws Exception {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                    .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                     .build();
             fail("Expected to fail due to absence of SA proposal.");
         } catch (IllegalArgumentException expected) {
@@ -358,7 +358,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithoutLocalId() throws Exception {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                    .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                     .addSaProposal(mIkeSaProposal)
                     .setRemoteIdentification(mRemoteIdentification)
                     .setAuthPsk(PSK)
@@ -372,7 +372,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithoutSetAuth() throws Exception {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
+                    .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                     .addSaProposal(mIkeSaProposal)
                     .setLocalIdentification(mLocalIdentification)
                     .setRemoteIdentification(mRemoteIdentification)
