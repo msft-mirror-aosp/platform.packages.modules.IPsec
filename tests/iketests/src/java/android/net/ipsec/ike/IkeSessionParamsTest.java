@@ -41,20 +41,14 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.InetAddresses;
-import android.net.IpSecManager;
-import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
 import android.util.SparseArray;
 
-import androidx.test.InstrumentationRegistry;
-
 import com.android.internal.net.TestUtils;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -92,7 +86,6 @@ public final class IkeSessionParamsTest {
     private Network mMockDefaultNetwork;
     private Network mMockUserConfigNetwork;
 
-    private UdpEncapsulationSocket mUdpEncapSocket;
     private IkeSaProposal mIkeSaProposal;
     private IkeIdentification mLocalIdentification;
     private IkeIdentification mRemoteIdentification;
@@ -103,10 +96,6 @@ public final class IkeSessionParamsTest {
 
     @Before
     public void setUp() throws Exception {
-        Context context = InstrumentationRegistry.getContext();
-        IpSecManager ipSecManager = (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE);
-        mUdpEncapSocket = ipSecManager.openUdpEncapsulationSocket();
-
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
         mMockUserConfigNetwork = mock(Network.class);
@@ -126,11 +115,6 @@ public final class IkeSessionParamsTest {
         mMockServerCaCert = mock(X509Certificate.class);
         mMockClientEndCert = mock(X509Certificate.class);
         mMockRsaPrivateKey = mock(RSAPrivateKey.class);
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        mUdpEncapSocket.close();
     }
 
     private void verifyIkeSessionParamsWithSeverIpCommon(IkeSessionParams sessionParams) {
@@ -165,7 +149,6 @@ public final class IkeSessionParamsTest {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
                         .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -189,7 +172,6 @@ public final class IkeSessionParamsTest {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
                         .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -209,7 +191,6 @@ public final class IkeSessionParamsTest {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
                         .setServerAddress(REMOTE_HOST_NAME)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -229,7 +210,6 @@ public final class IkeSessionParamsTest {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
                         .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -258,7 +238,6 @@ public final class IkeSessionParamsTest {
                 new IkeSessionParams.Builder(mMockConnectManager)
                         .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
                         .setNetwork(mMockUserConfigNetwork)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -293,7 +272,6 @@ public final class IkeSessionParamsTest {
             IkeSessionParams sessionParams =
                     new IkeSessionParams.Builder(mMockConnectManager)
                             .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                            .setUdpEncapsulationSocket(mUdpEncapSocket)
                             .addSaProposal(mIkeSaProposal)
                             .setLocalIdentification(mLocalIdentification)
                             .setRemoteIdentification(mRemoteIdentification)
@@ -307,6 +285,7 @@ public final class IkeSessionParamsTest {
 
         }
     }
+
 
     private void verifyAttrTypes(SparseArray expectedAttrCntMap, IkeSessionParams ikeParams) {
         ConfigAttribute[] configAttributes = ikeParams.getConfigurationAttributesInternal();
@@ -329,7 +308,6 @@ public final class IkeSessionParamsTest {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
                         .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -349,13 +327,11 @@ public final class IkeSessionParamsTest {
         verifyAttrTypes(expectedAttrCounts, sessionParams);
     }
 
-
     @Test
     public void testBuildWithoutPcscfAddress() throws Exception {
         IkeSessionParams sessionParams =
                 new IkeSessionParams.Builder(mMockConnectManager)
                         .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -372,7 +348,6 @@ public final class IkeSessionParamsTest {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
                     .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                    .setUdpEncapsulationSocket(mUdpEncapSocket)
                     .build();
             fail("Expected to fail due to absence of SA proposal.");
         } catch (IllegalArgumentException expected) {
@@ -384,7 +359,6 @@ public final class IkeSessionParamsTest {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
                     .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                    .setUdpEncapsulationSocket(mUdpEncapSocket)
                     .addSaProposal(mIkeSaProposal)
                     .setRemoteIdentification(mRemoteIdentification)
                     .setAuthPsk(PSK)
@@ -399,7 +373,6 @@ public final class IkeSessionParamsTest {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
                     .setServerAddress(REMOTE_IPV4_HOST_ADDRESS)
-                    .setUdpEncapsulationSocket(mUdpEncapSocket)
                     .addSaProposal(mIkeSaProposal)
                     .setLocalIdentification(mLocalIdentification)
                     .setRemoteIdentification(mRemoteIdentification)
@@ -408,6 +381,7 @@ public final class IkeSessionParamsTest {
         } catch (IllegalArgumentException expected) {
         }
     }
+
 
     @Test
     public void testNonAsciiFqdnAuthentication() throws Exception {
