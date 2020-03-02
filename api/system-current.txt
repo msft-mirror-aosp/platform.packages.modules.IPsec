@@ -136,12 +136,19 @@ package android.net.ipsec.ike {
   }
 
   public final class IkeSessionConfiguration {
+    method @NonNull public android.net.ipsec.ike.IkeSessionConnectionInfo getIkeSessionConnectionInfo();
     method @NonNull public java.util.List<java.net.InetAddress> getPcscfServers();
     method @NonNull public String getRemoteApplicationVersion();
     method @NonNull public java.util.List<byte[]> getRemoteVendorIds();
     method public boolean isIkeExtensionEnabled(int);
     field public static final int EXTENSION_TYPE_FRAGMENTATION = 1; // 0x1
     field public static final int EXTENSION_TYPE_MOBIKE = 2; // 0x2
+  }
+
+  public final class IkeSessionConnectionInfo {
+    method @NonNull public java.net.InetAddress getLocalAddress();
+    method @NonNull public android.net.Network getNetwork();
+    method @NonNull public java.net.InetAddress getRemoteAddress();
   }
 
   public final class IkeSessionParams {
@@ -153,7 +160,7 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getRemoteAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getRemoteIdentification();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getSaProposals();
-    method @NonNull public java.net.InetAddress getServerAddress();
+    method @NonNull public String getServerHostname();
     method public long getSoftLifetime();
   }
 
@@ -171,7 +178,7 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLocalIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@NonNull android.net.Network);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRemoteIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
-    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setServerAddress(@NonNull java.net.InetAddress);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setServerHostname(@NonNull String);
   }
 
   public static interface IkeSessionParams.ConfigRequestIpv4PcscfServer extends android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest {
