@@ -54,6 +54,7 @@ public final class IkeSessionConfiguration {
     /** IKEv2 Mobility and Multihoming Protocol */
     public static final int EXTENSION_TYPE_MOBIKE = 2;
 
+    private final IkeSessionConnectionInfo mIkeConnInfo;
     private final List<InetAddress> mPcscfServers = new ArrayList<>();
 
     /**
@@ -63,7 +64,11 @@ public final class IkeSessionConfiguration {
      *
      * @hide
      */
-    public IkeSessionConfiguration(IkeConfigPayload configPayload) {
+    public IkeSessionConfiguration(
+            IkeSessionConnectionInfo ikeConnInfo, IkeConfigPayload configPayload) {
+        // TODO(b/150466460): Throw exception if ikeConnInfo is null
+        mIkeConnInfo = ikeConnInfo;
+
         if (configPayload != null) {
             if (configPayload.configType != IkeConfigPayload.CONFIG_TYPE_REPLY) {
                 throw new IllegalArgumentException(
@@ -136,5 +141,15 @@ public final class IkeSessionConfiguration {
     @NonNull
     public List<InetAddress> getPcscfServers() {
         return Collections.unmodifiableList(mPcscfServers);
+    }
+
+    /**
+     * Returns the connection information.
+     *
+     * @return the IKE Session connection information.
+     */
+    @NonNull
+    public IkeSessionConnectionInfo getIkeSessionConnectionInfo() {
+        return mIkeConnInfo;
     }
 }
