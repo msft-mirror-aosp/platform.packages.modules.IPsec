@@ -84,9 +84,29 @@ public final class IkeSession implements AutoCloseable {
             @NonNull IkeSessionCallback ikeSessionCallback,
             @NonNull ChildSessionCallback firstChildSessionCallback) {
         this(
-                IkeThreadHolder.IKE_WORKER_THREAD.getLooper(),
                 context,
                 (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
+                ikeSessionParams,
+                firstChildSessionParams,
+                userCbExecutor,
+                ikeSessionCallback,
+                firstChildSessionCallback);
+    }
+
+    /** Package private */
+    @VisibleForTesting
+    IkeSession(
+            Context context,
+            IpSecManager ipSecManager,
+            IkeSessionParams ikeSessionParams,
+            ChildSessionParams firstChildSessionParams,
+            Executor userCbExecutor,
+            IkeSessionCallback ikeSessionCallback,
+            ChildSessionCallback firstChildSessionCallback) {
+        this(
+                IkeThreadHolder.IKE_WORKER_THREAD.getLooper(),
+                context,
+                ipSecManager,
                 ikeSessionParams,
                 firstChildSessionParams,
                 userCbExecutor,
