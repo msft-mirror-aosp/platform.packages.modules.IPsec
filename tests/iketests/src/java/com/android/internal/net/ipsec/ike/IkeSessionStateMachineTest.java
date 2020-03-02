@@ -171,6 +171,7 @@ public final class IkeSessionStateMachineTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
+    private static final String REMOTE_HOST_NAME = "ike.test.android";
 
     private static final String IKE_INIT_RESP_HEX_STRING =
             "5f54bf6d8b48e6e1909232b3d1edcb5c21202220000000000000014c220000300000"
@@ -637,6 +638,7 @@ public final class IkeSessionStateMachineTest {
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
         when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
+        when(mMockDefaultNetwork.getByName(REMOTE_HOST_NAME)).thenReturn(REMOTE_ADDRESS);
 
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
@@ -741,6 +743,7 @@ public final class IkeSessionStateMachineTest {
 
         mLooper.dispatchAll();
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
+        assertEquals(REMOTE_ADDRESS, ikeSession.mRemoteAddress);
 
         mSpyIkeUdpEncapSocket =
                 spy(
@@ -765,7 +768,7 @@ public final class IkeSessionStateMachineTest {
 
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
         return new IkeSessionParams.Builder(mMockConnectManager)
-                .setServerAddress(REMOTE_ADDRESS)
+                .setServerAddress(REMOTE_ADDRESS.getHostAddress())
                 .setUdpEncapsulationSocket(mUdpEncapSocket)
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
@@ -1200,6 +1203,20 @@ public final class IkeSessionStateMachineTest {
         IkeSaRecordConfig config = (IkeSaRecordConfig) invocation.getArguments()[ikeConfigIndex];
         config.initSpi.close();
         config.respSpi.close();
+    }
+
+    @Test
+    public void testResolveRemoteHostName() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+
+        IkeSessionParams ikeParams =
+                buildIkeSessionParamsCommon()
+                        .setAuthPsk(mPsk)
+                        .setServerAddress(REMOTE_HOST_NAME)
+                        .build();
+        mIkeSessionStateMachine = makeAndStartIkeSession(ikeParams);
+
+        verify(mMockDefaultNetwork).getByName(REMOTE_HOST_NAME);
     }
 
     @Test
