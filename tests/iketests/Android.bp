@@ -40,10 +40,3 @@ android_test {
         "libmultiplejvmtiagentsinterferenceagent",
     ],
 }
-
-java_library {
-    name: "ike_test",
-    installable: false, // Used only for testing; never installed alone.
-    srcs: [":ike-srcs"],
-    libs: ["unsupportedappusage"],
-}
