@@ -38,7 +38,6 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 
 import android.annotation.IntDef;
 import android.content.Context;
-import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -953,13 +952,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         public void enterState() {
             try {
                 Network network = mIkeSessionParams.getNetwork();
-                String serverAddr = mIkeSessionParams.getServerAddressInternal();
 
-                if (InetAddresses.isNumericAddress(serverAddr)) {
-                    mRemoteAddress = InetAddresses.parseNumericAddress(serverAddr);
-                } else {
-                    mRemoteAddress = network.getByName(serverAddr);
-                }
+                // TODO(b/149954916): Do DNS resolution asynchronously and support resolving
+                // multiple addresses.
+                mRemoteAddress = network.getByName(mIkeSessionParams.getServerHostname());
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
