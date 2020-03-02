@@ -75,3 +75,14 @@ java_library {
     srcs: [":ike-stubs-docs"],
     sdk_version: "system_current",
 }
+
+java_library {
+    name: "ike_test",
+    installable: false, // Used only for testing; never installed alone.
+    srcs: [":ike-srcs"],
+    libs: ["unsupportedappusage"],
+
+    // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
+    // being overwritten by the frameworks class copies.
+    jarjar_rules: "jarjar-rules-shared.txt",
+}
