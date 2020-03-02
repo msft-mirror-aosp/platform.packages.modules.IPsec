@@ -18,6 +18,7 @@ package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
+import android.net.Network;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.os.Handler;
 import android.util.LongSparseArray;
@@ -56,6 +57,9 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
     /** UDP-encapsulated IKE packets MUST be sent to 4500. */
     public static final int SERVER_PORT_UDP_ENCAPSULATED = 4500;
 
+    // Network this socket bound to.
+    private final Network mNetwork;
+
     // Map from locally generated IKE SPI to IkeSessionStateMachine instances.
     @VisibleForTesting
     protected final LongSparseArray<IkeSessionStateMachine> mSpiToIkeSession =
@@ -65,8 +69,9 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
     @VisibleForTesting
     protected final Set<IkeSessionStateMachine> mAliveIkeSessions = new HashSet<>();
 
-    protected IkeSocket(Handler handler) {
+    protected IkeSocket(Network network, Handler handler) {
         super(handler);
+        mNetwork = network;
     }
 
     protected static void parseAndDemuxIkePacket(
@@ -96,6 +101,15 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
             // Handle invalid IKE header
             getIkeLog().i(tag, "Can't parse malformed IKE packet header.");
         }
+    }
+
+    /**
+     * Return Network this socket bound to
+     *
+     * @return the bound Network
+     */
+    public final Network getNetwork() {
+        return mNetwork;
     }
 
     /**
