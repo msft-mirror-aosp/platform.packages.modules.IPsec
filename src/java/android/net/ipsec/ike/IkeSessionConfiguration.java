@@ -147,7 +147,6 @@ public final class IkeSessionConfiguration {
      * Returns the connection information.
      *
      * @return the IKE Session connection information.
-     * @hide
      */
     @NonNull
     public IkeSessionConnectionInfo getIkeSessionConnectionInfo() {
