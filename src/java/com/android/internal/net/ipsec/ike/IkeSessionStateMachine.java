@@ -2808,18 +2808,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
                             IkeConfigPayload.class);
 
+            // TODO(b/150466460); Construct and pass IkeSessionConnectionInfo to
+            // IkeSessionConfiguration
             if (configPayload == null) {
                 logd("No config payload in ikeMessage.");
-                return new IkeSessionConfiguration(null /*configPayload*/);
+                return new IkeSessionConfiguration(null /*ikeConnInfo*/, null /*configPayload*/);
             }
 
             if (configPayload.configType != CONFIG_TYPE_REPLY) {
                 logw("Unexpected config payload. Config Type: "
                         + configPayload.configType);
-                return new IkeSessionConfiguration(null /*configPayload*/);
+                return new IkeSessionConfiguration(null /*ikeConnInfo*/, null /*configPayload*/);
             }
 
-            return new IkeSessionConfiguration(configPayload);
+            return new IkeSessionConfiguration(null /*ikeConnInfo*/, configPayload);
         }
 
         protected void notifyIkeSessionSetup(IkeMessage msg) {
