@@ -25,7 +25,6 @@ import android.annotation.Nullable;
 import android.annotation.SystemApi;
 import android.content.Context;
 import android.net.ConnectivityManager;
-import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
 
@@ -98,7 +97,6 @@ public final class IkeSessionParams {
     @NonNull private final String mServerAddress;
     @NonNull private final Network mNetwork;
 
-    @NonNull private final UdpEncapsulationSocket mUdpEncapSocket;
     @NonNull private final IkeSaProposal[] mSaProposals;
 
     @NonNull private final IkeIdentification mLocalIdentification;
@@ -117,7 +115,6 @@ public final class IkeSessionParams {
     private IkeSessionParams(
             @Nullable String serverAddress,
             @NonNull Network network,
-            @NonNull UdpEncapsulationSocket udpEncapsulationSocket,
             @NonNull IkeSaProposal[] proposals,
             @NonNull IkeIdentification localIdentification,
             @NonNull IkeIdentification remoteIdentification,
@@ -130,7 +127,6 @@ public final class IkeSessionParams {
         mServerAddress = serverAddress;
         mNetwork = network;
 
-        mUdpEncapSocket = udpEncapsulationSocket;
         mSaProposals = proposals;
 
         mLocalIdentification = localIdentification;
@@ -161,16 +157,10 @@ public final class IkeSessionParams {
         return mServerAddress;
     }
 
-    /** Retrieves the configured {@link Network} @hide */
+    /** Retrieves the configured {@link Network} */
     @NonNull
     public Network getNetwork() {
         return mNetwork;
-    }
-
-    /** Retrieves the UDP encapsulation socket */
-    @NonNull
-    public UdpEncapsulationSocket getUdpEncapsulationSocket() {
-        return mUdpEncapSocket;
     }
 
     /** Retrieves all ChildSaProposals configured */
@@ -421,8 +411,6 @@ public final class IkeSessionParams {
         @Nullable private String mServerAddress;
         @Nullable private Network mNetwork;
 
-        @Nullable private UdpEncapsulationSocket mUdpEncapSocket;
-
         @Nullable private IkeIdentification mLocalIdentification;
         @Nullable private IkeIdentification mRemoteIdentification;
 
@@ -434,16 +422,10 @@ public final class IkeSessionParams {
 
         private boolean mIsIkeFragmentationSupported = false;
 
-        /** Temporary constructor for keeping API shape. Will be deleted in following CL. */
-        public Builder() {
-            mConnectivityManager = null;
-        }
-
         /**
          * Construct Builder
          *
          * @param context a valid {@link Context} instance.
-         * @hide
          */
         public Builder(@NonNull Context context) {
             this((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
@@ -492,7 +474,6 @@ public final class IkeSessionParams {
          *
          * @param network the {@link Network} that IKE Session will use.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
         public Builder setNetwork(@NonNull Network network) {
@@ -501,24 +482,6 @@ public final class IkeSessionParams {
             }
 
             mNetwork = network;
-            return this;
-        }
-
-        /**
-         * Sets the UDP Encapsulation socket for the {@link IkeSessionParams} being built.
-         *
-         * @param udpEncapsulationSocket the {@link IpSecManager.UdpEncapsulationSocket} for sending
-         *     and receiving IKE messages.
-         * @return Builder this, to facilitate chaining.
-         */
-        @NonNull
-        public Builder setUdpEncapsulationSocket(
-                @NonNull UdpEncapsulationSocket udpEncapsulationSocket) {
-            if (udpEncapsulationSocket == null) {
-                throw new NullPointerException("Required argument not provided");
-            }
-
-            mUdpEncapSocket = udpEncapsulationSocket;
             return this;
         }
 
@@ -796,7 +759,6 @@ public final class IkeSessionParams {
             }
 
             if (mServerAddress == null
-                    || mUdpEncapSocket == null
                     || mLocalIdentification == null
                     || mRemoteIdentification == null
                     || mLocalAuthConfig == null
@@ -807,7 +769,6 @@ public final class IkeSessionParams {
             return new IkeSessionParams(
                     mServerAddress,
                     network,
-                    mUdpEncapSocket,
                     mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,
                     mRemoteIdentification,
