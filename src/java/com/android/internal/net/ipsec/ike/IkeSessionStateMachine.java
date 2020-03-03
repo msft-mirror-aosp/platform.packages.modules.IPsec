@@ -21,6 +21,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_N
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ErrorType;
 
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PARTIAL;
@@ -44,6 +45,7 @@ import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSessionCallback;
+import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
@@ -2733,6 +2735,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     ikeMessage.getPayloadListForType(
                             IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
 
+            IkeConfigPayload configPayload =
+                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
+                            IkeConfigPayload.class);
+
             boolean hasErrorNotify = false;
             List<IkePayload> list = new LinkedList<>();
             for (IkeNotifyPayload payload : notifyPayloads) {
@@ -2755,6 +2761,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             list.add(saPayload);
             list.add(tsInitPayload);
             list.add(tsRespPayload);
+
+            if (configPayload != null) {
+                list.add(configPayload);
+            }
+
             return list;
         }
 
@@ -2772,12 +2783,34 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                     childReqList,
                                     childRespList)));
 
+            transitionTo(mChildProcedureOngoing);
+        }
+
+        protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
+            IkeConfigPayload configPayload =
+                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
+                            IkeConfigPayload.class);
+
+            if (configPayload == null) {
+                logd("No config payload in ikeMessage.");
+                return new IkeSessionConfiguration(null /*configPayload*/);
+            }
+
+            if (configPayload.configType != CONFIG_TYPE_REPLY) {
+                logw("Unexpected config payload. Config Type: "
+                        + configPayload.configType);
+                return new IkeSessionConfiguration(null /*configPayload*/);
+            }
+
+            return new IkeSessionConfiguration(configPayload);
+        }
+
+        protected void notifyIkeSessionSetup(IkeMessage msg) {
+            IkeSessionConfiguration ikeSessionConfig = buildIkeSessionConfiguration(msg);
             mUserCbExecutor.execute(
                     () -> {
-                        mIkeSessionCallback.onOpened(null /*sessionConfiguration*/);
-                        // TODO: Construct and pass a real IkeSessionConfiguration
+                        mIkeSessionCallback.onOpened(ikeSessionConfig);
                     });
-            transitionTo(mChildProcedureOngoing);
         }
     }
 
@@ -2834,6 +2867,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                     performFirstChildNegotiation(
                             childReqList, extractChildPayloadsFromMessage(ikeMessage));
+
+                    notifyIkeSessionSetup(ikeMessage);
                 }
             } catch (IkeProtocolException e) {
                 if (!mUseEap) {
@@ -2902,7 +2937,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mIpSecManager,
                             mLocalAddress,
                             mFirstChildSessionParams,
-                            true /*isFirstChild*/));
+                            true /*isFirstChildSa*/));
 
             final List<ConfigAttribute> configAttributes = new ArrayList<>();
             configAttributes.addAll(
@@ -3263,6 +3298,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 validateIkeAuthRespPostEap(nonChildPayloads);
 
                 performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
+
+                notifyIkeSessionSetup(ikeMessage);
             } catch (IkeProtocolException e) {
                 // Notify the remote because they may have set up the IKE SA.
                 sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
