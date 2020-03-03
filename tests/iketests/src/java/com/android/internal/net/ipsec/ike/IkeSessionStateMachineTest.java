@@ -71,6 +71,7 @@ import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.eap.EapSessionConfig;
+import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
@@ -153,6 +154,7 @@ import org.mockito.invocation.InvocationOnMock;
 
 import java.io.IOException;
 import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
@@ -234,6 +236,16 @@ public final class IkeSessionStateMachineTest {
             "094787780EE466E2CB049FA327B43908BC57E485";
     private static final String PRF_KEY_RESP_HEX_STRING =
             "A30E6B08BE56C0E6BFF4744143C75219299E1BEB";
+
+    private static final String CP_PAYLOAD_HEX_STRING =
+            "210000810200000000080011260010111067a17d000000000a"
+                    + "f68e8640000a0010200148880067ff000643000d000000000"
+                    + "00a0010200148880066ff000645000d0000000000150010200"
+                    + "148880006713a00f10104000000050015001020014888000671"
+                    + "3a00f101040000008900150010200148880005713a00e00104000000c9";
+    private static final String PCSCF_IPV6_ADDRESS1 = "2001:4888:6:713a:f1:104:0:5";
+    private static final String PCSCF_IPV6_ADDRESS2 = "2001:4888:6:713a:f1:104:0:89";
+    private static final String PCSCF_IPV6_ADDRESS3 = "2001:4888:5:713a:e0:104:0:c9";
 
     private static final byte[] EAP_DUMMY_MSG = "EAP Message".getBytes();
 
@@ -1934,7 +1946,8 @@ public final class IkeSessionStateMachineTest {
             IkeAuthPskPayload spyAuthPayload,
             IkeIdPayload respIdPayload,
             List<IkePayload> authRelatedPayloads,
-            boolean hasChildPayloads)
+            boolean hasChildPayloads,
+            boolean hasConfigPayloadInResp)
             throws Exception {
         // Send IKE AUTH response to IKE state machine
         ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
@@ -1969,8 +1982,24 @@ public final class IkeSessionStateMachineTest {
 
         // Validate that user has been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onOpened(any());
-        // TODO: Verify sessionConfiguration
+
+        ArgumentCaptor<IkeSessionConfiguration> ikeSessionConfigurationArgumentCaptor =
+                ArgumentCaptor.forClass(IkeSessionConfiguration.class);
+        verify(mMockIkeSessionCallback).onOpened(ikeSessionConfigurationArgumentCaptor.capture());
+
+        IkeSessionConfiguration sessionConfig =
+                ikeSessionConfigurationArgumentCaptor.getValue();
+        if (hasConfigPayloadInResp) {
+            assertNotNull(sessionConfig);
+            List<InetAddress> pcscfAddressList = sessionConfig.getPcscfServers();
+            assertEquals(3, pcscfAddressList.size());
+            assertTrue(pcscfAddressList.contains(InetAddress.getByName(PCSCF_IPV6_ADDRESS1)));
+            assertTrue(pcscfAddressList.contains(InetAddress.getByName(PCSCF_IPV6_ADDRESS2)));
+            assertTrue(pcscfAddressList.contains(InetAddress.getByName(PCSCF_IPV6_ADDRESS3)));
+        } else {
+            assertTrue(sessionConfig.getPcscfServers().size() == 0);
+        }
+
 
         // Verify payload list pair for first Child negotiation
         ArgumentCaptor<List<IkePayload>> mReqPayloadListCaptor =
@@ -2002,6 +2031,11 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_INITIATOR));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_RESPONDER));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_NONCE));
+        if (hasConfigPayloadInResp) {
+            assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_CP));
+        } else {
+            assertFalse(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_CP));
+        }
         IkeSaPayload respSaPayload =
                 IkePayload.getPayloadForTypeInProvidedList(
                         IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, childRespList);
@@ -2070,15 +2104,17 @@ public final class IkeSessionStateMachineTest {
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
         verifyRetransmissionStarted();
 
-        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
+        // Build IKE AUTH response with Auth-PSK, ID-Responder and config payloads.
         List<IkePayload> authRelatedPayloads = new LinkedList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
         IkeIdPayload respIdPayload = makeRespIdPayload();
         authRelatedPayloads.add(respIdPayload);
+        authRelatedPayloads.add(makeConfigPayload());
 
-        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, true);
+        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads,
+                true /*hasChildPayloads*/, true /*hasConfigPayloadInResp*/);
         verifyRetransmissionStopped();
     }
 
@@ -2376,7 +2412,8 @@ public final class IkeSessionStateMachineTest {
 
         IkeIdPayload respIdPayload = makeRespIdPayload();
 
-        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, false);
+        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads,
+                false /*hasChildPayloads*/, false /*hasConfigPayloadInResp*/);
         verifyRetransmissionStopped();
     }
 
@@ -4060,5 +4097,13 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    private IkeConfigPayload makeConfigPayload() throws Exception {
+        return (IkeConfigPayload)
+                IkeTestUtils.hexStringToIkePayload(
+                        IkePayload.PAYLOAD_TYPE_CP,
+                        true /*isResp*/,
+                        CP_PAYLOAD_HEX_STRING);
     }
 }
