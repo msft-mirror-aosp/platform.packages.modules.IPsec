@@ -45,6 +45,8 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("01" + ID + "000A17" + EAP_REQUEST_TYPE_DATA);
     public static final byte[] EAP_REQUEST_IDENTITY_PACKET =
             hexStringToByteArray("01" + ID + "000501");
+    public static final byte[] EAP_REQUEST_IDENTITY_PACKET_TOO_LONG =
+            hexStringToByteArray("01" + ID + "00050100");
 
     // EAP-Identity: hex for ASCII in "test@android.net"
     public static final String EAP_IDENTITY_STRING = "7465737440616E64726F69642E6E6574";
