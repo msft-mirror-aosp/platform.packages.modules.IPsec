@@ -20,6 +20,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import android.net.ipsec.ike.IkeDerAsn1DnIdentification;
 import android.net.ipsec.ike.IkeFqdnIdentification;
 import android.net.ipsec.ike.IkeIdentification;
 import android.net.ipsec.ike.IkeIpv4AddrIdentification;
@@ -35,6 +36,8 @@ import org.junit.Test;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.nio.ByteBuffer;
+
+import javax.security.auth.x500.X500Principal;
 
 public final class IkeIdPayloadTest {
 
@@ -66,6 +69,18 @@ public final class IkeIdPayloadTest {
     private static final String KEY_ID_PAYLOAD_BODY_HEX_STRING =
             "0b000000616E64726F6964496B654B65794964";
     private static final byte[] KEY_ID = "androidIkeKeyId".getBytes();
+
+    private static final String ASN1_DN_PAYLOAD_HEX_STRING =
+            "25000051090000003047310b30090603550406130255533110300e060355"
+                    + "040a1307416e64726f6964312630240603550403131d736d616c6c2e7365"
+                    + "727665722e746573742e616e64726f69642e6e6574";
+    private static final String ASN1_DN_PAYLOAD_BODY_HEX_STRING =
+            "090000003047310b30090603550406130255533110300e060355040a1307"
+                    + "416e64726f6964312630240603550403131d736d616c6c2e736572766572"
+                    + "2e746573742e616e64726f69642e6e6574";
+    private static final String ASN1_DN_INVALID_PAYLOAD_BODY_HEX_STRING = "090000001010101010";
+    private static final String ASN1_DN_STRING =
+            "CN=small.server.test.android.net, O=Android, C=US";
 
     private static final int ID_TYPE_OFFSET = 0;
 
@@ -130,6 +145,32 @@ public final class IkeIdPayloadTest {
         assertEquals(IkeIdentification.ID_TYPE_KEY_ID, payload.ikeId.idType);
         IkeKeyIdIdentification ikeId = (IkeKeyIdIdentification) payload.ikeId;
         assertArrayEquals(KEY_ID, ikeId.keyId);
+    }
+
+    @Test
+    public void testDecodeDerAsn1DnIdPayload() throws Exception {
+        byte[] inputPacket = TestUtils.hexStringToByteArray(ASN1_DN_PAYLOAD_BODY_HEX_STRING);
+        IkeIdPayload payload =
+                new IkeIdPayload(false /*critical*/, inputPacket, true /*isInitiator*/);
+
+        assertEquals(IkePayload.PAYLOAD_TYPE_ID_INITIATOR, payload.payloadType);
+        assertEquals(IkeIdentification.ID_TYPE_DER_ASN1_DN, payload.ikeId.idType);
+
+        IkeDerAsn1DnIdentification ikeId = (IkeDerAsn1DnIdentification) payload.ikeId;
+        X500Principal expectedAsn1Dn = new X500Principal(ASN1_DN_STRING);
+        assertEquals(expectedAsn1Dn, ikeId.derAsn1Dn);
+    }
+
+    @Test
+    public void testDecodeInvalidDerAsn1DnIdPayload() throws Exception {
+        try {
+            byte[] inputPacket =
+                    TestUtils.hexStringToByteArray(ASN1_DN_INVALID_PAYLOAD_BODY_HEX_STRING);
+            new IkeIdPayload(false /*critical*/, inputPacket, true /*isInitiator*/);
+            fail("Expected to fail due to incorrect formed DN");
+        } catch (AuthenticationFailedException expected) {
+
+        }
     }
 
     @Test
@@ -205,6 +246,19 @@ public final class IkeIdPayloadTest {
         payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_CERT, inputBuffer);
 
         byte[] expectedBytes = TestUtils.hexStringToByteArray(KEY_ID_PAYLOAD_HEX_STRING);
+        assertArrayEquals(expectedBytes, inputBuffer.array());
+    }
+
+    @Test
+    public void testConstructAndEncodeDerAsn1DnIdPayload() throws Exception {
+        X500Principal asnDn = new X500Principal(ASN1_DN_STRING);
+        IkeIdPayload payload =
+                new IkeIdPayload(true /*isInitiator*/, new IkeDerAsn1DnIdentification(asnDn));
+
+        ByteBuffer inputBuffer = ByteBuffer.allocate(payload.getPayloadLength());
+        payload.encodeToByteBuffer(IkePayload.PAYLOAD_TYPE_CERT, inputBuffer);
+
+        byte[] expectedBytes = TestUtils.hexStringToByteArray(ASN1_DN_PAYLOAD_HEX_STRING);
         assertArrayEquals(expectedBytes, inputBuffer.array());
     }
 }
