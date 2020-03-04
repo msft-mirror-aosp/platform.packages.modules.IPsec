@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.test.ike;
+package android.net.ipsec.ike;
 
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthConfig;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthEapConfig;
-import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthPskConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthEapConfig;
+import static android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
-import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
-import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
-import static com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -39,19 +39,16 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import android.content.Context;
+import android.net.ConnectivityManager;
 import android.net.InetAddresses;
-import android.net.IpSecManager;
-import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.eap.test.EapSessionConfig;
+import android.net.Network;
+import android.net.eap.EapSessionConfig;
 import android.util.SparseArray;
 
-import androidx.test.InstrumentationRegistry;
+import com.android.internal.net.TestUtils;
 
-import com.android.internal.net.test.TestUtils;
-
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -67,10 +64,15 @@ public final class IkeSessionParamsTest {
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
     private static final byte[] PSK = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
+    private static final String LOCAL_IPV4_HOST_ADDRESS = "192.0.2.100";
+    private static final String REMOTE_IPV4_HOST_ADDRESS = "192.0.2.100";
+    private static final String REMOTE_HOSTNAME = "server.test.android.net";
+
     private static final Inet4Address LOCAL_IPV4_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) (InetAddresses.parseNumericAddress(LOCAL_IPV4_HOST_ADDRESS));
     private static final Inet4Address REMOTE_IPV4_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) (InetAddresses.parseNumericAddress(REMOTE_IPV4_HOST_ADDRESS));
+
     private static final Inet4Address PCSCF_IPV4_ADDRESS_1 =
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.1"));
     private static final Inet4Address PCSCF_IPV4_ADDRESS_2 =
@@ -80,7 +82,10 @@ public final class IkeSessionParamsTest {
     private static final Inet6Address PCSCF_IPV6_ADDRESS_2 =
             (Inet6Address) (InetAddresses.parseNumericAddress("2001:DB8::2"));
 
-    private UdpEncapsulationSocket mUdpEncapSocket;
+    private ConnectivityManager mMockConnectManager;
+    private Network mMockDefaultNetwork;
+    private Network mMockUserConfigNetwork;
+
     private IkeSaProposal mIkeSaProposal;
     private IkeIdentification mLocalIdentification;
     private IkeIdentification mRemoteIdentification;
@@ -91,9 +96,10 @@ public final class IkeSessionParamsTest {
 
     @Before
     public void setUp() throws Exception {
-        Context context = InstrumentationRegistry.getContext();
-        IpSecManager ipSecManager = (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE);
-        mUdpEncapSocket = ipSecManager.openUdpEncapsulationSocket();
+        mMockConnectManager = mock(ConnectivityManager.class);
+        mMockDefaultNetwork = mock(Network.class);
+        mMockUserConfigNetwork = mock(Network.class);
+        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
 
         mIkeSaProposal =
                 new IkeSaProposal.Builder()
@@ -111,14 +117,12 @@ public final class IkeSessionParamsTest {
         mMockRsaPrivateKey = mock(RSAPrivateKey.class);
     }
 
-    @After
-    public void tearDown() throws Exception {
-        mUdpEncapSocket.close();
+    private void verifyIkeSessionParamsWithSeverIpCommon(IkeSessionParams sessionParams) {
+        assertEquals(REMOTE_IPV4_HOST_ADDRESS, sessionParams.getServerHostname());
+        verifyIkeSessionParamsCommon(sessionParams);
     }
 
     private void verifyIkeSessionParamsCommon(IkeSessionParams sessionParams) {
-        assertEquals(REMOTE_IPV4_ADDRESS, sessionParams.getServerAddress());
-        assertEquals(mUdpEncapSocket, sessionParams.getUdpEncapsulationSocket());
         assertArrayEquals(
                 new SaProposal[] {mIkeSaProposal}, sessionParams.getSaProposalsInternal());
 
@@ -128,20 +132,7 @@ public final class IkeSessionParamsTest {
         assertFalse(sessionParams.isIkeFragmentationSupported());
     }
 
-    @Test
-    public void testBuildWithPsk() throws Exception {
-        IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder()
-                        .setServerAddress(REMOTE_IPV4_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
-                        .addSaProposal(mIkeSaProposal)
-                        .setLocalIdentification(mLocalIdentification)
-                        .setRemoteIdentification(mRemoteIdentification)
-                        .setAuthPsk(PSK)
-                        .build();
-
-        verifyIkeSessionParamsCommon(sessionParams);
-
+    private void verifyAuthPskConfig(IkeSessionParams sessionParams) {
         IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
         assertTrue(localConfig instanceof IkeAuthPskConfig);
         assertEquals(IkeSessionParams.IKE_AUTH_METHOD_PSK, localConfig.mAuthMethod);
@@ -151,6 +142,23 @@ public final class IkeSessionParamsTest {
         assertTrue(remoteConfig instanceof IkeAuthPskConfig);
         assertEquals(IkeSessionParams.IKE_AUTH_METHOD_PSK, remoteConfig.mAuthMethod);
         assertArrayEquals(PSK, ((IkeAuthPskConfig) remoteConfig).mPsk);
+    }
+
+    @Test
+    public void testBuildWithPsk() throws Exception {
+        IkeSessionParams sessionParams =
+                new IkeSessionParams.Builder(mMockConnectManager)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .build();
+
+        verifyIkeSessionParamsWithSeverIpCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        assertEquals(mMockDefaultNetwork, sessionParams.getNetwork());
 
         assertEquals(IKE_HARD_LIFETIME_SEC_DEFAULT, sessionParams.getHardLifetime());
         assertEquals(IKE_SOFT_LIFETIME_SEC_DEFAULT, sessionParams.getSoftLifetime());
@@ -162,9 +170,8 @@ public final class IkeSessionParamsTest {
         long softLifetimeSec = TimeUnit.HOURS.toSeconds(10L);
 
         IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder()
-                        .setServerAddress(REMOTE_IPV4_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                new IkeSessionParams.Builder(mMockConnectManager)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -172,10 +179,28 @@ public final class IkeSessionParamsTest {
                         .setLifetime(hardLifetimeSec, softLifetimeSec)
                         .build();
 
-        verifyIkeSessionParamsCommon(sessionParams);
+        verifyIkeSessionParamsWithSeverIpCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
 
         assertEquals(hardLifetimeSec, sessionParams.getHardLifetime());
         assertEquals(softLifetimeSec, sessionParams.getSoftLifetime());
+    }
+
+    @Test
+    public void testBuildWithPskAndHostname() throws Exception {
+        IkeSessionParams sessionParams =
+                new IkeSessionParams.Builder(mMockConnectManager)
+                        .setServerHostname(REMOTE_HOSTNAME)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        assertEquals(REMOTE_HOSTNAME, sessionParams.getServerHostname());
     }
 
     @Test
@@ -183,16 +208,16 @@ public final class IkeSessionParamsTest {
         EapSessionConfig eapConfig = mock(EapSessionConfig.class);
 
         IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder()
-                        .setServerAddress(REMOTE_IPV4_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                new IkeSessionParams.Builder(mMockConnectManager)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
                         .setAuthEap(mMockServerCaCert, eapConfig)
                         .build();
 
-        verifyIkeSessionParamsCommon(sessionParams);
+        verifyIkeSessionParamsWithSeverIpCommon(sessionParams);
+        assertEquals(mMockDefaultNetwork, sessionParams.getNetwork());
 
         IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
         assertTrue(localConfig instanceof IkeAuthEapConfig);
@@ -210,9 +235,9 @@ public final class IkeSessionParamsTest {
     @Test
     public void testBuildWithDigitalSignatureAuth() throws Exception {
         IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder()
-                        .setServerAddress(REMOTE_IPV4_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                new IkeSessionParams.Builder(mMockConnectManager)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
+                        .setNetwork(mMockUserConfigNetwork)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -220,7 +245,8 @@ public final class IkeSessionParamsTest {
                                 mMockServerCaCert, mMockClientEndCert, mMockRsaPrivateKey)
                         .build();
 
-        verifyIkeSessionParamsCommon(sessionParams);
+        verifyIkeSessionParamsWithSeverIpCommon(sessionParams);
+        assertEquals(mMockUserConfigNetwork, sessionParams.getNetwork());
 
         IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
         assertTrue(localConfig instanceof IkeAuthDigitalSignLocalConfig);
@@ -244,9 +270,8 @@ public final class IkeSessionParamsTest {
     public void testBuildWithDsaDigitalSignatureAuth() throws Exception {
         try {
             IkeSessionParams sessionParams =
-                    new IkeSessionParams.Builder()
-                            .setServerAddress(REMOTE_IPV4_ADDRESS)
-                            .setUdpEncapsulationSocket(mUdpEncapSocket)
+                    new IkeSessionParams.Builder(mMockConnectManager)
+                            .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                             .addSaProposal(mIkeSaProposal)
                             .setLocalIdentification(mLocalIdentification)
                             .setRemoteIdentification(mRemoteIdentification)
@@ -260,6 +285,7 @@ public final class IkeSessionParamsTest {
 
         }
     }
+
 
     private void verifyAttrTypes(SparseArray expectedAttrCntMap, IkeSessionParams ikeParams) {
         ConfigAttribute[] configAttributes = ikeParams.getConfigurationAttributesInternal();
@@ -280,9 +306,8 @@ public final class IkeSessionParamsTest {
     @Test
     public void testBuildWithPcscfAddress() throws Exception {
         IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder()
-                        .setServerAddress(REMOTE_IPV4_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                new IkeSessionParams.Builder(mMockConnectManager)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -305,9 +330,8 @@ public final class IkeSessionParamsTest {
     @Test
     public void testBuildWithoutPcscfAddress() throws Exception {
         IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder()
-                        .setServerAddress(REMOTE_IPV4_ADDRESS)
-                        .setUdpEncapsulationSocket(mUdpEncapSocket)
+                new IkeSessionParams.Builder(mMockConnectManager)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                         .addSaProposal(mIkeSaProposal)
                         .setLocalIdentification(mLocalIdentification)
                         .setRemoteIdentification(mRemoteIdentification)
@@ -322,9 +346,8 @@ public final class IkeSessionParamsTest {
     @Test
     public void testBuildWithoutSaProposal() throws Exception {
         try {
-            new IkeSessionParams.Builder()
-                    .setServerAddress(REMOTE_IPV4_ADDRESS)
-                    .setUdpEncapsulationSocket(mUdpEncapSocket)
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                     .build();
             fail("Expected to fail due to absence of SA proposal.");
         } catch (IllegalArgumentException expected) {
@@ -334,9 +357,8 @@ public final class IkeSessionParamsTest {
     @Test
     public void testBuildWithoutLocalId() throws Exception {
         try {
-            new IkeSessionParams.Builder()
-                    .setServerAddress(REMOTE_IPV4_ADDRESS)
-                    .setUdpEncapsulationSocket(mUdpEncapSocket)
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                     .addSaProposal(mIkeSaProposal)
                     .setRemoteIdentification(mRemoteIdentification)
                     .setAuthPsk(PSK)
@@ -349,9 +371,8 @@ public final class IkeSessionParamsTest {
     @Test
     public void testBuildWithoutSetAuth() throws Exception {
         try {
-            new IkeSessionParams.Builder()
-                    .setServerAddress(REMOTE_IPV4_ADDRESS)
-                    .setUdpEncapsulationSocket(mUdpEncapSocket)
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
                     .addSaProposal(mIkeSaProposal)
                     .setLocalIdentification(mLocalIdentification)
                     .setRemoteIdentification(mRemoteIdentification)
@@ -360,6 +381,7 @@ public final class IkeSessionParamsTest {
         } catch (IllegalArgumentException expected) {
         }
     }
+
 
     @Test
     public void testNonAsciiFqdnAuthentication() throws Exception {
@@ -373,7 +395,7 @@ public final class IkeSessionParamsTest {
     @Test
     public void testSetHardLifetimeTooLong() throws Exception {
         try {
-            new IkeSessionParams.Builder()
+            new IkeSessionParams.Builder(mMockConnectManager)
                     .setLifetime(IKE_HARD_LIFETIME_SEC_MAXIMUM + 1, IKE_SOFT_LIFETIME_SEC_DEFAULT);
             fail("Expected failure because hard lifetime is too long");
         } catch (IllegalArgumentException expected) {
@@ -383,7 +405,7 @@ public final class IkeSessionParamsTest {
     @Test
     public void testSetHardLifetimeTooShort() throws Exception {
         try {
-            new IkeSessionParams.Builder()
+            new IkeSessionParams.Builder(mMockConnectManager)
                     .setLifetime(IKE_HARD_LIFETIME_SEC_MINIMUM - 1, IKE_SOFT_LIFETIME_SEC_DEFAULT);
             fail("Expected failure because hard lifetime is too short");
         } catch (IllegalArgumentException expected) {
@@ -393,7 +415,7 @@ public final class IkeSessionParamsTest {
     @Test
     public void testSetSoftLifetimeTooLong() throws Exception {
         try {
-            new IkeSessionParams.Builder()
+            new IkeSessionParams.Builder(mMockConnectManager)
                     .setLifetime(IKE_HARD_LIFETIME_SEC_DEFAULT, IKE_HARD_LIFETIME_SEC_DEFAULT);
             fail("Expected failure because soft lifetime is too long");
         } catch (IllegalArgumentException expected) {
@@ -403,7 +425,8 @@ public final class IkeSessionParamsTest {
     @Test
     public void testSetSoftLifetimeTooShort() throws Exception {
         try {
-            new IkeSessionParams.Builder().setLifetime(IKE_HARD_LIFETIME_SEC_DEFAULT, 0L);
+            new IkeSessionParams.Builder(mMockConnectManager)
+                    .setLifetime(IKE_HARD_LIFETIME_SEC_DEFAULT, 0L);
             fail("Expected failure because soft lifetime is too short");
         } catch (IllegalArgumentException expected) {
         }

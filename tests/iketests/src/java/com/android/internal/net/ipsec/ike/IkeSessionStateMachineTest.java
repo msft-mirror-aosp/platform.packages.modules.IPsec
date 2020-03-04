@@ -14,31 +14,31 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.ipsec.ike;
+package com.android.internal.net.ipsec.ike;
 
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
-import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
-import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
-import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
-import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
-import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.RETRY_INTERVAL_MS;
-import static com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
-import static com.android.internal.net.test.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
-import static com.android.internal.net.test.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
-import static com.android.internal.net.test.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
-import static com.android.internal.net.test.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
-import static com.android.internal.net.test.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
-import static com.android.internal.net.test.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
-import static com.android.internal.net.test.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
-import static com.android.internal.net.test.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_SA;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.RETRY_INTERVAL_MS;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
+import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
+import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_SA;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -67,83 +67,85 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.content.Context;
+import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
-import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.eap.test.EapSessionConfig;
-import android.net.ipsec.test.ike.ChildSaProposal;
-import android.net.ipsec.test.ike.ChildSessionCallback;
-import android.net.ipsec.test.ike.ChildSessionParams;
-import android.net.ipsec.test.ike.IkeIpv4AddrIdentification;
-import android.net.ipsec.test.ike.IkeManager;
-import android.net.ipsec.test.ike.IkeSaProposal;
-import android.net.ipsec.test.ike.IkeSessionCallback;
-import android.net.ipsec.test.ike.IkeSessionParams;
-import android.net.ipsec.test.ike.SaProposal;
-import android.net.ipsec.test.ike.TunnelModeChildSessionParams;
-import android.net.ipsec.test.ike.exceptions.IkeException;
-import android.net.ipsec.test.ike.exceptions.IkeInternalException;
-import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
+import android.net.Network;
+import android.net.eap.EapSessionConfig;
+import android.net.ipsec.ike.ChildSaProposal;
+import android.net.ipsec.ike.ChildSessionCallback;
+import android.net.ipsec.ike.ChildSessionParams;
+import android.net.ipsec.ike.IkeIpv4AddrIdentification;
+import android.net.ipsec.ike.IkeManager;
+import android.net.ipsec.ike.IkeSaProposal;
+import android.net.ipsec.ike.IkeSessionCallback;
+import android.net.ipsec.ike.IkeSessionConfiguration;
+import android.net.ipsec.ike.IkeSessionParams;
+import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.ike.TunnelModeChildSessionParams;
+import android.net.ipsec.ike.exceptions.IkeException;
+import android.net.ipsec.ike.exceptions.IkeInternalException;
+import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
-import com.android.internal.net.test.TestUtils;
-import com.android.internal.net.test.eap.EapAuthenticator;
-import com.android.internal.net.test.eap.IEapCallback;
-import com.android.internal.net.test.ipsec.ike.ChildSessionStateMachine.IChildSessionSmCallback;
-import com.android.internal.net.test.ipsec.ike.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
-import com.android.internal.net.test.ipsec.ike.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
-import com.android.internal.net.test.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
-import com.android.internal.net.test.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
-import com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.IkeSecurityParameterIndex;
-import com.android.internal.net.test.ipsec.ike.IkeSessionStateMachine.ReceivedIkePacket;
-import com.android.internal.net.test.ipsec.ike.SaRecord.ISaRecordHelper;
-import com.android.internal.net.test.ipsec.ike.SaRecord.IkeSaRecord;
-import com.android.internal.net.test.ipsec.ike.SaRecord.IkeSaRecordConfig;
-import com.android.internal.net.test.ipsec.ike.SaRecord.SaRecordHelper;
-import com.android.internal.net.test.ipsec.ike.crypto.IkeCipher;
-import com.android.internal.net.test.ipsec.ike.crypto.IkeMacIntegrity;
-import com.android.internal.net.test.ipsec.ike.crypto.IkeMacPrf;
-import com.android.internal.net.test.ipsec.ike.exceptions.AuthenticationFailedException;
-import com.android.internal.net.test.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.test.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.test.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
-import com.android.internal.net.test.ipsec.ike.message.IkeAuthDigitalSignPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeAuthPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeAuthPskPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeCertX509CertPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeConfigPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeDeletePayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeEapPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeHeader;
-import com.android.internal.net.test.ipsec.ike.message.IkeIdPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeInformationalPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeKePayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage.DecodeResult;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage.DecodeResultOk;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage.DecodeResultPartial;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage.DecodeResultProtectedError;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage.DecodeResultUnprotectedError;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage.IIkeMessageHelper;
-import com.android.internal.net.test.ipsec.ike.message.IkeMessage.IkeMessageHelper;
-import com.android.internal.net.test.ipsec.ike.message.IkeNoncePayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeNotifyPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkePayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
-import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
-import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
-import com.android.internal.net.test.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.test.ipsec.ike.message.IkeSkfPayload;
-import com.android.internal.net.test.ipsec.ike.message.IkeTestUtils;
-import com.android.internal.net.test.ipsec.ike.message.IkeTsPayload;
-import com.android.internal.net.test.ipsec.ike.testutils.CertUtils;
-import com.android.internal.net.test.ipsec.ike.testutils.MockIpSecTestUtils;
-import com.android.internal.net.test.ipsec.ike.utils.Retransmitter;
-import com.android.internal.net.test.ipsec.ike.utils.Retransmitter.IBackoffTimeoutCalculator;
-import com.android.internal.net.test.utils.Log;
-import com.android.internal.util.State;
+import com.android.internal.net.TestUtils;
+import com.android.internal.net.eap.EapAuthenticator;
+import com.android.internal.net.eap.IEapCallback;
+import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.IChildSessionSmCallback;
+import com.android.internal.net.ipsec.ike.ChildSessionStateMachineFactory.ChildSessionFactoryHelper;
+import com.android.internal.net.ipsec.ike.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
+import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.ReceivedIkePacket;
+import com.android.internal.net.ipsec.ike.SaRecord.ISaRecordHelper;
+import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
+import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecordConfig;
+import com.android.internal.net.ipsec.ike.SaRecord.SaRecordHelper;
+import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
+import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
+import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
+import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import com.android.internal.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
+import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
+import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
+import com.android.internal.net.ipsec.ike.message.IkeAuthPskPayload;
+import com.android.internal.net.ipsec.ike.message.IkeCertX509CertPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
+import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
+import com.android.internal.net.ipsec.ike.message.IkeEapPayload;
+import com.android.internal.net.ipsec.ike.message.IkeHeader;
+import com.android.internal.net.ipsec.ike.message.IkeIdPayload;
+import com.android.internal.net.ipsec.ike.message.IkeInformationalPayload;
+import com.android.internal.net.ipsec.ike.message.IkeKePayload;
+import com.android.internal.net.ipsec.ike.message.IkeMessage;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResult;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultOk;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultPartial;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultProtectedError;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultUnprotectedError;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.IIkeMessageHelper;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.IkeMessageHelper;
+import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
+import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
+import com.android.internal.net.ipsec.ike.message.IkePayload;
+import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
+import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
+import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
+import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.ipsec.ike.message.IkeSkfPayload;
+import com.android.internal.net.ipsec.ike.message.IkeTestUtils;
+import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.ike.utils.Retransmitter;
+import com.android.internal.net.ipsec.ike.utils.Retransmitter.IBackoffTimeoutCalculator;
+import com.android.internal.net.ipsec.ike.utils.State;
+import com.android.internal.net.utils.Log;
 
 import org.junit.After;
 import org.junit.Before;
@@ -153,6 +155,7 @@ import org.mockito.invocation.InvocationOnMock;
 
 import java.io.IOException;
 import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
@@ -167,6 +170,7 @@ public final class IkeSessionStateMachineTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
+    private static final String REMOTE_HOSTNAME = "ike.test.android";
 
     private static final String IKE_INIT_RESP_HEX_STRING =
             "5f54bf6d8b48e6e1909232b3d1edcb5c21202220000000000000014c220000300000"
@@ -235,6 +239,16 @@ public final class IkeSessionStateMachineTest {
     private static final String PRF_KEY_RESP_HEX_STRING =
             "A30E6B08BE56C0E6BFF4744143C75219299E1BEB";
 
+    private static final String CP_PAYLOAD_HEX_STRING =
+            "210000810200000000080011260010111067a17d000000000a"
+                    + "f68e8640000a0010200148880067ff000643000d000000000"
+                    + "00a0010200148880066ff000645000d0000000000150010200"
+                    + "148880006713a00f10104000000050015001020014888000671"
+                    + "3a00f101040000008900150010200148880005713a00e00104000000c9";
+    private static final String PCSCF_IPV6_ADDRESS1 = "2001:4888:6:713a:f1:104:0:5";
+    private static final String PCSCF_IPV6_ADDRESS2 = "2001:4888:6:713a:f1:104:0:89";
+    private static final String PCSCF_IPV6_ADDRESS3 = "2001:4888:5:713a:e0:104:0:c9";
+
     private static final byte[] EAP_DUMMY_MSG = "EAP Message".getBytes();
 
     private static final int KEY_LEN_IKE_INTE = 20;
@@ -257,8 +271,9 @@ public final class IkeSessionStateMachineTest {
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private Context mContext;
     private IpSecManager mIpSecManager;
-    private UdpEncapsulationSocket mUdpEncapSocket;
 
+    private ConnectivityManager mMockConnectManager;
+    private Network mMockDefaultNetwork;
     private IkeUdpEncapSocket mSpyIkeUdpEncapSocket;
 
     private TestLooper mLooper;
@@ -616,7 +631,14 @@ public final class IkeSessionStateMachineTest {
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
-        mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
+
+        mMockConnectManager = mock(ConnectivityManager.class);
+        mMockDefaultNetwork = mock(Network.class);
+        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
+        when(mMockDefaultNetwork.getByName(REMOTE_HOSTNAME)).thenReturn(REMOTE_ADDRESS);
+        when(mMockDefaultNetwork.getByName(REMOTE_ADDRESS.getHostAddress()))
+                .thenReturn(REMOTE_ADDRESS);
+
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
                         .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
@@ -689,7 +711,6 @@ public final class IkeSessionStateMachineTest {
     public void tearDown() throws Exception {
         mIkeSessionStateMachine.quit();
         mIkeSessionStateMachine.setDbg(false);
-        mUdpEncapSocket.close();
 
         mSpyCurrentIkeSaRecord.close();
         mSpyLocalInitIkeSaRecord.close();
@@ -720,9 +741,13 @@ public final class IkeSessionStateMachineTest {
 
         mLooper.dispatchAll();
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
+        assertEquals(REMOTE_ADDRESS, ikeSession.mRemoteAddress);
 
         mSpyIkeUdpEncapSocket =
-                spy(IkeUdpEncapSocket.getIkeUdpEncapSocket(mUdpEncapSocket, ikeSession));
+                spy(
+                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                mMockDefaultNetwork, mIpSecManager, ikeSession));
+
         doNothing().when(mSpyIkeUdpEncapSocket).sendIkePacket(any(), any());
         ikeSession.mIkeSocket = mSpyIkeUdpEncapSocket;
 
@@ -740,9 +765,8 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
-        return new IkeSessionParams.Builder()
-                .setServerAddress(REMOTE_ADDRESS)
-                .setUdpEncapsulationSocket(mUdpEncapSocket)
+        return new IkeSessionParams.Builder(mMockConnectManager)
+                .setServerHostname(REMOTE_ADDRESS.getHostAddress())
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
                 .setRemoteIdentification(
@@ -1176,6 +1200,20 @@ public final class IkeSessionStateMachineTest {
         IkeSaRecordConfig config = (IkeSaRecordConfig) invocation.getArguments()[ikeConfigIndex];
         config.initSpi.close();
         config.respSpi.close();
+    }
+
+    @Test
+    public void testResolveRemoteHostName() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+
+        IkeSessionParams ikeParams =
+                buildIkeSessionParamsCommon()
+                        .setAuthPsk(mPsk)
+                        .setServerHostname(REMOTE_HOSTNAME)
+                        .build();
+        mIkeSessionStateMachine = makeAndStartIkeSession(ikeParams);
+
+        verify(mMockDefaultNetwork).getByName(REMOTE_HOSTNAME);
     }
 
     @Test
@@ -1922,6 +1960,11 @@ public final class IkeSessionStateMachineTest {
         configPayload.recognizedAttributeList.contains(
                 new IkeConfigPayload.ConfigAttributeIpv6Address());
 
+        IkeNoncePayload noncePayload =
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
+        assertNull(noncePayload);
+
         return ikeAuthReqMessage;
     }
 
@@ -1929,7 +1972,8 @@ public final class IkeSessionStateMachineTest {
             IkeAuthPskPayload spyAuthPayload,
             IkeIdPayload respIdPayload,
             List<IkePayload> authRelatedPayloads,
-            boolean hasChildPayloads)
+            boolean hasChildPayloads,
+            boolean hasConfigPayloadInResp)
             throws Exception {
         // Send IKE AUTH response to IKE state machine
         ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
@@ -1964,8 +2008,24 @@ public final class IkeSessionStateMachineTest {
 
         // Validate that user has been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onOpened(any());
-        // TODO: Verify sessionConfiguration
+
+        ArgumentCaptor<IkeSessionConfiguration> ikeSessionConfigurationArgumentCaptor =
+                ArgumentCaptor.forClass(IkeSessionConfiguration.class);
+        verify(mMockIkeSessionCallback).onOpened(ikeSessionConfigurationArgumentCaptor.capture());
+
+        IkeSessionConfiguration sessionConfig =
+                ikeSessionConfigurationArgumentCaptor.getValue();
+        if (hasConfigPayloadInResp) {
+            assertNotNull(sessionConfig);
+            List<InetAddress> pcscfAddressList = sessionConfig.getPcscfServers();
+            assertEquals(3, pcscfAddressList.size());
+            assertTrue(pcscfAddressList.contains(InetAddress.getByName(PCSCF_IPV6_ADDRESS1)));
+            assertTrue(pcscfAddressList.contains(InetAddress.getByName(PCSCF_IPV6_ADDRESS2)));
+            assertTrue(pcscfAddressList.contains(InetAddress.getByName(PCSCF_IPV6_ADDRESS3)));
+        } else {
+            assertTrue(sessionConfig.getPcscfServers().size() == 0);
+        }
+
 
         // Verify payload list pair for first Child negotiation
         ArgumentCaptor<List<IkePayload>> mReqPayloadListCaptor =
@@ -1997,6 +2057,11 @@ public final class IkeSessionStateMachineTest {
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_INITIATOR));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_TS_RESPONDER));
         assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_NONCE));
+        if (hasConfigPayloadInResp) {
+            assertTrue(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_CP));
+        } else {
+            assertFalse(isIkePayloadExist(childRespList, IkePayload.PAYLOAD_TYPE_CP));
+        }
         IkeSaPayload respSaPayload =
                 IkePayload.getPayloadForTypeInProvidedList(
                         IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, childRespList);
@@ -2065,15 +2130,17 @@ public final class IkeSessionStateMachineTest {
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
         verifyRetransmissionStarted();
 
-        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
+        // Build IKE AUTH response with Auth-PSK, ID-Responder and config payloads.
         List<IkePayload> authRelatedPayloads = new LinkedList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
         IkeIdPayload respIdPayload = makeRespIdPayload();
         authRelatedPayloads.add(respIdPayload);
+        authRelatedPayloads.add(makeConfigPayload());
 
-        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, true);
+        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads,
+                true /*hasChildPayloads*/, true /*hasConfigPayloadInResp*/);
         verifyRetransmissionStopped();
     }
 
@@ -2371,7 +2438,8 @@ public final class IkeSessionStateMachineTest {
 
         IkeIdPayload respIdPayload = makeRespIdPayload();
 
-        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads, false);
+        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads,
+                false /*hasChildPayloads*/, false /*hasConfigPayloadInResp*/);
         verifyRetransmissionStopped();
     }
 
@@ -4055,5 +4123,13 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    private IkeConfigPayload makeConfigPayload() throws Exception {
+        return (IkeConfigPayload)
+                IkeTestUtils.hexStringToIkePayload(
+                        IkePayload.PAYLOAD_TYPE_CP,
+                        true /*isResp*/,
+                        CP_PAYLOAD_HEX_STRING);
     }
 }

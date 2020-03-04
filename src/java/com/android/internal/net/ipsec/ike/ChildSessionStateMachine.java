@@ -873,7 +873,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mIpSecManager,
                                 mLocalAddress,
                                 mChildSessionParams,
-                                false /*isFirstChild*/);
+                                false /*isFirstChildSa*/);
 
                 final ConfigAttribute[] configAttributes =
                         CreateChildSaHelper.getConfigAttributes(mChildSessionParams);
@@ -1709,12 +1709,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
                 ChildSessionParams childSessionParams,
-                boolean isFirstChild)
+                boolean isFirstChildSa)
                 throws ResourceUnavailableException {
 
             ChildSaProposal[] saProposals = childSessionParams.getSaProposalsInternal();
 
-            if (isFirstChild) {
+            if (isFirstChildSa) {
                 for (int i = 0; i < saProposals.length; i++) {
                     saProposals[i] =
                             childSessionParams.getSaProposalsInternal()[i]
@@ -1728,7 +1728,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     saProposals, ipSecManager, localAddress),
                             childSessionParams.getLocalTrafficSelectorsInternal(),
                             childSessionParams.getRemoteTrafficSelectorsInternal(),
-                            childSessionParams.isTransportMode());
+                            childSessionParams.isTransportMode(), isFirstChildSa);
 
             return payloadList;
         }
@@ -1758,7 +1758,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     localAddress),
                             currentLocalTs,
                             currentRemoteTs,
-                            isTransport);
+                            isTransport,
+                            false /*isFirstChildSa*/);
 
             payloads.add(
                     new IkeNotifyPayload(
@@ -1783,7 +1784,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     proposalNumber, currentProposal, ipSecManager, localAddress),
                             currentRemoteTs /*initTs*/,
                             currentLocalTs /*respTs*/,
-                            isTransport);
+                            isTransport,
+                            false /*isFirstChildSa*/);
 
             payloads.add(
                     new IkeNotifyPayload(
@@ -1796,14 +1798,18 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 IkeSaPayload saPayload,
                 IkeTrafficSelector[] initTs,
                 IkeTrafficSelector[] respTs,
-                boolean isTransport)
+                boolean isTransport,
+                boolean isFirstChildSa)
                 throws ResourceUnavailableException {
             List<IkePayload> payloadList = new ArrayList<>(5);
 
             payloadList.add(saPayload);
             payloadList.add(new IkeTsPayload(true /*isInitiator*/, initTs));
             payloadList.add(new IkeTsPayload(false /*isInitiator*/, respTs));
-            payloadList.add(new IkeNoncePayload());
+
+            if (!isFirstChildSa) {
+                payloadList.add(new IkeNoncePayload());
+            }
 
             DhGroupTransform[] dhGroups =
                     ((ChildProposal) saPayload.proposalList.get(0))

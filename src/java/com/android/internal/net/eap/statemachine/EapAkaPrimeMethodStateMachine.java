@@ -75,6 +75,7 @@ import javax.crypto.spec.SecretKeySpec;
  *     for Authentication and Key Agreement (EAP-AKA)</a>
  * @see <a href="https://tools.ietf.org/html/rfc5448">RFC 5448, Improved Extensible Authentication
  *     Protocol Method for 3rd Generation Authentication and Key Agreement (EAP-AKA')</a>
+ * @hide
  */
 public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
     public static final int K_AUT_LEN = 32;

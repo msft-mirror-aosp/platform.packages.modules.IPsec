@@ -21,6 +21,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_N
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ErrorType;
 
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PARTIAL;
@@ -40,10 +41,12 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.Network;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSessionCallback;
+import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
@@ -113,7 +116,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.SocketException;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
@@ -949,14 +951,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void enterState() {
             try {
-                mRemoteAddress = mIkeSessionParams.getServerAddress();
+                Network network = mIkeSessionParams.getNetwork();
+
+                // TODO(b/149954916): Do DNS resolution asynchronously and support resolving
+                // multiple addresses.
+                mRemoteAddress = network.getByName(mIkeSessionParams.getServerHostname());
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
                     mIkeSocket =
                             IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                    mIkeSessionParams.getUdpEncapsulationSocket(),
-                                    IkeSessionStateMachine.this);
+                                    network, mIpSecManager, IkeSessionStateMachine.this);
                 } else {
                     throw new UnsupportedOperationException("Do not support IPv6 IKE sever");
                     // TODO(b/146674994): Support IPv6 server address.
@@ -967,12 +972,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 isIpv4 ? OsConstants.AF_INET : OsConstants.AF_INET6,
                                 OsConstants.SOCK_DGRAM,
                                 OsConstants.IPPROTO_UDP);
+                network.bindSocket(sock);
                 Os.connect(sock, mRemoteAddress, mIkeSocket.getIkeServerPort());
                 InetSocketAddress localAddr = (InetSocketAddress) Os.getsockname(sock);
                 mLocalAddress = localAddr.getAddress();
                 mLocalPort = localAddr.getPort();
                 Os.close(sock);
-            } catch (ErrnoException | SocketException e) {
+            } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -1965,7 +1971,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             childData.respPayloads,
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNeeded(),
+                            getEncapSocketIfNatDetected(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     return HANDLED;
@@ -1994,10 +2000,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        private UdpEncapsulationSocket getEncapSocketIfNeeded() {
+        // Returns the UDP-Encapsulation socket to the newly created ChildSessionStateMachine if
+        // a NAT is detected. It allows the ChildSessionStateMachine to build IPsec transforms that
+        // can send and receive IPsec traffic through a NAT.
+        private UdpEncapsulationSocket getEncapSocketIfNatDetected() {
             boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
 
-            return (isNatDetected ? mIkeSessionParams.getUdpEncapsulationSocket() : null);
+            if (!isNatDetected) return null;
+
+            if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
+                throw new IllegalStateException(
+                        "NAT is detected but IKE packet is not UDP-Encapsulated.");
+            }
+            return ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket();
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
@@ -2021,7 +2036,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     mChildInLocalProcedure.createChildSession(
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNeeded(),
+                            getEncapSocketIfNatDetected(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     break;
@@ -2501,7 +2516,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
                     IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                            mIkeSessionParams.getServerAddress(), respIkeHeader.ikeResponderSpi);
+                            mRemoteAddress, respIkeHeader.ikeResponderSpi);
 
             int exchangeType = respIkeHeader.exchangeType;
             if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
@@ -2733,6 +2748,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     ikeMessage.getPayloadListForType(
                             IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
 
+            IkeConfigPayload configPayload =
+                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
+                            IkeConfigPayload.class);
+
             boolean hasErrorNotify = false;
             List<IkePayload> list = new LinkedList<>();
             for (IkeNotifyPayload payload : notifyPayloads) {
@@ -2755,6 +2774,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             list.add(saPayload);
             list.add(tsInitPayload);
             list.add(tsRespPayload);
+
+            if (configPayload != null) {
+                list.add(configPayload);
+            }
+
             return list;
         }
 
@@ -2772,12 +2796,36 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                     childReqList,
                                     childRespList)));
 
+            transitionTo(mChildProcedureOngoing);
+        }
+
+        protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
+            IkeConfigPayload configPayload =
+                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
+                            IkeConfigPayload.class);
+
+            // TODO(b/150466460); Construct and pass IkeSessionConnectionInfo to
+            // IkeSessionConfiguration
+            if (configPayload == null) {
+                logd("No config payload in ikeMessage.");
+                return new IkeSessionConfiguration(null /*ikeConnInfo*/, null /*configPayload*/);
+            }
+
+            if (configPayload.configType != CONFIG_TYPE_REPLY) {
+                logw("Unexpected config payload. Config Type: "
+                        + configPayload.configType);
+                return new IkeSessionConfiguration(null /*ikeConnInfo*/, null /*configPayload*/);
+            }
+
+            return new IkeSessionConfiguration(null /*ikeConnInfo*/, configPayload);
+        }
+
+        protected void notifyIkeSessionSetup(IkeMessage msg) {
+            IkeSessionConfiguration ikeSessionConfig = buildIkeSessionConfiguration(msg);
             mUserCbExecutor.execute(
                     () -> {
-                        mIkeSessionCallback.onOpened(null /*sessionConfiguration*/);
-                        // TODO: Construct and pass a real IkeSessionConfiguration
+                        mIkeSessionCallback.onOpened(ikeSessionConfig);
                     });
-            transitionTo(mChildProcedureOngoing);
         }
     }
 
@@ -2834,6 +2882,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                     performFirstChildNegotiation(
                             childReqList, extractChildPayloadsFromMessage(ikeMessage));
+
+                    notifyIkeSessionSetup(ikeMessage);
                 }
             } catch (IkeProtocolException e) {
                 if (!mUseEap) {
@@ -2902,7 +2952,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mIpSecManager,
                             mLocalAddress,
                             mFirstChildSessionParams,
-                            true /*isFirstChild*/));
+                            true /*isFirstChildSa*/));
 
             final List<ConfigAttribute> configAttributes = new ArrayList<>();
             configAttributes.addAll(
@@ -3263,6 +3313,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 validateIkeAuthRespPostEap(nonChildPayloads);
 
                 performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
+
+                notifyIkeSessionSetup(ikeMessage);
             } catch (IkeProtocolException e) {
                 // Notify the remote because they may have set up the IKE SA.
                 sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));

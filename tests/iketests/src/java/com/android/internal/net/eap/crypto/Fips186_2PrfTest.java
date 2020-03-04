@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.test.eap.crypto;
+package com.android.internal.net.eap.crypto;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.fail;
 
-import com.android.internal.net.test.TestUtils;
+import com.android.internal.net.TestUtils;
 
 import org.junit.Before;
 import org.junit.Test;

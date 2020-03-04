@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.test.ike;
+package android.net.ipsec.ike;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -25,8 +25,8 @@ import static org.junit.Assert.fail;
 
 import android.net.InetAddresses;
 
-import com.android.internal.net.test.TestUtils;
-import com.android.internal.net.test.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.TestUtils;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import org.junit.Test;
 
@@ -376,5 +376,45 @@ public final class IkeTrafficSelectorTest {
         assertTrue(mTsIpv6Three.contains(tsIpv6ThreeSubsetAddrRange));
         assertFalse(tsIpv6ThreeSubsetPortRange.contains(mTsIpv6Three));
         assertFalse(tsIpv6ThreeSubsetAddrRange.contains(mTsIpv6Three));
+    }
+
+    @Test
+    public void testDecodeIpv6TS() throws Exception {
+        int numTs = 1;
+
+        byte[] tsBytes = TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS);
+        IkeTrafficSelector[] selectors =
+                IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+
+        assertEquals(numTs, selectors.length);
+        assertTrue(selectors[0].equals(mTsIpv6Three));
+    }
+
+    @Test
+    public void testDecodeWithBothIpv6AndIpv4TS() throws Exception {
+        int numTs = 2;
+        byte[] tsBytes =
+                TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS + TS_IPV4_ONE_HEX_STRING);
+        IkeTrafficSelector[] selectors =
+                IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+
+        assertEquals(numTs, selectors.length);
+        assertTrue(selectors[0].equals(mTsIpv6Three));
+        assertTrue(selectors[1].equals(mTsOne));
+    }
+
+    @Test
+    public void testDecodeIpv6TSWithInvalidLength() throws Exception {
+        int numTs = 2;
+        byte[] tsBytes =
+                TestUtils.hexStringToByteArray(TS_IPV6_THREE_HEX_ADDRESS + "FFFF");
+
+        try {
+            IkeTrafficSelector[] selectors =
+                    IkeTrafficSelector.decodeIkeTrafficSelectors(numTs, tsBytes);
+            fail("Expected to fail with invalid syntax exception");
+        } catch(InvalidSyntaxException e) {
+        }
+
     }
 }

@@ -12,11 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-java_library {
-    name: "ike",
+java_sdk_library {
+    name: "android.net.ipsec.ike",
     installable: true,
-    // TODO (b/146757305): change to module API once available
-    sdk_version: "core_platform",
+    sdk_version: "module_current",
 
     aidl: {
         local_include_dirs: ["src/java"],
@@ -26,12 +25,16 @@ java_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
-        "android_system_stubs_current",
+    ],
+
+    api_packages: [
+        "android.net.eap",
+        "android.net.ipsec.ike",
+        "android.net.ipsec.ike.exceptions",
     ],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
-    // classpath conflicts. This is necessary to preserve access to these
-    // statically included classes.
+    // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
 
     plugins: ["java_api_finder"],
@@ -71,4 +74,15 @@ java_library {
     name: "ike-stubs",
     srcs: [":ike-stubs-docs"],
     sdk_version: "system_current",
+}
+
+java_library {
+    name: "ike_test",
+    installable: false, // Used only for testing; never installed alone.
+    srcs: [":ike-srcs"],
+    libs: ["unsupportedappusage"],
+
+    // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
+    // being overwritten by the frameworks class copies.
+    jarjar_rules: "jarjar-rules-shared.txt",
 }
