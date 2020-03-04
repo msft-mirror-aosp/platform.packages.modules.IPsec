@@ -138,7 +138,12 @@ public class EapMessage {
                             "Unsupported eapType=" + eapType);
                 }
 
-                byte[] eapDataBytes = new byte[buffer.remaining()];
+                // Length of data to go into EapData.eapTypeData =
+                //      eapLength - EAP_HEADER_LENGTH - 1B (eapType)
+                int eapDataLengthRemaining = Math.max(0, eapLength - EAP_HEADER_LENGTH - 1);
+                byte[] eapDataBytes =
+                        new byte[Math.min(eapDataLengthRemaining, buffer.remaining())];
+
                 buffer.get(eapDataBytes);
                 eapData = new EapData(eapType, eapDataBytes);
             } else {
