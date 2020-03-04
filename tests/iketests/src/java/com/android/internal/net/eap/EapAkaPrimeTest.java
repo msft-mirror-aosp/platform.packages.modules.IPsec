@@ -146,7 +146,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
     private static final byte[] EAP_AKA_PRIME_CHALLENGE_REQUEST =
             hexStringToByteArray(
-                    "01CE0044" // EAP-Request | ID | length in bytes
+                    "01CE0058" // EAP-Request | ID | length in bytes
                             + "32010000" // EAP-AKA' | Challenge | 2B padding
                             + "01050000" + RAND_1 // AT_RAND attribute
                             + "02050000" + AUTN // AT_AUTN attribute
@@ -162,7 +162,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
     private static final byte[] EAP_AKA_PRIME_CHALLENGE_REQUEST_WITHOUT_IDENTITY_REQ =
             hexStringToByteArray(
-                    "01CE0052" // EAP-Request | ID | length in bytes
+                    "01CE0058" // EAP-Request | ID | length in bytes
                             + "32010000" // EAP-AKA' | Challenge | 2B padding
                             + "01050000" + RAND_1 // AT_RAND attribute
                             + "02050000" + AUTN // AT_AUTN attribute
@@ -178,7 +178,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
     private static final byte[] EAP_AKA_PRIME_CHALLENGE_REQUEST_SYNC_FAIL =
             hexStringToByteArray(
-                    "01CE0044" // EAP-Request | ID | length in bytes
+                    "01CE0058" // EAP-Request | ID | length in bytes
                             + "32010000" // EAP-AKA' | Challenge | 2B padding
                             + "01050000" + RAND_2 // AT_RAND attribute
                             + "02050000" + AUTN // AT_AUTN attribute
