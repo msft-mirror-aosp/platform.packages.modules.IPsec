@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.message;
 
+import android.net.ipsec.ike.IkeDerAsn1DnIdentification;
 import android.net.ipsec.ike.IkeFqdnIdentification;
 import android.net.ipsec.ike.IkeIdentification;
 import android.net.ipsec.ike.IkeIpv4AddrIdentification;
@@ -86,9 +87,9 @@ public final class IkeIdPayload extends IkePayload {
             case IkeIdentification.ID_TYPE_IPV6_ADDR:
                 ikeId = new IkeIpv6AddrIdentification(idData);
                 return;
-            case IkeIdentification.ID_TYPE_DER_ASN1_DN: // Fall through
-            case IkeIdentification.ID_TYPE_DER_ASN1_GN:
-                throw new UnsupportedOperationException("ID type is not supported currently.");
+            case IkeIdentification.ID_TYPE_DER_ASN1_DN:
+                ikeId = new IkeDerAsn1DnIdentification(idData);
+                return;
             case IkeIdentification.ID_TYPE_KEY_ID:
                 ikeId = new IkeKeyIdIdentification(idData);
                 return;
