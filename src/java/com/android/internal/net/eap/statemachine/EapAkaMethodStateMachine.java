@@ -520,10 +520,12 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
             switch (tag) {
                 case mSuccess:
-                    // response format: [tag][RES length][RES][IK length][IK][CK length][CK]
+                    // response format: [tag][RES length][RES][CK length][CK][IK length][IK]
+                    // (TS 131 102#7.1.2.1)
                     break;
                 case mSynchronization:
                     // response format: [tag][AUTS length][AUTS]
+                    // (TS 131 102#7.1.2.1)
                     byte[] auts = new byte[Byte.toUnsignedInt(buffer.get())];
                     buffer.get(auts);
 
@@ -543,11 +545,11 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             byte[] res = new byte[Byte.toUnsignedInt(buffer.get())];
             buffer.get(res);
 
-            byte[] ik = new byte[Byte.toUnsignedInt(buffer.get())];
-            buffer.get(ik);
-
             byte[] ck = new byte[Byte.toUnsignedInt(buffer.get())];
             buffer.get(ck);
+
+            byte[] ik = new byte[Byte.toUnsignedInt(buffer.get())];
+            buffer.get(ik);
 
             LOG.d(mTAG, "RAND=" + LOG.pii(atRandAka.rand));
             LOG.d(mTAG, "AUTN=" + LOG.pii(atAutn.autn));
