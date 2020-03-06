@@ -75,6 +75,8 @@ public final class IkeSessionTest {
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
         when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
+        when(mMockDefaultNetwork.getByName(REMOTE_ADDRESS.getHostAddress()))
+                .thenReturn(REMOTE_ADDRESS);
 
         mIkeSessionParams = buildIkeSessionParams();
         mMockChildSessionParams = mock(ChildSessionParams.class);
@@ -86,7 +88,7 @@ public final class IkeSessionTest {
 
     private IkeSessionParams buildIkeSessionParams() throws Exception {
         return new IkeSessionParams.Builder(mMockConnectManager)
-                .setServerAddress(REMOTE_ADDRESS.getHostAddress())
+                .setServerHostname(REMOTE_ADDRESS.getHostAddress())
                 .addSaProposal(IkeSessionStateMachineTest.buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
                 .setRemoteIdentification(
