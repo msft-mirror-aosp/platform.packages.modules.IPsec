@@ -149,16 +149,16 @@ package android.net.ipsec.ike {
     method public long getHardLifetime();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getLocalAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getLocalIdentification();
+    method @NonNull public android.net.Network getNetwork();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getRemoteAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getRemoteIdentification();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getSaProposals();
     method @NonNull public java.net.InetAddress getServerAddress();
     method public long getSoftLifetime();
-    method @NonNull public android.net.IpSecManager.UdpEncapsulationSocket getUdpEncapsulationSocket();
   }
 
   public static final class IkeSessionParams.Builder {
-    ctor public IkeSessionParams.Builder();
+    ctor public IkeSessionParams.Builder(@NonNull android.content.Context);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(@NonNull java.net.InetAddress);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addSaProposal(@NonNull android.net.ipsec.ike.IkeSaProposal);
@@ -169,9 +169,9 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthPsk(@NonNull byte[]);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLifetime(long, long);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLocalIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@NonNull android.net.Network);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRemoteIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setServerAddress(@NonNull java.net.InetAddress);
-    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setUdpEncapsulationSocket(@NonNull android.net.IpSecManager.UdpEncapsulationSocket);
   }
 
   public static interface IkeSessionParams.ConfigRequestIpv4PcscfServer extends android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest {
