@@ -34,6 +34,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * IkeSessionConfiguration represents the negotiated configuration for a {@link IkeSession}.
@@ -54,6 +55,7 @@ public final class IkeSessionConfiguration {
     /** IKEv2 Mobility and Multihoming Protocol */
     public static final int EXTENSION_TYPE_MOBIKE = 2;
 
+    private final IkeSessionConnectionInfo mIkeConnInfo;
     private final List<InetAddress> mPcscfServers = new ArrayList<>();
 
     /**
@@ -63,7 +65,11 @@ public final class IkeSessionConfiguration {
      *
      * @hide
      */
-    public IkeSessionConfiguration(IkeConfigPayload configPayload) {
+    public IkeSessionConfiguration(
+            IkeSessionConnectionInfo ikeConnInfo, IkeConfigPayload configPayload) {
+        Objects.requireNonNull(ikeConnInfo, "ikeConnInfo not provided");
+        mIkeConnInfo = ikeConnInfo;
+
         if (configPayload != null) {
             if (configPayload.configType != IkeConfigPayload.CONFIG_TYPE_REPLY) {
                 throw new IllegalArgumentException(
@@ -136,5 +142,16 @@ public final class IkeSessionConfiguration {
     @NonNull
     public List<InetAddress> getPcscfServers() {
         return Collections.unmodifiableList(mPcscfServers);
+    }
+
+    /**
+     * Returns the connection information.
+     *
+     * @return the IKE Session connection information.
+     * @hide
+     */
+    @NonNull
+    public IkeSessionConnectionInfo getIkeSessionConnectionInfo() {
+        return mIkeConnInfo;
     }
 }
