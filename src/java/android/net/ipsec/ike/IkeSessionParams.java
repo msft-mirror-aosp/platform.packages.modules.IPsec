@@ -48,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -94,7 +95,7 @@ public final class IkeSessionParams {
     @VisibleForTesting
     static final long IKE_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
 
-    @NonNull private final String mServerAddress;
+    @NonNull private final String mServerHostname;
     @NonNull private final Network mNetwork;
 
     @NonNull private final IkeSaProposal[] mSaProposals;
@@ -113,7 +114,7 @@ public final class IkeSessionParams {
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
-            @Nullable String serverAddress,
+            @NonNull String serverHostname,
             @NonNull Network network,
             @NonNull IkeSaProposal[] proposals,
             @NonNull IkeIdentification localIdentification,
@@ -124,7 +125,7 @@ public final class IkeSessionParams {
             long hardLifetimeSec,
             long softLifetimeSec,
             boolean isIkeFragmentationSupported) {
-        mServerAddress = serverAddress;
+        mServerHostname = serverHostname;
         mNetwork = network;
 
         mSaProposals = proposals;
@@ -143,18 +144,22 @@ public final class IkeSessionParams {
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
 
-    /** Retrieves the configured server address */
-    // TODO: Temporarily keep it to avoid changing API. Delete me.
+    /**
+     * Retrieves the configured server hostname
+     *
+     * <p>The configured server hostname will be resolved during IKE Session creation.
+     *
+     * @hide
+     */
     @NonNull
-    public InetAddress getServerAddress() {
-        throw new UnsupportedOperationException("This method will be deleted");
+    public String getServerHostname() {
+        return mServerHostname;
     }
 
-    /** Retrieves the configured server address @hide */
-    // TODO: Rename to #getServerAddress and expose it
+    /** Temporarily keep this method to avoid touching API surface. Delete it in the followup CL. */
     @NonNull
-    public String getServerAddressInternal() {
-        return mServerAddress;
+    public InetAddress getServerAddress() {
+        return InetAddress.getLoopbackAddress();
     }
 
     /** Retrieves the configured {@link Network} */
@@ -408,7 +413,7 @@ public final class IkeSessionParams {
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
         @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
 
-        @Nullable private String mServerAddress;
+        @NonNull private String mServerHostname;
         @Nullable private Network mNetwork;
 
         @Nullable private IkeIdentification mLocalIdentification;
@@ -438,31 +443,26 @@ public final class IkeSessionParams {
         }
 
         /**
-         * Sets the server address for the {@link IkeSessionParams} being built.
+         * Sets the server hostname for the {@link IkeSessionParams} being built.
          *
-         * @param serverAddress the IP address of the IKE server.
-         * @return Builder this, to facilitate chaining.
-         */
-        // TODO: Temporarily keep it to avoid changing API. Delete me.
-        @NonNull
-        public Builder setServerAddress(@NonNull InetAddress serverAddress) {
-            throw new UnsupportedOperationException("This method will be deleted");
-        }
-
-        /**
-         * Sets the server address for the {@link IkeSessionParams} being built.
-         *
-         * @param serverAddress the IP address or hostname of the IKE server.
+         * @param serverHostname the hostname of the IKE server, such as "ike.android.com".
          * @return Builder this, to facilitate chaining.
          * @hide
          */
         @NonNull
-        public Builder setServerAddress(@NonNull String serverAddress) {
-            if (serverAddress == null) {
-                throw new NullPointerException("Required argument not provided");
-            }
+        public Builder setServerHostname(@NonNull String serverHostname) {
+            Objects.requireNonNull(serverHostname, "Required argument not provided");
 
-            mServerAddress = serverAddress;
+            mServerHostname = serverHostname;
+            return this;
+        }
+
+        /**
+         * Temporarily keep this method to avoid touching API surface. Delete it in the followup CL.
+         */
+        @NonNull
+        public Builder setServerAddress(@NonNull InetAddress serverAddress) {
+            mServerHostname = serverAddress.getHostAddress();
             return this;
         }
 
@@ -758,7 +758,7 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("Network not found");
             }
 
-            if (mServerAddress == null
+            if (mServerHostname == null
                     || mLocalIdentification == null
                     || mRemoteIdentification == null
                     || mLocalAuthConfig == null
@@ -767,7 +767,7 @@ public final class IkeSessionParams {
             }
 
             return new IkeSessionParams(
-                    mServerAddress,
+                    mServerHostname,
                     network,
                     mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,
