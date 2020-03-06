@@ -70,7 +70,6 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
-import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.IkeSessionConfiguration;
@@ -273,7 +272,6 @@ public final class IkeSessionStateMachineTest {
     private MockIpSecTestUtils mMockIpSecTestUtils;
     private Context mContext;
     private IpSecManager mIpSecManager;
-    private UdpEncapsulationSocket mUdpEncapSocket;
 
     private ConnectivityManager mMockConnectManager;
     private Network mMockDefaultNetwork;
@@ -634,7 +632,6 @@ public final class IkeSessionStateMachineTest {
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
         mContext = mMockIpSecTestUtils.getContext();
-        mUdpEncapSocket = mIpSecManager.openUdpEncapsulationSocket();
 
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
@@ -713,7 +710,6 @@ public final class IkeSessionStateMachineTest {
     public void tearDown() throws Exception {
         mIkeSessionStateMachine.quit();
         mIkeSessionStateMachine.setDbg(false);
-        mUdpEncapSocket.close();
 
         mSpyCurrentIkeSaRecord.close();
         mSpyLocalInitIkeSaRecord.close();
@@ -770,7 +766,6 @@ public final class IkeSessionStateMachineTest {
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
         return new IkeSessionParams.Builder(mMockConnectManager)
                 .setServerAddress(REMOTE_ADDRESS.getHostAddress())
-                .setUdpEncapsulationSocket(mUdpEncapSocket)
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
                 .setRemoteIdentification(
