@@ -23,7 +23,9 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
-import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.eap.EapSessionConfig;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -46,6 +48,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -92,8 +95,9 @@ public final class IkeSessionParams {
     @VisibleForTesting
     static final long IKE_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
 
-    @NonNull private final InetAddress mServerAddress;
-    @NonNull private final UdpEncapsulationSocket mUdpEncapSocket;
+    @NonNull private final String mServerHostname;
+    @NonNull private final Network mNetwork;
+
     @NonNull private final IkeSaProposal[] mSaProposals;
 
     @NonNull private final IkeIdentification mLocalIdentification;
@@ -110,8 +114,8 @@ public final class IkeSessionParams {
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
-            @NonNull InetAddress serverAddress,
-            @NonNull UdpEncapsulationSocket udpEncapsulationSocket,
+            @NonNull String serverHostname,
+            @NonNull Network network,
             @NonNull IkeSaProposal[] proposals,
             @NonNull IkeIdentification localIdentification,
             @NonNull IkeIdentification remoteIdentification,
@@ -121,8 +125,9 @@ public final class IkeSessionParams {
             long hardLifetimeSec,
             long softLifetimeSec,
             boolean isIkeFragmentationSupported) {
-        mServerAddress = serverAddress;
-        mUdpEncapSocket = udpEncapsulationSocket;
+        mServerHostname = serverHostname;
+        mNetwork = network;
+
         mSaProposals = proposals;
 
         mLocalIdentification = localIdentification;
@@ -139,16 +144,20 @@ public final class IkeSessionParams {
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
 
-    /** Retrieves the configured server address */
+    /**
+     * Retrieves the configured server hostname
+     *
+     * <p>The configured server hostname will be resolved during IKE Session creation.
+     */
     @NonNull
-    public InetAddress getServerAddress() {
-        return mServerAddress;
+    public String getServerHostname() {
+        return mServerHostname;
     }
 
-    /** Retrieves the UDP encapsulation socket */
+    /** Retrieves the configured {@link Network} */
     @NonNull
-    public UdpEncapsulationSocket getUdpEncapsulationSocket() {
-        return mUdpEncapSocket;
+    public Network getNetwork() {
+        return mNetwork;
     }
 
     /** Retrieves all ChildSaProposals configured */
@@ -391,11 +400,13 @@ public final class IkeSessionParams {
 
     /** This class can be used to incrementally construct a {@link IkeSessionParams}. */
     public static final class Builder {
+        @NonNull private final ConnectivityManager mConnectivityManager;
+
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
         @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
 
-        @Nullable private InetAddress mServerAddress;
-        @Nullable private UdpEncapsulationSocket mUdpEncapSocket;
+        @NonNull private String mServerHostname;
+        @Nullable private Network mNetwork;
 
         @Nullable private IkeIdentification mLocalIdentification;
         @Nullable private IkeIdentification mRemoteIdentification;
@@ -409,36 +420,50 @@ public final class IkeSessionParams {
         private boolean mIsIkeFragmentationSupported = false;
 
         /**
-         * Sets the server address for the {@link IkeSessionParams} being built.
+         * Construct Builder
          *
-         * @param serverAddress the IP address of the IKE server.
+         * @param context a valid {@link Context} instance.
+         */
+        public Builder(@NonNull Context context) {
+            this((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
+        }
+
+        /** @hide */
+        @VisibleForTesting
+        public Builder(ConnectivityManager connectManager) {
+            mConnectivityManager = connectManager;
+        }
+
+        /**
+         * Sets the server hostname for the {@link IkeSessionParams} being built.
+         *
+         * @param serverHostname the hostname of the IKE server, such as "ike.android.com".
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
-        public Builder setServerAddress(@NonNull InetAddress serverAddress) {
-            if (serverAddress == null) {
-                throw new NullPointerException("Required argument not provided");
-            }
+        public Builder setServerHostname(@NonNull String serverHostname) {
+            Objects.requireNonNull(serverHostname, "Required argument not provided");
 
-            mServerAddress = serverAddress;
+            mServerHostname = serverHostname;
             return this;
         }
 
         /**
-         * Sets the UDP Encapsulation socket for the {@link IkeSessionParams} being built.
+         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
          *
-         * @param udpEncapsulationSocket the {@link IpSecManager.UdpEncapsulationSocket} for sending
-         *     and receiving IKE messages.
+         * <p>If no {@link Network} is provided, the default Network (as per {@link
+         * ConnectivityManager#getActiveNetwork()}) will be used.
+         *
+         * @param network the {@link Network} that IKE Session will use.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
-        public Builder setUdpEncapsulationSocket(
-                @NonNull UdpEncapsulationSocket udpEncapsulationSocket) {
-            if (udpEncapsulationSocket == null) {
+        public Builder setNetwork(@NonNull Network network) {
+            if (network == null) {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            mUdpEncapSocket = udpEncapsulationSocket;
+            mNetwork = network;
             return this;
         }
 
@@ -709,8 +734,13 @@ public final class IkeSessionParams {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
-            if (mServerAddress == null
-                    || mUdpEncapSocket == null
+
+            Network network = mNetwork != null ? mNetwork : mConnectivityManager.getActiveNetwork();
+            if (network == null) {
+                throw new IllegalArgumentException("Network not found");
+            }
+
+            if (mServerHostname == null
                     || mLocalIdentification == null
                     || mRemoteIdentification == null
                     || mLocalAuthConfig == null
@@ -719,8 +749,8 @@ public final class IkeSessionParams {
             }
 
             return new IkeSessionParams(
-                    mServerAddress,
-                    mUdpEncapSocket,
+                    mServerHostname,
+                    network,
                     mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,
                     mRemoteIdentification,
