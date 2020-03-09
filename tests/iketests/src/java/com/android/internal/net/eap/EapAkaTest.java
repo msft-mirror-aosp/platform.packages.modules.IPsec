@@ -38,81 +38,83 @@ import org.junit.Before;
 import org.junit.Test;
 
 /**
- * This test verifies that EAP-AKA is functional for an end-to-end implementation
+ * This test verifies that EAP-AKA is functional for an end-to-end implementation.
+ *
+ * <p>This test uses externally generated test vectors.
  */
 public class EapAkaTest extends EapMethodEndToEndTest {
     private static final long AUTHENTICATOR_TIMEOUT_MILLIS = 250L;
 
     private static final int SUB_ID = 1;
-    private static final String UNFORMATTED_IDENTITY = "123456789ABCDEF"; // IMSI
+    private static final String UNFORMATTED_IDENTITY = "123456789012345"; // IMSI
 
     // EAP_IDENTITY = hex("test@android.net")
     private static final byte[] EAP_IDENTITY =
             hexStringToByteArray("7465737440616E64726F69642E6E6574");
 
     // TODO(b/140797965): find valid AUTN/RAND values for the CTS test sim
-    // IK: 7320EE404E055EF2B5AB0F86E96C48BE
-    // CK: E9D1707652E13BF3E05975F601678E5C
-    // MK: 2AE8AD50432246E6ACED9AA0FC794A22CE9CE4BB
-    // K_encr: DB6F06910D5D19CC9DA5F2687F5C5737
-    // K_aut: B20A586592796E08E7408FB53356E9B1
-    private static final String RAND_1 = "D6A296F030A305601B311D38A004505C";
+    // CK: 070AC6E26957E00C83A4B577210A8AEC
+    // IK: 0B48923D40B48C476B0EE8A43F780356
+    // MK: B8F5AC1C7A5F5B8D5579A6F22FD18E4EEB0B55C3
+    // K_encr: 1C2B848ADA2B9485C52517D1A92BF4AB
+    // K_aut: C9500EC59DC62C7D7F5E9E445FA1A3C4
+    private static final String RAND_1 = "A789798E3E75560EA3EA5E41A043753A";
     private static final String RAND_2 = "000102030405060708090A0B0C0D0E0F";
-    private static final String AUTN = "35A9143ED9E100011795E785DAFAAD9B";
-    private static final String RES = "E5167A255FDCDE9248AF6B50ADA0D944";
+    private static final String AUTN = "236C38DD8772000165A96F168F5C14E2";
+    private static final String RES = "2B1C2593F5AF288A3766CADA9CE23FB9";
     private static final String AUTS = "0102030405060708090A0B0C0D0E";
     private static final byte[] MSK =
             hexStringToByteArray(
-                    "EFC4FB9F54D99A3F4A04B756993CA813"
-                            + "E463CA0ADBF3CB2A296519ED4C600FF5"
-                            + "81898B1C425C20FE7471FC43A4BB3C00"
-                            + "DDF80A7083972B660BC7153CBF2C9AA1");
+                    "40B9767F5D333645D3B72E9E57EFFA9D"
+                            + "C9D1E7EB598D907948DADB5AD968D520"
+                            + "48F0C56A0D68E37E9482F77BC8F68990"
+                            + "5EAB7114ECA9FC4AB99D0920D76CF1CF");
     private static final byte[] EMSK =
             hexStringToByteArray(
-                    "5C95F3E2476ED4D6588CE6DE2618D808"
-                            + "9ECA12A4636C8A1B0C678562CBFC31D3"
-                            + "94B578DE0A3686E17F96F14D5341FE75"
-                            + "2012944CA394E5288BA1B2C70CB65063");
+                    "F3463F6ADD56EE5360C81DEF017FD57D"
+                            + "CBABF12EA45D2CC815F4334AB7BE8523"
+                            + "4FEAF76FAA02EEF963B25C9DC95308AF"
+                            + "72A937FF04FF2C6D1F172FD9111411EE");
 
-    // IK: 7320EE404E055EF2B5AB0F86E96C48BE
-    // CK: E9D1707652E13BF3E05975F601678E5C
-    // MK: 8183017CD8ADDB4617F4A2274DD5BCEA99354FB7
-    // K_encr: 891D5DB8CACAF657D68BE72371F927A2
-    // K_aut: E042A1CC5672358685EC012881EA02DE
+    // CK: 070AC6E26957E00C83A4B577210A8AEC
+    // IK: 0B48923D40B48C476B0EE8A43F780356
+    // MK: B8F5AC1C7A5F5B8D5579A6F22FD18E4EEB0B55C3
+    // K_encr: 1F6AB828DD3CF1931E6E62038728C47C
+    // K_aut: F035D5CA7512389F4F96454EA6737B7A
     private static final byte[] MSK_WITHOUT_IDENTITY_REQ =
             hexStringToByteArray(
-                    "629DE03704E15EF1B8BADFF7FA5D84D5"
-                            + "8574B6A3A46F274796346A86AE3455AC"
-                            + "711E2D4D3F96EE71E664B1B947D7E9E7"
-                            + "D227CBB6199A68BD7D43E6E4863D08D6");
+                    "111E1F3118B373F0658230785066F767"
+                            + "A238BF780BC77CA77DA3F7A3FE411BE8"
+                            + "0FCD763DE7FBCADB7EB9BDEF7F0E7B1D"
+                            + "2D5CA87C38AC0D3B8F99B882ECB4E840");
     private static final byte[] EMSK_WITHOUT_IDENTITY_REQ =
             hexStringToByteArray(
-                    "30A6638AE3AB5C5D29554D8256C3A287"
-                            + "FDF6255E4D726C0622DDF89609C16A8D"
-                            + "563768166A8111A083547DE4C8E280D6"
-                            + "113A608DE9227FC7C02679A1E04DB3CF");
+                    "CD1DD12100B99BC029B0C97777C42BD6"
+                            + "2FF24A32694D7EA209E3B3DBCC7B9CE9"
+                            + "EFD69A3A62CBDBDFA1CECD0F17B0E620"
+                            + "D648AA41D55AE0375BAD44C8F1A424BE");
 
     // Base 64 of: [Length][RAND_1][Length][AUTN]
     private static final String BASE64_CHALLENGE_1 =
-            "ENailvAwowVgGzEdOKAEUFwQNakUPtnhAAEXleeF2vqtmw==";
+            "EKeJeY4+dVYOo+peQaBDdToQI2w43YdyAAFlqW8Wj1wU4g==";
 
-    // Base 64 of: ['DB'][Length][RES][Length][IK][Length][CK]
+    // Base 64 of: ['DB'][Length][RES][Length][CK][Length][IK]
     private static final String BASE_64_RESPONSE_SUCCESS =
-            "2xDlFnolX9zekkiva1CtoNlEEHMg7kBOBV7ytasPhulsSL4Q6dFwdlLhO/PgWXX2AWeOXA==";
+            "2xArHCWT9a8oijdmytqc4j+5EAcKxuJpV+AMg6S1dyEKiuwQC0iSPUC0jEdrDuikP3gDVg==";
 
     // Base 64 of: [Length][RAND_2][Length][AUTN]
     private static final String BASE64_CHALLENGE_2 =
-            "EAABAgMEBQYHCAkKCwwNDg8QNakUPtnhAAEXleeF2vqtmw==";
+            "EAABAgMEBQYHCAkKCwwNDg8QI2w43YdyAAFlqW8Wj1wU4g==";
 
     // Base 64 of: ['DC'][Length][AUTS]
     private static final String BASE_64_RESPONSE_SYNC_FAIL = "3A4BAgMEBQYHCAkKCwwNDg==";
 
-    private static final String REQUEST_MAC = "90C3554783D49A18F9EAA231F3C261EC";
-    private static final String RESPONSE_MAC = "D085987D3D15FA50A80D0CECFA2412EB";
+    private static final String REQUEST_MAC = "8E733917F65C54EE820195EFB94246DC";
+    private static final String RESPONSE_MAC = "E5A74AE0840C1E75E0C471D5A915AB7F";
     private static final String REQUEST_MAC_WITHOUT_IDENTITY_REQ =
-            "6AD7E3F43ED99384E751F55AB8EA48B4";
+            "B66F674A14D96D358E8682230DF86253";
     private static final String RESPONSE_MAC_WITHOUT_IDENTITY_REQ =
-            "83E9F5B8B44BDE39B50538BF49864209";
+            "631BEABB876F072B49D453B660FAE748";
 
     private static final byte[] EAP_AKA_IDENTITY_REQUEST =
             hexStringToByteArray(
@@ -123,7 +125,7 @@ public class EapAkaTest extends EapMethodEndToEndTest {
             hexStringToByteArray(
                     "02CD001C" // EAP-Response | ID | length in bytes
                             + "17050000" // EAP-AKA | Identity | 2B padding
-                            + "0E05001030313233343536373839414243444546"); // AT_IDENTITY attribute
+                            + "0E05001030313233343536373839303132333435"); // AT_IDENTITY attribute
 
     private static final byte[] EAP_AKA_CHALLENGE_REQUEST =
             hexStringToByteArray(
@@ -141,14 +143,14 @@ public class EapAkaTest extends EapMethodEndToEndTest {
 
     private static final byte[] EAP_AKA_CHALLENGE_REQUEST_WITHOUT_IDENTITY_REQ =
             hexStringToByteArray(
-                    "01CE0044" // EAP-Request | ID | length in bytes
+                    "019B0044" // EAP-Request | ID | length in bytes
                             + "17010000" // EAP-AKA | Challenge | 2B padding
                             + "01050000" + RAND_1 // AT_RAND attribute
                             + "02050000" + AUTN // AT_AUTN attribute
                             + "0B050000" + REQUEST_MAC_WITHOUT_IDENTITY_REQ); // AT_MAC attribute
     private static final byte[] EAP_AKA_CHALLENGE_RESPONSE_WITHOUT_IDENTITY_REQUEST =
             hexStringToByteArray(
-                    "02CE0030" // EAP-Response | ID | length in bytes
+                    "029B0030" // EAP-Response | ID | length in bytes
                             + "17010000" // EAP-AKA | Challenge | 2B padding
                             + "03050080" + RES // AT_RES attribute
                             + "0B050000" + RESPONSE_MAC_WITHOUT_IDENTITY_REQ); // AT_MAC attribute
