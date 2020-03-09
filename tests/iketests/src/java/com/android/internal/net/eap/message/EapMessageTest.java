@@ -17,11 +17,14 @@
 package com.android.internal.net.eap.message;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
+import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_NAK;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_IDENTITY_PACKET_TOO_LONG;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_TYPE_DATA;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
@@ -178,5 +181,16 @@ public class EapMessageTest {
         assertTrue(notificationResponse instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) notificationResponse;
         assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
+    }
+
+    @Test
+    public void testDecodewithExtraBytes() throws Exception {
+        EapMessage result = EapMessage.decode(EAP_REQUEST_IDENTITY_PACKET_TOO_LONG);
+        EapData eapData = new EapData(EAP_IDENTITY, new byte[0]);
+
+        assertEquals(EAP_CODE_REQUEST, result.eapCode);
+        assertEquals(ID_INT, result.eapIdentifier);
+        assertEquals(EAP_REQUEST_IDENTITY_PACKET.length, result.eapLength);
+        assertEquals(eapData, result.eapData);
     }
 }
