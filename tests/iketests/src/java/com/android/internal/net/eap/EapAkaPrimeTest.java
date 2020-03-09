@@ -37,6 +37,15 @@ import com.android.internal.net.eap.statemachine.EapStateMachine;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
+
+/**
+ * This test verifies that EAP-AKA' is functional for an end-to-end implementation.
+ *
+ * <p>This test uses externally generated test vectors (RFC 5448 Appendix C).
+ *
+ * @see <a href="https://tools.ietf.org/html/rfc5448#appendix-C">RFC 5448, EAP-AKA' Test Vectors</a>
+ */
 public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     private static final long AUTHENTICATOR_TIMEOUT_MILLIS = 250L;
 
@@ -53,17 +62,15 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     // hex("foo:bar:buzz")
     private static final String SERVER_NETWORK_NAME = "666F6F3A6261723A62757A7A";
 
-    // TODO(b/142667016): replace with externally generated test values
-
     // IK: 7320EE404E055EF2B5AB0F86E96C48BE
     // CK: E9D1707652E13BF3E05975F601678E5C
     // Server Network Name: 666F6F3A6261723A62757A7A
     // SQN ^ AK: 35A9143ED9E1
     // IK': 79DC30692F3D2303D148549E5D50D0AA
     // CK': BBD0A7AD3F14757BA604C4CBE70F9090
-    // K_encr: 4c22c289bcf40367cf2bdb6a6e3fe56b
-    // K_aut: c64abd508ab628f842e9fb40a14fea769d2ccc67a8412794fe3b4c2556431e78
-    // K_re: 5454ccf7ecc227f25c6cd1023e09394fa5cedc14a2f155e9d96a70dc404b4dca
+    // K_encr: CB8396FFC7A0B0894D1153F876349201
+    // K_aut: B9AEC10CF18A9838871427CE5448126B77BCF9273C14C95B8ABD96A196B688B2
+    // K_re: 579714654806CA889DEF8D9F8A8A2240542DD9433260C0A651D28B5000C28810
     private static final String RAND_1 = "D6A296F030A305601B311D38A004505C";
     private static final String RAND_2 = "000102030405060708090A0B0C0D0E0F";
     private static final String AUTN = "35A9143ED9E100011795E785DAFAAD9B";
@@ -71,46 +78,46 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     private static final String AUTS = "0102030405060708090A0B0C0D0E";
     private static final byte[] MSK =
             hexStringToByteArray(
-                    "695788d8f33af56b5b2fea065a0e8656"
-                            + "7dc48120d6070d96056f9668614ec3e7"
-                            + "feb4933a3aaab3587980a624998c8b5e"
-                            + "a69d7295b824ef4a2201720be89d04df");
+                    "0CEC2A8CBA4E03D01D7506D3B739C97E"
+                            + "3F945A86C2CB049F5E3525D1EC5AE756"
+                            + "2B53EC957C3D02DEEC424403973FE32E"
+                            + "FC1299FD48505BA2E4B43EB83C312E5C");
     private static final byte[] EMSK =
             hexStringToByteArray(
-                    "2db1f574d6e92cec294779defef5a7f0"
-                            + "49319cc75367102815d0244087f23660"
-                            + "0986b47a862c1aeeca418c84a2f9581b"
-                            + "0738fdefd229a5f7a4ca76709379bf00");
+                    "1E8D3F94848418010C5163AEC00357B3"
+                            + "02DB7D65003CE5B7D06B89F097BA5508"
+                            + "1F26323CEFEEA0B6D9329E533F3D9FB4"
+                            + "AC10C0C02FB1664995ED5AC794E8D9FC");
 
     // IK: 7320EE404E055EF2B5AB0F86E96C48BE
     // CK: E9D1707652E13BF3E05975F601678E5C
     // Server Network Name: 666F6F3A6261723A62757A7A
     // SQN ^ AK: 35A9143ED9E1
-    // IK': 6C45FB0B12FF8172223B6D0E599EAE20
-    // CK': A01C894696BEB759ABE0340F71A20D7B
-    // K_encr: c039213c78fcf78a34bef30219a77822
-    // K_aut: 95b014e569144eba71a387f91fb6b72e06781df12d61bfe88e5149477cd232aa
-    // K_re: 1000c2e2f01766a4d2581ac454e41fce1ee17bcccbc32dfad78815075d884c5e
+    // IK': 79DC30692F3D2303D148549E5D50D0AA
+    // CK': BBD0A7AD3F14757BA604C4CBE70F9090
+    // K_encr: A12359DF8B2DBBAF42FA92345D84B270
+    // K_aut: 3194EE30607AFDBF04AF8457340988AD195852601ADBA7B3816AA8A476A647DA
+    // K_re: 4152DDC0F9DB44629D237ED8B18AF597572D2BAF251CDE9A1F1BD7A8500E4F13
     private static final byte[] MSK_WITHOUT_IDENTITY_REQ =
             hexStringToByteArray(
-                    "ad75a86586773134dcd9e78e3f75b282"
-                            + "7a42435cb1be7235be58cddc60a0ba19"
-                            + "dd5c30accfdb0db5ef065f46c3c25d7b"
-                            + "9f8703d9493a2dc6fb6563dbdc854658");
+                    "6C56239E95246E5A19CC81EFE221976A"
+                            + "7602378D53E05501E50AB4B974390B1B"
+                            + "3876C0B5C794B685EEBF96000815DD20"
+                            + "15EE7DF5AA50856F96414695C474DDA0");
     private static final byte[] EMSK_WITHOUT_IDENTITY_REQ =
             hexStringToByteArray(
-                    "31a3f2bb0e3e831d991dc8666438297f"
-                            + "4a5bc157fc1e31537e5a4927206d7b4b"
-                            + "db830761eea3441d9b90da48aebb9734"
-                            + "d3cbdec96072230a64043f54932a8841");
+                    "60E2C25C18AD451784BEBEE77DAC4D9A"
+                            + "0CF7E4DEA2E2E6F254C0CB40DDF8F5C0"
+                            + "058577AE640901417D8B11A99C9983D1"
+                            + "219C30D1CBD56881E1D43E387355E64A");
 
     // Base 64 of: [Length][RAND_1][Length][AUTN]
     private static final String BASE64_CHALLENGE_1 =
             "ENailvAwowVgGzEdOKAEUFwQNakUPtnhAAEXleeF2vqtmw==";
 
-    // Base 64 of: ['DB'][Length][RES][Length][IK][Length][CK]
+    // Base 64 of: ['DB'][Length][RES][Length][CK][Length][IK]
     private static final String BASE_64_RESPONSE_SUCCESS =
-            "2xDlFnolX9zekkiva1CtoNlEEHMg7kBOBV7ytasPhulsSL4Q6dFwdlLhO/PgWXX2AWeOXA==";
+            "2xDlFnolX9zekkiva1CtoNlEEOnRcHZS4Tvz4Fl19gFnjlwQcyDuQE4FXvK1qw+G6WxIvg==";
 
     // Base 64 of: [Length][RAND_2][Length][AUTN]
     private static final String BASE64_CHALLENGE_2 =
@@ -119,12 +126,12 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     // Base 64 of: ['DC'][Length][AUTS]
     private static final String BASE_64_RESPONSE_SYNC_FAIL = "3A4BAgMEBQYHCAkKCwwNDg==";
 
-    private static final String REQUEST_MAC = "9089f89b2f99bb85f2f2b529779f98db";
-    private static final String RESPONSE_MAC = "48d7d6a80e1e2ff26a1e4148e0a2303e";
+    private static final String REQUEST_MAC = "0A73E5323CFAB1EB833E7B5C7C317D25";
+    private static final String RESPONSE_MAC = "762E5A8EA05E4FEB72AF1C72205B670B";
     private static final String REQUEST_MAC_WITHOUT_IDENTITY_REQ =
-            "59f680ede020a3d0156eef56affb6997";
+            "34287531A4B339E87735A6509941ABBF";
     private static final String RESPONSE_MAC_WITHOUT_IDENTITY_REQ =
-            "e15322ff4abe51479c0fa92d00e343d7";
+            "D1967EC074E691DE419498A8127F6CF0";
 
     private static final byte[] EAP_AKA_PRIME_IDENTITY_REQUEST =
             hexStringToByteArray(
@@ -155,7 +162,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
     private static final byte[] EAP_AKA_PRIME_CHALLENGE_REQUEST_WITHOUT_IDENTITY_REQ =
             hexStringToByteArray(
-                    "01CE0044" // EAP-Request | ID | length in bytes
+                    "01CE0052" // EAP-Request | ID | length in bytes
                             + "32010000" // EAP-AKA' | Challenge | 2B padding
                             + "01050000" + RAND_1 // AT_RAND attribute
                             + "02050000" + AUTN // AT_AUTN attribute
@@ -192,6 +199,73 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     private static final byte[] EAP_RESPONSE_NAK_PACKET =
             hexStringToByteArray("021000060332"); // NAK with EAP-AKA' listed
 
+    ////////////////////////////////////
+    // RFC 5448 Appendix C: Test Vectors
+    ////////////////////////////////////
+    private static final String EXTERNAL_UNFORMATTED_IDENTITY = "0555444333222111"; // IMSI
+    private static final byte[] EXTERNAL_UNFORMATTED_IDENTITY_BYTES =
+            EXTERNAL_UNFORMATTED_IDENTITY.getBytes(StandardCharsets.US_ASCII);
+
+    private static final String EXTERNAL_SERVER_NETWORK = "WLAN";
+    private static final String EXTERNAL_SERVER_NETWORK_HEX = "574C414E";
+
+    // Base 64 of: [Length][EXTERNAL_RAND][Length][EXTERNAL_AUTN]
+    private static final String EXTERNAL_BASE_64_CHALLENGE =
+            "EIHpK2wO4OEuvOuo2SqZ36UQu1LpHHR6w6sqXCPRXuNR1Q==";
+
+    // Base 64 of: ['DB'][Length][RES][Length][CK][Length][IK]
+    private static final String EXTERNAL_BASE_64_RESPONSE_SUCCESS =
+            "2wgo17Dyouw95RBTSfvgmGSflI9dLpc6gcAPEJdEhxrTK/m70d1c5U4+Llo=";
+
+    // IK: 9744871AD32BF9BBD1DD5CE54E3E2E5A
+    // CK: 5349FBE098649F948F5D2E973A81C00F
+    // Server Network Name: 574C414E
+    // SQN ^ AK: BB52E91C747A
+    // IK': CCFC230CA74FCC96C0A5D61164F5A76C
+    // CK': 0093962D0DD84AA5684B045C9EDFFA04
+    // K_encr: 766FA0A6C317174B812D52FBCD11A179
+    // K_aut: 0842EA722FF6835BFA2032499FC3EC23C2F0E388B4F07543FFC677F1696D71EA
+    // K_re: CF83AA8BC7E0ACED892ACC98E76A9B2095B558C7795C7094715CB3393AA7D17A
+    private static final String EXTERNAL_RAND = "81E92B6C0EE0E12EBCEBA8D92A99DFA5";
+    private static final String EXTERNAL_AUTN = "BB52E91C747AC3AB2A5C23D15EE351D5";
+    private static final String EXTERNAL_RES = "28D7B0F2A2EC3DE5";
+    private static final byte[] EXTERNAL_MSK =
+            hexStringToByteArray(
+                    "67C42D9AA56C1B79E295E3459FC3D187"
+                            + "D42BE0BF818D3070E362C5E967A4D544"
+                            + "E8ECFE19358AB3039AFF03B7C930588C"
+                            + "055BABEE58A02650B067EC4E9347C75A");
+    private static final byte[] EXTERNAL_EMSK =
+            hexStringToByteArray(
+                    "F861703CD775590E16C7679EA3874ADA"
+                            + "866311DE290764D760CF76DF647EA01C"
+                            + "313F69924BDD7650CA9BAC141EA075C4"
+                            + "EF9E8029C0E290CDBAD5638B63BC23FB");
+
+    private static final byte[] EXTERNAL_EAP_AKA_PRIME_IDENTITY_RESPONSE =
+            hexStringToByteArray(
+                    "02CD0020" // EAP-Response | ID | length in bytes
+                            + "32050000" // EAP-AKA' | Identity | 2B padding
+                            + "0E0600113630353535343434333333323232313131000000"); // AT_IDENTITY
+
+    private static final String EXTERNAL_REQUEST_MAC = "621879e3e2da6da77e5184edb7385b13";
+    private static final String EXTERNAL_RESPONSE_MAC = "702DF07378567EF9C8E73A58578B7700";
+    private static final byte[] EXTERNAL_EAP_AKA_PRIME_CHALLENGE_REQUEST =
+            hexStringToByteArray(
+                    "01CE0050" // EAP-Request | ID | length in bytes
+                            + "32010000" // EAP-AKA' | Challenge | 2B padding
+                            + "01050000" + EXTERNAL_RAND // AT_RAND attribute
+                            + "02050000" + EXTERNAL_AUTN // AT_AUTN attribute
+                            + "17020004" + EXTERNAL_SERVER_NETWORK_HEX // AT_KDF_INPUT attribute
+                            + "18010001" // AT_KDF attribute
+                            + "0B050000" + EXTERNAL_REQUEST_MAC); // AT_MAC attribute
+    private static final byte[] EXTERNAL_EAP_AKA_PRIME_CHALLENGE_RESPONSE =
+            hexStringToByteArray(
+                    "02CE0028" // EAP-Response | ID | length in bytes
+                            + "32010000" // EAP-AKA' | Challenge | 2B padding
+                            + "03030040" + EXTERNAL_RES // AT_RES attribute
+                            + "0B050000" + EXTERNAL_RESPONSE_MAC); // AT_MAC attribute
+
     private TelephonyManager mMockTelephonyManager;
 
     @Before
@@ -203,11 +277,16 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     }
 
     private void setUp(boolean allowMismatchedNetworkNames, String peerNetworkName) {
+        setUp(EAP_IDENTITY, allowMismatchedNetworkNames, peerNetworkName);
+    }
+
+    private void setUp(
+            byte[] eapIdentity, boolean allowMismatchedNetworkNames, String peerNetworkName) {
         mMockTelephonyManager = mock(TelephonyManager.class);
 
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
-                        .setEapIdentity(EAP_IDENTITY)
+                        .setEapIdentity(eapIdentity)
                         .setEapAkaPrimeConfig(
                                 SUB_ID, APPTYPE_USIM, peerNetworkName, allowMismatchedNetworkNames)
                         .build();
@@ -230,9 +309,28 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
     @Test
     public void testEapAkaPrimeEndToEnd() {
-        verifyEapPrimeAkaIdentity();
+        verifyEapAkaPrimeIdentity();
         verifyEapAkaPrimeChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_PRIME_CHALLENGE_RESPONSE);
         verifyEapSuccess(MSK, EMSK);
+    }
+
+    @Test
+    public void testEapAkaPrimeEndToEndExternalTestVectors() {
+        setUp(
+                EXTERNAL_UNFORMATTED_IDENTITY_BYTES,
+                ALLOW_MISMATCHED_NETWORK_NAMES,
+                EXTERNAL_SERVER_NETWORK);
+
+        verifyEapAkaPrimeChallenge(
+                EXTERNAL_BASE_64_CHALLENGE,
+                EXTERNAL_BASE_64_RESPONSE_SUCCESS,
+                EXTERNAL_EAP_AKA_PRIME_CHALLENGE_REQUEST,
+                EXTERNAL_EAP_AKA_PRIME_CHALLENGE_RESPONSE);
+        verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
+        verifyNoMoreInteractions(
+                mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
+
+        verifyEapSuccess(EXTERNAL_MSK, EXTERNAL_EMSK);
     }
 
     @Test
@@ -244,7 +342,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     @Test
     public void testEapAkaPrimeWithEapNotifications() {
         verifyEapNotification(1);
-        verifyEapPrimeAkaIdentity();
+        verifyEapAkaPrimeIdentity();
 
         verifyEapNotification(2);
         verifyEapAkaPrimeChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_PRIME_CHALLENGE_RESPONSE);
@@ -257,14 +355,14 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     public void testEapAkaPrimeUnsupportedType() {
         verifyUnsupportedType(EAP_REQUEST_SIM_START_PACKET, EAP_RESPONSE_NAK_PACKET);
 
-        verifyEapPrimeAkaIdentity();
+        verifyEapAkaPrimeIdentity();
         verifyEapAkaPrimeChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_PRIME_CHALLENGE_RESPONSE);
         verifyEapSuccess(MSK, EMSK);
     }
 
     @Test
     public void testEapAkaPrimeSynchronizationFailure() {
-        verifyEapPrimeAkaIdentity();
+        verifyEapAkaPrimeIdentity();
         verifyEapAkaPrimeSynchronizationFailure();
         verifyEapAkaPrimeChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_PRIME_CHALLENGE_RESPONSE);
         verifyEapSuccess(MSK, EMSK);
@@ -272,7 +370,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
 
     @Test
     public void testEapAkaPrimeAuthenticationReject() {
-        verifyEapPrimeAkaIdentity();
+        verifyEapAkaPrimeIdentity();
 
         // return null from TelephonyManager to simluate rejection of AUTN
         verifyEapAkaPrimeChallenge(null, EAP_AKA_PRIME_AUTHENTICATION_REJECT);
@@ -284,7 +382,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     public void testEapAkaPrimeMismatchedNetworkNamesNotAllowed() {
         // use mismatched peer network name
         setUp(false, PEER_NETWORK_NAME_2);
-        verifyEapPrimeAkaIdentity();
+        verifyEapAkaPrimeIdentity();
         verifyEapAkaPrimeChallengeMismatchedNetworkNames();
         verifyEapFailure();
     }
@@ -292,14 +390,18 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
     @Test
     public void testEapAkaPrimeMismatchedNetworkNamesAllowed() {
         setUp(true, PEER_NETWORK_NAME_2);
-        verifyEapPrimeAkaIdentity();
+        verifyEapAkaPrimeIdentity();
         verifyEapAkaPrimeChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_PRIME_CHALLENGE_RESPONSE);
         verifyEapSuccess(MSK, EMSK);
     }
 
-    private void verifyEapPrimeAkaIdentity() {
+    private void verifyEapAkaPrimeIdentity() {
+        verifyEapAkaPrimeIdentity(UNFORMATTED_IDENTITY, EAP_AKA_PRIME_IDENTITY_RESPONSE);
+    }
+
+    private void verifyEapAkaPrimeIdentity(String unformattedIdentity, byte[] responseMessage) {
         // EAP-AKA'/Identity request
-        doReturn(UNFORMATTED_IDENTITY).when(mMockTelephonyManager).getSubscriberId();
+        doReturn(unformattedIdentity).when(mMockTelephonyManager).getSubscriberId();
 
         mEapAuthenticator.processEapMessage(EAP_AKA_PRIME_IDENTITY_REQUEST);
         mTestLooper.dispatchAll();
@@ -307,7 +409,7 @@ public class EapAkaPrimeTest extends EapMethodEndToEndTest {
         // verify EAP-AKA'/Identity response
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
         verify(mMockTelephonyManager).getSubscriberId();
-        verify(mMockCallback).onResponse(eq(EAP_AKA_PRIME_IDENTITY_RESPONSE));
+        verify(mMockCallback).onResponse(eq(responseMessage));
         verifyNoMoreInteractions(
                 mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
     }
