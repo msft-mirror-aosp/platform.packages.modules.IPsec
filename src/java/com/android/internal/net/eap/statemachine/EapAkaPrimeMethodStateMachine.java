@@ -257,9 +257,9 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
 
                 // Values derived as (CK' | IK'), but PRF' needs (IK' | CK')
                 byte[] ckIkPrime = deriveCkIkPrime(result, atKdfInput, atAutn);
-                ByteBuffer ikCkPrime = ByteBuffer.allocate(IK_PRIME_LENGTH + CK_PRIME_LENGTH);
-                ikCkPrime.put(ckIkPrime, CK_PRIME_LENGTH, IK_PRIME_LENGTH);
-                ikCkPrime.put(ckIkPrime, 0, CK_PRIME_LENGTH);
+                ByteBuffer prfKey = ByteBuffer.allocate(IK_PRIME_LENGTH + CK_PRIME_LENGTH);
+                prfKey.put(ckIkPrime, CK_PRIME_LENGTH, IK_PRIME_LENGTH);
+                prfKey.put(ckIkPrime, 0, CK_PRIME_LENGTH);
 
                 int dataToSignLen = MK_DATA_PREFIX.length() + mIdentity.length;
                 ByteBuffer dataToSign = ByteBuffer.allocate(dataToSignLen);
@@ -270,7 +270,7 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
                         ByteBuffer.wrap(
                                 KeyGenerationUtils.prfPlus(
                                         HmacSha256ByteSigner.getInstance(),
-                                        ikCkPrime.array(),
+                                        prfKey.array(),
                                         dataToSign.array(),
                                         MK_LEN_BYTES));
 
