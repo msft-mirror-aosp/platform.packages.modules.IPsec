@@ -99,7 +99,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
      * MAC = HMAC-SHA-1(K_aut, message)
      */
     private static final byte[] REQUEST_MAC_BYTES =
-            hexStringToByteArray("3EB97A1D0E62894FD0DA384D24D8983C");
+            hexStringToByteArray("9ADA1A6D79256E3A7AD001FF6116FAE0");
 
     /**
      * message =    01100048 | EAP-Request, ID, length in bytes
@@ -110,7 +110,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
      *              0B05000000000000000000000000000000000000 | AT_MAC (zeroed out)
      */
     private static final byte[] BIDDING_DOWN_MAC =
-            hexStringToByteArray("9CB543894A5EFDC32DF6A6CE1AB0E01A");
+            hexStringToByteArray("427055D060BC9B52059F297C6D482312");
 
     @Before
     public void setUp() {
