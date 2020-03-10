@@ -2880,10 +2880,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
+                    notifyIkeSessionSetup(ikeMessage);
+
                     performFirstChildNegotiation(
                             childReqList, extractChildPayloadsFromMessage(ikeMessage));
-
-                    notifyIkeSessionSetup(ikeMessage);
                 }
             } catch (IkeProtocolException e) {
                 if (!mUseEap) {
@@ -3312,9 +3312,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                 validateIkeAuthRespPostEap(nonChildPayloads);
 
-                performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
-
                 notifyIkeSessionSetup(ikeMessage);
+
+                performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
             } catch (IkeProtocolException e) {
                 // Notify the remote because they may have set up the IKE SA.
                 sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
