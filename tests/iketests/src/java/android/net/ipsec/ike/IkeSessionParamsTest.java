@@ -19,6 +19,7 @@ package android.net.ipsec.ike;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
@@ -61,6 +62,8 @@ import java.security.interfaces.RSAPrivateKey;
 import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionParamsTest {
+    private static final int IKE_OPTION_INVALID = -1;
+
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
     private static final byte[] PSK = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
@@ -117,8 +120,9 @@ public final class IkeSessionParamsTest {
         mMockRsaPrivateKey = mock(RSAPrivateKey.class);
     }
 
-    private void verifyIkeSessionParamsWithSeverIpCommon(IkeSessionParams sessionParams) {
+    private void verifyIkeParamsWithSeverIpAndDefaultValues(IkeSessionParams sessionParams) {
         assertEquals(REMOTE_IPV4_HOST_ADDRESS, sessionParams.getServerHostname());
+        assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
         verifyIkeSessionParamsCommon(sessionParams);
     }
 
@@ -144,18 +148,20 @@ public final class IkeSessionParamsTest {
         assertArrayEquals(PSK, ((IkeAuthPskConfig) remoteConfig).mPsk);
     }
 
+    private IkeSessionParams.Builder buildWithPskCommon(String hostname) {
+        return new IkeSessionParams.Builder(mMockConnectManager)
+                .setServerHostname(hostname)
+                .addSaProposal(mIkeSaProposal)
+                .setLocalIdentification(mLocalIdentification)
+                .setRemoteIdentification(mRemoteIdentification)
+                .setAuthPsk(PSK);
+    }
+
     @Test
     public void testBuildWithPsk() throws Exception {
-        IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
-                        .addSaProposal(mIkeSaProposal)
-                        .setLocalIdentification(mLocalIdentification)
-                        .setRemoteIdentification(mRemoteIdentification)
-                        .setAuthPsk(PSK)
-                        .build();
+        IkeSessionParams sessionParams = buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS).build();
 
-        verifyIkeSessionParamsWithSeverIpCommon(sessionParams);
+        verifyIkeParamsWithSeverIpAndDefaultValues(sessionParams);
         verifyAuthPskConfig(sessionParams);
 
         assertEquals(mMockDefaultNetwork, sessionParams.getNetwork());
@@ -170,16 +176,11 @@ public final class IkeSessionParamsTest {
         long softLifetimeSec = TimeUnit.HOURS.toSeconds(10L);
 
         IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
-                        .addSaProposal(mIkeSaProposal)
-                        .setLocalIdentification(mLocalIdentification)
-                        .setRemoteIdentification(mRemoteIdentification)
-                        .setAuthPsk(PSK)
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
                         .setLifetime(hardLifetimeSec, softLifetimeSec)
                         .build();
 
-        verifyIkeSessionParamsWithSeverIpCommon(sessionParams);
+        verifyIkeParamsWithSeverIpAndDefaultValues(sessionParams);
         verifyAuthPskConfig(sessionParams);
 
         assertEquals(hardLifetimeSec, sessionParams.getHardLifetime());
@@ -188,19 +189,71 @@ public final class IkeSessionParamsTest {
 
     @Test
     public void testBuildWithPskAndHostname() throws Exception {
-        IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder(mMockConnectManager)
-                        .setServerHostname(REMOTE_HOSTNAME)
-                        .addSaProposal(mIkeSaProposal)
-                        .setLocalIdentification(mLocalIdentification)
-                        .setRemoteIdentification(mRemoteIdentification)
-                        .setAuthPsk(PSK)
-                        .build();
+        IkeSessionParams sessionParams = buildWithPskCommon(REMOTE_HOSTNAME).build();
 
         verifyIkeSessionParamsCommon(sessionParams);
         verifyAuthPskConfig(sessionParams);
 
         assertEquals(REMOTE_HOSTNAME, sessionParams.getServerHostname());
+    }
+
+    @Test
+    public void testAddIkeOption() throws Exception {
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .addIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        assertTrue(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
+    }
+
+    @Test
+    public void testAddAndRemoveIkeOption() throws Exception {
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .addIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
+                        .removeIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
+    }
+
+    @Test
+    public void testAddInvalidIkeOption() throws Exception {
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager).addIkeOption(IKE_OPTION_INVALID);
+            fail("Expected to fail due to invalid ikeOption");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testRemoveInvalidIkeOption() throws Exception {
+        try {
+            new IkeSessionParams.Builder(mMockConnectManager).removeIkeOption(IKE_OPTION_INVALID);
+            fail("Expected to fail due to invalid ikeOption");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testCheckInvalidIkeOption() throws Exception {
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .addIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
+                        .build();
+
+        try {
+            sessionParams.hasIkeOption(IKE_OPTION_INVALID);
+            fail("Expected to fail due to invalid ikeOption");
+        } catch (IllegalArgumentException expected) {
+        }
     }
 
     @Test
@@ -216,7 +269,7 @@ public final class IkeSessionParamsTest {
                         .setAuthEap(mMockServerCaCert, eapConfig)
                         .build();
 
-        verifyIkeSessionParamsWithSeverIpCommon(sessionParams);
+        verifyIkeParamsWithSeverIpAndDefaultValues(sessionParams);
         assertEquals(mMockDefaultNetwork, sessionParams.getNetwork());
 
         IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
@@ -245,7 +298,7 @@ public final class IkeSessionParamsTest {
                                 mMockServerCaCert, mMockClientEndCert, mMockRsaPrivateKey)
                         .build();
 
-        verifyIkeSessionParamsWithSeverIpCommon(sessionParams);
+        verifyIkeParamsWithSeverIpAndDefaultValues(sessionParams);
         assertEquals(mMockUserConfigNetwork, sessionParams.getNetwork());
 
         IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
@@ -285,7 +338,6 @@ public final class IkeSessionParamsTest {
 
         }
     }
-
 
     private void verifyAttrTypes(SparseArray expectedAttrCntMap, IkeSessionParams ikeParams) {
         ConfigAttribute[] configAttributes = ikeParams.getConfigurationAttributesInternal();
@@ -381,7 +433,6 @@ public final class IkeSessionParamsTest {
         } catch (IllegalArgumentException expected) {
         }
     }
-
 
     @Test
     public void testNonAsciiFqdnAuthentication() throws Exception {
