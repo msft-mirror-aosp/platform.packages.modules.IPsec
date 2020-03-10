@@ -82,8 +82,8 @@ public final class ChildSessionParamsTest {
                         .build();
 
         assertEquals(Arrays.asList(mSaProposal), sessionParams.getSaProposals());
-        assertEquals(Arrays.asList(tsInbound), sessionParams.getLocalTrafficSelectors());
-        assertEquals(Arrays.asList(tsOutbound), sessionParams.getRemoteTrafficSelectors());
+        assertEquals(Arrays.asList(tsInbound), sessionParams.getInboundTrafficSelectors());
+        assertEquals(Arrays.asList(tsOutbound), sessionParams.getOutboundTrafficSelectors());
     }
 
     @Test
