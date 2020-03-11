@@ -2880,10 +2880,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
+                    notifyIkeSessionSetup(ikeMessage);
+
                     performFirstChildNegotiation(
                             childReqList, extractChildPayloadsFromMessage(ikeMessage));
-
-                    notifyIkeSessionSetup(ikeMessage);
                 }
             } catch (IkeProtocolException e) {
                 if (!mUseEap) {
@@ -3004,9 +3004,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
                         mRespIdPayload = (IkeIdPayload) payload;
-                        if (!mIkeSessionParams
-                                .getRemoteIdentification()
-                                .equals(mRespIdPayload.ikeId)) {
+                        if (!mIkeSessionParams.hasIkeOption(
+                                        IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
+                                && !mIkeSessionParams
+                                        .getRemoteIdentification()
+                                        .equals(mRespIdPayload.ikeId)) {
                             throw new AuthenticationFailedException(
                                     "Unrecognized Responder Identification.");
                         }
@@ -3312,9 +3314,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                 validateIkeAuthRespPostEap(nonChildPayloads);
 
-                performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
-
                 notifyIkeSessionSetup(ikeMessage);
+
+                performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
             } catch (IkeProtocolException e) {
                 // Notify the remote because they may have set up the IKE SA.
                 sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
