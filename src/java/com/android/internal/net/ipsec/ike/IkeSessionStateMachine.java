@@ -16,6 +16,7 @@
 package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -28,6 +29,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATU
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PARTIAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -2930,6 +2932,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             payloadList.add(mInitIdPayload);
             payloadList.add(respIdPayload);
 
+            if(mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
+                payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION));
+            }
+
             // Build Authentication payload
             IkeAuthConfig authConfig = mIkeSessionParams.getLocalAuthConfig();
             switch (authConfig.mAuthMethod) {
@@ -3052,12 +3058,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
 
             // Verify existence of payloads
-            if (mRespIdPayload == null || authPayload == null) {
-                throw new AuthenticationFailedException("ID-Responder or Auth payload is missing.");
+
+            if (authPayload == null && mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
+                // If EAP-only option is selected, the responder will not send auth payload if it
+                // accepts EAP-only authentication. Currently only EAP-only safe methods are
+                // proposed to the responder if IKE_OPTION_EAP_ONLY_AUTH option is set. So there is
+                // no need to check if the responder selected an EAP-only safe method
+                return;
             }
 
             // Authenticate the remote peer.
-            authenticate(authPayload, mRespIdPayload, certPayloads);
+            if (authPayload != null && mRespIdPayload != null) {
+                authenticate(authPayload, mRespIdPayload, certPayloads);
+                return;
+            }
+
+            throw new AuthenticationFailedException("ID-Responder or Auth payload is missing.");
         }
 
         private void authenticate(
