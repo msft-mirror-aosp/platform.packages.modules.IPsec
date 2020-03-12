@@ -45,6 +45,8 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray("01" + ID + "000A17" + EAP_REQUEST_TYPE_DATA);
     public static final byte[] EAP_REQUEST_IDENTITY_PACKET =
             hexStringToByteArray("01" + ID + "000501");
+    public static final byte[] EAP_REQUEST_IDENTITY_PACKET_TOO_LONG =
+            hexStringToByteArray("01" + ID + "00050100");
 
     // EAP-Identity: hex for ASCII in "test@android.net"
     public static final String EAP_IDENTITY_STRING = "7465737440616E64726F69642E6E6574";
@@ -215,19 +217,19 @@ public class EapTestMessageDefinitions {
                     + "17040000" // EAP-SIM | Synchronization-Failure | 2B padding
                     + "0404112233445566778899AABBCCDDEE"); // AT_AUTS attribute
 
-    public static final String IK = "00112233445566778899AABBCCDDEEFF";
-    public static final byte[] IK_BYTES = hexStringToByteArray(IK);
-    public static final String CK = "FFEEDDCCBBAA99887766554433221100";
+    public static final String CK = "00112233445566778899AABBCCDDEEFF";
     public static final byte[] CK_BYTES = hexStringToByteArray(CK);
+    public static final String IK = "FFEEDDCCBBAA99887766554433221100";
+    public static final byte[] IK_BYTES = hexStringToByteArray(IK);
 
-    // Base-64 of: 'DB05' + RES_BYTES + '10' + IK + '10' + CK
+    // Base-64 of: 'DB05' + RES_BYTES + '10' + CK + '10' + IK
     // 'DB0511223344551000112233445566778899AABBCCDDEEFF10FFEEDDCCBBAA99887766554433221100'
     public static final String EAP_AKA_UICC_RESP_SUCCESS_BASE_64 =
             "2wURIjNEVRAAESIzRFVmd4iZqrvM3e7/EP/u3cy7qpmId2ZVRDMiEQA=";
 
     public static final byte[] EAP_AKA_AUTHENTICATION_REJECT =
             hexStringToByteArray("02" + ID + "000817020000");
-    public static final String EAP_AKA_CHALLENGE_RESPONSE_MAC = "C70366512D9C5EBA8E3484509A25DCE4";
+    public static final String EAP_AKA_CHALLENGE_RESPONSE_MAC = "7086E8341306F99CDB949DBE9CAC4EB2";
     public static final byte[] EAP_AKA_CHALLENGE_RESPONSE_MAC_BYTES =
             hexStringToByteArray(EAP_AKA_CHALLENGE_RESPONSE_MAC);
     public static final byte[] EAP_AKA_CHALLENGE_RESPONSE_TYPE_DATA =
