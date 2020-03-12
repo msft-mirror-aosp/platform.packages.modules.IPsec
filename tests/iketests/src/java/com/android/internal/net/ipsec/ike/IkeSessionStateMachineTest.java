@@ -3729,6 +3729,21 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testKillSession() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mSpyIkeUdpEncapSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
+        verifyNotifyUserCloseSession();
+
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
     public void testReceiveDpd() throws Exception {
         setupIdleStateMachine();
 

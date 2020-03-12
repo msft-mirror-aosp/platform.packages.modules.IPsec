@@ -546,7 +546,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Forcibly close IKE Session. */
     public void killSession() {
-        // TODO: b/142977160 Support closing IKE Sesison immediately.
+        // TODO(b/150327466): Notify remote serve when there is no outstanding request
+
+        closeAllSaRecords(false /*expectSaClosed*/);
+        mUserCbExecutor.execute(
+                () -> {
+                    mIkeSessionCallback.onClosed();
+                });
+
+        quitNow();
     }
 
     private void scheduleRekeySession(LocalRequest rekeyRequest) {
