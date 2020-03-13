@@ -65,7 +65,6 @@ filegroup {
 droidstubs {
     name: "ike-stubs-docs",
     defaults:["framework-module-stubs-defaults-systemapi"],
-    libs: ["framework-all"],
     srcs: [":ike-api-srcs"],
     sdk_version: "system_current",
 }
