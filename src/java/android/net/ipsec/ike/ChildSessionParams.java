@@ -68,8 +68,8 @@ public abstract class ChildSessionParams {
                         IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE);
     }
 
-    @NonNull private final IkeTrafficSelector[] mLocalTrafficSelectors;
-    @NonNull private final IkeTrafficSelector[] mRemoteTrafficSelectors;
+    @NonNull private final IkeTrafficSelector[] mInboundTrafficSelectors;
+    @NonNull private final IkeTrafficSelector[] mOutboundTrafficSelectors;
     @NonNull private final ChildSaProposal[] mSaProposals;
 
     private final int mHardLifetimeSec;
@@ -79,30 +79,46 @@ public abstract class ChildSessionParams {
 
     /** @hide */
     protected ChildSessionParams(
-            IkeTrafficSelector[] localTs,
-            IkeTrafficSelector[] remoteTs,
+            IkeTrafficSelector[] inboundTs,
+            IkeTrafficSelector[] outboundTs,
             ChildSaProposal[] proposals,
             int hardLifetimeSec,
             int softLifetimeSec,
             boolean isTransport) {
-        mLocalTrafficSelectors = localTs;
-        mRemoteTrafficSelectors = remoteTs;
+        mInboundTrafficSelectors = inboundTs;
+        mOutboundTrafficSelectors = outboundTs;
         mSaProposals = proposals;
         mHardLifetimeSec = hardLifetimeSec;
         mSoftLifetimeSec = softLifetimeSec;
         mIsTransport = isTransport;
     }
 
-    /** Retrieves configured local (client) traffic selectors */
+    /**
+     * Retrieves configured inbound traffic selectors
+     *
+     * <p>@see {@link
+     * TunnelModeChildSessionParams.Builder#addInboundTrafficSelectors(IkeTrafficSelector)} or
+     * {@link
+     * TransportModeChildSessionParams.Builder#addInboundTrafficSelectors(IkeTrafficSelector)}
+     */
+    // TODO: Rename it to getInboundTrafficSelectors
     @NonNull
     public List<IkeTrafficSelector> getLocalTrafficSelectors() {
-        return Arrays.asList(mLocalTrafficSelectors);
+        return Arrays.asList(mInboundTrafficSelectors);
     }
 
-    /** Retrieves configured remote (server) traffic selectors */
+    /**
+     * Retrieves configured outbound traffic selectors
+     *
+     * <p>@see {@link
+     * TunnelModeChildSessionParams.Builder#addOutboundTrafficSelectors(IkeTrafficSelector)} or
+     * {@link
+     * TransportModeChildSessionParams.Builder#addOutboundTrafficSelectors(IkeTrafficSelector)}
+     */
+    // TODO: Rename it to getOutboundTrafficSelectors
     @NonNull
     public List<IkeTrafficSelector> getRemoteTrafficSelectors() {
-        return Arrays.asList(mRemoteTrafficSelectors);
+        return Arrays.asList(mOutboundTrafficSelectors);
     }
 
     /** Retrieves all ChildSaProposals configured */
@@ -128,13 +144,13 @@ public abstract class ChildSessionParams {
     }
 
     /** @hide */
-    public IkeTrafficSelector[] getLocalTrafficSelectorsInternal() {
-        return mLocalTrafficSelectors;
+    public IkeTrafficSelector[] getInboundTrafficSelectorsInternal() {
+        return mInboundTrafficSelectors;
     }
 
     /** @hide */
-    public IkeTrafficSelector[] getRemoteTrafficSelectorsInternal() {
-        return mRemoteTrafficSelectors;
+    public IkeTrafficSelector[] getOutboundTrafficSelectorsInternal() {
+        return mOutboundTrafficSelectors;
     }
 
     /** @hide */
@@ -163,26 +179,23 @@ public abstract class ChildSessionParams {
      * @hide
      */
     protected abstract static class Builder {
-        @NonNull protected final List<IkeTrafficSelector> mLocalTsList = new LinkedList<>();
-        @NonNull protected final List<IkeTrafficSelector> mRemoteTsList = new LinkedList<>();
+        @NonNull protected final List<IkeTrafficSelector> mInboundTsList = new LinkedList<>();
+        @NonNull protected final List<IkeTrafficSelector> mOutboundTsList = new LinkedList<>();
         @NonNull protected final List<SaProposal> mSaProposalList = new LinkedList<>();
 
         protected int mHardLifetimeSec = CHILD_HARD_LIFETIME_SEC_DEFAULT;
         protected int mSoftLifetimeSec = CHILD_SOFT_LIFETIME_SEC_DEFAULT;
 
-        protected Builder() {
-            // Currently IKE library only accepts setting up Child SA that all ports and all
-            // addresses are allowed on both sides. The protected traffic range is determined by the
-            // socket or interface that the {@link IpSecTransform} is applied to.
-            // TODO: b/130756765 Validate the current TS negotiation strategy.
-            mLocalTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
-            mRemoteTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
-            mLocalTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV6);
-            mRemoteTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV6);
+        protected void addProposal(@NonNull ChildSaProposal proposal) {
+            mSaProposalList.add(proposal);
         }
 
-        protected void validateAndAddSaProposal(@NonNull ChildSaProposal proposal) {
-            mSaProposalList.add(proposal);
+        protected void addInboundTs(@NonNull IkeTrafficSelector trafficSelector) {
+            mInboundTsList.add(trafficSelector);
+        }
+
+        protected void addOutboundTs(@NonNull IkeTrafficSelector trafficSelector) {
+            mOutboundTsList.add(trafficSelector);
         }
 
         protected void validateAndSetLifetime(int hardLifetimeSec, int softLifetimeSec) {
@@ -198,6 +211,16 @@ public abstract class ChildSessionParams {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException(
                         "ChildSessionParams requires at least one Child SA proposal.");
+            }
+
+            if (mInboundTsList.isEmpty()) {
+                mInboundTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
+                mInboundTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV6);
+            }
+
+            if (mOutboundTsList.isEmpty()) {
+                mOutboundTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
+                mOutboundTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV6);
             }
         }
     }
