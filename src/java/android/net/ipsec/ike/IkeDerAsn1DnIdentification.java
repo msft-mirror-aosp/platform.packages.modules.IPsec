@@ -16,6 +16,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 
 import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
@@ -30,6 +31,7 @@ import javax.security.auth.x500.X500Principal;
  *
  * @hide
  */
+@SystemApi
 public final class IkeDerAsn1DnIdentification extends IkeIdentification {
     /** The ASN.1 X.500 Distinguished Name */
     @NonNull public final X500Principal derAsn1Dn;
