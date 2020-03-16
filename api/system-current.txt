@@ -72,11 +72,11 @@ package android.net.ipsec.ike {
   }
 
   public abstract class ChildSessionParams {
-    method public long getHardLifetime();
+    method @IntRange(from=0x12c, to=0x3840) public int getHardLifetimeSeconds();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getLocalTrafficSelectors();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getRemoteTrafficSelectors();
     method @NonNull public java.util.List<android.net.ipsec.ike.ChildSaProposal> getSaProposals();
-    method public long getSoftLifetime();
+    method @IntRange(from=0x78, to=0x3840) public int getSoftLifetimeSeconds();
   }
 
   public final class IkeDerAsn1DnIdentification extends android.net.ipsec.ike.IkeIdentification {
@@ -158,15 +158,17 @@ package android.net.ipsec.ike {
 
   public final class IkeSessionParams {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest> getConfigurationRequests();
-    method public long getHardLifetime();
+    method @IntRange(from=0x14, to=0x708) public int getDpdDelaySeconds();
+    method @IntRange(from=0x12c, to=0x15180) public int getHardLifetimeSeconds();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getLocalAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getLocalIdentification();
     method @NonNull public android.net.Network getNetwork();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getRemoteAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getRemoteIdentification();
+    method public int[] getRetransmissionTimeoutsMillis();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getSaProposals();
     method @NonNull public String getServerHostname();
-    method public long getSoftLifetime();
+    method @IntRange(from=0x78, to=0x15180) public int getSoftLifetimeSeconds();
     method public boolean hasIkeOption(int);
     field public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0; // 0x0
   }
@@ -183,10 +185,12 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthDigitalSignature(@Nullable java.security.cert.X509Certificate, @NonNull java.security.cert.X509Certificate, @NonNull java.util.List<java.security.cert.X509Certificate>, @NonNull java.security.PrivateKey);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthEap(@Nullable java.security.cert.X509Certificate, @NonNull android.net.eap.EapSessionConfig);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthPsk(@NonNull byte[]);
-    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLifetime(long, long);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setDpdDelaySeconds(@IntRange(from=0x14, to=0x708) int);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLifetimeSeconds(@IntRange(from=0x12c, to=0x15180) int, @IntRange(from=0x78, to=0x15180) int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLocalIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@NonNull android.net.Network);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRemoteIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRetransmissionTimeoutsMillis(@NonNull int[]);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setServerHostname(@NonNull String);
   }
 
@@ -268,7 +272,7 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.TransportModeChildSessionParams.Builder addOutboundTrafficSelectors(@NonNull android.net.ipsec.ike.IkeTrafficSelector);
     method @NonNull public android.net.ipsec.ike.TransportModeChildSessionParams.Builder addSaProposal(@NonNull android.net.ipsec.ike.ChildSaProposal);
     method @NonNull public android.net.ipsec.ike.TransportModeChildSessionParams build();
-    method @NonNull public android.net.ipsec.ike.TransportModeChildSessionParams.Builder setLifetime(long, long);
+    method @NonNull public android.net.ipsec.ike.TransportModeChildSessionParams.Builder setLifetimeSeconds(@IntRange(from=0x12c, to=0x3840) int, @IntRange(from=0x78, to=0x3840) int);
   }
 
   public final class TunnelModeChildSessionParams extends android.net.ipsec.ike.ChildSessionParams {
@@ -286,7 +290,7 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams.Builder addOutboundTrafficSelectors(@NonNull android.net.ipsec.ike.IkeTrafficSelector);
     method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams.Builder addSaProposal(@NonNull android.net.ipsec.ike.ChildSaProposal);
     method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams build();
-    method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams.Builder setLifetime(long, long);
+    method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams.Builder setLifetimeSeconds(@IntRange(from=0x12c, to=0x3840) int, @IntRange(from=0x78, to=0x3840) int);
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv4Address extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
