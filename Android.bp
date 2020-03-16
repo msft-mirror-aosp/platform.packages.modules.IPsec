@@ -25,6 +25,7 @@ java_sdk_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
+        "framework-telephony-stubs",
     ],
 
     api_packages: [
