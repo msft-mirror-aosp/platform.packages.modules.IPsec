@@ -82,8 +82,6 @@ public final class IkeSessionParams {
     /**
      * Indicates any remote (server) identity is accepted even if it is different from what has been
      * configured.
-     *
-     * @hide
      */
     public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0;
 
@@ -236,7 +234,7 @@ public final class IkeSessionParams {
         return mSoftLifetimeSec;
     }
 
-    /** Checks if the given IKE Session negotiation option is set @hide */
+    /** Checks if the given IKE Session negotiation option is set */
     public boolean hasIkeOption(@IkeOption int ikeOption) {
         validateIkeOptionOrThrow(ikeOption);
         return (mIkeOptions & getOptionBitValue(ikeOption)) != 0;
@@ -769,7 +767,6 @@ public final class IkeSessionParams {
          *
          * @param ikeOption the option to be enabled.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
@@ -783,7 +780,6 @@ public final class IkeSessionParams {
          *
          * @param ikeOption the option to be disabled.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
         public Builder removeIkeOption(@IkeOption int ikeOption) {
