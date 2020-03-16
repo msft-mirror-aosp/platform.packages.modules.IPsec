@@ -47,7 +47,6 @@ public abstract class IkeIdentification {
         ID_TYPE_RFC822_ADDR,
         ID_TYPE_IPV6_ADDR,
         ID_TYPE_DER_ASN1_DN,
-        ID_TYPE_DER_ASN1_GN,
         ID_TYPE_KEY_ID
     })
     public @interface IdType {}
@@ -63,8 +62,6 @@ public abstract class IkeIdentification {
     /** @hide */
     public static final int ID_TYPE_DER_ASN1_DN = 9;
     /** @hide */
-    public static final int ID_TYPE_DER_ASN1_GN = 10;
-    /** @hide */
     public static final int ID_TYPE_KEY_ID = 11;
 
     static {
@@ -74,7 +71,6 @@ public abstract class IkeIdentification {
         SUPPORTED_ID_TYPES.add(ID_TYPE_RFC822_ADDR);
         SUPPORTED_ID_TYPES.add(ID_TYPE_IPV6_ADDR);
         SUPPORTED_ID_TYPES.add(ID_TYPE_DER_ASN1_DN);
-        SUPPORTED_ID_TYPES.add(ID_TYPE_DER_ASN1_GN);
         SUPPORTED_ID_TYPES.add(ID_TYPE_KEY_ID);
     }
 
