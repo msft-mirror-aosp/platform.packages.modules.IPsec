@@ -219,6 +219,8 @@ public final class IkeSessionStateMachineTest {
     private static final String ID_PAYLOAD_INITIATOR_HEX_STRING =
             "290000180200000031313233343536373839414243444546";
     private static final String ID_PAYLOAD_RESPONDER_HEX_STRING = "2700000c010000007f000001";
+    private static final String ID_PAYLOAD_RESPONDER_FQDN_HEX_STRING =
+            "2700001702000000696B652E616E64726F69642E6E6574";
     private static final String PSK_AUTH_RESP_PAYLOAD_HEX_STRING =
             "2100001c0200000058f36412e9b7b38df817a9f7779b7a008dacdd25";
     private static final String GENERIC_DIGITAL_SIGN_AUTH_RESP_HEX_STRING =
@@ -2119,11 +2121,13 @@ public final class IkeSessionStateMachineTest {
     }
 
     private IkeIdPayload makeRespIdPayload() throws Exception {
+        return makeRespIdPayload(ID_PAYLOAD_RESPONDER_HEX_STRING);
+    }
+
+    private IkeIdPayload makeRespIdPayload(String idRespPayloadHex) throws Exception {
         return (IkeIdPayload)
                 IkeTestUtils.hexStringToIkePayload(
-                        IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
-                        true /*isResp*/,
-                        ID_PAYLOAD_RESPONDER_HEX_STRING);
+                        IkePayload.PAYLOAD_TYPE_ID_RESPONDER, true /*isResp*/, idRespPayloadHex);
     }
 
     @Test
@@ -2200,6 +2204,70 @@ public final class IkeSessionStateMachineTest {
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+    }
+
+    @Test
+    public void testAuthWithOptionAcceptAnyRemoteId() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        reset(mMockChildSessionFactoryHelper);
+        setupChildStateMachineFactory(mMockChildSessionStateMachine);
+
+        IkeSessionParams ikeSessionParams =
+                buildIkeSessionParamsCommon()
+                        .setAuthPsk(mPsk)
+                        .setRemoteIdentification(
+                                new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
+                        .addIkeOption(IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
+                        .build();
+        mIkeSessionStateMachine = makeAndStartIkeSession(ikeSessionParams);
+
+        // Mock IKE INIT
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+
+        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload that is different
+        // from configured ID-Responder.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
+        authRelatedPayloads.add(spyAuthPayload);
+
+        IkeIdPayload respIdPayload = makeRespIdPayload(ID_PAYLOAD_RESPONDER_FQDN_HEX_STRING);
+        authRelatedPayloads.add(respIdPayload);
+
+        // Send response to IKE state machine and verify authentication is done.
+        verifySharedKeyAuthentication(
+                spyAuthPayload,
+                respIdPayload,
+                authRelatedPayloads,
+                true /*hasChildPayloads*/,
+                false /*hasConfigPayloadInResp*/);
+        verifyRetransmissionStopped();
+    }
+
+    @Test
+    public void testAuthRejectOtherResponderId() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+
+        // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload that is different
+        // from configured ID-Responder.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
+        authRelatedPayloads.add(spyAuthPayload);
+
+        IkeIdPayload respIdPayload = makeRespIdPayload(ID_PAYLOAD_RESPONDER_FQDN_HEX_STRING);
+        authRelatedPayloads.add(respIdPayload);
+
+        // Send response to IKE state machine
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+        mLooper.dispatchAll();
+
+        // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback)
+                .onClosedExceptionally(any(AuthenticationFailedException.class));
     }
 
     @Test
