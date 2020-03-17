@@ -71,7 +71,7 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          * being built.
          *
          * <p>This method allows callers to limit the inbound traffic transmitted over the Child
-         * Session to the given range. the IKE server may further narrow the range. Callers should
+         * Session to the given range. The IKE server may further narrow the range. Callers should
          * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
          *
          * <p>If no inbound {@link IkeTrafficSelector} is provided, a default value will be used
@@ -92,7 +92,7 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          * TransportModeChildSessionParams} being built.
          *
          * <p>This method allows callers to limit the outbound traffic transmitted over the Child
-         * Session to the given range. the IKE server may further narrow the range. Callers should
+         * Session to the given range. The IKE server may further narrow the range. Callers should
          * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
          *
          * <p>If no outbound {@link IkeTrafficSelector} is provided, a default value will be used
@@ -144,6 +144,7 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public TransportModeChildSessionParams build() {
+            addDefaultTsIfNotConfigured();
             validateOrThrow();
 
             return new TransportModeChildSessionParams(

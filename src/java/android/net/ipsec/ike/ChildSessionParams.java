@@ -210,7 +210,9 @@ public abstract class ChildSessionParams {
                 throw new IllegalArgumentException(
                         "ChildSessionParams requires at least one Child SA proposal.");
             }
+        }
 
+        protected void addDefaultTsIfNotConfigured() {
             if (mInboundTsList.isEmpty()) {
                 mInboundTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV4);
                 mInboundTsList.add(DEFAULT_TRAFFIC_SELECTOR_IPV6);
