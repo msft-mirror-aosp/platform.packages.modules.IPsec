@@ -17,6 +17,7 @@
 package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -34,6 +35,7 @@ import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.RETRY_IN
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -2019,6 +2021,11 @@ public final class IkeSessionStateMachineTest {
         assertNotNull(
                 ikeAuthReqMessage.getPayloadForType(
                         IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthPskPayload.class));
+
+        // Validate that there is no EAP only notify payload
+        List<IkeNotifyPayload> notifyPayloads = ikeAuthReqMessage.getPayloadListForType(
+                IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        assertFalse(hasEapOnlyNotifyPayload(notifyPayloads));
 
         // Validate inbound IKE AUTH response
         verifyIncrementLocaReqMsgId();
@@ -4248,11 +4255,37 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
+    @Test
+    public void testEapOnlyOption() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        IkeSessionParams ikeSessionParams = buildIkeSessionParamsCommon()
+                .setAuthEap(mRootCertificate, mEapSessionConfig)
+                .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH).build();
+        mIkeSessionStateMachine = makeAndStartIkeSession(ikeSessionParams);
+
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+
+        IkeMessage ikeAuthReqMessage = verifyAuthReqAndGetMsg();
+        List<IkeNotifyPayload> notifyPayloads = ikeAuthReqMessage.getPayloadListForType(
+                IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        assertTrue(hasEapOnlyNotifyPayload(notifyPayloads));
+    }
+
     private IkeConfigPayload makeConfigPayload() throws Exception {
         return (IkeConfigPayload)
                 IkeTestUtils.hexStringToIkePayload(
                         IkePayload.PAYLOAD_TYPE_CP,
                         true /*isResp*/,
                         CP_PAYLOAD_HEX_STRING);
+    }
+
+    private boolean hasEapOnlyNotifyPayload(List<IkeNotifyPayload> notifyPayloads) {
+        for (IkeNotifyPayload payload : notifyPayloads) {
+            if (payload.notifyType == NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
