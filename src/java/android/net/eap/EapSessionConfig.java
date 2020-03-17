@@ -228,6 +228,20 @@ public final class EapSessionConfig {
         public int getMethodType() {
             return methodType;
         }
+
+        /**
+         * Check if this is EAP-only safe method.
+         *
+         * @return whether the method is EAP-only safe
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998#section 4, for safe eap
+         * methods</a>
+         *
+         * @hide
+         */
+        public boolean isEapOnlySafeMethod() {
+            return false;
+        }
     }
 
     /**
@@ -262,6 +276,12 @@ public final class EapSessionConfig {
          */
         public int getAppType() {
             return apptype;
+        }
+
+        /** @hide */
+        @Override
+        public boolean isEapOnlySafeMethod() {
+            return true;
         }
     }
 
@@ -374,5 +394,25 @@ public final class EapSessionConfig {
         public String getPassword() {
             return password;
         }
+    }
+
+    /**
+     * Checks if all the methods in the session are EAP-only safe
+     *
+     * @return whether all the methods in the session are EAP-only safe
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998#section 4, for safe eap
+     * methods</a>
+     *
+     * @hide
+     */
+    public boolean areAllMethodsEapOnlySafe() {
+        for(Map.Entry<Integer, EapMethodConfig> eapConfigsEntry : eapConfigs.entrySet()) {
+            if (!eapConfigsEntry.getValue().isEapOnlySafeMethod()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
