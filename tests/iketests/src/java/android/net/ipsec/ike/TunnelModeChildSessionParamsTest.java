@@ -81,8 +81,8 @@ public final class TunnelModeChildSessionParamsTest {
 
     private void verifyCommon(TunnelModeChildSessionParams childParams) {
         assertArrayEquals(new SaProposal[] {mSaProposal}, childParams.getSaProposalsInternal());
-        assertEquals(NUM_TS, childParams.getLocalTrafficSelectorsInternal().length);
-        assertEquals(NUM_TS, childParams.getRemoteTrafficSelectorsInternal().length);
+        assertEquals(NUM_TS, childParams.getInboundTrafficSelectorsInternal().length);
+        assertEquals(NUM_TS, childParams.getOutboundTrafficSelectorsInternal().length);
         assertFalse(childParams.isTransportMode());
     }
 

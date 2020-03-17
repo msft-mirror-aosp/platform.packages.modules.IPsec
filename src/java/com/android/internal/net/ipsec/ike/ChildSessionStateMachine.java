@@ -1725,9 +1725,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
                                     saProposals, ipSecManager, localAddress),
-                            childSessionParams.getLocalTrafficSelectorsInternal(),
-                            childSessionParams.getRemoteTrafficSelectorsInternal(),
-                            childSessionParams.isTransportMode(), isFirstChildSa);
+                            childSessionParams.getInboundTrafficSelectorsInternal(),
+                            childSessionParams.getOutboundTrafficSelectorsInternal(),
+                            childSessionParams.isTransportMode(),
+                            isFirstChildSa);
 
             return payloadList;
         }
