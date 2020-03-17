@@ -78,7 +78,7 @@ public final class IkeSessionParams {
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID})
+    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID, IKE_OPTION_EAP_ONLY_AUTH})
     public @interface IkeOption {}
 
     /**
@@ -94,7 +94,6 @@ public final class IkeSessionParams {
      *
      * <p>@see {@link Builder#setAuthEap(X509Certificate, EapSessionConfig)}
      *
-     * @hide
      */
     public static final int IKE_OPTION_EAP_ONLY_AUTH = 1;
 
