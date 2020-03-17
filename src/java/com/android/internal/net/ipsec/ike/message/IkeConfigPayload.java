@@ -41,6 +41,8 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -217,6 +219,9 @@ public final class IkeConfigPayload extends IkePayload {
                         break;
                     case CONFIG_ATTR_INTERNAL_IP4_DHCP:
                         configList.add(new ConfigAttributeIpv4Dhcp(value));
+                        break;
+                    case CONFIG_ATTR_APPLICATION_VERSION:
+                        configList.add(new ConfigAttributeAppVersion(value));
                         break;
                     case CONFIG_ATTR_INTERNAL_IP6_ADDRESS:
                         configList.add(new ConfigAttributeIpv6Address(value));
@@ -1004,6 +1009,46 @@ public final class IkeConfigPayload extends IkePayload {
         @Override
         public Inet6Address getAddress() {
             return address;
+        }
+    }
+
+    /** This class represents an application version attribute */
+    public static class ConfigAttributeAppVersion extends ConfigAttribute {
+        private static final Charset ASCII = StandardCharsets.US_ASCII;
+        private static final String APP_VERSION_NONE = "";
+
+        public final String applicationVersion;
+
+        /**
+         * Construct an instance for an outbound packet for requesting remote application version.
+         */
+        public ConfigAttributeAppVersion() {
+            this(APP_VERSION_NONE);
+        }
+
+        /** Construct an instance for an outbound packet with local application version. */
+        public ConfigAttributeAppVersion(String localAppVersion) {
+            super(CONFIG_ATTR_APPLICATION_VERSION);
+            applicationVersion = localAppVersion;
+        }
+
+        /** Construct an instance from a decoded inbound packet. */
+        protected ConfigAttributeAppVersion(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_APPLICATION_VERSION);
+            applicationVersion = new String(value, ASCII);
+        }
+
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            buffer.put(applicationVersion.getBytes(ASCII));
+        }
+
+        protected int getValueLength() {
+            return applicationVersion.getBytes(ASCII).length;
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length >= 0;
         }
     }
 

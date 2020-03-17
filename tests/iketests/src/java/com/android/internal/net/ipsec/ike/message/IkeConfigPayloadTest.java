@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.message;
 
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
@@ -48,6 +49,7 @@ import android.net.LinkAddress;
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeAppVersion;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
@@ -167,6 +169,12 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("0015001020010db8000000000000000000000001");
     private static final byte[] IPV6_PCSCF_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00150000");
+
+    private static final String APP_VERSION = "Test IKE Server 1.0";
+    private static final byte[] APP_VERSION_ATTRIBUTE_WITH_VALUE =
+            TestUtils.hexStringToByteArray("000700135465737420494b452053657276657220312e30");
+    private static final byte[] APP_VERSION_ATTRIBUTE_WITHOUT_VALUE =
+            TestUtils.hexStringToByteArray("00070000");
 
     private Inet4Address[] mNetMasks;
     private int[] mIpv4PrefixLens;
@@ -803,5 +811,39 @@ public final class IkeConfigPayloadTest {
                 CONFIG_ATTR_IP6_PCSCF,
                 IPV6_PCSCF_ATTRIBUTE_WITHOUT_VALUE,
                 null /*expectedAddress*/);
+    }
+
+    @Test
+    public void testDecodeAppVersionWithValue() throws Exception {
+        ConfigAttributeAppVersion attribute = new ConfigAttributeAppVersion(APP_VERSION.getBytes());
+
+        assertEquals(CONFIG_ATTR_APPLICATION_VERSION, attribute.attributeType);
+        assertEquals(APP_VERSION, attribute.applicationVersion);
+    }
+
+    @Test
+    public void testDecodeAppVersionWithoutValue() throws Exception {
+        ConfigAttributeAppVersion attribute = new ConfigAttributeAppVersion(new byte[0]);
+
+        assertEquals(CONFIG_ATTR_APPLICATION_VERSION, attribute.attributeType);
+        assertEquals("", attribute.applicationVersion);
+    }
+
+    @Test
+    public void testEncodeAppVersionWithValue() throws Exception {
+        ConfigAttributeAppVersion attribute = new ConfigAttributeAppVersion(APP_VERSION);
+
+        verifyBuildAndEncodeAttributeCommon(
+                attribute, CONFIG_ATTR_APPLICATION_VERSION, APP_VERSION_ATTRIBUTE_WITH_VALUE);
+        assertEquals(APP_VERSION, attribute.applicationVersion);
+    }
+
+    @Test
+    public void testEncodeAppVersionWithoutValue() throws Exception {
+        ConfigAttributeAppVersion attribute = new ConfigAttributeAppVersion();
+
+        verifyBuildAndEncodeAttributeCommon(
+                attribute, CONFIG_ATTR_APPLICATION_VERSION, APP_VERSION_ATTRIBUTE_WITHOUT_VALUE);
+        assertEquals("", attribute.applicationVersion);
     }
 }
