@@ -2,6 +2,11 @@
 package android.net.eap {
 
   public final class EapSessionConfig {
+    method @Nullable public android.net.eap.EapSessionConfig.EapAkaConfig getEapAkaConfig();
+    method @Nullable public android.net.eap.EapSessionConfig.EapAkaPrimeConfig getEapAkaPrimeConfig();
+    method @NonNull public byte[] getEapIdentity();
+    method @Nullable public android.net.eap.EapSessionConfig.EapMsChapV2Config getEapMsChapV2onfig();
+    method @Nullable public android.net.eap.EapSessionConfig.EapSimConfig getEapSimConfig();
   }
 
   public static final class EapSessionConfig.Builder {
