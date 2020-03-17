@@ -942,8 +942,18 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("Necessary parameter missing.");
             }
 
-            // TODO(b/147109553): If IKE_OPTION_EAP_ONLY_AUTH is set and EapSessionConfig does not
-            // contain any EAP method that provides mutual authentication, throw an exception.
+            if ((mIkeOptions & getOptionBitValue(IKE_OPTION_EAP_ONLY_AUTH)) != 0) {
+                if (!(mLocalAuthConfig instanceof IkeAuthEapConfig)) {
+                    throw new IllegalArgumentException("If IKE_OPTION_EAP_ONLY_AUTH is set,"
+                            + " eap authentication needs to be configured.");
+                }
+
+                IkeAuthEapConfig ikeAuthEapConfig = (IkeAuthEapConfig) mLocalAuthConfig;
+                if (!ikeAuthEapConfig.getEapConfig().areAllMethodsEapOnlySafe()) {
+                    throw new IllegalArgumentException("Only EAP-only safe method allowed"
+                            + " when using EAP-only option.");
+                }
+            }
 
             return new IkeSessionParams(
                     mServerHostname,
