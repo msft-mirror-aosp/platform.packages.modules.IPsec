@@ -22,6 +22,7 @@ import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIM
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
@@ -48,6 +49,7 @@ import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
+import android.telephony.TelephonyManager;
 import android.util.SparseArray;
 
 import com.android.internal.net.TestUtils;
@@ -569,5 +571,55 @@ public final class IkeSessionParamsTest {
             fail("Expected failure because soft lifetime is too short");
         } catch (IllegalArgumentException expected) {
         }
+    }
+
+    @Test
+    public void testExpceptionOnEapOnlyOptionWithoutEapAuth() throws Exception {
+        try {
+            IkeSessionParams sessionParams =
+                    buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                            .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH)
+                            .build();
+            fail("Expected failure because eap only option added without setting auth config");
+        } catch (IllegalArgumentException expected) {
+
+        }
+    }
+
+    @Test
+    public void testExceptionOnEapOnlyOptionWithEapOnlyUnsafeMethod() throws Exception {
+        try {
+            EapSessionConfig eapSessionConfig = new EapSessionConfig.Builder()
+                    .setEapMsChapV2Config(null, null)
+                    .setEapAkaConfig(0, 0)
+                    .build();
+
+            IkeSessionParams sessionParams =
+                    buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                            .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH)
+                            .setAuthEap(null, eapSessionConfig)
+                            .build();
+            fail("Expected failure because eap only option added without eap only safe method");
+        } catch (IllegalArgumentException expected) {
+
+        }
+    }
+
+    @Test
+    public void testBuildWithEapOnlyOption() throws Exception {
+        EapSessionConfig eapSessionConfig = new EapSessionConfig.Builder()
+                .setEapAkaConfig(0, TelephonyManager.APPTYPE_ISIM)
+                .build();
+
+        IkeSessionParams sessionParams = buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH)
+                .setAuthEap(null, eapSessionConfig)
+                .build();
+
+        assertNotNull(sessionParams);
+        verifyIkeSessionParamsCommon(sessionParams);
+        assertTrue(sessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH));
+        IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
+        assertTrue(localConfig instanceof IkeAuthEapConfig);
     }
 }
