@@ -101,6 +101,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * @return The requested DHCP server address, or null if no specific DHCP server was
          *     requested
+         * @hide
          */
         @Nullable
         Inet4Address getAddress();
@@ -112,6 +113,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Retrieves the requested IPv4 DNS server address
          *
          * @return The requested DNS server address, or null if no specific DNS server was requested
+         * @hide
          */
         @Nullable
         Inet4Address getAddress();
@@ -144,6 +146,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Retrieves the requested IPv6 DNS server address
          *
          * @return The requested DNS server address, or null if no specific DNS server was requested
+         * @hide
          */
         @Nullable
         Inet6Address getAddress();
