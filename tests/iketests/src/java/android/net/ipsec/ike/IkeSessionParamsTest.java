@@ -173,25 +173,25 @@ public final class IkeSessionParamsTest {
 
         assertEquals(mMockDefaultNetwork, sessionParams.getNetwork());
 
-        assertEquals(IKE_HARD_LIFETIME_SEC_DEFAULT, sessionParams.getHardLifetime());
-        assertEquals(IKE_SOFT_LIFETIME_SEC_DEFAULT, sessionParams.getSoftLifetime());
+        assertEquals(IKE_HARD_LIFETIME_SEC_DEFAULT, sessionParams.getHardLifetimeSeconds());
+        assertEquals(IKE_SOFT_LIFETIME_SEC_DEFAULT, sessionParams.getSoftLifetimeSeconds());
     }
 
     @Test
     public void testBuildWithPskAndLifetime() throws Exception {
-        long hardLifetimeSec = TimeUnit.HOURS.toSeconds(20L);
-        long softLifetimeSec = TimeUnit.HOURS.toSeconds(10L);
+        int hardLifetimeSec = (int) TimeUnit.HOURS.toSeconds(20L);
+        int softLifetimeSec = (int) TimeUnit.HOURS.toSeconds(10L);
 
         IkeSessionParams sessionParams =
                 buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
-                        .setLifetime(hardLifetimeSec, softLifetimeSec)
+                        .setLifetimeSeconds(hardLifetimeSec, softLifetimeSec)
                         .build();
 
         verifyIkeParamsWithSeverIpAndDefaultValues(sessionParams);
         verifyAuthPskConfig(sessionParams);
 
-        assertEquals(hardLifetimeSec, sessionParams.getHardLifetime());
-        assertEquals(softLifetimeSec, sessionParams.getSoftLifetime());
+        assertEquals(hardLifetimeSec, sessionParams.getHardLifetimeSeconds());
+        assertEquals(softLifetimeSec, sessionParams.getSoftLifetimeSeconds());
     }
 
     @Test
@@ -532,7 +532,8 @@ public final class IkeSessionParamsTest {
     public void testSetHardLifetimeTooLong() throws Exception {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setLifetime(IKE_HARD_LIFETIME_SEC_MAXIMUM + 1, IKE_SOFT_LIFETIME_SEC_DEFAULT);
+                    .setLifetimeSeconds(
+                            IKE_HARD_LIFETIME_SEC_MAXIMUM + 1, IKE_SOFT_LIFETIME_SEC_DEFAULT);
             fail("Expected failure because hard lifetime is too long");
         } catch (IllegalArgumentException expected) {
         }
@@ -542,7 +543,8 @@ public final class IkeSessionParamsTest {
     public void testSetHardLifetimeTooShort() throws Exception {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setLifetime(IKE_HARD_LIFETIME_SEC_MINIMUM - 1, IKE_SOFT_LIFETIME_SEC_DEFAULT);
+                    .setLifetimeSeconds(
+                            IKE_HARD_LIFETIME_SEC_MINIMUM - 1, IKE_SOFT_LIFETIME_SEC_DEFAULT);
             fail("Expected failure because hard lifetime is too short");
         } catch (IllegalArgumentException expected) {
         }
@@ -552,7 +554,8 @@ public final class IkeSessionParamsTest {
     public void testSetSoftLifetimeTooLong() throws Exception {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setLifetime(IKE_HARD_LIFETIME_SEC_DEFAULT, IKE_HARD_LIFETIME_SEC_DEFAULT);
+                    .setLifetimeSeconds(
+                            IKE_HARD_LIFETIME_SEC_DEFAULT, IKE_HARD_LIFETIME_SEC_DEFAULT);
             fail("Expected failure because soft lifetime is too long");
         } catch (IllegalArgumentException expected) {
         }
@@ -562,7 +565,7 @@ public final class IkeSessionParamsTest {
     public void testSetSoftLifetimeTooShort() throws Exception {
         try {
             new IkeSessionParams.Builder(mMockConnectManager)
-                    .setLifetime(IKE_HARD_LIFETIME_SEC_DEFAULT, 0L);
+                    .setLifetimeSeconds(IKE_HARD_LIFETIME_SEC_DEFAULT, 0);
             fail("Expected failure because soft lifetime is too short");
         } catch (IllegalArgumentException expected) {
         }
