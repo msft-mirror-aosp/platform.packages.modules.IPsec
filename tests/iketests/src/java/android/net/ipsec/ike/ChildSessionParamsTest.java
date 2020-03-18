@@ -48,14 +48,12 @@ public final class ChildSessionParamsTest {
                 new TunnelModeChildSessionParams.Builder().addSaProposal(mSaProposal).build();
 
         assertArrayEquals(new SaProposal[] {mSaProposal}, sessionParams.getSaProposalsInternal());
-        assertEquals(NUM_TS, sessionParams.getInboundTrafficSelectorsInternal().length);
-        assertEquals(NUM_TS, sessionParams.getOutboundTrafficSelectorsInternal().length);
-        assertEquals(
-                Arrays.asList(sessionParams.getInboundTrafficSelectorsInternal()),
-                Arrays.asList(getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()));
-        assertEquals(
-                Arrays.asList(sessionParams.getOutboundTrafficSelectorsInternal()),
-                Arrays.asList(getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()));
+        assertArrayEquals(
+                new IkeTrafficSelector[] {getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()},
+                sessionParams.getInboundTrafficSelectorsInternal());
+        assertArrayEquals(
+                new IkeTrafficSelector[] {getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()},
+                sessionParams.getOutboundTrafficSelectorsInternal());
         assertFalse(sessionParams.isTransportMode());
     }
 
