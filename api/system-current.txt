@@ -163,12 +163,14 @@ package android.net.ipsec.ike {
 
   public final class IkeSessionParams {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest> getConfigurationRequests();
+    method @IntRange(from=0x14, to=0x708) public int getDpdDelaySeconds();
     method public long getHardLifetime();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getLocalAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getLocalIdentification();
     method @NonNull public android.net.Network getNetwork();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getRemoteAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getRemoteIdentification();
+    method public int[] getRetransmissionTimeoutsMillis();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getSaProposals();
     method @NonNull public String getServerHostname();
     method public long getSoftLifetime();
@@ -188,10 +190,12 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthDigitalSignature(@Nullable java.security.cert.X509Certificate, @NonNull java.security.cert.X509Certificate, @NonNull java.util.List<java.security.cert.X509Certificate>, @NonNull java.security.PrivateKey);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthEap(@Nullable java.security.cert.X509Certificate, @NonNull android.net.eap.EapSessionConfig);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthPsk(@NonNull byte[]);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setDpdDelaySeconds(@IntRange(from=0x14, to=0x708) int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLifetime(long, long);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLocalIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@NonNull android.net.Network);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRemoteIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRetransmissionTimeoutsMillis(@NonNull int[]);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setServerHostname(@NonNull String);
   }
 
