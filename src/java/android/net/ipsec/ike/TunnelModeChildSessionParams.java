@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * TunnelModeChildSessionParams represents proposed configurations for negotiating a tunnel mode
@@ -52,15 +53,15 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     @NonNull private final TunnelModeChildConfigAttribute[] mConfigRequests;
 
     private TunnelModeChildSessionParams(
-            @NonNull IkeTrafficSelector[] localTs,
-            @NonNull IkeTrafficSelector[] remoteTs,
+            @NonNull IkeTrafficSelector[] inboundTs,
+            @NonNull IkeTrafficSelector[] outboundTs,
             @NonNull ChildSaProposal[] proposals,
             @NonNull TunnelModeChildConfigAttribute[] configRequests,
             int hardLifetimeSec,
             int softLifetimeSec) {
         super(
-                localTs,
-                remoteTs,
+                inboundTs,
+                outboundTs,
                 proposals,
                 hardLifetimeSec,
                 softLifetimeSec,
@@ -174,7 +175,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            validateAndAddSaProposal(proposal);
+            addProposal(proposal);
             return this;
         }
 
@@ -194,8 +195,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
-            // TODO: Implement it.
-            throw new UnsupportedOperationException("Not yet supported");
+            Objects.requireNonNull(trafficSelector, "Required argument not provided");
+            addInboundTs(trafficSelector);
+            return this;
         }
 
         /**
@@ -214,8 +216,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
-            // TODO: Implement it.
-            throw new UnsupportedOperationException("Not yet supported");
+            Objects.requireNonNull(trafficSelector, "Required argument not provided");
+            addOutboundTs(trafficSelector);
+            return this;
         }
 
         /**
@@ -409,8 +412,8 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
             }
 
             return new TunnelModeChildSessionParams(
-                    mLocalTsList.toArray(new IkeTrafficSelector[0]),
-                    mRemoteTsList.toArray(new IkeTrafficSelector[0]),
+                    mInboundTsList.toArray(new IkeTrafficSelector[0]),
+                    mOutboundTsList.toArray(new IkeTrafficSelector[0]),
                     mSaProposalList.toArray(new ChildSaProposal[0]),
                     mConfigRequestList.toArray(new TunnelModeChildConfigAttribute[0]),
                     mHardLifetimeSec,
