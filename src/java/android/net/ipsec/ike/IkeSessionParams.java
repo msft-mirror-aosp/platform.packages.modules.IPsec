@@ -266,7 +266,7 @@ public final class IkeSessionParams {
         return mSoftLifetimeSec;
     }
 
-    /** Retrieves the Dead Peer Detection(DPD) delay in seconds @hide */
+    /** Retrieves the Dead Peer Detection(DPD) delay in seconds */
     @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
     public int getDpdDelaySeconds() {
         return mDpdDelaySec;
@@ -275,11 +275,9 @@ public final class IkeSessionParams {
     /**
      * Retrieves the relative retransmission timeout list in milliseconds
      *
-     * <p>@see {@link Builder#setRetransmissionTimeoutMillis(int[])}
-     *
-     * @hide
+     * <p>@see {@link Builder#setRetransmissionTimeoutsMillis(int[])}
      */
-    public int[] getRetransmissionTimeoutMillis() {
+    public int[] getRetransmissionTimeoutsMillis() {
         return mRetransTimeoutMsList;
     }
 
@@ -826,7 +824,6 @@ public final class IkeSessionParams {
          *     inbound cryptographically protected IKE message was received. Defaults to 120
          *     seconds. MUST be a value from 20 seconds to 1800 seconds, inclusive.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
         public Builder setDpdDelaySeconds(
@@ -852,10 +849,9 @@ public final class IkeSessionParams {
          * @param retransTimeoutMillisList the array of relative retransmission timeout in
          *     milliseconds.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
-        public Builder setRetransmissionTimeoutMillis(@NonNull int[] retransTimeoutMillisList) {
+        public Builder setRetransmissionTimeoutsMillis(@NonNull int[] retransTimeoutMillisList) {
             boolean isValid = true;
             if (retransTimeoutMillisList == null
                     || retransTimeoutMillisList.length > IKE_RETRANS_MAX_ATTEMPTS_MAX) {
