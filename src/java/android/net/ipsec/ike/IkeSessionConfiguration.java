@@ -16,6 +16,7 @@
 
 package android.net.ipsec.ike;
 
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
 
@@ -25,6 +26,7 @@ import android.annotation.SystemApi;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeAppVersion;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 
@@ -33,7 +35,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * IkeSessionConfiguration represents the negotiated configuration for a {@link IkeSession}.
@@ -54,8 +59,11 @@ public final class IkeSessionConfiguration {
     /** IKEv2 Mobility and Multihoming Protocol */
     public static final int EXTENSION_TYPE_MOBIKE = 2;
 
+    private final String mRemoteApplicationVersion;
     private final IkeSessionConnectionInfo mIkeConnInfo;
     private final List<InetAddress> mPcscfServers = new ArrayList<>();
+    private final List<byte[]> mRemoteVendorIds = new ArrayList<>();
+    private final Set<Integer> mEnabledExtensions = new HashSet<>();
 
     /**
      * Construct an instance of {@link IkeSessionConfiguration}.
@@ -65,10 +73,20 @@ public final class IkeSessionConfiguration {
      * @hide
      */
     public IkeSessionConfiguration(
-            IkeSessionConnectionInfo ikeConnInfo, IkeConfigPayload configPayload) {
-        // TODO(b/150466460): Throw exception if ikeConnInfo is null
-        mIkeConnInfo = ikeConnInfo;
+            IkeSessionConnectionInfo ikeConnInfo,
+            IkeConfigPayload configPayload,
+            List<byte[]> remoteVendorIds,
+            List<Integer> enabledExtensions) {
+        String errMsg = " not provided";
+        Objects.requireNonNull(ikeConnInfo, "ikeConnInfo" + errMsg);
+        Objects.requireNonNull(remoteVendorIds, "remoteVendorIds" + errMsg);
+        Objects.requireNonNull(enabledExtensions, "enabledExtensions" + errMsg);
 
+        mIkeConnInfo = ikeConnInfo;
+        mRemoteVendorIds.addAll(remoteVendorIds);
+        mEnabledExtensions.addAll(enabledExtensions);
+
+        String appVersion = "";
         if (configPayload != null) {
             if (configPayload.configType != IkeConfigPayload.CONFIG_TYPE_REPLY) {
                 throw new IllegalArgumentException(
@@ -79,6 +97,10 @@ public final class IkeSessionConfiguration {
             for (ConfigAttribute attr : configPayload.recognizedAttributeList) {
                 if (attr.isEmptyValue()) continue;
                 switch (attr.attributeType) {
+                    case CONFIG_ATTR_APPLICATION_VERSION:
+                        ConfigAttributeAppVersion appVersionAttr = (ConfigAttributeAppVersion) attr;
+                        appVersion = appVersionAttr.applicationVersion;
+                        break;
                     case CONFIG_ATTR_IP4_PCSCF:
                         ConfigAttributeIpv4Pcscf ip4Pcscf = (ConfigAttributeIpv4Pcscf) attr;
                         mPcscfServers.add(ip4Pcscf.getAddress());
@@ -92,6 +114,7 @@ public final class IkeSessionConfiguration {
                 }
             }
         }
+        mRemoteApplicationVersion = appVersion;
     }
 
     /**
@@ -102,8 +125,7 @@ public final class IkeSessionConfiguration {
      */
     @NonNull
     public String getRemoteApplicationVersion() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException("Not yet supported");
+        return mRemoteApplicationVersion;
     }
 
     /**
@@ -114,8 +136,7 @@ public final class IkeSessionConfiguration {
      */
     @NonNull
     public List<byte[]> getRemoteVendorIds() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException("Not yet supported");
+        return Collections.unmodifiableList(mRemoteVendorIds);
     }
 
     /**
@@ -128,8 +149,7 @@ public final class IkeSessionConfiguration {
      * @return {@code true} if this extension is enabled.
      */
     public boolean isIkeExtensionEnabled(@ExtensionType int extensionType) {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException("Not yet supported");
+        return mEnabledExtensions.contains(extensionType);
     }
 
     /**
