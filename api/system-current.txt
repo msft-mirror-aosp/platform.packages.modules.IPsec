@@ -78,8 +78,8 @@ package android.net.ipsec.ike {
 
   public abstract class ChildSessionParams {
     method @IntRange(from=0x12c, to=0x3840) public int getHardLifetimeSeconds();
-    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getLocalTrafficSelectors();
-    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getRemoteTrafficSelectors();
+    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getInboundTrafficSelectors();
+    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getOutboundTrafficSelectors();
     method @NonNull public java.util.List<android.net.ipsec.ike.ChildSaProposal> getSaProposals();
     method @IntRange(from=0x78, to=0x3840) public int getSoftLifetimeSeconds();
   }
@@ -303,11 +303,9 @@ package android.net.ipsec.ike {
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv4DhcpServer extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
-    method @Nullable public java.net.Inet4Address getAddress();
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv4DnsServer extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
-    method @Nullable public java.net.Inet4Address getAddress();
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv4Netmask extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
@@ -319,7 +317,6 @@ package android.net.ipsec.ike {
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv6DnsServer extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
-    method @Nullable public java.net.Inet6Address getAddress();
   }
 
   public static interface TunnelModeChildSessionParams.TunnelModeChildConfigRequest {

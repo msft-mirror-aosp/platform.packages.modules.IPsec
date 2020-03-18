@@ -101,9 +101,8 @@ public abstract class ChildSessionParams {
      * {@link
      * TransportModeChildSessionParams.Builder#addInboundTrafficSelectors(IkeTrafficSelector)}
      */
-    // TODO: Rename it to getInboundTrafficSelectors
     @NonNull
-    public List<IkeTrafficSelector> getLocalTrafficSelectors() {
+    public List<IkeTrafficSelector> getInboundTrafficSelectors() {
         return Arrays.asList(mInboundTrafficSelectors);
     }
 
@@ -115,9 +114,8 @@ public abstract class ChildSessionParams {
      * {@link
      * TransportModeChildSessionParams.Builder#addOutboundTrafficSelectors(IkeTrafficSelector)}
      */
-    // TODO: Rename it to getOutboundTrafficSelectors
     @NonNull
-    public List<IkeTrafficSelector> getRemoteTrafficSelectors() {
+    public List<IkeTrafficSelector> getOutboundTrafficSelectors() {
         return Arrays.asList(mOutboundTrafficSelectors);
     }
 
