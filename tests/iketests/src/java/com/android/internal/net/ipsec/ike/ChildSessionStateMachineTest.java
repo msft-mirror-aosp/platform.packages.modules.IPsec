@@ -335,11 +335,11 @@ public final class ChildSessionStateMachineTest {
         IkeTsPayload tsInitPayload =
                 new IkeTsPayload(
                         true /*isInitiator*/,
-                        mChildSessionParams.getLocalTrafficSelectorsInternal());
+                        mChildSessionParams.getInboundTrafficSelectorsInternal());
         IkeTsPayload tsRespPayload =
                 new IkeTsPayload(
                         false /*isInitiator*/,
-                        mChildSessionParams.getRemoteTrafficSelectorsInternal());
+                        mChildSessionParams.getOutboundTrafficSelectorsInternal());
 
         mFirstSaReqPayloads.add(tsInitPayload);
         mFirstSaReqPayloads.add(tsRespPayload);
@@ -488,10 +488,10 @@ public final class ChildSessionStateMachineTest {
         // Verify Child Session Configuration
         ChildSessionConfiguration sessionConfig = mChildConfigCaptor.getValue();
         verifyTsList(
-                Arrays.asList(mChildSessionParams.getLocalTrafficSelectorsInternal()),
+                Arrays.asList(mChildSessionParams.getInboundTrafficSelectorsInternal()),
                 sessionConfig.getInboundTrafficSelectors());
         verifyTsList(
-                Arrays.asList(mChildSessionParams.getRemoteTrafficSelectorsInternal()),
+                Arrays.asList(mChildSessionParams.getOutboundTrafficSelectorsInternal()),
                 sessionConfig.getOutboundTrafficSelectors());
 
         List<LinkAddress> addrList = sessionConfig.getInternalAddresses();
@@ -681,9 +681,10 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.mSaProposal = buildSaProposal();
         mChildSessionStateMachine.mChildCipher = mock(IkeCipher.class);
         mChildSessionStateMachine.mChildIntegrity = mock(IkeMacIntegrity.class);
-        mChildSessionStateMachine.mLocalTs = mChildSessionParams.getLocalTrafficSelectorsInternal();
+        mChildSessionStateMachine.mLocalTs =
+                mChildSessionParams.getInboundTrafficSelectorsInternal();
         mChildSessionStateMachine.mRemoteTs =
-                mChildSessionParams.getRemoteTrafficSelectorsInternal();
+                mChildSessionParams.getOutboundTrafficSelectorsInternal();
 
         mChildSessionStateMachine.mCurrentChildSaRecord = mSpyCurrentChildSaRecord;
 

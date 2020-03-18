@@ -20,8 +20,10 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
 import android.annotation.IntDef;
+import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.content.Context;
 import android.net.ConnectivityManager;
@@ -80,8 +82,10 @@ public final class IkeSessionParams {
     public @interface IkeOption {}
 
     /**
-     * Indicates any remote (server) identity is accepted even if it is different from what has been
-     * configured.
+     * If set, the IKE library will accept any remote (server) identity, even if it does not match
+     * the configured remote identity
+     *
+     * <p>See {@link Builder#setRemoteIdentification(IkeIdentification)}
      */
     public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0;
 
@@ -89,25 +93,39 @@ public final class IkeSessionParams {
     private static final int MAX_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
 
     /** @hide */
-    @VisibleForTesting
-    static final long IKE_HARD_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(5L);
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
     /** @hide */
-    @VisibleForTesting
-    static final long IKE_HARD_LIFETIME_SEC_MAXIMUM = TimeUnit.HOURS.toSeconds(24L);
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MAXIMUM = 86400; // 24 hours
     /** @hide */
-    @VisibleForTesting
-    static final long IKE_HARD_LIFETIME_SEC_DEFAULT = TimeUnit.HOURS.toSeconds(4L);
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_DEFAULT = 14400; // 4 hours
+
+    /** @hide */
+    @VisibleForTesting static final int IKE_SOFT_LIFETIME_SEC_MINIMUM = 120; // 2 minutes
+    /** @hide */
+    @VisibleForTesting static final int IKE_SOFT_LIFETIME_SEC_DEFAULT = 7200; // 2 hours
 
     /** @hide */
     @VisibleForTesting
-    static final long IKE_SOFT_LIFETIME_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(2L);
-    /** @hide */
-    @VisibleForTesting
-    static final long IKE_SOFT_LIFETIME_SEC_DEFAULT = TimeUnit.HOURS.toSeconds(2L);
+    static final int IKE_LIFETIME_MARGIN_SEC_MINIMUM = (int) TimeUnit.MINUTES.toSeconds(1L);
 
     /** @hide */
+    @VisibleForTesting static final int IKE_DPD_DELAY_SEC_MIN = 20;
+    /** @hide */
+    @VisibleForTesting static final int IKE_DPD_DELAY_SEC_MAX = 1800; // 30 minutes
+    /** @hide */
+    @VisibleForTesting static final int IKE_DPD_DELAY_SEC_DEFAULT = 120; // 2 minutes
+
+    /** @hide */
+    @VisibleForTesting static final int IKE_RETRANS_TIMEOUT_MS_MIN = 500;
+    /** @hide */
     @VisibleForTesting
-    static final long IKE_LIFETIME_MARGIN_SEC_MINIMUM = TimeUnit.MINUTES.toSeconds(1L);
+    static final int IKE_RETRANS_TIMEOUT_MS_MAX = (int) TimeUnit.MINUTES.toMillis(30L);
+    /** @hide */
+    @VisibleForTesting static final int IKE_RETRANS_MAX_ATTEMPTS_MAX = 10;
+    /** @hide */
+    @VisibleForTesting
+    static final int[] IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT =
+            new int[] {500, 1000, 2000, 4000, 8000};
 
     @NonNull private final String mServerHostname;
     @NonNull private final Network mNetwork;
@@ -122,10 +140,14 @@ public final class IkeSessionParams {
 
     @NonNull private final IkeConfigAttribute[] mConfigRequests;
 
+    @NonNull private final int[] mRetransTimeoutMsList;
+
     private final long mIkeOptions;
 
-    private final long mHardLifetimeSec;
-    private final long mSoftLifetimeSec;
+    private final int mHardLifetimeSec;
+    private final int mSoftLifetimeSec;
+
+    private final int mDpdDelaySec;
 
     private final boolean mIsIkeFragmentationSupported;
 
@@ -138,9 +160,11 @@ public final class IkeSessionParams {
             @NonNull IkeAuthConfig localAuthConfig,
             @NonNull IkeAuthConfig remoteAuthConfig,
             @NonNull IkeConfigAttribute[] configRequests,
+            @NonNull int[] retransTimeoutMsList,
             long ikeOptions,
-            long hardLifetimeSec,
-            long softLifetimeSec,
+            int hardLifetimeSec,
+            int softLifetimeSec,
+            int dpdDelaySec,
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
         mNetwork = network;
@@ -155,10 +179,14 @@ public final class IkeSessionParams {
 
         mConfigRequests = configRequests;
 
+        mRetransTimeoutMsList = retransTimeoutMsList;
+
         mIkeOptions = ikeOptions;
 
         mHardLifetimeSec = hardLifetimeSec;
         mSoftLifetimeSec = softLifetimeSec;
+
+        mDpdDelaySec = dpdDelaySec;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
@@ -225,13 +253,34 @@ public final class IkeSessionParams {
     }
 
     /** Retrieves hard lifetime in seconds */
-    public long getHardLifetime() {
+    // Use "second" because smaller unit won't make sense to describe a rekey interval.
+    @SuppressLint("MethodNameUnits")
+    @IntRange(from = IKE_HARD_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+    public int getHardLifetimeSeconds() {
         return mHardLifetimeSec;
     }
 
     /** Retrieves soft lifetime in seconds */
-    public long getSoftLifetime() {
+    // Use "second" because smaller unit does not make sense to a rekey interval.
+    @SuppressLint("MethodNameUnits")
+    @IntRange(from = IKE_SOFT_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+    public int getSoftLifetimeSeconds() {
         return mSoftLifetimeSec;
+    }
+
+    /** Retrieves the Dead Peer Detection(DPD) delay in seconds */
+    @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
+    public int getDpdDelaySeconds() {
+        return mDpdDelaySec;
+    }
+
+    /**
+     * Retrieves the relative retransmission timeout list in milliseconds
+     *
+     * <p>@see {@link Builder#setRetransmissionTimeoutsMillis(int[])}
+     */
+    public int[] getRetransmissionTimeoutsMillis() {
+        return mRetransTimeoutMsList;
     }
 
     /** Checks if the given IKE Session negotiation option is set */
@@ -242,12 +291,12 @@ public final class IkeSessionParams {
 
     /** @hide */
     public long getHardLifetimeMsInternal() {
-        return TimeUnit.SECONDS.toMillis(mHardLifetimeSec);
+        return TimeUnit.SECONDS.toMillis((long) mHardLifetimeSec);
     }
 
     /** @hide */
     public long getSoftLifetimeMsInternal() {
-        return TimeUnit.SECONDS.toMillis(mSoftLifetimeSec);
+        return TimeUnit.SECONDS.toMillis((long) mSoftLifetimeSec);
     }
 
     /** @hide */
@@ -440,6 +489,12 @@ public final class IkeSessionParams {
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
         @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
 
+        @NonNull
+        private int[] mRetransTimeoutMsList =
+                Arrays.copyOf(
+                        IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
+                        IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT.length);
+
         @NonNull private String mServerHostname;
         @Nullable private Network mNetwork;
 
@@ -451,8 +506,10 @@ public final class IkeSessionParams {
 
         private long mIkeOptions = 0;
 
-        private long mHardLifetimeSec = IKE_HARD_LIFETIME_SEC_DEFAULT;
-        private long mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
+        private int mHardLifetimeSec = IKE_HARD_LIFETIME_SEC_DEFAULT;
+        private int mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
+
+        private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
 
         private boolean mIsIkeFragmentationSupported = false;
 
@@ -740,25 +797,81 @@ public final class IkeSessionParams {
          *
          * <p>Lifetimes will not be negotiated with the remote IKE server.
          *
-         * @param hardLifetimeSec number of seconds after which IKE SA will expire. Defaults to
+         * @param hardLifetimeSeconds number of seconds after which IKE SA will expire. Defaults to
          *     14400 seconds (4 hours). MUST be a value from 300 seconds (5 minutes) to 86400
          *     seconds (24 hours), inclusive.
-         * @param softLifetimeSec number of seconds after which IKE SA will request rekey. Defaults
-         *     to 7200 seconds (2 hours). MUST be at least 120 seconds (2 minutes), and at least 60
-         *     seconds (1 minute) shorter than the hard lifetime.
+         * @param softLifetimeSeconds number of seconds after which IKE SA will request rekey.
+         *     Defaults to 7200 seconds (2 hours). MUST be at least 120 seconds (2 minutes), and at
+         *     least 60 seconds (1 minute) shorter than the hard lifetime.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
-        public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
-            if (hardLifetimeSec < IKE_HARD_LIFETIME_SEC_MINIMUM
-                    || hardLifetimeSec > IKE_HARD_LIFETIME_SEC_MAXIMUM
-                    || softLifetimeSec < IKE_SOFT_LIFETIME_SEC_MINIMUM
-                    || hardLifetimeSec - softLifetimeSec < IKE_LIFETIME_MARGIN_SEC_MINIMUM) {
+        public Builder setLifetimeSeconds(
+                @IntRange(from = IKE_HARD_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+                        int hardLifetimeSeconds,
+                @IntRange(from = IKE_SOFT_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+                        int softLifetimeSeconds) {
+            if (hardLifetimeSeconds < IKE_HARD_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSeconds > IKE_HARD_LIFETIME_SEC_MAXIMUM
+                    || softLifetimeSeconds < IKE_SOFT_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSeconds - softLifetimeSeconds
+                            < IKE_LIFETIME_MARGIN_SEC_MINIMUM) {
                 throw new IllegalArgumentException("Invalid lifetime value");
             }
 
-            mHardLifetimeSec = hardLifetimeSec;
-            mSoftLifetimeSec = softLifetimeSec;
+            mHardLifetimeSec = hardLifetimeSeconds;
+            mSoftLifetimeSec = softLifetimeSeconds;
+            return this;
+        }
+
+        /**
+         * Sets the Dead Peer Detection(DPD) delay in seconds.
+         *
+         * @param dpdDelaySeconds number of seconds after which IKE SA will initiate DPD if no
+         *     inbound cryptographically protected IKE message was received. Defaults to 120
+         *     seconds. MUST be a value from 20 seconds to 1800 seconds, inclusive.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder setDpdDelaySeconds(
+                @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
+                        int dpdDelaySeconds) {
+            if (dpdDelaySeconds < IKE_DPD_DELAY_SEC_MIN
+                    || dpdDelaySeconds > IKE_DPD_DELAY_SEC_MAX) {
+                throw new IllegalArgumentException("Invalid DPD delay value");
+            }
+            mDpdDelaySec = dpdDelaySeconds;
+            return this;
+        }
+
+        /**
+         * Sets the retransmission timeout list in milliseconds.
+         *
+         * <p>Configures the retransmission by providing an array of relative retransmission
+         * timeouts in milliseconds, where the array length represents the maximum retransmission
+         * attempts before terminating the IKE Session. Each element in the array MUST be a value
+         * from 500 ms to 1800000 ms (30 minutes). The length of the array MUST NOT exceed 10. This
+         * retransmission timeout list defaults to {0.5s, 1s, 2s, 4s, 8s}
+         *
+         * @param retransTimeoutMillisList the array of relative retransmission timeout in
+         *     milliseconds.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder setRetransmissionTimeoutsMillis(@NonNull int[] retransTimeoutMillisList) {
+            boolean isValid = true;
+            if (retransTimeoutMillisList == null
+                    || retransTimeoutMillisList.length > IKE_RETRANS_MAX_ATTEMPTS_MAX) {
+                isValid = false;
+            }
+            for (int t : retransTimeoutMillisList) {
+                if (t < IKE_RETRANS_TIMEOUT_MS_MIN || t > IKE_RETRANS_TIMEOUT_MS_MAX) {
+                    isValid = false;
+                }
+            }
+            if (!isValid) throw new IllegalArgumentException("Invalid retransmission timeout list");
+
+            mRetransTimeoutMsList = retransTimeoutMillisList;
             return this;
         }
 
@@ -821,9 +934,11 @@ public final class IkeSessionParams {
                     mLocalAuthConfig,
                     mRemoteAuthConfig,
                     mConfigRequestList.toArray(new IkeConfigAttribute[0]),
+                    mRetransTimeoutMsList,
                     mIkeOptions,
                     mHardLifetimeSec,
                     mSoftLifetimeSec,
+                    mDpdDelaySec,
                     mIsIkeFragmentationSupported);
         }
 
