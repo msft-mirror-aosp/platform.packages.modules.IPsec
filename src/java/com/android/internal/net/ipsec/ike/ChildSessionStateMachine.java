@@ -96,7 +96,6 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * ChildSessionStateMachine tracks states and manages exchanges of this Child Session.
@@ -406,7 +405,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private long getRekeyTimeout() {
         // TODO: Make rekey timout fuzzy
-        return TimeUnit.SECONDS.toMillis(mChildSessionParams.getSoftLifetime());
+        return mChildSessionParams.getSoftLifetimeMsInternal();
     }
 
     /**

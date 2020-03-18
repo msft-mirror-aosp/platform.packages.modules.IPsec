@@ -19,6 +19,7 @@ package android.net.ipsec.ike;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
+import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
@@ -55,8 +56,8 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
             @NonNull IkeTrafficSelector[] remoteTs,
             @NonNull ChildSaProposal[] proposals,
             @NonNull TunnelModeChildConfigAttribute[] configRequests,
-            long hardLifetimeSec,
-            long softLifetimeSec) {
+            int hardLifetimeSec,
+            int softLifetimeSec) {
         super(
                 localTs,
                 remoteTs,
@@ -222,19 +223,27 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * <p>Lifetimes will not be negotiated with the remote IKE server.
          *
-         * @param hardLifetimeSec number of seconds after which Child SA will expire. Defaults to
-         *     7200 seconds (2 hours). Considering IPsec packet lifetime, IKE library requires hard
-         *     lifetime to be a value from 300 seconds (5 minutes) to 14400 seconds (4 hours),
+         * @param hardLifetimeSeconds number of seconds after which Child SA will expire. Defaults
+         *     to 7200 seconds (2 hours). Considering IPsec packet lifetime, IKE library requires
+         *     hard lifetime to be a value from 300 seconds (5 minutes) to 14400 seconds (4 hours),
          *     inclusive.
-         * @param softLifetimeSec number of seconds after which Child SA will request rekey.
+         * @param softLifetimeSeconds number of seconds after which Child SA will request rekey.
          *     Defaults to 3600 seconds (1 hour). MUST be at least 120 seconds (2 minutes), and at
          *     least 60 seconds (1 minute) shorter than the hard lifetime.
          */
         @NonNull
-        public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
-            validateAndSetLifetime(hardLifetimeSec, softLifetimeSec);
-            mHardLifetimeSec = hardLifetimeSec;
-            mSoftLifetimeSec = softLifetimeSec;
+        public Builder setLifetimeSeconds(
+                @IntRange(
+                                from = CHILD_HARD_LIFETIME_SEC_MINIMUM,
+                                to = CHILD_HARD_LIFETIME_SEC_MAXIMUM)
+                        int hardLifetimeSeconds,
+                @IntRange(
+                                from = CHILD_SOFT_LIFETIME_SEC_MINIMUM,
+                                to = CHILD_HARD_LIFETIME_SEC_MAXIMUM)
+                        int softLifetimeSeconds) {
+            validateAndSetLifetime(hardLifetimeSeconds, softLifetimeSeconds);
+            mHardLifetimeSec = hardLifetimeSeconds;
+            mSoftLifetimeSec = softLifetimeSeconds;
             return this;
         }
 
