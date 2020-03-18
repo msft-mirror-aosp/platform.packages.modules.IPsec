@@ -78,7 +78,7 @@ public final class IkeSessionParams {
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID})
+    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID, IKE_OPTION_EAP_ONLY_AUTH})
     public @interface IkeOption {}
 
     /**
@@ -88,9 +88,17 @@ public final class IkeSessionParams {
      * <p>See {@link Builder#setRemoteIdentification(IkeIdentification)}
      */
     public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0;
+    /**
+     * If set, and EAP has been configured as the authentication method, the IKE library will
+     * request that the remote (also) use an EAP-only authentication flow.
+     *
+     * <p>@see {@link Builder#setAuthEap(X509Certificate, EapSessionConfig)}
+     *
+     */
+    public static final int IKE_OPTION_EAP_ONLY_AUTH = 1;
 
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_EAP_ONLY_AUTH;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
@@ -456,14 +464,7 @@ public final class IkeSessionParams {
     /**
      * This class represents the configuration to support EAP authentication of the local side.
      *
-     * <p>EAP MUST be used with IKEv2 public-key-based authentication of the responder to the
-     * initiator. Currently IKE library does not support the IKEv2 protocol extension(RFC 5998)
-     * which allows EAP methods that provide mutual authentication and key agreement to be used to
-     * provide extensible responder authentication for IKEv2 based on methods other than public key
-     * signatures.
-     *
-     * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
-     *     Authentication in IKEv2</a>
+     * <p>@see {@link IkeSessionParams.Builder#setAuthEap(X509Certificate, EapSessionConfig)}
      */
     public static class IkeAuthEapConfig extends IkeAuthConfig {
         /** @hide */
@@ -643,7 +644,20 @@ public final class IkeSessionParams {
          * Configures the {@link IkeSession} to use EAP authentication.
          *
          * <p>Not all EAP methods provide mutual authentication. As such EAP MUST be used in
-         * conjunction with a public-key-signature-based authentication of the remote side.
+         * conjunction with a public-key-signature-based authentication of the remote server, unless
+         * EAP-Only authentication is enabled.
+         *
+         * <p>Callers may enable EAP-Only authentication by setting {@link
+         * IKE_OPTION_EAP_ONLY_AUTH}, which will make IKE library request the remote to use EAP-Only
+         * authentication. The remote may opt to reject the request, at which point the received
+         * certificates and authentication payload WILL be validated with the provided root CA or
+         * system's truststore as usual. Only safe EAP methods as listed in RFC 5998 will be
+         * accepted for EAP-Only authentication.
+         *
+         * <p>If {@link IKE_OPTION_EAP_ONLY_AUTH} is set, callers MUST configure EAP as the
+         * authentication method and all EAP methods set in EAP Session configuration MUST be safe
+         * methods that are accepted for EAP-Only authentication. Otherwise callers will get an
+         * exception when building the {@link IkeSessionParams}
          *
          * <p>Callers MUST declare only one authentication method. Calling this function will
          * override the previously set authentication configuration.
@@ -658,6 +672,8 @@ public final class IkeSessionParams {
          *     truststore is considered acceptable.
          * @return Builder this, to facilitate chaining.
          */
+        // TODO(b/151667921): Consider also supporting configuring EAP method that is not accepted
+        // by EAP-Only when {@link IKE_OPTION_EAP_ONLY_AUTH} is set
         @NonNull
         public Builder setAuthEap(
                 @Nullable X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
@@ -923,6 +939,19 @@ public final class IkeSessionParams {
                     || mLocalAuthConfig == null
                     || mRemoteAuthConfig == null) {
                 throw new IllegalArgumentException("Necessary parameter missing.");
+            }
+
+            if ((mIkeOptions & getOptionBitValue(IKE_OPTION_EAP_ONLY_AUTH)) != 0) {
+                if (!(mLocalAuthConfig instanceof IkeAuthEapConfig)) {
+                    throw new IllegalArgumentException("If IKE_OPTION_EAP_ONLY_AUTH is set,"
+                            + " eap authentication needs to be configured.");
+                }
+
+                IkeAuthEapConfig ikeAuthEapConfig = (IkeAuthEapConfig) mLocalAuthConfig;
+                if (!ikeAuthEapConfig.getEapConfig().areAllMethodsEapOnlySafe()) {
+                    throw new IllegalArgumentException("Only EAP-only safe method allowed"
+                            + " when using EAP-only option.");
+                }
             }
 
             return new IkeSessionParams(

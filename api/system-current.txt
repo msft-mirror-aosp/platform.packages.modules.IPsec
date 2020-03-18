@@ -2,6 +2,11 @@
 package android.net.eap {
 
   public final class EapSessionConfig {
+    method @Nullable public android.net.eap.EapSessionConfig.EapAkaConfig getEapAkaConfig();
+    method @Nullable public android.net.eap.EapSessionConfig.EapAkaPrimeConfig getEapAkaPrimeConfig();
+    method @NonNull public byte[] getEapIdentity();
+    method @Nullable public android.net.eap.EapSessionConfig.EapMsChapV2Config getEapMsChapV2onfig();
+    method @Nullable public android.net.eap.EapSessionConfig.EapSimConfig getEapSimConfig();
   }
 
   public static final class EapSessionConfig.Builder {
@@ -73,8 +78,8 @@ package android.net.ipsec.ike {
 
   public abstract class ChildSessionParams {
     method @IntRange(from=0x12c, to=0x3840) public int getHardLifetimeSeconds();
-    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getLocalTrafficSelectors();
-    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getRemoteTrafficSelectors();
+    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getInboundTrafficSelectors();
+    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getOutboundTrafficSelectors();
     method @NonNull public java.util.List<android.net.ipsec.ike.ChildSaProposal> getSaProposals();
     method @IntRange(from=0x78, to=0x3840) public int getSoftLifetimeSeconds();
   }
@@ -171,6 +176,7 @@ package android.net.ipsec.ike {
     method @IntRange(from=0x78, to=0x15180) public int getSoftLifetimeSeconds();
     method public boolean hasIkeOption(int);
     field public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0; // 0x0
+    field public static final int IKE_OPTION_EAP_ONLY_AUTH = 1; // 0x1
   }
 
   public static final class IkeSessionParams.Builder {
@@ -298,11 +304,9 @@ package android.net.ipsec.ike {
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv4DhcpServer extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
-    method @Nullable public java.net.Inet4Address getAddress();
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv4DnsServer extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
-    method @Nullable public java.net.Inet4Address getAddress();
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv4Netmask extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
@@ -314,7 +318,6 @@ package android.net.ipsec.ike {
   }
 
   public static interface TunnelModeChildSessionParams.ConfigRequestIpv6DnsServer extends android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest {
-    method @Nullable public java.net.Inet6Address getAddress();
   }
 
   public static interface TunnelModeChildSessionParams.TunnelModeChildConfigRequest {

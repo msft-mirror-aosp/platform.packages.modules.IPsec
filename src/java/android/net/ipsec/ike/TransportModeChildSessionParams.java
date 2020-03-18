@@ -20,6 +20,8 @@ import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
 
+import java.util.Objects;
+
 /**
  * TransportModeChildSessionParams represents proposed configurations for negotiating a transport
  * mode Child Session.
@@ -29,12 +31,18 @@ import android.annotation.SystemApi;
 @SystemApi
 public final class TransportModeChildSessionParams extends ChildSessionParams {
     private TransportModeChildSessionParams(
-            IkeTrafficSelector[] localTs,
-            IkeTrafficSelector[] remoteTs,
+            IkeTrafficSelector[] inboundTs,
+            IkeTrafficSelector[] outboundTs,
             ChildSaProposal[] proposals,
             int hardLifetimeSec,
             int softLifetimeSec) {
-        super(localTs, remoteTs, proposals, hardLifetimeSec, softLifetimeSec, true /*isTransport*/);
+        super(
+                inboundTs,
+                outboundTs,
+                proposals,
+                hardLifetimeSec,
+                softLifetimeSec,
+                true /*isTransport*/);
     }
 
     /**
@@ -54,13 +62,17 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
-            validateAndAddSaProposal(proposal);
+            addProposal(proposal);
             return this;
         }
 
         /**
          * Adds an inbound {@link IkeTrafficSelector} to the {@link TransportModeChildSessionParams}
          * being built.
+         *
+         * <p>This method allows callers to limit the inbound traffic transmitted over the Child
+         * Session to the given range. The IKE server may further narrow the range. Callers should
+         * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
          *
          * <p>If no inbound {@link IkeTrafficSelector} is provided, a default value will be used
          * that covers all IP addresses and ports.
@@ -70,13 +82,18 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
-            // TODO: Implement it.
-            throw new UnsupportedOperationException("Not yet supported");
+            Objects.requireNonNull(trafficSelector, "Required argument not provided");
+            addInboundTs(trafficSelector);
+            return this;
         }
 
         /**
          * Adds an outbound {@link IkeTrafficSelector} to the {@link
          * TransportModeChildSessionParams} being built.
+         *
+         * <p>This method allows callers to limit the outbound traffic transmitted over the Child
+         * Session to the given range. The IKE server may further narrow the range. Callers should
+         * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
          *
          * <p>If no outbound {@link IkeTrafficSelector} is provided, a default value will be used
          * that covers all IP addresses and ports.
@@ -86,8 +103,9 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
-            // TODO: Implement it.
-            throw new UnsupportedOperationException("Not yet supported");
+            Objects.requireNonNull(trafficSelector, "Required argument not provided");
+            addOutboundTs(trafficSelector);
+            return this;
         }
 
         /**
@@ -126,11 +144,12 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public TransportModeChildSessionParams build() {
+            addDefaultTsIfNotConfigured();
             validateOrThrow();
 
             return new TransportModeChildSessionParams(
-                    mLocalTsList.toArray(new IkeTrafficSelector[0]),
-                    mRemoteTsList.toArray(new IkeTrafficSelector[0]),
+                    mInboundTsList.toArray(new IkeTrafficSelector[0]),
+                    mOutboundTsList.toArray(new IkeTrafficSelector[0]),
                     mSaProposalList.toArray(new ChildSaProposal[0]),
                     mHardLifetimeSec,
                     mSoftLifetimeSec);
