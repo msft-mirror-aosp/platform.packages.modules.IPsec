@@ -38,9 +38,17 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_DELETE;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_VENDOR;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_IKE;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DPD;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
 import android.annotation.IntDef;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -60,9 +68,11 @@ import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
@@ -140,6 +150,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * IkeSessionStateMachine tracks states and manages exchanges of this IKE session.
@@ -174,12 +185,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private static final IkeAlarmReceiver sIkeAlarmReceiver = new IkeAlarmReceiver();
 
     /** Intent filter for all Intents that should be received by sIkeAlarmReceiver */
-    private static final IntentFilter sIntentFiler;
+    private static final IntentFilter sIntentFilter = new IntentFilter();
 
     static {
-        sIntentFiler = new IntentFilter();
-        sIntentFiler.addCategory(TAG);
+        sIntentFilter.addAction(ACTION_DELETE_CHILD);
+        sIntentFilter.addAction(ACTION_DELETE_IKE);
+        sIntentFilter.addAction(ACTION_DPD);
+        sIntentFilter.addAction(ACTION_REKEY_CHILD);
+        sIntentFilter.addAction(ACTION_REKEY_IKE);
     }
+
+    private static final AtomicInteger sIkeSessionIdGenerator = new AtomicInteger();
+
+    // Bundle key for remote IKE SPI. Package private
+    @VisibleForTesting static final String BUNDLE_KEY_IKE_REMOTE_SPI = "BUNDLE_KEY_IKE_REMOTE_SPI";
 
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
@@ -262,6 +281,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     static final int CMD_EAP_FAILED = CMD_GENERAL_BASE + 12;
     /** Proxy to IkeSessionStateMachine handler to notify of success, to continue to post-auth */
     static final int CMD_EAP_FINISH_EAP_AUTH = CMD_GENERAL_BASE + 14;
+    /** Alarm goes off for a scheduled event, check {@link Message.arg2} for event type */
+    static final int CMD_ALARM_FIRED = CMD_GENERAL_BASE + 15;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -289,6 +310,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_EAP_ERRORED, "EAP errored");
         CMD_TO_STR.put(CMD_EAP_FAILED, "EAP failed");
         CMD_TO_STR.put(CMD_EAP_FINISH_EAP_AUTH, "Finish EAP");
+        CMD_TO_STR.put(CMD_ALARM_FIRED, "Alarm Fired");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_IKE, "Create IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
@@ -308,8 +330,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      */
     private final SparseArray<ChildSessionStateMachine> mRemoteSpiToChildSessionMap;
 
+    private final int mIkeSessionId;
     private final Context mContext;
     private final IpSecManager mIpSecManager;
+    private final AlarmManager mAlarmManager;
     private final IkeLocalRequestScheduler mScheduler;
     private final Executor mUserCbExecutor;
     private final IkeSessionCallback mIkeSessionCallback;
@@ -427,9 +451,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 // Pass in a Handler so #onReceive will run on the StateMachine thread
                 context.registerReceiver(
                         sIkeAlarmReceiver,
-                        sIntentFiler,
+                        sIntentFilter,
                         null /*broadcastPermission*/,
-                        new Handler(getHandler().getLooper()));
+                        new Handler(looper));
                 sContextToIkeSmMap.put(context, new HashSet<IkeSessionStateMachine>());
             }
             sContextToIkeSmMap.get(context).add(this);
@@ -437,6 +461,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // TODO: Statically store the ikeSessionCallback to prevent user from providing the same
             // callback instance in the future
         }
+
+        mIkeSessionId = sIkeSessionIdGenerator.getAndIncrement();
+        sIkeAlarmReceiver.registerIkeSession(mIkeSessionId, getHandler());
 
         mIkeSessionParams = ikeParams;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
@@ -449,6 +476,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         mContext = context;
         mIpSecManager = ipSecManager;
+        mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
         mUserCbExecutor = userCbExecutor;
         mIkeSessionCallback = ikeSessionCallback;
@@ -960,6 +988,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         if (mIkeSocket == null) return;
         mIkeSocket.releaseReference(this);
 
+        sIkeAlarmReceiver.unregisterIkeSession(mIkeSessionId);
+
         synchronized (IKE_SESSION_LOCK) {
             Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(mContext);
             ikeSet.remove(this);
@@ -1068,9 +1098,44 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      * Idle represents a state when there is no ongoing IKE exchange affecting established IKE SA.
      */
     class Idle extends LocalRequestQueuer {
+        private PendingIntent mDpdIntent;
+
+        // TODO (b/152236790): Add wakelock for awaiting LocalRequests and ongoing procedures.
+
         @Override
         public void enterState() {
             mScheduler.readyForNextProcedure();
+
+            if (mDpdIntent == null) {
+                long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
+                mDpdIntent =
+                        buildIkeAlarmIntent(
+                                mContext,
+                                ACTION_DPD,
+                                getIntentIdentifier(remoteIkeSpi),
+                                getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi));
+            }
+            long dpdDelayMs = TimeUnit.SECONDS.toMillis(mIkeSessionParams.getDpdDelaySeconds());
+
+            // Initiating DPD is a way to detect the aliveness of the remote server and also a
+            // way to assert the aliveness of IKE library. Considering this, the alarm to trigger
+            // DPD needs to go off even when device is in doze mode to decrease the chance the
+            // remote server thinks IKE library is dead. Also, since DPD initiation is
+            // time-critical, we need to use "setExact" to avoid the batching alarm delay which can
+            // be at most 75% for the alarm timeout (@see AlarmManagerService#maxTriggerTime).
+            // Please check AlarmManager#setExactAndAllowWhileIdle for more details.
+            mAlarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + dpdDelayMs,
+                    mDpdIntent);
+            logd("DPD Alarm scheduled with DPD delay: " + dpdDelayMs + "ms");
+        }
+
+        @Override
+        protected void exitState() {
+            // #exitState is guaranteed to be invoked when quit() or quitNow() is called
+            mAlarmManager.cancel(mDpdIntent);
+            logd("DPD Alarm canceled");
         }
 
         @Override
@@ -1079,6 +1144,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 case CMD_RECEIVE_IKE_PACKET:
                     deferMessage(message);
                     transitionTo(mReceiving);
+                    return HANDLED;
+
+                case CMD_ALARM_FIRED:
+                    handleFiredAlarm(message);
                     return HANDLED;
 
                 case CMD_FORCE_TRANSITION: // Testing command
@@ -1118,6 +1187,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     transitionTo(mDeleteIkeLocalDelete);
                     break;
+                case CMD_LOCAL_REQUEST_DPD:
+                    transitionTo(mDpdIkeLocalInfo);
+                    break;
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
@@ -1150,6 +1222,32 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
             return false;
         }
+    }
+
+    private String getIntentIdentifier(long remoteIkeSpi) {
+        return TAG + "_" + mIkeSessionId + "_" + remoteIkeSpi;
+    }
+
+    private Message getIntentIkeSmMsg(int localRequestType, long remoteIkeSpi) {
+        Bundle spiBundle = new Bundle();
+        spiBundle.putLong(BUNDLE_KEY_IKE_REMOTE_SPI, remoteIkeSpi);
+
+        return obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, localRequestType, spiBundle);
+    }
+
+    // Package private. Accessible to ChildSessionStateMachine
+    static PendingIntent buildIkeAlarmIntent(
+            Context context, String intentAction, String intentId, Message ikeSmMsg) {
+        Intent intent = new Intent(intentAction);
+        intent.setIdentifier(intentId);
+        intent.setPackage(context.getPackageName());
+
+        Bundle bundle = new Bundle();
+        bundle.putParcelable(IkeAlarmReceiver.PARCELABLE_NAME_IKE_SESSION_MSG, ikeSmMsg);
+        intent.putExtras(bundle);
+
+        return PendingIntent.getBroadcast(
+                context, 0 /*requestCode unused*/, intent, 0 /*default flags*/);
     }
 
     /**
@@ -1378,6 +1476,24 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
             return false;
         }
+
+        protected void handleFiredAlarm(Message message) {
+            switch (message.arg2) {
+                case CMD_LOCAL_REQUEST_DPD:
+                    // IKE Session has not received any protectd IKE packet for the whole DPD delay
+                    long remoteIkeSpi = ((Bundle) message.obj).getLong(BUNDLE_KEY_IKE_REMOTE_SPI);
+                    sendMessage(
+                            CMD_LOCAL_REQUEST_DPD,
+                            new IkeLocalRequest(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi));
+
+                    // TODO(b/152442041): Cancel the scheduled DPD request if IKE Session starts any
+                    // procedure before DPD get executed.
+                    return;
+                default:
+                    logWtf("Invalid alarm action: " + message.arg2);
+            }
+            // TODO: Handle delete and rekey IKE/Child SA
+        }
     }
 
     /**
@@ -1393,7 +1509,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 case CMD_RECEIVE_IKE_PACKET:
                     handleReceivedIkePacket(message);
                     return HANDLED;
-
+                case CMD_ALARM_FIRED:
+                    handleFiredAlarm(message);
+                    return HANDLED;
                 case CMD_FORCE_TRANSITION:
                     transitionTo((State) message.obj);
                     return HANDLED;
@@ -4351,7 +4469,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void enterState() {
-            // TODO: Acquire a wake lock
             mRetransmitter =
                     new EncryptedRetransmitter(
                             buildEncryptedInformationalMessage(
@@ -4401,7 +4518,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void exitState() {
-            // TODO: Release the wake lock
             mRetransmitter.stopRetransmitting();
         }
     }
