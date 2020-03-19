@@ -19,6 +19,7 @@ package android.net.ipsec.ike;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
+import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
@@ -39,6 +40,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * TunnelModeChildSessionParams represents proposed configurations for negotiating a tunnel mode
@@ -51,15 +53,15 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     @NonNull private final TunnelModeChildConfigAttribute[] mConfigRequests;
 
     private TunnelModeChildSessionParams(
-            @NonNull IkeTrafficSelector[] localTs,
-            @NonNull IkeTrafficSelector[] remoteTs,
+            @NonNull IkeTrafficSelector[] inboundTs,
+            @NonNull IkeTrafficSelector[] outboundTs,
             @NonNull ChildSaProposal[] proposals,
             @NonNull TunnelModeChildConfigAttribute[] configRequests,
-            long hardLifetimeSec,
-            long softLifetimeSec) {
+            int hardLifetimeSec,
+            int softLifetimeSec) {
         super(
-                localTs,
-                remoteTs,
+                inboundTs,
+                outboundTs,
                 proposals,
                 hardLifetimeSec,
                 softLifetimeSec,
@@ -99,6 +101,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * @return The requested DHCP server address, or null if no specific DHCP server was
          *     requested
+         * @hide
          */
         @Nullable
         Inet4Address getAddress();
@@ -110,6 +113,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Retrieves the requested IPv4 DNS server address
          *
          * @return The requested DNS server address, or null if no specific DNS server was requested
+         * @hide
          */
         @Nullable
         Inet4Address getAddress();
@@ -142,6 +146,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Retrieves the requested IPv6 DNS server address
          *
          * @return The requested DNS server address, or null if no specific DNS server was requested
+         * @hide
          */
         @Nullable
         Inet6Address getAddress();
@@ -173,7 +178,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            validateAndAddSaProposal(proposal);
+            addProposal(proposal);
             return this;
         }
 
@@ -182,7 +187,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * being built.
          *
          * <p>This method allows callers to limit the inbound traffic transmitted over the Child
-         * Session to the given range. the IKE server may further narrow the range. Callers should
+         * Session to the given range. The IKE server may further narrow the range. Callers should
          * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
          *
          * <p>If no inbound {@link IkeTrafficSelector} is provided, a default value will be used
@@ -193,8 +198,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
-            // TODO: Implement it.
-            throw new UnsupportedOperationException("Not yet supported");
+            Objects.requireNonNull(trafficSelector, "Required argument not provided");
+            addInboundTs(trafficSelector);
+            return this;
         }
 
         /**
@@ -202,7 +208,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * being built.
          *
          * <p>This method allows callers to limit the outbound traffic transmitted over the Child
-         * Session to the given range. the IKE server may further narrow the range. Callers should
+         * Session to the given range. The IKE server may further narrow the range. Callers should
          * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
          *
          * <p>If no outbound {@link IkeTrafficSelector} is provided, a default value will be used
@@ -213,8 +219,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
-            // TODO: Implement it.
-            throw new UnsupportedOperationException("Not yet supported");
+            Objects.requireNonNull(trafficSelector, "Required argument not provided");
+            addOutboundTs(trafficSelector);
+            return this;
         }
 
         /**
@@ -222,19 +229,27 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * <p>Lifetimes will not be negotiated with the remote IKE server.
          *
-         * @param hardLifetimeSec number of seconds after which Child SA will expire. Defaults to
-         *     7200 seconds (2 hours). Considering IPsec packet lifetime, IKE library requires hard
-         *     lifetime to be a value from 300 seconds (5 minutes) to 14400 seconds (4 hours),
+         * @param hardLifetimeSeconds number of seconds after which Child SA will expire. Defaults
+         *     to 7200 seconds (2 hours). Considering IPsec packet lifetime, IKE library requires
+         *     hard lifetime to be a value from 300 seconds (5 minutes) to 14400 seconds (4 hours),
          *     inclusive.
-         * @param softLifetimeSec number of seconds after which Child SA will request rekey.
+         * @param softLifetimeSeconds number of seconds after which Child SA will request rekey.
          *     Defaults to 3600 seconds (1 hour). MUST be at least 120 seconds (2 minutes), and at
          *     least 60 seconds (1 minute) shorter than the hard lifetime.
          */
         @NonNull
-        public Builder setLifetime(long hardLifetimeSec, long softLifetimeSec) {
-            validateAndSetLifetime(hardLifetimeSec, softLifetimeSec);
-            mHardLifetimeSec = hardLifetimeSec;
-            mSoftLifetimeSec = softLifetimeSec;
+        public Builder setLifetimeSeconds(
+                @IntRange(
+                                from = CHILD_HARD_LIFETIME_SEC_MINIMUM,
+                                to = CHILD_HARD_LIFETIME_SEC_MAXIMUM)
+                        int hardLifetimeSeconds,
+                @IntRange(
+                                from = CHILD_SOFT_LIFETIME_SEC_MINIMUM,
+                                to = CHILD_HARD_LIFETIME_SEC_MAXIMUM)
+                        int softLifetimeSeconds) {
+            validateAndSetLifetime(hardLifetimeSeconds, softLifetimeSeconds);
+            mHardLifetimeSec = hardLifetimeSeconds;
+            mSoftLifetimeSec = softLifetimeSeconds;
             return this;
         }
 
@@ -393,6 +408,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public TunnelModeChildSessionParams build() {
+            addDefaultTsIfNotConfigured();
             validateOrThrow();
 
             if (mHasIp4AddressRequest) {
@@ -400,8 +416,8 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
             }
 
             return new TunnelModeChildSessionParams(
-                    mLocalTsList.toArray(new IkeTrafficSelector[0]),
-                    mRemoteTsList.toArray(new IkeTrafficSelector[0]),
+                    mInboundTsList.toArray(new IkeTrafficSelector[0]),
+                    mOutboundTsList.toArray(new IkeTrafficSelector[0]),
                     mSaProposalList.toArray(new ChildSaProposal[0]),
                     mConfigRequestList.toArray(new TunnelModeChildConfigAttribute[0]),
                     mHardLifetimeSec,
