@@ -31,25 +31,57 @@ import java.util.Arrays;
 public final class ChildSessionParamsTest {
     private static final int NUM_TS = 2;
 
-    @Test
-    public void testBuild() throws Exception {
-        ChildSaProposal saProposal =
+    private final ChildSaProposal mSaProposal;
+
+    public ChildSessionParamsTest() {
+        mSaProposal =
                 new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12,
                                 SaProposal.KEY_LEN_AES_128)
                         .build();
-        ChildSessionParams sessionParams =
-                new TunnelModeChildSessionParams.Builder().addSaProposal(saProposal).build();
+    }
 
-        assertArrayEquals(new SaProposal[] {saProposal}, sessionParams.getSaProposalsInternal());
-        assertEquals(NUM_TS, sessionParams.getLocalTrafficSelectorsInternal().length);
-        assertEquals(NUM_TS, sessionParams.getRemoteTrafficSelectorsInternal().length);
-        assertEquals(Arrays.asList(sessionParams.getLocalTrafficSelectorsInternal()),
-                Arrays.asList(getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()));
-        assertEquals(Arrays.asList(sessionParams.getRemoteTrafficSelectorsInternal()),
-                Arrays.asList(getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()));
+    @Test
+    public void testBuild() throws Exception {
+        ChildSessionParams sessionParams =
+                new TunnelModeChildSessionParams.Builder().addSaProposal(mSaProposal).build();
+
+        assertArrayEquals(new SaProposal[] {mSaProposal}, sessionParams.getSaProposalsInternal());
+        assertArrayEquals(
+                new IkeTrafficSelector[] {getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()},
+                sessionParams.getInboundTrafficSelectorsInternal());
+        assertArrayEquals(
+                new IkeTrafficSelector[] {getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()},
+                sessionParams.getOutboundTrafficSelectorsInternal());
         assertFalse(sessionParams.isTransportMode());
+    }
+
+    @Test
+    public void testBuildTrafficSelectors() {
+        IkeTrafficSelector tsInbound =
+                new IkeTrafficSelector(
+                        16,
+                        65520,
+                        InetAddress.parseNumericAddress("192.0.2.100"),
+                        InetAddress.parseNumericAddress("192.0.2.101"));
+        IkeTrafficSelector tsOutbound =
+                new IkeTrafficSelector(
+                        32,
+                        256,
+                        InetAddress.parseNumericAddress("192.0.2.200"),
+                        InetAddress.parseNumericAddress("192.0.2.255"));
+
+        ChildSessionParams sessionParams =
+                new TunnelModeChildSessionParams.Builder()
+                        .addSaProposal(mSaProposal)
+                        .addInboundTrafficSelectors(tsInbound)
+                        .addOutboundTrafficSelectors(tsOutbound)
+                        .build();
+
+        assertEquals(Arrays.asList(mSaProposal), sessionParams.getSaProposals());
+        assertEquals(Arrays.asList(tsInbound), sessionParams.getInboundTrafficSelectors());
+        assertEquals(Arrays.asList(tsOutbound), sessionParams.getOutboundTrafficSelectors());
     }
 
     @Test

@@ -16,6 +16,8 @@
 
 package com.android.internal.net.ipsec.ike;
 
+import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -33,6 +35,7 @@ import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.RETRY_IN
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -81,6 +84,7 @@ import android.net.ipsec.ike.IkeManager;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSessionCallback;
 import android.net.ipsec.ike.IkeSessionConfiguration;
+import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.TunnelModeChildSessionParams;
@@ -234,6 +238,8 @@ public final class IkeSessionStateMachineTest {
             "2d00001801000000070000100000ffff00000000ffffffff";
     private static final String TS_RESP_PAYLOAD_HEX_STRING =
             "2900001801000000070000100000ffff000000000fffffff";
+    private static final String VENDOR_ID_PAYLOAD_HEX_STRING =
+            "0000001852656d6f74652056656e646f72204944204f6e65";
 
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
 
@@ -253,6 +259,8 @@ public final class IkeSessionStateMachineTest {
     private static final String PCSCF_IPV6_ADDRESS3 = "2001:4888:5:713a:e0:104:0:c9";
 
     private static final byte[] EAP_DUMMY_MSG = "EAP Message".getBytes();
+    private static final byte[] REMOTE_VENDOR_ID_ONE = "Remote Vendor ID One".getBytes();
+    private static final byte[] REMOTE_VENDOR_ID_TWO = "Remote Vendor ID Two".getBytes();
 
     private static final int KEY_LEN_IKE_INTE = 20;
     private static final int KEY_LEN_IKE_ENCR = 16;
@@ -814,6 +822,7 @@ public final class IkeSessionStateMachineTest {
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_VENDOR);
 
         payloadHexStringList.add(IKE_SA_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
@@ -821,6 +830,7 @@ public final class IkeSessionStateMachineTest {
         payloadHexStringList.add(NAT_DETECTION_SOURCE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NAT_DETECTION_DESTINATION_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(FRAGMENTATION_SUPPORTED_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(VENDOR_ID_PAYLOAD_HEX_STRING);
 
         // In each test assign different IKE responder SPI in IKE INIT response to avoid remote SPI
         // collision during response validation.
@@ -1061,6 +1071,14 @@ public final class IkeSessionStateMachineTest {
         return false;
     }
 
+    private static void assertByteArrayListEquals(
+            List<byte[]> expectedList, List<byte[]> resultList) {
+        assertEquals(expectedList.size(), resultList.size());
+        for (int i = 0; i < expectedList.size(); i++) {
+            assertArrayEquals(expectedList.get(i), resultList.get(i));
+        }
+    }
+
     private void verifyIncrementLocaReqMsgId() {
         assertEquals(
                 ++mExpectedCurrentSaLocalReqMsgId,
@@ -1291,8 +1309,15 @@ public final class IkeSessionStateMachineTest {
         assertTrue(mIkeSessionStateMachine.mIsLocalBehindNat);
         assertFalse(mIkeSessionStateMachine.mIsRemoteBehindNat);
 
+        // Validate vendor IDs
+        assertByteArrayListEquals(
+                Arrays.asList(REMOTE_VENDOR_ID_ONE), mIkeSessionStateMachine.mRemoteVendorIds);
+
         // Validate fragmentation support negotiation
         assertTrue(mIkeSessionStateMachine.mSupportFragment);
+        assertEquals(
+                Arrays.asList(EXTENSION_TYPE_FRAGMENTATION),
+                mIkeSessionStateMachine.mEnabledExtensions);
     }
 
     private void setIkeInitResults() throws Exception {
@@ -1305,6 +1330,9 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.mIsLocalBehindNat = true;
         mIkeSessionStateMachine.mIsRemoteBehindNat = false;
         mIkeSessionStateMachine.mSupportFragment = true;
+        mIkeSessionStateMachine.mRemoteVendorIds =
+                Arrays.asList(REMOTE_VENDOR_ID_ONE, REMOTE_VENDOR_ID_TWO);
+        mIkeSessionStateMachine.mEnabledExtensions = Arrays.asList(EXTENSION_TYPE_FRAGMENTATION);
         mIkeSessionStateMachine.addIkeSaRecord(mSpyCurrentIkeSaRecord);
     }
 
@@ -1995,6 +2023,11 @@ public final class IkeSessionStateMachineTest {
                 ikeAuthReqMessage.getPayloadForType(
                         IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthPskPayload.class));
 
+        // Validate that there is no EAP only notify payload
+        List<IkeNotifyPayload> notifyPayloads = ikeAuthReqMessage.getPayloadListForType(
+                IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        assertFalse(hasEapOnlyNotifyPayload(notifyPayloads));
+
         // Validate inbound IKE AUTH response
         verifyIncrementLocaReqMsgId();
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, authResp);
@@ -2012,14 +2045,15 @@ public final class IkeSessionStateMachineTest {
         // Validate that user has been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
 
+        // Verify IkeSessionConfiguration
         ArgumentCaptor<IkeSessionConfiguration> ikeSessionConfigurationArgumentCaptor =
                 ArgumentCaptor.forClass(IkeSessionConfiguration.class);
         verify(mMockIkeSessionCallback).onOpened(ikeSessionConfigurationArgumentCaptor.capture());
 
         IkeSessionConfiguration sessionConfig =
                 ikeSessionConfigurationArgumentCaptor.getValue();
+        assertNotNull(sessionConfig);
         if (hasConfigPayloadInResp) {
-            assertNotNull(sessionConfig);
             List<InetAddress> pcscfAddressList = sessionConfig.getPcscfServers();
             assertEquals(3, pcscfAddressList.size());
             assertTrue(pcscfAddressList.contains(InetAddress.getByName(PCSCF_IPV6_ADDRESS1)));
@@ -2029,6 +2063,19 @@ public final class IkeSessionStateMachineTest {
             assertTrue(sessionConfig.getPcscfServers().size() == 0);
         }
 
+        assertEquals(
+                "" /*expected application version*/, sessionConfig.getRemoteApplicationVersion());
+        assertByteArrayListEquals(
+                Arrays.asList(REMOTE_VENDOR_ID_ONE, REMOTE_VENDOR_ID_TWO),
+                sessionConfig.getRemoteVendorIds());
+        assertTrue(
+                sessionConfig.isIkeExtensionEnabled(
+                        IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION));
+
+        IkeSessionConnectionInfo ikeConnInfo = sessionConfig.getIkeSessionConnectionInfo();
+        assertEquals(LOCAL_ADDRESS, ikeConnInfo.getLocalAddress());
+        assertEquals(REMOTE_ADDRESS, ikeConnInfo.getRemoteAddress());
+        assertEquals(mMockDefaultNetwork, ikeConnInfo.getNetwork());
 
         // Verify payload list pair for first Child negotiation
         ArgumentCaptor<List<IkePayload>> mReqPayloadListCaptor =
@@ -3730,6 +3777,21 @@ public final class IkeSessionStateMachineTest {
     }
 
     @Test
+    public void testKillSession() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mSpyIkeUdpEncapSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
+        verifyNotifyUserCloseSession();
+
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
     public void testReceiveDpd() throws Exception {
         setupIdleStateMachine();
 
@@ -4194,11 +4256,37 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
+    @Test
+    public void testEapOnlyOption() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        IkeSessionParams ikeSessionParams = buildIkeSessionParamsCommon()
+                .setAuthEap(mRootCertificate, mEapSessionConfig)
+                .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH).build();
+        mIkeSessionStateMachine = makeAndStartIkeSession(ikeSessionParams);
+
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+
+        IkeMessage ikeAuthReqMessage = verifyAuthReqAndGetMsg();
+        List<IkeNotifyPayload> notifyPayloads = ikeAuthReqMessage.getPayloadListForType(
+                IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        assertTrue(hasEapOnlyNotifyPayload(notifyPayloads));
+    }
+
     private IkeConfigPayload makeConfigPayload() throws Exception {
         return (IkeConfigPayload)
                 IkeTestUtils.hexStringToIkePayload(
                         IkePayload.PAYLOAD_TYPE_CP,
                         true /*isResp*/,
                         CP_PAYLOAD_HEX_STRING);
+    }
+
+    private boolean hasEapOnlyNotifyPayload(List<IkeNotifyPayload> notifyPayloads) {
+        for (IkeNotifyPayload payload : notifyPayloads) {
+            if (payload.notifyType == NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
