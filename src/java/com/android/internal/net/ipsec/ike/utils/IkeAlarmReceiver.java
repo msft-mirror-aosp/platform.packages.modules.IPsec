@@ -16,10 +16,16 @@
 
 package com.android.internal.net.ipsec.ike.utils;
 
+import static android.net.ipsec.ike.IkeManager.getIkeLog;
+
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Handler;
 import android.os.Message;
+import android.util.SparseArray;
+
+import java.util.HashSet;
 
 /**
  * IkeAlarmReceiver represents a class that receives all the alarms set by IKE library
@@ -29,23 +35,71 @@ import android.os.Message;
  * contain asynchronous process to complete might need acquire a wake lock later.
  */
 public class IkeAlarmReceiver extends BroadcastReceiver {
-    /** Broadcast intent action when the DPD alarm is fired */
-    public static final String ACTION_FIRE_DPD = "IkeAlarmReceiver.FIRE_DPD";
+    // Broadcast intent actions when an IKE Session event alarm is fired
+    public static final String ACTION_DELETE_CHILD = "IkeAlarmReceiver.ACTION_DELETE_CHILD";
+    public static final String ACTION_REKEY_CHILD = "IkeAlarmReceiver.ACTION_REKEY_CHILD";
+    public static final String ACTION_DELETE_IKE = "IkeAlarmReceiver.ACTION_DELETE_IKE";
+    public static final String ACTION_REKEY_IKE = "IkeAlarmReceiver.ACTION_REKEY_IKE";
+    public static final String ACTION_DPD = "IkeAlarmReceiver.ACTION_DPD";
 
-    /** Parcelable name for DPD Message */
-    public static final String PARCELABLE_NAME_DPD_MESSAGE =
-            "IkeAlarmReceiver.PARCELABLE_NAME_DPD_MESSAGE";
+    private static final HashSet<String> sIkeSessionActionsSet = new HashSet<>();
 
+    static {
+        sIkeSessionActionsSet.add(ACTION_DELETE_CHILD);
+        sIkeSessionActionsSet.add(ACTION_REKEY_CHILD);
+        sIkeSessionActionsSet.add(ACTION_DELETE_IKE);
+        sIkeSessionActionsSet.add(ACTION_REKEY_IKE);
+        sIkeSessionActionsSet.add(ACTION_DPD);
+    }
+
+    /** Parcelable name of Message that is owned by IKE Session StateMachine */
+    public static final String PARCELABLE_NAME_IKE_SESSION_MSG =
+            "IkeAlarmReceiver.PARCELABLE_NAME_IKE_SESSION_MSG";
+
+    private final SparseArray<Handler> mIkeSessionIdToHandlerMap = new SparseArray<>();
+
+    /**
+     * Called when an alarm fires.
+     *
+     * <p>This is method is guaranteed to run on IkeSessionStateMachine thread since
+     * IkeAlarmReceiver is registered with IkeSessionStateMachine Handler
+     */
     @Override
     public void onReceive(Context context, Intent intent) {
         final String action = intent.getAction();
-        if (action.equals(ACTION_FIRE_DPD)) {
-            Message message =
-                    (Message) intent.getExtras().getParcelable(PARCELABLE_NAME_DPD_MESSAGE);
+        getIkeLog()
+                .d(
+                        "IkeAlarmReceiver",
+                        "Alarm fired: action " + action + " id " + intent.getIdentifier());
+        switch (action) {
+            case ACTION_DELETE_CHILD: // fallthrough
+            case ACTION_REKEY_CHILD: // fallthrough
+            case ACTION_DELETE_IKE: // fallthrough
+            case ACTION_REKEY_IKE: // fallthrough
+            case ACTION_DPD:
+                // This Message has lost its target information after being sent as a Broadcast
+                Message message =
+                        (Message) intent.getExtras().getParcelable(PARCELABLE_NAME_IKE_SESSION_MSG);
+                Handler ikeHandler = mIkeSessionIdToHandlerMap.get(message.arg1);
 
-            // Use #dispatchMessage so that this method won't return util the message is processed
-            message.getTarget().dispatchMessage(message);
-            return;
+                if (ikeHandler != null) {
+                    // Use #dispatchMessage so that this method won't return until the message is
+                    // processed
+                    ikeHandler.dispatchMessage(message);
+                }
+                return;
+            default:
+                getIkeLog().d("IkeAlarmReceiver", "Received unrecognized alarm intent");
         }
+    }
+
+    /** Register a newly created IkeSessionStateMachine handler */
+    public void registerIkeSession(int ikeSessionId, Handler ikeSesisonHandler) {
+        mIkeSessionIdToHandlerMap.put(ikeSessionId, ikeSesisonHandler);
+    }
+
+    /** Unregistered the deleted IkeSessionStateMachine */
+    public void unregisterIkeSession(int ikeSessionId) {
+        mIkeSessionIdToHandlerMap.remove(ikeSessionId);
     }
 }
