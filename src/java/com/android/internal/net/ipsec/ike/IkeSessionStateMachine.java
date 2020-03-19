@@ -15,6 +15,8 @@
  */
 package com.android.internal.net.ipsec.ike;
 
+import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -27,6 +29,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATU
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PARTIAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -47,6 +50,7 @@ import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSessionCallback;
 import android.net.ipsec.ike.IkeSessionConfiguration;
+import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
@@ -106,6 +110,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
+import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 
@@ -328,6 +333,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting byte[] mIkeInitResponseBytes;
     @VisibleForTesting IkeNoncePayload mIkeInitNoncePayload;
     @VisibleForTesting IkeNoncePayload mIkeRespNoncePayload;
+    @VisibleForTesting List<byte[]> mRemoteVendorIds = new ArrayList<>();
+    @VisibleForTesting List<Integer> mEnabledExtensions = new ArrayList<>();
 
     // FIXME: b/131265898 Pass these parameters from CreateIkeLocalIkeAuth through to
     // CreateIkeLocalIkeAuthPostEap as entry data when Android StateMachine can support that.
@@ -2562,8 +2569,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         mIkeRespNoncePayload = (IkeNoncePayload) payload;
                         break;
                     case IkePayload.PAYLOAD_TYPE_VENDOR:
-                        // Do not support any vendor defined protocol extensions. Ignore
-                        // all Vendor ID Payloads.
+                        mRemoteVendorIds.add(((IkeVendorPayload) payload).vendorId);
                         break;
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
@@ -2587,6 +2593,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 break;
                             case NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED:
                                 mSupportFragment = true;
+                                mEnabledExtensions.add(EXTENSION_TYPE_FRAGMENTATION);
                                 break;
                             default:
                                 // Unknown and unexpected status notifications are ignored as per
@@ -2811,21 +2818,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeConfigPayload configPayload =
                     ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
                             IkeConfigPayload.class);
-
-            // TODO(b/150466460); Construct and pass IkeSessionConnectionInfo to
-            // IkeSessionConfiguration
             if (configPayload == null) {
-                logd("No config payload in ikeMessage.");
-                return new IkeSessionConfiguration(null /*ikeConnInfo*/, null /*configPayload*/);
+                logi("No config payload in ikeMessage.");
+            } else if (configPayload.configType != CONFIG_TYPE_REPLY) {
+                logi("Unexpected config payload. Config Type: " + configPayload.configType);
+                configPayload = null;
             }
 
-            if (configPayload.configType != CONFIG_TYPE_REPLY) {
-                logw("Unexpected config payload. Config Type: "
-                        + configPayload.configType);
-                return new IkeSessionConfiguration(null /*ikeConnInfo*/, null /*configPayload*/);
-            }
+            IkeSessionConnectionInfo ikeConnInfo =
+                    new IkeSessionConnectionInfo(
+                            mLocalAddress, mRemoteAddress, mIkeSessionParams.getNetwork());
 
-            return new IkeSessionConfiguration(null /*ikeConnInfo*/, configPayload);
+            return new IkeSessionConfiguration(
+                    ikeConnInfo, configPayload, mRemoteVendorIds, mEnabledExtensions);
         }
 
         protected void notifyIkeSessionSetup(IkeMessage msg) {
@@ -2926,6 +2931,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             false /*isInitiator*/, mIkeSessionParams.getRemoteIdentification());
             payloadList.add(mInitIdPayload);
             payloadList.add(respIdPayload);
+
+            if(mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
+                payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION));
+            }
 
             // Build Authentication payload
             IkeAuthConfig authConfig = mIkeSessionParams.getLocalAuthConfig();
@@ -3049,12 +3058,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
 
             // Verify existence of payloads
-            if (mRespIdPayload == null || authPayload == null) {
-                throw new AuthenticationFailedException("ID-Responder or Auth payload is missing.");
+
+            if (authPayload == null && mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
+                // If EAP-only option is selected, the responder will not send auth payload if it
+                // accepts EAP-only authentication. Currently only EAP-only safe methods are
+                // proposed to the responder if IKE_OPTION_EAP_ONLY_AUTH option is set. So there is
+                // no need to check if the responder selected an EAP-only safe method
+                return;
             }
 
             // Authenticate the remote peer.
-            authenticate(authPayload, mRespIdPayload, certPayloads);
+            if (authPayload != null && mRespIdPayload != null) {
+                authenticate(authPayload, mRespIdPayload, certPayloads);
+                return;
+            }
+
+            throw new AuthenticationFailedException("ID-Responder or Auth payload is missing.");
         }
 
         private void authenticate(
