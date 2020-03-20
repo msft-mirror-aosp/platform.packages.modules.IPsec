@@ -97,10 +97,10 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
     @VisibleForTesting
     @interface SignatureAlgo {}
 
-    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA1 = "SHA1withRSA";
-    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_256 = "SHA256withRSA";
-    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_384 = "SHA384withRSA";
-    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_512 = "SHA512withRSA";
+    public static final String SIGNATURE_ALGO_RSA_SHA1 = "SHA1withRSA";
+    public static final String SIGNATURE_ALGO_RSA_SHA2_256 = "SHA256withRSA";
+    public static final String SIGNATURE_ALGO_RSA_SHA2_384 = "SHA384withRSA";
+    public static final String SIGNATURE_ALGO_RSA_SHA2_512 = "SHA512withRSA";
 
     public final String signatureAndHashAlgos;
     public final byte[] signature;

@@ -161,6 +161,7 @@ import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
+import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -325,6 +326,8 @@ public final class IkeSessionStateMachineTest {
 
     private X509Certificate mRootCertificate;
     private X509Certificate mServerEndCertificate;
+    private PrivateKey mUserPrivateKey;
+    private X509Certificate mUserEndCert;
 
     private ArgumentCaptor<IkeMessage> mIkeMessageCaptor =
             ArgumentCaptor.forClass(IkeMessage.class);
@@ -662,6 +665,8 @@ public final class IkeSessionStateMachineTest {
 
         mRootCertificate = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
         mServerEndCertificate = CertUtils.createCertFromPemFile("end-cert-a.pem");
+        mUserEndCert = CertUtils.createCertFromPemFile("end-cert-b.pem");
+        mUserPrivateKey = CertUtils.createRsaPrivateKeyFromKeyFile("end-cert-key-b.key");
 
         mPsk = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
 
@@ -792,6 +797,12 @@ public final class IkeSessionStateMachineTest {
     private IkeSessionParams buildIkeSessionParamsEap() throws Exception {
         return buildIkeSessionParamsCommon()
                 .setAuthEap(mRootCertificate, mEapSessionConfig)
+                .build();
+    }
+
+    private IkeSessionParams buildIkeSessionParamsDigitalSignature() throws Exception {
+        return buildIkeSessionParamsCommon()
+                .setAuthDigitalSignature(mRootCertificate, mUserEndCert, mUserPrivateKey)
                 .build();
     }
 
@@ -1998,8 +2009,65 @@ public final class IkeSessionStateMachineTest {
         return ikeAuthReqMessage;
     }
 
+    private void verifyDigitalSignatureAuthentication(
+            IkeAuthDigitalSignPayload spyAuthPayload,
+            X509Certificate certificate,
+            IkeIdPayload respIdPayload,
+            List<IkePayload> authRelatedPayloads,
+            boolean hasChildPayloads,
+            boolean hasConfigPayloadInResp)
+            throws Exception {
+        IkeMessage ikeAuthReqMessage =
+                verifyAuthenticationCommonAndGetIkeMessage(
+                        respIdPayload,
+                        authRelatedPayloads,
+                        hasChildPayloads,
+                        hasConfigPayloadInResp);
+
+        verify(spyAuthPayload)
+                .verifyInboundSignature(
+                        certificate,
+                        mIkeSessionStateMachine.mIkeInitRequestBytes,
+                        mSpyCurrentIkeSaRecord.nonceInitiator,
+                        respIdPayload.getEncodedPayloadBody(),
+                        mIkeSessionStateMachine.mIkePrf,
+                        mSpyCurrentIkeSaRecord.getSkPr());
+
+        assertNotNull(
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthDigitalSignPayload.class));
+    }
+
     private void verifySharedKeyAuthentication(
             IkeAuthPskPayload spyAuthPayload,
+            IkeIdPayload respIdPayload,
+            List<IkePayload> authRelatedPayloads,
+            boolean hasChildPayloads,
+            boolean hasConfigPayloadInResp)
+            throws Exception {
+        IkeMessage ikeAuthReqMessage =
+                verifyAuthenticationCommonAndGetIkeMessage(
+                        respIdPayload,
+                        authRelatedPayloads,
+                        hasChildPayloads,
+                        hasConfigPayloadInResp);
+
+        // Validate authentication is done. Cannot use matchers because IkeAuthPskPayload is final.
+        verify(spyAuthPayload)
+                .verifyInboundSignature(
+                        mPsk,
+                        mIkeSessionStateMachine.mIkeInitRequestBytes,
+                        mSpyCurrentIkeSaRecord.nonceInitiator,
+                        respIdPayload.getEncodedPayloadBody(),
+                        mIkeSessionStateMachine.mIkePrf,
+                        mSpyCurrentIkeSaRecord.getSkPr());
+
+        assertNotNull(
+                ikeAuthReqMessage.getPayloadForType(
+                        IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthPskPayload.class));
+    }
+
+    private IkeMessage verifyAuthenticationCommonAndGetIkeMessage(
             IkeIdPayload respIdPayload,
             List<IkePayload> authRelatedPayloads,
             boolean hasChildPayloads,
@@ -2018,9 +2086,6 @@ public final class IkeSessionStateMachineTest {
         } else {
             ikeAuthReqMessage = verifyAuthReqAndGetMsg();
         }
-        assertNotNull(
-                ikeAuthReqMessage.getPayloadForType(
-                        IkePayload.PAYLOAD_TYPE_AUTH, IkeAuthPskPayload.class));
 
         // Validate that there is no EAP only notify payload
         List<IkeNotifyPayload> notifyPayloads = ikeAuthReqMessage.getPayloadListForType(
@@ -2030,16 +2095,6 @@ public final class IkeSessionStateMachineTest {
         // Validate inbound IKE AUTH response
         verifyIncrementLocaReqMsgId();
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, authResp);
-
-        // Validate authentication is done. Cannot use matchers because IkeAuthPskPayload is final.
-        verify(spyAuthPayload)
-                .verifyInboundSignature(
-                        mPsk,
-                        mIkeSessionStateMachine.mIkeInitRequestBytes,
-                        mSpyCurrentIkeSaRecord.nonceInitiator,
-                        respIdPayload.getEncodedPayloadBody(),
-                        mIkeSessionStateMachine.mIkePrf,
-                        mSpyCurrentIkeSaRecord.getSkPr());
 
         // Validate that user has been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
@@ -2135,6 +2190,8 @@ public final class IkeSessionStateMachineTest {
         mLooper.dispatchAll();
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        return ikeAuthReqMessage;
     }
 
     private IkeAuthPskPayload makeSpyRespPskPayload() throws Exception {
@@ -2174,6 +2231,35 @@ public final class IkeSessionStateMachineTest {
         return (IkeIdPayload)
                 IkeTestUtils.hexStringToIkePayload(
                         IkePayload.PAYLOAD_TYPE_ID_RESPONDER, true /*isResp*/, idRespPayloadHex);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthDigitalSignature() throws Exception {
+        // Quit and restart IKE Session with Digital Signature Auth params
+        mIkeSessionStateMachine.quitNow();
+        reset(mMockChildSessionFactoryHelper);
+        setupChildStateMachineFactory(mMockChildSessionStateMachine);
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsDigitalSignature());
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+
+        // Build IKE AUTH response with Digital Signature Auth, ID-Responder and config payloads.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthDigitalSignPayload spyAuthPayload = makeSpyDigitalSignAuthPayload();
+        authRelatedPayloads.add(spyAuthPayload);
+        authRelatedPayloads.add(new IkeCertX509CertPayload(mServerEndCertificate));
+
+        IkeIdPayload respIdPayload = makeRespIdPayload();
+        authRelatedPayloads.add(respIdPayload);
+        authRelatedPayloads.add(makeConfigPayload());
+
+        verifyDigitalSignatureAuthentication(
+                spyAuthPayload,
+                mServerEndCertificate,
+                respIdPayload,
+                authRelatedPayloads,
+                true /*hasChildPayloads*/,
+                true /*hasConfigPayloadInResp*/);
+        verifyRetransmissionStopped();
     }
 
     @Test
