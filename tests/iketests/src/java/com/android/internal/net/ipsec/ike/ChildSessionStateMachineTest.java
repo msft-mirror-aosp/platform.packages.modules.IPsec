@@ -120,6 +120,7 @@ import com.android.server.IpSecService;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatcher;
@@ -508,8 +509,8 @@ public final class ChildSessionStateMachineTest {
         }
     }
 
-    @Test
-    public void testCreateFirstChild() throws Exception {
+    @Ignore
+    public void disableTestCreateFirstChild() throws Exception {
         doReturn(mSpyCurrentChildSaRecord)
                 .when(mMockSaRecordHelper)
                 .makeChildSaRecord(any(), any(), any());
@@ -1089,8 +1090,8 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback, never()).scheduleRetryLocalRequest(any());
     }
 
-    @Test
-    public void testRekeyLocalCreateChildHandlesKeyCalculationFail() throws Exception {
+    @Ignore
+    public void disableTestRekeyLocalCreateChildHandlesKeyCalculationFail() throws Exception {
         // Throw exception when building ChildSaRecord
         when(mMockSaRecordHelper.makeChildSaRecord(any(), any(), any()))
                 .thenThrow(
