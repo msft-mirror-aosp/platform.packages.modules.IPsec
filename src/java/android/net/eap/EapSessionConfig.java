@@ -22,8 +22,9 @@ import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 
 import android.annotation.NonNull;
+import android.annotation.Nullable;
 import android.annotation.SystemApi;
-import android.telephony.TelephonyManager.UiccAppType;
+import android.telephony.Annotation.UiccAppType;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.message.EapData.EapMethod;
@@ -56,6 +57,52 @@ public final class EapSessionConfig {
     public EapSessionConfig(Map<Integer, EapMethodConfig> eapConfigs, byte[] eapIdentity) {
         this.eapConfigs = Collections.unmodifiableMap(eapConfigs);
         this.eapIdentity = eapIdentity;
+    }
+
+    /** Retrieves client's EAP Identity */
+    @NonNull
+    public byte[] getEapIdentity() {
+        return eapIdentity;
+    }
+
+    /**
+     * Retrieves configuration for EAP SIM
+     *
+     * @return the configuration for EAP SIM, or null if it was not set
+     */
+    @Nullable
+    public EapSimConfig getEapSimConfig() {
+        return (EapSimConfig) eapConfigs.get(EAP_TYPE_SIM);
+    }
+
+    /**
+     * Retrieves configuration for EAP AKA
+     *
+     * @return the configuration for EAP AKA, or null if it was not set
+     */
+    @Nullable
+    public EapAkaConfig getEapAkaConfig() {
+        return (EapAkaConfig) eapConfigs.get(EAP_TYPE_AKA);
+    }
+
+    /**
+     * Retrieves configuration for EAP AKA'
+     *
+     * @return the configuration for EAP AKA', or null if it was not set
+     */
+    @Nullable
+    public EapAkaPrimeConfig getEapAkaPrimeConfig() {
+        return (EapAkaPrimeConfig) eapConfigs.get(EAP_TYPE_AKA_PRIME);
+    }
+
+    /**
+     * Retrieves configuration for EAP MSCHAPV2
+     *
+     * @return the configuration for EAP MSCHAPV2, or null if it was not set
+     */
+    @Nullable
+    public EapMsChapV2Config getEapMsChapV2onfig() {
+        return (EapMsChapV2Config) eapConfigs.get(EAP_TYPE_MSCHAP_V2);
     }
 
     /** This class can be used to incrementally construct an {@link EapSessionConfig}. */
@@ -181,6 +228,20 @@ public final class EapSessionConfig {
         public int getMethodType() {
             return methodType;
         }
+
+        /**
+         * Check if this is EAP-only safe method.
+         *
+         * @return whether the method is EAP-only safe
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998#section 4, for safe eap
+         * methods</a>
+         *
+         * @hide
+         */
+        public boolean isEapOnlySafeMethod() {
+            return false;
+        }
     }
 
     /**
@@ -215,6 +276,12 @@ public final class EapSessionConfig {
          */
         public int getAppType() {
             return apptype;
+        }
+
+        /** @hide */
+        @Override
+        public boolean isEapOnlySafeMethod() {
+            return true;
         }
     }
 
@@ -327,5 +394,25 @@ public final class EapSessionConfig {
         public String getPassword() {
             return password;
         }
+    }
+
+    /**
+     * Checks if all the methods in the session are EAP-only safe
+     *
+     * @return whether all the methods in the session are EAP-only safe
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998#section 4, for safe eap
+     * methods</a>
+     *
+     * @hide
+     */
+    public boolean areAllMethodsEapOnlySafe() {
+        for(Map.Entry<Integer, EapMethodConfig> eapConfigsEntry : eapConfigs.entrySet()) {
+            if (!eapConfigsEntry.getValue().isEapOnlySafeMethod()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

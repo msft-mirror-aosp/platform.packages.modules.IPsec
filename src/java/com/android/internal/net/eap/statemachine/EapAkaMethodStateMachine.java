@@ -520,10 +520,12 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
             switch (tag) {
                 case mSuccess:
-                    // response format: [tag][RES length][RES][IK length][IK][CK length][CK]
+                    // response format: [tag][RES length][RES][CK length][CK][IK length][IK]
+                    // (TS 131 102#7.1.2.1)
                     break;
                 case mSynchronization:
                     // response format: [tag][AUTS length][AUTS]
+                    // (TS 131 102#7.1.2.1)
                     byte[] auts = new byte[Byte.toUnsignedInt(buffer.get())];
                     buffer.get(auts);
 
@@ -543,19 +545,17 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             byte[] res = new byte[Byte.toUnsignedInt(buffer.get())];
             buffer.get(res);
 
-            byte[] ik = new byte[Byte.toUnsignedInt(buffer.get())];
-            buffer.get(ik);
-
             byte[] ck = new byte[Byte.toUnsignedInt(buffer.get())];
             buffer.get(ck);
 
-            LOG.d(
-                    mTAG,
-                    "RAND=" + LOG.pii(atRandAka.rand)
-                            + " AUTN=" + LOG.pii(atAutn.autn)
-                            + " RES=" + LOG.pii(res)
-                            + " IK=" + LOG.pii(ik)
-                            + " CK=" + LOG.pii(ck));
+            byte[] ik = new byte[Byte.toUnsignedInt(buffer.get())];
+            buffer.get(ik);
+
+            LOG.d(mTAG, "RAND=" + LOG.pii(atRandAka.rand));
+            LOG.d(mTAG, "AUTN=" + LOG.pii(atAutn.autn));
+            LOG.d(mTAG, "RES=" + LOG.pii(res));
+            LOG.d(mTAG, "IK=" + LOG.pii(ik));
+            LOG.d(mTAG, "CK=" + LOG.pii(ck));
 
             return new RandChallengeResult(res, ik, ck);
         }

@@ -88,8 +88,7 @@ public final class IkeSkfPayloadTest {
                 spy(
                         IkeMacIntegrity.create(
                                 new IntegrityTransform(
-                                        SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128),
-                                IkeMessage.getSecurityProvider()));
+                                        SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128)));
         byte[] expectedChecksum = TestUtils.hexStringToByteArray(IKE_FRAG_MSG_CHECKSUM);
         doReturn(expectedChecksum).when(mSpyHmacSha256IntegrityMac).generateChecksum(any(), any());
 
@@ -100,8 +99,7 @@ public final class IkeSkfPayloadTest {
                                 IkeCipher.create(
                                         new EncryptionTransform(
                                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
-                                                SaProposal.KEY_LEN_AES_128),
-                                        IkeMessage.getSecurityProvider()));
+                                                SaProposal.KEY_LEN_AES_128)));
         byte[] expectedDecryptedPaddedData =
                 TestUtils.hexStringToByteArray(
                         IKE_FRAG_MSG_DECRYPTED_BODY_HEX_STRING + IKE_FRAG_MSG_PADDING);

@@ -110,13 +110,25 @@ public abstract class SaProposal {
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({PSEUDORANDOM_FUNCTION_HMAC_SHA1, PSEUDORANDOM_FUNCTION_AES128_XCBC})
+    @IntDef({
+        PSEUDORANDOM_FUNCTION_HMAC_SHA1,
+        PSEUDORANDOM_FUNCTION_AES128_XCBC,
+        PSEUDORANDOM_FUNCTION_SHA2_256,
+        PSEUDORANDOM_FUNCTION_SHA2_384,
+        PSEUDORANDOM_FUNCTION_SHA2_512
+    })
     public @interface PseudorandomFunction {}
 
     /** HMAC-SHA1 Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_HMAC_SHA1 = 2;
     /** AES128-XCBC Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_AES128_XCBC = 4;
+    /** HMAC-SHA2-256 Pseudorandom Function. */
+    public static final int PSEUDORANDOM_FUNCTION_SHA2_256 = 5;
+    /** HMAC-SHA2-384 Pseudorandom Function. */
+    public static final int PSEUDORANDOM_FUNCTION_SHA2_384 = 6;
+    /** HMAC-SHA2-384 Pseudorandom Function. */
+    public static final int PSEUDORANDOM_FUNCTION_SHA2_512 = 7;
 
     private static final SparseArray<String> SUPPORTED_PRF_TO_STR;
 
@@ -124,6 +136,9 @@ public abstract class SaProposal {
         SUPPORTED_PRF_TO_STR = new SparseArray<>();
         SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_HMAC_SHA1, "PRF_HMAC_SHA1");
         SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_AES128_XCBC, "PRF_AES128_XCBC");
+        SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_SHA2_256, "PRF_HMAC2_256");
+        SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_SHA2_384, "PRF_HMAC2_384");
+        SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_SHA2_512, "PRF_HMAC2_512");
     }
 
     /** @hide */

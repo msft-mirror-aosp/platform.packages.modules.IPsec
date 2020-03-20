@@ -137,8 +137,7 @@ public final class IkeCertX509CertPayloadTest {
     }
 
     private X509Certificate pemStringToCertificate(String certPemStr) throws Exception {
-        CertificateFactory factory =
-                CertificateFactory.getInstance("X.509", IkeMessage.getSecurityProvider());
+        CertificateFactory factory = CertificateFactory.getInstance("X.509");
         Base64.Decoder bs64Decoder = Base64.getDecoder();
         byte[] decodedBytes = bs64Decoder.decode(certPemStr);
         return (X509Certificate)

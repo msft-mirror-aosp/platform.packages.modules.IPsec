@@ -75,6 +75,7 @@ import javax.crypto.spec.SecretKeySpec;
  *     for Authentication and Key Agreement (EAP-AKA)</a>
  * @see <a href="https://tools.ietf.org/html/rfc5448">RFC 5448, Improved Extensible Authentication
  *     Protocol Method for 3rd Generation Authentication and Key Agreement (EAP-AKA')</a>
+ * @hide
  */
 public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
     public static final int K_AUT_LEN = 32;
@@ -85,6 +86,8 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
     private static final int SUPPORTED_KDF = 1;
     private static final int FC = 0x20; // Required by TS 133 402 Annex A.2
     private static final int SQN_XOR_AK_LEN = 6;
+    private static final int IK_PRIME_LENGTH = 16;
+    private static final int CK_PRIME_LENGTH = 16;
     private static final String MAC_ALGORITHM_STRING = "HmacSHA256";
     private static final String MK_DATA_PREFIX = "EAP-AKA'";
 
@@ -251,7 +254,12 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
                 AtKdfInput atKdfInput =
                         (AtKdfInput) eapAkaTypeData.attributeMap.get(EAP_AT_KDF_INPUT);
                 AtAutn atAutn = (AtAutn) eapAkaTypeData.attributeMap.get(EAP_AT_AUTN);
+
+                // Values derived as (CK' | IK'), but PRF' needs (IK' | CK')
                 byte[] ckIkPrime = deriveCkIkPrime(result, atKdfInput, atAutn);
+                ByteBuffer prfKey = ByteBuffer.allocate(IK_PRIME_LENGTH + CK_PRIME_LENGTH);
+                prfKey.put(ckIkPrime, CK_PRIME_LENGTH, IK_PRIME_LENGTH);
+                prfKey.put(ckIkPrime, 0, CK_PRIME_LENGTH);
 
                 int dataToSignLen = MK_DATA_PREFIX.length() + mIdentity.length;
                 ByteBuffer dataToSign = ByteBuffer.allocate(dataToSignLen);
@@ -262,7 +270,7 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
                         ByteBuffer.wrap(
                                 KeyGenerationUtils.prfPlus(
                                         HmacSha256ByteSigner.getInstance(),
-                                        ckIkPrime,
+                                        prfKey.array(),
                                         dataToSign.array(),
                                         MK_LEN_BYTES));
 

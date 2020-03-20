@@ -26,7 +26,6 @@ import android.net.IpSecAlgorithm;
 import android.net.ipsec.ike.SaProposal;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
 
 import org.junit.Before;
@@ -68,8 +67,7 @@ public final class IkeCombinedModeCipherTest {
                         IkeCipher.create(
                                 new EncryptionTransform(
                                         SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16,
-                                        SaProposal.KEY_LEN_AES_256),
-                                IkeMessage.getSecurityProvider());
+                                        SaProposal.KEY_LEN_AES_256));
 
         mAesGcmKey = TestUtils.hexStringToByteArray(KEY);
         mIv = TestUtils.hexStringToByteArray(IV);

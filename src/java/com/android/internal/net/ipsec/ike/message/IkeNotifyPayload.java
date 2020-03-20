@@ -82,7 +82,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
         NOTIFY_TYPE_USE_TRANSPORT_MODE,
         NOTIFY_TYPE_REKEY_SA,
-        NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED
+        NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED,
+        NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION
     })
     public @interface NotifyType {}
 
@@ -124,6 +125,9 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
     public static final int NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED = 16394;
     /** Indicates that the sender supports IKE fragmentation. */
     public static final int NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED = 16430;
+
+    /** Indicates that the sender prefers to use only eap based authentication */
+    public static final int NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION = 16417;
 
     private static final int NOTIFY_HEADER_LEN = 4;
     private static final int ERROR_NOTIFY_TYPE_MAX = 16383;
@@ -292,8 +296,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
 
         try {
             MessageDigest natDetectionDataDigest =
-                    MessageDigest.getInstance(
-                            NAT_DETECTION_DIGEST_ALGORITHM, IkeMessage.getSecurityProvider());
+                    MessageDigest.getInstance(NAT_DETECTION_DIGEST_ALGORITHM);
             return natDetectionDataDigest.digest(byteBuffer.array());
         } catch (NoSuchAlgorithmException e) {
             throw new ProviderException(

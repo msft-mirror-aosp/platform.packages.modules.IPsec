@@ -12,23 +12,47 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-java_library {
-    name: "ike",
+java_sdk_library {
+    name: "android.net.ipsec.ike",
     installable: true,
+    sdk_version: "module_current",
 
     aidl: {
         local_include_dirs: ["src/java"],
     },
+    srcs: [":ike-srcs"],
+
+    libs: [
+        "unsupportedappusage",
+        "framework-annotations-lib",
+    ],
+
+    api_packages: [
+        "android.net.eap",
+        "android.net.ipsec.ike",
+        "android.net.ipsec.ike.exceptions",
+    ],
+
+    // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
+    // being overwritten by the frameworks class copies.
+    jarjar_rules: "jarjar-rules-shared.txt",
+
+    plugins: ["java_api_finder"],
+
+    hostdex: true, // for hiddenapi check
+    apex_available: [
+        "com.android.ipsec",
+        "test_com.android.ipsec",
+    ],
+}
+
+filegroup {
+    name: "ike-srcs",
     srcs: [
         "src/java/**/*.java",
         ":bouncycastle_ike_digests",
+        ":framework-ike-shared-srcs",
     ],
-
-    // Bouncycastle filegroup is jar-jar'ed to avoid classpath conflicts. This is necessary to
-    // preserve access to SHA1Digest and MD4Digest implementations for use by EAP.
-    jarjar_rules: "jarjar-bouncycastle-ike-digests.txt",
-
-    plugins: ["java_api_finder"],
 }
 
 filegroup {
@@ -36,3 +60,42 @@ filegroup {
     srcs: ["src/java/android/**/*.java"],
     path: "src/java/",
 }
+
+java_library {
+    name: "ike_test",
+    installable: false, // Used only for testing; never installed alone.
+    srcs: [":ike-srcs"],
+    libs: ["unsupportedappusage"],
+
+    // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
+    // being overwritten by the frameworks class copies.
+    jarjar_rules: "jarjar-rules-shared.txt",
+}
+
+stubs_defaults {
+    name: "ike-stubs-defaults",
+    srcs: [":ike-api-srcs"],
+}
+
+droidstubs {
+    name: "android.net.ipsec.ike.api.sources.module_libs_api",
+    defaults: [
+        "framework-module-api-defaults-module_libs_api",
+        "ike-stubs-defaults",
+    ],
+}
+
+droidstubs {
+    name: "android.net.ipsec.ike.stubs.sources.module_libs_api",
+    defaults: [
+        "framework-module-stubs-defaults-module_libs_api",
+        "ike-stubs-defaults",
+    ],
+}
+
+java_library {
+    name: "android.net.ipsec.ike.stubs.module_libs_api",
+    srcs: [":android.net.ipsec.ike.stubs.sources.module_libs_api"],
+    sdk_version: "module_current",
+}
+

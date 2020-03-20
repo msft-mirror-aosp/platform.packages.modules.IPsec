@@ -16,6 +16,10 @@
 
 package android.net.ipsec.ike;
 
+import static android.net.ipsec.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_MAXIMUM;
+import static android.net.ipsec.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_MINIMUM;
+import static android.net.ipsec.ike.ChildSessionParams.CHILD_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
@@ -42,9 +46,10 @@ import org.junit.Test;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
+import java.util.concurrent.TimeUnit;
 
 public final class TunnelModeChildSessionParamsTest {
-    private static final int NUM_TS = 1;
+    private static final int NUM_TS = 2;
 
     private static final int IP6_PREFIX_LEN = 64;
 
@@ -76,8 +81,8 @@ public final class TunnelModeChildSessionParamsTest {
 
     private void verifyCommon(TunnelModeChildSessionParams childParams) {
         assertArrayEquals(new SaProposal[] {mSaProposal}, childParams.getSaProposalsInternal());
-        assertEquals(NUM_TS, childParams.getLocalTrafficSelectorsInternal().length);
-        assertEquals(NUM_TS, childParams.getRemoteTrafficSelectorsInternal().length);
+        assertEquals(NUM_TS, childParams.getInboundTrafficSelectorsInternal().length);
+        assertEquals(NUM_TS, childParams.getOutboundTrafficSelectorsInternal().length);
         assertFalse(childParams.isTransportMode());
     }
 
@@ -105,6 +110,27 @@ public final class TunnelModeChildSessionParamsTest {
 
         verifyCommon(childParams);
         assertEquals(0, childParams.getConfigurationAttributesInternal().length);
+
+        assertEquals(CHILD_HARD_LIFETIME_SEC_DEFAULT, childParams.getHardLifetimeSeconds());
+        assertEquals(CHILD_SOFT_LIFETIME_SEC_DEFAULT, childParams.getSoftLifetimeSeconds());
+    }
+
+    @Test
+    public void testBuildChildSessionParamsWithLifetime() {
+        int hardLifetimeSec = (int) TimeUnit.HOURS.toSeconds(3L);
+        int softLifetimeSec = (int) TimeUnit.HOURS.toSeconds(1L);
+
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder()
+                        .addSaProposal(mSaProposal)
+                        .setLifetimeSeconds(hardLifetimeSec, softLifetimeSec)
+                        .build();
+
+        verifyCommon(childParams);
+        assertEquals(0, childParams.getConfigurationAttributesInternal().length);
+
+        assertEquals(hardLifetimeSec, childParams.getHardLifetimeSeconds());
+        assertEquals(softLifetimeSec, childParams.getSoftLifetimeSeconds());
     }
 
     @Test
@@ -193,6 +219,49 @@ public final class TunnelModeChildSessionParamsTest {
             fail("Expected to fail due to invalid address family value");
         } catch (IllegalArgumentException expected) {
 
+        }
+    }
+
+    @Test
+    public void testSetHardLifetimeTooLong() throws Exception {
+        try {
+            new TunnelModeChildSessionParams.Builder()
+                    .setLifetimeSeconds(
+                            CHILD_HARD_LIFETIME_SEC_MAXIMUM + 1, CHILD_SOFT_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because hard lifetime is too long");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetHardLifetimeTooShort() throws Exception {
+        try {
+            new TunnelModeChildSessionParams.Builder()
+                    .setLifetimeSeconds(
+                            CHILD_HARD_LIFETIME_SEC_MINIMUM - 1, CHILD_SOFT_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because hard lifetime is too short");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetSoftLifetimeTooLong() throws Exception {
+        try {
+            new TunnelModeChildSessionParams.Builder()
+                    .setLifetimeSeconds(
+                            CHILD_HARD_LIFETIME_SEC_DEFAULT, CHILD_HARD_LIFETIME_SEC_DEFAULT);
+            fail("Expected failure because soft lifetime is too long");
+        } catch (IllegalArgumentException expected) {
+        }
+    }
+
+    @Test
+    public void testSetSoftLifetimeTooShort() throws Exception {
+        try {
+            new TunnelModeChildSessionParams.Builder()
+                    .setLifetimeSeconds(CHILD_HARD_LIFETIME_SEC_DEFAULT, 0);
+            fail("Expected failure because soft lifetime is too short");
+        } catch (IllegalArgumentException expected) {
         }
     }
 }

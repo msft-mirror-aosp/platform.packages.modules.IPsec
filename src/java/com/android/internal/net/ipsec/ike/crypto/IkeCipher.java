@@ -22,7 +22,6 @@ import android.net.ipsec.ike.SaProposal;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
 
 import java.security.NoSuchAlgorithmException;
-import java.security.Provider;
 import java.security.SecureRandom;
 
 import javax.crypto.Cipher;
@@ -47,18 +46,13 @@ public abstract class IkeCipher extends IkeCrypto {
     protected final Cipher mCipher;
 
     protected IkeCipher(
-            int algorithmId,
-            int keyLength,
-            int ivLength,
-            String algorithmName,
-            boolean isAead,
-            Provider provider) {
+            int algorithmId, int keyLength, int ivLength, String algorithmName, boolean isAead) {
         super(algorithmId, keyLength, algorithmName);
         mIvLen = ivLength;
         mIsAead = isAead;
 
         try {
-            mCipher = Cipher.getInstance(getAlgorithmName(), provider);
+            mCipher = Cipher.getInstance(getAlgorithmName());
         } catch (NoSuchAlgorithmException | NoSuchPaddingException e) {
             throw new IllegalArgumentException("Failed to construct " + getTypeString(), e);
         }
@@ -68,10 +62,9 @@ public abstract class IkeCipher extends IkeCrypto {
      * Contruct an instance of IkeCipher.
      *
      * @param encryptionTransform the valid negotiated EncryptionTransform.
-     * @param provider the security provider.
      * @return an instance of IkeCipher.
      */
-    public static IkeCipher create(EncryptionTransform encryptionTransform, Provider provider) {
+    public static IkeCipher create(EncryptionTransform encryptionTransform) {
         int algorithmId = encryptionTransform.id;
 
         // Use specifiedKeyLength for algorithms with variable key length. Since
@@ -79,14 +72,13 @@ public abstract class IkeCipher extends IkeCrypto {
         switch (algorithmId) {
             case SaProposal.ENCRYPTION_ALGORITHM_3DES:
                 return new IkeNormalModeCipher(
-                        algorithmId, KEY_LEN_3DES, IV_LEN_3DES, "DESede/CBC/NoPadding", provider);
+                        algorithmId, KEY_LEN_3DES, IV_LEN_3DES, "DESede/CBC/NoPadding");
             case SaProposal.ENCRYPTION_ALGORITHM_AES_CBC:
                 return new IkeNormalModeCipher(
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
                         IV_LEN_AES_CBC,
-                        "AES/CBC/NoPadding",
-                        provider);
+                        "AES/CBC/NoPadding");
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
                 // Fall through
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
@@ -97,8 +89,7 @@ public abstract class IkeCipher extends IkeCrypto {
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
                         IV_LEN_AES_GCM,
-                        "AES/GCM/NoPadding",
-                        provider);
+                        "AES/GCM/NoPadding");
             default:
                 throw new IllegalArgumentException(
                         "Unrecognized Encryption Algorithm ID: " + algorithmId);

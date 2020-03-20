@@ -49,7 +49,6 @@ import com.android.internal.net.ipsec.ike.SaRecord.SaRecordHelper;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
-import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
@@ -150,19 +149,15 @@ public final class SaRecordTest {
     @Before
     public void setUp() throws Exception {
         mIkeHmacSha1Prf =
-                IkeMacPrf.create(
-                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
-                        IkeMessage.getSecurityProvider());
+                IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
         mHmacSha1IntegrityMac =
                 IkeMacIntegrity.create(
-                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96),
-                        IkeMessage.getSecurityProvider());
+                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96));
         mAesCbcCipher =
                 IkeCipher.create(
                         new EncryptionTransform(
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
-                                SaProposal.KEY_LEN_AES_128),
-                        IkeMessage.getSecurityProvider());
+                                SaProposal.KEY_LEN_AES_128));
 
         mMockFutureRekeyIkeEvent = mock(LocalRequest.class);
         mMockFutureRekeyChildEvent = mock(ChildLocalRequest.class);

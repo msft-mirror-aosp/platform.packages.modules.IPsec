@@ -15,17 +15,21 @@
  */
 package com.android.internal.net.ipsec.ike;
 
+import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ErrorType;
 
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_OK;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PARTIAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -40,10 +44,13 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.Network;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSessionCallback;
+import android.net.ipsec.ike.IkeSessionConfiguration;
+import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
@@ -57,6 +64,7 @@ import android.os.Message;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
+import android.util.CloseGuard;
 import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -80,6 +88,8 @@ import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPskPayload;
 import com.android.internal.net.ipsec.ike.message.IkeCertPayload;
 import com.android.internal.net.ipsec.ike.message.IkeCertX509CertPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.ipsec.ike.message.IkeEapPayload;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
@@ -100,10 +110,9 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
+import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
-import com.android.internal.net.ipsec.ike.utils.State;
-
-import dalvik.system.CloseGuard;
+import com.android.internal.util.State;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -112,9 +121,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.SocketException;
 import java.security.GeneralSecurityException;
-import java.security.Provider;
 import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
@@ -154,11 +161,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
-
-    // TODO: Add SA_HARD_LIFETIME_MS
-
-    // Time after which IKE SA needs to be rekeyed
-    @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(3L);
 
     // Default delay time for retrying a request
     @VisibleForTesting static final long RETRY_INTERVAL_MS = TimeUnit.SECONDS.toMillis(15L);
@@ -272,7 +274,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
     }
 
-    private final IkeSessionParams mIkeSessionParams;
+    /** Package */
+    @VisibleForTesting final IkeSessionParams mIkeSessionParams;
 
     /** Map that stores all IkeSaRecords, keyed by locally generated IKE SPI. */
     private final LongSparseArray<IkeSaRecord> mLocalSpiToIkeSaRecordMap;
@@ -330,6 +333,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting byte[] mIkeInitResponseBytes;
     @VisibleForTesting IkeNoncePayload mIkeInitNoncePayload;
     @VisibleForTesting IkeNoncePayload mIkeRespNoncePayload;
+    @VisibleForTesting List<byte[]> mRemoteVendorIds = new ArrayList<>();
+    @VisibleForTesting List<Integer> mEnabledExtensions = new ArrayList<>();
 
     // FIXME: b/131265898 Pass these parameters from CreateIkeLocalIkeAuth through to
     // CreateIkeLocalIkeAuthPostEap as entry data when Android StateMachine can support that.
@@ -548,12 +553,23 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Forcibly close IKE Session. */
     public void killSession() {
-        // TODO: b/142977160 Support closing IKE Sesison immediately.
+        // TODO(b/150327466): Notify remote serve when there is no outstanding request
+
+        closeAllSaRecords(false /*expectSaClosed*/);
+        mUserCbExecutor.execute(
+                () -> {
+                    mIkeSessionCallback.onClosed();
+                });
+
+        quitNow();
     }
 
     private void scheduleRekeySession(LocalRequest rekeyRequest) {
         // TODO: Make rekey timeout fuzzy
-        sendMessageDelayed(CMD_LOCAL_REQUEST_REKEY_IKE, rekeyRequest, SA_SOFT_LIFETIME_MS);
+        sendMessageDelayed(
+                CMD_LOCAL_REQUEST_REKEY_IKE,
+                rekeyRequest,
+                mIkeSessionParams.getSoftLifetimeMsInternal());
     }
 
     private void scheduleRetry(LocalRequest localRequest) {
@@ -645,7 +661,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         private final InetAddress mSourceAddress;
         private final long mSpi;
-        private final CloseGuard mCloseGuard = CloseGuard.get();
+        private final CloseGuard mCloseGuard = new CloseGuard();
 
         private IkeSecurityParameterIndex(InetAddress sourceAddress, long spi) {
             mSourceAddress = sourceAddress;
@@ -950,25 +966,34 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void enterState() {
             try {
-                mRemoteAddress = mIkeSessionParams.getServerAddress();
+                Network network = mIkeSessionParams.getNetwork();
+
+                // TODO(b/149954916): Do DNS resolution asynchronously and support resolving
+                // multiple addresses.
+                mRemoteAddress = network.getByName(mIkeSessionParams.getServerHostname());
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
+                if (isIpv4) {
+                    mIkeSocket =
+                            IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                    network, mIpSecManager, IkeSessionStateMachine.this);
+                } else {
+                    throw new UnsupportedOperationException("Do not support IPv6 IKE sever");
+                    // TODO(b/146674994): Support IPv6 server address.
+                }
+
                 FileDescriptor sock =
                         Os.socket(
                                 isIpv4 ? OsConstants.AF_INET : OsConstants.AF_INET6,
                                 OsConstants.SOCK_DGRAM,
                                 OsConstants.IPPROTO_UDP);
-                Os.connect(sock, mRemoteAddress, IkeSocket.IKE_SERVER_PORT);
+                network.bindSocket(sock);
+                Os.connect(sock, mRemoteAddress, mIkeSocket.getIkeServerPort());
                 InetSocketAddress localAddr = (InetSocketAddress) Os.getsockname(sock);
                 mLocalAddress = localAddr.getAddress();
                 mLocalPort = localAddr.getPort();
                 Os.close(sock);
-
-                mIkeSocket =
-                        IkeSocket.getIkeSocket(
-                                mIkeSessionParams.getUdpEncapsulationSocket(),
-                                IkeSessionStateMachine.this);
-            } catch (ErrnoException | SocketException e) {
+            } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -1961,7 +1986,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             childData.respPayloads,
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNeeded(),
+                            getEncapSocketIfNatDetected(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     return HANDLED;
@@ -1990,10 +2015,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        private UdpEncapsulationSocket getEncapSocketIfNeeded() {
+        // Returns the UDP-Encapsulation socket to the newly created ChildSessionStateMachine if
+        // a NAT is detected. It allows the ChildSessionStateMachine to build IPsec transforms that
+        // can send and receive IPsec traffic through a NAT.
+        private UdpEncapsulationSocket getEncapSocketIfNatDetected() {
             boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
 
-            return (isNatDetected ? mIkeSessionParams.getUdpEncapsulationSocket() : null);
+            if (!isNatDetected) return null;
+
+            if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
+                throw new IllegalStateException(
+                        "NAT is detected but IKE packet is not UDP-Encapsulated.");
+            }
+            return ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket();
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
@@ -2017,7 +2051,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     mChildInLocalProcedure.createChildSession(
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNeeded(),
+                            getEncapSocketIfNatDetected(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     break;
@@ -2471,7 +2505,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mLocalAddress,
                             mRemoteAddress,
                             mLocalPort,
-                            IkeSocket.IKE_SERVER_PORT);
+                            mIkeSocket.getIkeServerPort());
             payloadList.add(
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
@@ -2497,7 +2531,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
                     IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                            mIkeSessionParams.getServerAddress(), respIkeHeader.ikeResponderSpi);
+                            mRemoteAddress, respIkeHeader.ikeResponderSpi);
 
             int exchangeType = respIkeHeader.exchangeType;
             if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
@@ -2535,8 +2569,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         mIkeRespNoncePayload = (IkeNoncePayload) payload;
                         break;
                     case IkePayload.PAYLOAD_TYPE_VENDOR:
-                        // Do not support any vendor defined protocol extensions. Ignore
-                        // all Vendor ID Payloads.
+                        mRemoteVendorIds.add(((IkeVendorPayload) payload).vendorId);
                         break;
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
@@ -2560,6 +2593,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 break;
                             case NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED:
                                 mSupportFragment = true;
+                                mEnabledExtensions.add(EXTENSION_TYPE_FRAGMENTATION);
                                 break;
                             default:
                                 // Unknown and unexpected status notifications are ignored as per
@@ -2600,13 +2634,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // has exactly one Transform for each Transform type. Only exception is when
             // combined-mode cipher is used, there will be either no integrity algorithm or an
             // INTEGRITY_ALGORITHM_NONE type algorithm.
-            Provider provider = IkeMessage.getSecurityProvider();
-            mIkeCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
+            mIkeCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0]);
             if (!mIkeCipher.isAead()) {
-                mIkeIntegrity =
-                        IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
+                mIkeIntegrity = IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0]);
             }
-            mIkePrf = IkeMacPrf.create(mSaProposal.getPrfTransforms()[0], provider);
+            mIkePrf = IkeMacPrf.create(mSaProposal.getPrfTransforms()[0]);
 
             IkeKePayload reqKePayload =
                     reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
@@ -2630,7 +2662,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // Check if the remote node is behind NAT
             byte[] expectedRemoteNatData =
                     IkeNotifyPayload.generateNatDetectionData(
-                            initIkeSpi, respIkeSpi, mRemoteAddress, IkeSocket.IKE_SERVER_PORT);
+                            initIkeSpi, respIkeSpi, mRemoteAddress, mIkeSocket.getIkeServerPort());
             for (IkeNotifyPayload natPayload : natSourcePayloads) {
                 // If none of the received hash matches the expected value, the remote node is
                 // behind NAT.
@@ -2731,6 +2763,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     ikeMessage.getPayloadListForType(
                             IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
 
+            IkeConfigPayload configPayload =
+                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
+                            IkeConfigPayload.class);
+
             boolean hasErrorNotify = false;
             List<IkePayload> list = new LinkedList<>();
             for (IkeNotifyPayload payload : notifyPayloads) {
@@ -2753,6 +2789,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             list.add(saPayload);
             list.add(tsInitPayload);
             list.add(tsRespPayload);
+
+            if (configPayload != null) {
+                list.add(configPayload);
+            }
+
             return list;
         }
 
@@ -2770,12 +2811,34 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                     childReqList,
                                     childRespList)));
 
+            transitionTo(mChildProcedureOngoing);
+        }
+
+        protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
+            IkeConfigPayload configPayload =
+                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
+                            IkeConfigPayload.class);
+            if (configPayload == null) {
+                logi("No config payload in ikeMessage.");
+            } else if (configPayload.configType != CONFIG_TYPE_REPLY) {
+                logi("Unexpected config payload. Config Type: " + configPayload.configType);
+                configPayload = null;
+            }
+
+            IkeSessionConnectionInfo ikeConnInfo =
+                    new IkeSessionConnectionInfo(
+                            mLocalAddress, mRemoteAddress, mIkeSessionParams.getNetwork());
+
+            return new IkeSessionConfiguration(
+                    ikeConnInfo, configPayload, mRemoteVendorIds, mEnabledExtensions);
+        }
+
+        protected void notifyIkeSessionSetup(IkeMessage msg) {
+            IkeSessionConfiguration ikeSessionConfig = buildIkeSessionConfiguration(msg);
             mUserCbExecutor.execute(
                     () -> {
-                        mIkeSessionCallback.onOpened(null /*sessionConfiguration*/);
-                        // TODO: Construct and pass a real IkeSessionConfiguration
+                        mIkeSessionCallback.onOpened(ikeSessionConfig);
                     });
-            transitionTo(mChildProcedureOngoing);
         }
     }
 
@@ -2830,6 +2893,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 } else {
                     validateIkeAuthRespWithChildPayloads(ikeMessage);
 
+                    notifyIkeSessionSetup(ikeMessage);
+
                     performFirstChildNegotiation(
                             childReqList, extractChildPayloadsFromMessage(ikeMessage));
                 }
@@ -2867,6 +2932,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             payloadList.add(mInitIdPayload);
             payloadList.add(respIdPayload);
 
+            if(mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
+                payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION));
+            }
+
             // Build Authentication payload
             IkeAuthConfig authConfig = mIkeSessionParams.getLocalAuthConfig();
             switch (authConfig.mAuthMethod) {
@@ -2900,7 +2969,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mIpSecManager,
                             mLocalAddress,
                             mFirstChildSessionParams,
-                            true /*isFirstChild*/));
+                            true /*isFirstChildSa*/));
+
+            final List<ConfigAttribute> configAttributes = new ArrayList<>();
+            configAttributes.addAll(
+                    Arrays.asList(
+                            CreateChildSaHelper.getConfigAttributes(mFirstChildSessionParams)));
+            configAttributes.addAll(
+                    Arrays.asList(mIkeSessionParams.getConfigurationAttributesInternal()));
+            if (!configAttributes.isEmpty()) {
+                payloadList.add(new IkeConfigPayload(false /*isReply*/, configAttributes));
+            }
 
             return buildIkeAuthReqMessage(payloadList);
         }
@@ -2942,9 +3021,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
                         mRespIdPayload = (IkeIdPayload) payload;
-                        if (!mIkeSessionParams
-                                .getRemoteIdentification()
-                                .equals(mRespIdPayload.ikeId)) {
+                        if (!mIkeSessionParams.hasIkeOption(
+                                        IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
+                                && !mIkeSessionParams
+                                        .getRemoteIdentification()
+                                        .equals(mRespIdPayload.ikeId)) {
                             throw new AuthenticationFailedException(
                                     "Unrecognized Responder Identification.");
                         }
@@ -2977,12 +3058,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
 
             // Verify existence of payloads
-            if (mRespIdPayload == null || authPayload == null) {
-                throw new AuthenticationFailedException("ID-Responder or Auth payload is missing.");
+
+            if (authPayload == null && mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
+                // If EAP-only option is selected, the responder will not send auth payload if it
+                // accepts EAP-only authentication. Currently only EAP-only safe methods are
+                // proposed to the responder if IKE_OPTION_EAP_ONLY_AUTH option is set. So there is
+                // no need to check if the responder selected an EAP-only safe method
+                return;
             }
 
             // Authenticate the remote peer.
-            authenticate(authPayload, mRespIdPayload, certPayloads);
+            if (authPayload != null && mRespIdPayload != null) {
+                authenticate(authPayload, mRespIdPayload, certPayloads);
+                return;
+            }
+
+            throw new AuthenticationFailedException("ID-Responder or Auth payload is missing.");
         }
 
         private void authenticate(
@@ -3250,6 +3341,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                 validateIkeAuthRespPostEap(nonChildPayloads);
 
+                notifyIkeSessionSetup(ikeMessage);
+
                 performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
             } catch (IkeProtocolException e) {
                 // Notify the remote because they may have set up the IKE SA.
@@ -3475,20 +3568,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 IkeProposal reqProposal = negotiatedProposals.first;
                 IkeProposal respProposal = negotiatedProposals.second;
 
-                Provider provider = IkeMessage.getSecurityProvider();
                 IkeMacPrf newPrf;
                 IkeCipher newCipher;
                 IkeMacIntegrity newIntegrity = null;
 
-                newCipher =
-                        IkeCipher.create(
-                                respProposal.saProposal.getEncryptionTransforms()[0], provider);
+                newCipher = IkeCipher.create(respProposal.saProposal.getEncryptionTransforms()[0]);
                 if (!newCipher.isAead()) {
                     newIntegrity =
                             IkeMacIntegrity.create(
-                                    respProposal.saProposal.getIntegrityTransforms()[0], provider);
+                                    respProposal.saProposal.getIntegrityTransforms()[0]);
                 }
-                newPrf = IkeMacPrf.create(respProposal.saProposal.getPrfTransforms()[0], provider);
+                newPrf = IkeMacPrf.create(respProposal.saProposal.getPrfTransforms()[0]);
 
                 // Build new SaRecord
                 IkeSaRecord newSaRecord =

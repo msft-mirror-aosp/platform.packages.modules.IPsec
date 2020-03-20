@@ -18,17 +18,27 @@ package com.android.internal.net.ipsec.ike;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyObject;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.net.IpSecManager;
+import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.Network;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.system.ErrnoException;
@@ -40,8 +50,10 @@ import android.util.LongSparseArray;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.IkeSocket.PacketReceiver;
+import com.android.internal.net.ipsec.ike.IkeUdpEncapSocket.PacketReceiver;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
+import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.server.IpSecService;
 
 import org.junit.After;
 import org.junit.Before;
@@ -49,6 +61,7 @@ import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import java.io.FileDescriptor;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -56,7 +69,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public final class IkeSocketTest {
+public final class IkeUdpEncapSocketTest {
     private static final int REMOTE_RECV_BUFF_SIZE = 2048;
     private static final int TIMEOUT = 1000;
 
@@ -94,17 +107,42 @@ public final class IkeSocketTest {
     private LongSparseArray mSpiToIkeStateMachineMap;
     private PacketReceiver mPacketReceiver;
 
-    private UdpEncapsulationSocket mClientUdpEncapSocket;
+    private UdpEncapsulationSocket mSpyUdpEncapSocket;
     private InetAddress mLocalAddress;
     private FileDescriptor mDummyRemoteServerFd;
 
+    private UdpEncapsulationSocket mSpyDummyUdpEncapSocketOne;
+    private UdpEncapsulationSocket mSpyDummyUdpEncapSocketTwo;
+    private IpSecManager mSpyIpSecManager;
+
+    private Network mMockNetwork;
     private IkeSessionStateMachine mMockIkeSessionStateMachine;
 
     @Before
     public void setUp() throws Exception {
         Context context = InstrumentationRegistry.getContext();
         IpSecManager ipSecManager = (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE);
-        mClientUdpEncapSocket = ipSecManager.openUdpEncapsulationSocket();
+        mSpyUdpEncapSocket = spy(ipSecManager.openUdpEncapsulationSocket());
+
+        MockIpSecTestUtils mockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
+        IpSecManager dummyIpSecManager = mockIpSecTestUtils.getIpSecManager();
+        IpSecService ipSecService = mockIpSecTestUtils.getIpSecService();
+
+        when(ipSecService.openUdpEncapsulationSocket(anyInt(), anyObject()))
+                .thenReturn(MockIpSecTestUtils.buildDummyIpSecUdpEncapResponse(12345));
+        mSpyDummyUdpEncapSocketOne = spy(dummyIpSecManager.openUdpEncapsulationSocket());
+
+        when(ipSecService.openUdpEncapsulationSocket(anyInt(), anyObject()))
+                .thenReturn(MockIpSecTestUtils.buildDummyIpSecUdpEncapResponse(23456));
+        mSpyDummyUdpEncapSocketTwo = spy(dummyIpSecManager.openUdpEncapsulationSocket());
+
+        mSpyIpSecManager = spy(dummyIpSecManager);
+        doReturn(mSpyDummyUdpEncapSocketOne)
+                .doReturn(mSpyDummyUdpEncapSocketTwo)
+                .when(mSpyIpSecManager)
+                .openUdpEncapsulationSocket();
+
+        mMockNetwork = mock(Network.class);
 
         mLocalAddress = InetAddress.getByName(IPV4_LOOPBACK);
         mDummyRemoteServerFd = getBoundUdpSocket(mLocalAddress);
@@ -122,45 +160,100 @@ public final class IkeSocketTest {
         mSpiToIkeStateMachineMap = new LongSparseArray<IkeSessionStateMachine>();
         mSpiToIkeStateMachineMap.put(mLocalSpi, mMockIkeSessionStateMachine);
 
-        mPacketReceiver = new IkeSocket.PacketReceiver();
+        mPacketReceiver = new IkeUdpEncapSocket.PacketReceiver();
     }
 
     @After
     public void tearDown() throws Exception {
-        mClientUdpEncapSocket.close();
-        IkeSocket.setPacketReceiver(mPacketReceiver);
+        mSpyUdpEncapSocket.close();
+        IkeUdpEncapSocket.setPacketReceiver(mPacketReceiver);
         Os.close(mDummyRemoteServerFd);
     }
 
     private static FileDescriptor getBoundUdpSocket(InetAddress address) throws Exception {
         FileDescriptor sock =
                 Os.socket(OsConstants.AF_INET, OsConstants.SOCK_DGRAM, OsConstants.IPPROTO_UDP);
-        Os.bind(sock, address, IkeSocket.IKE_SERVER_PORT);
+        Os.bind(sock, address, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         return sock;
     }
 
     @Test
-    public void testGetAndCloseIkeSocket() throws Exception {
+    public void testGetAndCloseIkeUdpEncapSocketSameNetwork() throws Exception {
         // Must be prepared here; AndroidJUnitRunner runs tests on different threads from the
-        // setUp() call. Since the new Handler() call is run in getIkeSocket, the Looper must be
-        // prepared here.
+        // setUp() call. Since the new Handler() call is run in getIkeUdpEncapSocket, the Looper
+        // must be prepared here.
         if (Looper.myLooper() == null) Looper.prepare();
 
-        IkeSessionStateMachine mMockIkeSessionOne = mock(IkeSessionStateMachine.class);
-        IkeSessionStateMachine mMockIkeSessionTwo = mock(IkeSessionStateMachine.class);
+        IkeSessionStateMachine mockIkeSessionOne = mock(IkeSessionStateMachine.class);
+        IkeSessionStateMachine mockIkeSessionTwo = mock(IkeSessionStateMachine.class);
 
-        IkeSocket ikeSocketOne = IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionOne);
+        IkeUdpEncapSocket ikeSocketOne =
+                IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                        mMockNetwork, mSpyIpSecManager, mockIkeSessionOne);
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
-        IkeSocket ikeSocketTwo = IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionTwo);
-        assertEquals(ikeSocketOne, ikeSocketTwo);
+        IkeUdpEncapSocket ikeSocketTwo =
+                IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                        mMockNetwork, mSpyIpSecManager, mockIkeSessionTwo);
         assertEquals(2, ikeSocketTwo.mAliveIkeSessions.size());
+        assertEquals(ikeSocketOne, ikeSocketTwo);
 
-        ikeSocketOne.releaseReference(mMockIkeSessionOne);
+        verify(mSpyIpSecManager).openUdpEncapsulationSocket();
+        verify(mMockNetwork).bindSocket(any(FileDescriptor.class));
+
+        ikeSocketOne.releaseReference(mockIkeSessionOne);
+        assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
+        verify(mSpyDummyUdpEncapSocketOne, never()).close();
+
+        ikeSocketTwo.releaseReference(mockIkeSessionTwo);
+        assertEquals(0, ikeSocketTwo.mAliveIkeSessions.size());
+        verify(mSpyDummyUdpEncapSocketOne).close();
+    }
+
+    @Test
+    public void testGetAndCloseIkeUdpEncapSocketDifferentNetwork() throws Exception {
+        // Must be prepared here; AndroidJUnitRunner runs tests on different threads from the
+        // setUp() call. Since the new Handler() call is run in getIkeUdpEncapSocket, the Looper
+        // must be prepared here.
+        if (Looper.myLooper() == null) Looper.prepare();
+
+        IkeSessionStateMachine mockIkeSessionOne = mock(IkeSessionStateMachine.class);
+        IkeSessionStateMachine mockIkeSessionTwo = mock(IkeSessionStateMachine.class);
+
+        Network mockNetworkOne = mock(Network.class);
+        Network mockNetworkTwo = mock(Network.class);
+
+        IkeUdpEncapSocket ikeSocketOne =
+                IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                        mockNetworkOne, mSpyIpSecManager, mockIkeSessionOne);
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
-        ikeSocketTwo.releaseReference(mMockIkeSessionTwo);
+        IkeUdpEncapSocket ikeSocketTwo =
+                IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                        mockNetworkTwo, mSpyIpSecManager, mockIkeSessionTwo);
+        assertEquals(1, ikeSocketTwo.mAliveIkeSessions.size());
+
+        assertNotEquals(ikeSocketOne, ikeSocketTwo);
+        verify(mSpyIpSecManager, times(2)).openUdpEncapsulationSocket();
+
+        ArgumentCaptor<FileDescriptor> fdCaptorOne = ArgumentCaptor.forClass(FileDescriptor.class);
+        ArgumentCaptor<FileDescriptor> fdCaptorTwo = ArgumentCaptor.forClass(FileDescriptor.class);
+        verify(mockNetworkOne).bindSocket(fdCaptorOne.capture());
+        verify(mockNetworkTwo).bindSocket(fdCaptorTwo.capture());
+
+        FileDescriptor fdOne = fdCaptorOne.getValue();
+        FileDescriptor fdTwo = fdCaptorTwo.getValue();
+        assertNotNull(fdOne);
+        assertNotNull(fdTwo);
+        assertNotEquals(fdOne, fdTwo);
+
+        ikeSocketOne.releaseReference(mockIkeSessionOne);
+        assertEquals(0, ikeSocketOne.mAliveIkeSessions.size());
+        verify(mSpyDummyUdpEncapSocketOne).close();
+
+        ikeSocketTwo.releaseReference(mockIkeSessionTwo);
         assertEquals(0, ikeSocketTwo.mAliveIkeSessions.size());
+        verify(mSpyDummyUdpEncapSocketTwo).close();
     }
 
     @Test
@@ -168,16 +261,17 @@ public final class IkeSocketTest {
         if (Looper.myLooper() == null) Looper.prepare();
 
         // Send IKE packet
-        IkeSocket ikeSocket =
-                IkeSocket.getIkeSocket(mClientUdpEncapSocket, mMockIkeSessionStateMachine);
+        IkeUdpEncapSocket ikeSocket =
+                IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                        mMockNetwork, mSpyIpSecManager, mMockIkeSessionStateMachine);
         ikeSocket.sendIkePacket(mDataOne, mLocalAddress);
 
         byte[] receivedData = receive(mDummyRemoteServerFd);
 
         // Verify received data
         ByteBuffer expectedBuffer =
-                ByteBuffer.allocate(IkeSocket.NON_ESP_MARKER_LEN + mDataOne.length);
-        expectedBuffer.put(IkeSocket.NON_ESP_MARKER).put(mDataOne);
+                ByteBuffer.allocate(IkeUdpEncapSocket.NON_ESP_MARKER_LEN + mDataOne.length);
+        expectedBuffer.put(IkeUdpEncapSocket.NON_ESP_MARKER).put(mDataOne);
 
         assertArrayEquals(expectedBuffer.array(), receivedData);
 
@@ -186,53 +280,61 @@ public final class IkeSocketTest {
 
     @Test
     public void testReceiveIkePacket() throws Exception {
+        doReturn(mSpyUdpEncapSocket).when(mSpyIpSecManager).openUdpEncapsulationSocket();
+
         // Create working thread.
-        HandlerThread mIkeThread = new HandlerThread("IkeSocketTest");
+        HandlerThread mIkeThread = new HandlerThread("IkeUdpEncapSocketTest");
         mIkeThread.start();
 
-        // Create IkeSocket on working thread.
-        IkeSocketReceiver socketReceiver = new IkeSocketReceiver();
+        // Create IkeUdpEncapSocket on working thread.
+        IkeUdpEncapSocketReceiver socketReceiver = new IkeUdpEncapSocketReceiver();
         TestCountDownLatch createLatch = new TestCountDownLatch();
         mIkeThread
                 .getThreadHandler()
                 .post(
                         () -> {
                             try {
-                                socketReceiver.setIkeSocket(
-                                        IkeSocket.getIkeSocket(
-                                                mClientUdpEncapSocket,
+                                socketReceiver.setIkeUdpEncapSocket(
+                                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                                mMockNetwork,
+                                                mSpyIpSecManager,
                                                 mMockIkeSessionStateMachine));
                                 createLatch.countDown();
-                                Log.d("IkeSocketTest", "IkeSocket created.");
-                            } catch (ErrnoException e) {
-                                Log.e("IkeSocketTest", "error encountered creating IkeSocket ", e);
+                                Log.d("IkeUdpEncapSocketTest", "IkeUdpEncapSocket created.");
+                            } catch (ErrnoException
+                                    | IOException
+                                    | ResourceUnavailableException e) {
+                                Log.e(
+                                        "IkeUdpEncapSocketTest",
+                                        "error encountered creating IkeUdpEncapSocket ",
+                                        e);
                             }
                         });
         createLatch.await();
 
-        IkeSocket ikeSocket = socketReceiver.getIkeSocket();
+        IkeUdpEncapSocket ikeSocket = socketReceiver.getIkeUdpEncapSocket();
         assertNotNull(ikeSocket);
 
-        // Configure IkeSocket
+        // Configure IkeUdpEncapSocket
         TestCountDownLatch receiveLatch = new TestCountDownLatch();
         DummyPacketReceiver packetReceiver = new DummyPacketReceiver(receiveLatch);
-        IkeSocket.setPacketReceiver(packetReceiver);
+        IkeUdpEncapSocket.setPacketReceiver(packetReceiver);
 
         // Send first packet.
-        sendToIkeSocket(mDummyRemoteServerFd, mDataOne, mLocalAddress);
+        sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataOne, mLocalAddress);
         receiveLatch.await();
 
         assertEquals(1, ikeSocket.numPacketsReceived());
         assertArrayEquals(mDataOne, packetReceiver.mReceivedData);
 
         // Send second packet.
-        sendToIkeSocket(mDummyRemoteServerFd, mDataTwo, mLocalAddress);
+        sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataTwo, mLocalAddress);
         receiveLatch.await();
 
         assertEquals(2, ikeSocket.numPacketsReceived());
         assertArrayEquals(mDataTwo, packetReceiver.mReceivedData);
 
-        // Close IkeSocket.
+        // Close IkeUdpEncapSocket.
         TestCountDownLatch closeLatch = new TestCountDownLatch();
         ikeSocket
                 .getHandler()
@@ -243,7 +345,23 @@ public final class IkeSocketTest {
                         });
         closeLatch.await();
 
+        verify(mSpyUdpEncapSocket).close();
+        verifyCloseFd(mSpyUdpEncapSocket.getFileDescriptor());
+
         mIkeThread.quitSafely();
+    }
+
+    private void verifyCloseFd(FileDescriptor fd) {
+        try {
+            Os.sendto(
+                    fd,
+                    ByteBuffer.wrap("Check if closed".getBytes()),
+                    0,
+                    InetAddress.getLoopbackAddress(),
+                    IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
+            fail("Expected to fail because fd is closed");
+        } catch (ErrnoException | IOException expected) {
+        }
     }
 
     @Test
@@ -307,13 +425,13 @@ public final class IkeSocketTest {
                                                     null));
                                 } catch (Exception e) {
                                     Log.e(
-                                            "IkeSocketTest",
+                                            "IkeUdpEncapSocketTest",
                                             "Error encountered reading from socket",
                                             e);
                                 }
                             }
                             Log.d(
-                                    "IkeSocketTest",
+                                    "IkeUdpEncapSocketTest",
                                     "Packet received with size of " + bytesRead.get());
                         });
 
@@ -323,24 +441,24 @@ public final class IkeSocketTest {
         return Arrays.copyOfRange(receiveBuffer, 0, bytesRead.get());
     }
 
-    private void sendToIkeSocket(FileDescriptor fd, byte[] data, InetAddress destAddress)
+    private void sendToIkeUdpEncapSocket(FileDescriptor fd, byte[] data, InetAddress destAddress)
             throws Exception {
-        Os.sendto(fd, data, 0, data.length, 0, destAddress, mClientUdpEncapSocket.getPort());
+        Os.sendto(fd, data, 0, data.length, 0, destAddress, mSpyUdpEncapSocket.getPort());
     }
 
-    private static class IkeSocketReceiver {
-        private IkeSocket mIkeSocket;
+    private static class IkeUdpEncapSocketReceiver {
+        private IkeUdpEncapSocket mIkeUdpEncapSocket;
 
-        void setIkeSocket(IkeSocket ikeSocket) {
-            mIkeSocket = ikeSocket;
+        void setIkeUdpEncapSocket(IkeUdpEncapSocket ikeSocket) {
+            mIkeUdpEncapSocket = ikeSocket;
         }
 
-        IkeSocket getIkeSocket() {
-            return mIkeSocket;
+        IkeUdpEncapSocket getIkeUdpEncapSocket() {
+            return mIkeUdpEncapSocket;
         }
     }
 
-    private static class DummyPacketReceiver implements IkeSocket.IPacketReceiver {
+    private static class DummyPacketReceiver implements IkeUdpEncapSocket.IPacketReceiver {
         byte[] mReceivedData = null;
         final TestCountDownLatch mLatch;
 
@@ -352,7 +470,7 @@ public final class IkeSocketTest {
                 byte[] revbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession) {
             mReceivedData = Arrays.copyOfRange(revbuf, 0, revbuf.length);
             mLatch.countDown();
-            Log.d("IkeSocketTest", "Packet received");
+            Log.d("IkeUdpEncapSocketTest", "Packet received");
         }
     }
 

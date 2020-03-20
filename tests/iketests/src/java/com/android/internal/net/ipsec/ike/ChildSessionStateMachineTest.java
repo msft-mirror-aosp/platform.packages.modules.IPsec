@@ -104,7 +104,6 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
 import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.ipsec.ike.message.IkeKePayload;
-import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
@@ -236,10 +235,7 @@ public final class ChildSessionStateMachineTest {
         mSpyIkeLog = TestUtils.makeSpyLogThrowExceptionForWtf(TAG);
         IkeManager.setIkeLog(mSpyIkeLog);
 
-        mIkePrf =
-                IkeMacPrf.create(
-                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
-                        IkeMessage.getSecurityProvider());
+        mIkePrf = IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
 
         mContext = InstrumentationRegistry.getContext();
         mMockIpSecService = mock(IpSecService.class);
@@ -339,11 +335,11 @@ public final class ChildSessionStateMachineTest {
         IkeTsPayload tsInitPayload =
                 new IkeTsPayload(
                         true /*isInitiator*/,
-                        mChildSessionParams.getLocalTrafficSelectorsInternal());
+                        mChildSessionParams.getInboundTrafficSelectorsInternal());
         IkeTsPayload tsRespPayload =
                 new IkeTsPayload(
                         false /*isInitiator*/,
-                        mChildSessionParams.getRemoteTrafficSelectorsInternal());
+                        mChildSessionParams.getOutboundTrafficSelectorsInternal());
 
         mFirstSaReqPayloads.add(tsInitPayload);
         mFirstSaReqPayloads.add(tsRespPayload);
@@ -492,10 +488,10 @@ public final class ChildSessionStateMachineTest {
         // Verify Child Session Configuration
         ChildSessionConfiguration sessionConfig = mChildConfigCaptor.getValue();
         verifyTsList(
-                Arrays.asList(mChildSessionParams.getLocalTrafficSelectorsInternal()),
+                Arrays.asList(mChildSessionParams.getInboundTrafficSelectorsInternal()),
                 sessionConfig.getInboundTrafficSelectors());
         verifyTsList(
-                Arrays.asList(mChildSessionParams.getRemoteTrafficSelectorsInternal()),
+                Arrays.asList(mChildSessionParams.getOutboundTrafficSelectorsInternal()),
                 sessionConfig.getOutboundTrafficSelectors());
 
         List<LinkAddress> addrList = sessionConfig.getInternalAddresses();
@@ -685,9 +681,10 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.mSaProposal = buildSaProposal();
         mChildSessionStateMachine.mChildCipher = mock(IkeCipher.class);
         mChildSessionStateMachine.mChildIntegrity = mock(IkeMacIntegrity.class);
-        mChildSessionStateMachine.mLocalTs = mChildSessionParams.getLocalTrafficSelectorsInternal();
+        mChildSessionStateMachine.mLocalTs =
+                mChildSessionParams.getInboundTrafficSelectorsInternal();
         mChildSessionStateMachine.mRemoteTs =
-                mChildSessionParams.getRemoteTrafficSelectorsInternal();
+                mChildSessionParams.getOutboundTrafficSelectorsInternal();
 
         mChildSessionStateMachine.mCurrentChildSaRecord = mSpyCurrentChildSaRecord;
 

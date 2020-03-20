@@ -25,6 +25,7 @@ import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
+import android.util.CloseGuard;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
@@ -38,8 +39,6 @@ import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultPartial;
 import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
-
-import dalvik.system.CloseGuard;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -82,7 +81,7 @@ public abstract class SaRecord implements AutoCloseable {
 
     private final LocalRequest mFutureRekeyEvent;
 
-    private final CloseGuard mCloseGuard = CloseGuard.get();
+    private final CloseGuard mCloseGuard = new CloseGuard();
 
     /** Package private */
     SaRecord(
@@ -503,7 +502,8 @@ public abstract class SaRecord implements AutoCloseable {
                 getIkeLog().wtf(TAG, "Kernel does not support UDP encapsulation for IPv6 SAs");
             }
             if (udpEncapSocket != null && sourceAddress instanceof Inet4Address) {
-                builder.setIpv4Encapsulation(udpEncapSocket, IkeSocket.IKE_SERVER_PORT);
+                builder.setIpv4Encapsulation(
+                        udpEncapSocket, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
             }
 
             if (isTransport) {

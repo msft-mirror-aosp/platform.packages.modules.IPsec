@@ -16,25 +16,42 @@
 
 package android.net.ipsec.ike;
 
+import static android.system.OsConstants.AF_INET;
+import static android.system.OsConstants.AF_INET6;
+
 import android.annotation.IntDef;
+import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
-import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.eap.EapSessionConfig;
 
+import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.security.PrivateKey;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 /**
  * IkeSessionParams contains all user provided configurations for negotiating an {@link IkeSession}.
@@ -59,8 +76,68 @@ public final class IkeSessionParams {
     /** @hide */
     public static final int IKE_AUTH_METHOD_EAP = 3;
 
-    @NonNull private final InetAddress mServerAddress;
-    @NonNull private final UdpEncapsulationSocket mUdpEncapSocket;
+    /** @hide */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID, IKE_OPTION_EAP_ONLY_AUTH})
+    public @interface IkeOption {}
+
+    /**
+     * If set, the IKE library will accept any remote (server) identity, even if it does not match
+     * the configured remote identity
+     *
+     * <p>See {@link Builder#setRemoteIdentification(IkeIdentification)}
+     */
+    public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0;
+    /**
+     * If set, and EAP has been configured as the authentication method, the IKE library will
+     * request that the remote (also) use an EAP-only authentication flow.
+     *
+     * <p>@see {@link Builder#setAuthEap(X509Certificate, EapSessionConfig)}
+     *
+     */
+    public static final int IKE_OPTION_EAP_ONLY_AUTH = 1;
+
+    private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_EAP_ONLY_AUTH;
+
+    /** @hide */
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
+    /** @hide */
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MAXIMUM = 86400; // 24 hours
+    /** @hide */
+    @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_DEFAULT = 14400; // 4 hours
+
+    /** @hide */
+    @VisibleForTesting static final int IKE_SOFT_LIFETIME_SEC_MINIMUM = 120; // 2 minutes
+    /** @hide */
+    @VisibleForTesting static final int IKE_SOFT_LIFETIME_SEC_DEFAULT = 7200; // 2 hours
+
+    /** @hide */
+    @VisibleForTesting
+    static final int IKE_LIFETIME_MARGIN_SEC_MINIMUM = (int) TimeUnit.MINUTES.toSeconds(1L);
+
+    /** @hide */
+    @VisibleForTesting static final int IKE_DPD_DELAY_SEC_MIN = 20;
+    /** @hide */
+    @VisibleForTesting static final int IKE_DPD_DELAY_SEC_MAX = 1800; // 30 minutes
+    /** @hide */
+    @VisibleForTesting static final int IKE_DPD_DELAY_SEC_DEFAULT = 120; // 2 minutes
+
+    /** @hide */
+    @VisibleForTesting static final int IKE_RETRANS_TIMEOUT_MS_MIN = 500;
+    /** @hide */
+    @VisibleForTesting
+    static final int IKE_RETRANS_TIMEOUT_MS_MAX = (int) TimeUnit.MINUTES.toMillis(30L);
+    /** @hide */
+    @VisibleForTesting static final int IKE_RETRANS_MAX_ATTEMPTS_MAX = 10;
+    /** @hide */
+    @VisibleForTesting
+    static final int[] IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT =
+            new int[] {500, 1000, 2000, 4000, 8000};
+
+    @NonNull private final String mServerHostname;
+    @NonNull private final Network mNetwork;
+
     @NonNull private final IkeSaProposal[] mSaProposals;
 
     @NonNull private final IkeIdentification mLocalIdentification;
@@ -69,19 +146,37 @@ public final class IkeSessionParams {
     @NonNull private final IkeAuthConfig mLocalAuthConfig;
     @NonNull private final IkeAuthConfig mRemoteAuthConfig;
 
+    @NonNull private final IkeConfigAttribute[] mConfigRequests;
+
+    @NonNull private final int[] mRetransTimeoutMsList;
+
+    private final long mIkeOptions;
+
+    private final int mHardLifetimeSec;
+    private final int mSoftLifetimeSec;
+
+    private final int mDpdDelaySec;
+
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
-            @NonNull InetAddress serverAddress,
-            @NonNull UdpEncapsulationSocket udpEncapsulationSocket,
+            @NonNull String serverHostname,
+            @NonNull Network network,
             @NonNull IkeSaProposal[] proposals,
             @NonNull IkeIdentification localIdentification,
             @NonNull IkeIdentification remoteIdentification,
             @NonNull IkeAuthConfig localAuthConfig,
             @NonNull IkeAuthConfig remoteAuthConfig,
+            @NonNull IkeConfigAttribute[] configRequests,
+            @NonNull int[] retransTimeoutMsList,
+            long ikeOptions,
+            int hardLifetimeSec,
+            int softLifetimeSec,
+            int dpdDelaySec,
             boolean isIkeFragmentationSupported) {
-        mServerAddress = serverAddress;
-        mUdpEncapSocket = udpEncapsulationSocket;
+        mServerHostname = serverHostname;
+        mNetwork = network;
+
         mSaProposals = proposals;
 
         mLocalIdentification = localIdentification;
@@ -90,19 +185,44 @@ public final class IkeSessionParams {
         mLocalAuthConfig = localAuthConfig;
         mRemoteAuthConfig = remoteAuthConfig;
 
+        mConfigRequests = configRequests;
+
+        mRetransTimeoutMsList = retransTimeoutMsList;
+
+        mIkeOptions = ikeOptions;
+
+        mHardLifetimeSec = hardLifetimeSec;
+        mSoftLifetimeSec = softLifetimeSec;
+
+        mDpdDelaySec = dpdDelaySec;
+
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
 
-    /** Retrieves the configured server address */
-    @NonNull
-    public InetAddress getServerAddress() {
-        return mServerAddress;
+    private static void validateIkeOptionOrThrow(@IkeOption int ikeOption) {
+        if (ikeOption < MIN_IKE_OPTION || ikeOption > MAX_IKE_OPTION) {
+            throw new IllegalArgumentException("Invalid IKE Option: " + ikeOption);
+        }
     }
 
-    /** Retrieves the UDP encapsulation socket */
+    private static long getOptionBitValue(int ikeOption) {
+        return 1 << ikeOption;
+    }
+
+    /**
+     * Retrieves the configured server hostname
+     *
+     * <p>The configured server hostname will be resolved during IKE Session creation.
+     */
     @NonNull
-    public UdpEncapsulationSocket getUdpEncapsulationSocket() {
-        return mUdpEncapSocket;
+    public String getServerHostname() {
+        return mServerHostname;
+    }
+
+    /** Retrieves the configured {@link Network} */
+    @NonNull
+    public Network getNetwork() {
+        return mNetwork;
     }
 
     /** Retrieves all ChildSaProposals configured */
@@ -140,10 +260,96 @@ public final class IkeSessionParams {
         return mRemoteAuthConfig;
     }
 
+    /** Retrieves hard lifetime in seconds */
+    // Use "second" because smaller unit won't make sense to describe a rekey interval.
+    @SuppressLint("MethodNameUnits")
+    @IntRange(from = IKE_HARD_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+    public int getHardLifetimeSeconds() {
+        return mHardLifetimeSec;
+    }
+
+    /** Retrieves soft lifetime in seconds */
+    // Use "second" because smaller unit does not make sense to a rekey interval.
+    @SuppressLint("MethodNameUnits")
+    @IntRange(from = IKE_SOFT_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+    public int getSoftLifetimeSeconds() {
+        return mSoftLifetimeSec;
+    }
+
+    /** Retrieves the Dead Peer Detection(DPD) delay in seconds */
+    @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
+    public int getDpdDelaySeconds() {
+        return mDpdDelaySec;
+    }
+
+    /**
+     * Retrieves the relative retransmission timeout list in milliseconds
+     *
+     * <p>@see {@link Builder#setRetransmissionTimeoutsMillis(int[])}
+     */
+    public int[] getRetransmissionTimeoutsMillis() {
+        return mRetransTimeoutMsList;
+    }
+
+    /** Checks if the given IKE Session negotiation option is set */
+    public boolean hasIkeOption(@IkeOption int ikeOption) {
+        validateIkeOptionOrThrow(ikeOption);
+        return (mIkeOptions & getOptionBitValue(ikeOption)) != 0;
+    }
+
+    /** @hide */
+    public long getHardLifetimeMsInternal() {
+        return TimeUnit.SECONDS.toMillis((long) mHardLifetimeSec);
+    }
+
+    /** @hide */
+    public long getSoftLifetimeMsInternal() {
+        return TimeUnit.SECONDS.toMillis((long) mSoftLifetimeSec);
+    }
+
     /** @hide */
     public boolean isIkeFragmentationSupported() {
         return mIsIkeFragmentationSupported;
     }
+
+    /** @hide */
+    public IkeConfigAttribute[] getConfigurationAttributesInternal() {
+        return mConfigRequests;
+    }
+
+    /** Retrieves the list of Configuration Requests */
+    @NonNull
+    public List<IkeConfigRequest> getConfigurationRequests() {
+        return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
+    }
+
+    /** Represents an IKE session configuration request type */
+    public interface IkeConfigRequest {}
+
+    /** Represents an IPv4 P_CSCF request */
+    public interface ConfigRequestIpv4PcscfServer extends IkeConfigRequest {
+        /**
+         * Retrieves the requested IPv4 P_CSCF server address
+         *
+         * @return The requested P_CSCF server address, or null if no specific P_CSCF server was
+         *     requested
+         */
+        @Nullable
+        Inet4Address getAddress();
+    }
+
+    /** Represents an IPv6 P_CSCF request */
+    public interface ConfigRequestIpv6PcscfServer extends IkeConfigRequest {
+        /**
+         * Retrieves the requested IPv6 P_CSCF server address
+         *
+         * @return The requested P_CSCF server address, or null if no specific P_CSCF server was
+         *     requested
+         */
+        @Nullable
+        Inet6Address getAddress();
+    }
+
     /**
      * This class contains common information of an IKEv2 authentication configuration.
      */
@@ -258,14 +464,7 @@ public final class IkeSessionParams {
     /**
      * This class represents the configuration to support EAP authentication of the local side.
      *
-     * <p>EAP MUST be used with IKEv2 public-key-based authentication of the responder to the
-     * initiator. Currently IKE library does not support the IKEv2 protocol extension(RFC 5998)
-     * which allows EAP methods that provide mutual authentication and key agreement to be used to
-     * provide extensible responder authentication for IKEv2 based on methods other than public key
-     * signatures.
-     *
-     * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
-     *     Authentication in IKEv2</a>
+     * <p>@see {@link IkeSessionParams.Builder#setAuthEap(X509Certificate, EapSessionConfig)}
      */
     public static class IkeAuthEapConfig extends IkeAuthConfig {
         /** @hide */
@@ -286,10 +485,19 @@ public final class IkeSessionParams {
 
     /** This class can be used to incrementally construct a {@link IkeSessionParams}. */
     public static final class Builder {
-        @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
+        @NonNull private final ConnectivityManager mConnectivityManager;
 
-        @Nullable private InetAddress mServerAddress;
-        @Nullable private UdpEncapsulationSocket mUdpEncapSocket;
+        @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
+        @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
+
+        @NonNull
+        private int[] mRetransTimeoutMsList =
+                Arrays.copyOf(
+                        IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT,
+                        IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT.length);
+
+        @NonNull private String mServerHostname;
+        @Nullable private Network mNetwork;
 
         @Nullable private IkeIdentification mLocalIdentification;
         @Nullable private IkeIdentification mRemoteIdentification;
@@ -297,39 +505,60 @@ public final class IkeSessionParams {
         @Nullable private IkeAuthConfig mLocalAuthConfig;
         @Nullable private IkeAuthConfig mRemoteAuthConfig;
 
+        private long mIkeOptions = 0;
+
+        private int mHardLifetimeSec = IKE_HARD_LIFETIME_SEC_DEFAULT;
+        private int mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
+
+        private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
+
         private boolean mIsIkeFragmentationSupported = false;
 
         /**
-         * Sets the server address for the {@link IkeSessionParams} being built.
+         * Construct Builder
          *
-         * @param serverAddress the IP address of the IKE server.
+         * @param context a valid {@link Context} instance.
+         */
+        public Builder(@NonNull Context context) {
+            this((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
+        }
+
+        /** @hide */
+        @VisibleForTesting
+        public Builder(ConnectivityManager connectManager) {
+            mConnectivityManager = connectManager;
+        }
+
+        /**
+         * Sets the server hostname for the {@link IkeSessionParams} being built.
+         *
+         * @param serverHostname the hostname of the IKE server, such as "ike.android.com".
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
-        public Builder setServerAddress(@NonNull InetAddress serverAddress) {
-            if (serverAddress == null) {
-                throw new NullPointerException("Required argument not provided");
-            }
+        public Builder setServerHostname(@NonNull String serverHostname) {
+            Objects.requireNonNull(serverHostname, "Required argument not provided");
 
-            mServerAddress = serverAddress;
+            mServerHostname = serverHostname;
             return this;
         }
 
         /**
-         * Sets the UDP Encapsulation socket for the {@link IkeSessionParams} being built.
+         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
          *
-         * @param udpEncapsulationSocket the {@link IpSecManager.UdpEncapsulationSocket} for sending
-         *     and receiving IKE messages.
+         * <p>If no {@link Network} is provided, the default Network (as per {@link
+         * ConnectivityManager#getActiveNetwork()}) will be used.
+         *
+         * @param network the {@link Network} that IKE Session will use.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
-        public Builder setUdpEncapsulationSocket(
-                @NonNull UdpEncapsulationSocket udpEncapsulationSocket) {
-            if (udpEncapsulationSocket == null) {
+        public Builder setNetwork(@NonNull Network network) {
+            if (network == null) {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            mUdpEncapSocket = udpEncapsulationSocket;
+            mNetwork = network;
             return this;
         }
 
@@ -415,7 +644,20 @@ public final class IkeSessionParams {
          * Configures the {@link IkeSession} to use EAP authentication.
          *
          * <p>Not all EAP methods provide mutual authentication. As such EAP MUST be used in
-         * conjunction with a public-key-signature-based authentication of the remote side.
+         * conjunction with a public-key-signature-based authentication of the remote server, unless
+         * EAP-Only authentication is enabled.
+         *
+         * <p>Callers may enable EAP-Only authentication by setting {@link
+         * IKE_OPTION_EAP_ONLY_AUTH}, which will make IKE library request the remote to use EAP-Only
+         * authentication. The remote may opt to reject the request, at which point the received
+         * certificates and authentication payload WILL be validated with the provided root CA or
+         * system's truststore as usual. Only safe EAP methods as listed in RFC 5998 will be
+         * accepted for EAP-Only authentication.
+         *
+         * <p>If {@link IKE_OPTION_EAP_ONLY_AUTH} is set, callers MUST configure EAP as the
+         * authentication method and all EAP methods set in EAP Session configuration MUST be safe
+         * methods that are accepted for EAP-Only authentication. Otherwise callers will get an
+         * exception when building the {@link IkeSessionParams}
          *
          * <p>Callers MUST declare only one authentication method. Calling this function will
          * override the previously set authentication configuration.
@@ -430,6 +672,8 @@ public final class IkeSessionParams {
          *     truststore is considered acceptable.
          * @return Builder this, to facilitate chaining.
          */
+        // TODO(b/151667921): Consider also supporting configuring EAP method that is not accepted
+        // by EAP-Only when {@link IKE_OPTION_EAP_ONLY_AUTH} is set
         @NonNull
         public Builder setAuthEap(
                 @Nullable X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
@@ -522,6 +766,158 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Adds a specific internal P_CSCF server request to the {@link IkeSessionParams} being
+         * built.
+         *
+         * @param address the requested P_CSCF address.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder addPcscfServerRequest(@NonNull InetAddress address) {
+            if (address == null) {
+                throw new NullPointerException("Required argument not provided");
+            }
+
+            if (address instanceof Inet4Address) {
+                mConfigRequestList.add(new ConfigAttributeIpv4Pcscf((Inet4Address) address));
+            } else if (address instanceof Inet6Address) {
+                mConfigRequestList.add(new ConfigAttributeIpv6Pcscf((Inet6Address) address));
+            } else {
+                throw new IllegalArgumentException("Invalid address family");
+            }
+            return this;
+        }
+
+        /**
+         * Adds a internal P_CSCF server request to the {@link IkeSessionParams} being built.
+         *
+         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
+         *     OsConstants.AF_INET6} are allowed.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder addPcscfServerRequest(int addressFamily) {
+            if (addressFamily == AF_INET) {
+                mConfigRequestList.add(new ConfigAttributeIpv4Pcscf());
+                return this;
+            } else if (addressFamily == AF_INET6) {
+                mConfigRequestList.add(new ConfigAttributeIpv6Pcscf());
+                return this;
+            } else {
+                throw new IllegalArgumentException("Invalid address family: " + addressFamily);
+            }
+        }
+
+        /**
+         * Sets hard and soft lifetimes.
+         *
+         * <p>Lifetimes will not be negotiated with the remote IKE server.
+         *
+         * @param hardLifetimeSeconds number of seconds after which IKE SA will expire. Defaults to
+         *     14400 seconds (4 hours). MUST be a value from 300 seconds (5 minutes) to 86400
+         *     seconds (24 hours), inclusive.
+         * @param softLifetimeSeconds number of seconds after which IKE SA will request rekey.
+         *     Defaults to 7200 seconds (2 hours). MUST be at least 120 seconds (2 minutes), and at
+         *     least 60 seconds (1 minute) shorter than the hard lifetime.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder setLifetimeSeconds(
+                @IntRange(from = IKE_HARD_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+                        int hardLifetimeSeconds,
+                @IntRange(from = IKE_SOFT_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
+                        int softLifetimeSeconds) {
+            if (hardLifetimeSeconds < IKE_HARD_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSeconds > IKE_HARD_LIFETIME_SEC_MAXIMUM
+                    || softLifetimeSeconds < IKE_SOFT_LIFETIME_SEC_MINIMUM
+                    || hardLifetimeSeconds - softLifetimeSeconds
+                            < IKE_LIFETIME_MARGIN_SEC_MINIMUM) {
+                throw new IllegalArgumentException("Invalid lifetime value");
+            }
+
+            mHardLifetimeSec = hardLifetimeSeconds;
+            mSoftLifetimeSec = softLifetimeSeconds;
+            return this;
+        }
+
+        /**
+         * Sets the Dead Peer Detection(DPD) delay in seconds.
+         *
+         * @param dpdDelaySeconds number of seconds after which IKE SA will initiate DPD if no
+         *     inbound cryptographically protected IKE message was received. Defaults to 120
+         *     seconds. MUST be a value from 20 seconds to 1800 seconds, inclusive.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder setDpdDelaySeconds(
+                @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
+                        int dpdDelaySeconds) {
+            if (dpdDelaySeconds < IKE_DPD_DELAY_SEC_MIN
+                    || dpdDelaySeconds > IKE_DPD_DELAY_SEC_MAX) {
+                throw new IllegalArgumentException("Invalid DPD delay value");
+            }
+            mDpdDelaySec = dpdDelaySeconds;
+            return this;
+        }
+
+        /**
+         * Sets the retransmission timeout list in milliseconds.
+         *
+         * <p>Configures the retransmission by providing an array of relative retransmission
+         * timeouts in milliseconds, where the array length represents the maximum retransmission
+         * attempts before terminating the IKE Session. Each element in the array MUST be a value
+         * from 500 ms to 1800000 ms (30 minutes). The length of the array MUST NOT exceed 10. This
+         * retransmission timeout list defaults to {0.5s, 1s, 2s, 4s, 8s}
+         *
+         * @param retransTimeoutMillisList the array of relative retransmission timeout in
+         *     milliseconds.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder setRetransmissionTimeoutsMillis(@NonNull int[] retransTimeoutMillisList) {
+            boolean isValid = true;
+            if (retransTimeoutMillisList == null
+                    || retransTimeoutMillisList.length > IKE_RETRANS_MAX_ATTEMPTS_MAX) {
+                isValid = false;
+            }
+            for (int t : retransTimeoutMillisList) {
+                if (t < IKE_RETRANS_TIMEOUT_MS_MIN || t > IKE_RETRANS_TIMEOUT_MS_MAX) {
+                    isValid = false;
+                }
+            }
+            if (!isValid) throw new IllegalArgumentException("Invalid retransmission timeout list");
+
+            mRetransTimeoutMsList = retransTimeoutMillisList;
+            return this;
+        }
+
+        /**
+         * Sets the specified IKE Option as enabled.
+         *
+         * @param ikeOption the option to be enabled.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder addIkeOption(@IkeOption int ikeOption) {
+            validateIkeOptionOrThrow(ikeOption);
+            mIkeOptions |= getOptionBitValue(ikeOption);
+            return this;
+        }
+
+        /**
+         * Resets (disables) the specified IKE Option.
+         *
+         * @param ikeOption the option to be disabled.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder removeIkeOption(@IkeOption int ikeOption) {
+            validateIkeOptionOrThrow(ikeOption);
+            mIkeOptions &= ~getOptionBitValue(ikeOption);
+            return this;
+        }
+
+        /**
          * Validates and builds the {@link IkeSessionParams}.
          *
          * @return IkeSessionParams the validated IkeSessionParams.
@@ -531,8 +927,13 @@ public final class IkeSessionParams {
             if (mSaProposalList.isEmpty()) {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
-            if (mServerAddress == null
-                    || mUdpEncapSocket == null
+
+            Network network = mNetwork != null ? mNetwork : mConnectivityManager.getActiveNetwork();
+            if (network == null) {
+                throw new IllegalArgumentException("Network not found");
+            }
+
+            if (mServerHostname == null
                     || mLocalIdentification == null
                     || mRemoteIdentification == null
                     || mLocalAuthConfig == null
@@ -540,14 +941,33 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("Necessary parameter missing.");
             }
 
+            if ((mIkeOptions & getOptionBitValue(IKE_OPTION_EAP_ONLY_AUTH)) != 0) {
+                if (!(mLocalAuthConfig instanceof IkeAuthEapConfig)) {
+                    throw new IllegalArgumentException("If IKE_OPTION_EAP_ONLY_AUTH is set,"
+                            + " eap authentication needs to be configured.");
+                }
+
+                IkeAuthEapConfig ikeAuthEapConfig = (IkeAuthEapConfig) mLocalAuthConfig;
+                if (!ikeAuthEapConfig.getEapConfig().areAllMethodsEapOnlySafe()) {
+                    throw new IllegalArgumentException("Only EAP-only safe method allowed"
+                            + " when using EAP-only option.");
+                }
+            }
+
             return new IkeSessionParams(
-                    mServerAddress,
-                    mUdpEncapSocket,
-                    mSaProposalList.toArray(new IkeSaProposal[mSaProposalList.size()]),
+                    mServerHostname,
+                    network,
+                    mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,
                     mRemoteIdentification,
                     mLocalAuthConfig,
                     mRemoteAuthConfig,
+                    mConfigRequestList.toArray(new IkeConfigAttribute[0]),
+                    mRetransTimeoutMsList,
+                    mIkeOptions,
+                    mHardLifetimeSec,
+                    mSoftLifetimeSec,
+                    mDpdDelaySec,
                     mIsIkeFragmentationSupported);
         }
 

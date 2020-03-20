@@ -76,7 +76,6 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.ipsec.ike.message.IkeKePayload;
-import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NotifyType;
@@ -85,20 +84,18 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
-import com.android.internal.net.ipsec.ike.utils.State;
+import com.android.internal.util.State;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
-import java.security.Provider;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * ChildSessionStateMachine tracks states and manages exchanges of this Child Session.
@@ -121,9 +118,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private static final String TAG = "ChildSessionStateMachine";
 
     private static final int SPI_NOT_REGISTERED = 0;
-
-    // Time after which Child SA needs to be rekeyed
-    @VisibleForTesting static final long SA_SOFT_LIFETIME_MS = TimeUnit.HOURS.toMillis(2L);
 
     private static final int CMD_GENERAL_BASE = CMD_PRIVATE_BASE;
 
@@ -150,7 +144,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private final IpSecManager mIpSecManager;
 
     /** User provided configurations. */
-    private final ChildSessionParams mChildSessionParams;
+    @VisibleForTesting final ChildSessionParams mChildSessionParams;
 
     private final Executor mUserCbExecutor;
     private final ChildSessionCallback mUserCallback;
@@ -411,7 +405,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private long getRekeyTimeout() {
         // TODO: Make rekey timout fuzzy
-        return SA_SOFT_LIFETIME_MS;
+        return mChildSessionParams.getSoftLifetimeMsInternal();
     }
 
     /**
@@ -779,13 +773,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             // integrity algorithm or has one integrity algorithm with any supported value.
 
             mSaProposal = createChildResult.negotiatedProposal;
-            Provider provider = IkeMessage.getSecurityProvider();
-            mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0], provider);
+            mChildCipher = IkeCipher.create(mSaProposal.getEncryptionTransforms()[0]);
             if (mSaProposal.getIntegrityTransforms().length != 0
                     && mSaProposal.getIntegrityTransforms()[0].id
                             != SaProposal.INTEGRITY_ALGORITHM_NONE) {
-                mChildIntegrity =
-                        IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0], provider);
+                mChildIntegrity = IkeMacIntegrity.create(mSaProposal.getIntegrityTransforms()[0]);
             }
 
             mLocalTs = createChildResult.initTs;
@@ -880,7 +872,16 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mIpSecManager,
                                 mLocalAddress,
                                 mChildSessionParams,
-                                false /*isFirstChild*/);
+                                false /*isFirstChildSa*/);
+
+                final ConfigAttribute[] configAttributes =
+                        CreateChildSaHelper.getConfigAttributes(mChildSessionParams);
+                if (configAttributes.length > 0) {
+                    mRequestPayloads.add(
+                            new IkeConfigPayload(
+                                    false /*isReply*/, Arrays.asList(configAttributes)));
+                }
+
                 mChildSmCallback.onOutboundPayloadsReady(
                         EXCHANGE_TYPE_CREATE_CHILD_SA,
                         false /*isResp*/,
@@ -1707,12 +1708,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 IpSecManager ipSecManager,
                 InetAddress localAddress,
                 ChildSessionParams childSessionParams,
-                boolean isFirstChild)
+                boolean isFirstChildSa)
                 throws ResourceUnavailableException {
 
             ChildSaProposal[] saProposals = childSessionParams.getSaProposalsInternal();
 
-            if (isFirstChild) {
+            if (isFirstChildSa) {
                 for (int i = 0; i < saProposals.length; i++) {
                     saProposals[i] =
                             childSessionParams.getSaProposalsInternal()[i]
@@ -1724,20 +1725,19 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
                                     saProposals, ipSecManager, localAddress),
-                            childSessionParams.getLocalTrafficSelectorsInternal(),
-                            childSessionParams.getRemoteTrafficSelectorsInternal(),
-                            childSessionParams.isTransportMode());
-
-            if (!childSessionParams.isTransportMode()) {
-                ConfigAttribute[] attributes =
-                        ((TunnelModeChildSessionParams) childSessionParams)
-                                .getConfigurationAttributesInternal();
-                IkeConfigPayload configPayload =
-                        new IkeConfigPayload(false /*isReply*/, Arrays.asList(attributes));
-                payloadList.add(configPayload);
-            }
+                            childSessionParams.getInboundTrafficSelectorsInternal(),
+                            childSessionParams.getOutboundTrafficSelectorsInternal(),
+                            childSessionParams.isTransportMode(),
+                            isFirstChildSa);
 
             return payloadList;
+        }
+
+        public static ConfigAttribute[] getConfigAttributes(ChildSessionParams params) {
+            if (!params.isTransportMode()) {
+                return ((TunnelModeChildSessionParams) params).getConfigurationAttributesInternal();
+            }
+            return new ConfigAttribute[0];
         }
 
         /** Create payload list as a rekey Child Session request. */
@@ -1758,7 +1758,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     localAddress),
                             currentLocalTs,
                             currentRemoteTs,
-                            isTransport);
+                            isTransport,
+                            false /*isFirstChildSa*/);
 
             payloads.add(
                     new IkeNotifyPayload(
@@ -1783,7 +1784,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     proposalNumber, currentProposal, ipSecManager, localAddress),
                             currentRemoteTs /*initTs*/,
                             currentLocalTs /*respTs*/,
-                            isTransport);
+                            isTransport,
+                            false /*isFirstChildSa*/);
 
             payloads.add(
                     new IkeNotifyPayload(
@@ -1796,14 +1798,18 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 IkeSaPayload saPayload,
                 IkeTrafficSelector[] initTs,
                 IkeTrafficSelector[] respTs,
-                boolean isTransport)
+                boolean isTransport,
+                boolean isFirstChildSa)
                 throws ResourceUnavailableException {
             List<IkePayload> payloadList = new ArrayList<>(5);
 
             payloadList.add(saPayload);
             payloadList.add(new IkeTsPayload(true /*isInitiator*/, initTs));
             payloadList.add(new IkeTsPayload(false /*isInitiator*/, respTs));
-            payloadList.add(new IkeNoncePayload());
+
+            if (!isFirstChildSa) {
+                payloadList.add(new IkeNoncePayload());
+            }
 
             DhGroupTransform[] dhGroups =
                     ((ChildProposal) saPayload.proposalList.get(0))

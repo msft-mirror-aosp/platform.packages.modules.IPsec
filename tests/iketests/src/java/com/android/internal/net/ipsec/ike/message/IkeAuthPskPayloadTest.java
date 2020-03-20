@@ -81,9 +81,7 @@ public final class IkeAuthPskPayloadTest {
     @Before
     public void setUp() throws Exception {
         mIkeHmacSha1Prf =
-                IkeMacPrf.create(
-                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
-                        IkeMessage.getSecurityProvider());
+                IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
     }
 
     @Test

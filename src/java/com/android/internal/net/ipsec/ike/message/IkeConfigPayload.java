@@ -19,13 +19,17 @@ package com.android.internal.net.ipsec.ike.message;
 import android.annotation.IntDef;
 import android.net.LinkAddress;
 import android.net.ipsec.ike.IkeManager;
-import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequest;
+import android.net.ipsec.ike.IkeSessionParams;
+import android.net.ipsec.ike.IkeSessionParams.ConfigRequestIpv4PcscfServer;
+import android.net.ipsec.ike.IkeSessionParams.ConfigRequestIpv6PcscfServer;
+import android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Address;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4DhcpServer;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4DnsServer;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Netmask;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6Address;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6DnsServer;
+import android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -37,6 +41,8 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedList;
 import java.util.List;
 
@@ -67,7 +73,9 @@ public final class IkeConfigPayload extends IkePayload {
         CONFIG_ATTR_INTERNAL_IP6_DNS,
         CONFIG_ATTR_INTERNAL_IP4_SUBNET,
         CONFIG_ATTR_SUPPORTED_ATTRIBUTES,
-        CONFIG_ATTR_INTERNAL_IP6_SUBNET
+        CONFIG_ATTR_INTERNAL_IP6_SUBNET,
+        CONFIG_ATTR_IP4_PCSCF,
+        CONFIG_ATTR_IP6_PCSCF
     })
     public @interface ConfigAttr {}
 
@@ -81,6 +89,8 @@ public final class IkeConfigPayload extends IkePayload {
     public static final int CONFIG_ATTR_INTERNAL_IP4_SUBNET = 13;
     public static final int CONFIG_ATTR_SUPPORTED_ATTRIBUTES = 14;
     public static final int CONFIG_ATTR_INTERNAL_IP6_SUBNET = 15;
+    public static final int CONFIG_ATTR_IP4_PCSCF = 20;
+    public static final int CONFIG_ATTR_IP6_PCSCF = 21;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({CONFIG_TYPE_REQUEST, CONFIG_TYPE_REPLY})
@@ -155,7 +165,7 @@ public final class IkeConfigPayload extends IkePayload {
     // TODO: Create ConfigAttribute subclasses for each attribute.
 
     /** This class represents common information of all Configuration Attributes. */
-    public abstract static class ConfigAttribute implements ConfigRequest {
+    public abstract static class ConfigAttribute {
         private static final int ATTRIBUTE_TYPE_MASK = 0x7fff;
 
         private static final int ATTRIBUTE_HEADER_LEN = 4;
@@ -210,6 +220,9 @@ public final class IkeConfigPayload extends IkePayload {
                     case CONFIG_ATTR_INTERNAL_IP4_DHCP:
                         configList.add(new ConfigAttributeIpv4Dhcp(value));
                         break;
+                    case CONFIG_ATTR_APPLICATION_VERSION:
+                        configList.add(new ConfigAttributeAppVersion(value));
+                        break;
                     case CONFIG_ATTR_INTERNAL_IP6_ADDRESS:
                         configList.add(new ConfigAttributeIpv6Address(value));
                         break;
@@ -221,6 +234,12 @@ public final class IkeConfigPayload extends IkePayload {
                         break;
                     case CONFIG_ATTR_INTERNAL_IP6_SUBNET:
                         configList.add(new ConfigAttributeIpv6Subnet(value));
+                        break;
+                    case CONFIG_ATTR_IP4_PCSCF:
+                        configList.add(new ConfigAttributeIpv4Pcscf(value));
+                        break;
+                    case CONFIG_ATTR_IP6_PCSCF:
+                        configList.add(new ConfigAttributeIpv6Pcscf(value));
                         break;
                     default:
                         IkeManager.getIkeLog()
@@ -291,24 +310,51 @@ public final class IkeConfigPayload extends IkePayload {
         protected abstract boolean isLengthValid(int length);
     }
 
+    /** This class supports strong typing for IkeConfigRequest(s) */
+    public abstract static class IkeConfigAttribute extends ConfigAttribute
+            implements IkeConfigRequest {
+        protected IkeConfigAttribute(int attributeType) {
+            super(attributeType);
+        }
+
+        protected IkeConfigAttribute(int attributeType, int len) throws InvalidSyntaxException {
+            super(attributeType, len);
+        }
+    }
+
+    /** This class supports strong typing for TunnelModeChildConfigRequest(s) */
+    public abstract static class TunnelModeChildConfigAttribute extends ConfigAttribute
+            implements TunnelModeChildConfigRequest {
+        protected TunnelModeChildConfigAttribute(int attributeType) {
+            super(attributeType);
+        }
+
+        protected TunnelModeChildConfigAttribute(int attributeType, int len)
+                throws InvalidSyntaxException {
+            super(attributeType, len);
+        }
+    }
+
     /**
-     * This class represents common information of all Configuration Attributes whoses value is one
-     * IPv4 address or empty.
+     * This class represents common information of all Tunnel Mode Child Session Configuration
+     * Attributes for which the value is one IPv4 address or empty.
      */
-    abstract static class ConfigAttrIpv4AddressBase extends ConfigAttribute {
+    abstract static class TunnelModeChildConfigAttrIpv4AddressBase
+            extends TunnelModeChildConfigAttribute implements TunnelModeChildConfigRequest {
         public final Inet4Address address;
 
-        protected ConfigAttrIpv4AddressBase(int attributeType, Inet4Address address) {
+        protected TunnelModeChildConfigAttrIpv4AddressBase(
+                int attributeType, Inet4Address address) {
             super(attributeType);
             this.address = address;
         }
 
-        protected ConfigAttrIpv4AddressBase(int attributeType) {
+        protected TunnelModeChildConfigAttrIpv4AddressBase(int attributeType) {
             super(attributeType);
             this.address = null;
         }
 
-        protected ConfigAttrIpv4AddressBase(int attributeType, byte[] value)
+        protected TunnelModeChildConfigAttrIpv4AddressBase(int attributeType, byte[] value)
                 throws InvalidSyntaxException {
             super(attributeType, value.length);
 
@@ -318,7 +364,12 @@ public final class IkeConfigPayload extends IkePayload {
             }
 
             try {
-                address = (Inet4Address) Inet4Address.getByAddress(value);
+                InetAddress netAddress = InetAddress.getByAddress(value);
+
+                if (!(netAddress instanceof Inet4Address)) {
+                    throw new InvalidSyntaxException("Invalid IPv4 address.");
+                }
+                address = (Inet4Address) netAddress;
             } catch (UnknownHostException e) {
                 throw new InvalidSyntaxException("Invalid attribute value", e);
             }
@@ -326,10 +377,64 @@ public final class IkeConfigPayload extends IkePayload {
 
         @Override
         protected void encodeValueToByteBuffer(ByteBuffer buffer) {
-            if (address == null) {
-                buffer.put(new byte[0]);
+            if (address == null) return; // No encoding necessary
+
+            buffer.put(address.getAddress());
+        }
+
+        @Override
+        protected int getValueLength() {
+            return address == null ? 0 : IPV4_ADDRESS_LEN;
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length == IPV4_ADDRESS_LEN || length == VALUE_LEN_NOT_INCLUDED;
+        }
+    }
+
+    /**
+     * This class represents common information of all IKE Session Configuration Attributes for
+     * which the value is one IPv4 address or empty.
+     */
+    abstract static class IkeConfigAttrIpv4AddressBase extends IkeConfigAttribute
+            implements IkeSessionParams.IkeConfigRequest {
+        public final Inet4Address address;
+
+        protected IkeConfigAttrIpv4AddressBase(int attributeType, Inet4Address address) {
+            super(attributeType);
+            this.address = address;
+        }
+
+        protected IkeConfigAttrIpv4AddressBase(int attributeType) {
+            super(attributeType);
+            this.address = null;
+        }
+
+        protected IkeConfigAttrIpv4AddressBase(int attributeType, byte[] value)
+                throws InvalidSyntaxException {
+            super(attributeType, value.length);
+
+            if (value.length == VALUE_LEN_NOT_INCLUDED) {
+                address = null;
                 return;
             }
+
+            try {
+                InetAddress netAddress = InetAddress.getByAddress(value);
+
+                if (!(netAddress instanceof Inet4Address)) {
+                    throw new InvalidSyntaxException("Invalid IPv4 address.");
+                }
+                address = (Inet4Address) netAddress;
+            } catch (UnknownHostException e) {
+                throw new InvalidSyntaxException("Invalid attribute value", e);
+            }
+        }
+
+        @Override
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            if (address == null) return; // No encoding necessary
 
             buffer.put(address.getAddress());
         }
@@ -346,7 +451,7 @@ public final class IkeConfigPayload extends IkePayload {
     }
 
     /** This class represents Configuration Attribute for IPv4 internal address. */
-    public static class ConfigAttributeIpv4Address extends ConfigAttrIpv4AddressBase
+    public static class ConfigAttributeIpv4Address extends TunnelModeChildConfigAttrIpv4AddressBase
             implements ConfigRequestIpv4Address {
         /** Construct an instance with specified address for an outbound packet. */
         public ConfigAttributeIpv4Address(Inet4Address ipv4Address) {
@@ -380,7 +485,7 @@ public final class IkeConfigPayload extends IkePayload {
      * <p>Non-empty values for this attribute in a CFG_REQUEST do not make sense and thus MUST NOT
      * be included
      */
-    public static class ConfigAttributeIpv4Netmask extends ConfigAttrIpv4AddressBase
+    public static class ConfigAttributeIpv4Netmask extends TunnelModeChildConfigAttrIpv4AddressBase
             implements ConfigRequestIpv4Netmask {
         /**
          * Construct an instance without a specified netmask for an outbound packet.
@@ -411,7 +516,7 @@ public final class IkeConfigPayload extends IkePayload {
     }
 
     /** This class represents Configuration Attribute for IPv4 DHCP server. */
-    public static class ConfigAttributeIpv4Dhcp extends ConfigAttrIpv4AddressBase
+    public static class ConfigAttributeIpv4Dhcp extends TunnelModeChildConfigAttrIpv4AddressBase
             implements ConfigRequestIpv4DhcpServer {
         /** Construct an instance with specified DHCP server address for an outbound packet. */
         public ConfigAttributeIpv4Dhcp(Inet4Address ipv4Address) {
@@ -445,7 +550,7 @@ public final class IkeConfigPayload extends IkePayload {
      * <p>There is no use case to create a DNS request for a specfic DNS server address. As an IKE
      * client, we will only support building an empty DNS attribute for an outbound IKE packet.
      */
-    public static class ConfigAttributeIpv4Dns extends ConfigAttrIpv4AddressBase
+    public static class ConfigAttributeIpv4Dns extends TunnelModeChildConfigAttrIpv4AddressBase
             implements ConfigRequestIpv4DnsServer {
         /** Construct an instance with specified DNS server address for an outbound packet. */
         public ConfigAttributeIpv4Dns(Inet4Address ipv4Address) {
@@ -483,7 +588,7 @@ public final class IkeConfigPayload extends IkePayload {
      * <p>According to RFC 7296, INTERNAL_IP4_SUBNET in configuration requests cannot be used
      * reliably because the meaning is unclear.
      */
-    public static class ConfigAttributeIpv4Subnet extends ConfigAttribute {
+    public static class ConfigAttributeIpv4Subnet extends TunnelModeChildConfigAttribute {
         private static final int VALUE_LEN = 2 * IPV4_ADDRESS_LEN;
 
         public final LinkAddress linkAddress;
@@ -564,30 +669,176 @@ public final class IkeConfigPayload extends IkePayload {
         }
     }
 
+    /** This class represents an IPv4 P_CSCF address attribute */
+    public static class ConfigAttributeIpv4Pcscf extends IkeConfigAttrIpv4AddressBase
+            implements ConfigRequestIpv4PcscfServer {
+        /** Construct an instance with a specified P_CSCF server address for an outbound packet. */
+        public ConfigAttributeIpv4Pcscf(Inet4Address ipv4Address) {
+            super(CONFIG_ATTR_IP4_PCSCF, ipv4Address);
+        }
+
+        /**
+         * Construct an instance without a specified P_CSCF server address for an outbound packet.
+         *
+         * <p>It must be only used in a configuration request.
+         */
+        public ConfigAttributeIpv4Pcscf() {
+            super(CONFIG_ATTR_IP4_PCSCF);
+        }
+
+        /** Construct an instance with a decoded inbound packet. */
+        @VisibleForTesting
+        ConfigAttributeIpv4Pcscf(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_IP4_PCSCF, value);
+        }
+
+        @Override
+        public Inet4Address getAddress() {
+            return address;
+        }
+    }
+
     /**
-     * This class represents common information of all Configuration Attributes whoses value is an
-     * IPv6 address range.
+     * This class represents common information of all Tunnel Mode Child Session Configuration
+     * Attributes for which the value is one IPv6 address or empty.
+     */
+    abstract static class TunnelModeChildConfigAttrIpv6AddressBase
+            extends TunnelModeChildConfigAttribute implements TunnelModeChildConfigRequest {
+        public final Inet6Address address;
+
+        protected TunnelModeChildConfigAttrIpv6AddressBase(
+                int attributeType, Inet6Address address) {
+            super(attributeType);
+            this.address = address;
+        }
+
+        protected TunnelModeChildConfigAttrIpv6AddressBase(int attributeType) {
+            super(attributeType);
+            this.address = null;
+        }
+
+        protected TunnelModeChildConfigAttrIpv6AddressBase(int attributeType, byte[] value)
+                throws InvalidSyntaxException {
+            super(attributeType, value.length);
+
+            if (value.length == VALUE_LEN_NOT_INCLUDED) {
+                address = null;
+                return;
+            }
+
+            try {
+                InetAddress netAddress = InetAddress.getByAddress(value);
+
+                if (!(netAddress instanceof Inet6Address)) {
+                    throw new InvalidSyntaxException("Invalid IPv6 address.");
+                }
+                address = (Inet6Address) netAddress;
+            } catch (UnknownHostException e) {
+                throw new InvalidSyntaxException("Invalid attribute value", e);
+            }
+        }
+
+        @Override
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            if (address == null) return; // No encoding necessary
+
+            buffer.put(address.getAddress());
+        }
+
+        @Override
+        protected int getValueLength() {
+            return address == null ? 0 : IPV6_ADDRESS_LEN;
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length == IPV6_ADDRESS_LEN || length == VALUE_LEN_NOT_INCLUDED;
+        }
+    }
+
+    /**
+     * This class represents common information of all IKE Session Configuration Attributes for
+     * which the value is one IPv6 address or empty.
+     */
+    abstract static class IkeConfigAttrIpv6AddressBase extends IkeConfigAttribute
+            implements IkeConfigRequest {
+        public final Inet6Address address;
+
+        protected IkeConfigAttrIpv6AddressBase(int attributeType, Inet6Address address) {
+            super(attributeType);
+            this.address = address;
+        }
+
+        protected IkeConfigAttrIpv6AddressBase(int attributeType) {
+            super(attributeType);
+            this.address = null;
+        }
+
+        protected IkeConfigAttrIpv6AddressBase(int attributeType, byte[] value)
+                throws InvalidSyntaxException {
+            super(attributeType, value.length);
+
+            if (value.length == VALUE_LEN_NOT_INCLUDED) {
+                address = null;
+                return;
+            }
+
+            try {
+                InetAddress netAddress = InetAddress.getByAddress(value);
+
+                if (!(netAddress instanceof Inet6Address)) {
+                    throw new InvalidSyntaxException("Invalid IPv6 address.");
+                }
+                address = (Inet6Address) netAddress;
+            } catch (UnknownHostException e) {
+                throw new InvalidSyntaxException("Invalid attribute value", e);
+            }
+        }
+
+        @Override
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            if (address == null) return; // No encoding necessary
+
+            buffer.put(address.getAddress());
+        }
+
+        @Override
+        protected int getValueLength() {
+            return address == null ? 0 : IPV6_ADDRESS_LEN;
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length == IPV6_ADDRESS_LEN || length == VALUE_LEN_NOT_INCLUDED;
+        }
+    }
+
+    /**
+     * This class represents common information of all Configuration Attributes for which the value
+     * is an IPv6 address range.
      *
      * <p>These attributes contains an IPv6 address and a prefix length.
      */
-    abstract static class ConfigAttrIpv6AddrRangeBase extends ConfigAttribute {
+    abstract static class TunnelModeChildConfigAttrIpv6AddrRangeBase
+            extends TunnelModeChildConfigAttribute {
         private static final int VALUE_LEN = IPV6_ADDRESS_LEN + PREFIX_LEN_LEN;
 
         public final LinkAddress linkAddress;
 
-        protected ConfigAttrIpv6AddrRangeBase(int attributeType, LinkAddress ipv6LinkAddress) {
+        protected TunnelModeChildConfigAttrIpv6AddrRangeBase(
+                int attributeType, LinkAddress ipv6LinkAddress) {
             super(attributeType);
 
             validateIpv6LinkAddressTypeOrThrow(ipv6LinkAddress);
             linkAddress = ipv6LinkAddress;
         }
 
-        protected ConfigAttrIpv6AddrRangeBase(int attributeType) {
+        protected TunnelModeChildConfigAttrIpv6AddrRangeBase(int attributeType) {
             super(attributeType);
             linkAddress = null;
         }
 
-        protected ConfigAttrIpv6AddrRangeBase(int attributeType, byte[] value)
+        protected TunnelModeChildConfigAttrIpv6AddrRangeBase(int attributeType, byte[] value)
                 throws InvalidSyntaxException {
             super(attributeType, value.length);
 
@@ -640,8 +891,8 @@ public final class IkeConfigPayload extends IkePayload {
     }
 
     /** This class represents Configuration Attribute for IPv6 internal addresses. */
-    public static class ConfigAttributeIpv6Address extends ConfigAttrIpv6AddrRangeBase
-            implements ConfigRequestIpv6Address {
+    public static class ConfigAttributeIpv6Address
+            extends TunnelModeChildConfigAttrIpv6AddrRangeBase implements ConfigRequestIpv6Address {
         /** Construct an instance with specified address for an outbound packet. */
         public ConfigAttributeIpv6Address(LinkAddress ipv6LinkAddress) {
             super(CONFIG_ATTR_INTERNAL_IP6_ADDRESS, ipv6LinkAddress);
@@ -679,7 +930,8 @@ public final class IkeConfigPayload extends IkePayload {
      * <p>According to RFC 7296, INTERNAL_IP6_SUBNET in configuration requests cannot be used
      * reliably because the meaning is unclear.
      */
-    public static class ConfigAttributeIpv6Subnet extends ConfigAttrIpv6AddrRangeBase {
+    public static class ConfigAttributeIpv6Subnet
+            extends TunnelModeChildConfigAttrIpv6AddrRangeBase {
         /** Construct an instance with specified subnet for an outbound packet. */
         public ConfigAttributeIpv6Subnet(LinkAddress ipv6LinkAddress) {
             super(CONFIG_ATTR_INTERNAL_IP6_SUBNET, ipv6LinkAddress);
@@ -707,14 +959,11 @@ public final class IkeConfigPayload extends IkePayload {
      * <p>There is no use case to create a DNS request for a specfic DNS server address. As an IKE
      * client, we will only support building an empty DNS attribute for an outbound IKE packet.
      */
-    public static class ConfigAttributeIpv6Dns extends ConfigAttribute
+    public static class ConfigAttributeIpv6Dns extends TunnelModeChildConfigAttrIpv6AddressBase
             implements ConfigRequestIpv6DnsServer {
-        public final Inet6Address address;
-
         /** Construct an instance with specified DNS server address for an outbound packet. */
         public ConfigAttributeIpv6Dns(Inet6Address ipv6Address) {
-            super(CONFIG_ATTR_INTERNAL_IP6_DNS);
-            address = ipv6Address;
+            super(CONFIG_ATTR_INTERNAL_IP6_DNS, ipv6Address);
         }
 
         /**
@@ -724,52 +973,82 @@ public final class IkeConfigPayload extends IkePayload {
          */
         public ConfigAttributeIpv6Dns() {
             super(CONFIG_ATTR_INTERNAL_IP6_DNS);
-            this.address = null;
         }
 
         protected ConfigAttributeIpv6Dns(byte[] value) throws InvalidSyntaxException {
-            super(CONFIG_ATTR_INTERNAL_IP6_DNS, value.length);
-
-            if (value.length == VALUE_LEN_NOT_INCLUDED) {
-                address = null;
-                return;
-            }
-
-            try {
-                InetAddress netAddress = InetAddress.getByAddress(value);
-
-                if (!(netAddress instanceof Inet6Address)) {
-                    throw new InvalidSyntaxException("Invalid IPv6 address.");
-                }
-                address = (Inet6Address) netAddress;
-            } catch (UnknownHostException e) {
-                throw new InvalidSyntaxException("Invalid attribute value", e);
-            }
-        }
-
-        @Override
-        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
-            if (address == null) {
-                buffer.put(new byte[0]);
-                return;
-            }
-
-            buffer.put(address.getAddress());
-        }
-
-        @Override
-        protected int getValueLength() {
-            return address == null ? 0 : IPV6_ADDRESS_LEN;
-        }
-
-        @Override
-        protected boolean isLengthValid(int length) {
-            return length == IPV6_ADDRESS_LEN || length == VALUE_LEN_NOT_INCLUDED;
+            super(CONFIG_ATTR_INTERNAL_IP6_DNS, value);
         }
 
         @Override
         public Inet6Address getAddress() {
             return address;
+        }
+    }
+
+    /** This class represents an IPv6 P_CSCF address attribute */
+    public static class ConfigAttributeIpv6Pcscf extends IkeConfigAttrIpv6AddressBase
+            implements ConfigRequestIpv6PcscfServer {
+        /** Construct an instance with a specified P_CSCF server address for an outbound packet. */
+        public ConfigAttributeIpv6Pcscf(Inet6Address ipv6Address) {
+            super(CONFIG_ATTR_IP6_PCSCF, ipv6Address);
+        }
+
+        /**
+         * Construct an instance without a specified P_CSCF server address for an outbound packet.
+         *
+         * <p>It must be only used in a configuration request.
+         */
+        public ConfigAttributeIpv6Pcscf() {
+            super(CONFIG_ATTR_IP6_PCSCF);
+        }
+
+        protected ConfigAttributeIpv6Pcscf(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_IP6_PCSCF, value);
+        }
+
+        @Override
+        public Inet6Address getAddress() {
+            return address;
+        }
+    }
+
+    /** This class represents an application version attribute */
+    public static class ConfigAttributeAppVersion extends ConfigAttribute {
+        private static final Charset ASCII = StandardCharsets.US_ASCII;
+        private static final String APP_VERSION_NONE = "";
+
+        public final String applicationVersion;
+
+        /**
+         * Construct an instance for an outbound packet for requesting remote application version.
+         */
+        public ConfigAttributeAppVersion() {
+            this(APP_VERSION_NONE);
+        }
+
+        /** Construct an instance for an outbound packet with local application version. */
+        public ConfigAttributeAppVersion(String localAppVersion) {
+            super(CONFIG_ATTR_APPLICATION_VERSION);
+            applicationVersion = localAppVersion;
+        }
+
+        /** Construct an instance from a decoded inbound packet. */
+        protected ConfigAttributeAppVersion(byte[] value) throws InvalidSyntaxException {
+            super(CONFIG_ATTR_APPLICATION_VERSION);
+            applicationVersion = new String(value, ASCII);
+        }
+
+        protected void encodeValueToByteBuffer(ByteBuffer buffer) {
+            buffer.put(applicationVersion.getBytes(ASCII));
+        }
+
+        protected int getValueLength() {
+            return applicationVersion.getBytes(ASCII).length;
+        }
+
+        @Override
+        protected boolean isLengthValid(int length) {
+            return length >= 0;
         }
     }
 

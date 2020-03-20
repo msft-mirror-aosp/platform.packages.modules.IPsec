@@ -16,8 +16,11 @@
 
 package android.net.ipsec.ike;
 
+import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
+
+import java.util.Objects;
 
 /**
  * TransportModeChildSessionParams represents proposed configurations for negotiating a transport
@@ -28,10 +31,18 @@ import android.annotation.SystemApi;
 @SystemApi
 public final class TransportModeChildSessionParams extends ChildSessionParams {
     private TransportModeChildSessionParams(
-            IkeTrafficSelector[] localTs,
-            IkeTrafficSelector[] remoteTs,
-            ChildSaProposal[] proposals) {
-        super(localTs, remoteTs, proposals, true /*isTransport*/);
+            IkeTrafficSelector[] inboundTs,
+            IkeTrafficSelector[] outboundTs,
+            ChildSaProposal[] proposals,
+            int hardLifetimeSec,
+            int softLifetimeSec) {
+        super(
+                inboundTs,
+                outboundTs,
+                proposals,
+                hardLifetimeSec,
+                softLifetimeSec,
+                true /*isTransport*/);
     }
 
     /**
@@ -51,13 +62,17 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
-            validateAndAddSaProposal(proposal);
+            addProposal(proposal);
             return this;
         }
 
         /**
          * Adds an inbound {@link IkeTrafficSelector} to the {@link TransportModeChildSessionParams}
          * being built.
+         *
+         * <p>This method allows callers to limit the inbound traffic transmitted over the Child
+         * Session to the given range. The IKE server may further narrow the range. Callers should
+         * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
          *
          * <p>If no inbound {@link IkeTrafficSelector} is provided, a default value will be used
          * that covers all IP addresses and ports.
@@ -67,13 +82,18 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
-            // TODO: Implement it.
-            throw new UnsupportedOperationException("Not yet supported");
+            Objects.requireNonNull(trafficSelector, "Required argument not provided");
+            addInboundTs(trafficSelector);
+            return this;
         }
 
         /**
          * Adds an outbound {@link IkeTrafficSelector} to the {@link
          * TransportModeChildSessionParams} being built.
+         *
+         * <p>This method allows callers to limit the outbound traffic transmitted over the Child
+         * Session to the given range. The IKE server may further narrow the range. Callers should
+         * refer to {@link ChildSessionConfiguration} for the negotiated traffic selectors.
          *
          * <p>If no outbound {@link IkeTrafficSelector} is provided, a default value will be used
          * that covers all IP addresses and ports.
@@ -83,8 +103,38 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
-            // TODO: Implement it.
-            throw new UnsupportedOperationException("Not yet supported");
+            Objects.requireNonNull(trafficSelector, "Required argument not provided");
+            addOutboundTs(trafficSelector);
+            return this;
+        }
+
+        /**
+         * Sets hard and soft lifetimes.
+         *
+         * <p>Lifetimes will not be negotiated with the remote IKE server.
+         *
+         * @param hardLifetimeSeconds number of seconds after which Child SA will expire. Defaults
+         *     to 7200 seconds (2 hours). Considering IPsec packet lifetime, IKE library requires
+         *     hard lifetime to be a value from 300 seconds (5 minutes) to 14400 seconds (4 hours),
+         *     inclusive.
+         * @param softLifetimeSeconds number of seconds after which Child SA will request rekey.
+         *     Defaults to 3600 seconds (1 hour). MUST be at least 120 seconds (2 minutes), and at
+         *     least 60 seconds (1 minute) shorter than the hard lifetime.
+         */
+        @NonNull
+        public Builder setLifetimeSeconds(
+                @IntRange(
+                                from = CHILD_HARD_LIFETIME_SEC_MINIMUM,
+                                to = CHILD_HARD_LIFETIME_SEC_MAXIMUM)
+                        int hardLifetimeSeconds,
+                @IntRange(
+                                from = CHILD_SOFT_LIFETIME_SEC_MINIMUM,
+                                to = CHILD_HARD_LIFETIME_SEC_MAXIMUM)
+                        int softLifetimeSeconds) {
+            validateAndSetLifetime(hardLifetimeSeconds, softLifetimeSeconds);
+            mHardLifetimeSec = hardLifetimeSeconds;
+            mSoftLifetimeSec = softLifetimeSeconds;
+            return this;
         }
 
         /**
@@ -94,12 +144,15 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          */
         @NonNull
         public TransportModeChildSessionParams build() {
+            addDefaultTsIfNotConfigured();
             validateOrThrow();
 
             return new TransportModeChildSessionParams(
-                    mLocalTsList.toArray(new IkeTrafficSelector[mLocalTsList.size()]),
-                    mRemoteTsList.toArray(new IkeTrafficSelector[mRemoteTsList.size()]),
-                    mSaProposalList.toArray(new ChildSaProposal[mSaProposalList.size()]));
+                    mInboundTsList.toArray(new IkeTrafficSelector[0]),
+                    mOutboundTsList.toArray(new IkeTrafficSelector[0]),
+                    mSaProposalList.toArray(new ChildSaProposal[0]),
+                    mHardLifetimeSec,
+                    mSoftLifetimeSec);
         }
     }
 }

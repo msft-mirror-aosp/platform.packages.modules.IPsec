@@ -26,7 +26,8 @@ android_test {
     libs: ["android.test.runner"],
 
     static_libs: [
-        "ike",
+        // TODO (b/149494912): Do not statically link ike and test against <uses-library>
+        "ike_test", // Runs against a test version of the IKE library, not on the system's copy.
         "androidx.test.rules",
         "frameworks-base-testutils",
         "mockito-target-inline-minus-junit4",
@@ -38,6 +39,4 @@ android_test {
         "libstaticjvmtiagent",
         "libmultiplejvmtiagentsinterferenceagent",
     ],
-
-    jarjar_rules: "jarjar-rules-test.txt",
 }

@@ -20,7 +20,6 @@ import android.content.Context;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.org.bouncycastle.util.io.pem.PemObject;
 import com.android.org.bouncycastle.util.io.pem.PemReader;
 
@@ -43,8 +42,7 @@ public final class CertUtils {
         InputStream inputStream =
                 context.getResources().getAssets().open(PEM_FOLDER_NAME + "/" + fileName);
 
-        CertificateFactory factory =
-                CertificateFactory.getInstance("X.509", IkeMessage.getSecurityProvider());
+        CertificateFactory factory = CertificateFactory.getInstance("X.509");
         return (X509Certificate) factory.generateCertificate(inputStream);
     }
 

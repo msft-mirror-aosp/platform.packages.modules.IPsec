@@ -22,7 +22,6 @@ import static org.junit.Assert.assertFalse;
 import android.net.ipsec.ike.SaProposal;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 
 import org.junit.Before;
@@ -34,7 +33,7 @@ import java.util.Arrays;
 
 @RunWith(JUnit4.class)
 public final class IkeMacPrfTest {
-
+    // Test vectors for PRF_HMAC_SHA1
     private static final String PRF_KEY_HEX_STRING = "094787780EE466E2CB049FA327B43908BC57E485";
     private static final String DATA_TO_SIGN_HEX_STRING = "010000000a50500d";
     private static final String CALCULATED_MAC_HEX_STRING =
@@ -100,18 +99,36 @@ public final class IkeMacPrfTest {
     private static final int FIRST_CHILD_AUTH_ALGO_KEY_LEN = 20;
     private static final int FIRST_CHILD_ENCR_ALGO_KEY_LEN = 16;
 
+    // Test vectors for PRF_HMAC_SHA256
+    private static final String PRF_HMAC256_KEY_HEX_STRING =
+            "E6075DF8C7DE1695C3641C190920E8C0655DE695A429FEAC9AA8F932871F1EDD";
+    private static final String PRF_HMAC256_DATA_TO_SIGN_HEX_STRING = "01000000C0A82B67";
+    private static final String PRF_HMAC256_CALCULATED_MAC_HEX_STRING =
+            "CFEE9454BA2FFFAD01D0B49EAEA854B5FEC9839F8747600F85197FF0054AE716";
+
+    private static final String PRF_HMAC256_IKE_NONCE_INIT_HEX_STRING =
+            "25de54767208d840fbe6881c699cbc8841582eae6f8724ac17c0ad8680e57b3e";
+    private static final String PRF_HMAC256_IKE_NONCE_RESP_HEX_STRING =
+            "7550340a140ce00f523b0e4bddec7671336bbca8c3dd2e31312d36c904950ca4";
+    private static final String PRF_HMAC256_IKE_SHARED_DH_KEY_HEX_STRING =
+            "01FB25276B0D1D9979DAC170B53815988C31A50AD0DF4EEB89B8407EFAE3A676"
+                    + "281903E48AD020050C9E1522F4DDA031C57A7A3D0CA9D075F044B5212E2A88B92E71";
+    private static final String PRF_HMAC256_IKE_SKEYSEED_HEX_STRING =
+            "9A3E05D4DBE797DC45DA7660DB60C9CCCEEBBC32CA2B0EDA5B5A8793EF192E4E";
+
     private IkeMacPrf mIkeHmacSha1Prf;
+    private IkeMacPrf mIkeHmacSha256Prf;
 
     @Before
     public void setUp() throws Exception {
         mIkeHmacSha1Prf =
-                IkeMacPrf.create(
-                        new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1),
-                        IkeMessage.getSecurityProvider());
+                IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
+        mIkeHmacSha256Prf =
+                IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256));
     }
 
     @Test
-    public void testsignBytes() throws Exception {
+    public void testSignBytesHmacSha1() throws Exception {
         byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_KEY_HEX_STRING);
         byte[] dataBytes = TestUtils.hexStringToByteArray(DATA_TO_SIGN_HEX_STRING);
 
@@ -122,7 +139,19 @@ public final class IkeMacPrfTest {
     }
 
     @Test
-    public void testGenerateSKeySeed() throws Exception {
+    public void testSignBytesHmacSha256() throws Exception {
+        byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_HMAC256_KEY_HEX_STRING);
+        byte[] dataBytes = TestUtils.hexStringToByteArray(PRF_HMAC256_DATA_TO_SIGN_HEX_STRING);
+
+        byte[] calculatedBytes = mIkeHmacSha256Prf.signBytes(skpBytes, dataBytes);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(PRF_HMAC256_CALCULATED_MAC_HEX_STRING);
+        assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testGenerateSKeySeedHmacSha1() throws Exception {
         byte[] nonceInit = TestUtils.hexStringToByteArray(IKE_NONCE_INIT_HEX_STRING);
         byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
         byte[] sharedDhKey = TestUtils.hexStringToByteArray(IKE_SHARED_DH_KEY_HEX_STRING);
@@ -131,6 +160,21 @@ public final class IkeMacPrfTest {
                 mIkeHmacSha1Prf.generateSKeySeed(nonceInit, nonceResp, sharedDhKey);
 
         byte[] expectedSKeySeed = TestUtils.hexStringToByteArray(IKE_SKEYSEED_HEX_STRING);
+        assertArrayEquals(expectedSKeySeed, calculatedSKeySeed);
+    }
+
+    @Test
+    public void testGenerateSKeySeedHmacSha256() throws Exception {
+        byte[] nonceInit = TestUtils.hexStringToByteArray(PRF_HMAC256_IKE_NONCE_INIT_HEX_STRING);
+        byte[] nonceResp = TestUtils.hexStringToByteArray(PRF_HMAC256_IKE_NONCE_RESP_HEX_STRING);
+        byte[] sharedDhKey =
+                TestUtils.hexStringToByteArray(PRF_HMAC256_IKE_SHARED_DH_KEY_HEX_STRING);
+
+        byte[] calculatedSKeySeed =
+                mIkeHmacSha256Prf.generateSKeySeed(nonceInit, nonceResp, sharedDhKey);
+
+        byte[] expectedSKeySeed =
+                TestUtils.hexStringToByteArray(PRF_HMAC256_IKE_SKEYSEED_HEX_STRING);
         assertArrayEquals(expectedSKeySeed, calculatedSKeySeed);
     }
 

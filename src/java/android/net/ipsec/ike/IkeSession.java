@@ -22,11 +22,10 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.os.HandlerThread;
 import android.os.Looper;
+import android.util.CloseGuard;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
-
-import dalvik.system.CloseGuard;
 
 import java.util.concurrent.Executor;
 
@@ -51,7 +50,7 @@ import java.util.concurrent.Executor;
  */
 @SystemApi
 public final class IkeSession implements AutoCloseable {
-    private final CloseGuard mCloseGuard = CloseGuard.get();
+    private final CloseGuard mCloseGuard = new CloseGuard();
 
     @VisibleForTesting final IkeSessionStateMachine mIkeSessionStateMachine;
 
@@ -85,9 +84,29 @@ public final class IkeSession implements AutoCloseable {
             @NonNull IkeSessionCallback ikeSessionCallback,
             @NonNull ChildSessionCallback firstChildSessionCallback) {
         this(
-                IkeThreadHolder.IKE_WORKER_THREAD.getLooper(),
                 context,
                 (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
+                ikeSessionParams,
+                firstChildSessionParams,
+                userCbExecutor,
+                ikeSessionCallback,
+                firstChildSessionCallback);
+    }
+
+    /** Package private */
+    @VisibleForTesting
+    IkeSession(
+            Context context,
+            IpSecManager ipSecManager,
+            IkeSessionParams ikeSessionParams,
+            ChildSessionParams firstChildSessionParams,
+            Executor userCbExecutor,
+            IkeSessionCallback ikeSessionCallback,
+            ChildSessionCallback firstChildSessionCallback) {
+        this(
+                IkeThreadHolder.IKE_WORKER_THREAD.getLooper(),
+                context,
+                ipSecManager,
                 ikeSessionParams,
                 firstChildSessionParams,
                 userCbExecutor,
