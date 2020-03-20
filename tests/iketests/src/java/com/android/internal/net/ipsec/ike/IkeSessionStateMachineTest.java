@@ -460,9 +460,9 @@ public final class IkeSessionStateMachineTest {
         IkeHeader header =
                 makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SK);
         byte[] dummyPacket = new byte[0];
-        when(mMockIkeMessageHelper.decode(
-                        anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
-                .thenReturn(new DecodeResultProtectedError(exception, dummyPacket));
+        doReturn(new DecodeResultProtectedError(exception, dummyPacket))
+                .when(mMockIkeMessageHelper)
+                .decode(anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any());
 
         return new ReceivedIkePacket(header, dummyPacket);
     }
@@ -472,9 +472,9 @@ public final class IkeSessionStateMachineTest {
         IkeHeader header =
                 makeDummyIkeHeader(ikeSaRecord, isResp, eType, IkePayload.PAYLOAD_TYPE_SK);
         byte[] dummyPacket = new byte[0];
-        when(mMockIkeMessageHelper.decode(
-                        anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any()))
-                .thenReturn(new DecodeResultUnprotectedError(exception));
+        doReturn(new DecodeResultUnprotectedError(exception))
+                .when(mMockIkeMessageHelper)
+                .decode(anyInt(), any(), any(), eq(ikeSaRecord), eq(header), any(), any());
 
         return new ReceivedIkePacket(header, dummyPacket);
     }
@@ -557,15 +557,16 @@ public final class IkeSessionStateMachineTest {
             IkeHeader header,
             DecodeResultPartial collectedFrags,
             DecodeResult result) {
-        when(mMockIkeMessageHelper.decode(
+        doReturn(result)
+                .when(mMockIkeMessageHelper)
+                .decode(
                         anyInt(),
                         any(),
                         any(),
                         eq(ikeSaRecord),
                         eq(header),
                         any(),
-                        eq(collectedFrags)))
-                .thenReturn(result);
+                        eq(collectedFrags));
     }
 
     private IkeMessage makeDummyIkeMessageForTest(
@@ -645,10 +646,11 @@ public final class IkeSessionStateMachineTest {
 
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
-        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
-        when(mMockDefaultNetwork.getByName(REMOTE_HOSTNAME)).thenReturn(REMOTE_ADDRESS);
-        when(mMockDefaultNetwork.getByName(REMOTE_ADDRESS.getHostAddress()))
-                .thenReturn(REMOTE_ADDRESS);
+        doReturn(mMockDefaultNetwork).when(mMockConnectManager).getActiveNetwork();
+        doReturn(REMOTE_ADDRESS).when(mMockDefaultNetwork).getByName(REMOTE_HOSTNAME);
+        doReturn(REMOTE_ADDRESS)
+                .when(mMockDefaultNetwork)
+                .getByName(REMOTE_ADDRESS.getHostAddress());
 
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
@@ -1142,9 +1144,9 @@ public final class IkeSessionStateMachineTest {
     private void resetMockIkeMessageHelper() {
         reset(mMockIkeMessageHelper);
         doReturn(new byte[0]).when(mMockIkeMessageHelper).encode(any());
-        when(mMockIkeMessageHelper.encryptAndEncode(
-                        any(), any(), any(), any(), anyBoolean(), anyInt()))
-                .thenReturn(new byte[1][0]);
+        doReturn(new byte[1][0])
+                .when(mMockIkeMessageHelper)
+                .encryptAndEncode(any(), any(), any(), any(), anyBoolean(), anyInt());
     }
 
     @Test
@@ -3496,14 +3498,15 @@ public final class IkeSessionStateMachineTest {
                     "testLastSentRespFrag1".getBytes(), "testLastSentRespFrag2".getBytes()
                 };
 
-        when(mMockIkeMessageHelper.encryptAndEncode(
+        doReturn(dummyIkeResp)
+                .when(mMockIkeMessageHelper)
+                .encryptAndEncode(
                         any(),
                         any(),
                         eq(mSpyCurrentIkeSaRecord),
                         any(IkeMessage.class),
                         anyBoolean(),
-                        anyInt()))
-                .thenReturn(dummyIkeResp);
+                        anyInt());
 
         // Receive a DPD request, expect to send dummyIkeResp
         ReceivedIkePacket dummyDpdRequest =
