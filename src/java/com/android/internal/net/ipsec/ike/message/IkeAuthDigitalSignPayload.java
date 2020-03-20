@@ -102,6 +102,19 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
     public static final String SIGNATURE_ALGO_RSA_SHA2_384 = "SHA384withRSA";
     public static final String SIGNATURE_ALGO_RSA_SHA2_512 = "SHA512withRSA";
 
+    // IKEv2 types for hash algorithms.
+    public static final short HASH_ALGORITHM_RSA_SHA1 = 1;
+    public static final short HASH_ALGORITHM_RSA_SHA2_256 = 2;
+    public static final short HASH_ALGORITHM_RSA_SHA2_384 = 3;
+    public static final short HASH_ALGORITHM_RSA_SHA2_512 = 4;
+    public static final short[] ALL_SIGNATURE_ALGO_TYPES =
+            new short[] {
+                HASH_ALGORITHM_RSA_SHA1,
+                HASH_ALGORITHM_RSA_SHA2_256,
+                HASH_ALGORITHM_RSA_SHA2_384,
+                HASH_ALGORITHM_RSA_SHA2_512
+            };
+
     public final String signatureAndHashAlgos;
     public final byte[] signature;
 
