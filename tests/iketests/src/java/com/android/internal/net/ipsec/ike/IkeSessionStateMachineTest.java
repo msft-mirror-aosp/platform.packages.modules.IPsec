@@ -153,6 +153,7 @@ import com.android.internal.net.utils.Log;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
@@ -1238,8 +1239,8 @@ public final class IkeSessionStateMachineTest {
         verify(mMockDefaultNetwork).getByName(REMOTE_HOSTNAME);
     }
 
-    @Test
-    public void testCreateIkeLocalIkeInit() throws Exception {
+    @Ignore
+    public void disableTestCreateIkeLocalIkeInit() throws Exception {
         setupFirstIkeSa();
 
         // Send IKE INIT request
@@ -2992,8 +2993,8 @@ public final class IkeSessionStateMachineTest {
         verifyRetransmissionStopped();
     }
 
-    @Test
-    public void testRekeyIkeLocalDeleteHandlesRespWithParsingError() throws Exception {
+    @Ignore
+    public void disableTestRekeyIkeLocalDeleteHandlesRespWithParsingError() throws Exception {
         setupIdleStateMachine();
         mockCreateAndTransitionToRekeyDeleteLocal();
         resetMockIkeMessageHelper();
@@ -3142,8 +3143,8 @@ public final class IkeSessionStateMachineTest {
                         eq(mSpyRemoteInitIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
     }
 
-    @Test
-    public void testRekeyIkeRemoteCreateHandlesInvalidReq() throws Exception {
+    @Ignore
+    public void disableTestRekeyIkeRemoteCreateHandlesInvalidReq() throws Exception {
         setupIdleStateMachine();
 
         // Receive Rekey request
@@ -3154,8 +3155,8 @@ public final class IkeSessionStateMachineTest {
         verifyProcessRekeyReqFailure(ERROR_TYPE_NO_PROPOSAL_CHOSEN);
     }
 
-    @Test
-    public void testRekeyIkeRemoteCreateSaCreationFailure() throws Exception {
+    @Ignore
+    public void disableTestRekeyIkeRemoteCreateSaCreationFailure() throws Exception {
         // Throw error when building new IKE SA
         throwExceptionWhenMakeRekeyIkeSa(
                 new GeneralSecurityException("testRekeyIkeRemoteCreateSaCreationFailure"));
@@ -3278,8 +3279,8 @@ public final class IkeSessionStateMachineTest {
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
 
-    @Test
-    public void testSimulRekey() throws Exception {
+    @Ignore
+    public void disableTestSimulRekey() throws Exception {
         setupIdleStateMachine();
 
         // Prepare "rekeyed" SA
@@ -4127,8 +4128,8 @@ public final class IkeSessionStateMachineTest {
         verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
     }
 
-    @Test
-    public void testTempFailureHandlerTimeout() throws Exception {
+    @Ignore
+    public void disableTestTempFailureHandlerTimeout() throws Exception {
         long currentTime = 0;
         int retryCnt = 0;
 
@@ -4187,8 +4188,8 @@ public final class IkeSessionStateMachineTest {
         verify(mMockChildSessionStateMachine, times(2)).rekeyChildSession();
     }
 
-    @Test
-    public void testIdleReceiveRequestWithFatalError() throws Exception {
+    @Ignore
+    public void disableTestIdleReceiveRequestWithFatalError() throws Exception {
         setupIdleStateMachine();
 
         // Mock receiving packet with syntax error
