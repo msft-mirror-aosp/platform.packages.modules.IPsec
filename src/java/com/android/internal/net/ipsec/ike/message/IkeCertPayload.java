@@ -53,7 +53,7 @@ import javax.net.ssl.X509TrustManager;
  */
 public abstract class IkeCertPayload extends IkePayload {
     // Length of certificate encoding type field in octets.
-    private static final int CERT_ENCODING_LEN = 1;
+    protected static final int CERT_ENCODING_LEN = 1;
 
     private static final String KEY_STORE_TYPE_PKCS12 = "PKCS12";
     private static final String CERT_PATH_ALGO_PKIX = "PKIX";
@@ -132,14 +132,20 @@ public abstract class IkeCertPayload extends IkePayload {
         try {
             // TODO: b/122676944 Support CRL checking
 
-            // Create a new keyStore with all trusted anchors
-            KeyStore keyStore = KeyStore.getInstance(KEY_STORE_TYPE_PKCS12);
-            keyStore.load(null);
-            for (TrustAnchor t : trustAnchorSet) {
-                X509Certificate trustedCert = t.getTrustedCert();
-                String alias =
-                        trustedCert.getSubjectX500Principal().getName() + trustedCert.hashCode();
-                keyStore.setCertificateEntry(alias, trustedCert);
+            // By default, use system-trusted CAs
+            KeyStore keyStore = null;
+
+            // But if a specific trust anchor is specified, use that instead
+            if (trustAnchorSet != null && !trustAnchorSet.isEmpty()) {
+                keyStore = KeyStore.getInstance(KEY_STORE_TYPE_PKCS12);
+                keyStore.load(null);
+                for (TrustAnchor t : trustAnchorSet) {
+                    X509Certificate trustedCert = t.getTrustedCert();
+                    String alias =
+                            trustedCert.getSubjectX500Principal().getName()
+                                    + trustedCert.hashCode();
+                    keyStore.setCertificateEntry(alias, trustedCert);
+                }
             }
 
             // Build X509TrustManager with all keystore
