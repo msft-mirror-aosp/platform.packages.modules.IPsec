@@ -157,7 +157,6 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  */
 public class IkeSessionStateMachine extends AbstractSessionStateMachine {
-
     private static final String TAG = "IkeSessionStateMachine";
 
     // TODO: b/140579254 Allow users to configure fragment size.
@@ -253,6 +252,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     static final int CMD_LOCAL_REQUEST_DELETE_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 2;
     static final int CMD_LOCAL_REQUEST_REKEY_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 3;
     static final int CMD_LOCAL_REQUEST_INFO = CMD_IKE_LOCAL_REQUEST_BASE + 4;
+    static final int CMD_LOCAL_REQUEST_DPD = CMD_IKE_LOCAL_REQUEST_BASE + 5;
 
     private static final SparseArray<String> CMD_TO_STR;
 
@@ -275,6 +275,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_DPD, "DPD");
     }
 
     /** Package */
@@ -387,7 +388,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
     @VisibleForTesting final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
     @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
-    // TODO: Add InfoLocal.
+    @VisibleForTesting final State mDpdIkeLocalInfo = new DpdIkeLocalInfo();
 
     /** Constructor for testing. */
     @VisibleForTesting
@@ -438,6 +439,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         addState(mRekeyIkeLocalDelete);
         addState(mRekeyIkeRemoteDelete);
         addState(mDeleteIkeLocalDelete);
+        addState(mDpdIkeLocalInfo);
 
         setInitialState(mInitial);
         mScheduler =
@@ -1270,7 +1272,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     return;
 
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Fallthrough
-                case CMD_LOCAL_REQUEST_INFO:
+                case CMD_LOCAL_REQUEST_INFO: // Fallthrough
+                case CMD_LOCAL_REQUEST_DPD:
                     mScheduler.addRequest(req);
                     return;
 
@@ -4266,6 +4269,67 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void exitState() {
+            mRetransmitter.stopRetransmitting();
+        }
+    }
+
+    /** DpdIkeLocalInfo initiates a dead peer detection for IKE Session. */
+    class DpdIkeLocalInfo extends DeleteBase {
+        private Retransmitter mRetransmitter;
+
+        @Override
+        public void enterState() {
+            // TODO: Acquire a wake lock
+            mRetransmitter =
+                    new EncryptedRetransmitter(
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    false /*isResp*/,
+                                    mCurrentIkeSaRecord.getLocalRequestMessageId()));
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            // TODO: Ignore DPD response in Idle and any remotely initiated exchange
+            deferMessage(message);
+            transitionTo(mIdle);
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            // DPD response usually contains no payload. But since there is not any requirement of
+            // it, payload validation will be skipped.
+            if (ikeMessage.ikeHeader.exchangeType == IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
+                transitionTo(mIdle);
+                return;
+            }
+
+            handleResponseGenericProcessError(
+                    mCurrentIkeSaRecord,
+                    new InvalidSyntaxException(
+                            "Invalid exchange type; expected INFORMATIONAL, but got: "
+                                    + ikeMessage.ikeHeader.exchangeType));
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
+            loge("Invalid syntax on IKE DPD response.", exception);
+            handleIkeFatalError(exception);
+
+            // #exitState will be called when StateMachine quits
+            quitNow();
+        }
+
+        @Override
+        public void exitState() {
+            // TODO: Release the wake lock
             mRetransmitter.stopRetransmitting();
         }
     }
