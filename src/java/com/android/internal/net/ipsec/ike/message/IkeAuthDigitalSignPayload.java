@@ -41,7 +41,7 @@ import java.util.Arrays;
  * signature authentication method.
  *
  * <p>If AUTH_METHOD_RSA_DIGITAL_SIGN is used, then the hash algorithm is SHA1. If
- * AUTH_METHOD_GENERIC_DIGITAL_SIGN is used, the signature algorihtm and hash algorithm are
+ * AUTH_METHOD_GENERIC_DIGITAL_SIGN is used, the signature algorithm and hash algorithm are
  * extracted from authentication data.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.8">RFC 7296, Internet Key Exchange
@@ -51,6 +51,8 @@ import java.util.Arrays;
  */
 public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
     private static final String KEY_ALGO_NAME = "RSA";
+    private static final byte SIGNATURE_ALGO_ASN1_BYTES_LEN = (byte) 15;
+    private static final byte SIGNATURE_ALGO_ASN1_BYTES_LEN_LEN = (byte) 1;
 
     // Byte arrays of DER encoded identifier ASN.1 objects that indicates the algorithm used to
     // generate the signature, extracted from
@@ -95,12 +97,25 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
     @VisibleForTesting
     @interface SignatureAlgo {}
 
-    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA1 = "SHA1withRSA";
-    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_256 = "SHA256withRSA";
-    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_384 = "SHA384withRSA";
-    @VisibleForTesting static final String SIGNATURE_ALGO_RSA_SHA2_512 = "SHA512withRSA";
+    public static final String SIGNATURE_ALGO_RSA_SHA1 = "SHA1withRSA";
+    public static final String SIGNATURE_ALGO_RSA_SHA2_256 = "SHA256withRSA";
+    public static final String SIGNATURE_ALGO_RSA_SHA2_384 = "SHA384withRSA";
+    public static final String SIGNATURE_ALGO_RSA_SHA2_512 = "SHA512withRSA";
 
-    public final String signatureAlgoAndHash;
+    // IKEv2 types for hash algorithms.
+    public static final short HASH_ALGORITHM_RSA_SHA1 = 1;
+    public static final short HASH_ALGORITHM_RSA_SHA2_256 = 2;
+    public static final short HASH_ALGORITHM_RSA_SHA2_384 = 3;
+    public static final short HASH_ALGORITHM_RSA_SHA2_512 = 4;
+    public static final short[] ALL_SIGNATURE_ALGO_TYPES =
+            new short[] {
+                HASH_ALGORITHM_RSA_SHA1,
+                HASH_ALGORITHM_RSA_SHA2_256,
+                HASH_ALGORITHM_RSA_SHA2_384,
+                HASH_ALGORITHM_RSA_SHA2_512
+            };
+
+    public final String signatureAndHashAlgos;
     public final byte[] signature;
 
     protected IkeAuthDigitalSignPayload(
@@ -109,7 +124,7 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
         super(critical, authMethod);
         switch (authMethod) {
             case AUTH_METHOD_RSA_DIGITAL_SIGN:
-                signatureAlgoAndHash = SIGNATURE_ALGO_RSA_SHA1;
+                signatureAndHashAlgos = SIGNATURE_ALGO_RSA_SHA1;
                 signature = authData;
                 break;
             case AUTH_METHOD_GENERIC_DIGITAL_SIGN:
@@ -119,7 +134,7 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
                 int signAlgoLen = Byte.toUnsignedInt(inputBuffer.get());
                 byte[] signAlgoBytes = new byte[signAlgoLen];
                 inputBuffer.get(signAlgoBytes);
-                signatureAlgoAndHash = bytesToJavaStandardSignAlgoName(signAlgoBytes);
+                signatureAndHashAlgos = bytesToJavaStandardSignAlgoName(signAlgoBytes);
 
                 // Get signature.
                 signature = new byte[authData.length - SIGNATURE_ALGO_ASN1_LEN_LEN - signAlgoLen];
@@ -169,7 +184,7 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
             signGen.update(dataToSignBytes);
 
             signature = signGen.sign();
-            signatureAlgoAndHash = signatureAlgoName;
+            signatureAndHashAlgos = signatureAlgoName;
         } catch (SignatureException | InvalidKeyException e) {
             throw new IllegalArgumentException("Signature generation failed", e);
         } catch (NoSuchAlgorithmException e) {
@@ -178,6 +193,21 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
                             + KEY_ALGO_NAME
                             + " or "
                             + signatureAlgoName);
+        }
+    }
+
+    private byte[] javaStandardSignAlgoNameToAsn1Bytes(String javaSignatureAndHashAlgo) {
+        switch (javaSignatureAndHashAlgo) {
+            case SIGNATURE_ALGO_RSA_SHA1:
+                return PKI_ALGO_ID_DER_BYTES_RSA_SHA1;
+            case SIGNATURE_ALGO_RSA_SHA2_256:
+                return PKI_ALGO_ID_DER_BYTES_RSA_SHA2_256;
+            case SIGNATURE_ALGO_RSA_SHA2_384:
+                return PKI_ALGO_ID_DER_BYTES_RSA_SHA2_384;
+            case SIGNATURE_ALGO_RSA_SHA2_512:
+                return PKI_ALGO_ID_DER_BYTES_RSA_SHA2_512;
+            default:
+                throw new IllegalArgumentException("Impossible! We used an unsupported algo");
         }
     }
 
@@ -225,7 +255,7 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
                 getSignedOctets(ikeInitBytes, nonce, idPayloadBodyBytes, ikePrf, prfKeyBytes);
 
         try {
-            Signature signValidator = Signature.getInstance(signatureAlgoAndHash);
+            Signature signValidator = Signature.getInstance(signatureAndHashAlgos);
             signValidator.initVerify(certificate);
             signValidator.update(dataToSignBytes);
 
@@ -236,24 +266,27 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
             throw new AuthenticationFailedException(e);
         } catch (NoSuchAlgorithmException e) {
             throw new ProviderException(
-                    "Security Provider does not support " + signatureAlgoAndHash);
+                    "Security Provider does not support " + signatureAndHashAlgos);
         }
     }
 
-    // TODO: Add methods for generating signature.
-
     @Override
     protected void encodeAuthDataToByteBuffer(ByteBuffer byteBuffer) {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
+        if (authMethod == AUTH_METHOD_GENERIC_DIGITAL_SIGN) {
+            byteBuffer.put(SIGNATURE_ALGO_ASN1_BYTES_LEN);
+            byteBuffer.put(javaStandardSignAlgoNameToAsn1Bytes(signatureAndHashAlgos));
+        }
+        byteBuffer.put(signature);
     }
 
     @Override
     protected int getAuthDataLength() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException(
-                "It is not supported to get payload length of " + getTypeString());
+        if (authMethod == AUTH_METHOD_GENERIC_DIGITAL_SIGN) {
+            return SIGNATURE_ALGO_ASN1_BYTES_LEN_LEN
+                    + SIGNATURE_ALGO_ASN1_BYTES_LEN
+                    + signature.length;
+        }
+        return signature.length;
     }
 
     @Override
