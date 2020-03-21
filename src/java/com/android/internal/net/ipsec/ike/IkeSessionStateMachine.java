@@ -41,6 +41,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 
 import android.annotation.IntDef;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -112,6 +113,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
+import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 
@@ -160,6 +162,23 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private static final String TAG = "IkeSessionStateMachine";
 
     // TODO: b/140579254 Allow users to configure fragment size.
+
+    private static final Object IKE_SESSION_LOCK = new Object();
+
+    @GuardedBy("IKE_SESSION_LOCK")
+    private static final HashMap<Context, Set<IkeSessionStateMachine>> sContextToIkeSmMap =
+            new HashMap<>();
+
+    /** Alarm receiver that will be shared by all IkeSessionStateMachine */
+    private static final IkeAlarmReceiver sIkeAlarmReceiver = new IkeAlarmReceiver();
+
+    /** Intent filter for all Intents that should be received by sIkeAlarmReceiver */
+    private static final IntentFilter sIntentFiler;
+
+    static {
+        sIntentFiler = new IntentFilter();
+        sIntentFiler.addCategory(TAG);
+    }
 
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
@@ -403,6 +422,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
         super(TAG, looper);
+
+        synchronized (IKE_SESSION_LOCK) {
+            if (!sContextToIkeSmMap.containsKey(context)) {
+                // Pass in a Handler so #onReceive will run on the StateMachine thread
+                context.registerReceiver(
+                        sIkeAlarmReceiver,
+                        sIntentFiler,
+                        null /*broadcastPermission*/,
+                        new Handler(getHandler().getLooper()));
+                sContextToIkeSmMap.put(context, new HashSet<IkeSessionStateMachine>());
+            }
+            sContextToIkeSmMap.get(context).add(this);
+
+            // TODO: Statically store the ikeSessionCallback to prevent user from providing the same
+            // callback instance in the future
+        }
 
         mIkeSessionParams = ikeParams;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
@@ -923,6 +958,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         if (mIkeSocket == null) return;
         mIkeSocket.releaseReference(this);
+
+        synchronized (IKE_SESSION_LOCK) {
+            Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(mContext);
+            ikeSet.remove(this);
+            if (ikeSet.isEmpty()) {
+                mContext.unregisterReceiver(sIkeAlarmReceiver);
+                sContextToIkeSmMap.remove(mContext);
+            }
+            // TODO: Remove the stored ikeSessionCallback
+        }
     }
 
     private void closeAllSaRecords(boolean expectSaClosed) {
