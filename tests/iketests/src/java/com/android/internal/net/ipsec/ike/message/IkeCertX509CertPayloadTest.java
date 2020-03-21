@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.message;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -26,12 +27,17 @@ import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedExcepti
 import org.junit.Test;
 
 import java.io.ByteArrayInputStream;
+import java.nio.ByteBuffer;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Base64;
 
 public final class IkeCertX509CertPayloadTest {
+    private static final int NEXT_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_NO_NEXT;
+
+    // Generic header - length: 4B (Generic header) + 1B (Cert encoding) 1061B (Cert length)
+    private static final String CERT_PAYLOAD_HEADER_HEX_STRING = "0000042a";
     private static final String CERT_PAYLOAD_BODY_HEX_STRING =
             "043082042130820209a003020102020827a2b30cdd5043ab300d06092a864886"
                     + "f70d01010c05003035310b3009060355040613024e5a310e300c060355040a13"
@@ -93,6 +99,20 @@ public final class IkeCertX509CertPayloadTest {
                     + "zc4SGPYepFwMb8mBTDANq8JKdHVgdE6YYck5XdL4SbTRGW/jAqyKBjr+6pvJ1jcv"
                     + "7beRMLs=";
     private static final int CERTIFICATE_OFFSET = 1;
+
+    @Test
+    public void testEncodeX509Certificate() throws Exception {
+        X509Certificate cert = pemStringToCertificate(CLIENT_END_CERTIFICATE);
+        IkeCertX509CertPayload certPayload = new IkeCertX509CertPayload(cert);
+
+        ByteBuffer buffer = ByteBuffer.allocate(certPayload.getPayloadLength());
+        certPayload.encodeToByteBuffer(NEXT_PAYLOAD_TYPE, buffer);
+
+        byte[] expected =
+                TestUtils.hexStringToByteArray(
+                        CERT_PAYLOAD_HEADER_HEX_STRING + CERT_PAYLOAD_BODY_HEX_STRING);
+        assertArrayEquals(expected, buffer.array());
+    }
 
     @Test
     public void testDecodeX509Certificate() throws Exception {

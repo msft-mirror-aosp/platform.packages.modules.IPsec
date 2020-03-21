@@ -23,6 +23,7 @@ import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedExcepti
 import java.io.ByteArrayInputStream;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 
@@ -75,9 +76,14 @@ public final class IkeCertX509CertPayload extends IkeCertPayload {
      */
     @Override
     protected void encodeToByteBuffer(@PayloadType int nextPayload, ByteBuffer byteBuffer) {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException(
-                "It is not supported to encode a " + getTypeString());
+        encodePayloadHeaderToByteBuffer(nextPayload, getPayloadLength(), byteBuffer);
+
+        byteBuffer.put((byte) certEncodingType);
+        try {
+            byteBuffer.put(certificate.getEncoded());
+        } catch (CertificateEncodingException e) {
+            // No certificate to encode.
+        }
     }
 
     /**
@@ -87,9 +93,11 @@ public final class IkeCertX509CertPayload extends IkeCertPayload {
      */
     @Override
     protected int getPayloadLength() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException(
-                "It is not supported to get payload length of " + getTypeString());
+        try {
+            return GENERIC_HEADER_LENGTH + CERT_ENCODING_LEN + certificate.getEncoded().length;
+        } catch (CertificateEncodingException e) {
+            return GENERIC_HEADER_LENGTH + CERT_ENCODING_LEN;
+        }
     }
 
     /**
