@@ -41,6 +41,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 
 import android.annotation.IntDef;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -53,6 +54,7 @@ import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
+import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import android.net.ipsec.ike.exceptions.IkeException;
@@ -111,6 +113,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
+import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 
@@ -121,12 +124,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -154,10 +159,26 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  */
 public class IkeSessionStateMachine extends AbstractSessionStateMachine {
-
     private static final String TAG = "IkeSessionStateMachine";
 
     // TODO: b/140579254 Allow users to configure fragment size.
+
+    private static final Object IKE_SESSION_LOCK = new Object();
+
+    @GuardedBy("IKE_SESSION_LOCK")
+    private static final HashMap<Context, Set<IkeSessionStateMachine>> sContextToIkeSmMap =
+            new HashMap<>();
+
+    /** Alarm receiver that will be shared by all IkeSessionStateMachine */
+    private static final IkeAlarmReceiver sIkeAlarmReceiver = new IkeAlarmReceiver();
+
+    /** Intent filter for all Intents that should be received by sIkeAlarmReceiver */
+    private static final IntentFilter sIntentFiler;
+
+    static {
+        sIntentFiler = new IntentFilter();
+        sIntentFiler.addCategory(TAG);
+    }
 
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
@@ -250,6 +271,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     static final int CMD_LOCAL_REQUEST_DELETE_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 2;
     static final int CMD_LOCAL_REQUEST_REKEY_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 3;
     static final int CMD_LOCAL_REQUEST_INFO = CMD_IKE_LOCAL_REQUEST_BASE + 4;
+    static final int CMD_LOCAL_REQUEST_DPD = CMD_IKE_LOCAL_REQUEST_BASE + 5;
 
     private static final SparseArray<String> CMD_TO_STR;
 
@@ -272,6 +294,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_DPD, "DPD");
     }
 
     /** Package */
@@ -384,7 +407,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
     @VisibleForTesting final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
     @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
-    // TODO: Add InfoLocal.
+    @VisibleForTesting final State mDpdIkeLocalInfo = new DpdIkeLocalInfo();
 
     /** Constructor for testing. */
     @VisibleForTesting
@@ -399,6 +422,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
         super(TAG, looper);
+
+        synchronized (IKE_SESSION_LOCK) {
+            if (!sContextToIkeSmMap.containsKey(context)) {
+                // Pass in a Handler so #onReceive will run on the StateMachine thread
+                context.registerReceiver(
+                        sIkeAlarmReceiver,
+                        sIntentFiler,
+                        null /*broadcastPermission*/,
+                        new Handler(getHandler().getLooper()));
+                sContextToIkeSmMap.put(context, new HashSet<IkeSessionStateMachine>());
+            }
+            sContextToIkeSmMap.get(context).add(this);
+
+            // TODO: Statically store the ikeSessionCallback to prevent user from providing the same
+            // callback instance in the future
+        }
 
         mIkeSessionParams = ikeParams;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
@@ -435,6 +474,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         addState(mRekeyIkeLocalDelete);
         addState(mRekeyIkeRemoteDelete);
         addState(mDeleteIkeLocalDelete);
+        addState(mDpdIkeLocalInfo);
 
         setInitialState(mInitial);
         mScheduler =
@@ -918,6 +958,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         if (mIkeSocket == null) return;
         mIkeSocket.releaseReference(this);
+
+        synchronized (IKE_SESSION_LOCK) {
+            Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(mContext);
+            ikeSet.remove(this);
+            if (ikeSet.isEmpty()) {
+                mContext.unregisterReceiver(sIkeAlarmReceiver);
+                sContextToIkeSmMap.remove(mContext);
+            }
+            // TODO: Remove the stored ikeSessionCallback
+        }
     }
 
     private void closeAllSaRecords(boolean expectSaClosed) {
@@ -1267,7 +1317,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     return;
 
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Fallthrough
-                case CMD_LOCAL_REQUEST_INFO:
+                case CMD_LOCAL_REQUEST_INFO: // Fallthrough
+                case CMD_LOCAL_REQUEST_DPD:
                     mScheduler.addRequest(req);
                     return;
 
@@ -2510,6 +2561,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
 
+            ByteBuffer signatureHashAlgoTypes =
+                    ByteBuffer.allocate(
+                            IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES.length * 2);
+            for (short type : IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES) {
+                signatureHashAlgoTypes.putShort(type);
+            }
+            payloadList.add(
+                    new IkeNotifyPayload(
+                            IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS,
+                            signatureHashAlgoTypes.array()));
+
             // TODO: Add Notification Payloads according to user configurations.
 
             // Build IKE header
@@ -2560,10 +2622,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         respKePayload = (IkeKePayload) payload;
                         break;
                     case IkePayload.PAYLOAD_TYPE_CERT_REQUEST:
-                        throw new UnsupportedOperationException(
-                                "Do not support handling Cert Request Payload.");
-                        // TODO: Handle it when using certificate based authentication. Otherwise,
-                        // ignore it.
+                        // Certificates unconditionally sent (only) for Digital Signature Auth
+                        break;
                     case IkePayload.PAYLOAD_TYPE_NONCE:
                         hasNoncePayload = true;
                         mIkeRespNoncePayload = (IkeNoncePayload) payload;
@@ -2951,9 +3011,28 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     payloadList.add(pskPayload);
                     break;
                 case IkeSessionParams.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
-                    // TODO: Support authentication based on public key signature.
-                    throw new UnsupportedOperationException(
-                            "Do not support public-key based authentication.");
+                    IkeAuthDigitalSignLocalConfig localAuthConfig =
+                            (IkeAuthDigitalSignLocalConfig) mIkeSessionParams.getLocalAuthConfig();
+
+                    // Add certificates to list
+                    payloadList.add(
+                            new IkeCertX509CertPayload(localAuthConfig.getClientEndCertificate()));
+                    for (X509Certificate intermediateCert : localAuthConfig.mIntermediateCerts) {
+                        payloadList.add(new IkeCertX509CertPayload(intermediateCert));
+                    }
+
+                    IkeAuthDigitalSignPayload digitalSignaturePayload =
+                            new IkeAuthDigitalSignPayload(
+                                    IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_512,
+                                    localAuthConfig.mPrivateKey,
+                                    mIkeInitRequestBytes,
+                                    mCurrentIkeSaRecord.nonceResponder,
+                                    mInitIdPayload.getEncodedPayloadBody(),
+                                    mIkePrf,
+                                    mCurrentIkeSaRecord.getSkPi());
+                    payloadList.add(digitalSignaturePayload);
+
+                    break;
                 case IkeSessionParams.IKE_AUTH_METHOD_EAP:
                     // Do not include AUTH payload when using EAP.
                     break;
@@ -3135,8 +3214,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         "The remote/server failed to provide a end certificate");
             }
 
-            Set<TrustAnchor> trustAnchorSet = new HashSet<>();
-            trustAnchorSet.add(trustAnchor);
+            Set<TrustAnchor> trustAnchorSet =
+                    trustAnchor == null ? null : Collections.singleton(trustAnchor);
 
             IkeCertPayload.validateCertificates(
                     endCert, certList, null /*crlList*/, trustAnchorSet);
@@ -4235,6 +4314,67 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void exitState() {
+            mRetransmitter.stopRetransmitting();
+        }
+    }
+
+    /** DpdIkeLocalInfo initiates a dead peer detection for IKE Session. */
+    class DpdIkeLocalInfo extends DeleteBase {
+        private Retransmitter mRetransmitter;
+
+        @Override
+        public void enterState() {
+            // TODO: Acquire a wake lock
+            mRetransmitter =
+                    new EncryptedRetransmitter(
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    false /*isResp*/,
+                                    mCurrentIkeSaRecord.getLocalRequestMessageId()));
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            // TODO: Ignore DPD response in Idle and any remotely initiated exchange
+            deferMessage(message);
+            transitionTo(mIdle);
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            // DPD response usually contains no payload. But since there is not any requirement of
+            // it, payload validation will be skipped.
+            if (ikeMessage.ikeHeader.exchangeType == IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
+                transitionTo(mIdle);
+                return;
+            }
+
+            handleResponseGenericProcessError(
+                    mCurrentIkeSaRecord,
+                    new InvalidSyntaxException(
+                            "Invalid exchange type; expected INFORMATIONAL, but got: "
+                                    + ikeMessage.ikeHeader.exchangeType));
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
+            loge("Invalid syntax on IKE DPD response.", exception);
+            handleIkeFatalError(exception);
+
+            // #exitState will be called when StateMachine quits
+            quitNow();
+        }
+
+        @Override
+        public void exitState() {
+            // TODO: Release the wake lock
             mRetransmitter.stopRetransmitting();
         }
     }
