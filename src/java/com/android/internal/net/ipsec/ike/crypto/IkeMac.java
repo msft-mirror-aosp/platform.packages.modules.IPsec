@@ -16,6 +16,9 @@
 
 package com.android.internal.net.ipsec.ike.crypto;
 
+import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96;
+import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC;
+
 import com.android.internal.net.crypto.KeyGenerationUtils.ByteSigner;
 
 import java.nio.ByteBuffer;
@@ -68,12 +71,20 @@ abstract class IkeMac extends IkeCrypto implements ByteSigner {
     @Override
     public byte[] signBytes(byte[] keyBytes, byte[] dataToSign) {
         try {
-            SecretKeySpec secretKey = new SecretKeySpec(keyBytes, getAlgorithmName());
-
             if (mIsEncryptAlgo) {
-                throw new UnsupportedOperationException(
-                        "Do not support " + getTypeString() + " using encryption algorithm.");
+                int algoId = getAlgorithmId();
+                switch (algoId) {
+                    case INTEGRITY_ALGORITHM_AES_XCBC_96:
+                        return new AesXCbcImpl(mCipher)
+                                .signBytes(keyBytes, dataToSign, true /*needTruncation*/);
+                    case PSEUDORANDOM_FUNCTION_AES128_XCBC:
+                        return new AesXCbcImpl(mCipher)
+                                .signBytes(keyBytes, dataToSign, false /*needTruncation*/);
+                    default:
+                        throw new IllegalStateException("Invalid algorithm: " + algoId);
+                }
             } else {
+                SecretKeySpec secretKey = new SecretKeySpec(keyBytes, getAlgorithmName());
                 ByteBuffer inputBuffer = ByteBuffer.wrap(dataToSign);
                 mMac.init(secretKey);
                 mMac.update(inputBuffer);
