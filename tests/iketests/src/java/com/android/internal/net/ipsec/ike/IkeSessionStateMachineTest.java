@@ -70,6 +70,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.app.AlarmManager;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.InetAddresses;
@@ -1396,6 +1397,8 @@ public final class IkeSessionStateMachineTest {
         when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
+                        anyInt(),
+                        any(AlarmManager.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         any(ChildSessionCallback.class),
@@ -1451,6 +1454,8 @@ public final class IkeSessionStateMachineTest {
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
+                        anyInt(),
+                        any(AlarmManager.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(childCallback),
@@ -2191,6 +2196,8 @@ public final class IkeSessionStateMachineTest {
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
+                        anyInt(),
+                        any(AlarmManager.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(mMockChildSessionCallback),
@@ -4028,6 +4035,8 @@ public final class IkeSessionStateMachineTest {
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
                         eq(mContext),
+                        anyInt(),
+                        any(AlarmManager.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(cb),

@@ -148,8 +148,8 @@ public final class IkeLocalRequestScheduler {
         }
 
         /** Schedule a request for a Child SA that is identified by the remoteChildSpi */
-        ChildLocalRequest(int type, int remoteChildSpi, ChildSessionParams childParams) {
-            this(type, remoteChildSpi, null /*childCallback*/, childParams);
+        ChildLocalRequest(int type, int remoteChildSpi) {
+            this(type, remoteChildSpi, null /*childCallback*/, null /*childParams*/);
         }
 
         private ChildLocalRequest(

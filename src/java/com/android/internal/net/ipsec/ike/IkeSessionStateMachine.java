@@ -172,7 +172,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </pre>
  */
 public class IkeSessionStateMachine extends AbstractSessionStateMachine {
-    private static final String TAG = "IkeSessionStateMachine";
+    // Package private
+    static final String TAG = "IkeSessionStateMachine";
 
     // TODO: b/140579254 Allow users to configure fragment size.
 
@@ -200,6 +201,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     // Bundle key for remote IKE SPI. Package private
     @VisibleForTesting static final String BUNDLE_KEY_IKE_REMOTE_SPI = "BUNDLE_KEY_IKE_REMOTE_SPI";
+    // Bundle key for remote Child SPI. Package private
+    @VisibleForTesting
+    static final String BUNDLE_KEY_CHILD_REMOTE_SPI = "BUNDLE_KEY_CHILD_REMOTE_SPI";
 
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
@@ -568,6 +572,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     ChildSessionStateMachineFactory.makeChildSessionStateMachine(
                             getHandler().getLooper(),
                             mContext,
+                            mIkeSessionId,
+                            mAlarmManager,
                             childParams,
                             mUserCbExecutor,
                             callbacks,
@@ -1502,6 +1508,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         protected void handleFiredAlarm(Message message) {
             switch (message.arg2) {
+                case CMD_LOCAL_REQUEST_DELETE_CHILD:
+                    // Child SA (identified by remoteChildSpi) has hit its hard lifetime
+                    enqueueChildLocalRequest(message);
+                    return;
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     // IKE SA hits its hard lifetime
                     enqueueIkeLocalRequest(message);
@@ -1516,12 +1526,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 default:
                     logWtf("Invalid alarm action: " + message.arg2);
             }
-            // TODO: Handle delete and rekey IKE/Child SA
+            // TODO: Handle rekey IKE/Child SA
         }
 
         private void enqueueIkeLocalRequest(Message message) {
             long remoteIkeSpi = ((Bundle) message.obj).getLong(BUNDLE_KEY_IKE_REMOTE_SPI);
             sendMessage(message.arg2, new IkeLocalRequest(message.arg2, remoteIkeSpi));
+        }
+
+        private void enqueueChildLocalRequest(Message message) {
+            int remoteChildSpi = ((Bundle) message.obj).getInt(BUNDLE_KEY_CHILD_REMOTE_SPI);
+            sendMessage(message.arg2, new ChildLocalRequest(message.arg2, remoteChildSpi));
         }
     }
 
@@ -2234,9 +2249,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        private ChildSessionStateMachine getChildSession(ChildSessionCallback callbacks) {
+        private ChildSessionStateMachine getChildSession(ChildLocalRequest req) {
+            if (req.childSessionCallback == null) {
+                return mRemoteSpiToChildSessionMap.get(req.remoteSpi);
+            }
+            return getChildSession(req.childSessionCallback);
+        }
+
+        private ChildSessionStateMachine getChildSession(ChildSessionCallback callback) {
             synchronized (mChildCbToSessions) {
-                return mChildCbToSessions.get(callbacks);
+                return mChildCbToSessions.get(callback);
             }
         }
 
@@ -2256,7 +2278,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
-            mChildInLocalProcedure = getChildSession(req.childSessionCallback);
+            mChildInLocalProcedure = getChildSession(req);
             mLocalRequestOngoing = req;
 
             if (mChildInLocalProcedure == null) {
