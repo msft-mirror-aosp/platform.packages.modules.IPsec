@@ -145,6 +145,8 @@ public final class SaRecordTest {
     private LocalRequest mMockFutureRekeyIkeEvent;
     private ChildLocalRequest mMockFutureRekeyChildEvent;
 
+    private SaLifetimeAlarmScheduler mMockLifetimeAlarmScheduler;
+
     private SaRecordHelper mSaRecordHelper = new SaRecordHelper();
 
     @Before
@@ -162,6 +164,7 @@ public final class SaRecordTest {
 
         mMockFutureRekeyIkeEvent = mock(LocalRequest.class);
         mMockFutureRekeyChildEvent = mock(ChildLocalRequest.class);
+        mMockLifetimeAlarmScheduler = mock(SaLifetimeAlarmScheduler.class);
     }
 
     // Test generating keying material for making IKE SA.
@@ -299,7 +302,8 @@ public final class SaRecordTest {
                         TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING),
                         false /*isTransport*/,
                         true /*isLocalInit*/,
-                        mMockFutureRekeyChildEvent);
+                        mMockFutureRekeyChildEvent,
+                        mMockLifetimeAlarmScheduler);
 
         ChildSaRecord childSaRecord =
                 mSaRecordHelper.makeChildSaRecord(
