@@ -182,7 +182,14 @@ public abstract class SaProposal {
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({DH_GROUP_NONE, DH_GROUP_1024_BIT_MODP, DH_GROUP_1536_BIT_MODP, DH_GROUP_2048_BIT_MODP})
+    @IntDef({
+        DH_GROUP_NONE,
+        DH_GROUP_1024_BIT_MODP,
+        DH_GROUP_1536_BIT_MODP,
+        DH_GROUP_2048_BIT_MODP,
+        DH_GROUP_3072_BIT_MODP,
+        DH_GROUP_4096_BIT_MODP
+    })
     public @interface DhGroup {}
 
     /** None Diffie-Hellman Group. */
@@ -193,9 +200,9 @@ public abstract class SaProposal {
     public static final int DH_GROUP_1536_BIT_MODP = 5;
     /** 2048-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_2048_BIT_MODP = 14;
-    /** 3072-bit MODP Diffie-Hellman Group. @hide */
+    /** 3072-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_3072_BIT_MODP = 15;
-    /** 4096-bit MODP Diffie-Hellman Group. @hide */
+    /** 4096-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_4096_BIT_MODP = 16;
 
     private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
