@@ -83,6 +83,7 @@ import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
 import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
 import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
@@ -109,7 +110,6 @@ import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
@@ -322,6 +322,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
 
+    /** Peer-selected DH group to use. Defaults to first proposed DH group in first SA proposal. */
+    @VisibleForTesting int mPeerSelectedDhGroup;
+
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
      * State.
@@ -441,6 +444,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         mIkeSessionParams = ikeParams;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
+
+        // SaProposals.Builder guarantees there is at least one SA proposal, and each SA proposal
+        // has at least one DH group.
+        mPeerSelectedDhGroup =
+                mIkeSessionParams.getSaProposals().get(0).getDhGroupTransforms()[0].id;
 
         mTempFailHandler = new TempFailureHandler(looper);
 
@@ -2522,7 +2530,34 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                 transitionTo(mCreateIkeLocalIkeAuth);
             } catch (IkeProtocolException | GeneralSecurityException | IOException e) {
-                // TODO: Try another DH group to buld KE Payload if receiving InvalidKeException
+                if (e instanceof InvalidKeException) {
+                    InvalidKeException keException = (InvalidKeException) e;
+
+                    int requestedDhGroup = keException.getDhGroup();
+                    boolean doAllProposalsHaveDhGroup = true;
+                    for (IkeSaProposal proposal : mIkeSessionParams.getSaProposalsInternal()) {
+                        doAllProposalsHaveDhGroup &=
+                                proposal.getDhGroups().contains(requestedDhGroup);
+                    }
+
+                    // If DH group is not acceptable for all proposals, fail. The caller explicitly
+                    // did not want that combination, and the IKE library must honor it.
+                    if (doAllProposalsHaveDhGroup) {
+                        mPeerSelectedDhGroup = requestedDhGroup;
+
+                        // Remove state set during request creation
+                        mIkeSocket.unregisterIke(
+                                mRetransmitter.getMessage().ikeHeader.ikeInitiatorSpi);
+                        mIkeInitRequestBytes = null;
+                        mIkeInitNoncePayload = null;
+
+                        transitionTo(mInitial);
+                        openSession();
+
+                        return;
+                    }
+                }
+
                 handleIkeFatalError(e);
             } finally {
                 if (!ikeInitSuccess) {
@@ -2551,6 +2586,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getIkeInitSaRequestPayloads(
                             saProposals,
+                            mPeerSelectedDhGroup,
                             initSpi,
                             respSpi,
                             mLocalAddress,
@@ -2703,7 +2739,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeKePayload reqKePayload =
                     reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
             if (reqKePayload.dhGroup != respKePayload.dhGroup
-                    && respKePayload.dhGroup != mSaProposal.getDhGroupTransforms()[0].id) {
+                    && respKePayload.dhGroup != mPeerSelectedDhGroup) {
                 throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
             }
 
@@ -4385,6 +4421,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private static class CreateIkeSaHelper {
         public static List<IkePayload> getIkeInitSaRequestPayloads(
                 IkeSaProposal[] saProposals,
+                int selectedDhGroup,
                 long initIkeSpi,
                 long respIkeSpi,
                 InetAddress localAddr,
@@ -4393,7 +4430,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 int remotePort)
                 throws IOException {
             List<IkePayload> payloadList =
-                    getCreateIkeSaPayloads(IkeSaPayload.createInitialIkeSaPayload(saProposals));
+                    getCreateIkeSaPayloads(
+                            selectedDhGroup, IkeSaPayload.createInitialIkeSaPayload(saProposals));
 
             // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
             // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in
@@ -4418,7 +4456,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 throw new IllegalArgumentException("Local address was null for rekey");
             }
 
+            // Guaranteed to have at least one SA Proposal, since the IKE session was set up
+            // properly.
+            int selectedDhGroup = saProposals[0].getDhGroupTransforms()[0].id;
+
             return getCreateIkeSaPayloads(
+                    selectedDhGroup,
                     IkeSaPayload.createRekeyIkeSaRequestPayload(saProposals, localAddr));
         }
 
@@ -4429,7 +4472,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 throw new IllegalArgumentException("Local address was null for rekey");
             }
 
+            int selectedDhGroup = saProposal.getDhGroupTransforms()[0].id;
+
             return getCreateIkeSaPayloads(
+                    selectedDhGroup,
                     IkeSaPayload.createRekeyIkeSaResponsePayload(
                             respProposalNumber, saProposal, localAddr));
         }
@@ -4439,8 +4485,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
          *
          * <p>Will return a non-empty list of IkePayloads, the first of which WILL be the SA payload
          */
-        private static List<IkePayload> getCreateIkeSaPayloads(IkeSaPayload saPayload)
-                throws IOException {
+        private static List<IkePayload> getCreateIkeSaPayloads(
+                int selectedDhGroup, IkeSaPayload saPayload) throws IOException {
             if (saPayload.proposalList.size() == 0) {
                 throw new IllegalArgumentException("Invalid SA proposal list - was empty");
             }
@@ -4451,11 +4497,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             payloadList.add(new IkeNoncePayload());
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
-            DhGroupTransform dhGroupTransform =
-                    ((IkeProposal) saPayload.proposalList.get(0))
-                            .saProposal
-                            .getDhGroupTransforms()[0];
-            payloadList.add(new IkeKePayload(dhGroupTransform.id));
+            payloadList.add(new IkeKePayload(selectedDhGroup));
 
             return payloadList;
         }
