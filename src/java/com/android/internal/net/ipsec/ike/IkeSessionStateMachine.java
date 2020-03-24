@@ -41,6 +41,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 
 import android.annotation.IntDef;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -111,6 +112,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
+import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 
@@ -154,10 +156,26 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  */
 public class IkeSessionStateMachine extends AbstractSessionStateMachine {
-
     private static final String TAG = "IkeSessionStateMachine";
 
     // TODO: b/140579254 Allow users to configure fragment size.
+
+    private static final Object IKE_SESSION_LOCK = new Object();
+
+    @GuardedBy("IKE_SESSION_LOCK")
+    private static final HashMap<Context, Set<IkeSessionStateMachine>> sContextToIkeSmMap =
+            new HashMap<>();
+
+    /** Alarm receiver that will be shared by all IkeSessionStateMachine */
+    private static final IkeAlarmReceiver sIkeAlarmReceiver = new IkeAlarmReceiver();
+
+    /** Intent filter for all Intents that should be received by sIkeAlarmReceiver */
+    private static final IntentFilter sIntentFiler;
+
+    static {
+        sIntentFiler = new IntentFilter();
+        sIntentFiler.addCategory(TAG);
+    }
 
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
@@ -250,6 +268,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     static final int CMD_LOCAL_REQUEST_DELETE_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 2;
     static final int CMD_LOCAL_REQUEST_REKEY_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 3;
     static final int CMD_LOCAL_REQUEST_INFO = CMD_IKE_LOCAL_REQUEST_BASE + 4;
+    static final int CMD_LOCAL_REQUEST_DPD = CMD_IKE_LOCAL_REQUEST_BASE + 5;
 
     private static final SparseArray<String> CMD_TO_STR;
 
@@ -272,6 +291,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_DPD, "DPD");
     }
 
     /** Package */
@@ -384,7 +404,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
     @VisibleForTesting final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
     @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
-    // TODO: Add InfoLocal.
+    @VisibleForTesting final State mDpdIkeLocalInfo = new DpdIkeLocalInfo();
 
     /** Constructor for testing. */
     @VisibleForTesting
@@ -399,6 +419,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
         super(TAG, looper);
+
+        synchronized (IKE_SESSION_LOCK) {
+            if (!sContextToIkeSmMap.containsKey(context)) {
+                // Pass in a Handler so #onReceive will run on the StateMachine thread
+                context.registerReceiver(
+                        sIkeAlarmReceiver,
+                        sIntentFiler,
+                        null /*broadcastPermission*/,
+                        new Handler(getHandler().getLooper()));
+                sContextToIkeSmMap.put(context, new HashSet<IkeSessionStateMachine>());
+            }
+            sContextToIkeSmMap.get(context).add(this);
+
+            // TODO: Statically store the ikeSessionCallback to prevent user from providing the same
+            // callback instance in the future
+        }
 
         mIkeSessionParams = ikeParams;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
@@ -435,6 +471,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         addState(mRekeyIkeLocalDelete);
         addState(mRekeyIkeRemoteDelete);
         addState(mDeleteIkeLocalDelete);
+        addState(mDpdIkeLocalInfo);
 
         setInitialState(mInitial);
         mScheduler =
@@ -918,6 +955,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         if (mIkeSocket == null) return;
         mIkeSocket.releaseReference(this);
+
+        synchronized (IKE_SESSION_LOCK) {
+            Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(mContext);
+            ikeSet.remove(this);
+            if (ikeSet.isEmpty()) {
+                mContext.unregisterReceiver(sIkeAlarmReceiver);
+                sContextToIkeSmMap.remove(mContext);
+            }
+            // TODO: Remove the stored ikeSessionCallback
+        }
     }
 
     private void closeAllSaRecords(boolean expectSaClosed) {
@@ -1267,7 +1314,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     return;
 
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Fallthrough
-                case CMD_LOCAL_REQUEST_INFO:
+                case CMD_LOCAL_REQUEST_INFO: // Fallthrough
+                case CMD_LOCAL_REQUEST_DPD:
                     mScheduler.addRequest(req);
                     return;
 
@@ -4235,6 +4283,67 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void exitState() {
+            mRetransmitter.stopRetransmitting();
+        }
+    }
+
+    /** DpdIkeLocalInfo initiates a dead peer detection for IKE Session. */
+    class DpdIkeLocalInfo extends DeleteBase {
+        private Retransmitter mRetransmitter;
+
+        @Override
+        public void enterState() {
+            // TODO: Acquire a wake lock
+            mRetransmitter =
+                    new EncryptedRetransmitter(
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    false /*isResp*/,
+                                    mCurrentIkeSaRecord.getLocalRequestMessageId()));
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            // TODO: Ignore DPD response in Idle and any remotely initiated exchange
+            deferMessage(message);
+            transitionTo(mIdle);
+        }
+
+        @Override
+        protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            // DPD response usually contains no payload. But since there is not any requirement of
+            // it, payload validation will be skipped.
+            if (ikeMessage.ikeHeader.exchangeType == IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
+                transitionTo(mIdle);
+                return;
+            }
+
+            handleResponseGenericProcessError(
+                    mCurrentIkeSaRecord,
+                    new InvalidSyntaxException(
+                            "Invalid exchange type; expected INFORMATIONAL, but got: "
+                                    + ikeMessage.ikeHeader.exchangeType));
+        }
+
+        @Override
+        protected void handleResponseGenericProcessError(
+                IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
+            loge("Invalid syntax on IKE DPD response.", exception);
+            handleIkeFatalError(exception);
+
+            // #exitState will be called when StateMachine quits
+            quitNow();
+        }
+
+        @Override
+        public void exitState() {
+            // TODO: Release the wake lock
             mRetransmitter.stopRetransmitting();
         }
     }
