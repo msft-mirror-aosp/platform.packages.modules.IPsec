@@ -107,6 +107,7 @@ import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.ReceivedIkePack
 import com.android.internal.net.ipsec.ike.SaRecord.ISaRecordHelper;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecordConfig;
+import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.SaRecord.SaRecordHelper;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
@@ -638,7 +639,8 @@ public final class IkeSessionStateMachineTest {
                 new byte[KEY_LEN_IKE_ENCR],
                 TestUtils.hexStringToByteArray(PRF_KEY_INIT_HEX_STRING),
                 TestUtils.hexStringToByteArray(PRF_KEY_RESP_HEX_STRING),
-                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
+                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
+                mock(SaLifetimeAlarmScheduler.class));
     }
 
     @Before
