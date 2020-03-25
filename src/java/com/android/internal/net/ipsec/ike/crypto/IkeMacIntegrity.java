@@ -74,11 +74,9 @@ public class IkeMacIntegrity extends IkeMac {
             case SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96:
                 keyLength = 16;
                 isEncryptAlgo = true;
+                algorithmName = "AES/CBC/NoPadding";
                 checksumLength = 12;
-
-                // TODO:Set mAlgorithmName
-                throw new UnsupportedOperationException(
-                        "Do not support INTEGRITY_ALGORITHM_AES_XCBC_96.");
+                break;
             case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128:
                 keyLength = 32;
                 algorithmName = "HmacSHA256";
