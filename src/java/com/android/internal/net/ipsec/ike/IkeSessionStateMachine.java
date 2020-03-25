@@ -54,6 +54,7 @@ import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
+import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import android.net.ipsec.ike.exceptions.IkeException;
@@ -123,12 +124,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -2558,6 +2561,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
 
+            ByteBuffer signatureHashAlgoTypes =
+                    ByteBuffer.allocate(
+                            IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES.length * 2);
+            for (short type : IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES) {
+                signatureHashAlgoTypes.putShort(type);
+            }
+            payloadList.add(
+                    new IkeNotifyPayload(
+                            IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS,
+                            signatureHashAlgoTypes.array()));
+
             // TODO: Add Notification Payloads according to user configurations.
 
             // Build IKE header
@@ -2608,10 +2622,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         respKePayload = (IkeKePayload) payload;
                         break;
                     case IkePayload.PAYLOAD_TYPE_CERT_REQUEST:
-                        throw new UnsupportedOperationException(
-                                "Do not support handling Cert Request Payload.");
-                        // TODO: Handle it when using certificate based authentication. Otherwise,
-                        // ignore it.
+                        // Certificates unconditionally sent (only) for Digital Signature Auth
+                        break;
                     case IkePayload.PAYLOAD_TYPE_NONCE:
                         hasNoncePayload = true;
                         mIkeRespNoncePayload = (IkeNoncePayload) payload;
@@ -2999,9 +3011,28 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     payloadList.add(pskPayload);
                     break;
                 case IkeSessionParams.IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
-                    // TODO: Support authentication based on public key signature.
-                    throw new UnsupportedOperationException(
-                            "Do not support public-key based authentication.");
+                    IkeAuthDigitalSignLocalConfig localAuthConfig =
+                            (IkeAuthDigitalSignLocalConfig) mIkeSessionParams.getLocalAuthConfig();
+
+                    // Add certificates to list
+                    payloadList.add(
+                            new IkeCertX509CertPayload(localAuthConfig.getClientEndCertificate()));
+                    for (X509Certificate intermediateCert : localAuthConfig.mIntermediateCerts) {
+                        payloadList.add(new IkeCertX509CertPayload(intermediateCert));
+                    }
+
+                    IkeAuthDigitalSignPayload digitalSignaturePayload =
+                            new IkeAuthDigitalSignPayload(
+                                    IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_512,
+                                    localAuthConfig.mPrivateKey,
+                                    mIkeInitRequestBytes,
+                                    mCurrentIkeSaRecord.nonceResponder,
+                                    mInitIdPayload.getEncodedPayloadBody(),
+                                    mIkePrf,
+                                    mCurrentIkeSaRecord.getSkPi());
+                    payloadList.add(digitalSignaturePayload);
+
+                    break;
                 case IkeSessionParams.IKE_AUTH_METHOD_EAP:
                     // Do not include AUTH payload when using EAP.
                     break;
@@ -3183,8 +3214,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         "The remote/server failed to provide a end certificate");
             }
 
-            Set<TrustAnchor> trustAnchorSet = new HashSet<>();
-            trustAnchorSet.add(trustAnchor);
+            Set<TrustAnchor> trustAnchorSet =
+                    trustAnchor == null ? null : Collections.singleton(trustAnchor);
 
             IkeCertPayload.validateCertificates(
                     endCert, certList, null /*crlList*/, trustAnchorSet);
