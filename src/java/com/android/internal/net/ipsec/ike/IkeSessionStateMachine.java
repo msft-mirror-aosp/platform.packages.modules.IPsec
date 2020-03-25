@@ -129,6 +129,7 @@ import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -3183,8 +3184,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         "The remote/server failed to provide a end certificate");
             }
 
-            Set<TrustAnchor> trustAnchorSet = new HashSet<>();
-            trustAnchorSet.add(trustAnchor);
+            Set<TrustAnchor> trustAnchorSet =
+                    trustAnchor == null ? null : Collections.singleton(trustAnchor);
 
             IkeCertPayload.validateCertificates(
                     endCert, certList, null /*crlList*/, trustAnchorSet);
