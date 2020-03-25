@@ -17,10 +17,13 @@
 package android.net.ipsec.ike;
 
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
 
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
@@ -30,10 +33,13 @@ import android.net.LinkAddress;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
 
 import java.net.InetAddress;
 import java.util.Collections;
@@ -55,6 +61,8 @@ public final class ChildSessionConfiguration {
     private final List<IkeTrafficSelector> mOutboundTs;
     private final List<LinkAddress> mInternalAddressList;
     private final List<InetAddress> mInternalDnsAddressList;
+    private final List<IpPrefix> mSubnetAddressList;
+    private final List<InetAddress> mInternalDhcpAddressList;
 
     /**
      * Construct an instance of {@link ChildSessionConfiguration}.
@@ -110,8 +118,26 @@ public final class ChildSessionConfiguration {
                 case CONFIG_ATTR_INTERNAL_IP6_DNS:
                     mInternalDnsAddressList.add(((ConfigAttributeIpv6Dns) att).address);
                     break;
+                case CONFIG_ATTR_INTERNAL_IP4_SUBNET:
+                    ConfigAttributeIpv4Subnet ipv4SubnetAttr = (ConfigAttributeIpv4Subnet) att;
+                    mSubnetAddressList.add(
+                            new IpPrefix(
+                                    ipv4SubnetAttr.linkAddress.getAddress(),
+                                    ipv4SubnetAttr.linkAddress.getPrefixLength()));
+                    break;
+                case CONFIG_ATTR_INTERNAL_IP6_SUBNET:
+                    ConfigAttributeIpv6Subnet ipV6SubnetAttr = (ConfigAttributeIpv6Subnet) att;
+                    mSubnetAddressList.add(
+                            new IpPrefix(
+                                    ipV6SubnetAttr.linkAddress.getAddress(),
+                                    ipV6SubnetAttr.linkAddress.getPrefixLength()));
+                    break;
+                case CONFIG_ATTR_INTERNAL_IP4_DHCP:
+                    mInternalDhcpAddressList.add(((ConfigAttributeIpv4Dhcp) att).address);
+                    break;
                 default:
-                    // TODO: Subnet and Dhcp4 attributes
+                    throw new IllegalArgumentException(
+                            "Unrecognized child config attribute:" + att.attributeType);
             }
         }
     }
@@ -127,6 +153,8 @@ public final class ChildSessionConfiguration {
         mOutboundTs = Collections.unmodifiableList(outTs);
         mInternalAddressList = new LinkedList<>();
         mInternalDnsAddressList = new LinkedList<>();
+        mSubnetAddressList = new LinkedList<>();
+        mInternalDhcpAddressList = new LinkedList<>();
     }
 
     /**
@@ -178,8 +206,7 @@ public final class ChildSessionConfiguration {
      */
     @NonNull
     public List<IpPrefix> getInternalSubnets() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException("Not yet supported");
+        return Collections.unmodifiableList(mSubnetAddressList);
     }
 
     /**
@@ -201,7 +228,6 @@ public final class ChildSessionConfiguration {
      */
     @NonNull
     public List<InetAddress> getInternalDhcpServers() {
-        // TODO: Implement it.
-        throw new UnsupportedOperationException("Not yet supported");
+        return Collections.unmodifiableList(mInternalDhcpAddressList);
     }
 }
