@@ -124,6 +124,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
@@ -2559,6 +2560,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             payloadList.add(
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
+
+            ByteBuffer signatureHashAlgoTypes =
+                    ByteBuffer.allocate(
+                            IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES.length * 2);
+            for (short type : IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES) {
+                signatureHashAlgoTypes.putShort(type);
+            }
+            payloadList.add(
+                    new IkeNotifyPayload(
+                            IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS,
+                            signatureHashAlgoTypes.array()));
 
             // TODO: Add Notification Payloads according to user configurations.
 
