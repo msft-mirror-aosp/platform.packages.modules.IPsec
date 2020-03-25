@@ -53,7 +53,7 @@ import javax.net.ssl.X509TrustManager;
  */
 public abstract class IkeCertPayload extends IkePayload {
     // Length of certificate encoding type field in octets.
-    private static final int CERT_ENCODING_LEN = 1;
+    protected static final int CERT_ENCODING_LEN = 1;
 
     private static final String KEY_STORE_TYPE_PKCS12 = "PKCS12";
     private static final String CERT_PATH_ALGO_PKIX = "PKIX";
