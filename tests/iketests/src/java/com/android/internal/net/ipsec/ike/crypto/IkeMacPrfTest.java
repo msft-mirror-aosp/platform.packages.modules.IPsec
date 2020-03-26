@@ -116,8 +116,36 @@ public final class IkeMacPrfTest {
     private static final String PRF_HMAC256_IKE_SKEYSEED_HEX_STRING =
             "9A3E05D4DBE797DC45DA7660DB60C9CCCEEBBC32CA2B0EDA5B5A8793EF192E4E";
 
+    private static final String PRF_AES128XCBC_KEY_HEX_STRING = "000102030405060708090a0b0c0d0e0f";
+    private static final String PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING =
+            "000102030405060708090a0b0c0d0e0f10111213";
+    private static final String PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING =
+            "47f51b4564966215b8985c63055ed308";
+
+    private static final String PRF_AES128XCBC_KEY_HEX_STRING1 = "000102030405060708090a0b0c0d0e0f";
+    private static final String PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING1 =
+            "000102030405060708090a0b0c0d0e0f";
+    private static final String PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING1 =
+            "d2a246fa349b68a79998a4394ff7a263";
+    private static final String PRF_AES128_IKE_NONCE_INIT_HEX_STRING =
+            "00010203040506079B7BE6465ABD7C5F68B6ED5D3B4C72CB4240EB5C464123";
+    private static final String PRF_AES128_IKE_NONCE_RESP_HEX_STRING =
+            "08090a0B0C0D0E0FEE92B73091942A9C06950F98848F1AF1694C4DDFF1";
+    private static final String PRF_AES128XCBC_KEY_HEX_STRING2 = "00010203040506070809";
+    private static final String PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING2 =
+            "000102030405060708090a0b0c0d0e0f10111213";
+    private static final String PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING2 =
+            "0fa087af7d866e7653434e602fdde835";
+    private static final String PRF_AES128XCBC_KEY_HEX_STRING3 =
+            "000102030405060708090a0b0c0d0e0fedcb";
+    private static final String PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING3 =
+            "000102030405060708090a0b0c0d0e0f10111213";
+    private static final String PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING3 =
+            "8cd3c93ae598a9803006ffb67c40e9e4";
+
     private IkeMacPrf mIkeHmacSha1Prf;
     private IkeMacPrf mIkeHmacSha256Prf;
+    private IkeMacPrf mIkeAes128XCbcPrf;
 
     @Before
     public void setUp() throws Exception {
@@ -125,6 +153,8 @@ public final class IkeMacPrfTest {
                 IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
         mIkeHmacSha256Prf =
                 IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256));
+        mIkeAes128XCbcPrf =
+                IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC));
     }
 
     @Test
@@ -227,5 +257,70 @@ public final class IkeMacPrfTest {
 
         byte[] expectedKeyMat = TestUtils.hexStringToByteArray(FIRST_CHILD_KEY_MAT);
         assertArrayEquals(expectedKeyMat, calculatedKeyMat);
+    }
+
+    @Test
+    public void testSignBytesPrfAes128XCbc() throws Exception {
+        byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_AES128XCBC_KEY_HEX_STRING);
+        byte[] dataBytes = TestUtils.hexStringToByteArray(PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING);
+
+        byte[] calculatedBytes = mIkeAes128XCbcPrf.signBytes(skpBytes, dataBytes);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING);
+        assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testSignBytesPrfAes128XCbcWith16ByteInput() throws Exception {
+        // 16-byte is a multiple of aes block size. Hence key2 will be used instead of key3
+        byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_AES128XCBC_KEY_HEX_STRING1);
+        byte[] dataBytes = TestUtils.hexStringToByteArray(PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING1);
+
+        byte[] calculatedBytes = mIkeAes128XCbcPrf.signBytes(skpBytes, dataBytes);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING1);
+        assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testSignBytesPrfAes128XCbcWithKeyShorterThan16Bytes() throws Exception {
+        byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_AES128XCBC_KEY_HEX_STRING2);
+        byte[] dataBytes = TestUtils.hexStringToByteArray(PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING2);
+
+        byte[] calculatedBytes = mIkeAes128XCbcPrf.signBytes(skpBytes, dataBytes);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING2);
+        assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testSignBytesPrfAes128XCbcWithKeyLongerThan16Bytes() throws Exception {
+        byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_AES128XCBC_KEY_HEX_STRING3);
+        byte[] dataBytes = TestUtils.hexStringToByteArray(PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING3);
+
+        byte[] calculatedBytes = mIkeAes128XCbcPrf.signBytes(skpBytes, dataBytes);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING3);
+        assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testGenerateSKeySeedAes128XCbc() throws Exception {
+        // TODO: Test key generation with real IKE exchange packets
+        byte[] nonceInit = TestUtils.hexStringToByteArray(PRF_AES128_IKE_NONCE_INIT_HEX_STRING);
+        byte[] nonceResp = TestUtils.hexStringToByteArray(PRF_AES128_IKE_NONCE_RESP_HEX_STRING);
+        byte[] sharedDhKey =
+                TestUtils.hexStringToByteArray(PRF_AES128XCBC_DATA_TO_SIGN_HEX_STRING1);
+
+        byte[] calculatedSKeySeed =
+                mIkeAes128XCbcPrf.generateSKeySeed(nonceInit, nonceResp, sharedDhKey);
+
+        byte[] expectedSKeySeed =
+                TestUtils.hexStringToByteArray(PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING1);
+        assertArrayEquals(expectedSKeySeed, calculatedSKeySeed);
     }
 }

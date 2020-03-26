@@ -22,6 +22,7 @@ import com.android.internal.net.crypto.KeyGenerationUtils;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
@@ -41,6 +42,7 @@ import javax.crypto.Mac;
  */
 public class IkeMacPrf extends IkeMac {
     // STOPSHIP: b/130190639 Catch unchecked exceptions, notify users and close the IKE session.
+    private static final int PSEUDORANDOM_FUNCTION_AES128_XCBC_KEY_LEN = 16;
 
     private IkeMacPrf(
             @SaProposal.PseudorandomFunction int algorithmId,
@@ -71,10 +73,8 @@ public class IkeMacPrf extends IkeMac {
             case SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC:
                 keyLength = 16;
                 isEncryptAlgo = true;
-
-                // TODO:Set mAlgorithmName
-                throw new UnsupportedOperationException(
-                        "Do not support PSEUDORANDOM_FUNCTION_AES128_XCBC.");
+                algorithmName = "AES_128/CBC/NoPadding";
+                break;
             case SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256:
                 keyLength = 32;
                 algorithmName = "HmacSHA256";
@@ -103,10 +103,17 @@ public class IkeMacPrf extends IkeMac {
      * @return the byte array of SKEYSEED.
      */
     public byte[] generateSKeySeed(byte[] nonceInit, byte[] nonceResp, byte[] sharedDhKey) {
-        // TODO: If it is PSEUDORANDOM_FUNCTION_AES128_XCBC, only use first 8 bytes of each nonce.
-
-        ByteBuffer keyBuffer = ByteBuffer.allocate(nonceInit.length + nonceResp.length);
-        keyBuffer.put(nonceInit).put(nonceResp);
+        ByteBuffer keyBuffer = null;
+        if (getAlgorithmId() == SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC) {
+            keyBuffer = ByteBuffer.allocate(PSEUDORANDOM_FUNCTION_AES128_XCBC_KEY_LEN);
+            // Use 8 bytes each from initiator and responder nonces as per RFC 7296
+            keyBuffer
+                    .put(Arrays.copyOfRange(nonceInit, 0, 8))
+                    .put(Arrays.copyOfRange(nonceResp, 0, 8));
+        } else {
+            keyBuffer = ByteBuffer.allocate(nonceInit.length + nonceResp.length);
+            keyBuffer.put(nonceInit).put(nonceResp);
+        }
 
         return signBytes(keyBuffer.array(), sharedDhKey);
     }
@@ -122,11 +129,21 @@ public class IkeMacPrf extends IkeMac {
      */
     public byte[] generateRekeyedSKeySeed(
             byte[] skD, byte[] nonceInit, byte[] nonceResp, byte[] sharedDhKey) {
-        // TODO: If it is PSEUDORANDOM_FUNCTION_AES128_XCBC, only use first 8 bytes of each nonce.
-
-        ByteBuffer dataToSign =
-                ByteBuffer.allocate(sharedDhKey.length + nonceInit.length + nonceResp.length);
-        dataToSign.put(sharedDhKey).put(nonceInit).put(nonceResp);
+        ByteBuffer dataToSign = null;
+        if (getAlgorithmId() == SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC) {
+            dataToSign =
+                    ByteBuffer.allocate(
+                            sharedDhKey.length + PSEUDORANDOM_FUNCTION_AES128_XCBC_KEY_LEN);
+            // Use 8 bytes each from initiator and responder nonces as per RFC 7296
+            dataToSign
+                    .put(sharedDhKey)
+                    .put(Arrays.copyOfRange(nonceInit, 0, 8))
+                    .put(Arrays.copyOfRange(nonceResp, 0, 8));
+        } else {
+            dataToSign =
+                    ByteBuffer.allocate(sharedDhKey.length + nonceInit.length + nonceResp.length);
+            dataToSign.put(sharedDhKey).put(nonceInit).put(nonceResp);
+        }
 
         return signBytes(skD, dataToSign.array());
     }
