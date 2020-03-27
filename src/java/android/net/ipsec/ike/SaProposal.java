@@ -19,7 +19,6 @@ package android.net.ipsec.ike;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
-import android.util.ArraySet;
 import android.util.Pair;
 import android.util.SparseArray;
 
@@ -34,9 +33,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 
 /**
  * SaProposal represents a proposed configuration to negotiate an IKE or Child SA.
@@ -348,11 +347,13 @@ public abstract class SaProposal {
     protected abstract static class Builder {
         protected static final String ERROR_TAG = "Invalid SA Proposal: ";
 
-        // Use set to avoid adding repeated algorithms.
-        protected final Set<EncryptionTransform> mProposedEncryptAlgos = new ArraySet<>();
-        protected final Set<PrfTransform> mProposedPrfs = new ArraySet<>();
-        protected final Set<IntegrityTransform> mProposedIntegrityAlgos = new ArraySet<>();
-        protected final Set<DhGroupTransform> mProposedDhGroups = new ArraySet<>();
+        // Use LinkedHashSet to ensure uniqueness and that ordering is maintained.
+        protected final LinkedHashSet<EncryptionTransform> mProposedEncryptAlgos =
+                new LinkedHashSet<>();
+        protected final LinkedHashSet<PrfTransform> mProposedPrfs = new LinkedHashSet<>();
+        protected final LinkedHashSet<IntegrityTransform> mProposedIntegrityAlgos =
+                new LinkedHashSet<>();
+        protected final LinkedHashSet<DhGroupTransform> mProposedDhGroups = new LinkedHashSet<>();
 
         protected boolean mHasAead = false;
 
