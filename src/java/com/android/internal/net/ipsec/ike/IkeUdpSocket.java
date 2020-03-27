@@ -46,6 +46,11 @@ public abstract class IkeUdpSocket extends IkeSocket {
         mSocket = socket;
     }
 
+    @Override
+    protected FileDescriptor getFd() {
+        return createFd(); // Returns cached FD
+    }
+
     /**
      * Get FileDescriptor for use with the Packet Receiver.
      *
