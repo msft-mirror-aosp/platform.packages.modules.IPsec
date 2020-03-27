@@ -124,18 +124,9 @@ public final class IkeUdpEncapSocket extends IkeSocket {
         return mUdpEncapSocket.getFileDescriptor();
     }
 
-    /**
-     * IPacketReceiver provides a package private interface for handling received packet.
-     *
-     * <p>IPacketReceiver exists so that the interface is injectable for testing.
-     */
-    interface IPacketReceiver {
-        void handlePacket(byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession);
-    }
-
     /** Package private */
     @VisibleForTesting
-    static final class PacketReceiver implements IPacketReceiver {
+    static final class PacketReceiver implements IkeSocket.IPacketReceiver {
         public void handlePacket(
                 byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession) {
             ByteBuffer byteBuffer = ByteBuffer.wrap(recvbuf);
@@ -161,7 +152,7 @@ public final class IkeUdpEncapSocket extends IkeSocket {
 
     /** Package private */
     @VisibleForTesting
-    static void setPacketReceiver(IPacketReceiver receiver) {
+    static void setPacketReceiver(IkeSocket.IPacketReceiver receiver) {
         sPacketReceiver = receiver;
     }
 
