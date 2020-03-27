@@ -21,15 +21,19 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 
 import android.net.InetAddresses;
+import android.net.IpPrefix;
 import android.net.LinkAddress;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -48,6 +52,9 @@ public final class ChildSessionConfigurationTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.240"));
     private static final LinkAddress IPV4_LINK_ADDRESS =
             new LinkAddress(IPV4_ADDRESS, IP4_PREFIX_LEN);
+    private static final IpPrefix IPV4_SUBNET_IP_PREFIX_ADDRESS = new IpPrefix("198.51.100.0/24");
+    private static final IpPrefix IPV6_SUBNET_IP_PREFIX_ADDRESS =
+            new IpPrefix("2001:db8:abcd:0012::0/64");
 
     private static final int IP6_PREFIX_LEN = 64;
     private static final Inet6Address IPV6_ADDRESS =
@@ -63,6 +70,9 @@ public final class ChildSessionConfigurationTest {
     private ConfigAttributeIpv6Address mIpv6Attr;
     private ConfigAttributeIpv4Dns mIpv4Dns;
     private ConfigAttributeIpv6Dns mIpv6Dns;
+    private ConfigAttributeIpv4Subnet mIpv4Subnet;
+    private ConfigAttributeIpv6Subnet mIpv6Subnet;
+    private ConfigAttributeIpv4Dhcp mIpv4Dhcp;
 
     @Before
     public void setUp() throws Exception {
@@ -78,6 +88,13 @@ public final class ChildSessionConfigurationTest {
         mIpv6Attr = new ConfigAttributeIpv6Address(IPV6_LINK_ADDRESS);
         mIpv4Dns = new ConfigAttributeIpv4Dns(IPV4_ADDRESS);
         mIpv6Dns = new ConfigAttributeIpv6Dns(IPV6_ADDRESS);
+        mIpv4Dhcp = new ConfigAttributeIpv4Dhcp(IPV4_ADDRESS);
+        mIpv4Subnet =
+                new ConfigAttributeIpv4Subnet(
+                        new LinkAddress(IPV4_SUBNET_IP_PREFIX_ADDRESS.toString()));
+        mIpv6Subnet =
+                new ConfigAttributeIpv6Subnet(
+                        new LinkAddress(IPV6_SUBNET_IP_PREFIX_ADDRESS.toString()));
     }
 
     private void verifySessionConfigCommon(ChildSessionConfiguration sessionConfig) {
@@ -185,8 +202,46 @@ public final class ChildSessionConfigurationTest {
 
         assertEquals(expectedDnsAddrList.size(), sessionConfig.getInternalDnsServers().size());
         for (int i = 0; i < expectedDnsAddrList.size(); i++) {
-            assertEquals(
-                    expectedDnsAddrList.get(i), sessionConfig.getInternalDnsServers().get(i));
+            assertEquals(expectedDnsAddrList.get(i), sessionConfig.getInternalDnsServers().get(i));
         }
+    }
+
+    @Test
+    public void testBuildWithSubnetAttr() {
+        List<ConfigAttribute> attributeList = new LinkedList<>();
+        attributeList.add(mIpv4Subnet);
+        attributeList.add(mIpv6Subnet);
+
+        IkeConfigPayload configPayload = new IkeConfigPayload(true /*isReply*/, attributeList);
+
+        ChildSessionConfiguration sessionConfig =
+                new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
+
+        verifySessionConfigCommon(sessionConfig);
+
+        List<IpPrefix> expectedSubnetAddrList = new LinkedList<>();
+        expectedSubnetAddrList.add(IPV4_SUBNET_IP_PREFIX_ADDRESS);
+        expectedSubnetAddrList.add(IPV6_SUBNET_IP_PREFIX_ADDRESS);
+
+        assertEquals(expectedSubnetAddrList.size(), sessionConfig.getInternalSubnets().size());
+        for (int i = 0; i < expectedSubnetAddrList.size(); i++) {
+            assertEquals(expectedSubnetAddrList.get(i), sessionConfig.getInternalSubnets().get(i));
+        }
+    }
+
+    @Test
+    public void testBuildWithDhcpAttr() {
+        List<ConfigAttribute> attributeList = new LinkedList<>();
+        attributeList.add(mIpv4Dhcp);
+
+        IkeConfigPayload configPayload = new IkeConfigPayload(true /*isReply*/, attributeList);
+
+        ChildSessionConfiguration sessionConfig =
+                new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
+
+        verifySessionConfigCommon(sessionConfig);
+
+        assertEquals(1, sessionConfig.getInternalDhcpServers().size());
+        assertEquals(sessionConfig.getInternalDhcpServers().get(0), IPV4_ADDRESS);
     }
 }
