@@ -56,6 +56,20 @@ public final class IkeMacIntegrityTest {
 
     private byte[] mDataToAuthenticate;
 
+    private IkeMacIntegrity mAes128XCbcIntgerityMac;
+    private static final String AUTH_AES128XCBC_KEY_HEX_STRING = "000102030405060708090a0b0c0d0e0f";
+    private static final String AUTH_AES128XCBC_DATA_TO_SIGN_HEX_STRING =
+            "000102030405060708090a0b0c0d0e0f10111213";
+    private static final String AUTH_AES128XCBC_CALCULATED_MAC_HEX_STRING =
+            "47f51b4564966215b8985c63";
+
+    private static final String AUTH_AES128XCBC_KEY_HEX_STRING1 =
+            "000102030405060708090a0b0c0d0e0f";
+    private static final String AUTH_AES128XCBC_DATA_TO_SIGN_HEX_STRING1 =
+            "000102030405060708090a0b0c0d0e0f";
+    private static final String AUTH_AES128XCBC_CALCULATED_MAC_HEX_STRING1 =
+            "d2a246fa349b68a79998a439";
+
     @Before
     public void setUp() throws Exception {
         mHmacSha1IntegrityMac =
@@ -64,6 +78,9 @@ public final class IkeMacIntegrityTest {
         mHmacSha1IntegrityKey = TestUtils.hexStringToByteArray(INTEGRITY_KEY_HEX_STRING);
 
         mDataToAuthenticate = TestUtils.hexStringToByteArray(DATA_TO_AUTH_HEX_STRING);
+        mAes128XCbcIntgerityMac =
+                IkeMacIntegrity.create(
+                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96));
     }
 
     @Test
@@ -122,5 +139,30 @@ public final class IkeMacIntegrityTest {
         } catch (IllegalArgumentException expected) {
 
         }
+    }
+
+    @Test
+    public void testSignBytesAuthAes128XCbc() throws Exception {
+        byte[] skpBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_KEY_HEX_STRING);
+        byte[] dataBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_DATA_TO_SIGN_HEX_STRING);
+
+        byte[] calculatedBytes = mAes128XCbcIntgerityMac.signBytes(skpBytes, dataBytes);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(AUTH_AES128XCBC_CALCULATED_MAC_HEX_STRING);
+        assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testSignBytesAuthAes128XCbcWith16ByteInput() throws Exception {
+        // 16-byte is a multiple of aes block size. Hence key2 will be used instead of key3
+        byte[] skpBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_KEY_HEX_STRING1);
+        byte[] dataBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_DATA_TO_SIGN_HEX_STRING1);
+
+        byte[] calculatedBytes = mAes128XCbcIntgerityMac.signBytes(skpBytes, dataBytes);
+
+        byte[] expectedBytes =
+                TestUtils.hexStringToByteArray(AUTH_AES128XCBC_CALCULATED_MAC_HEX_STRING1);
+        assertArrayEquals(expectedBytes, calculatedBytes);
     }
 }
