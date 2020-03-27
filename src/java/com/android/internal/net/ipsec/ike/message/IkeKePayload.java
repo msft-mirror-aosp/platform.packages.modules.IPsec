@@ -60,6 +60,8 @@ public final class IkeKePayload extends IkePayload {
     // Key exchange data length in octets
     private static final int DH_GROUP_1024_BIT_MODP_DATA_LEN = 128;
     private static final int DH_GROUP_2048_BIT_MODP_DATA_LEN = 256;
+    private static final int DH_GROUP_3072_BIT_MODP_DATA_LEN = 384;
+    private static final int DH_GROUP_4096_BIT_MODP_DATA_LEN = 512;
 
     // Algorithm name of Diffie-Hellman
     private static final String KEY_EXCHANGE_ALGORITHM = "DH";
@@ -117,6 +119,12 @@ public final class IkeKePayload extends IkePayload {
             case SaProposal.DH_GROUP_2048_BIT_MODP:
                 isValidSyntax = DH_GROUP_2048_BIT_MODP_DATA_LEN == dataSize;
                 break;
+            case SaProposal.DH_GROUP_3072_BIT_MODP:
+                isValidSyntax = DH_GROUP_3072_BIT_MODP_DATA_LEN == dataSize;
+                break;
+            case SaProposal.DH_GROUP_4096_BIT_MODP:
+                isValidSyntax = DH_GROUP_4096_BIT_MODP_DATA_LEN == dataSize;
+                break;
             default:
                 // For unsupported DH group, we cannot check its syntax. Upper layer will ingore
                 // this payload.
@@ -161,6 +169,18 @@ public final class IkeKePayload extends IkePayload {
                         BigIntegerUtils.unsignedHexStringToBigInteger(
                                 IkeDhParams.PRIME_2048_BIT_MODP);
                 keySize = DH_GROUP_2048_BIT_MODP_DATA_LEN;
+                break;
+            case SaProposal.DH_GROUP_3072_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_3072_BIT_MODP);
+                keySize = DH_GROUP_3072_BIT_MODP_DATA_LEN;
+                break;
+            case SaProposal.DH_GROUP_4096_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_4096_BIT_MODP);
+                keySize = DH_GROUP_4096_BIT_MODP_DATA_LEN;
                 break;
             default:
                 throw new IllegalArgumentException("DH group not supported: " + dh);
