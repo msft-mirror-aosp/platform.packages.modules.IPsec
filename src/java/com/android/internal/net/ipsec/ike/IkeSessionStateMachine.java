@@ -2123,8 +2123,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     transitionTo(mChildProcedureOngoing);
                     mProcedureFinished = false;
                     return;
+                case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
+                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+                    IkeMessage responseIkeMessage =
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    true /*isResponse*/,
+                                    ikeMessage.ikeHeader.messageId);
+                    sendEncryptedIkeMessage(responseIkeMessage);
+                    return;
                 default:
-                    // TODO: Add support for generic INFORMATIONAL request
             }
         }
 
@@ -2365,7 +2374,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     handleInboundRekeyChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
-                    // TODO:b/139943757 Handle general informational request
+                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+                    IkeMessage responseIkeMessage =
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    true /*isResponse*/,
+                                    ikeMessage.ikeHeader.messageId);
+                    sendEncryptedIkeMessage(responseIkeMessage);
+                    break;
                 default:
                     cleanUpAndQuit(
                             new IllegalStateException(
