@@ -785,6 +785,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     // TODO: Add methods for building and validating general Informational packet.
 
+    /** Switch to a new IKE socket due to NAT detection, or an underlying network change. */
+    private void switchToIkeSocket(long localSpi, IkeSocket newSocket) {
+        newSocket.registerIke(localSpi, this);
+        mIkeSocket.unregisterIke(localSpi);
+        mIkeSocket.releaseReference(this);
+        mIkeSocket = newSocket;
+    }
+
     @VisibleForTesting
     void addIkeSaRecord(IkeSaRecord record) {
         mLocalSpiToIkeSaRecordMap.put(record.getLocalSpi(), record);
@@ -1032,12 +1040,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
-                    mIkeSocket =
-                            IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                    network, mIpSecManager, IkeSessionStateMachine.this);
+                    mIkeSocket = IkeUdp4Socket.getInstance(network, IkeSessionStateMachine.this);
                 } else {
-                    throw new UnsupportedOperationException("Do not support IPv6 IKE sever");
-                    // TODO(b/146674994): Support IPv6 server address.
+                    mIkeSocket = IkeUdp6Socket.getInstance(network, IkeSessionStateMachine.this);
                 }
 
                 FileDescriptor sock =
@@ -1049,9 +1054,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 Os.connect(sock, mRemoteAddress, mIkeSocket.getIkeServerPort());
                 InetSocketAddress localAddr = (InetSocketAddress) Os.getsockname(sock);
                 mLocalAddress = localAddr.getAddress();
-                mLocalPort = localAddr.getPort();
+                mLocalPort = mIkeSocket.getLocalPort();
                 Os.close(sock);
-            } catch (ErrnoException | IOException | ResourceUnavailableException e) {
+            } catch (ErrnoException | IOException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -2764,6 +2769,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 // behind NAT.
                 if (Arrays.equals(expectedRemoteNatData, natPayload.notifyData)) {
                     mIsRemoteBehindNat = false;
+                }
+            }
+
+            if (mIsLocalBehindNat || mIsRemoteBehindNat) {
+                if (!(mRemoteAddress instanceof Inet4Address)) {
+                    handleIkeFatalError(
+                            new IllegalStateException("Remote IPv6 server was behind a NAT"));
+                }
+
+                logd("Switching to UDP encap socket");
+
+                try {
+                    IkeSocket newSocket =
+                            IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                    mIkeSessionParams.getNetwork(),
+                                    mIpSecManager,
+                                    IkeSessionStateMachine.this);
+                    switchToIkeSocket(initIkeSpi, newSocket);
+                } catch (ErrnoException | IOException | ResourceUnavailableException e) {
+                    handleIkeFatalError(e);
                 }
             }
         }
