@@ -248,36 +248,39 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
         TestCountDownLatch receiveLatch = new TestCountDownLatch();
         DummyPacketReceiver packetReceiver = new DummyPacketReceiver(receiveLatch);
         IkeUdpEncapSocket.setPacketReceiver(packetReceiver);
+        try {
+            // Send first packet.
+            sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataOne, IPV4_LOOPBACK);
+            receiveLatch.await();
 
-        // Send first packet.
-        sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataOne, IPV4_LOOPBACK);
-        receiveLatch.await();
+            assertEquals(1, ikeSocket.numPacketsReceived());
+            assertArrayEquals(mDataOne, packetReceiver.mReceivedData);
 
-        assertEquals(1, ikeSocket.numPacketsReceived());
-        assertArrayEquals(mDataOne, packetReceiver.mReceivedData);
+            // Send second packet.
+            sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataTwo, IPV4_LOOPBACK);
+            receiveLatch.await();
 
-        // Send second packet.
-        sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataTwo, IPV4_LOOPBACK);
-        receiveLatch.await();
+            assertEquals(2, ikeSocket.numPacketsReceived());
+            assertArrayEquals(mDataTwo, packetReceiver.mReceivedData);
 
-        assertEquals(2, ikeSocket.numPacketsReceived());
-        assertArrayEquals(mDataTwo, packetReceiver.mReceivedData);
+            // Close IkeUdpEncapSocket.
+            TestCountDownLatch closeLatch = new TestCountDownLatch();
+            ikeSocket
+                    .getHandler()
+                    .post(
+                            () -> {
+                                ikeSocket.releaseReference(mMockIkeSessionStateMachine);
+                                closeLatch.countDown();
+                            });
+            closeLatch.await();
 
-        // Close IkeUdpEncapSocket.
-        TestCountDownLatch closeLatch = new TestCountDownLatch();
-        ikeSocket
-                .getHandler()
-                .post(
-                        () -> {
-                            ikeSocket.releaseReference(mMockIkeSessionStateMachine);
-                            closeLatch.countDown();
-                        });
-        closeLatch.await();
+            verify(mSpyUdpEncapSocket).close();
+            verifyCloseFd(mSpyUdpEncapSocket.getFileDescriptor());
 
-        verify(mSpyUdpEncapSocket).close();
-        verifyCloseFd(mSpyUdpEncapSocket.getFileDescriptor());
-
-        mIkeThread.quitSafely();
+            mIkeThread.quitSafely();
+        } finally {
+            IkeUdpEncapSocket.setPacketReceiver(getPacketReceiver());
+        }
     }
 
     @Test
