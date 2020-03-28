@@ -15,6 +15,11 @@
  */
 package com.android.internal.net.ipsec.ike;
 
+import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
+import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DPD;
+
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
 
@@ -27,6 +32,8 @@ import java.util.LinkedList;
  * <p>LocalRequestScheduler is running on the IkeSessionStateMachine thread.
  */
 public final class IkeLocalRequestScheduler {
+    public static int SPI_NOT_INCLUDED = 0;
+
     private final LinkedList<LocalRequest> mRequestQueue = new LinkedList<>();
 
     private final IProcedureConsumer mConsumer;
@@ -69,15 +76,15 @@ public final class IkeLocalRequestScheduler {
     }
 
     /**
-     * This class represents a user requested or internally scheduled IKE procedure that will be
-     * initiated locally.
+     * This class represents the common information of procedures that will be locally initiated.
      */
-    public static class LocalRequest {
+    public abstract static class LocalRequest {
         public final int procedureType;
-        // TODO: Also store specific payloads for INFO exchange.
+
         private boolean mIsCancelled;
 
         LocalRequest(int type) {
+            validateTypeOrThrow(type);
             procedureType = type;
             mIsCancelled = false;
         }
@@ -89,6 +96,40 @@ public final class IkeLocalRequestScheduler {
         void cancel() {
             mIsCancelled = true;
         }
+
+        protected abstract void validateTypeOrThrow(int type);
+
+        protected abstract boolean isChildRequest();
+    }
+
+    /**
+     * This class represents a user requested or internally scheduled IKE procedure that will be
+     * initiated locally.
+     */
+    public static class IkeLocalRequest extends LocalRequest {
+        public long remoteSpi;
+
+        /** Schedule a request for the IKE Session */
+        IkeLocalRequest(int type) {
+            this(type, SPI_NOT_INCLUDED);
+        }
+
+        /** Schedule a request for an IKE SA that is identified by the remoteIkeSpi */
+        IkeLocalRequest(int type, long remoteIkeSpi) {
+            super(type);
+            remoteSpi = remoteIkeSpi;
+        }
+
+        @Override
+        protected void validateTypeOrThrow(int type) {
+            if (type >= CMD_LOCAL_REQUEST_CREATE_IKE && type <= CMD_LOCAL_REQUEST_DPD) return;
+            throw new IllegalArgumentException("Invalid IKE procedure type: " + type);
+        }
+
+        @Override
+        protected boolean isChildRequest() {
+            return false;
+        }
     }
 
     /**
@@ -96,14 +137,44 @@ public final class IkeLocalRequestScheduler {
      * initiated locally.
      */
     public static class ChildLocalRequest extends LocalRequest {
+        public int remoteSpi;
         public final ChildSessionCallback childSessionCallback;
         public final ChildSessionParams childSessionParams;
 
+        /** Schedule a request for a Child Session that is identified by the childCallback */
         ChildLocalRequest(
                 int type, ChildSessionCallback childCallback, ChildSessionParams childParams) {
+            this(type, SPI_NOT_INCLUDED, childCallback, childParams);
+        }
+
+        /** Schedule a request for a Child SA that is identified by the remoteChildSpi */
+        ChildLocalRequest(int type, int remoteChildSpi) {
+            this(type, remoteChildSpi, null /*childCallback*/, null /*childParams*/);
+        }
+
+        private ChildLocalRequest(
+                int type,
+                int remoteChildSpi,
+                ChildSessionCallback childCallback,
+                ChildSessionParams childParams) {
             super(type);
             childSessionParams = childParams;
             childSessionCallback = childCallback;
+            remoteSpi = remoteChildSpi;
+        }
+
+        @Override
+        protected void validateTypeOrThrow(int type) {
+            if (type >= CMD_LOCAL_REQUEST_CREATE_CHILD && type <= CMD_LOCAL_REQUEST_REKEY_CHILD) {
+                return;
+            }
+
+            throw new IllegalArgumentException("Invalid Child procedure type: " + type);
+        }
+
+        @Override
+        protected boolean isChildRequest() {
+            return true;
         }
     }
 
