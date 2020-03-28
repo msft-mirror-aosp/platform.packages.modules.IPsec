@@ -161,4 +161,13 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
     public void close() {
         stop();
     }
+
+    /**
+     * IPacketReceiver provides a package private interface for handling received packet.
+     *
+     * <p>IPacketReceiver exists so that the interface is injectable for testing.
+     */
+    interface IPacketReceiver {
+        void handlePacket(byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession);
+    }
 }
