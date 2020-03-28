@@ -27,6 +27,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IProcedureConsumer;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IkeLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
 
 import org.junit.Before;
@@ -109,10 +110,10 @@ public final class IkeLocalRequestSchedulerTest {
 
     @Test
     public void testDoNotProcessCanceledRequest() {
-        LocalRequest[] requestArray = new LocalRequest[4];
+        LocalRequest[] requestArray = new IkeLocalRequest[4];
 
         for (int i = 0; i < requestArray.length; i++) {
-            requestArray[i] = new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE);
+            requestArray[i] = new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE);
             mScheduler.addRequest(requestArray[i]);
         }
 
