@@ -3048,6 +3048,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         // TODO: b/139482382 If receiving a remote request while waiting for the last IKE AUTH
         // response, defer it to next state.
 
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeMessage.ikeHeader);
+
+            // Null out last received packet, so the next state (that handles the actual request)
+            // does not treat the message as a retransmission.
+            ikeSaRecord.updateLastReceivedReqFirstPacket(null);
+
+            // Send to next state; we can't handle this yet.
+            deferMessage(message);
+        }
+
         protected IkeMessage buildIkeAuthReqMessage(List<IkePayload> payloadList) {
             // Build IKE header
             IkeHeader ikeHeader =
