@@ -90,6 +90,7 @@ import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalReq
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IkeLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
+import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
@@ -1248,6 +1249,28 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         return obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, localRequestType, spiBundle);
     }
 
+    private SaLifetimeAlarmScheduler buildSaLifetimeAlarmScheduler(long remoteSpi) {
+        PendingIntent deleteSaIntent =
+                buildIkeAlarmIntent(
+                        mContext,
+                        ACTION_DELETE_IKE,
+                        getIntentIdentifier(remoteSpi),
+                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_IKE, remoteSpi));
+        PendingIntent rekeySaIntent =
+                buildIkeAlarmIntent(
+                        mContext,
+                        ACTION_REKEY_IKE,
+                        getIntentIdentifier(remoteSpi),
+                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_IKE, remoteSpi));
+
+        return new SaLifetimeAlarmScheduler(
+                mIkeSessionParams.getHardLifetimeMsInternal(),
+                mIkeSessionParams.getSoftLifetimeMsInternal(),
+                deleteSaIntent,
+                rekeySaIntent,
+                mAlarmManager);
+    }
+
     // Package private. Accessible to ChildSessionStateMachine
     static PendingIntent buildIkeAlarmIntent(
             Context context, String intentAction, String intentId, Message ikeSmMsg) {
@@ -1492,12 +1515,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         protected void handleFiredAlarm(Message message) {
             switch (message.arg2) {
+                case CMD_LOCAL_REQUEST_DELETE_IKE:
+                    // IKE SA hits its hard lifetime
+                    enqueueIkeLocalRequest(message);
+                    return;
                 case CMD_LOCAL_REQUEST_DPD:
                     // IKE Session has not received any protectd IKE packet for the whole DPD delay
-                    long remoteIkeSpi = ((Bundle) message.obj).getLong(BUNDLE_KEY_IKE_REMOTE_SPI);
-                    sendMessage(
-                            CMD_LOCAL_REQUEST_DPD,
-                            new IkeLocalRequest(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi));
+                    enqueueIkeLocalRequest(message);
 
                     // TODO(b/152442041): Cancel the scheduled DPD request if IKE Session starts any
                     // procedure before DPD get executed.
@@ -1506,6 +1530,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     logWtf("Invalid alarm action: " + message.arg2);
             }
             // TODO: Handle delete and rekey IKE/Child SA
+        }
+
+        private void enqueueIkeLocalRequest(Message message) {
+            long remoteIkeSpi = ((Bundle) message.obj).getLong(BUNDLE_KEY_IKE_REMOTE_SPI);
+            sendMessage(message.arg2, new IkeLocalRequest(message.arg2, remoteIkeSpi));
         }
     }
 
@@ -2673,7 +2702,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 mIkePrf,
                                 mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
                                 mIkeCipher.getKeyLength(),
-                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
+                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
+                                buildSaLifetimeAlarmScheduler(mRemoteIkeSpiResource.getSpi()));
 
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
@@ -3866,6 +3896,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 newPrf = IkeMacPrf.create(respProposal.saProposal.getPrfTransforms()[0]);
 
                 // Build new SaRecord
+                long remoteSpi =
+                        isLocalInit
+                                ? respProposal.getIkeSpiResource().getSpi()
+                                : reqProposal.getIkeSpiResource().getSpi();
                 IkeSaRecord newSaRecord =
                         IkeSaRecord.makeRekeyedIkeSaRecord(
                                 mCurrentIkeSaRecord,
@@ -3878,8 +3912,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 newIntegrity == null ? 0 : newIntegrity.getKeyLength(),
                                 newCipher.getKeyLength(),
                                 isLocalInit,
-                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
-
+                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
+                                buildSaLifetimeAlarmScheduler(remoteSpi));
                 addIkeSaRecord(newSaRecord);
 
                 mIkeCipher = newCipher;
