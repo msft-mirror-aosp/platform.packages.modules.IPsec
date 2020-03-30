@@ -94,7 +94,6 @@ public abstract class IkeSocketTestBase {
 
     @After
     public void tearDown() throws Exception {
-        IkeUdpEncapSocket.setPacketReceiver(getPacketReceiver());
         Os.close(mDummyRemoteServerFd);
     }
 
@@ -105,6 +104,15 @@ public abstract class IkeSocketTestBase {
                 Os.socket(OsConstants.AF_INET, OsConstants.SOCK_DGRAM, OsConstants.IPPROTO_UDP);
         Os.bind(sock, address, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         return sock;
+    }
+
+    protected boolean isFdOpen(FileDescriptor fd) {
+        try {
+            Os.getsockname(fd);
+            return true;
+        } catch (ErrnoException ignored) {
+            return false;
+        }
     }
 
     protected void verifyCloseFd(FileDescriptor fd) {
