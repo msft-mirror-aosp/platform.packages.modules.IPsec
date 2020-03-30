@@ -112,6 +112,11 @@ public final class IkeUdpEncapSocket extends IkeSocket {
         return mUdpEncapSocket;
     }
 
+    @Override
+    protected FileDescriptor getFd() {
+        return createFd(); // Returns cached FD
+    }
+
     /**
      * Get FileDescriptor of mUdpEncapSocket.
      *
