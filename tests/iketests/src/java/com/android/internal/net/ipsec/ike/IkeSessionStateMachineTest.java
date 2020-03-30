@@ -208,6 +208,7 @@ public final class IkeSessionStateMachineTest {
                     + "92f46bef84f0be7db860351843858f8acf87056e272377f7"
                     + "0c9f2d81e29c7b0ce4f291a3a72476bb0b278fd4b7b0a4c2"
                     + "6bbeb08214c7071376079587";
+    private static final String INVALID_KE_PAYLOAD_HEX_STRING = "0000000a00000011000e";
     private static final String NONCE_INIT_PAYLOAD_HEX_STRING =
             "29000024c39b7f368f4681b89fa9b7be6465abd7c5f68b6ed5d3b4c72cb4240eb5c46412";
     private static final String NONCE_RESP_PAYLOAD_HEX_STRING =
@@ -777,13 +778,20 @@ public final class IkeSessionStateMachineTest {
     }
 
     public static IkeSaProposal buildSaProposal() throws Exception {
+        return buildSaProposalCommon().addDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP).build();
+    }
+
+    private static IkeSaProposal buildNegotiatedSaProposal() throws Exception {
+        return buildSaProposalCommon().build();
+    }
+
+    private static IkeSaProposal.Builder buildSaProposalCommon() throws Exception {
         return new IkeSaProposal.Builder()
                 .addEncryptionAlgorithm(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                 .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
                 .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1)
-                .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                .build();
+                .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP);
     }
 
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
@@ -1256,6 +1264,33 @@ public final class IkeSessionStateMachineTest {
         verify(mMockDefaultNetwork).getByName(REMOTE_HOSTNAME);
     }
 
+    @Test
+    public void testCreateIkeLocalIkeInitNegotiatesDhGroup() throws Exception {
+        setupFirstIkeSa();
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        // Verify we started with the top proposed DH group
+        assertEquals(
+                SaProposal.DH_GROUP_1024_BIT_MODP, mIkeSessionStateMachine.mPeerSelectedDhGroup);
+
+        // Send back a INVALID_KE_PAYLOAD, and verify that the selected DH group changes
+        ReceivedIkePacket resp =
+                makeDummyReceivedIkeInitRespPacket(
+                        1L /*initiator SPI*/,
+                        2L /*responder SPI*/,
+                        IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                        true /*isResp*/,
+                        false /*fromIkeInit*/,
+                        Arrays.asList(IkePayload.PAYLOAD_TYPE_NOTIFY),
+                        Arrays.asList(INVALID_KE_PAYLOAD_HEX_STRING));
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mLooper.dispatchAll();
+
+        assertEquals(
+                SaProposal.DH_GROUP_2048_BIT_MODP, mIkeSessionStateMachine.mPeerSelectedDhGroup);
+    }
+
     @Ignore
     public void disableTestCreateIkeLocalIkeInit() throws Exception {
         setupFirstIkeSa();
@@ -1344,7 +1379,7 @@ public final class IkeSessionStateMachineTest {
         mIkeSessionStateMachine.mIkeCipher = mock(IkeCipher.class);
         mIkeSessionStateMachine.mIkeIntegrity = mock(IkeMacIntegrity.class);
         mIkeSessionStateMachine.mIkePrf = mock(IkeMacPrf.class);
-        mIkeSessionStateMachine.mSaProposal = buildSaProposal();
+        mIkeSessionStateMachine.mSaProposal = buildNegotiatedSaProposal();
         mIkeSessionStateMachine.mCurrentIkeSaRecord = mSpyCurrentIkeSaRecord;
         mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
         mIkeSessionStateMachine.mIsLocalBehindNat = true;
@@ -4099,6 +4134,11 @@ public final class IkeSessionStateMachineTest {
         IkeSessionParams mockSessionParams = mock(IkeSessionParams.class);
         when(mockSessionParams.getSaProposalsInternal()).thenThrow(mock(RuntimeException.class));
 
+        DhGroupTransform dhGroupTransform = new DhGroupTransform(SaProposal.DH_GROUP_2048_BIT_MODP);
+        IkeSaProposal mockSaProposal = mock(IkeSaProposal.class);
+        when(mockSaProposal.getDhGroupTransforms())
+                .thenReturn(new DhGroupTransform[] {dhGroupTransform});
+        when(mockSessionParams.getSaProposals()).thenReturn(Arrays.asList(mockSaProposal));
         IkeSessionStateMachine ikeSession =
                 new IkeSessionStateMachine(
                         mLooper.getLooper(),
