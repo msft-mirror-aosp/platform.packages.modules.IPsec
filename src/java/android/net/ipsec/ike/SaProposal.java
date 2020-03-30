@@ -192,6 +192,10 @@ public abstract class SaProposal {
     public static final int DH_GROUP_1024_BIT_MODP = 2;
     /** 2048-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_2048_BIT_MODP = 14;
+    /** 3072-bit MODP Diffie-Hellman Group. @hide */
+    public static final int DH_GROUP_3072_BIT_MODP = 15;
+    /** 4096-bit MODP Diffie-Hellman Group. @hide */
+    public static final int DH_GROUP_4096_BIT_MODP = 16;
 
     private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
 
@@ -200,6 +204,8 @@ public abstract class SaProposal {
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_NONE, "DH_NONE");
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_1024_BIT_MODP, "DH_1024_BIT_MODP");
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_2048_BIT_MODP, "DH_2048_BIT_MODP");
+        SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_3072_BIT_MODP, "DH_3072_BIT_MODP");
+        SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_4096_BIT_MODP, "DH_4096_BIT_MODP");
     }
 
     @IkePayload.ProtocolId private final int mProtocolId;
