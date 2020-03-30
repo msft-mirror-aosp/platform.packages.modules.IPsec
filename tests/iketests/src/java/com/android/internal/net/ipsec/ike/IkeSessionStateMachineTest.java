@@ -73,10 +73,13 @@ import static org.mockito.Mockito.when;
 
 import android.app.AlarmManager;
 import android.content.Context;
+import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
+import android.net.SocketKeepalive;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
@@ -93,6 +96,7 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.os.Handler;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
@@ -150,6 +154,7 @@ import com.android.internal.net.ipsec.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter.IBackoffTimeoutCalculator;
 import com.android.internal.net.ipsec.ike.utils.State;
@@ -288,11 +293,12 @@ public final class IkeSessionStateMachineTest {
     private static final long RETRANSMIT_BACKOFF_TIMEOUT_MS = 5000L;
 
     private MockIpSecTestUtils mMockIpSecTestUtils;
-    private Context mContext;
+    private Context mSpyContext;
     private IpSecManager mIpSecManager;
 
     private ConnectivityManager mMockConnectManager;
     private Network mMockDefaultNetwork;
+    private SocketKeepalive mMockSocketKeepalive;
     private IkeUdpEncapSocket mSpyIkeUdpEncapSocket;
     private IkeUdp4Socket mSpyIkeUdp4Socket;
     private IkeUdp6Socket mSpyIkeUdp6Socket;
@@ -656,7 +662,16 @@ public final class IkeSessionStateMachineTest {
 
         mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
         mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
-        mContext = mMockIpSecTestUtils.getContext();
+
+        mSpyContext = spy(mMockIpSecTestUtils.getContext());
+        doReturn(null)
+                .when(mSpyContext)
+                .registerReceiver(
+                        any(IkeAlarmReceiver.class),
+                        any(IntentFilter.class),
+                        any(),
+                        any(Handler.class));
+        doNothing().when(mSpyContext).unregisterReceiver(any(IkeAlarmReceiver.class));
 
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
@@ -665,6 +680,20 @@ public final class IkeSessionStateMachineTest {
         doReturn(REMOTE_ADDRESS)
                 .when(mMockDefaultNetwork)
                 .getByName(REMOTE_ADDRESS.getHostAddress());
+
+        mMockSocketKeepalive = mock(SocketKeepalive.class);
+        doReturn(mMockSocketKeepalive)
+                .when(mMockConnectManager)
+                .createSocketKeepalive(
+                        any(Network.class),
+                        any(UdpEncapsulationSocket.class),
+                        any(Inet4Address.class),
+                        any(Inet4Address.class),
+                        any(Executor.class),
+                        any(SocketKeepalive.Callback.class));
+        doReturn(mMockConnectManager)
+                .when(mSpyContext)
+                .getSystemService(Context.CONNECTIVITY_SERVICE);
 
         mEapSessionConfig =
                 new EapSessionConfig.Builder()
@@ -758,7 +787,7 @@ public final class IkeSessionStateMachineTest {
         IkeSessionStateMachine ikeSession =
                 new IkeSessionStateMachine(
                         mLooper.getLooper(),
-                        mContext,
+                        mSpyContext,
                         mIpSecManager,
                         ikeParams,
                         mChildSessionParams,
@@ -1319,6 +1348,9 @@ public final class IkeSessionStateMachineTest {
         // Validate socket switched
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdpEncapSocket);
         verify(mSpyIkeUdp4Socket).unregisterIke(anyLong());
+
+        // Validate keepalive has started
+        verify(mMockSocketKeepalive).start(anyInt());
     }
 
     @Ignore
@@ -1462,7 +1494,7 @@ public final class IkeSessionStateMachineTest {
         // After state machine start, add to the callback->statemachine map
         when(mMockChildSessionFactoryHelper.makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
-                        eq(mContext),
+                        eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
                         eq(mChildSessionParams),
@@ -1519,7 +1551,7 @@ public final class IkeSessionStateMachineTest {
         verify(mMockChildSessionFactoryHelper)
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
-                        eq(mContext),
+                        eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
                         eq(mChildSessionParams),
@@ -2261,7 +2293,7 @@ public final class IkeSessionStateMachineTest {
         verify(mMockChildSessionFactoryHelper)
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
-                        eq(mContext),
+                        eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
                         eq(mChildSessionParams),
@@ -2532,7 +2564,7 @@ public final class IkeSessionStateMachineTest {
                 .newEapAuthenticator(
                         eq(mIkeSessionStateMachine.getHandler().getLooper()),
                         captor.capture(),
-                        eq(mContext),
+                        eq(mSpyContext),
                         eq(mEapSessionConfig));
 
         return captor.getValue();
@@ -4100,7 +4132,7 @@ public final class IkeSessionStateMachineTest {
         verify(mMockChildSessionFactoryHelper)
                 .makeChildSessionStateMachine(
                         eq(mLooper.getLooper()),
-                        eq(mContext),
+                        eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
                         eq(mChildSessionParams),
@@ -4183,7 +4215,7 @@ public final class IkeSessionStateMachineTest {
         IkeSessionStateMachine ikeSession =
                 new IkeSessionStateMachine(
                         mLooper.getLooper(),
-                        mContext,
+                        mSpyContext,
                         mIpSecManager,
                         mockSessionParams,
                         mChildSessionParams,
