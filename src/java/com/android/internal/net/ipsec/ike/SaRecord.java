@@ -18,6 +18,8 @@ package com.android.internal.net.ipsec.ike;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
 import android.annotation.Nullable;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -25,6 +27,7 @@ import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
+import android.os.SystemClock;
 import android.util.CloseGuard;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -79,6 +82,9 @@ public abstract class SaRecord implements AutoCloseable {
     private final byte[] mSkEi;
     private final byte[] mSkEr;
 
+    private final SaLifetimeAlarmScheduler mSaLifetimeAlarmScheduler;
+
+    // TODO(b/149058810): Use AlarmManager and PendingIntent to schedule rekey
     private final LocalRequest mFutureRekeyEvent;
 
     private final CloseGuard mCloseGuard = new CloseGuard();
@@ -92,7 +98,8 @@ public abstract class SaRecord implements AutoCloseable {
             byte[] skAr,
             byte[] skEi,
             byte[] skEr,
-            LocalRequest futureRekeyEvent) {
+            LocalRequest futureRekeyEvent,
+            SaLifetimeAlarmScheduler saLifetimeAlarmScheduler) {
         isLocalInit = localInit;
         nonceInitiator = nonceInit;
         nonceResponder = nonceResp;
@@ -107,6 +114,10 @@ public abstract class SaRecord implements AutoCloseable {
         logKey("SK_ei", skEi);
         logKey("SK_er", skEr);
 
+        mSaLifetimeAlarmScheduler = saLifetimeAlarmScheduler;
+        mSaLifetimeAlarmScheduler.scheduleLifetimeExpiryAlarm(getTag());
+
+        // TODO(b/149058810): Use alarmManager to schedule rekey event and remove mFutureRekeyEvent
         mFutureRekeyEvent = futureRekeyEvent;
 
         mCloseGuard.open("close");
@@ -168,6 +179,8 @@ public abstract class SaRecord implements AutoCloseable {
     @Override
     public void close() {
         mFutureRekeyEvent.cancel();
+
+        mSaLifetimeAlarmScheduler.cancelLifetimeExpiryAlarm(getTag());
     }
 
     /** Package private */
@@ -323,7 +336,8 @@ public abstract class SaRecord implements AutoCloseable {
                     skEr,
                     skPi,
                     skPr,
-                    ikeSaRecordConfig.futureRekeyEvent);
+                    ikeSaRecordConfig.futureRekeyEvent,
+                    ikeSaRecordConfig.saLifetimeAlarmScheduler);
         }
 
         @Override
@@ -457,7 +471,8 @@ public abstract class SaRecord implements AutoCloseable {
                         skEr,
                         inTransform,
                         outTransform,
-                        childSaRecordConfig.futureRekeyEvent);
+                        childSaRecordConfig.futureRekeyEvent,
+                        childSaRecordConfig.saLifetimeAlarmSched);
 
             } catch (Exception e) {
                 if (initTransform != null) initTransform.close();
@@ -514,6 +529,52 @@ public abstract class SaRecord implements AutoCloseable {
         }
     }
 
+    /** This class provides methods to schedule and cancel SA lifetime expiry alarm */
+    static class SaLifetimeAlarmScheduler {
+        private final long mDeleteDelayMs;
+        private final long mRekeyDelayMs;
+        private final PendingIntent mDeleteSaIntent;
+        private final PendingIntent mRekeySaIntent;
+        private final AlarmManager mAlarmManager;
+
+        SaLifetimeAlarmScheduler(
+                long deleteDelayMs,
+                long rekeyDelayMs,
+                PendingIntent deleteSaIntent,
+                PendingIntent rekeySaIntent,
+                AlarmManager alarmManager) {
+            mDeleteDelayMs = deleteDelayMs;
+            mRekeyDelayMs = rekeyDelayMs;
+            mAlarmManager = alarmManager;
+            mDeleteSaIntent = deleteSaIntent;
+            mRekeySaIntent = rekeySaIntent;
+        }
+
+        public void scheduleLifetimeExpiryAlarm(String tag) {
+            // Hard lifetime expiry alarm needs to be "setExact" considering the hard lifetime
+            // minimum value is 5 minutes and the inexact alarm might cause at most 75% of the
+            // scheduled interval delay because batching alarms. It is not necessay to wake up the
+            // alarm during doze mode because even the SA expires at that time, the device can not
+            // get access to network and won't expose more vulnerabilities.
+            mAlarmManager.setExact(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + mDeleteDelayMs,
+                    mDeleteSaIntent);
+            getIkeLog().d(tag, "Hard lifetime expiry alarm set for " + mDeleteDelayMs + "ms");
+
+            // TODO: Schedule alarm for rekey
+        }
+
+        public void cancelLifetimeExpiryAlarm(String tag) {
+            mAlarmManager.cancel(mDeleteSaIntent);
+            mAlarmManager.cancel(mRekeySaIntent);
+            mDeleteSaIntent.cancel();
+            mRekeySaIntent.cancel();
+
+            getIkeLog().d(tag, "Hard and soft lifetime alarm cancelled");
+        }
+    }
+
     /** Package private class to group parameters for building a ChildSaRecord. */
     @VisibleForTesting
     static final class ChildSaRecordConfig {
@@ -531,6 +592,7 @@ public abstract class SaRecord implements AutoCloseable {
         public final boolean isLocalInit;
         public final boolean hasIntegrityAlgo;
         public final ChildLocalRequest futureRekeyEvent;
+        public final SaLifetimeAlarmScheduler saLifetimeAlarmSched;
 
         ChildSaRecordConfig(
                 Context context,
@@ -545,7 +607,8 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] skD,
                 boolean isTransport,
                 boolean isLocalInit,
-                ChildLocalRequest futureRekeyEvent) {
+                ChildLocalRequest futureRekeyEvent,
+                SaLifetimeAlarmScheduler saLifetimeAlarmSched) {
             this.context = context;
             this.initSpi = initSpi;
             this.respSpi = respSpi;
@@ -560,6 +623,7 @@ public abstract class SaRecord implements AutoCloseable {
             this.isLocalInit = isLocalInit;
             hasIntegrityAlgo = (integrityAlgo != null);
             this.futureRekeyEvent = futureRekeyEvent;
+            this.saLifetimeAlarmSched = saLifetimeAlarmSched;
         }
     }
 
@@ -599,8 +663,18 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] skEr,
                 byte[] skPi,
                 byte[] skPr,
-                LocalRequest futureRekeyEvent) {
-            super(localInit, nonceInit, nonceResp, skAi, skAr, skEi, skEr, futureRekeyEvent);
+                LocalRequest futureRekeyEvent,
+                SaLifetimeAlarmScheduler saLifetimeAlarmScheduler) {
+            super(
+                    localInit,
+                    nonceInit,
+                    nonceResp,
+                    skAi,
+                    skAr,
+                    skEi,
+                    skEr,
+                    futureRekeyEvent,
+                    saLifetimeAlarmScheduler);
 
             mInitiatorSpiResource = initSpi;
             mResponderSpiResource = respSpi;
@@ -632,7 +706,8 @@ public abstract class SaRecord implements AutoCloseable {
                 IkeMacPrf prf,
                 int integrityKeyLength,
                 int encryptionKeyLength,
-                LocalRequest futureRekeyEvent)
+                LocalRequest futureRekeyEvent,
+                SaLifetimeAlarmScheduler saLifetimeAlarmScheduler)
                 throws GeneralSecurityException {
             return sSaRecordHelper.makeFirstIkeSaRecord(
                     initRequest,
@@ -644,7 +719,8 @@ public abstract class SaRecord implements AutoCloseable {
                             integrityKeyLength,
                             encryptionKeyLength,
                             true /*isLocalInit*/,
-                            futureRekeyEvent));
+                            futureRekeyEvent,
+                            saLifetimeAlarmScheduler));
         }
 
         /** Package private */
@@ -659,7 +735,8 @@ public abstract class SaRecord implements AutoCloseable {
                 int integrityKeyLength,
                 int encryptionKeyLength,
                 boolean isLocalInit,
-                LocalRequest futureRekeyEvent)
+                LocalRequest futureRekeyEvent,
+                SaLifetimeAlarmScheduler saLifetimeAlarmScheduler)
                 throws GeneralSecurityException {
             return sSaRecordHelper.makeRekeyedIkeSaRecord(
                     oldSaRecord,
@@ -673,7 +750,8 @@ public abstract class SaRecord implements AutoCloseable {
                             integrityKeyLength,
                             encryptionKeyLength,
                             isLocalInit,
-                            futureRekeyEvent));
+                            futureRekeyEvent,
+                            saLifetimeAlarmScheduler));
         }
 
         private void logKey(String type, byte[] key) {
@@ -852,6 +930,7 @@ public abstract class SaRecord implements AutoCloseable {
         public final int encryptionKeyLength;
         public final boolean isLocalInit;
         public final LocalRequest futureRekeyEvent;
+        public final SaLifetimeAlarmScheduler saLifetimeAlarmScheduler;
 
         IkeSaRecordConfig(
                 IkeSecurityParameterIndex initSpi,
@@ -860,7 +939,8 @@ public abstract class SaRecord implements AutoCloseable {
                 int integrityKeyLength,
                 int encryptionKeyLength,
                 boolean isLocalInit,
-                LocalRequest futureRekeyEvent) {
+                LocalRequest futureRekeyEvent,
+                SaLifetimeAlarmScheduler saLifetimeAlarmScheduler) {
             this.initSpi = initSpi;
             this.respSpi = respSpi;
             this.prf = prf;
@@ -868,6 +948,7 @@ public abstract class SaRecord implements AutoCloseable {
             this.encryptionKeyLength = encryptionKeyLength;
             this.isLocalInit = isLocalInit;
             this.futureRekeyEvent = futureRekeyEvent;
+            this.saLifetimeAlarmScheduler = saLifetimeAlarmScheduler;
         }
     }
 
@@ -898,8 +979,18 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] skEr,
                 IpSecTransform inTransform,
                 IpSecTransform outTransform,
-                ChildLocalRequest futureRekeyEvent) {
-            super(localInit, nonceInit, nonceResp, skAi, skAr, skEi, skEr, futureRekeyEvent);
+                ChildLocalRequest futureRekeyEvent,
+                SaLifetimeAlarmScheduler saLifetimeAlarmScheduler) {
+            super(
+                    localInit,
+                    nonceInit,
+                    nonceResp,
+                    skAi,
+                    skAr,
+                    skEi,
+                    skEr,
+                    futureRekeyEvent,
+                    saLifetimeAlarmScheduler);
 
             mInboundSpi = inSpi;
             mOutboundSpi = outSpi;
@@ -926,7 +1017,8 @@ public abstract class SaRecord implements AutoCloseable {
                 byte[] skD,
                 boolean isTransport,
                 boolean isLocalInit,
-                ChildLocalRequest futureRekeyEvent)
+                ChildLocalRequest futureRekeyEvent,
+                SaLifetimeAlarmScheduler saLifetimeAlarmScheduler)
                 throws GeneralSecurityException, ResourceUnavailableException,
                         SpiUnavailableException, IOException {
             return sSaRecordHelper.makeChildSaRecord(
@@ -945,7 +1037,8 @@ public abstract class SaRecord implements AutoCloseable {
                             skD,
                             isTransport,
                             isLocalInit,
-                            futureRekeyEvent));
+                            futureRekeyEvent,
+                            saLifetimeAlarmScheduler));
         }
 
         @Override
