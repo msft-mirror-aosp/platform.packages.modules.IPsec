@@ -19,8 +19,11 @@ import static android.net.ipsec.ike.IkeManager.getIkeLog;
 import static android.net.ipsec.ike.SaProposal.DH_GROUP_NONE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.BUNDLE_KEY_CHILD_REMOTE_SPI;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_ALARM_FIRED;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.buildIkeAlarmIntent;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -36,9 +39,13 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PROTOCOL_ID_ESP;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 
 import android.annotation.IntDef;
 import android.annotation.Nullable;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -55,6 +62,7 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.os.Bundle;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
@@ -64,6 +72,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeExchangeSubType;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
+import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
@@ -96,7 +105,6 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 /**
  * ChildSessionStateMachine tracks states and manages exchanges of this Child Session.
@@ -142,6 +150,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     private final Context mContext;
+    private final int mIkeSessionId;
+    private final AlarmManager mAlarmManager;
     private final IpSecManager mIpSecManager;
 
     /** User provided configurations. */
@@ -219,6 +229,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     ChildSessionStateMachine(
             Looper looper,
             Context context,
+            int ikeSessionUniqueId,
+            AlarmManager alarmManager,
             IpSecManager ipSecManager,
             ChildSessionParams sessionParams,
             Executor userCbExecutor,
@@ -227,6 +239,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         super(TAG, looper);
 
         mContext = context;
+        mIkeSessionId = ikeSessionUniqueId;
+        mAlarmManager = alarmManager;
         mIpSecManager = ipSecManager;
         mChildSessionParams = sessionParams;
 
@@ -406,7 +420,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private long getRekeyTimeout() {
         // TODO: Make rekey timout fuzzy
-        return TimeUnit.SECONDS.toMillis(mChildSessionParams.getSoftLifetime());
+        return mChildSessionParams.getSoftLifetimeMsInternal();
     }
 
     /**
@@ -719,7 +733,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         mSkD,
                                         mChildSessionParams.isTransportMode(),
                                         true /*isLocalInit*/,
-                                        rekeyLocalRequest);
+                                        rekeyLocalRequest,
+                                        buildSaLifetimeAlarmSched(
+                                                createChildResult.respSpi.getSpi()));
 
                         mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
 
@@ -815,6 +831,41 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
             handleChildFatalError(exception);
         }
+    }
+
+    private String getIntentIdentifier(int remoteSpi) {
+        return IkeSessionStateMachine.TAG + "_" + mIkeSessionId + "_" + TAG + "_" + remoteSpi;
+    }
+
+    private Message getIntentIkeSmMsg(int localRequestType, int remoteSpi) {
+        Bundle spiBundle = new Bundle();
+        spiBundle.putInt(BUNDLE_KEY_CHILD_REMOTE_SPI, remoteSpi);
+
+        // This Message will eventually gets fired on the IKE session state machine's handler, since
+        // the pendingIntent clears the target
+        return obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, localRequestType, spiBundle);
+    }
+
+    private SaLifetimeAlarmScheduler buildSaLifetimeAlarmSched(int remoteSpi) {
+        PendingIntent deleteSaIntent =
+                buildIkeAlarmIntent(
+                        mContext,
+                        ACTION_DELETE_CHILD,
+                        getIntentIdentifier(remoteSpi),
+                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_CHILD, remoteSpi));
+        PendingIntent rekeySaIntent =
+                buildIkeAlarmIntent(
+                        mContext,
+                        ACTION_REKEY_CHILD,
+                        getIntentIdentifier(remoteSpi),
+                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_CHILD, remoteSpi));
+
+        return new SaLifetimeAlarmScheduler(
+                mChildSessionParams.getHardLifetimeMsInternal(),
+                mChildSessionParams.getSoftLifetimeMsInternal(),
+                deleteSaIntent,
+                rekeySaIntent,
+                mAlarmManager);
     }
 
     /** Initial state of ChildSessionStateMachine. */
@@ -1264,7 +1315,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                                 mSkD,
                                                 mChildSessionParams.isTransportMode(),
                                                 true /*isLocalInit*/,
-                                                rekeyLocalRequest);
+                                                rekeyLocalRequest,
+                                                buildSaLifetimeAlarmSched(
+                                                        createChildResult.respSpi.getSpi()));
 
                                 mChildSmCallback.scheduleLocalRequest(
                                         rekeyLocalRequest, getRekeyTimeout());
@@ -1437,7 +1490,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         mSkD,
                                         mChildSessionParams.isTransportMode(),
                                         false /*isLocalInit*/,
-                                        rekeyLocalRequest);
+                                        rekeyLocalRequest,
+                                        buildSaLifetimeAlarmSched(
+                                                createChildResult.initSpi.getSpi()));
 
                         mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
 
@@ -1726,9 +1781,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
                                     saProposals, ipSecManager, localAddress),
-                            childSessionParams.getLocalTrafficSelectorsInternal(),
-                            childSessionParams.getRemoteTrafficSelectorsInternal(),
-                            childSessionParams.isTransportMode(), isFirstChildSa);
+                            childSessionParams.getInboundTrafficSelectorsInternal(),
+                            childSessionParams.getOutboundTrafficSelectorsInternal(),
+                            childSessionParams.isTransportMode(),
+                            isFirstChildSa);
 
             return payloadList;
         }

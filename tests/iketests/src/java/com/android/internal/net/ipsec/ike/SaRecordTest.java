@@ -45,6 +45,7 @@ import com.android.internal.net.ipsec.ike.SaRecord.IIpSecTransformHelper;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecordConfig;
 import com.android.internal.net.ipsec.ike.SaRecord.IpSecTransformHelper;
+import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.SaRecord.SaRecordHelper;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
@@ -144,6 +145,8 @@ public final class SaRecordTest {
     private LocalRequest mMockFutureRekeyIkeEvent;
     private ChildLocalRequest mMockFutureRekeyChildEvent;
 
+    private SaLifetimeAlarmScheduler mMockLifetimeAlarmScheduler;
+
     private SaRecordHelper mSaRecordHelper = new SaRecordHelper();
 
     @Before
@@ -161,6 +164,7 @@ public final class SaRecordTest {
 
         mMockFutureRekeyIkeEvent = mock(LocalRequest.class);
         mMockFutureRekeyChildEvent = mock(ChildLocalRequest.class);
+        mMockLifetimeAlarmScheduler = mock(SaLifetimeAlarmScheduler.class);
     }
 
     // Test generating keying material for making IKE SA.
@@ -184,7 +188,8 @@ public final class SaRecordTest {
                         IKE_AUTH_ALGO_KEY_LEN,
                         IKE_ENCR_ALGO_KEY_LEN,
                         true /*isLocalInit*/,
-                        mMockFutureRekeyIkeEvent);
+                        mMockFutureRekeyIkeEvent,
+                        mock(SaLifetimeAlarmScheduler.class));
 
         int keyMaterialLen =
                 IKE_SK_D_KEY_LEN
@@ -297,7 +302,8 @@ public final class SaRecordTest {
                         TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING),
                         false /*isTransport*/,
                         true /*isLocalInit*/,
-                        mMockFutureRekeyChildEvent);
+                        mMockFutureRekeyChildEvent,
+                        mMockLifetimeAlarmScheduler);
 
         ChildSaRecord childSaRecord =
                 mSaRecordHelper.makeChildSaRecord(

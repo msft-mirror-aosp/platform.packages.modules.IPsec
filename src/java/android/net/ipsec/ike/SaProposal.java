@@ -19,7 +19,6 @@ package android.net.ipsec.ike;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
-import android.util.ArraySet;
 import android.util.Pair;
 import android.util.SparseArray;
 
@@ -34,9 +33,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Set;
 
 /**
  * SaProposal represents a proposed configuration to negotiate an IKE or Child SA.
@@ -192,6 +191,10 @@ public abstract class SaProposal {
     public static final int DH_GROUP_1024_BIT_MODP = 2;
     /** 2048-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_2048_BIT_MODP = 14;
+    /** 3072-bit MODP Diffie-Hellman Group. @hide */
+    public static final int DH_GROUP_3072_BIT_MODP = 15;
+    /** 4096-bit MODP Diffie-Hellman Group. @hide */
+    public static final int DH_GROUP_4096_BIT_MODP = 16;
 
     private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
 
@@ -200,6 +203,8 @@ public abstract class SaProposal {
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_NONE, "DH_NONE");
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_1024_BIT_MODP, "DH_1024_BIT_MODP");
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_2048_BIT_MODP, "DH_2048_BIT_MODP");
+        SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_3072_BIT_MODP, "DH_3072_BIT_MODP");
+        SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_4096_BIT_MODP, "DH_4096_BIT_MODP");
     }
 
     @IkePayload.ProtocolId private final int mProtocolId;
@@ -342,11 +347,13 @@ public abstract class SaProposal {
     protected abstract static class Builder {
         protected static final String ERROR_TAG = "Invalid SA Proposal: ";
 
-        // Use set to avoid adding repeated algorithms.
-        protected final Set<EncryptionTransform> mProposedEncryptAlgos = new ArraySet<>();
-        protected final Set<PrfTransform> mProposedPrfs = new ArraySet<>();
-        protected final Set<IntegrityTransform> mProposedIntegrityAlgos = new ArraySet<>();
-        protected final Set<DhGroupTransform> mProposedDhGroups = new ArraySet<>();
+        // Use LinkedHashSet to ensure uniqueness and that ordering is maintained.
+        protected final LinkedHashSet<EncryptionTransform> mProposedEncryptAlgos =
+                new LinkedHashSet<>();
+        protected final LinkedHashSet<PrfTransform> mProposedPrfs = new LinkedHashSet<>();
+        protected final LinkedHashSet<IntegrityTransform> mProposedIntegrityAlgos =
+                new LinkedHashSet<>();
+        protected final LinkedHashSet<DhGroupTransform> mProposedDhGroups = new LinkedHashSet<>();
 
         protected boolean mHasAead = false;
 

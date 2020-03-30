@@ -34,17 +34,21 @@ import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 
 public final class IkeAuthDigitalSignPayloadTest {
     // TODO: Build a RSA_SHA1 signature and add tests for it.
 
-    // RSA_SHA2_256
+    // AuthMethod 14 (Generic DS) with RSA_SHA2_256
     private static final String AUTH_PAYLOAD_BODY_GENERIC_DIGITAL_SIGN_HEX_STRING =
             "0e0000000f300d06092a864886f70d01010b05006f76af4150d653c5d4136b9f"
                     + "69d905849bf075c563e6d14ccda42361ec3e7d12c72e2dece5711ea1d952f7b8"
                     + "e12c5d982aa4efdaeac36a02b222aa96242cc424";
+
+    private static final String GENERIC_PAYLOAD_HEADER = "00000058"; // 88B length
+
     private static final String SIGNATURE =
             "6f76af4150d653c5d4136b9f69d905849bf075c563e6d14ccda42361ec3e7d12"
                     + "c72e2dece5711ea1d952f7b8e12c5d982aa4efdaeac36a02b222aa96242cc424";
@@ -65,6 +69,8 @@ public final class IkeAuthDigitalSignPayloadTest {
                     + "c5078355436f3347376ff2900001c0000400545bc3f2113770de91c769094f1bd"
                     + "614534e765ea290000080000402e290000100000402f000100020003000400000"
                     + "00800004014";
+
+    private static final int NEXT_PAYLOAD_TYPE = IkePayload.PAYLOAD_TYPE_NO_NEXT;
     private static final String NONCE_INIT_HEX_STRING =
             "a5dded450b5ffd2670f37954367fce28279a085c830a03358b10b0872c0578f9";
     private static final String ID_RESP_PAYLOAD_BODY_HEX_STRING = "01000000c0a82b8a";
@@ -94,8 +100,31 @@ public final class IkeAuthDigitalSignPayloadTest {
 
         assertTrue(payload instanceof IkeAuthDigitalSignPayload);
         IkeAuthDigitalSignPayload dsPayload = (IkeAuthDigitalSignPayload) payload;
-        assertEquals(SIGNATURE_ALGO_RSA_SHA2_256, dsPayload.signatureAlgoAndHash);
+        assertEquals(SIGNATURE_ALGO_RSA_SHA2_256, dsPayload.signatureAndHashAlgos);
         assertArrayEquals(dsPayload.signature, TestUtils.hexStringToByteArray(SIGNATURE));
+    }
+
+    @Test
+    public void testSignAndEncode() throws Exception {
+        PrivateKey key = CertUtils.createRsaPrivateKeyFromKeyFile("end-cert-key-a.key");
+
+        IkeAuthDigitalSignPayload authPayload =
+                new IkeAuthDigitalSignPayload(
+                        SIGNATURE_ALGO_RSA_SHA2_256,
+                        key,
+                        IKE_INIT_RESP_REQUEST,
+                        NONCE_INIT_RESP,
+                        ID_RESP_PAYLOAD_BODY,
+                        mIkeHmacSha1Prf,
+                        PRF_RESP_KEY);
+
+        ByteBuffer buffer = ByteBuffer.allocate(authPayload.getPayloadLength());
+        authPayload.encodeToByteBuffer(NEXT_PAYLOAD_TYPE, buffer);
+
+        byte[] expected =
+                TestUtils.hexStringToByteArray(
+                        GENERIC_PAYLOAD_HEADER + AUTH_PAYLOAD_BODY_GENERIC_DIGITAL_SIGN_HEX_STRING);
+        assertArrayEquals(expected, buffer.array());
     }
 
     @Test
@@ -153,7 +182,7 @@ public final class IkeAuthDigitalSignPayloadTest {
                         mIkeHmacSha1Prf,
                         PRF_RESP_KEY);
 
-        assertEquals(SIGNATURE_ALGO_RSA_SHA2_256, authPayload.signatureAlgoAndHash);
+        assertEquals(SIGNATURE_ALGO_RSA_SHA2_256, authPayload.signatureAndHashAlgos);
         assertArrayEquals(authPayload.signature, TestUtils.hexStringToByteArray(SIGNATURE));
     }
 }

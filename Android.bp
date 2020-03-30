@@ -22,6 +22,10 @@ java_sdk_library {
     },
     srcs: [":ike-srcs"],
 
+    static_libs: [
+        "ike-internals",
+    ],
+
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
@@ -40,7 +44,6 @@ java_sdk_library {
     plugins: ["java_api_finder"],
 
     hostdex: true, // for hiddenapi check
-    visibility: ["//frameworks/opt/net/ike:__subpackages__"],
     apex_available: [
         "com.android.ipsec",
         "test_com.android.ipsec",
@@ -51,7 +54,6 @@ filegroup {
     name: "ike-srcs",
     srcs: [
         "src/java/**/*.java",
-        ":bouncycastle_ike_digests",
         ":framework-ike-shared-srcs",
     ],
 }
@@ -62,18 +64,15 @@ filegroup {
     path: "src/java/",
 }
 
-droidstubs {
-    name: "ike-stubs-docs",
-    defaults:["framework-module-stubs-defaults-systemapi"],
-    libs: ["framework-all"],
-    srcs: [":ike-api-srcs"],
-    sdk_version: "system_current",
-}
-
+// Provides internal classes needed to build the ike sources.
 java_library {
-    name: "ike-stubs",
-    srcs: [":ike-stubs-docs"],
-    sdk_version: "system_current",
+    name: "ike-internals",
+    apex_available: [
+        "com.android.ipsec",
+        "test_com.android.ipsec",
+    ],
+    static_libs: ["bouncycastle_ike_digests"],
+    sdk_version: "core_current",
 }
 
 java_library {
@@ -81,8 +80,36 @@ java_library {
     installable: false, // Used only for testing; never installed alone.
     srcs: [":ike-srcs"],
     libs: ["unsupportedappusage"],
+    static_libs: ["ike-internals"],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
+}
+
+stubs_defaults {
+    name: "ike-stubs-defaults",
+    srcs: [":ike-api-srcs"],
+}
+
+droidstubs {
+    name: "android.net.ipsec.ike.api.sources.module_libs_api",
+    defaults: [
+        "framework-module-api-defaults-module_libs_api",
+        "ike-stubs-defaults",
+    ],
+}
+
+droidstubs {
+    name: "android.net.ipsec.ike.stubs.sources.module_libs_api",
+    defaults: [
+        "framework-module-stubs-defaults-module_libs_api",
+        "ike-stubs-defaults",
+    ],
+}
+
+java_library {
+    name: "android.net.ipsec.ike.stubs.module_libs_api",
+    srcs: [":android.net.ipsec.ike.stubs.sources.module_libs_api"],
+    defaults: ["framework-module-stubs-lib-defaults-module_libs_api"],
 }

@@ -82,7 +82,10 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
         NOTIFY_TYPE_USE_TRANSPORT_MODE,
         NOTIFY_TYPE_REKEY_SA,
-        NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED
+        NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED,
+        NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION,
+        NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED,
+        NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS
     })
     public @interface NotifyType {}
 
@@ -122,8 +125,20 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      * being negotiated. Only allowed in the request/response for negotiating a Child SA.
      */
     public static final int NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED = 16394;
+
+    /** Indicates that the sender prefers to use only eap based authentication */
+    public static final int NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION = 16417;
+
     /** Indicates that the sender supports IKE fragmentation. */
     public static final int NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED = 16430;
+
+    /**
+     * Indicates that the sender supports GENERIC_DIGITAL_SIGNATURE authentication payloads.
+     *
+     * <p>See RFC 7427 - Signature Authentication in the Internet Key Exchange Version 2 (IKEv2) for
+     * more details
+     */
+    public static final int NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS = 16431;
 
     private static final int NOTIFY_HEADER_LEN = 4;
     private static final int ERROR_NOTIFY_TYPE_MAX = 16383;
@@ -191,6 +206,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
                 NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED, "ESP TCP Padding not supported");
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED, "Fragmentation supported");
+        NOTIFY_TYPE_TO_STRING.put(
+                NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS, "Generic Digital Signatures supported");
     }
 
     public final int protocolId;
