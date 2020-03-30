@@ -28,6 +28,8 @@ import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -50,7 +52,7 @@ public final class IkeUdp4Socket extends IkeUdpSocket {
     private static Map<Network, IkeUdp4Socket> sNetworkToUdp4SocketMap = new HashMap<>();
 
     private IkeUdp4Socket(FileDescriptor socket, Network network, Handler handler) {
-        super(socket, network, handler);
+        super(socket, network, handler == null ? new Handler() : handler);
     }
 
     /**
@@ -65,6 +67,14 @@ public final class IkeUdp4Socket extends IkeUdpSocket {
      */
     public static IkeUdp4Socket getInstance(Network network, IkeSessionStateMachine ikeSession)
             throws ErrnoException, IOException {
+        return getInstance(network, ikeSession, null);
+    }
+
+    // package protected; for testing purposes.
+    @VisibleForTesting
+    static IkeUdp4Socket getInstance(
+            Network network, IkeSessionStateMachine ikeSession, Handler handler)
+            throws ErrnoException, IOException {
         IkeUdp4Socket ikeSocket = sNetworkToUdp4SocketMap.get(network);
         if (ikeSocket == null) {
             FileDescriptor sock = Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -74,7 +84,7 @@ public final class IkeUdp4Socket extends IkeUdpSocket {
             Os.fcntlInt(sock, F_SETFL, SOCK_DGRAM | SOCK_NONBLOCK);
             network.bindSocket(sock);
 
-            ikeSocket = new IkeUdp4Socket(sock, network, new Handler());
+            ikeSocket = new IkeUdp4Socket(sock, network, handler);
 
             // Create and register FileDescriptor for receiving IKE packet on current thread.
             ikeSocket.start();
