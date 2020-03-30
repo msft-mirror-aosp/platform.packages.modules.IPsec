@@ -77,6 +77,7 @@ import com.android.internal.net.eap.EapAuthenticator;
 import com.android.internal.net.eap.IEapCallback;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IkeLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
@@ -190,8 +191,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     // indicates that something has gone wrong, and we are out of sync.
     @VisibleForTesting
     static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
-
-    // TODO: Allow users to configure IKE lifetime
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -557,7 +556,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Initiates IKE setup procedure. */
     public void openSession() {
-        sendMessage(CMD_LOCAL_REQUEST_CREATE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
+        sendMessage(
+                CMD_LOCAL_REQUEST_CREATE_IKE, new IkeLocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
     }
 
     /** Schedules a Create Child procedure. */
@@ -596,7 +596,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Initiates Delete IKE procedure. */
     public void closeSession() {
-        sendMessage(CMD_LOCAL_REQUEST_DELETE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
+        sendMessage(
+                CMD_LOCAL_REQUEST_DELETE_IKE, new IkeLocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
     }
 
     /** Forcibly close IKE Session. */
@@ -1117,6 +1118,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         private void executeLocalRequest(LocalRequest req, Message message) {
+            if (!isRequestForCurrentSa(req)) {
+                logd("Request is for a deleted SA. Ignore it.");
+                mScheduler.readyForNextProcedure();
+                return;
+            }
+
             switch (req.procedureType) {
                 case CMD_LOCAL_REQUEST_REKEY_IKE:
                     transitionTo(mRekeyIkeLocalCreate);
@@ -1135,6 +1142,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             new IllegalStateException(
                                     "Invalid local request procedure type: " + req.procedureType));
             }
+        }
+
+        // When in Idle state, this IkeSessionStateMachine and all its ChildSessionStateMachines
+        // only have one alive IKE/Child SA respectively. Returns true if this local request is for
+        // the current IKE/Child SA, or false if the request is for a deleted SA.
+        private boolean isRequestForCurrentSa(LocalRequest localRequest) {
+            if (localRequest.isChildRequest()) {
+                ChildLocalRequest req = (ChildLocalRequest) localRequest;
+                if (req.remoteSpi == IkeLocalRequestScheduler.SPI_NOT_INCLUDED
+                        || mRemoteSpiToChildSessionMap.get(req.remoteSpi) != null) {
+                    return true;
+                }
+            } else {
+                IkeLocalRequest req = (IkeLocalRequest) localRequest;
+                if (req.remoteSpi == IkeLocalRequestScheduler.SPI_NOT_INCLUDED
+                        || req.remoteSpi == mCurrentIkeSaRecord.getRemoteSpi()) {
+                    return true;
+                }
+            }
+            return false;
         }
     }
 
@@ -2528,7 +2555,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 mIkePrf,
                                 mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
                                 mIkeCipher.getKeyLength(),
-                                new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
+                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
 
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
@@ -3733,7 +3760,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 newIntegrity == null ? 0 : newIntegrity.getKeyLength(),
                                 newCipher.getKeyLength(),
                                 isLocalInit,
-                                new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
+                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
 
                 addIkeSaRecord(newSaRecord);
 
