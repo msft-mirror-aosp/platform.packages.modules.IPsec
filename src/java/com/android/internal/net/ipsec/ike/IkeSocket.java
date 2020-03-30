@@ -21,13 +21,17 @@ import static android.net.ipsec.ike.IkeManager.getIkeLog;
 import android.net.Network;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.os.Handler;
+import android.system.ErrnoException;
+import android.system.Os;
 import android.util.LongSparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
 import com.android.internal.net.ipsec.ike.utils.PacketReader;
 
+import java.io.FileDescriptor;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -102,6 +106,16 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
             getIkeLog().i(tag, "Can't parse malformed IKE packet header.");
         }
     }
+
+    /**
+     * Returns the port that this IKE socket is listening on (bound to).
+     */
+    public final int getLocalPort() throws ErrnoException {
+        InetSocketAddress localAddr = (InetSocketAddress) Os.getsockname(getFd());
+        return localAddr.getPort();
+    }
+
+    protected abstract FileDescriptor getFd();
 
     /**
      * Return Network this socket bound to
