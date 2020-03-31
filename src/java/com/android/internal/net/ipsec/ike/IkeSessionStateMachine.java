@@ -38,9 +38,17 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_DELETE;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_VENDOR;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_IKE;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DPD;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
 import android.annotation.IntDef;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
+import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -60,9 +68,11 @@ import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
@@ -77,12 +87,15 @@ import com.android.internal.net.eap.EapAuthenticator;
 import com.android.internal.net.eap.IEapCallback;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IkeLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
+import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
 import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
 import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
@@ -109,7 +122,6 @@ import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
@@ -139,6 +151,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * IkeSessionStateMachine tracks states and manages exchanges of this IKE session.
@@ -159,7 +172,8 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  */
 public class IkeSessionStateMachine extends AbstractSessionStateMachine {
-    private static final String TAG = "IkeSessionStateMachine";
+    // Package private
+    static final String TAG = "IkeSessionStateMachine";
 
     // TODO: b/140579254 Allow users to configure fragment size.
 
@@ -173,12 +187,23 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private static final IkeAlarmReceiver sIkeAlarmReceiver = new IkeAlarmReceiver();
 
     /** Intent filter for all Intents that should be received by sIkeAlarmReceiver */
-    private static final IntentFilter sIntentFiler;
+    private static final IntentFilter sIntentFilter = new IntentFilter();
 
     static {
-        sIntentFiler = new IntentFilter();
-        sIntentFiler.addCategory(TAG);
+        sIntentFilter.addAction(ACTION_DELETE_CHILD);
+        sIntentFilter.addAction(ACTION_DELETE_IKE);
+        sIntentFilter.addAction(ACTION_DPD);
+        sIntentFilter.addAction(ACTION_REKEY_CHILD);
+        sIntentFilter.addAction(ACTION_REKEY_IKE);
     }
+
+    private static final AtomicInteger sIkeSessionIdGenerator = new AtomicInteger();
+
+    // Bundle key for remote IKE SPI. Package private
+    @VisibleForTesting static final String BUNDLE_KEY_IKE_REMOTE_SPI = "BUNDLE_KEY_IKE_REMOTE_SPI";
+    // Bundle key for remote Child SPI. Package private
+    @VisibleForTesting
+    static final String BUNDLE_KEY_CHILD_REMOTE_SPI = "BUNDLE_KEY_CHILD_REMOTE_SPI";
 
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
@@ -190,8 +215,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     // indicates that something has gone wrong, and we are out of sync.
     @VisibleForTesting
     static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
-
-    // TODO: Allow users to configure IKE lifetime
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -263,6 +286,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     static final int CMD_EAP_FAILED = CMD_GENERAL_BASE + 12;
     /** Proxy to IkeSessionStateMachine handler to notify of success, to continue to post-auth */
     static final int CMD_EAP_FINISH_EAP_AUTH = CMD_GENERAL_BASE + 14;
+    /** Alarm goes off for a scheduled event, check {@link Message.arg2} for event type */
+    static final int CMD_ALARM_FIRED = CMD_GENERAL_BASE + 15;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -290,6 +315,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_EAP_ERRORED, "EAP errored");
         CMD_TO_STR.put(CMD_EAP_FAILED, "EAP failed");
         CMD_TO_STR.put(CMD_EAP_FINISH_EAP_AUTH, "Finish EAP");
+        CMD_TO_STR.put(CMD_ALARM_FIRED, "Alarm Fired");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_IKE, "Create IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
@@ -309,8 +335,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      */
     private final SparseArray<ChildSessionStateMachine> mRemoteSpiToChildSessionMap;
 
+    private final int mIkeSessionId;
     private final Context mContext;
     private final IpSecManager mIpSecManager;
+    private final AlarmManager mAlarmManager;
     private final IkeLocalRequestScheduler mScheduler;
     private final Executor mUserCbExecutor;
     private final IkeSessionCallback mIkeSessionCallback;
@@ -321,6 +349,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @GuardedBy("mChildCbToSessions")
     final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
+
+    /** Peer-selected DH group to use. Defaults to first proposed DH group in first SA proposal. */
+    @VisibleForTesting int mPeerSelectedDhGroup;
 
     /**
      * Package private socket that sends and receives encoded IKE message. Initialized in Initial
@@ -428,9 +459,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 // Pass in a Handler so #onReceive will run on the StateMachine thread
                 context.registerReceiver(
                         sIkeAlarmReceiver,
-                        sIntentFiler,
+                        sIntentFilter,
                         null /*broadcastPermission*/,
-                        new Handler(getHandler().getLooper()));
+                        new Handler(looper));
                 sContextToIkeSmMap.put(context, new HashSet<IkeSessionStateMachine>());
             }
             sContextToIkeSmMap.get(context).add(this);
@@ -439,8 +470,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // callback instance in the future
         }
 
+        mIkeSessionId = sIkeSessionIdGenerator.getAndIncrement();
+        sIkeAlarmReceiver.registerIkeSession(mIkeSessionId, getHandler());
+
         mIkeSessionParams = ikeParams;
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
+
+        // SaProposals.Builder guarantees there is at least one SA proposal, and each SA proposal
+        // has at least one DH group.
+        mPeerSelectedDhGroup =
+                mIkeSessionParams.getSaProposals().get(0).getDhGroupTransforms()[0].id;
 
         mTempFailHandler = new TempFailureHandler(looper);
 
@@ -450,6 +489,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         mContext = context;
         mIpSecManager = ipSecManager;
+        mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
         mUserCbExecutor = userCbExecutor;
         mIkeSessionCallback = ikeSessionCallback;
@@ -540,6 +580,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     ChildSessionStateMachineFactory.makeChildSessionStateMachine(
                             getHandler().getLooper(),
                             mContext,
+                            mIkeSessionId,
+                            mAlarmManager,
                             childParams,
                             mUserCbExecutor,
                             callbacks,
@@ -549,7 +591,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Initiates IKE setup procedure. */
     public void openSession() {
-        sendMessage(CMD_LOCAL_REQUEST_CREATE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
+        sendMessage(
+                CMD_LOCAL_REQUEST_CREATE_IKE, new IkeLocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
     }
 
     /** Schedules a Create Child procedure. */
@@ -588,7 +631,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Initiates Delete IKE procedure. */
     public void closeSession() {
-        sendMessage(CMD_LOCAL_REQUEST_DELETE_IKE, new LocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
+        sendMessage(
+                CMD_LOCAL_REQUEST_DELETE_IKE, new IkeLocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
     }
 
     /** Forcibly close IKE Session. */
@@ -777,6 +821,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     // TODO: Add methods for building and validating general Informational packet.
 
+    /** Switch to a new IKE socket due to NAT detection, or an underlying network change. */
+    private void switchToIkeSocket(long localSpi, IkeSocket newSocket) {
+        newSocket.registerIke(localSpi, this);
+        mIkeSocket.unregisterIke(localSpi);
+        mIkeSocket.releaseReference(this);
+        mIkeSocket = newSocket;
+    }
+
     @VisibleForTesting
     void addIkeSaRecord(IkeSaRecord record) {
         mLocalSpiToIkeSaRecordMap.put(record.getLocalSpi(), record);
@@ -959,6 +1011,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         if (mIkeSocket == null) return;
         mIkeSocket.releaseReference(this);
 
+        sIkeAlarmReceiver.unregisterIkeSession(mIkeSessionId);
+
         synchronized (IKE_SESSION_LOCK) {
             Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(mContext);
             ikeSet.remove(this);
@@ -1024,12 +1078,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
-                    mIkeSocket =
-                            IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                    network, mIpSecManager, IkeSessionStateMachine.this);
+                    mIkeSocket = IkeUdp4Socket.getInstance(network, IkeSessionStateMachine.this);
                 } else {
-                    throw new UnsupportedOperationException("Do not support IPv6 IKE sever");
-                    // TODO(b/146674994): Support IPv6 server address.
+                    mIkeSocket = IkeUdp6Socket.getInstance(network, IkeSessionStateMachine.this);
                 }
 
                 FileDescriptor sock =
@@ -1041,9 +1092,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 Os.connect(sock, mRemoteAddress, mIkeSocket.getIkeServerPort());
                 InetSocketAddress localAddr = (InetSocketAddress) Os.getsockname(sock);
                 mLocalAddress = localAddr.getAddress();
-                mLocalPort = localAddr.getPort();
+                mLocalPort = mIkeSocket.getLocalPort();
                 Os.close(sock);
-            } catch (ErrnoException | IOException | ResourceUnavailableException e) {
+            } catch (ErrnoException | IOException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -1067,9 +1118,44 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      * Idle represents a state when there is no ongoing IKE exchange affecting established IKE SA.
      */
     class Idle extends LocalRequestQueuer {
+        private PendingIntent mDpdIntent;
+
+        // TODO (b/152236790): Add wakelock for awaiting LocalRequests and ongoing procedures.
+
         @Override
         public void enterState() {
             mScheduler.readyForNextProcedure();
+
+            if (mDpdIntent == null) {
+                long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
+                mDpdIntent =
+                        buildIkeAlarmIntent(
+                                mContext,
+                                ACTION_DPD,
+                                getIntentIdentifier(remoteIkeSpi),
+                                getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi));
+            }
+            long dpdDelayMs = TimeUnit.SECONDS.toMillis(mIkeSessionParams.getDpdDelaySeconds());
+
+            // Initiating DPD is a way to detect the aliveness of the remote server and also a
+            // way to assert the aliveness of IKE library. Considering this, the alarm to trigger
+            // DPD needs to go off even when device is in doze mode to decrease the chance the
+            // remote server thinks IKE library is dead. Also, since DPD initiation is
+            // time-critical, we need to use "setExact" to avoid the batching alarm delay which can
+            // be at most 75% for the alarm timeout (@see AlarmManagerService#maxTriggerTime).
+            // Please check AlarmManager#setExactAndAllowWhileIdle for more details.
+            mAlarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + dpdDelayMs,
+                    mDpdIntent);
+            logd("DPD Alarm scheduled with DPD delay: " + dpdDelayMs + "ms");
+        }
+
+        @Override
+        protected void exitState() {
+            // #exitState is guaranteed to be invoked when quit() or quitNow() is called
+            mAlarmManager.cancel(mDpdIntent);
+            logd("DPD Alarm canceled");
         }
 
         @Override
@@ -1078,6 +1164,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 case CMD_RECEIVE_IKE_PACKET:
                     deferMessage(message);
                     transitionTo(mReceiving);
+                    return HANDLED;
+
+                case CMD_ALARM_FIRED:
+                    handleFiredAlarm(message);
                     return HANDLED;
 
                 case CMD_FORCE_TRANSITION: // Testing command
@@ -1104,12 +1194,21 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         private void executeLocalRequest(LocalRequest req, Message message) {
+            if (!isRequestForCurrentSa(req)) {
+                logd("Request is for a deleted SA. Ignore it.");
+                mScheduler.readyForNextProcedure();
+                return;
+            }
+
             switch (req.procedureType) {
                 case CMD_LOCAL_REQUEST_REKEY_IKE:
                     transitionTo(mRekeyIkeLocalCreate);
                     break;
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     transitionTo(mDeleteIkeLocalDelete);
+                    break;
+                case CMD_LOCAL_REQUEST_DPD:
+                    transitionTo(mDpdIkeLocalInfo);
                     break;
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // fallthrough
@@ -1123,6 +1222,74 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                     "Invalid local request procedure type: " + req.procedureType));
             }
         }
+
+        // When in Idle state, this IkeSessionStateMachine and all its ChildSessionStateMachines
+        // only have one alive IKE/Child SA respectively. Returns true if this local request is for
+        // the current IKE/Child SA, or false if the request is for a deleted SA.
+        private boolean isRequestForCurrentSa(LocalRequest localRequest) {
+            if (localRequest.isChildRequest()) {
+                ChildLocalRequest req = (ChildLocalRequest) localRequest;
+                if (req.remoteSpi == IkeLocalRequestScheduler.SPI_NOT_INCLUDED
+                        || mRemoteSpiToChildSessionMap.get(req.remoteSpi) != null) {
+                    return true;
+                }
+            } else {
+                IkeLocalRequest req = (IkeLocalRequest) localRequest;
+                if (req.remoteSpi == IkeLocalRequestScheduler.SPI_NOT_INCLUDED
+                        || req.remoteSpi == mCurrentIkeSaRecord.getRemoteSpi()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
+
+    private String getIntentIdentifier(long remoteIkeSpi) {
+        return TAG + "_" + mIkeSessionId + "_" + remoteIkeSpi;
+    }
+
+    private Message getIntentIkeSmMsg(int localRequestType, long remoteIkeSpi) {
+        Bundle spiBundle = new Bundle();
+        spiBundle.putLong(BUNDLE_KEY_IKE_REMOTE_SPI, remoteIkeSpi);
+
+        return obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, localRequestType, spiBundle);
+    }
+
+    private SaLifetimeAlarmScheduler buildSaLifetimeAlarmScheduler(long remoteSpi) {
+        PendingIntent deleteSaIntent =
+                buildIkeAlarmIntent(
+                        mContext,
+                        ACTION_DELETE_IKE,
+                        getIntentIdentifier(remoteSpi),
+                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_IKE, remoteSpi));
+        PendingIntent rekeySaIntent =
+                buildIkeAlarmIntent(
+                        mContext,
+                        ACTION_REKEY_IKE,
+                        getIntentIdentifier(remoteSpi),
+                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_IKE, remoteSpi));
+
+        return new SaLifetimeAlarmScheduler(
+                mIkeSessionParams.getHardLifetimeMsInternal(),
+                mIkeSessionParams.getSoftLifetimeMsInternal(),
+                deleteSaIntent,
+                rekeySaIntent,
+                mAlarmManager);
+    }
+
+    // Package private. Accessible to ChildSessionStateMachine
+    static PendingIntent buildIkeAlarmIntent(
+            Context context, String intentAction, String intentId, Message ikeSmMsg) {
+        Intent intent = new Intent(intentAction);
+        intent.setIdentifier(intentId);
+        intent.setPackage(context.getPackageName());
+
+        Bundle bundle = new Bundle();
+        bundle.putParcelable(IkeAlarmReceiver.PARCELABLE_NAME_IKE_SESSION_MSG, ikeSmMsg);
+        intent.putExtras(bundle);
+
+        return PendingIntent.getBroadcast(
+                context, 0 /*requestCode unused*/, intent, 0 /*default flags*/);
     }
 
     /**
@@ -1351,6 +1518,39 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
             return false;
         }
+
+        protected void handleFiredAlarm(Message message) {
+            switch (message.arg2) {
+                case CMD_LOCAL_REQUEST_DELETE_CHILD:
+                    // Child SA (identified by remoteChildSpi) has hit its hard lifetime
+                    enqueueChildLocalRequest(message);
+                    return;
+                case CMD_LOCAL_REQUEST_DELETE_IKE:
+                    // IKE SA hits its hard lifetime
+                    enqueueIkeLocalRequest(message);
+                    return;
+                case CMD_LOCAL_REQUEST_DPD:
+                    // IKE Session has not received any protectd IKE packet for the whole DPD delay
+                    enqueueIkeLocalRequest(message);
+
+                    // TODO(b/152442041): Cancel the scheduled DPD request if IKE Session starts any
+                    // procedure before DPD get executed.
+                    return;
+                default:
+                    logWtf("Invalid alarm action: " + message.arg2);
+            }
+            // TODO: Handle rekey IKE/Child SA
+        }
+
+        private void enqueueIkeLocalRequest(Message message) {
+            long remoteIkeSpi = ((Bundle) message.obj).getLong(BUNDLE_KEY_IKE_REMOTE_SPI);
+            sendMessage(message.arg2, new IkeLocalRequest(message.arg2, remoteIkeSpi));
+        }
+
+        private void enqueueChildLocalRequest(Message message) {
+            int remoteChildSpi = ((Bundle) message.obj).getInt(BUNDLE_KEY_CHILD_REMOTE_SPI);
+            sendMessage(message.arg2, new ChildLocalRequest(message.arg2, remoteChildSpi));
+        }
     }
 
     /**
@@ -1366,7 +1566,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 case CMD_RECEIVE_IKE_PACKET:
                     handleReceivedIkePacket(message);
                     return HANDLED;
-
+                case CMD_ALARM_FIRED:
+                    handleFiredAlarm(message);
+                    return HANDLED;
                 case CMD_FORCE_TRANSITION:
                     transitionTo((State) message.obj);
                     return HANDLED;
@@ -2060,9 +2262,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        private ChildSessionStateMachine getChildSession(ChildSessionCallback callbacks) {
+        private ChildSessionStateMachine getChildSession(ChildLocalRequest req) {
+            if (req.childSessionCallback == null) {
+                return mRemoteSpiToChildSessionMap.get(req.remoteSpi);
+            }
+            return getChildSession(req.childSessionCallback);
+        }
+
+        private ChildSessionStateMachine getChildSession(ChildSessionCallback callback) {
             synchronized (mChildCbToSessions) {
-                return mChildCbToSessions.get(callbacks);
+                return mChildCbToSessions.get(callback);
             }
         }
 
@@ -2082,7 +2291,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
-            mChildInLocalProcedure = getChildSession(req.childSessionCallback);
+            mChildInLocalProcedure = getChildSession(req);
             mLocalRequestOngoing = req;
 
             if (mChildInLocalProcedure == null) {
@@ -2515,14 +2724,42 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 mIkePrf,
                                 mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
                                 mIkeCipher.getKeyLength(),
-                                new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
+                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
+                                buildSaLifetimeAlarmScheduler(mRemoteIkeSpiResource.getSpi()));
 
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
 
                 transitionTo(mCreateIkeLocalIkeAuth);
             } catch (IkeProtocolException | GeneralSecurityException | IOException e) {
-                // TODO: Try another DH group to buld KE Payload if receiving InvalidKeException
+                if (e instanceof InvalidKeException) {
+                    InvalidKeException keException = (InvalidKeException) e;
+
+                    int requestedDhGroup = keException.getDhGroup();
+                    boolean doAllProposalsHaveDhGroup = true;
+                    for (IkeSaProposal proposal : mIkeSessionParams.getSaProposalsInternal()) {
+                        doAllProposalsHaveDhGroup &=
+                                proposal.getDhGroups().contains(requestedDhGroup);
+                    }
+
+                    // If DH group is not acceptable for all proposals, fail. The caller explicitly
+                    // did not want that combination, and the IKE library must honor it.
+                    if (doAllProposalsHaveDhGroup) {
+                        mPeerSelectedDhGroup = requestedDhGroup;
+
+                        // Remove state set during request creation
+                        mIkeSocket.unregisterIke(
+                                mRetransmitter.getMessage().ikeHeader.ikeInitiatorSpi);
+                        mIkeInitRequestBytes = null;
+                        mIkeInitNoncePayload = null;
+
+                        transitionTo(mInitial);
+                        openSession();
+
+                        return;
+                    }
+                }
+
                 handleIkeFatalError(e);
             } finally {
                 if (!ikeInitSuccess) {
@@ -2551,6 +2788,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getIkeInitSaRequestPayloads(
                             saProposals,
+                            mPeerSelectedDhGroup,
                             initSpi,
                             respSpi,
                             mLocalAddress,
@@ -2703,7 +2941,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeKePayload reqKePayload =
                     reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
             if (reqKePayload.dhGroup != respKePayload.dhGroup
-                    && respKePayload.dhGroup != mSaProposal.getDhGroupTransforms()[0].id) {
+                    && respKePayload.dhGroup != mPeerSelectedDhGroup) {
                 throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
             }
 
@@ -2728,6 +2966,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 // behind NAT.
                 if (Arrays.equals(expectedRemoteNatData, natPayload.notifyData)) {
                     mIsRemoteBehindNat = false;
+                }
+            }
+
+            if (mIsLocalBehindNat || mIsRemoteBehindNat) {
+                if (!(mRemoteAddress instanceof Inet4Address)) {
+                    handleIkeFatalError(
+                            new IllegalStateException("Remote IPv6 server was behind a NAT"));
+                }
+
+                logd("Switching to UDP encap socket");
+
+                try {
+                    IkeSocket newSocket =
+                            IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                    mIkeSessionParams.getNetwork(),
+                                    mIpSecManager,
+                                    IkeSessionStateMachine.this);
+                    switchToIkeSocket(initIkeSpi, newSocket);
+                } catch (ErrnoException | IOException | ResourceUnavailableException e) {
+                    handleIkeFatalError(e);
                 }
             }
         }
@@ -3660,6 +3918,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 newPrf = IkeMacPrf.create(respProposal.saProposal.getPrfTransforms()[0]);
 
                 // Build new SaRecord
+                long remoteSpi =
+                        isLocalInit
+                                ? respProposal.getIkeSpiResource().getSpi()
+                                : reqProposal.getIkeSpiResource().getSpi();
                 IkeSaRecord newSaRecord =
                         IkeSaRecord.makeRekeyedIkeSaRecord(
                                 mCurrentIkeSaRecord,
@@ -3672,8 +3934,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 newIntegrity == null ? 0 : newIntegrity.getKeyLength(),
                                 newCipher.getKeyLength(),
                                 isLocalInit,
-                                new LocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE));
-
+                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
+                                buildSaLifetimeAlarmScheduler(remoteSpi));
                 addIkeSaRecord(newSaRecord);
 
                 mIkeCipher = newCipher;
@@ -4324,7 +4586,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void enterState() {
-            // TODO: Acquire a wake lock
             mRetransmitter =
                     new EncryptedRetransmitter(
                             buildEncryptedInformationalMessage(
@@ -4374,7 +4635,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void exitState() {
-            // TODO: Release the wake lock
             mRetransmitter.stopRetransmitting();
         }
     }
@@ -4385,6 +4645,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private static class CreateIkeSaHelper {
         public static List<IkePayload> getIkeInitSaRequestPayloads(
                 IkeSaProposal[] saProposals,
+                int selectedDhGroup,
                 long initIkeSpi,
                 long respIkeSpi,
                 InetAddress localAddr,
@@ -4393,7 +4654,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 int remotePort)
                 throws IOException {
             List<IkePayload> payloadList =
-                    getCreateIkeSaPayloads(IkeSaPayload.createInitialIkeSaPayload(saProposals));
+                    getCreateIkeSaPayloads(
+                            selectedDhGroup, IkeSaPayload.createInitialIkeSaPayload(saProposals));
 
             // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
             // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in
@@ -4418,7 +4680,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 throw new IllegalArgumentException("Local address was null for rekey");
             }
 
+            // Guaranteed to have at least one SA Proposal, since the IKE session was set up
+            // properly.
+            int selectedDhGroup = saProposals[0].getDhGroupTransforms()[0].id;
+
             return getCreateIkeSaPayloads(
+                    selectedDhGroup,
                     IkeSaPayload.createRekeyIkeSaRequestPayload(saProposals, localAddr));
         }
 
@@ -4429,7 +4696,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 throw new IllegalArgumentException("Local address was null for rekey");
             }
 
+            int selectedDhGroup = saProposal.getDhGroupTransforms()[0].id;
+
             return getCreateIkeSaPayloads(
+                    selectedDhGroup,
                     IkeSaPayload.createRekeyIkeSaResponsePayload(
                             respProposalNumber, saProposal, localAddr));
         }
@@ -4439,8 +4709,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
          *
          * <p>Will return a non-empty list of IkePayloads, the first of which WILL be the SA payload
          */
-        private static List<IkePayload> getCreateIkeSaPayloads(IkeSaPayload saPayload)
-                throws IOException {
+        private static List<IkePayload> getCreateIkeSaPayloads(
+                int selectedDhGroup, IkeSaPayload saPayload) throws IOException {
             if (saPayload.proposalList.size() == 0) {
                 throw new IllegalArgumentException("Invalid SA proposal list - was empty");
             }
@@ -4451,11 +4721,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             payloadList.add(new IkeNoncePayload());
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
-            DhGroupTransform dhGroupTransform =
-                    ((IkeProposal) saPayload.proposalList.get(0))
-                            .saProposal
-                            .getDhGroupTransforms()[0];
-            payloadList.add(new IkeKePayload(dhGroupTransform.id));
+            payloadList.add(new IkeKePayload(selectedDhGroup));
 
             return payloadList;
         }
