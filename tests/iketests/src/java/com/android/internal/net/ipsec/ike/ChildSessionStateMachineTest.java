@@ -64,6 +64,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.app.AlarmManager;
 import android.content.Context;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
@@ -91,6 +92,7 @@ import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalReq
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecordConfig;
 import com.android.internal.net.ipsec.ike.SaRecord.ISaRecordHelper;
+import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.SaRecord.SaRecordHelper;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
@@ -173,9 +175,12 @@ public final class ChildSessionStateMachineTest {
 
     private static final int KEY_LEN_IKE_SKD = 20;
 
+    private static final int IKE_SESSION_UNIQUE_ID = 1;
+
     private IkeMacPrf mIkePrf;
 
     private Context mContext;
+    private AlarmManager mMockAlarmManager;
     private IpSecService mMockIpSecService;
     private IpSecManager mMockIpSecManager;
     private UdpEncapsulationSocket mMockUdpEncapSocket;
@@ -239,6 +244,8 @@ public final class ChildSessionStateMachineTest {
         mIkePrf = IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
 
         mContext = InstrumentationRegistry.getContext();
+        mMockAlarmManager = mock(AlarmManager.class);
+
         mMockIpSecService = mock(IpSecService.class);
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
         mMockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
@@ -260,6 +267,8 @@ public final class ChildSessionStateMachineTest {
                 new ChildSessionStateMachine(
                         mLooper.getLooper(),
                         mContext,
+                        IKE_SESSION_UNIQUE_ID,
+                        mMockAlarmManager,
                         mMockIpSecManager,
                         mChildSessionParams,
                         mSpyUserCbExecutor,
@@ -378,7 +387,8 @@ public final class ChildSessionStateMachineTest {
                                 null,
                                 mock(IpSecTransform.class),
                                 mock(IpSecTransform.class),
-                                mock(ChildLocalRequest.class)));
+                                mock(ChildLocalRequest.class),
+                                mock(SaLifetimeAlarmScheduler.class)));
         doNothing().when(child).close();
         return child;
     }

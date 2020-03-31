@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike;
 
+import android.app.AlarmManager;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.ipsec.ike.ChildSessionCallback;
@@ -37,12 +38,21 @@ final class ChildSessionStateMachineFactory {
     static ChildSessionStateMachine makeChildSessionStateMachine(
             Looper looper,
             Context context,
+            int ikeSessionUniqueId,
+            AlarmManager alarmManager,
             ChildSessionParams sessionParams,
             Executor userCbExecutor,
             ChildSessionCallback userCallbacks,
             IChildSessionSmCallback childSmCallback) {
         return sChildSessionHelper.makeChildSessionStateMachine(
-                looper, context, sessionParams, userCbExecutor, userCallbacks, childSmCallback);
+                looper,
+                context,
+                ikeSessionUniqueId,
+                alarmManager,
+                sessionParams,
+                userCbExecutor,
+                userCallbacks,
+                childSmCallback);
     }
 
     @VisibleForTesting
@@ -60,6 +70,8 @@ final class ChildSessionStateMachineFactory {
         ChildSessionStateMachine makeChildSessionStateMachine(
                 Looper looper,
                 Context context,
+                int ikeSessionUniqueId,
+                AlarmManager alarmManager,
                 ChildSessionParams sessionParams,
                 Executor userCbExecutor,
                 ChildSessionCallback userCallbacks,
@@ -75,6 +87,8 @@ final class ChildSessionStateMachineFactory {
         public ChildSessionStateMachine makeChildSessionStateMachine(
                 Looper looper,
                 Context context,
+                int ikeSessionUniqueId,
+                AlarmManager alarmManager,
                 ChildSessionParams sessionParams,
                 Executor userCbExecutor,
                 ChildSessionCallback userCallbacks,
@@ -83,6 +97,8 @@ final class ChildSessionStateMachineFactory {
                     new ChildSessionStateMachine(
                             looper,
                             context,
+                            ikeSessionUniqueId,
+                            alarmManager,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
                             sessionParams,
                             userCbExecutor,
