@@ -136,8 +136,7 @@ public final class ChildSessionConfiguration {
                     mInternalDhcpAddressList.add(((ConfigAttributeIpv4Dhcp) att).address);
                     break;
                 default:
-                    throw new IllegalArgumentException(
-                            "Unrecognized child config attribute:" + att.attributeType);
+                    // Not relevant to child session
             }
         }
     }
