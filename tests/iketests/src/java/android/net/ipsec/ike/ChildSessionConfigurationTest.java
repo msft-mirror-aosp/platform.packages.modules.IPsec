@@ -30,6 +30,7 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
@@ -73,6 +74,7 @@ public final class ChildSessionConfigurationTest {
     private ConfigAttributeIpv4Subnet mIpv4Subnet;
     private ConfigAttributeIpv6Subnet mIpv6Subnet;
     private ConfigAttributeIpv4Dhcp mIpv4Dhcp;
+    private ConfigAttributeIpv4Pcscf mIpv4Pcscf;
 
     @Before
     public void setUp() throws Exception {
@@ -95,6 +97,7 @@ public final class ChildSessionConfigurationTest {
         mIpv6Subnet =
                 new ConfigAttributeIpv6Subnet(
                         new LinkAddress(IPV6_SUBNET_IP_PREFIX_ADDRESS.toString()));
+        mIpv4Pcscf = new ConfigAttributeIpv4Pcscf(IPV4_ADDRESS);
     }
 
     private void verifySessionConfigCommon(ChildSessionConfiguration sessionConfig) {
@@ -188,6 +191,7 @@ public final class ChildSessionConfigurationTest {
         List<ConfigAttribute> attributeList = new LinkedList<>();
         attributeList.add(mIpv4Dns);
         attributeList.add(mIpv6Dns);
+        attributeList.add(mIpv4Pcscf);
 
         IkeConfigPayload configPayload = new IkeConfigPayload(true /*isReply*/, attributeList);
 
