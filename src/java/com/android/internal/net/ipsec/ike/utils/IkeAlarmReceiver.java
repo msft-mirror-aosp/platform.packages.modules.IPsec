@@ -41,6 +41,7 @@ public class IkeAlarmReceiver extends BroadcastReceiver {
     public static final String ACTION_DELETE_IKE = "IkeAlarmReceiver.ACTION_DELETE_IKE";
     public static final String ACTION_REKEY_IKE = "IkeAlarmReceiver.ACTION_REKEY_IKE";
     public static final String ACTION_DPD = "IkeAlarmReceiver.ACTION_DPD";
+    public static final String ACTION_KEEPALIVE = "IkeAlarmReceiver.ACTION_KEEPALIVE";
 
     private static final HashSet<String> sIkeSessionActionsSet = new HashSet<>();
 
@@ -76,7 +77,8 @@ public class IkeAlarmReceiver extends BroadcastReceiver {
             case ACTION_REKEY_CHILD: // fallthrough
             case ACTION_DELETE_IKE: // fallthrough
             case ACTION_REKEY_IKE: // fallthrough
-            case ACTION_DPD:
+            case ACTION_DPD: // fallthrough
+            case ACTION_KEEPALIVE:
                 // This Message has lost its target information after being sent as a Broadcast
                 Message message =
                         (Message) intent.getExtras().getParcelable(PARCELABLE_NAME_IKE_SESSION_MSG);
