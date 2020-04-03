@@ -81,7 +81,6 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.net.SocketKeepalive;
 import android.net.eap.EapSessionConfig;
-import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
