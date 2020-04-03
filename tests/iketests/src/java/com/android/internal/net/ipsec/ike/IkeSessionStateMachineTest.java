@@ -174,6 +174,7 @@ import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
@@ -2347,6 +2348,61 @@ public final class IkeSessionStateMachineTest {
         return (IkeIdPayload)
                 IkeTestUtils.hexStringToIkePayload(
                         IkePayload.PAYLOAD_TYPE_ID_RESPONDER, true /*isResp*/, idRespPayloadHex);
+    }
+
+    private void verifyEmptyInformationalSent(int count) {
+        verify(mMockIkeMessageHelper, times(count))
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        argThat(
+                                msg -> {
+                                    return msg.ikePayloadList.isEmpty()
+                                            && msg.ikeHeader.isResponseMsg
+                                            && msg.ikeHeader.fromIkeInitiator
+                                            && msg.ikeHeader.exchangeType
+                                                    == IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+                                }),
+                        anyBoolean(),
+                        anyInt());
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthDefersOtherMessages() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+
+        // Build IKE AUTH response with Auth-PSK, ID-Responder and config payloads.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
+        authRelatedPayloads.add(spyAuthPayload);
+
+        ReceivedIkePacket req =
+                makeDummyEncryptedReceivedIkePacket(
+                        mSpyCurrentIkeSaRecord,
+                        IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                        false,
+                        Collections.emptyList(),
+                        Collections.emptyList());
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, req);
+
+        verifyEmptyInformationalSent(0);
+
+        // Send IKE AUTH response to IKE state machine to trigger moving to next state
+        IkeIdPayload respIdPayload = makeRespIdPayload();
+        authRelatedPayloads.add(respIdPayload);
+        authRelatedPayloads.add(makeConfigPayload());
+
+        ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, authResp);
+        mLooper.dispatchAll();
+
+        verifyEmptyInformationalSent(1);
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
     }
 
     @Test

@@ -2145,8 +2145,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     transitionTo(mChildProcedureOngoing);
                     mProcedureFinished = false;
                     return;
+                case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
+                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+                    IkeMessage responseIkeMessage =
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    true /*isResponse*/,
+                                    ikeMessage.ikeHeader.messageId);
+                    sendEncryptedIkeMessage(responseIkeMessage);
+                    return;
                 default:
-                    // TODO: Add support for generic INFORMATIONAL request
             }
         }
 
@@ -2387,7 +2396,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     handleInboundRekeyChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
-                    // TODO:b/139943757 Handle general informational request
+                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+                    IkeMessage responseIkeMessage =
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    true /*isResponse*/,
+                                    ikeMessage.ikeHeader.messageId);
+                    sendEncryptedIkeMessage(responseIkeMessage);
+                    break;
                 default:
                     cleanUpAndQuit(
                             new IllegalStateException(
@@ -3071,6 +3088,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         // TODO: b/139482382 If receiving a remote request while waiting for the last IKE AUTH
         // response, defer it to next state.
+
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeMessage.ikeHeader);
+
+            // Null out last received packet, so the next state (that handles the actual request)
+            // does not treat the message as a retransmission.
+            ikeSaRecord.updateLastReceivedReqFirstPacket(null);
+
+            // Send to next state; we can't handle this yet.
+            deferMessage(message);
+        }
 
         protected IkeMessage buildIkeAuthReqMessage(List<IkePayload> payloadList) {
             // Build IKE header
