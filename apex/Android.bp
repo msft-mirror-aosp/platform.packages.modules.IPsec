@@ -16,6 +16,7 @@
 apex_defaults {
     name: "com.android.ipsec-defaults",
     updatable: true,
+    min_sdk_version: "R",
     java_libs: ["android.net.ipsec.ike"],
     key: "com.android.ipsec.key",
     certificate: ":com.android.ipsec.certificate",
