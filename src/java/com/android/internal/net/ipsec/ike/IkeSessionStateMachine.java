@@ -41,6 +41,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_IKE;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DPD;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_KEEPALIVE;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
@@ -98,6 +99,7 @@ import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedExcepti
 import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPskPayload;
@@ -195,6 +197,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         sIntentFilter.addAction(ACTION_DPD);
         sIntentFilter.addAction(ACTION_REKEY_CHILD);
         sIntentFilter.addAction(ACTION_REKEY_IKE);
+        sIntentFilter.addAction(ACTION_KEEPALIVE);
     }
 
     private static final AtomicInteger sIkeSessionIdGenerator = new AtomicInteger();
@@ -215,6 +218,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     // indicates that something has gone wrong, and we are out of sync.
     @VisibleForTesting
     static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
+
+    @VisibleForTesting static final int NATT_KEEPALIVE_DELAY_SECONDS = 10;
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -288,6 +293,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     static final int CMD_EAP_FINISH_EAP_AUTH = CMD_GENERAL_BASE + 14;
     /** Alarm goes off for a scheduled event, check {@link Message.arg2} for event type */
     static final int CMD_ALARM_FIRED = CMD_GENERAL_BASE + 15;
+    /** Send keepalive packet */
+    static final int CMD_SEND_KEEPALIVE = CMD_GENERAL_BASE + 16;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -370,6 +377,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting boolean mIsLocalBehindNat;
     /** Indicates if remote node is behind a NAT. */
     @VisibleForTesting boolean mIsRemoteBehindNat;
+    /** NATT keepalive scheduler. Initialized when a NAT is detected */
+    @VisibleForTesting IkeNattKeepalive mIkeNattKeepalive;
 
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
     @VisibleForTesting boolean mSupportFragment;
@@ -1008,8 +1017,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        if (mIkeSocket == null) return;
-        mIkeSocket.releaseReference(this);
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.stop();
+        }
+
+        if (mIkeSocket != null) {
+            mIkeSocket.releaseReference(this);
+        }
 
         sIkeAlarmReceiver.unregisterIkeSession(mIkeSessionId);
 
@@ -1242,6 +1256,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
             return false;
         }
+    }
+
+    private String getIntentIdentifier() {
+        return TAG + "_" + mIkeSessionId;
     }
 
     private String getIntentIdentifier(long remoteIkeSpi) {
@@ -1521,6 +1539,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         protected void handleFiredAlarm(Message message) {
             switch (message.arg2) {
+                case CMD_SEND_KEEPALIVE:
+                    // Software keepalive alarm is fired
+                    mIkeNattKeepalive.onAlarmFired();
+                    return;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     // Child SA (identified by remoteChildSpi) has hit its hard lifetime
                     enqueueChildLocalRequest(message);
@@ -2123,8 +2145,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     transitionTo(mChildProcedureOngoing);
                     mProcedureFinished = false;
                     return;
+                case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
+                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+                    IkeMessage responseIkeMessage =
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    true /*isResponse*/,
+                                    ikeMessage.ikeHeader.messageId);
+                    sendEncryptedIkeMessage(responseIkeMessage);
+                    return;
                 default:
-                    // TODO: Add support for generic INFORMATIONAL request
             }
         }
 
@@ -2365,7 +2396,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     handleInboundRekeyChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
-                    // TODO:b/139943757 Handle general informational request
+                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+                    IkeMessage responseIkeMessage =
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    true /*isResponse*/,
+                                    ikeMessage.ikeHeader.messageId);
+                    sendEncryptedIkeMessage(responseIkeMessage);
+                    break;
                 default:
                     cleanUpAndQuit(
                             new IllegalStateException(
@@ -2987,7 +3026,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                     handleIkeFatalError(e);
                 }
+
+                mIkeNattKeepalive =
+                        new IkeNattKeepalive(
+                                mContext,
+                                NATT_KEEPALIVE_DELAY_SECONDS,
+                                (Inet4Address) mLocalAddress,
+                                (Inet4Address) mRemoteAddress,
+                                ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
+                                mIkeSocket.getNetwork(),
+                                buildKeepaliveIntent());
+                mIkeNattKeepalive.start();
             }
+        }
+
+        private PendingIntent buildKeepaliveIntent() {
+            return buildIkeAlarmIntent(
+                    mContext,
+                    ACTION_KEEPALIVE,
+                    getIntentIdentifier(),
+                    obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE));
         }
 
         @Override
@@ -3030,6 +3088,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         // TODO: b/139482382 If receiving a remote request while waiting for the last IKE AUTH
         // response, defer it to next state.
+
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeMessage.ikeHeader);
+
+            // Null out last received packet, so the next state (that handles the actual request)
+            // does not treat the message as a retransmission.
+            ikeSaRecord.updateLastReceivedReqFirstPacket(null);
+
+            // Send to next state; we can't handle this yet.
+            deferMessage(message);
+        }
 
         protected IkeMessage buildIkeAuthReqMessage(List<IkePayload> payloadList) {
             // Build IKE header
