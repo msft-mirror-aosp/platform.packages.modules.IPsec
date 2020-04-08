@@ -157,7 +157,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     /** User provided configurations. */
     @VisibleForTesting final ChildSessionParams mChildSessionParams;
 
-    private final Executor mUserCbExecutor;
     private final ChildSessionCallback mUserCallback;
 
     /** Callback to notify IKE Session the state changes. */
@@ -236,7 +235,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             Executor userCbExecutor,
             ChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback) {
-        super(TAG, looper);
+        super(TAG, looper, userCbExecutor);
 
         mContext = context;
         mIkeSessionId = ikeSessionUniqueId;
@@ -244,7 +243,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         mIpSecManager = ipSecManager;
         mChildSessionParams = sessionParams;
 
-        mUserCbExecutor = userCbExecutor;
         mUserCallback = userCallback;
         mChildSmCallback = childSmCallback;
 
@@ -518,7 +516,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, outPayloads, this);
     }
 
-    /** Notify users the deletion of a Child SA. MUST be called through mUserCbExecutor */
+    /** Notify users the deletion of a Child SA. MUST be called on user callback executor */
     private void onIpSecTransformPairDeleted(ChildSaRecord childSaRecord) {
         mUserCallback.onIpSecTransformDeleted(
                 childSaRecord.getOutboundIpSecTransform(), IpSecManager.DIRECTION_OUT);
@@ -592,7 +590,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             // Clean up all SaRecords.
             closeAllSaRecords(false /*expectSaClosed*/);
 
-            mUserCbExecutor.execute(
+            executeUserCallback(
                     () -> {
                         mUserCallback.onClosedExceptionally(new IkeInternalException(e));
                     });
@@ -629,7 +627,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private void closeChildSaRecord(ChildSaRecord childSaRecord, boolean expectSaClosed) {
         if (childSaRecord == null) return;
 
-        mUserCbExecutor.execute(
+        executeUserCallback(
                 () -> {
                     onIpSecTransformPairDeleted(childSaRecord);
                 });
@@ -651,7 +649,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         ? (IkeException) error
                         : new IkeInternalException(error);
 
-        mUserCbExecutor.execute(
+        executeUserCallback(
                 () -> {
                     mUserCallback.onClosedExceptionally(ikeException);
                 });
@@ -675,7 +673,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_KILL_SESSION:
-                    mUserCbExecutor.execute(
+                    executeUserCallback(
                             () -> {
                                 mUserCallback.onClosed();
                             });
@@ -741,7 +739,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         ChildSessionConfiguration sessionConfig =
                                 buildChildSessionConfigFromResp(createChildResult, respPayloads);
-                        mUserCbExecutor.execute(
+                        executeUserCallback(
                                 () -> {
                                     mUserCallback.onIpSecTransformCreated(
                                             mCurrentChildSaRecord.getInboundIpSecTransform(),
@@ -894,7 +892,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return HANDLED;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     // This may happen when creation has been rescheduled to be after deletion.
-                    mUserCbExecutor.execute(
+                    executeUserCallback(
                             () -> {
                                 mUserCallback.onClosed();
                             });
@@ -1062,7 +1060,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         + " request."));
             } else {
 
-                mUserCbExecutor.execute(
+                executeUserCallback(
                         () -> {
                             mUserCallback.onClosed();
                             onIpSecTransformPairDeleted(mCurrentChildSaRecord);
@@ -1163,7 +1161,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                             + " deletion case");
                         }
 
-                        mUserCbExecutor.execute(
+                        executeUserCallback(
                                 () -> {
                                     mUserCallback.onClosed();
                                     onIpSecTransformPairDeleted(mCurrentChildSaRecord);
@@ -1322,7 +1320,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mChildSmCallback.scheduleLocalRequest(
                                         rekeyLocalRequest, getRekeyTimeout());
 
-                                mUserCbExecutor.execute(
+                                executeUserCallback(
                                         () -> {
                                             mUserCallback.onIpSecTransformCreated(
                                                     mLocalInitNewChildSaRecord
@@ -1504,7 +1502,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         // the remote has (implicitly) acknowledged our response via the
                         // delete-old-SA request. This will be performed in the finishRekey()
                         // method.
-                        mUserCbExecutor.execute(
+                        executeUserCallback(
                                 () -> {
                                     mUserCallback.onIpSecTransformCreated(
                                             mRemoteInitNewChildSaRecord.getInboundIpSecTransform(),
@@ -1609,7 +1607,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         // Rekey timer for old SA will be cancelled as part of the closing of the SA.
         protected void finishRekey() {
-            mUserCbExecutor.execute(
+            executeUserCallback(
                     () -> {
                         onIpSecTransformPairDeleted(mCurrentChildSaRecord);
                     });
@@ -1738,7 +1736,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         protected void finishRekey() {
-            mUserCbExecutor.execute(
+            executeUserCallback(
                     () -> {
                         mUserCallback.onIpSecTransformCreated(
                                 mRemoteInitNewChildSaRecord.getOutboundIpSecTransform(),
