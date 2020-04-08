@@ -25,6 +25,7 @@ import android.os.Looper;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.IChildSessionSmCallback;
+import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 
 import java.util.concurrent.Executor;
 
@@ -40,6 +41,7 @@ final class ChildSessionStateMachineFactory {
             Context context,
             int ikeSessionUniqueId,
             AlarmManager alarmManager,
+            IpSecSpiGenerator ipSecSpiGenerator,
             ChildSessionParams sessionParams,
             Executor userCbExecutor,
             ChildSessionCallback userCallbacks,
@@ -49,6 +51,7 @@ final class ChildSessionStateMachineFactory {
                 context,
                 ikeSessionUniqueId,
                 alarmManager,
+                ipSecSpiGenerator,
                 sessionParams,
                 userCbExecutor,
                 userCallbacks,
@@ -72,6 +75,7 @@ final class ChildSessionStateMachineFactory {
                 Context context,
                 int ikeSessionUniqueId,
                 AlarmManager alarmManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 ChildSessionParams sessionParams,
                 Executor userCbExecutor,
                 ChildSessionCallback userCallbacks,
@@ -89,6 +93,7 @@ final class ChildSessionStateMachineFactory {
                 Context context,
                 int ikeSessionUniqueId,
                 AlarmManager alarmManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 ChildSessionParams sessionParams,
                 Executor userCbExecutor,
                 ChildSessionCallback userCallbacks,
@@ -100,6 +105,7 @@ final class ChildSessionStateMachineFactory {
                             ikeSessionUniqueId,
                             alarmManager,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
+                            ipSecSpiGenerator,
                             sessionParams,
                             userCbExecutor,
                             userCallbacks,
