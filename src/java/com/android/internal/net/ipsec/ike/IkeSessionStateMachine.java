@@ -347,7 +347,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private final IpSecManager mIpSecManager;
     private final AlarmManager mAlarmManager;
     private final IkeLocalRequestScheduler mScheduler;
-    private final Executor mUserCbExecutor;
     private final IkeSessionCallback mIkeSessionCallback;
     private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
     private final TempFailureHandler mTempFailHandler;
@@ -461,7 +460,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
-        super(TAG, looper);
+        super(TAG, looper, userCbExecutor);
 
         synchronized (IKE_SESSION_LOCK) {
             if (!sContextToIkeSmMap.containsKey(context)) {
@@ -500,7 +499,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         mIpSecManager = ipSecManager;
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
-        mUserCbExecutor = userCbExecutor;
         mIkeSessionCallback = ikeSessionCallback;
 
         mFirstChildSessionParams = firstChildParams;
@@ -649,7 +647,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         // TODO(b/150327466): Notify remote serve when there is no outstanding request
 
         closeAllSaRecords(false /*expectSaClosed*/);
-        mUserCbExecutor.execute(
+        executeUserCallback(
                 () -> {
                     mIkeSessionCallback.onClosed();
                 });
@@ -696,7 +694,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         new IOException(
                                 "Kept receiving TEMPORARY_FAILURE error. State information is out"
                                         + " of sync.");
-                mUserCbExecutor.execute(
+                executeUserCallback(
                         () -> {
                             mIkeSessionCallback.onClosedExceptionally(
                                     new IkeInternalException(error));
@@ -989,7 +987,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // Clean up all SaRecords.
             closeAllSaRecords(false /*expectSaClosed*/);
 
-            mUserCbExecutor.execute(
+            executeUserCallback(
                     () -> {
                         mIkeSessionCallback.onClosedExceptionally(new IkeInternalException(e));
                     });
@@ -1070,7 +1068,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         // Clean up all SaRecords.
         closeAllSaRecords(false /*expectSaClosed*/);
-        mUserCbExecutor.execute(
+        executeUserCallback(
                 () -> {
                     mIkeSessionCallback.onClosedExceptionally(ikeException);
                 });
@@ -1986,7 +1984,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 validateIkeDeleteReq(ikeMessage, mCurrentIkeSaRecord);
                 IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
 
-                mUserCbExecutor.execute(
+                executeUserCallback(
                         () -> {
                             mIkeSessionCallback.onClosed();
                         });
@@ -3224,7 +3222,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         protected void notifyIkeSessionSetup(IkeMessage msg) {
             IkeSessionConfiguration ikeSessionConfig = buildIkeSessionConfiguration(msg);
-            mUserCbExecutor.execute(
+            executeUserCallback(
                     () -> {
                         mIkeSessionCallback.onOpened(ikeSessionConfig);
                     });
@@ -4623,7 +4621,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
                 validateIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
-                mUserCbExecutor.execute(
+                executeUserCallback(
                         () -> {
                             mIkeSessionCallback.onClosed();
                         });
