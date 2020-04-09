@@ -25,6 +25,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -77,11 +78,13 @@ abstract class AbstractSessionStateMachine extends StateMachine {
     // Use a value greater than the retransmit-failure timeout.
     static final long REKEY_DELETE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180L);
 
+    protected final Executor mUserCbExecutor;
     private final String mLogTag;
 
-    protected AbstractSessionStateMachine(String name, Looper looper) {
+    protected AbstractSessionStateMachine(String name, Looper looper, Executor userCbExecutor) {
         super(name, looper);
         mLogTag = name;
+        mUserCbExecutor = userCbExecutor;
     }
 
     /**
@@ -144,6 +147,14 @@ abstract class AbstractSessionStateMachine extends StateMachine {
         protected abstract void cleanUpAndQuit(RuntimeException e);
 
         protected abstract String getCmdString(int cmd);
+    }
+
+    protected void executeUserCallback(Runnable r) {
+        try {
+            mUserCbExecutor.execute(r);
+        } catch (Exception e) {
+            logd("Callback execution failed", e);
+        }
     }
 
     @Override
