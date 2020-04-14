@@ -32,7 +32,7 @@ import com.android.internal.net.eap.message.EapData.EapMethod;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
+import java.util.Objects;
 /**
  * EapSessionConfig represents a container for EAP method configuration.
  *
@@ -43,26 +43,36 @@ import java.util.Map;
  */
 @SystemApi
 public final class EapSessionConfig {
-    /** @hide */
-    @VisibleForTesting static final byte[] DEFAULT_IDENTITY = new byte[0];
+    private static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     // IANA -> EapMethodConfig for that method
-    /** @hide */
-    public final Map<Integer, EapMethodConfig> eapConfigs;
-    /** @hide */
-    public final byte[] eapIdentity;
+    private final Map<Integer, EapMethodConfig> mEapConfigs;
+    private final byte[] mEapIdentity;
 
     /** @hide */
     @VisibleForTesting
     public EapSessionConfig(Map<Integer, EapMethodConfig> eapConfigs, byte[] eapIdentity) {
-        this.eapConfigs = Collections.unmodifiableMap(eapConfigs);
-        this.eapIdentity = eapIdentity;
+        Objects.requireNonNull(eapConfigs, "eapConfigs must not be null");
+        Objects.requireNonNull(eapIdentity, "eapIdentity must not be null");
+
+        mEapConfigs = Collections.unmodifiableMap(eapConfigs);
+        mEapIdentity = eapIdentity;
+    }
+
+    /**
+     * Gets the EAP configs set in this EapSessionConfig.
+     *
+     * @hide
+     */
+    public Map<Integer, EapMethodConfig> getEapConfigs() {
+        // Return the underlying Collection directly because it's unmodifiable
+        return mEapConfigs;
     }
 
     /** Retrieves client's EAP Identity */
     @NonNull
     public byte[] getEapIdentity() {
-        return eapIdentity;
+        return mEapIdentity;
     }
 
     /**
@@ -72,7 +82,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapSimConfig getEapSimConfig() {
-        return (EapSimConfig) eapConfigs.get(EAP_TYPE_SIM);
+        return (EapSimConfig) mEapConfigs.get(EAP_TYPE_SIM);
     }
 
     /**
@@ -82,7 +92,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapAkaConfig getEapAkaConfig() {
-        return (EapAkaConfig) eapConfigs.get(EAP_TYPE_AKA);
+        return (EapAkaConfig) mEapConfigs.get(EAP_TYPE_AKA);
     }
 
     /**
@@ -92,7 +102,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapAkaPrimeConfig getEapAkaPrimeConfig() {
-        return (EapAkaPrimeConfig) eapConfigs.get(EAP_TYPE_AKA_PRIME);
+        return (EapAkaPrimeConfig) mEapConfigs.get(EAP_TYPE_AKA_PRIME);
     }
 
     /**
@@ -102,7 +112,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapMsChapV2Config getEapMsChapV2onfig() {
-        return (EapMsChapV2Config) eapConfigs.get(EAP_TYPE_MSCHAP_V2);
+        return (EapMsChapV2Config) mEapConfigs.get(EAP_TYPE_MSCHAP_V2);
     }
 
     /** This class can be used to incrementally construct an {@link EapSessionConfig}. */
@@ -124,6 +134,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public Builder setEapIdentity(@NonNull byte[] eapIdentity) {
+            Objects.requireNonNull(eapIdentity, "eapIdentity must not be null");
             this.mEapIdentity = eapIdentity.clone();
             return this;
         }
@@ -212,12 +223,11 @@ public final class EapSessionConfig {
      * EapMethodConfig represents a generic EAP method configuration.
      */
     public abstract static class EapMethodConfig {
-        /** @hide */
-        @EapMethod public final int methodType;
+        @EapMethod private final int mMethodType;
 
         /** @hide */
         EapMethodConfig(@EapMethod int methodType) {
-            this.methodType = methodType;
+            mMethodType = methodType;
         }
 
         /**
@@ -226,7 +236,7 @@ public final class EapSessionConfig {
          * @return the IANA-defined EAP method constant
          */
         public int getMethodType() {
-            return methodType;
+            return mMethodType;
         }
 
         /**
@@ -249,15 +259,13 @@ public final class EapSessionConfig {
      * authentication.
      */
     public abstract static class EapUiccConfig extends EapMethodConfig {
-        /** @hide */
-        public final int subId;
-        /** @hide */
-        public final int apptype;
+        private final int mSubId;
+        private final int mApptype;
 
         private EapUiccConfig(@EapMethod int methodType, int subId, @UiccAppType int apptype) {
             super(methodType);
-            this.subId = subId;
-            this.apptype = apptype;
+            mSubId = subId;
+            mApptype = apptype;
         }
 
         /**
@@ -266,7 +274,7 @@ public final class EapSessionConfig {
          * @return the subId
          */
         public int getSubId() {
-            return subId;
+            return mSubId;
         }
 
         /**
@@ -275,7 +283,7 @@ public final class EapSessionConfig {
          * @return the {@link UiccAppType} constant
          */
         public int getAppType() {
-            return apptype;
+            return mApptype;
         }
 
         /** @hide */
@@ -316,10 +324,8 @@ public final class EapSessionConfig {
      * EapAkaPrimeConfig represents the configs needed for an EAP-AKA' session.
      */
     public static class EapAkaPrimeConfig extends EapAkaConfig {
-        /** @hide */
-        @NonNull public final String networkName;
-        /** @hide */
-        public final boolean allowMismatchedNetworkNames;
+        @NonNull private final String mNetworkName;
+        private final boolean mAllowMismatchedNetworkNames;
 
         /** @hide */
         @VisibleForTesting
@@ -330,12 +336,10 @@ public final class EapSessionConfig {
                 boolean allowMismatchedNetworkNames) {
             super(EAP_TYPE_AKA_PRIME, subId, apptype);
 
-            if (networkName == null) {
-                throw new IllegalArgumentException("NetworkName was null");
-            }
+            Objects.requireNonNull(networkName, "networkName must not be null");
 
-            this.networkName = networkName;
-            this.allowMismatchedNetworkNames = allowMismatchedNetworkNames;
+            mNetworkName = networkName;
+            mAllowMismatchedNetworkNames = allowMismatchedNetworkNames;
         }
 
         /**
@@ -345,7 +349,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public String getNetworkName() {
-            return networkName;
+            return mNetworkName;
         }
 
         /**
@@ -354,7 +358,7 @@ public final class EapSessionConfig {
          * @return whether network name mismatches are allowed
          */
         public boolean allowsMismatchedNetworkNames() {
-            return allowMismatchedNetworkNames;
+            return mAllowMismatchedNetworkNames;
         }
     }
 
@@ -362,22 +366,19 @@ public final class EapSessionConfig {
      * EapMsChapV2Config represents the configs needed for an EAP MSCHAPv2 session.
      */
     public static class EapMsChapV2Config extends EapMethodConfig {
-        /** @hide */
-        @NonNull public final String username;
-        /** @hide */
-        @NonNull public final String password;
+        @NonNull private final String mUsername;
+        @NonNull private final String mPassword;
 
         /** @hide */
         @VisibleForTesting
         public EapMsChapV2Config(String username, String password) {
             super(EAP_TYPE_MSCHAP_V2);
 
-            if (username == null || password == null) {
-                throw new IllegalArgumentException("Username or password was null");
-            }
+            Objects.requireNonNull(username, "username must not be null");
+            Objects.requireNonNull(password, "password must not be null");
 
-            this.username = username;
-            this.password = password;
+            mUsername = username;
+            mPassword = password;
         }
 
         /**
@@ -387,7 +388,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public String getUsername() {
-            return username;
+            return mUsername;
         }
 
         /**
@@ -397,7 +398,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public String getPassword() {
-            return password;
+            return mPassword;
         }
     }
 
@@ -412,7 +413,7 @@ public final class EapSessionConfig {
      * @hide
      */
     public boolean areAllMethodsEapOnlySafe() {
-        for(Map.Entry<Integer, EapMethodConfig> eapConfigsEntry : eapConfigs.entrySet()) {
+        for (Map.Entry<Integer, EapMethodConfig> eapConfigsEntry : mEapConfigs.entrySet()) {
             if (!eapConfigsEntry.getValue().isEapOnlySafeMethod()) {
                 return false;
             }

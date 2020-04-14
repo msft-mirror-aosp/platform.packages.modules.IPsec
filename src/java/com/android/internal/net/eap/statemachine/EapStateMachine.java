@@ -86,8 +86,8 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         LOG.d(
                 TAG,
                 "Starting EapStateMachine with EAP-Identity="
-                        + LOG.pii(eapSessionConfig.eapIdentity)
-                        + " and configs=" + eapSessionConfig.eapConfigs.keySet());
+                        + LOG.pii(eapSessionConfig.getEapIdentity())
+                        + " and configs=" + eapSessionConfig.getEapConfigs().keySet());
 
         transitionTo(new CreatedState());
     }
@@ -152,8 +152,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
             } catch (UnsupportedEapTypeException ex) {
                 return new DecodeResult(
                         EapMessage.getNakResponse(
-                                ex.eapIdentifier,
-                                mEapSessionConfig.eapConfigs.keySet()));
+                                ex.eapIdentifier, mEapSessionConfig.getEapConfigs().keySet()));
             } catch (EapSilentException ex) {
                 return new DecodeResult(new EapError(ex));
             }
@@ -243,8 +242,11 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         @VisibleForTesting
         EapResult getIdentityResponse(int eapIdentifier) {
             try {
-                LOG.d(mTAG, "Returning EAP-Identity: " + LOG.pii(mEapSessionConfig.eapIdentity));
-                EapData identityData = new EapData(EAP_IDENTITY, mEapSessionConfig.eapIdentity);
+                LOG.d(
+                        mTAG,
+                        "Returning EAP-Identity: " + LOG.pii(mEapSessionConfig.getEapIdentity()));
+                EapData identityData =
+                        new EapData(EAP_IDENTITY, mEapSessionConfig.getEapIdentity());
                 return EapResponse.getEapResponse(
                         new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, identityData));
             } catch (EapSilentException ex) {
@@ -292,8 +294,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
                 if (mEapMethodStateMachine == null) {
                     return EapMessage.getNakResponse(
-                            eapMessage.eapIdentifier,
-                            mEapSessionConfig.eapConfigs.keySet());
+                            eapMessage.eapIdentifier, mEapSessionConfig.getEapConfigs().keySet());
                 }
             }
 
@@ -308,7 +309,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
 
         @Nullable
         private EapMethodStateMachine buildEapMethodStateMachine(@EapMethod int eapType) {
-            EapMethodConfig eapMethodConfig = mEapSessionConfig.eapConfigs.get(eapType);
+            EapMethodConfig eapMethodConfig = mEapSessionConfig.getEapConfigs().get(eapType);
             if (eapMethodConfig == null) {
                 LOG.e(
                         mTAG,
@@ -322,20 +323,23 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 case EAP_TYPE_SIM:
                     EapSimConfig eapSimConfig = (EapSimConfig) eapMethodConfig;
                     return new EapSimMethodStateMachine(
-                            mContext, mEapSessionConfig.eapIdentity, eapSimConfig, mSecureRandom);
+                            mContext,
+                            mEapSessionConfig.getEapIdentity(),
+                            eapSimConfig,
+                            mSecureRandom);
                 case EAP_TYPE_AKA:
                     EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
                     boolean supportsEapAkaPrime =
-                            mEapSessionConfig.eapConfigs.containsKey(EAP_TYPE_AKA_PRIME);
+                            mEapSessionConfig.getEapConfigs().containsKey(EAP_TYPE_AKA_PRIME);
                     return new EapAkaMethodStateMachine(
                             mContext,
-                            mEapSessionConfig.eapIdentity,
+                            mEapSessionConfig.getEapIdentity(),
                             eapAkaConfig,
                             supportsEapAkaPrime);
                 case EAP_TYPE_AKA_PRIME:
                     EapAkaPrimeConfig eapAkaPrimeConfig = (EapAkaPrimeConfig) eapMethodConfig;
                     return new EapAkaPrimeMethodStateMachine(
-                            mContext, mEapSessionConfig.eapIdentity, eapAkaPrimeConfig);
+                            mContext, mEapSessionConfig.getEapIdentity(), eapAkaPrimeConfig);
                 case EAP_TYPE_MSCHAP_V2:
                     EapMsChapV2Config eapMsChapV2Config = (EapMsChapV2Config) eapMethodConfig;
                     return new EapMsChapV2MethodStateMachine(eapMsChapV2Config, mSecureRandom);
