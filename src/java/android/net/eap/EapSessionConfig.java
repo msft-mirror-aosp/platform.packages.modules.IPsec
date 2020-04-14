@@ -303,7 +303,12 @@ public final class EapSessionConfig {
         /** @hide */
         @VisibleForTesting
         public EapAkaConfig(int subId, @UiccAppType int apptype) {
-            super(EAP_TYPE_AKA, subId, apptype);
+            this(EAP_TYPE_AKA, subId, apptype);
+        }
+
+        /** @hide */
+        EapAkaConfig(int methodType, int subId, @UiccAppType int apptype) {
+            super(methodType, subId, apptype);
         }
     }
 
@@ -323,7 +328,7 @@ public final class EapSessionConfig {
                 @UiccAppType int apptype,
                 @NonNull String networkName,
                 boolean allowMismatchedNetworkNames) {
-            super(subId, apptype);
+            super(EAP_TYPE_AKA_PRIME, subId, apptype);
 
             if (networkName == null) {
                 throw new IllegalArgumentException("NetworkName was null");
