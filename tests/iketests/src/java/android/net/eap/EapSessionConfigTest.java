@@ -72,6 +72,7 @@ public class EapSessionConfigTest {
 
         assertArrayEquals(DEFAULT_IDENTITY, result.eapIdentity);
         EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_AKA);
+        assertEquals(EAP_TYPE_AKA, eapMethodConfig.methodType);
         EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
         assertEquals(SUB_ID, eapAkaConfig.subId);
         assertEquals(APPTYPE_USIM, eapAkaConfig.apptype);
@@ -87,6 +88,7 @@ public class EapSessionConfigTest {
 
         assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
         EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_AKA_PRIME);
+        assertEquals(EAP_TYPE_AKA_PRIME, eapMethodConfig.methodType);
         EapAkaPrimeConfig eapAkaPrimeConfig = (EapAkaPrimeConfig) eapMethodConfig;
         assertEquals(SUB_ID, eapAkaPrimeConfig.subId);
         assertEquals(APPTYPE_USIM, eapAkaPrimeConfig.apptype);
@@ -100,6 +102,7 @@ public class EapSessionConfigTest {
                 new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
 
         EapMsChapV2Config config = (EapMsChapV2Config) result.eapConfigs.get(EAP_TYPE_MSCHAP_V2);
+        assertEquals(EAP_TYPE_MSCHAP_V2, config.methodType);
         assertEquals(USERNAME, config.username);
         assertEquals(PASSWORD, config.password);
     }
