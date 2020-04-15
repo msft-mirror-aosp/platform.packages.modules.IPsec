@@ -77,7 +77,6 @@ import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
-import android.util.CloseGuard;
 import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -128,6 +127,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
+import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 
@@ -140,7 +140,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -729,100 +728,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             logd("TempFailureHandler: Reset Temporary failure retry timeout");
             removeMessages(TEMP_FAILURE_RETRY_TIMEOUT);
             mTempFailureReceived = false;
-        }
-    }
-    /**
-     * This class represents a reserved IKE SPI.
-     *
-     * <p>This class is created to avoid assigning same SPI to the same address.
-     *
-     * <p>Objects of this type are used to track reserved IKE SPI to avoid SPI collision. They can
-     * be obtained by calling {@link #allocateSecurityParameterIndex()} and must be released by
-     * calling {@link #close()} when they are no longer needed.
-     *
-     * <p>This class follows the pattern of {@link IpSecManager.SecurityParameterIndex}.
-     *
-     * <p>TODO: Move this class to a central place, like IkeManager.
-     */
-    public static final class IkeSecurityParameterIndex implements AutoCloseable {
-        // Remember assigned IKE SPIs to avoid SPI collision.
-        private static final Set<Pair<InetAddress, Long>> sAssignedIkeSpis = new HashSet<>();
-        private static final int MAX_ASSIGN_IKE_SPI_ATTEMPTS = 100;
-        private static final SecureRandom IKE_SPI_RANDOM = new SecureRandom();
-
-        private final InetAddress mSourceAddress;
-        private final long mSpi;
-        private final CloseGuard mCloseGuard = new CloseGuard();
-
-        private IkeSecurityParameterIndex(InetAddress sourceAddress, long spi) {
-            mSourceAddress = sourceAddress;
-            mSpi = spi;
-            mCloseGuard.open("close");
-        }
-
-        /**
-         * Get a new IKE SPI and maintain the reservation.
-         *
-         * @return an instance of IkeSecurityParameterIndex.
-         */
-        public static IkeSecurityParameterIndex allocateSecurityParameterIndex(
-                InetAddress sourceAddress) throws IOException {
-            // TODO: Create specific Exception for SPI assigning error.
-
-            for (int i = 0; i < MAX_ASSIGN_IKE_SPI_ATTEMPTS; i++) {
-                long spi = IKE_SPI_RANDOM.nextLong();
-                // Zero value can only be used in the IKE responder SPI field of an IKE INIT
-                // request.
-                if (spi != 0L
-                        && sAssignedIkeSpis.add(new Pair<InetAddress, Long>(sourceAddress, spi))) {
-                    return new IkeSecurityParameterIndex(sourceAddress, spi);
-                }
-            }
-
-            throw new IOException("Failed to generate IKE SPI.");
-        }
-
-        /**
-         * Get a new IKE SPI and maintain the reservation.
-         *
-         * @return an instance of IkeSecurityParameterIndex.
-         */
-        public static IkeSecurityParameterIndex allocateSecurityParameterIndex(
-                InetAddress sourceAddress, long requestedSpi) throws IOException {
-            if (sAssignedIkeSpis.add(new Pair<InetAddress, Long>(sourceAddress, requestedSpi))) {
-                return new IkeSecurityParameterIndex(sourceAddress, requestedSpi);
-            }
-
-            throw new IOException(
-                    "Failed to generate IKE SPI for "
-                            + requestedSpi
-                            + " with source address "
-                            + sourceAddress.getHostAddress());
-        }
-
-        /**
-         * Get the underlying SPI held by this object.
-         *
-         * @return the underlying IKE SPI.
-         */
-        public long getSpi() {
-            return mSpi;
-        }
-
-        /** Release an SPI that was previously reserved. */
-        @Override
-        public void close() {
-            sAssignedIkeSpis.remove(new Pair<InetAddress, Long>(mSourceAddress, mSpi));
-            mCloseGuard.close();
-        }
-
-        /** Check that the IkeSecurityParameterIndex was closed properly. */
-        @Override
-        protected void finalize() throws Throwable {
-            if (mCloseGuard != null) {
-                mCloseGuard.warnIfOpen();
-            }
-            close();
         }
     }
 
