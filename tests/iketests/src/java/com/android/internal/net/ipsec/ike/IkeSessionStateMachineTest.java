@@ -108,7 +108,6 @@ import com.android.internal.net.ipsec.ike.ChildSessionStateMachineFactory.ChildS
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachineFactory.IChildSessionFactoryHelper;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IkeLocalRequest;
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.internal.net.ipsec.ike.SaRecord.ISaRecordHelper;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
@@ -155,6 +154,7 @@ import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
+import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter.IBackoffTimeoutCalculator;
 import com.android.internal.net.ipsec.ike.utils.State;
