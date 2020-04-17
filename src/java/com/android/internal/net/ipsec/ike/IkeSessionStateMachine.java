@@ -77,7 +77,6 @@ import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.system.OsConstants;
-import android.util.CloseGuard;
 import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -128,6 +127,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
+import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 
@@ -140,7 +140,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
@@ -347,7 +346,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private final IpSecManager mIpSecManager;
     private final AlarmManager mAlarmManager;
     private final IkeLocalRequestScheduler mScheduler;
-    private final Executor mUserCbExecutor;
     private final IkeSessionCallback mIkeSessionCallback;
     private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
     private final TempFailureHandler mTempFailHandler;
@@ -461,7 +459,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
-        super(TAG, looper);
+        super(TAG, looper, userCbExecutor);
 
         synchronized (IKE_SESSION_LOCK) {
             if (!sContextToIkeSmMap.containsKey(context)) {
@@ -500,7 +498,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         mIpSecManager = ipSecManager;
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
-        mUserCbExecutor = userCbExecutor;
         mIkeSessionCallback = ikeSessionCallback;
 
         mFirstChildSessionParams = firstChildParams;
@@ -649,7 +646,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         // TODO(b/150327466): Notify remote serve when there is no outstanding request
 
         closeAllSaRecords(false /*expectSaClosed*/);
-        mUserCbExecutor.execute(
+        executeUserCallback(
                 () -> {
                     mIkeSessionCallback.onClosed();
                 });
@@ -696,7 +693,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         new IOException(
                                 "Kept receiving TEMPORARY_FAILURE error. State information is out"
                                         + " of sync.");
-                mUserCbExecutor.execute(
+                executeUserCallback(
                         () -> {
                             mIkeSessionCallback.onClosedExceptionally(
                                     new IkeInternalException(error));
@@ -731,100 +728,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             logd("TempFailureHandler: Reset Temporary failure retry timeout");
             removeMessages(TEMP_FAILURE_RETRY_TIMEOUT);
             mTempFailureReceived = false;
-        }
-    }
-    /**
-     * This class represents a reserved IKE SPI.
-     *
-     * <p>This class is created to avoid assigning same SPI to the same address.
-     *
-     * <p>Objects of this type are used to track reserved IKE SPI to avoid SPI collision. They can
-     * be obtained by calling {@link #allocateSecurityParameterIndex()} and must be released by
-     * calling {@link #close()} when they are no longer needed.
-     *
-     * <p>This class follows the pattern of {@link IpSecManager.SecurityParameterIndex}.
-     *
-     * <p>TODO: Move this class to a central place, like IkeManager.
-     */
-    public static final class IkeSecurityParameterIndex implements AutoCloseable {
-        // Remember assigned IKE SPIs to avoid SPI collision.
-        private static final Set<Pair<InetAddress, Long>> sAssignedIkeSpis = new HashSet<>();
-        private static final int MAX_ASSIGN_IKE_SPI_ATTEMPTS = 100;
-        private static final SecureRandom IKE_SPI_RANDOM = new SecureRandom();
-
-        private final InetAddress mSourceAddress;
-        private final long mSpi;
-        private final CloseGuard mCloseGuard = new CloseGuard();
-
-        private IkeSecurityParameterIndex(InetAddress sourceAddress, long spi) {
-            mSourceAddress = sourceAddress;
-            mSpi = spi;
-            mCloseGuard.open("close");
-        }
-
-        /**
-         * Get a new IKE SPI and maintain the reservation.
-         *
-         * @return an instance of IkeSecurityParameterIndex.
-         */
-        public static IkeSecurityParameterIndex allocateSecurityParameterIndex(
-                InetAddress sourceAddress) throws IOException {
-            // TODO: Create specific Exception for SPI assigning error.
-
-            for (int i = 0; i < MAX_ASSIGN_IKE_SPI_ATTEMPTS; i++) {
-                long spi = IKE_SPI_RANDOM.nextLong();
-                // Zero value can only be used in the IKE responder SPI field of an IKE INIT
-                // request.
-                if (spi != 0L
-                        && sAssignedIkeSpis.add(new Pair<InetAddress, Long>(sourceAddress, spi))) {
-                    return new IkeSecurityParameterIndex(sourceAddress, spi);
-                }
-            }
-
-            throw new IOException("Failed to generate IKE SPI.");
-        }
-
-        /**
-         * Get a new IKE SPI and maintain the reservation.
-         *
-         * @return an instance of IkeSecurityParameterIndex.
-         */
-        public static IkeSecurityParameterIndex allocateSecurityParameterIndex(
-                InetAddress sourceAddress, long requestedSpi) throws IOException {
-            if (sAssignedIkeSpis.add(new Pair<InetAddress, Long>(sourceAddress, requestedSpi))) {
-                return new IkeSecurityParameterIndex(sourceAddress, requestedSpi);
-            }
-
-            throw new IOException(
-                    "Failed to generate IKE SPI for "
-                            + requestedSpi
-                            + " with source address "
-                            + sourceAddress.getHostAddress());
-        }
-
-        /**
-         * Get the underlying SPI held by this object.
-         *
-         * @return the underlying IKE SPI.
-         */
-        public long getSpi() {
-            return mSpi;
-        }
-
-        /** Release an SPI that was previously reserved. */
-        @Override
-        public void close() {
-            sAssignedIkeSpis.remove(new Pair<InetAddress, Long>(mSourceAddress, mSpi));
-            mCloseGuard.close();
-        }
-
-        /** Check that the IkeSecurityParameterIndex was closed properly. */
-        @Override
-        protected void finalize() throws Throwable {
-            if (mCloseGuard != null) {
-                mCloseGuard.warnIfOpen();
-            }
-            close();
         }
     }
 
@@ -989,7 +892,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // Clean up all SaRecords.
             closeAllSaRecords(false /*expectSaClosed*/);
 
-            mUserCbExecutor.execute(
+            executeUserCallback(
                     () -> {
                         mIkeSessionCallback.onClosedExceptionally(new IkeInternalException(e));
                     });
@@ -1070,7 +973,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         // Clean up all SaRecords.
         closeAllSaRecords(false /*expectSaClosed*/);
-        mUserCbExecutor.execute(
+        executeUserCallback(
                 () -> {
                     mIkeSessionCallback.onClosedExceptionally(ikeException);
                 });
@@ -1986,7 +1889,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 validateIkeDeleteReq(ikeMessage, mCurrentIkeSaRecord);
                 IkeMessage resp = buildIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
 
-                mUserCbExecutor.execute(
+                executeUserCallback(
                         () -> {
                             mIkeSessionCallback.onClosed();
                         });
@@ -2145,8 +2048,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     transitionTo(mChildProcedureOngoing);
                     mProcedureFinished = false;
                     return;
+                case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
+                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+                    IkeMessage responseIkeMessage =
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    true /*isResponse*/,
+                                    ikeMessage.ikeHeader.messageId);
+                    sendEncryptedIkeMessage(responseIkeMessage);
+                    return;
                 default:
-                    // TODO: Add support for generic INFORMATIONAL request
             }
         }
 
@@ -2387,7 +2299,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     handleInboundRekeyChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
-                    // TODO:b/139943757 Handle general informational request
+                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+                    IkeMessage responseIkeMessage =
+                            buildEncryptedInformationalMessage(
+                                    new IkeInformationalPayload[0],
+                                    true /*isResponse*/,
+                                    ikeMessage.ikeHeader.messageId);
+                    sendEncryptedIkeMessage(responseIkeMessage);
+                    break;
                 default:
                     cleanUpAndQuit(
                             new IllegalStateException(
@@ -3072,6 +2992,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         // TODO: b/139482382 If receiving a remote request while waiting for the last IKE AUTH
         // response, defer it to next state.
 
+        @Override
+        protected void handleRequestIkeMessage(
+                IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
+            IkeSaRecord ikeSaRecord = getIkeSaRecordForPacket(ikeMessage.ikeHeader);
+
+            // Null out last received packet, so the next state (that handles the actual request)
+            // does not treat the message as a retransmission.
+            ikeSaRecord.updateLastReceivedReqFirstPacket(null);
+
+            // Send to next state; we can't handle this yet.
+            deferMessage(message);
+        }
+
         protected IkeMessage buildIkeAuthReqMessage(List<IkePayload> payloadList) {
             // Build IKE header
             IkeHeader ikeHeader =
@@ -3194,7 +3127,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         protected void notifyIkeSessionSetup(IkeMessage msg) {
             IkeSessionConfiguration ikeSessionConfig = buildIkeSessionConfiguration(msg);
-            mUserCbExecutor.execute(
+            executeUserCallback(
                     () -> {
                         mIkeSessionCallback.onOpened(ikeSessionConfig);
                     });
@@ -4593,7 +4526,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
                 validateIkeDeleteResp(ikeMessage, mCurrentIkeSaRecord);
-                mUserCbExecutor.execute(
+                executeUserCallback(
                         () -> {
                             mIkeSessionCallback.onClosed();
                         });
