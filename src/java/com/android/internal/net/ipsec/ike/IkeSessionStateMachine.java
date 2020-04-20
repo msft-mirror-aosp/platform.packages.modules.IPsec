@@ -1827,7 +1827,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         private EncryptedRetransmitter(IkeSaRecord ikeSaRecord, IkeMessage msg) {
-            super(getHandler(), msg);
+            super(getHandler(), msg, mIkeSessionParams.getRetransmissionTimeoutsMillis());
 
             mIkeSaRecord = ikeSaRecord;
 
@@ -2959,7 +2959,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         private class UnencryptedRetransmitter extends Retransmitter {
             private UnencryptedRetransmitter(IkeMessage msg) {
-                super(getHandler(), msg);
+                super(getHandler(), msg, mIkeSessionParams.getRetransmissionTimeoutsMillis());
 
                 retransmit();
             }

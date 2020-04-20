@@ -42,13 +42,15 @@ public final class RetransmitterTest {
     private Handler mMockHandler;
     private IkeMessage mMockIkeMessage;
     private TestRetransmitter mRetransmitter;
+    private static final int[] IKE_RETRANS_TIMEOUT_MS_LIST =
+            new int[] {500, 1000, 2000, 4000, 8000};
 
     private class TestRetransmitter extends Retransmitter {
         int mSendCallCount; // Defaults to 0
         boolean mFailed; // Defaults to false
 
-        TestRetransmitter(Handler handler, IkeMessage message) {
-            super(handler, message);
+        TestRetransmitter(Handler handler, IkeMessage message, int[] retransmissionTimeouts) {
+            super(handler, message, retransmissionTimeouts);
         }
 
         @Override
@@ -70,7 +72,8 @@ public final class RetransmitterTest {
         doReturn(mockMessage).when(mMockHandler).obtainMessage(eq(CMD_RETRANSMIT), anyObject());
 
         mMockIkeMessage = mock(IkeMessage.class);
-        mRetransmitter = new TestRetransmitter(mMockHandler, mMockIkeMessage);
+        mRetransmitter =
+                new TestRetransmitter(mMockHandler, mMockIkeMessage, IKE_RETRANS_TIMEOUT_MS_LIST);
     }
 
     @Test
@@ -79,18 +82,16 @@ public final class RetransmitterTest {
         assertEquals(1, mRetransmitter.mSendCallCount);
         verify(mMockHandler).obtainMessage(eq(CMD_RETRANSMIT), eq(mRetransmitter));
         verify(mMockHandler)
-                .sendMessageDelayed(any(Message.class), eq(Retransmitter.RETRANSMIT_TIMEOUT_MS));
+                .sendMessageDelayed(
+                        any(Message.class), eq((long) (IKE_RETRANS_TIMEOUT_MS_LIST[0])));
     }
 
     @Test
-    public void testRetransmitQueuesExponentialRetransmit() throws Exception {
+    public void testRetransmitUserConfiguredRetransmit() throws Exception {
         mRetransmitter.retransmit();
 
-        for (int i = 0; i <= Retransmitter.RETRANSMIT_MAX_ATTEMPTS; i++) {
-            long expectedTimeout =
-                    (long)
-                            (Retransmitter.RETRANSMIT_TIMEOUT_MS
-                                    * Math.pow(Retransmitter.RETRANSMIT_BACKOFF_FACTOR, i));
+        for (int i = 0; i < IKE_RETRANS_TIMEOUT_MS_LIST.length; i++) {
+            long expectedTimeout = (long) IKE_RETRANS_TIMEOUT_MS_LIST[i];
 
             assertEquals(i + 1, mRetransmitter.mSendCallCount);
             assertFalse(mRetransmitter.mFailed);
@@ -114,10 +115,13 @@ public final class RetransmitterTest {
         mRetransmitter.retransmit();
 
         // Exhaust all retransmit attempts
-        for (int i = 0; i <= Retransmitter.RETRANSMIT_MAX_ATTEMPTS; i++) {
+        for (int i = 0; i < IKE_RETRANS_TIMEOUT_MS_LIST.length - 1; i++) {
             mRetransmitter.retransmit();
         }
+        assertFalse(mRetransmitter.mFailed);
 
+        // Trigger the last retransmission
+        mRetransmitter.retransmit();
         assertTrue(mRetransmitter.mFailed);
     }
 
