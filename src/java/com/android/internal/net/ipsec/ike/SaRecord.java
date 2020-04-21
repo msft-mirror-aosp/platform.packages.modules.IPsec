@@ -188,6 +188,11 @@ public abstract class SaRecord implements AutoCloseable {
         return mFutureRekeyEvent;
     }
 
+    /** Reschedule rekey */
+    public void rescheduleRekey(long retryDelayMs) {
+        // TODO(b/149058810): Schedule rekey using alarm manager
+    }
+
     /** Package private */
     @VisibleForTesting
     static void setSaRecordHelper(ISaRecordHelper helper) {

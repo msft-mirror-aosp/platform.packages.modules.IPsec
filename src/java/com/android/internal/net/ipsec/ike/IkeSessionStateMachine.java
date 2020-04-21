@@ -214,9 +214,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
 
-    // Default delay time for retrying a request
-    @VisibleForTesting static final long RETRY_INTERVAL_MS = TimeUnit.SECONDS.toMillis(15L);
-
     // Close IKE Session when all responses during this time were TEMPORARY_FAILURE(s). This
     // indicates that something has gone wrong, and we are out of sync.
     @VisibleForTesting
@@ -731,15 +728,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        /** Schedule retry when a request got rejected by TEMPORARY_FAILURE. */
-        public void handleTempFailure(LocalRequest localRequest) {
-            logd(
-                    "TempFailureHandler: Receive TEMPORARY FAILURE. Reschedule request: "
-                            + localRequest.procedureType);
-
-            // TODO: Support customized delay time when this is a rekey request and SA is going to
-            // expire soon.
-            scheduleRetry(localRequest);
+        /**
+         * Schedule temporary failure timeout.
+         *
+         * <p>Caller of this method is responsible for scheduling retry of the rejected request.
+         */
+        public void handleTempFailure() {
+            logd("TempFailureHandler: Receive TEMPORARY FAILURE");
 
             if (!mTempFailureReceived) {
                 sendEmptyMessageDelayed(TEMP_FAILURE_RETRY_TIMEOUT, TEMP_FAILURE_RETRY_TIMEOUT_MS);
@@ -2215,7 +2210,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         protected void handleTempFailure() {
-            mTempFailHandler.handleTempFailure(mLocalRequestOngoing);
+            // The ChildSessionStateMachine will be responsible for rescheduling the rejected
+            // request.
+            mTempFailHandler.handleTempFailure();
         }
 
         private void transitionToIdleIfAllProceduresDone() {
@@ -3878,7 +3875,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 + firstErrorNotifyPayload.notifyType
                                 + " for rekey IKE. Schedule a retry");
                 if (!isSimulRekey) {
-                    scheduleRetry(mCurrentIkeSaRecord.getFutureRekeyEvent());
+                    mCurrentIkeSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
                 }
             }
 
@@ -3969,7 +3966,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 mRetransmitter = new EncryptedRetransmitter(buildIkeRekeyReq());
             } catch (IOException e) {
                 loge("Fail to assign IKE SPI for rekey. Schedule a retry.", e);
-                scheduleRetry(mCurrentIkeSaRecord.getFutureRekeyEvent());
+                mCurrentIkeSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
                 transitionTo(mIdle);
             }
         }
@@ -3981,7 +3978,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         protected void handleTempFailure() {
-            mTempFailHandler.handleTempFailure(mCurrentIkeSaRecord.getFutureRekeyEvent());
+            mTempFailHandler.handleTempFailure();
+            mCurrentIkeSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
         }
 
         /**
