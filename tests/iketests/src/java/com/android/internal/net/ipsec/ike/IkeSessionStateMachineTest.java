@@ -33,6 +33,12 @@ import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCH
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
@@ -175,8 +181,10 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Executor;
 
 public final class IkeSessionStateMachineTest {
@@ -2107,14 +2115,23 @@ public final class IkeSessionStateMachineTest {
                         IkePayload.PAYLOAD_TYPE_CP, IkeConfigPayload.class);
         assertNotNull(configPayload);
 
-        configPayload.recognizedAttributeList.contains(
-                new IkeConfigPayload.ConfigAttributeIpv4Pcscf());
-        configPayload.recognizedAttributeList.contains(
-                new IkeConfigPayload.ConfigAttributeIpv6Pcscf());
-        configPayload.recognizedAttributeList.contains(
-                new IkeConfigPayload.ConfigAttributeIpv4Address());
-        configPayload.recognizedAttributeList.contains(
-                new IkeConfigPayload.ConfigAttributeIpv6Address());
+        Map<Integer, Integer> expectedAttributes =
+                Map.of(
+                        CONFIG_ATTR_IP4_PCSCF,
+                        1,
+                        CONFIG_ATTR_IP6_PCSCF,
+                        1,
+                        CONFIG_ATTR_INTERNAL_IP4_ADDRESS,
+                        1,
+                        CONFIG_ATTR_INTERNAL_IP6_ADDRESS,
+                        1,
+                        CONFIG_ATTR_APPLICATION_VERSION,
+                        1,
+                        CONFIG_ATTR_INTERNAL_IP4_NETMASK,
+                        1);
+        Map<Integer, Integer> actualAttributes =
+                buildAttributeMap(configPayload.recognizedAttributeList);
+        assertEquals(expectedAttributes, actualAttributes);
 
         IkeNoncePayload noncePayload =
                 ikeAuthReqMessage.getPayloadForType(
@@ -2122,6 +2139,16 @@ public final class IkeSessionStateMachineTest {
         assertNull(noncePayload);
 
         return ikeAuthReqMessage;
+    }
+
+    private Map<Integer, Integer> buildAttributeMap(
+            List<IkeConfigPayload.ConfigAttribute> recognizedAttributeList) {
+        Map<Integer, Integer> attrCountMap = new HashMap<>();
+        for (IkeConfigPayload.ConfigAttribute attr : recognizedAttributeList) {
+            attrCountMap.compute(attr.attributeType, (key, val) -> (val == null) ? 1 : val + 1);
+        }
+
+        return attrCountMap;
     }
 
     private void verifyDigitalSignatureAuthentication(
@@ -2203,8 +2230,9 @@ public final class IkeSessionStateMachineTest {
         }
 
         // Validate that there is no EAP only notify payload
-        List<IkeNotifyPayload> notifyPayloads = ikeAuthReqMessage.getPayloadListForType(
-                IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        List<IkeNotifyPayload> notifyPayloads =
+                ikeAuthReqMessage.getPayloadListForType(
+                        IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
         assertFalse(hasEapOnlyNotifyPayload(notifyPayloads));
 
         // Validate inbound IKE AUTH response
@@ -2219,8 +2247,7 @@ public final class IkeSessionStateMachineTest {
                 ArgumentCaptor.forClass(IkeSessionConfiguration.class);
         verify(mMockIkeSessionCallback).onOpened(ikeSessionConfigurationArgumentCaptor.capture());
 
-        IkeSessionConfiguration sessionConfig =
-                ikeSessionConfigurationArgumentCaptor.getValue();
+        IkeSessionConfiguration sessionConfig = ikeSessionConfigurationArgumentCaptor.getValue();
         assertNotNull(sessionConfig);
         if (hasConfigPayloadInResp) {
             List<InetAddress> pcscfAddressList = sessionConfig.getPcscfServers();
@@ -2448,8 +2475,12 @@ public final class IkeSessionStateMachineTest {
         authRelatedPayloads.add(respIdPayload);
         authRelatedPayloads.add(makeConfigPayload());
 
-        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads,
-                true /*hasChildPayloads*/, true /*hasConfigPayloadInResp*/);
+        verifySharedKeyAuthentication(
+                spyAuthPayload,
+                respIdPayload,
+                authRelatedPayloads,
+                true /*hasChildPayloads*/,
+                true /*hasConfigPayloadInResp*/);
         verifyRetransmissionStopped();
     }
 
@@ -2811,8 +2842,12 @@ public final class IkeSessionStateMachineTest {
 
         IkeIdPayload respIdPayload = makeRespIdPayload();
 
-        verifySharedKeyAuthentication(spyAuthPayload, respIdPayload, authRelatedPayloads,
-                false /*hasChildPayloads*/, false /*hasConfigPayloadInResp*/);
+        verifySharedKeyAuthentication(
+                spyAuthPayload,
+                respIdPayload,
+                authRelatedPayloads,
+                false /*hasChildPayloads*/,
+                false /*hasConfigPayloadInResp*/);
         verifyRetransmissionStopped();
     }
 
@@ -4524,25 +4559,26 @@ public final class IkeSessionStateMachineTest {
     @Test
     public void testEapOnlyOption() throws Exception {
         mIkeSessionStateMachine.quitNow();
-        IkeSessionParams ikeSessionParams = buildIkeSessionParamsCommon()
-                .setAuthEap(mRootCertificate, mEapSessionConfig)
-                .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH).build();
+        IkeSessionParams ikeSessionParams =
+                buildIkeSessionParamsCommon()
+                        .setAuthEap(mRootCertificate, mEapSessionConfig)
+                        .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH)
+                        .build();
         mIkeSessionStateMachine = makeAndStartIkeSession(ikeSessionParams);
 
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
 
         IkeMessage ikeAuthReqMessage = verifyAuthReqAndGetMsg();
-        List<IkeNotifyPayload> notifyPayloads = ikeAuthReqMessage.getPayloadListForType(
-                IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        List<IkeNotifyPayload> notifyPayloads =
+                ikeAuthReqMessage.getPayloadListForType(
+                        IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
         assertTrue(hasEapOnlyNotifyPayload(notifyPayloads));
     }
 
     private IkeConfigPayload makeConfigPayload() throws Exception {
         return (IkeConfigPayload)
                 IkeTestUtils.hexStringToIkePayload(
-                        IkePayload.PAYLOAD_TYPE_CP,
-                        true /*isResp*/,
-                        CP_PAYLOAD_HEX_STRING);
+                        IkePayload.PAYLOAD_TYPE_CP, true /*isResp*/, CP_PAYLOAD_HEX_STRING);
     }
 
     private boolean hasEapOnlyNotifyPayload(List<IkeNotifyPayload> notifyPayloads) {
