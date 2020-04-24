@@ -150,8 +150,6 @@ import com.android.internal.net.ipsec.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
-import com.android.internal.net.ipsec.ike.utils.Retransmitter;
-import com.android.internal.net.ipsec.ike.utils.Retransmitter.IBackoffTimeoutCalculator;
 import com.android.internal.net.ipsec.ike.utils.State;
 import com.android.internal.net.utils.Log;
 
@@ -275,14 +273,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private static final int CHILD_SPI_LOCAL = 0x2ad4c0a2;
     private static final int CHILD_SPI_REMOTE = 0xcae7019f;
 
-    private static final int DUMMY_UDP_ENCAP_RESOURCE_ID = 0x3234;
-    private static final int UDP_ENCAP_PORT = 34567;
-
     private static final int EAP_SIM_SUB_ID = 1;
 
     private static final int PAYLOAD_TYPE_UNSUPPORTED = 127;
-
-    private static final long RETRANSMIT_BACKOFF_TIMEOUT_MS = 5000L;
 
     private IkeUdpEncapSocket mSpyIkeUdpEncapSocket;
     private IkeUdp4Socket mSpyIkeUdp4Socket;
@@ -307,7 +300,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private IIkeMessageHelper mMockIkeMessageHelper;
     private ISaRecordHelper mMockSaRecordHelper;
-    private IBackoffTimeoutCalculator mMockBackoffTimeoutCalculator;
 
     private ChildSessionStateMachine mMockChildSessionStateMachine;
     private IChildSessionFactoryHelper mMockChildSessionFactoryHelper;
@@ -692,13 +684,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mMockChildSessionFactoryHelper);
         setupChildStateMachineFactory(mMockChildSessionStateMachine);
 
-        // Inject longer retransmission timeout
-        mMockBackoffTimeoutCalculator = mock(IBackoffTimeoutCalculator.class);
-        doReturn(RETRANSMIT_BACKOFF_TIMEOUT_MS)
-                .when(mMockBackoffTimeoutCalculator)
-                .getExponentialBackoffTimeout(anyInt());
-        Retransmitter.setBackoffTimeoutCalculator(mMockBackoffTimeoutCalculator);
-
         // Setup state machine
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsPsk(mPsk));
 
@@ -727,7 +712,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mSpyRemoteInitIkeSaRecord.close();
 
         IkeManager.resetIkeLog();
-        Retransmitter.resetBackoffTimeoutCalculator();
         IkeMessage.setIkeMessageHelper(new IkeMessageHelper());
         SaRecord.setSaRecordHelper(new SaRecordHelper());
         ChildSessionStateMachineFactory.setChildSessionFactoryHelper(
@@ -796,7 +780,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .setRemoteIdentification(
                         new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
                 .addPcscfServerRequest(AF_INET)
-                .addPcscfServerRequest(AF_INET6);
+                .addPcscfServerRequest(AF_INET6)
+                .setRetransmissionTimeoutsMillis(
+                        new int[] {5000, 10000, 20000, 30000, 40000, 50000});
     }
 
     private IkeSessionParams buildIkeSessionParamsPsk(byte[] psk) throws Exception {
