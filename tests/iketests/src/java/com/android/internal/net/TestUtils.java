@@ -19,13 +19,16 @@ package com.android.internal.net;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.utils.Log;
 
 import java.nio.ByteBuffer;
 
-/** TestUtils provides utility methods for parsing Hex String and constructing testing Logger. */
+/** TestUtils provides utility methods to facilitate IKE unit tests */
 public class TestUtils {
     public static byte[] hexStringToByteArray(String hexString) {
         int len = hexString.length();
@@ -109,5 +112,11 @@ public class TestUtils {
                 .wtf(anyString(), anyString(), anyObject());
 
         return spyLog;
+    }
+
+    public static RandomnessFactory createMockRandomFactory() {
+        RandomnessFactory rFactory = mock(RandomnessFactory.class);
+        doReturn(null).when(rFactory).getRandom();
+        return rFactory;
     }
 }
