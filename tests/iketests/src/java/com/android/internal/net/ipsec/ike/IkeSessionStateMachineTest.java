@@ -27,6 +27,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_U
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
+import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
@@ -151,6 +152,8 @@ import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.testmode.DeterministicSecureRandom;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
+import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.ike.utils.State;
 import com.android.internal.net.utils.Log;
@@ -279,6 +282,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private static final int EAP_SIM_SUB_ID = 1;
 
     private static final int PAYLOAD_TYPE_UNSUPPORTED = 127;
+
+    private static final long RETRANSMIT_BACKOFF_TIMEOUT_MS = 5000L;
+
+    private static final IkeSpiGenerator IKE_SPI_GENERATOR =
+            new IkeSpiGenerator(createMockRandomFactory());
 
     private IkeUdpEncapSocket mSpyIkeUdpEncapSocket;
     private IkeUdp4Socket mSpyIkeUdp4Socket;
@@ -619,8 +627,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         Inet4Address respAddress = isLocalInit ? REMOTE_ADDRESS : LOCAL_ADDRESS;
 
         return new IkeSaRecord(
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(initAddress, initSpi),
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(respAddress, respSpi),
+                IKE_SPI_GENERATOR.allocateSpi(initAddress, initSpi),
+                IKE_SPI_GENERATOR.allocateSpi(respAddress, respSpi),
                 isLocalInit,
                 TestUtils.hexStringToByteArray(NONCE_INIT_HEX_STRING),
                 TestUtils.hexStringToByteArray(NONCE_RESP_HEX_STRING),
@@ -1173,10 +1181,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     @Test
     public void testAllocateIkeSpi() throws Exception {
         // Test randomness.
-        IkeSecurityParameterIndex ikeSpiOne =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(LOCAL_ADDRESS);
-        IkeSecurityParameterIndex ikeSpiTwo =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(LOCAL_ADDRESS);
+        IkeSecurityParameterIndex ikeSpiOne = IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS);
+        IkeSecurityParameterIndex ikeSpiTwo = IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS);
 
         assertNotEquals(ikeSpiOne.getSpi(), ikeSpiTwo.getSpi());
         ikeSpiTwo.close();
@@ -1184,7 +1190,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Test duplicate SPIs.
         long spiValue = ikeSpiOne.getSpi();
         try {
-            IkeSecurityParameterIndex.allocateSecurityParameterIndex(LOCAL_ADDRESS, spiValue);
+            IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, spiValue);
             fail("Expected to fail because duplicate SPI was assigned to the same address.");
         } catch (IOException expected) {
 
@@ -1192,7 +1198,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         ikeSpiOne.close();
         IkeSecurityParameterIndex ikeSpiThree =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(LOCAL_ADDRESS, spiValue);
+                IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, spiValue);
         ikeSpiThree.close();
     }
 
@@ -1467,6 +1473,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
+                        any(IpSecSpiGenerator.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         any(ChildSessionCallback.class),
@@ -1524,6 +1531,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
+                        any(IpSecSpiGenerator.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(childCallback),
@@ -2285,6 +2293,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
+                        any(IpSecSpiGenerator.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(mMockChildSessionCallback),
@@ -4187,6 +4196,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
+                        any(IpSecSpiGenerator.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
                         eq(cb),
