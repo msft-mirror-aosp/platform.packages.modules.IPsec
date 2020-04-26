@@ -22,6 +22,7 @@ import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 import com.android.internal.net.ipsec.ike.IkeDhParams;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.utils.BigIntegerUtils;
 
 import java.math.BigInteger;
@@ -145,35 +146,12 @@ public final class IkeKePayload extends IkePayload {
      *
      * <p>Critical bit in this payload must not be set as instructed in RFC 7296.
      *
-     * <p>TODO(b/148689509): Remove this constructor in the following CL that injects
-     * DeterministicSecureRandom to the process of IKE Session creation.
-     *
      * @param dh DH group for this KE payload
+     * @param randomnessFactory the randomness factory
      * @see <a href="https://tools.ietf.org/html/rfc7296#page-76">RFC 7296, Internet Key Exchange
      *     Protocol Version 2 (IKEv2), Critical.
      */
-    public IkeKePayload(@SaProposal.DhGroup int dh) {
-        this(dh, null /* secureRandom */);
-    }
-
-    /**
-     * Construct an instance of IkeKePayload for building an outbound packet.
-     *
-     * <p>Generate a DH key pair. Cache the private key and send out the public key as
-     * keyExchangeData.
-     *
-     * <p>Critical bit in this payload must not be set as instructed in RFC 7296.
-     *
-     * <p>TODO(b/148689509): Pass in a SecureRandom factory in the following CL that injects
-     * DeterministicSecureRandom to the process of IKE Session creation.
-     *
-     * @param dh DH group for this KE payload
-     * @param secureRandom the source of secure randomness, if null, a SecureRandom will be
-     *     constructed internally
-     * @see <a href="https://tools.ietf.org/html/rfc7296#page-76">RFC 7296, Internet Key Exchange
-     *     Protocol Version 2 (IKEv2), Critical.
-     */
-    public IkeKePayload(@SaProposal.DhGroup int dh, SecureRandom secureRandom) {
+    public IkeKePayload(@SaProposal.DhGroup int dh, RandomnessFactory randomnessFactory) {
         super(PAYLOAD_TYPE_KE, false);
 
         dhGroup = dh;
@@ -216,7 +194,8 @@ public final class IkeKePayload extends IkePayload {
 
             KeyPairGenerator dhKeyPairGen = KeyPairGenerator.getInstance(KEY_EXCHANGE_ALGORITHM);
 
-            SecureRandom random = secureRandom == null ? new SecureRandom() : secureRandom;
+            SecureRandom random = randomnessFactory.getRandom();
+            random = random == null ? new SecureRandom() : random;
             dhKeyPairGen.initialize(dhParams, random);
 
             KeyPair keyPair = dhKeyPairGen.generateKeyPair();
