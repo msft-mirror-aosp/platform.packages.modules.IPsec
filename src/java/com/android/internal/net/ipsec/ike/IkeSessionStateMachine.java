@@ -610,6 +610,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mContext,
                             mIkeSessionId,
                             mAlarmManager,
+                            mRandomFactory,
                             mIpSecSpiGenerator,
                             childParams,
                             mUserCbExecutor,
@@ -2021,7 +2022,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                         respProposalNumber,
                                         mSaProposal,
                                         mIkeSpiGenerator,
-                                        mLocalAddress);
+                                        mLocalAddress,
+                                        mRandomFactory);
 
                         // Build IKE header
                         IkeHeader ikeHeader =
@@ -2762,7 +2764,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mLocalAddress,
                             mRemoteAddress,
                             mLocalPort,
-                            mIkeSocket.getIkeServerPort());
+                            mIkeSocket.getIkeServerPort(),
+                            mRandomFactory);
             payloadList.add(
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
@@ -3303,6 +3306,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             payloadList.addAll(
                     CreateChildSaHelper.getInitChildCreateReqPayloads(
+                            mRandomFactory,
                             mIpSecSpiGenerator,
                             mLocalAddress,
                             mFirstChildSessionParams,
@@ -3512,7 +3516,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             getHandler().getLooper(),
                             new IkeEapCallback(),
                             mContext,
-                            ikeAuthEapConfig.mEapConfig);
+                            ikeAuthEapConfig.mEapConfig,
+                            mRandomFactory);
         }
 
         @Override
@@ -3994,7 +3999,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // getRekeyIkeSaRequestPayloads
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getRekeyIkeSaRequestPayloads(
-                            saProposals, mIkeSpiGenerator, mLocalAddress);
+                            saProposals, mIkeSpiGenerator, mLocalAddress, mRandomFactory);
 
             // Build IKE header
             IkeHeader ikeHeader =
@@ -4653,11 +4658,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 InetAddress localAddr,
                 InetAddress remoteAddr,
                 int localPort,
-                int remotePort)
+                int remotePort,
+                RandomnessFactory randomFactory)
                 throws IOException {
             List<IkePayload> payloadList =
                     getCreateIkeSaPayloads(
-                            selectedDhGroup, IkeSaPayload.createInitialIkeSaPayload(saProposals));
+                            selectedDhGroup,
+                            IkeSaPayload.createInitialIkeSaPayload(saProposals),
+                            randomFactory);
 
             // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
             // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in
@@ -4677,7 +4685,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         public static List<IkePayload> getRekeyIkeSaRequestPayloads(
-                IkeSaProposal[] saProposals, IkeSpiGenerator ikeSpiGenerator, InetAddress localAddr)
+                IkeSaProposal[] saProposals,
+                IkeSpiGenerator ikeSpiGenerator,
+                InetAddress localAddr,
+                RandomnessFactory randomFactory)
                 throws IOException {
             if (localAddr == null) {
                 throw new IllegalArgumentException("Local address was null for rekey");
@@ -4690,14 +4701,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             return getCreateIkeSaPayloads(
                     selectedDhGroup,
                     IkeSaPayload.createRekeyIkeSaRequestPayload(
-                            saProposals, ikeSpiGenerator, localAddr));
+                            saProposals, ikeSpiGenerator, localAddr),
+                    randomFactory);
         }
 
         public static List<IkePayload> getRekeyIkeSaResponsePayloads(
                 byte respProposalNumber,
                 IkeSaProposal saProposal,
                 IkeSpiGenerator ikeSpiGenerator,
-                InetAddress localAddr)
+                InetAddress localAddr,
+                RandomnessFactory randomFactory)
                 throws IOException {
             if (localAddr == null) {
                 throw new IllegalArgumentException("Local address was null for rekey");
@@ -4708,7 +4721,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             return getCreateIkeSaPayloads(
                     selectedDhGroup,
                     IkeSaPayload.createRekeyIkeSaResponsePayload(
-                            respProposalNumber, saProposal, ikeSpiGenerator, localAddr));
+                            respProposalNumber, saProposal, ikeSpiGenerator, localAddr),
+                    randomFactory);
         }
 
         /**
@@ -4717,7 +4731,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
          * <p>Will return a non-empty list of IkePayloads, the first of which WILL be the SA payload
          */
         private static List<IkePayload> getCreateIkeSaPayloads(
-                int selectedDhGroup, IkeSaPayload saPayload) throws IOException {
+                int selectedDhGroup, IkeSaPayload saPayload, RandomnessFactory randomFactory)
+                throws IOException {
             if (saPayload.proposalList.size() == 0) {
                 throw new IllegalArgumentException("Invalid SA proposal list - was empty");
             }
@@ -4725,10 +4740,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             List<IkePayload> payloadList = new ArrayList<>(3);
 
             payloadList.add(saPayload);
-            payloadList.add(new IkeNoncePayload());
+            payloadList.add(new IkeNoncePayload(randomFactory));
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
-            payloadList.add(new IkeKePayload(selectedDhGroup));
+            payloadList.add(new IkeKePayload(selectedDhGroup, randomFactory));
 
             return payloadList;
         }
