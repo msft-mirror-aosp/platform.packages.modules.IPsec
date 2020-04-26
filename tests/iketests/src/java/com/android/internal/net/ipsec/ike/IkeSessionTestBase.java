@@ -17,6 +17,7 @@
 package com.android.internal.net.ipsec.ike;
 
 import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -29,11 +30,13 @@ import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.SocketKeepalive;
 import android.os.Handler;
 
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 
 import org.junit.Before;
 
@@ -54,6 +57,7 @@ public abstract class IkeSessionTestBase {
     protected ConnectivityManager mMockConnectManager;
     protected Network mMockDefaultNetwork;
     protected SocketKeepalive mMockSocketKeepalive;
+    protected NetworkCapabilities mMockNetworkCapabilities;
 
     @Before
     public void setUp() throws Exception {
@@ -91,5 +95,13 @@ public abstract class IkeSessionTestBase {
         doReturn(mMockConnectManager)
                 .when(mSpyContext)
                 .getSystemService(Context.CONNECTIVITY_SERVICE);
+
+        mMockNetworkCapabilities = mock(NetworkCapabilities.class);
+        doReturn(mMockNetworkCapabilities)
+                .when(mMockConnectManager)
+                .getNetworkCapabilities(any(Network.class));
+        doReturn(false)
+                .when(mMockNetworkCapabilities)
+                .hasCapability(RandomnessFactory.NETWORK_CAPABILITY_TRANSPORT_TEST);
     }
 }

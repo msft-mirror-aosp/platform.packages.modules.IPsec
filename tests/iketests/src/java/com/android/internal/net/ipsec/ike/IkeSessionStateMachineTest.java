@@ -148,8 +148,10 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSkfPayload;
 import com.android.internal.net.ipsec.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
+import com.android.internal.net.ipsec.ike.testmode.DeterministicSecureRandom;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.ike.utils.State;
 import com.android.internal.net.utils.Log;
 
@@ -165,6 +167,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
+import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.Collections;
@@ -785,6 +788,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         new int[] {5000, 10000, 20000, 30000, 40000, 50000});
     }
 
+    private IkeSessionParams buildIkeSessionParams() throws Exception {
+        return buildIkeSessionParamsCommon().setAuthPsk(mPsk).build();
+    }
+
     private IkeSessionParams buildIkeSessionParamsPsk(byte[] psk) throws Exception {
         return buildIkeSessionParamsCommon().setAuthPsk(psk).build();
     }
@@ -1242,6 +1249,31 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine = makeAndStartIkeSession(ikeParams);
 
         verify(mMockDefaultNetwork).getByName(REMOTE_HOSTNAME);
+    }
+
+    @Test
+    public void testEnableTestMode() throws Exception {
+        doReturn(true)
+                .when(mMockNetworkCapabilities)
+                .hasCapability(RandomnessFactory.NETWORK_CAPABILITY_TRANSPORT_TEST);
+
+        IkeSessionStateMachine ikeSession = makeAndStartIkeSession(buildIkeSessionParams());
+
+        SecureRandom random = ikeSession.mRandomFactory.getRandom();
+        assertNotNull(random);
+        assertTrue(random instanceof DeterministicSecureRandom);
+    }
+
+    @Test
+    public void testDisableTestMode() throws Exception {
+        doReturn(false)
+                .when(mMockNetworkCapabilities)
+                .hasCapability(RandomnessFactory.NETWORK_CAPABILITY_TRANSPORT_TEST);
+
+        IkeSessionStateMachine ikeSession = makeAndStartIkeSession(buildIkeSessionParams());
+
+        SecureRandom random = ikeSession.mRandomFactory.getRandom();
+        assertNull(random);
     }
 
     @Test
