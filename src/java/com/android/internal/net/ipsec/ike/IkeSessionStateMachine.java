@@ -128,6 +128,7 @@ import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 
@@ -350,6 +351,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
     private final TempFailureHandler mTempFailHandler;
 
+    /** Package private */
+    @VisibleForTesting final RandomnessFactory mRandomFactory;
+
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
     final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
@@ -497,6 +501,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         mContext = context;
         mIpSecManager = ipSecManager;
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+
+        mRandomFactory = new RandomnessFactory(mContext, mIkeSessionParams.getNetwork());
 
         mIkeSessionCallback = ikeSessionCallback;
 
