@@ -79,6 +79,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.app.AlarmManager;
+import android.content.Context;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
@@ -95,6 +96,7 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.os.Looper;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
@@ -659,7 +661,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mMockEapAuthenticator = mock(EapAuthenticator.class);
         doReturn(mMockEapAuthenticator)
                 .when(mMockEapAuthenticatorFactory)
-                .newEapAuthenticator(any(), any(), any(), any());
+                .newEapAuthenticator(
+                        any(Looper.class),
+                        any(IEapCallback.class),
+                        any(Context.class),
+                        any(EapSessionConfig.class),
+                        any(RandomnessFactory.class));
 
         mRootCertificate = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
         mServerEndCertificate = CertUtils.createCertFromPemFile("end-cert-a.pem");
@@ -1459,8 +1466,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         mIkeSessionStateMachine.mIkeInitRequestBytes = new byte[0];
         mIkeSessionStateMachine.mIkeInitResponseBytes = new byte[0];
-        mIkeSessionStateMachine.mIkeInitNoncePayload = new IkeNoncePayload();
-        mIkeSessionStateMachine.mIkeRespNoncePayload = new IkeNoncePayload();
+        mIkeSessionStateMachine.mIkeInitNoncePayload =
+                new IkeNoncePayload(createMockRandomFactory());
+        mIkeSessionStateMachine.mIkeRespNoncePayload =
+                new IkeNoncePayload(createMockRandomFactory());
 
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_FORCE_TRANSITION, authState);
         mLooper.dispatchAll();
@@ -1473,6 +1482,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
+                        any(RandomnessFactory.class),
                         any(IpSecSpiGenerator.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
@@ -1531,6 +1541,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
+                        any(RandomnessFactory.class),
                         any(IpSecSpiGenerator.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
@@ -2293,6 +2304,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
+                        any(RandomnessFactory.class),
                         any(IpSecSpiGenerator.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
@@ -2622,7 +2634,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mIkeSessionStateMachine.getHandler().getLooper()),
                         captor.capture(),
                         eq(mSpyContext),
-                        eq(mEapSessionConfig));
+                        eq(mEapSessionConfig),
+                        any(RandomnessFactory.class));
 
         return captor.getValue();
     }
@@ -4196,6 +4209,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(mSpyContext),
                         anyInt(),
                         any(AlarmManager.class),
+                        any(RandomnessFactory.class),
                         any(IpSecSpiGenerator.class),
                         eq(mChildSessionParams),
                         eq(mSpyUserCbExecutor),
