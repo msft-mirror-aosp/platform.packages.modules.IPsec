@@ -19,6 +19,7 @@ package com.android.internal.net.ipsec.ike.message;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
@@ -66,10 +67,13 @@ public final class IkeNoncePayload extends IkePayload {
     }
 
     /** Generate Nonce data and construct an instance of IkeNoncePayload. */
-    public IkeNoncePayload() {
+    public IkeNoncePayload(RandomnessFactory randomnessFactory) {
         super(PAYLOAD_TYPE_NONCE, false);
         nonceData = new byte[GENERATED_NONCE_LEN];
-        new SecureRandom().nextBytes(nonceData);
+
+        SecureRandom random = randomnessFactory.getRandom();
+        random = random == null ? new SecureRandom() : random;
+        random.nextBytes(nonceData);
     }
 
     /**
