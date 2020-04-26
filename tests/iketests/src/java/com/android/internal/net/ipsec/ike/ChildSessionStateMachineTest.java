@@ -21,6 +21,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_N
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.system.OsConstants.AF_INET;
 
+import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
@@ -117,6 +118,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.utils.Log;
 import com.android.server.IpSecService;
 
@@ -186,6 +188,7 @@ public final class ChildSessionStateMachineTest {
     private UdpEncapsulationSocket mMockUdpEncapSocket;
 
     private TestLooper mLooper;
+    private IpSecSpiGenerator mIpSecSpiGenerator;
     private ChildSessionStateMachine mChildSessionStateMachine;
 
     private List<IkePayload> mFirstSaReqPayloads = new LinkedList<>();
@@ -250,6 +253,8 @@ public final class ChildSessionStateMachineTest {
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
         mMockUdpEncapSocket = mock(UdpEncapsulationSocket.class);
 
+        mIpSecSpiGenerator = new IpSecSpiGenerator(mMockIpSecManager, createMockRandomFactory());
+
         mMockNegotiatedProposal = mock(ChildSaProposal.class);
 
         mSpyUserCbExecutor =
@@ -270,6 +275,7 @@ public final class ChildSessionStateMachineTest {
                         IKE_SESSION_UNIQUE_ID,
                         mMockAlarmManager,
                         mMockIpSecManager,
+                        mIpSecSpiGenerator,
                         mChildSessionParams,
                         mSpyUserCbExecutor,
                         mMockChildSessionCallback,
@@ -329,7 +335,7 @@ public final class ChildSessionStateMachineTest {
         IkeSaPayload reqSaPayload =
                 IkeSaPayload.createChildSaRequestPayload(
                         mChildSessionParams.getSaProposalsInternal(),
-                        mMockIpSecManager,
+                        mIpSecSpiGenerator,
                         LOCAL_ADDRESS);
         mFirstSaReqPayloads.add(reqSaPayload);
 
