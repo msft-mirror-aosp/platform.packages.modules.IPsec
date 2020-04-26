@@ -22,6 +22,7 @@ import android.os.Looper;
 
 import com.android.internal.net.eap.EapAuthenticator;
 import com.android.internal.net.eap.IEapCallback;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 
 /** Package private factory for building EapAuthenticator instances. */
 final class IkeEapAuthenticatorFactory {
@@ -29,12 +30,17 @@ final class IkeEapAuthenticatorFactory {
      * Builds and returns a new EapAuthenticator
      *
      * @param looper Looper for running a message loop
-     * @param cbHandler Handler for posting callbacks to the given IEapCallback
      * @param cb IEapCallback for callbacks to the client
      * @param context Context for the EapAuthenticator
+     * @param eapSessionConfig EAP session configuration
+     * @param randomnessFactory the randomness factory
      */
     public EapAuthenticator newEapAuthenticator(
-            Looper looper, IEapCallback cb, Context context, EapSessionConfig eapSessionConfig) {
-        return new EapAuthenticator(looper, cb, context, eapSessionConfig);
+            Looper looper,
+            IEapCallback cb,
+            Context context,
+            EapSessionConfig eapSessionConfig,
+            RandomnessFactory randomnessFactory) {
+        return new EapAuthenticator(looper, cb, context, eapSessionConfig, randomnessFactory);
     }
 }
