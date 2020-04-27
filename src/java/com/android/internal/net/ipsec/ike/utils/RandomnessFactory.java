@@ -21,13 +21,14 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.eap.EapAuthenticator.EapRandomFactory;
 import com.android.internal.net.ipsec.ike.testmode.DeterministicSecureRandom;
 
 import java.security.SecureRandom;
 
 /** Factory class that creates a DeterministicSecureRandom when test mode is enabled */
 @VisibleForTesting
-public class RandomnessFactory {
+public class RandomnessFactory implements EapRandomFactory {
     // This constant is mirrored of android.net.NetworkCapabilities.TRANSPORT_TEST due to lack of
     // @TestApi guarantees in mainline modules
     public static final int NETWORK_CAPABILITY_TRANSPORT_TEST = 7;
@@ -53,6 +54,7 @@ public class RandomnessFactory {
      * <p>TODO(b/154941518): figure out how to let this method always return a random without
      * relying on nullability behavior
      */
+    @Override
     public SecureRandom getRandom() {
         if (mIsTestModeEnabled) {
             return new DeterministicSecureRandom();

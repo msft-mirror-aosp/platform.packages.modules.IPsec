@@ -119,6 +119,7 @@ import com.android.internal.net.ipsec.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.utils.Log;
 import com.android.server.IpSecService;
 
@@ -188,6 +189,7 @@ public final class ChildSessionStateMachineTest {
     private UdpEncapsulationSocket mMockUdpEncapSocket;
 
     private TestLooper mLooper;
+    private RandomnessFactory mMockRandomFactory;
     private IpSecSpiGenerator mIpSecSpiGenerator;
     private ChildSessionStateMachine mChildSessionStateMachine;
 
@@ -274,6 +276,7 @@ public final class ChildSessionStateMachineTest {
                         mContext,
                         IKE_SESSION_UNIQUE_ID,
                         mMockAlarmManager,
+                        createMockRandomFactory(),
                         mMockIpSecManager,
                         mIpSecSpiGenerator,
                         mChildSessionParams,
@@ -363,8 +366,8 @@ public final class ChildSessionStateMachineTest {
         mFirstSaRespPayloads.add(tsRespPayload);
 
         // Build Nonce Payloads
-        mFirstSaReqPayloads.add(new IkeNoncePayload());
-        mFirstSaRespPayloads.add(new IkeNoncePayload());
+        mFirstSaReqPayloads.add(new IkeNoncePayload(createMockRandomFactory()));
+        mFirstSaRespPayloads.add(new IkeNoncePayload(createMockRandomFactory()));
 
         // Build Config Request Payload
         List<ConfigAttribute> attrReqList = new LinkedList<>();
@@ -963,7 +966,7 @@ public final class ChildSessionStateMachineTest {
         inboundPayloads.add(new IkeTsPayload(false /*isInitiator*/, respTs));
 
         // Build Nonce Payloads
-        inboundPayloads.add(new IkeNoncePayload());
+        inboundPayloads.add(new IkeNoncePayload(createMockRandomFactory()));
 
         if (isLocalInitRekey) {
             // Rekey-Create response without Notify-Rekey payload is valid.
@@ -1572,7 +1575,8 @@ public final class ChildSessionStateMachineTest {
                 .when(mMockNegotiatedProposal)
                 .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
-        payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP));
+        payloadList.add(
+                new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP, createMockRandomFactory()));
 
         CreateChildSaHelper.validateKePayloads(
                 payloadList, true /*isResp*/, mMockNegotiatedProposal);
@@ -1619,7 +1623,8 @@ public final class ChildSessionStateMachineTest {
                 .when(mMockNegotiatedProposal)
                 .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
-        payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP));
+        payloadList.add(
+                new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
 
         try {
             CreateChildSaHelper.validateKePayloads(
@@ -1643,7 +1648,8 @@ public final class ChildSessionStateMachineTest {
                 .when(mMockNegotiatedProposal)
                 .getDhGroupTransforms();
         List<IkePayload> payloadList = new LinkedList<>();
-        payloadList.add(new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP));
+        payloadList.add(
+                new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
 
         try {
             CreateChildSaHelper.validateKePayloads(
