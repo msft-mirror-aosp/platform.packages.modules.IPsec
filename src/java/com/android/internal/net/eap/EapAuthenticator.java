@@ -48,6 +48,10 @@ public class EapAuthenticator extends Handler {
     private static final String TAG = EapAuthenticator.class.getSimpleName();
     private static final long DEFAULT_TIMEOUT_MILLIS = 7000L;
 
+    private static final EapRandomFactory DEFAULT_RANDOM_FACTORY =
+            () -> {
+                return new SecureRandom();
+            };
     private final Executor mWorkerPool;
     private final EapStateMachine mStateMachine;
     private final IEapCallback mCb;
@@ -63,14 +67,33 @@ public class EapAuthenticator extends Handler {
      * @param eapSessionConfig Configuration for an EapAuthenticator
      */
     public EapAuthenticator(
+            Looper looper, IEapCallback cb, Context context, EapSessionConfig eapSessionConfig) {
+        this(looper, cb, context, eapSessionConfig, DEFAULT_RANDOM_FACTORY);
+    }
+
+    /**
+     * Test-Only Constructor for EapAuthenticator.
+     *
+     * @param looper Looper for running a message loop
+     * @param cb IEapCallback for callbacks to the client
+     * @param context Context for this EapAuthenticator
+     * @param eapSessionConfig Configuration for an EapAuthenticator
+     * @param randomnessFactory the randomness factory
+     * @hide
+     */
+    public EapAuthenticator(
             Looper looper,
             IEapCallback cb,
             Context context,
-            EapSessionConfig eapSessionConfig) {
+            EapSessionConfig eapSessionConfig,
+            EapRandomFactory randomnessFactory) {
         this(
                 looper,
                 cb,
-                new EapStateMachine(context, eapSessionConfig, new SecureRandom()),
+                new EapStateMachine(
+                        context,
+                        eapSessionConfig,
+                        createNewRandomIfNull(randomnessFactory.getRandom())),
                 Executors.newSingleThreadExecutor(),
                 DEFAULT_TIMEOUT_MILLIS);
     }
@@ -88,6 +111,16 @@ public class EapAuthenticator extends Handler {
         mStateMachine = eapStateMachine;
         mWorkerPool = executor;
         mTimeoutMillis = timeoutMillis;
+    }
+
+    private static SecureRandom createNewRandomIfNull(SecureRandom random) {
+        return random == null ? new SecureRandom() : random;
+    }
+
+    /** SecureRandom factory for EAP */
+    public interface EapRandomFactory {
+        /** Returns a SecureRandom instance */
+        SecureRandom getRandom();
     }
 
     @Override
