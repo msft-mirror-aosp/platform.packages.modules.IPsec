@@ -3056,8 +3056,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
 
             IkeConfigPayload configPayload =
-                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
-                            IkeConfigPayload.class);
+                    ikeMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_CP, IkeConfigPayload.class);
 
             boolean hasErrorNotify = false;
             List<IkePayload> list = new LinkedList<>();
@@ -3108,8 +3108,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
             IkeConfigPayload configPayload =
-                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_CP,
-                            IkeConfigPayload.class);
+                    ikeMessage.getPayloadForType(
+                            IkePayload.PAYLOAD_TYPE_CP, IkeConfigPayload.class);
             if (configPayload == null) {
                 logi("No config payload in ikeMessage.");
             } else if (configPayload.configType != CONFIG_TYPE_REPLY) {
@@ -3224,7 +3224,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             payloadList.add(mInitIdPayload);
             payloadList.add(respIdPayload);
 
-            if(mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
+            if (mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
                 payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION));
             }
 
@@ -3288,9 +3288,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             CreateChildSaHelper.getConfigAttributes(mFirstChildSessionParams)));
             configAttributes.addAll(
                     Arrays.asList(mIkeSessionParams.getConfigurationAttributesInternal()));
-            if (!configAttributes.isEmpty()) {
-                payloadList.add(new IkeConfigPayload(false /*isReply*/, configAttributes));
-            }
+            // Always request app version
+            configAttributes.add(new IkeConfigPayload.ConfigAttributeAppVersion());
+            payloadList.add(new IkeConfigPayload(false /*isReply*/, configAttributes));
 
             return buildIkeAuthReqMessage(payloadList);
         }
