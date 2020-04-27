@@ -20,20 +20,14 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
-import android.content.Context;
-import android.net.ConnectivityManager;
-import android.net.InetAddresses;
-import android.net.IpSecManager;
-import android.net.Network;
 import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
 
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachineTest;
-import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.ike.IkeSessionTestBase;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -43,20 +37,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
-public final class IkeSessionTest {
+public final class IkeSessionTest extends IkeSessionTestBase {
     private static final int TIMEOUT_MS = 500;
-
-    private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
-    private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
-
-    private MockIpSecTestUtils mMockIpSecTestUtils;
-    private IpSecManager mIpSecManager;
-    private Context mContext;
-
-    private ConnectivityManager mMockConnectManager;
-    private Network mMockDefaultNetwork;
 
     private IkeSessionParams mIkeSessionParams;
     private ChildSessionParams mMockChildSessionParams;
@@ -66,17 +48,9 @@ public final class IkeSessionTest {
 
     @Before
     public void setUp() throws Exception {
+        super.setUp();
+
         if (Looper.myLooper() == null) Looper.prepare();
-
-        mMockIpSecTestUtils = MockIpSecTestUtils.setUpMockIpSec();
-        mIpSecManager = mMockIpSecTestUtils.getIpSecManager();
-        mContext = mMockIpSecTestUtils.getContext();
-
-        mMockConnectManager = mock(ConnectivityManager.class);
-        mMockDefaultNetwork = mock(Network.class);
-        when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
-        when(mMockDefaultNetwork.getByName(REMOTE_ADDRESS.getHostAddress()))
-                .thenReturn(REMOTE_ADDRESS);
 
         mIkeSessionParams = buildIkeSessionParams();
         mMockChildSessionParams = mock(ChildSessionParams.class);
@@ -101,7 +75,7 @@ public final class IkeSessionTest {
     public void testConstructIkeSession() throws Exception {
         IkeSession ikeSession =
                 new IkeSession(
-                        mContext,
+                        mSpyContext,
                         mIpSecManager,
                         mIkeSessionParams,
                         mMockChildSessionParams,
@@ -130,7 +104,7 @@ public final class IkeSessionTest {
                     try {
                         sessions[index] =
                                 new IkeSession(
-                                        mContext,
+                                        mSpyContext,
                                         mIpSecManager,
                                         mIkeSessionParams,
                                         mMockChildSessionParams,
@@ -159,7 +133,7 @@ public final class IkeSessionTest {
         IkeSession ikeSession =
                 new IkeSession(
                         testLooper.getLooper(),
-                        mContext,
+                        mSpyContext,
                         mIpSecManager,
                         mIkeSessionParams,
                         mMockChildSessionParams,
