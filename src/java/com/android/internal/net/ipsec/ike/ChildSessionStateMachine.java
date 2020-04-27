@@ -93,6 +93,8 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
+import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.util.State;
 
 import java.io.IOException;
@@ -153,6 +155,13 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private final int mIkeSessionId;
     private final AlarmManager mAlarmManager;
     private final IpSecManager mIpSecManager;
+
+    private final RandomnessFactory mRandomFactory;
+    /**
+     * mIpSecSpiGenerator will be used by all Child SA creations in this Child Session to avoid SPI
+     * collision in test mode.
+     */
+    private final IpSecSpiGenerator mIpSecSpiGenerator;
 
     /** User provided configurations. */
     @VisibleForTesting final ChildSessionParams mChildSessionParams;
@@ -230,7 +239,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             Context context,
             int ikeSessionUniqueId,
             AlarmManager alarmManager,
+            RandomnessFactory randomnessFactory,
             IpSecManager ipSecManager,
+            IpSecSpiGenerator ipSecSpiGenerator,
             ChildSessionParams sessionParams,
             Executor userCbExecutor,
             ChildSessionCallback userCallback,
@@ -240,7 +251,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         mContext = context;
         mIkeSessionId = ikeSessionUniqueId;
         mAlarmManager = alarmManager;
+        mRandomFactory = randomnessFactory;
         mIpSecManager = ipSecManager;
+        mIpSecSpiGenerator = ipSecSpiGenerator;
         mChildSessionParams = sessionParams;
 
         mUserCallback = userCallback;
@@ -706,7 +719,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             exchangeType,
                             expectedExchangeType,
                             mChildSessionParams.isTransportMode(),
-                            mIpSecManager,
+                            mIpSecSpiGenerator,
                             mRemoteAddress);
             switch (createChildResult.status) {
                 case CREATE_STATUS_OK:
@@ -919,7 +932,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             try {
                 mRequestPayloads =
                         CreateChildSaHelper.getInitChildCreateReqPayloads(
-                                mIpSecManager,
+                                mRandomFactory,
+                                mIpSecSpiGenerator,
                                 mLocalAddress,
                                 mChildSessionParams,
                                 false /*isFirstChildSa*/);
@@ -937,7 +951,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         false /*isResp*/,
                         mRequestPayloads,
                         ChildSessionStateMachine.this);
-            } catch (ResourceUnavailableException e) {
+            } catch (SpiUnavailableException | ResourceUnavailableException e) {
                 // Fail to assign SPI
                 handleChildFatalError(e);
             }
@@ -1253,7 +1267,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 // Build request with negotiated proposal and TS.
                 mRequestPayloads =
                         CreateChildSaHelper.getRekeyChildCreateReqPayloads(
-                                mIpSecManager,
+                                mRandomFactory,
+                                mIpSecSpiGenerator,
                                 mLocalAddress,
                                 mSaProposal,
                                 mLocalTs,
@@ -1265,7 +1280,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         false /*isResp*/,
                         mRequestPayloads,
                         ChildSessionStateMachine.this);
-            } catch (ResourceUnavailableException e) {
+            } catch (SpiUnavailableException | ResourceUnavailableException e) {
                 loge("Fail to assign Child SPI. Schedule a retry for rekey Child");
                 mChildSmCallback.scheduleRetryLocalRequest(
                         (ChildLocalRequest) mCurrentChildSaRecord.getFutureRekeyEvent());
@@ -1286,7 +1301,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     EXCHANGE_TYPE_CREATE_CHILD_SA,
                                     mChildSessionParams.isTransportMode(),
                                     mCurrentChildSaRecord,
-                                    mIpSecManager,
+                                    mIpSecSpiGenerator,
                                     mRemoteAddress);
 
                     switch (createChildResult.status) {
@@ -1437,7 +1452,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                 respPayloads =
                         CreateChildSaHelper.getRekeyChildCreateRespPayloads(
-                                mIpSecManager,
+                                mRandomFactory,
+                                mIpSecSpiGenerator,
                                 mLocalAddress,
                                 respProposalNumber,
                                 mSaProposal,
@@ -1448,7 +1464,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             } catch (NoValidProposalChosenException e) {
                 handleCreationFailureAndBackToIdle(e);
                 return;
-            } catch (ResourceUnavailableException e) {
+            } catch (SpiUnavailableException | ResourceUnavailableException e) {
                 handleCreationFailureAndBackToIdle(
                         new NoValidProposalChosenException("Fail to assign inbound SPI", e));
                 return;
@@ -1461,7 +1477,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             req.exchangeType /*exchangeType*/,
                             EXCHANGE_TYPE_CREATE_CHILD_SA /*expectedExchangeType*/,
                             mChildSessionParams.isTransportMode(),
-                            mIpSecManager,
+                            mIpSecSpiGenerator,
                             mRemoteAddress);
 
             switch (createChildResult.status) {
@@ -1759,11 +1775,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     static class CreateChildSaHelper {
         /** Create payload list for creating the initial Child SA for this Child Session. */
         public static List<IkePayload> getInitChildCreateReqPayloads(
-                IpSecManager ipSecManager,
+                RandomnessFactory randomFactory,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 InetAddress localAddress,
                 ChildSessionParams childSessionParams,
                 boolean isFirstChildSa)
-                throws ResourceUnavailableException {
+                throws SpiUnavailableException, ResourceUnavailableException {
 
             ChildSaProposal[] saProposals = childSessionParams.getSaProposalsInternal();
 
@@ -1778,11 +1795,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             List<IkePayload> payloadList =
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
-                                    saProposals, ipSecManager, localAddress),
+                                    saProposals, ipSecSpiGenerator, localAddress),
                             childSessionParams.getInboundTrafficSelectorsInternal(),
                             childSessionParams.getOutboundTrafficSelectorsInternal(),
                             childSessionParams.isTransportMode(),
-                            isFirstChildSa);
+                            isFirstChildSa,
+                            randomFactory);
 
             return payloadList;
         }
@@ -1796,24 +1814,26 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         /** Create payload list as a rekey Child Session request. */
         public static List<IkePayload> getRekeyChildCreateReqPayloads(
-                IpSecManager ipSecManager,
+                RandomnessFactory randomFactory,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 InetAddress localAddress,
                 ChildSaProposal currentProposal,
                 IkeTrafficSelector[] currentLocalTs,
                 IkeTrafficSelector[] currentRemoteTs,
                 int localSpi,
                 boolean isTransport)
-                throws ResourceUnavailableException {
+                throws SpiUnavailableException, ResourceUnavailableException {
             List<IkePayload> payloads =
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaRequestPayload(
                                     new ChildSaProposal[] {currentProposal},
-                                    ipSecManager,
+                                    ipSecSpiGenerator,
                                     localAddress),
                             currentLocalTs,
                             currentRemoteTs,
                             isTransport,
-                            false /*isFirstChildSa*/);
+                            false /*isFirstChildSa*/,
+                            randomFactory);
 
             payloads.add(
                     new IkeNotifyPayload(
@@ -1823,7 +1843,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         /** Create payload list as a rekey Child Session response. */
         public static List<IkePayload> getRekeyChildCreateRespPayloads(
-                IpSecManager ipSecManager,
+                RandomnessFactory randomFactory,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 InetAddress localAddress,
                 byte proposalNumber,
                 ChildSaProposal currentProposal,
@@ -1831,15 +1852,19 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 IkeTrafficSelector[] currentRemoteTs,
                 int localSpi,
                 boolean isTransport)
-                throws ResourceUnavailableException {
+                throws SpiUnavailableException, ResourceUnavailableException {
             List<IkePayload> payloads =
                     getChildCreatePayloads(
                             IkeSaPayload.createChildSaResponsePayload(
-                                    proposalNumber, currentProposal, ipSecManager, localAddress),
+                                    proposalNumber,
+                                    currentProposal,
+                                    ipSecSpiGenerator,
+                                    localAddress),
                             currentRemoteTs /*initTs*/,
                             currentLocalTs /*respTs*/,
                             isTransport,
-                            false /*isFirstChildSa*/);
+                            false /*isFirstChildSa*/,
+                            randomFactory);
 
             payloads.add(
                     new IkeNotifyPayload(
@@ -1853,7 +1878,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 IkeTrafficSelector[] initTs,
                 IkeTrafficSelector[] respTs,
                 boolean isTransport,
-                boolean isFirstChildSa)
+                boolean isFirstChildSa,
+                RandomnessFactory randomFactory)
                 throws ResourceUnavailableException {
             List<IkePayload> payloadList = new ArrayList<>(5);
 
@@ -1862,14 +1888,14 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             payloadList.add(new IkeTsPayload(false /*isInitiator*/, respTs));
 
             if (!isFirstChildSa) {
-                payloadList.add(new IkeNoncePayload());
+                payloadList.add(new IkeNoncePayload(randomFactory));
             }
 
             DhGroupTransform[] dhGroups =
                     ((ChildProposal) saPayload.proposalList.get(0))
                             .saProposal.getDhGroupTransforms();
             if (dhGroups.length != 0 && dhGroups[0].id != DH_GROUP_NONE) {
-                payloadList.add(new IkeKePayload(dhGroups[0].id));
+                payloadList.add(new IkeKePayload(dhGroups[0].id, randomFactory));
             }
 
             if (isTransport) payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_USE_TRANSPORT_MODE));
@@ -1887,7 +1913,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 @ExchangeType int exchangeType,
                 @ExchangeType int expectedExchangeType,
                 boolean expectTransport,
-                IpSecManager ipSecManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 InetAddress remoteAddress) {
 
             return validateAndNegotiateChild(
@@ -1897,7 +1923,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     expectedExchangeType,
                     true /*isLocalInit*/,
                     expectTransport,
-                    ipSecManager,
+                    ipSecSpiGenerator,
                     remoteAddress);
         }
 
@@ -1911,7 +1937,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 @ExchangeType int exchangeType,
                 @ExchangeType int expectedExchangeType,
                 boolean expectTransport,
-                IpSecManager ipSecManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 InetAddress remoteAddress) {
 
             // It is guaranteed that a Rekey-Notify Payload with remote SPI of current Child SA is
@@ -1923,7 +1949,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     expectedExchangeType,
                     false /*isLocalInit*/,
                     expectTransport,
-                    ipSecManager,
+                    ipSecSpiGenerator,
                     remoteAddress);
         }
 
@@ -1938,7 +1964,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 @ExchangeType int expectedExchangeType,
                 boolean expectTransport,
                 ChildSaRecord expectedChildRecord,
-                IpSecManager ipSecManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 InetAddress remoteAddress) {
             // Validate rest of payloads and negotiate Child SA.
             CreateChildResult childResult =
@@ -1949,7 +1975,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             expectedExchangeType,
                             true /*isLocalInit*/,
                             expectTransport,
-                            ipSecManager,
+                            ipSecSpiGenerator,
                             remoteAddress);
 
             // TODO: Validate new Child SA does not have different Traffic Selectors
@@ -1987,7 +2013,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 @ExchangeType int expectedExchangeType,
                 boolean isLocalInit,
                 boolean expectTransport,
-                IpSecManager ipSecManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 InetAddress remoteAddress) {
             List<IkePayload> inboundPayloads = isLocalInit ? respPayloads : reqPayloads;
 
@@ -2060,7 +2086,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 // inside.
                 childProposalPair =
                         IkeSaPayload.getVerifiedNegotiatedChildProposalPair(
-                                reqSaPayload, respSaPayload, ipSecManager, remoteAddress);
+                                reqSaPayload, respSaPayload, ipSecSpiGenerator, remoteAddress);
                 ChildSaProposal saProposal = childProposalPair.second.saProposal;
 
                 validateKePayloads(inboundPayloads, isLocalInit /*isResp*/, saProposal);
