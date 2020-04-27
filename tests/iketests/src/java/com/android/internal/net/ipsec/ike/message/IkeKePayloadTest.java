@@ -16,6 +16,8 @@
 
 package com.android.internal.net.ipsec.ike.message;
 
+import static com.android.internal.net.TestUtils.createMockRandomFactory;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -155,7 +157,8 @@ public final class IkeKePayloadTest {
 
     @Test
     public void testGetIkeKePayload() throws Exception {
-        IkeKePayload payload = new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP);
+        IkeKePayload payload =
+                new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP, createMockRandomFactory());
 
         // Test DHPrivateKeySpec
         assertTrue(payload.isOutbound);

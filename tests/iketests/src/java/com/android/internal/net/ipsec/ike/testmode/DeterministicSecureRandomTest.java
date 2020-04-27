@@ -21,8 +21,11 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
 import com.android.internal.net.ipsec.ike.message.IkeKePayload;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 
 import org.junit.Test;
 
@@ -67,11 +70,16 @@ public final class DeterministicSecureRandomTest {
 
     @Test
     public void testDeterministicSecureRandomInKePayload() throws Exception {
-        DeterministicSecureRandom srOne = new DeterministicSecureRandom();
-        DeterministicSecureRandom srTwo = new DeterministicSecureRandom();
+        RandomnessFactory rFactory = mock(RandomnessFactory.class);
+        doAnswer(
+            (invocation) -> {
+                return new DeterministicSecureRandom();
+            })
+            .when(rFactory)
+            .getRandom();
 
-        IkeKePayload kePayloadOne = new IkeKePayload(DH_GROUP_2048_BIT_MODP, srOne);
-        IkeKePayload kePayloadTwo = new IkeKePayload(DH_GROUP_2048_BIT_MODP, srTwo);
+        IkeKePayload kePayloadOne = new IkeKePayload(DH_GROUP_2048_BIT_MODP, rFactory);
+        IkeKePayload kePayloadTwo = new IkeKePayload(DH_GROUP_2048_BIT_MODP, rFactory);
         assertArrayEquals(kePayloadOne.keyExchangeData, kePayloadTwo.keyExchangeData);
 
         DHPrivateKeySpec localPrivateKeyOne = kePayloadOne.localPrivateKey;
