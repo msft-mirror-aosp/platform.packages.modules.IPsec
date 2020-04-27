@@ -38,7 +38,6 @@ import android.net.ipsec.ike.SaProposal;
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecordConfig;
 import com.android.internal.net.ipsec.ike.SaRecord.IIpSecTransformHelper;
@@ -54,6 +53,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransfo
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.server.IpSecService;
 
 import org.junit.Before;
