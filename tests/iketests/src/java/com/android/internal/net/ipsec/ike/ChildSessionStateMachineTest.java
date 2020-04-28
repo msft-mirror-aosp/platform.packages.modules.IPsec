@@ -270,19 +270,7 @@ public final class ChildSessionStateMachineTest {
 
         // Setup thread and looper
         mLooper = new TestLooper();
-        mChildSessionStateMachine =
-                new ChildSessionStateMachine(
-                        mLooper.getLooper(),
-                        mContext,
-                        IKE_SESSION_UNIQUE_ID,
-                        mMockAlarmManager,
-                        createMockRandomFactory(),
-                        mMockIpSecManager,
-                        mIpSecSpiGenerator,
-                        mChildSessionParams,
-                        mSpyUserCbExecutor,
-                        mMockChildSessionCallback,
-                        mMockChildSessionSmCallback);
+        mChildSessionStateMachine = buildChildSession(mChildSessionParams);
         mChildSessionStateMachine.setDbg(true);
         SaRecord.setSaRecordHelper(mMockSaRecordHelper);
 
@@ -951,6 +939,14 @@ public final class ChildSessionStateMachineTest {
                 (IkeSaPayload)
                         (IkeTestUtils.hexStringToIkePayload(
                                 IkePayload.PAYLOAD_TYPE_SA, true, inboundSaHexString));
+
+        return makeInboundRekeyChildPayloads(remoteSpi, saPayload, isLocalInitRekey);
+    }
+
+    private List<IkePayload> makeInboundRekeyChildPayloads(
+            int remoteSpi, IkeSaPayload saPayload, boolean isLocalInitRekey) throws Exception {
+        List<IkePayload> inboundPayloads = new LinkedList<>();
+
         inboundPayloads.add(saPayload);
 
         // Build TS Payloads
@@ -1260,6 +1256,8 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.receiveRequest(
                 IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
         mLooper.dispatchAll();
+
+        assertEquals(0, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
 
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
@@ -1673,5 +1671,72 @@ public final class ChildSessionStateMachineTest {
 
         verifyHandleFatalErrorAndQuit(IkeInternalException.class);
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
+    }
+
+    @Test
+    public void testFirstChildLocalRekey() throws Exception {
+        ChildSaProposal saProposal = buildSaProposalWithDhGroup();
+        ChildSessionParams childSessionParams =
+                new TunnelModeChildSessionParams.Builder()
+                        .addSaProposal(saProposal)
+                        .addInternalAddressRequest(AF_INET)
+                        .addInternalAddressRequest(INTERNAL_ADDRESS)
+                        .build();
+        mChildSessionStateMachine = buildChildSession(childSessionParams);
+        mChildSessionStateMachine.mIsFirstChild = true;
+        mChildSessionStateMachine.setDbg(true);
+        mChildSessionStateMachine.start();
+
+        setupIdleStateMachine();
+
+        assertEquals(0, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
+        verifyOutboundRekeyKePayload(false /*isResp*/);
+    }
+
+    private void verifyOutboundRekeyKePayload(boolean isResp) {
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_CREATE_CHILD_SA),
+                        eq(isResp),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+
+        // Verify outbound payload list
+        List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
+
+        assertNotNull(
+                IkePayload.getPayloadForTypeInProvidedList(
+                        PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloadList));
+    }
+
+    private ChildSessionStateMachine buildChildSession(ChildSessionParams childSessionParams) {
+        return new ChildSessionStateMachine(
+                mLooper.getLooper(),
+                mContext,
+                IKE_SESSION_UNIQUE_ID,
+                mMockAlarmManager,
+                createMockRandomFactory(),
+                mMockIpSecManager,
+                mIpSecSpiGenerator,
+                childSessionParams,
+                mSpyUserCbExecutor,
+                mMockChildSessionCallback,
+                mMockChildSessionSmCallback);
+    }
+
+    private ChildSaProposal buildSaProposalWithDhGroup() {
+        return new ChildSaProposal.Builder()
+                .addEncryptionAlgorithm(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
+                .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
+                .addDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP)
+                .build();
     }
 }

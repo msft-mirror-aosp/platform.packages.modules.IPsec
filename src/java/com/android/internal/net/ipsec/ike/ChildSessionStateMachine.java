@@ -104,8 +104,10 @@ import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 /**
@@ -221,6 +223,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mRekeyChildRemoteCreate = new RekeyChildRemoteCreate();
     @VisibleForTesting final State mRekeyChildLocalDelete = new RekeyChildLocalDelete();
     @VisibleForTesting final State mRekeyChildRemoteDelete = new RekeyChildRemoteDelete();
+    @VisibleForTesting boolean mIsFirstChild;
 
     /**
      * Builds a new uninitialized ChildSessionStateMachine
@@ -361,6 +364,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         this.mUdpEncapSocket = udpEncapSocket;
         this.mIkePrf = ikePrf;
         this.mSkD = skD;
+        mIsFirstChild = true;
 
         int spi = registerProvisionalChildAndGetSpi(respPayloads);
         sendMessage(
@@ -391,6 +395,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         this.mUdpEncapSocket = udpEncapSocket;
         this.mIkePrf = ikePrf;
         this.mSkD = skD;
+        mIsFirstChild = false;
 
         sendMessage(CMD_LOCAL_REQUEST_CREATE_CHILD);
     }
@@ -1264,13 +1269,18 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void enterState() {
             try {
+                ChildSaProposal saProposal = mSaProposal;
+                if (mIsFirstChild) {
+                    saProposal = addDhGroupsFromChildSessionParamsIfAbsent();
+                }
+
                 // Build request with negotiated proposal and TS.
                 mRequestPayloads =
                         CreateChildSaHelper.getRekeyChildCreateReqPayloads(
                                 mRandomFactory,
                                 mIpSecSpiGenerator,
                                 mLocalAddress,
-                                mSaProposal,
+                                saProposal,
                                 mLocalTs,
                                 mRemoteTs,
                                 mCurrentChildSaRecord.getLocalSpi(),
@@ -1307,8 +1317,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     switch (createChildResult.status) {
                         case CREATE_STATUS_OK:
                             try {
-                                // Do not need to update the negotiated proposal and TS because they
-                                // are not changed.
+                                // Do not need to update TS because they are not changed.
+                                mSaProposal = createChildResult.negotiatedProposal;
 
                                 ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
 
@@ -1405,6 +1415,29 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         }
     }
 
+    private ChildSaProposal addDhGroupsFromChildSessionParamsIfAbsent() {
+        // DH groups are excluded for the first child. Add dh groups from child session params in
+        // this case.
+        if (mSaProposal.getDhGroups().size() != 0) {
+            return mSaProposal;
+        }
+
+        Set<DhGroupTransform> dhGroupSet = new LinkedHashSet<>();
+        for (SaProposal saProposal : mChildSessionParams.getSaProposals()) {
+            if (!mSaProposal.isNegotiatedFromExceptDhGroup(saProposal)) continue;
+            dhGroupSet.addAll(Arrays.asList(saProposal.getDhGroupTransforms()));
+        }
+
+        DhGroupTransform[] dhGroups = new DhGroupTransform[dhGroupSet.size()];
+        dhGroupSet.toArray(dhGroups);
+
+        return new ChildSaProposal(
+                mSaProposal.getEncryptionTransforms(),
+                mSaProposal.getIntegrityTransforms(),
+                dhGroups,
+                mSaProposal.getEsnTransforms());
+    }
+
     /**
      * RekeyChildRemoteCreate represents the state where Child Session receives a Rekey Child
      * request.
@@ -1448,6 +1481,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 IkeSaPayload reqSaPayload =
                         IkePayload.getPayloadForTypeInProvidedList(
                                 PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
+
+                // TODO: Handle first child remote rekey request with KE payload.
+
                 byte respProposalNumber = reqSaPayload.getNegotiatedProposalNumber(mSaProposal);
 
                 respPayloads =
