@@ -16,6 +16,8 @@
 
 package com.android.internal.net.ipsec.ike;
 
+import static com.android.internal.net.TestUtils.createMockRandomFactory;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -38,7 +40,6 @@ import android.net.ipsec.ike.SaProposal;
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecordConfig;
 import com.android.internal.net.ipsec.ike.SaRecord.IIpSecTransformHelper;
@@ -54,6 +55,8 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransfo
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
 import com.android.server.IpSecService;
 
 import org.junit.Before;
@@ -69,6 +72,9 @@ public final class SaRecordTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+
+    private static final IkeSpiGenerator IKE_SPI_GENERATOR =
+            new IkeSpiGenerator(createMockRandomFactory());
 
     private static final String PRF_KEY_HEX_STRING = "094787780EE466E2CB049FA327B43908BC57E485";
     private static final String DATA_TO_SIGN_HEX_STRING = "010000000a50500d";
@@ -175,11 +181,9 @@ public final class SaRecordTest {
         byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
 
         IkeSecurityParameterIndex ikeInitSpi =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                        LOCAL_ADDRESS, IKE_INIT_SPI);
+                IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, IKE_INIT_SPI);
         IkeSecurityParameterIndex ikeRespSpi =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                        REMOTE_ADDRESS, IKE_RESP_SPI);
+                IKE_SPI_GENERATOR.allocateSpi(REMOTE_ADDRESS, IKE_RESP_SPI);
         IkeSaRecordConfig ikeSaRecordConfig =
                 new IkeSaRecordConfig(
                         ikeInitSpi,
