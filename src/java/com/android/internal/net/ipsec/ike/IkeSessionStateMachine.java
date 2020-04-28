@@ -53,6 +53,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
+import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.net.ipsec.ike.ChildSessionCallback;
@@ -128,6 +129,9 @@ import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
+import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
 
@@ -350,6 +354,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
     private final TempFailureHandler mTempFailHandler;
 
+    /** Package private */
+    @VisibleForTesting final RandomnessFactory mRandomFactory;
+
+    /**
+     * mIkeSpiGenerator will be used by all IKE SA creations in this IKE Session to avoid SPI
+     * collision in test mode.
+     */
+    private final IkeSpiGenerator mIkeSpiGenerator;
+    /**
+     * mIpSecSpiGenerator will be shared by all Child Sessions under this IKE Session to avoid SPI
+     * collision in test mode.
+     */
+    private final IpSecSpiGenerator mIpSecSpiGenerator;
+
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
     final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
@@ -498,6 +516,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         mIpSecManager = ipSecManager;
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
+        mRandomFactory = new RandomnessFactory(mContext, mIkeSessionParams.getNetwork());
+        mIkeSpiGenerator = new IkeSpiGenerator(mRandomFactory);
+        mIpSecSpiGenerator = new IpSecSpiGenerator(mIpSecManager, mRandomFactory);
+
         mIkeSessionCallback = ikeSessionCallback;
 
         mFirstChildSessionParams = firstChildParams;
@@ -588,6 +610,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mContext,
                             mIkeSessionId,
                             mAlarmManager,
+                            mRandomFactory,
+                            mIpSecSpiGenerator,
                             childParams,
                             mUserCbExecutor,
                             callbacks,
@@ -1995,7 +2019,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
                         List<IkePayload> payloadList =
                                 CreateIkeSaHelper.getRekeyIkeSaResponsePayloads(
-                                        respProposalNumber, mSaProposal, mLocalAddress);
+                                        respProposalNumber,
+                                        mSaProposal,
+                                        mIkeSpiGenerator,
+                                        mLocalAddress,
+                                        mRandomFactory);
 
                         // Build IKE header
                         IkeHeader ikeHeader =
@@ -2719,8 +2747,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         private IkeMessage buildIkeInitReq() throws IOException {
             // Generate IKE SPI
-            mLocalIkeSpiResource =
-                    IkeSecurityParameterIndex.allocateSecurityParameterIndex(mLocalAddress);
+            mLocalIkeSpiResource = mIkeSpiGenerator.allocateSpi(mLocalAddress);
+
             long initSpi = mLocalIkeSpiResource.getSpi();
             long respSpi = 0;
 
@@ -2736,7 +2764,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             mLocalAddress,
                             mRemoteAddress,
                             mLocalPort,
-                            mIkeSocket.getIkeServerPort());
+                            mIkeSocket.getIkeServerPort(),
+                            mRandomFactory);
             payloadList.add(
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
@@ -2772,8 +2801,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 throws IkeProtocolException, IOException {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
-                    IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                            mRemoteAddress, respIkeHeader.ikeResponderSpi);
+                    mIkeSpiGenerator.allocateSpi(mRemoteAddress, respIkeHeader.ikeResponderSpi);
 
             int exchangeType = respIkeHeader.exchangeType;
             if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
@@ -2866,7 +2894,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
             mSaProposal =
                     IkeSaPayload.getVerifiedNegotiatedIkeProposalPair(
-                                    reqSaPayload, respSaPayload, mRemoteAddress)
+                                    reqSaPayload, respSaPayload, mIkeSpiGenerator, mRemoteAddress)
                             .second
                             .saProposal;
 
@@ -3151,7 +3179,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 mUseEap =
                         (IkeSessionParams.IKE_AUTH_METHOD_EAP
                                 == mIkeSessionParams.getLocalAuthConfig().mAuthMethod);
-            } catch (ResourceUnavailableException e) {
+            } catch (SpiUnavailableException | ResourceUnavailableException e) {
                 // Handle IPsec SPI assigning failure.
                 handleIkeFatalError(e);
             }
@@ -3211,7 +3239,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             handleIkeFatalError(ikeException);
         }
 
-        private IkeMessage buildIkeAuthReq() throws ResourceUnavailableException {
+        private IkeMessage buildIkeAuthReq()
+                throws SpiUnavailableException, ResourceUnavailableException {
             List<IkePayload> payloadList = new LinkedList<>();
 
             // Build Identification payloads
@@ -3277,7 +3306,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             payloadList.addAll(
                     CreateChildSaHelper.getInitChildCreateReqPayloads(
-                            mIpSecManager,
+                            mRandomFactory,
+                            mIpSecSpiGenerator,
                             mLocalAddress,
                             mFirstChildSessionParams,
                             true /*isFirstChildSa*/));
@@ -3480,12 +3510,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeSessionParams.IkeAuthEapConfig ikeAuthEapConfig =
                     (IkeSessionParams.IkeAuthEapConfig) mIkeSessionParams.getLocalAuthConfig();
 
+            // TODO(b/148689509): Pass in deterministic random when test mode is enabled
             mEapAuthenticator =
                     mEapAuthenticatorFactory.newEapAuthenticator(
                             getHandler().getLooper(),
                             new IkeEapCallback(),
                             mContext,
-                            ikeAuthEapConfig.mEapConfig);
+                            ikeAuthEapConfig.mEapConfig,
+                            mRandomFactory);
         }
 
         @Override
@@ -3875,7 +3907,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 // Throw exception or return valid negotiated proposal with allocated SPIs
                 negotiatedProposals =
                         IkeSaPayload.getVerifiedNegotiatedIkeProposalPair(
-                                reqSaPayload, respSaPayload, mRemoteAddress);
+                                reqSaPayload, respSaPayload, mIkeSpiGenerator, mRemoteAddress);
                 IkeProposal reqProposal = negotiatedProposals.first;
                 IkeProposal respProposal = negotiatedProposals.second;
 
@@ -3966,7 +3998,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // No need to allocate SPIs; they will be allocated as part of the
             // getRekeyIkeSaRequestPayloads
             List<IkePayload> payloadList =
-                    CreateIkeSaHelper.getRekeyIkeSaRequestPayloads(saProposals, mLocalAddress);
+                    CreateIkeSaHelper.getRekeyIkeSaRequestPayloads(
+                            saProposals, mIkeSpiGenerator, mLocalAddress, mRandomFactory);
 
             // Build IKE header
             IkeHeader ikeHeader =
@@ -4625,11 +4658,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 InetAddress localAddr,
                 InetAddress remoteAddr,
                 int localPort,
-                int remotePort)
+                int remotePort,
+                RandomnessFactory randomFactory)
                 throws IOException {
             List<IkePayload> payloadList =
                     getCreateIkeSaPayloads(
-                            selectedDhGroup, IkeSaPayload.createInitialIkeSaPayload(saProposals));
+                            selectedDhGroup,
+                            IkeSaPayload.createInitialIkeSaPayload(saProposals),
+                            randomFactory);
 
             // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
             // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in
@@ -4649,7 +4685,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         public static List<IkePayload> getRekeyIkeSaRequestPayloads(
-                IkeSaProposal[] saProposals, InetAddress localAddr) throws IOException {
+                IkeSaProposal[] saProposals,
+                IkeSpiGenerator ikeSpiGenerator,
+                InetAddress localAddr,
+                RandomnessFactory randomFactory)
+                throws IOException {
             if (localAddr == null) {
                 throw new IllegalArgumentException("Local address was null for rekey");
             }
@@ -4660,11 +4700,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             return getCreateIkeSaPayloads(
                     selectedDhGroup,
-                    IkeSaPayload.createRekeyIkeSaRequestPayload(saProposals, localAddr));
+                    IkeSaPayload.createRekeyIkeSaRequestPayload(
+                            saProposals, ikeSpiGenerator, localAddr),
+                    randomFactory);
         }
 
         public static List<IkePayload> getRekeyIkeSaResponsePayloads(
-                byte respProposalNumber, IkeSaProposal saProposal, InetAddress localAddr)
+                byte respProposalNumber,
+                IkeSaProposal saProposal,
+                IkeSpiGenerator ikeSpiGenerator,
+                InetAddress localAddr,
+                RandomnessFactory randomFactory)
                 throws IOException {
             if (localAddr == null) {
                 throw new IllegalArgumentException("Local address was null for rekey");
@@ -4675,7 +4721,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             return getCreateIkeSaPayloads(
                     selectedDhGroup,
                     IkeSaPayload.createRekeyIkeSaResponsePayload(
-                            respProposalNumber, saProposal, localAddr));
+                            respProposalNumber, saProposal, ikeSpiGenerator, localAddr),
+                    randomFactory);
         }
 
         /**
@@ -4684,7 +4731,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
          * <p>Will return a non-empty list of IkePayloads, the first of which WILL be the SA payload
          */
         private static List<IkePayload> getCreateIkeSaPayloads(
-                int selectedDhGroup, IkeSaPayload saPayload) throws IOException {
+                int selectedDhGroup, IkeSaPayload saPayload, RandomnessFactory randomFactory)
+                throws IOException {
             if (saPayload.proposalList.size() == 0) {
                 throw new IllegalArgumentException("Invalid SA proposal list - was empty");
             }
@@ -4692,10 +4740,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             List<IkePayload> payloadList = new ArrayList<>(3);
 
             payloadList.add(saPayload);
-            payloadList.add(new IkeNoncePayload());
+            payloadList.add(new IkeNoncePayload(randomFactory));
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
-            payloadList.add(new IkeKePayload(selectedDhGroup));
+            payloadList.add(new IkeKePayload(selectedDhGroup, randomFactory));
 
             return payloadList;
         }
