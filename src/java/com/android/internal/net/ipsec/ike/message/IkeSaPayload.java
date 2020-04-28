@@ -24,7 +24,6 @@ import static android.net.ipsec.ike.SaProposal.PseudorandomFunction;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
@@ -36,9 +35,11 @@ import android.util.ArraySet;
 import android.util.Pair;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
+import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -108,7 +109,11 @@ public final class IkeSaPayload extends IkePayload {
     /** Package private constructor for building a request for IKE SA initial creation or rekey */
     @VisibleForTesting
     IkeSaPayload(
-            boolean isResp, byte spiSize, IkeSaProposal[] saProposals, InetAddress localAddress)
+            boolean isResp,
+            byte spiSize,
+            IkeSaProposal[] saProposals,
+            IkeSpiGenerator ikeSpiGenerator,
+            InetAddress localAddress)
             throws IOException {
         this(isResp, spiSize, localAddress);
 
@@ -120,7 +125,11 @@ public final class IkeSaPayload extends IkePayload {
             // Proposal number must start from 1.
             proposalList.add(
                     IkeProposal.createIkeProposal(
-                            (byte) (i + 1) /*number*/, spiSize, saProposals[i], localAddress));
+                            (byte) (i + 1) /* number */,
+                            spiSize,
+                            saProposals[i],
+                            ikeSpiGenerator,
+                            localAddress));
         }
 
         getIkeLog().d(TAG, "Generate " + toString());
@@ -133,13 +142,18 @@ public final class IkeSaPayload extends IkePayload {
             byte spiSize,
             byte proposalNumber,
             IkeSaProposal saProposal,
+            IkeSpiGenerator ikeSpiGenerator,
             InetAddress localAddress)
             throws IOException {
         this(isResp, spiSize, localAddress);
 
         proposalList.add(
                 IkeProposal.createIkeProposal(
-                        proposalNumber /*number*/, spiSize, saProposal, localAddress));
+                        proposalNumber /* number */,
+                        spiSize,
+                        saProposal,
+                        ikeSpiGenerator,
+                        localAddress));
 
         getIkeLog().d(TAG, "Generate " + toString());
     }
@@ -162,9 +176,12 @@ public final class IkeSaPayload extends IkePayload {
      * negotiation.
      */
     @VisibleForTesting
-    IkeSaPayload(ChildSaProposal[] saProposals, IpSecManager ipSecManager, InetAddress localAddress)
-            throws ResourceUnavailableException {
-        this(false /*isResp*/, ipSecManager, localAddress);
+    IkeSaPayload(
+            ChildSaProposal[] saProposals,
+            IpSecSpiGenerator ipSecSpiGenerator,
+            InetAddress localAddress)
+            throws SpiUnavailableException, ResourceUnavailableException {
+        this(false /* isResp */, ipSecSpiGenerator, localAddress);
 
         if (saProposals.length < 1) {
             throw new IllegalArgumentException("Invalid SA payload.");
@@ -176,7 +193,10 @@ public final class IkeSaPayload extends IkePayload {
             // Proposal number must start from 1.
             proposalList.add(
                     ChildProposal.createChildProposal(
-                            (byte) (i + 1) /*number*/, saProposals[i], ipSecManager, localAddress));
+                            (byte) (i + 1) /* number */,
+                            saProposals[i],
+                            ipSecSpiGenerator,
+                            localAddress));
         }
 
         getIkeLog().d(TAG, "Generate " + toString());
@@ -190,20 +210,21 @@ public final class IkeSaPayload extends IkePayload {
     IkeSaPayload(
             byte proposalNumber,
             ChildSaProposal saProposal,
-            IpSecManager ipSecManager,
+            IpSecSpiGenerator ipSecSpiGenerator,
             InetAddress localAddress)
-            throws ResourceUnavailableException {
-        this(true /*isResp*/, ipSecManager, localAddress);
+            throws SpiUnavailableException, ResourceUnavailableException {
+        this(true /* isResp */, ipSecSpiGenerator, localAddress);
 
         proposalList.add(
                 ChildProposal.createChildProposal(
-                        proposalNumber /*number*/, saProposal, ipSecManager, localAddress));
+                        proposalNumber /* number */, saProposal, ipSecSpiGenerator, localAddress));
 
         getIkeLog().d(TAG, "Generate " + toString());
     }
 
     /** Constructor for building an outbound SA Payload for Child SA negotiation. */
-    private IkeSaPayload(boolean isResp, IpSecManager ipSecManager, InetAddress localAddress) {
+    private IkeSaPayload(
+            boolean isResp, IpSecSpiGenerator ipSecSpiGenerator, InetAddress localAddress) {
         super(IkePayload.PAYLOAD_TYPE_SA, false);
 
         isSaResponse = isResp;
@@ -224,18 +245,26 @@ public final class IkeSaPayload extends IkePayload {
      */
     public static IkeSaPayload createInitialIkeSaPayload(IkeSaProposal[] saProposals)
             throws IOException {
-        return new IkeSaPayload(false /*isResp*/, SPI_LEN_NOT_INCLUDED, saProposals, null);
+        return new IkeSaPayload(
+                false /* isResp */,
+                SPI_LEN_NOT_INCLUDED,
+                saProposals,
+                null /* ikeSpiGenerator unused */,
+                null /* localAddress unused */);
     }
 
     /**
      * Construct an instance of IkeSaPayload for building an outbound request for Rekey IKE.
      *
      * @param saProposals the array of all IKE SA Proposals.
+     * @param ikeSpiGenerator the IKE SPI generator.
      * @param localAddress the local address assigned on-device.
      */
     public static IkeSaPayload createRekeyIkeSaRequestPayload(
-            IkeSaProposal[] saProposals, InetAddress localAddress) throws IOException {
-        return new IkeSaPayload(false /*isResp*/, SPI_LEN_IKE, saProposals, localAddress);
+            IkeSaProposal[] saProposals, IkeSpiGenerator ikeSpiGenerator, InetAddress localAddress)
+            throws IOException {
+        return new IkeSaPayload(
+                false /* isResp */, SPI_LEN_IKE, saProposals, ikeSpiGenerator, localAddress);
     }
 
     /**
@@ -243,13 +272,22 @@ public final class IkeSaPayload extends IkePayload {
      *
      * @param respProposalNumber the selected proposal's number.
      * @param saProposal the expected selected IKE SA Proposal.
+     * @param ikeSpiGenerator the IKE SPI generator.
      * @param localAddress the local address assigned on-device.
      */
     public static IkeSaPayload createRekeyIkeSaResponsePayload(
-            byte respProposalNumber, IkeSaProposal saProposal, InetAddress localAddress)
+            byte respProposalNumber,
+            IkeSaProposal saProposal,
+            IkeSpiGenerator ikeSpiGenerator,
+            InetAddress localAddress)
             throws IOException {
         return new IkeSaPayload(
-                true /*isResp*/, SPI_LEN_IKE, respProposalNumber, saProposal, localAddress);
+                true /* isResp */,
+                SPI_LEN_IKE,
+                respProposalNumber,
+                saProposal,
+                ikeSpiGenerator,
+                localAddress);
     }
 
     /**
@@ -257,15 +295,17 @@ public final class IkeSaPayload extends IkePayload {
      * negotiation.
      *
      * @param saProposals the array of all Child SA Proposals.
-     * @param ipSecManager the IpSecManager for generating IPsec SPIs.
+     * @param ipSecSpiGenerator the IPsec SPI generator.
      * @param localAddress the local address assigned on-device.
      * @throws ResourceUnavailableException if too many SPIs are currently allocated for this user.
      */
     public static IkeSaPayload createChildSaRequestPayload(
-            ChildSaProposal[] saProposals, IpSecManager ipSecManager, InetAddress localAddress)
-            throws ResourceUnavailableException {
+            ChildSaProposal[] saProposals,
+            IpSecSpiGenerator ipSecSpiGenerator,
+            InetAddress localAddress)
+            throws SpiUnavailableException, ResourceUnavailableException {
 
-        return new IkeSaPayload(saProposals, ipSecManager, localAddress);
+        return new IkeSaPayload(saProposals, ipSecSpiGenerator, localAddress);
     }
 
     /**
@@ -274,16 +314,16 @@ public final class IkeSaPayload extends IkePayload {
      *
      * @param respProposalNumber the selected proposal's number.
      * @param saProposal the expected selected Child SA Proposal.
-     * @param ipSecManager the IpSecManager for generating IPsec SPIs.
+     * @param ipSecSpiGenerator the IPsec SPI generator.
      * @param localAddress the local address assigned on-device.
      */
     public static IkeSaPayload createChildSaResponsePayload(
             byte respProposalNumber,
             ChildSaProposal saProposal,
-            IpSecManager ipSecManager,
+            IpSecSpiGenerator ipSecSpiGenerator,
             InetAddress localAddress)
-            throws ResourceUnavailableException {
-        return new IkeSaPayload(respProposalNumber, saProposal, ipSecManager, localAddress);
+            throws SpiUnavailableException, ResourceUnavailableException {
+        return new IkeSaPayload(respProposalNumber, saProposal, ipSecSpiGenerator, localAddress);
     }
 
     /**
@@ -335,7 +375,10 @@ public final class IkeSaPayload extends IkePayload {
      *     the request SA Payload.
      */
     public static Pair<IkeProposal, IkeProposal> getVerifiedNegotiatedIkeProposalPair(
-            IkeSaPayload reqSaPayload, IkeSaPayload respSaPayload, InetAddress remoteAddress)
+            IkeSaPayload reqSaPayload,
+            IkeSaPayload respSaPayload,
+            IkeSpiGenerator ikeSpiGenerator,
+            InetAddress remoteAddress)
             throws NoValidProposalChosenException, IOException {
         Pair<Proposal, Proposal> proposalPair =
                 getVerifiedNegotiatedProposalPair(reqSaPayload, respSaPayload);
@@ -346,12 +389,12 @@ public final class IkeSaPayload extends IkePayload {
             // Allocate initiator's inbound SPI as needed for remotely initiated IKE SA creation
             if (reqProposal.spiSize != SPI_NOT_INCLUDED
                     && reqProposal.getIkeSpiResource() == null) {
-                reqProposal.allocateResourceForRemoteIkeSpi(remoteAddress);
+                reqProposal.allocateResourceForRemoteIkeSpi(ikeSpiGenerator, remoteAddress);
             }
             // Allocate responder's inbound SPI as needed for locally initiated IKE SA creation
             if (respProposal.spiSize != SPI_NOT_INCLUDED
                     && respProposal.getIkeSpiResource() == null) {
-                respProposal.allocateResourceForRemoteIkeSpi(remoteAddress);
+                respProposal.allocateResourceForRemoteIkeSpi(ikeSpiGenerator, remoteAddress);
             }
 
             return new Pair(reqProposal, respProposal);
@@ -384,7 +427,7 @@ public final class IkeSaPayload extends IkePayload {
      *
      * @param reqSaPayload the request payload.
      * @param respSaPayload the response payload.
-     * @param ipSecManager the IpSecManager to allocate SPI resource for the Proposal in this
+     * @param ipSecSpiGenerator the SPI generator to allocate SPI resource for the Proposal in this
      *     inbound SA Payload.
      * @param remoteAddress the address of the remote IKE peer.
      * @return the Pair of selected ChildProposal in the locally generated request and the
@@ -397,7 +440,7 @@ public final class IkeSaPayload extends IkePayload {
     public static Pair<ChildProposal, ChildProposal> getVerifiedNegotiatedChildProposalPair(
             IkeSaPayload reqSaPayload,
             IkeSaPayload respSaPayload,
-            IpSecManager ipSecManager,
+            IpSecSpiGenerator ipSecSpiGenerator,
             InetAddress remoteAddress)
             throws NoValidProposalChosenException, ResourceUnavailableException,
                     SpiUnavailableException {
@@ -409,11 +452,11 @@ public final class IkeSaPayload extends IkePayload {
         try {
             // Allocate initiator's inbound SPI as needed for remotely initiated Child SA creation
             if (reqProposal.getChildSpiResource() == null) {
-                reqProposal.allocateResourceForRemoteChildSpi(ipSecManager, remoteAddress);
+                reqProposal.allocateResourceForRemoteChildSpi(ipSecSpiGenerator, remoteAddress);
             }
             // Allocate responder's inbound SPI as needed for locally initiated Child SA creation
             if (respProposal.getChildSpiResource() == null) {
-                respProposal.allocateResourceForRemoteChildSpi(ipSecManager, remoteAddress);
+                respProposal.allocateResourceForRemoteChildSpi(ipSecSpiGenerator, remoteAddress);
             }
 
             return new Pair(reqProposal, respProposal);
@@ -719,7 +762,7 @@ public final class IkeSaPayload extends IkePayload {
                     PROTOCOL_ID_IKE,
                     spiSize,
                     ikeSpiResource == null ? SPI_NOT_INCLUDED : ikeSpiResource.getSpi(),
-                    false /*hasUnrecognizedTransform*/);
+                    false /* hasUnrecognizedTransform */);
             mIkeSpiResource = ikeSpiResource;
             this.saProposal = saProposal;
         }
@@ -731,14 +774,17 @@ public final class IkeSaPayload extends IkePayload {
          */
         @VisibleForTesting
         static IkeProposal createIkeProposal(
-                byte number, byte spiSize, IkeSaProposal saProposal, InetAddress localAddress)
+                byte number,
+                byte spiSize,
+                IkeSaProposal saProposal,
+                IkeSpiGenerator ikeSpiGenerator,
+                InetAddress localAddress)
                 throws IOException {
             // IKE_INIT uses SPI_LEN_NOT_INCLUDED, while rekeys use SPI_LEN_IKE
             IkeSecurityParameterIndex spiResource =
                     (spiSize == SPI_LEN_NOT_INCLUDED
                             ? null
-                            : IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                                    localAddress));
+                            : ikeSpiGenerator.allocateSpi(localAddress));
             return new IkeProposal(number, spiSize, spiResource, saProposal);
         }
 
@@ -754,9 +800,9 @@ public final class IkeSaPayload extends IkePayload {
          * Package private method for allocating SPI resource for a validated remotely generated IKE
          * SA proposal.
          */
-        void allocateResourceForRemoteIkeSpi(InetAddress remoteAddress) throws IOException {
-            mIkeSpiResource =
-                    IkeSecurityParameterIndex.allocateSecurityParameterIndex(remoteAddress, spi);
+        void allocateResourceForRemoteIkeSpi(
+                IkeSpiGenerator ikeSpiGenerator, InetAddress remoteAddress) throws IOException {
+            mIkeSpiResource = ikeSpiGenerator.allocateSpi(remoteAddress, spi);
         }
 
         @Override
@@ -807,7 +853,7 @@ public final class IkeSaPayload extends IkePayload {
                     PROTOCOL_ID_ESP,
                     SPI_LEN_IPSEC,
                     (long) childSpiResource.getSpi(),
-                    false /*hasUnrecognizedTransform*/);
+                    false /* hasUnrecognizedTransform */);
             mChildSpiResource = childSpiResource;
             this.saProposal = saProposal;
         }
@@ -821,11 +867,11 @@ public final class IkeSaPayload extends IkePayload {
         static ChildProposal createChildProposal(
                 byte number,
                 ChildSaProposal saProposal,
-                IpSecManager ipSecManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 InetAddress localAddress)
-                throws ResourceUnavailableException {
+                throws SpiUnavailableException, ResourceUnavailableException {
             return new ChildProposal(
-                    number, ipSecManager.allocateSecurityParameterIndex(localAddress), saProposal);
+                    number, ipSecSpiGenerator.allocateSpi(localAddress), saProposal);
         }
 
         /** Package private method for releasing SPI resource in this unselected Proposal. */
@@ -840,10 +886,10 @@ public final class IkeSaPayload extends IkePayload {
          * Package private method for allocating SPI resource for a validated remotely generated
          * Child SA proposal.
          */
-        void allocateResourceForRemoteChildSpi(IpSecManager ipSecManager, InetAddress remoteAddress)
+        void allocateResourceForRemoteChildSpi(
+                IpSecSpiGenerator ipSecSpiGenerator, InetAddress remoteAddress)
                 throws ResourceUnavailableException, SpiUnavailableException {
-            mChildSpiResource =
-                    ipSecManager.allocateSecurityParameterIndex(remoteAddress, (int) spi);
+            mChildSpiResource = ipSecSpiGenerator.allocateSpi(remoteAddress, (int) spi);
         }
 
         @Override
