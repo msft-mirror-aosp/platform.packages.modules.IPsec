@@ -33,7 +33,6 @@ import android.util.CloseGuard;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
@@ -42,6 +41,7 @@ import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultPartial;
 import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
+import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 
 import java.io.IOException;
 import java.net.Inet4Address;
