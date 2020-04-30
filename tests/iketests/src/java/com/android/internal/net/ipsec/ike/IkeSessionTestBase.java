@@ -102,6 +102,6 @@ public abstract class IkeSessionTestBase {
                 .getNetworkCapabilities(any(Network.class));
         doReturn(false)
                 .when(mMockNetworkCapabilities)
-                .hasCapability(RandomnessFactory.NETWORK_CAPABILITY_TRANSPORT_TEST);
+                .hasTransport(RandomnessFactory.TRANSPORT_TEST);
     }
 }
