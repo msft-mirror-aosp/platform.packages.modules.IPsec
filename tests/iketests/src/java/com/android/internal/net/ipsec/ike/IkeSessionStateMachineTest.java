@@ -755,13 +755,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
         assertEquals(REMOTE_ADDRESS, ikeSession.mRemoteAddress);
 
-        // Get socket instances used by the IkeSessionStateMachine by virtue of the caching.
-        mSpyIkeUdp4Socket = spy(IkeUdp4Socket.getInstance(mMockDefaultNetwork, ikeSession));
-        mSpyIkeUdp6Socket = spy(IkeUdp6Socket.getInstance(mMockDefaultNetwork, ikeSession));
-        mSpyIkeUdpEncapSocket =
-                spy(
-                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                mMockDefaultNetwork, mIpSecManager, ikeSession));
+        // Setup socket instances used by the IkeSessionStateMachine
+        // TODO: rename these from spy to mock.
+        mSpyIkeUdp4Socket = mock(IkeUdp4Socket.class);
+        mSpyIkeUdp6Socket = mock(IkeUdp6Socket.class);
+        mSpyIkeUdpEncapSocket = mock(IkeUdpEncapSocket.class);
 
         doNothing().when(mSpyIkeUdp4Socket).sendIkePacket(any(), any());
         doNothing().when(mSpyIkeUdp6Socket).sendIkePacket(any(), any());
@@ -1182,7 +1180,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         verify(mSpyCurrentIkeSocket).releaseReference(eq(mIkeSessionStateMachine));
-        verify(mSpyCurrentIkeSocket).close();
     }
 
     @Test
@@ -1331,9 +1328,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Validate socket switched
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdpEncapSocket);
         verify(mSpyIkeUdp4Socket).unregisterIke(anyLong());
-
-        // Validate keepalive has started
-        verify(mMockSocketKeepalive).start(anyInt());
     }
 
     @Ignore

@@ -46,20 +46,9 @@ public abstract class IkeUdpSocket extends IkeSocket {
         mSocket = socket;
     }
 
+    /** Get FileDescriptor for use with the packet reader polling loop */
     @Override
     protected FileDescriptor getFd() {
-        return createFd(); // Returns cached FD
-    }
-
-    /**
-     * Get FileDescriptor for use with the Packet Receiver.
-     *
-     * <p>PacketReader registers a listener for this file descriptor on the thread where
-     * IkeUdpSocket is constructed. When there is a read event, this listener is invoked and then
-     * calls {@link handlePacket} to handle the received packet.
-     */
-    @Override
-    protected FileDescriptor createFd() {
         return mSocket;
     }
 

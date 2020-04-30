@@ -26,6 +26,7 @@ import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.os.Handler;
+import android.os.Looper;
 import android.system.ErrnoException;
 import android.system.Os;
 import android.util.LongSparseArray;
@@ -81,7 +82,10 @@ public final class IkeUdpEncapSocket extends IkeSocket {
      * @return an IkeUdpEncapSocket instance
      */
     public static IkeUdpEncapSocket getIkeUdpEncapSocket(
-            Network network, IpSecManager ipsecManager, IkeSessionStateMachine ikeSession)
+            Network network,
+            IpSecManager ipsecManager,
+            IkeSessionStateMachine ikeSession,
+            Looper looper)
             throws ErrnoException, IOException, ResourceUnavailableException {
         IkeUdpEncapSocket ikeSocket = sNetworkToIkeSocketMap.get(network);
         if (ikeSocket == null) {
@@ -92,7 +96,7 @@ public final class IkeUdpEncapSocket extends IkeSocket {
             Os.fcntlInt(fd, F_SETFL, SOCK_DGRAM | SOCK_NONBLOCK);
             network.bindSocket(fd);
 
-            ikeSocket = new IkeUdpEncapSocket(udpEncapSocket, network, new Handler());
+            ikeSocket = new IkeUdpEncapSocket(udpEncapSocket, network, new Handler(looper));
 
             // Create and register FileDescriptor for receiving IKE packet on current thread.
             ikeSocket.start();
@@ -112,21 +116,10 @@ public final class IkeUdpEncapSocket extends IkeSocket {
         return mUdpEncapSocket;
     }
 
+    /** Get FileDescriptor for use with the packet reader polling loop */
     @Override
     protected FileDescriptor getFd() {
-        return createFd(); // Returns cached FD
-    }
-
-    /**
-     * Get FileDescriptor of mUdpEncapSocket.
-     *
-     * <p>PacketReader registers a listener for this file descriptor on the thread where
-     * IkeUdpEncapSocket is constructed. When there is a read event, this listener is invoked and
-     * then calls {@link handlePacket} to handle the received packet.
-     */
-    @Override
-    protected FileDescriptor createFd() {
-        return mUdpEncapSocket.getFileDescriptor();
+        return mUdpEncapSocket.getFileDescriptor(); // Returns cached FD
     }
 
     /** Package private */
