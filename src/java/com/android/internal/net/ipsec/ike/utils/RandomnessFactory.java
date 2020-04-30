@@ -31,7 +31,7 @@ import java.security.SecureRandom;
 public class RandomnessFactory implements EapRandomFactory {
     // This constant is mirrored of android.net.NetworkCapabilities.TRANSPORT_TEST due to lack of
     // @TestApi guarantees in mainline modules
-    public static final int NETWORK_CAPABILITY_TRANSPORT_TEST = 7;
+    public static final int TRANSPORT_TEST = 7;
 
     private final boolean mIsTestModeEnabled;
 
@@ -41,8 +41,7 @@ public class RandomnessFactory implements EapRandomFactory {
         NetworkCapabilities networkCapabilities = connectManager.getNetworkCapabilities(network);
 
         mIsTestModeEnabled =
-                networkCapabilities != null
-                        && networkCapabilities.hasCapability(NETWORK_CAPABILITY_TRANSPORT_TEST);
+                networkCapabilities != null && networkCapabilities.hasTransport(TRANSPORT_TEST);
     }
 
     /**

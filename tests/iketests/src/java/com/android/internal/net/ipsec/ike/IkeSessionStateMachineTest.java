@@ -1268,7 +1268,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testEnableTestMode() throws Exception {
         doReturn(true)
                 .when(mMockNetworkCapabilities)
-                .hasCapability(RandomnessFactory.NETWORK_CAPABILITY_TRANSPORT_TEST);
+                .hasTransport(RandomnessFactory.TRANSPORT_TEST);
 
         IkeSessionStateMachine ikeSession = makeAndStartIkeSession(buildIkeSessionParams());
 
@@ -1281,7 +1281,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testDisableTestMode() throws Exception {
         doReturn(false)
                 .when(mMockNetworkCapabilities)
-                .hasCapability(RandomnessFactory.NETWORK_CAPABILITY_TRANSPORT_TEST);
+                .hasTransport(RandomnessFactory.TRANSPORT_TEST);
 
         IkeSessionStateMachine ikeSession = makeAndStartIkeSession(buildIkeSessionParams());
 
