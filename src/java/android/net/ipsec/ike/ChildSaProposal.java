@@ -107,6 +107,16 @@ public final class ChildSaProposal extends SaProposal {
                 && isTransformSelectedFrom(mEsns, ((ChildSaProposal) reqProposal).mEsns);
     }
 
+    /** @hide */
+    public boolean isNegotiatedFromExceptDhGroup(SaProposal saProposal) {
+        return getProtocolId() == saProposal.getProtocolId()
+                && isTransformSelectedFrom(
+                        getEncryptionTransforms(), saProposal.getEncryptionTransforms())
+                && isTransformSelectedFrom(
+                        getIntegrityTransforms(), saProposal.getIntegrityTransforms())
+                && isTransformSelectedFrom(mEsns, ((ChildSaProposal) saProposal).mEsns);
+    }
+
     /**
      * This class is used to incrementally construct a ChildSaProposal. ChildSaProposal instances
      * are immutable once built.
