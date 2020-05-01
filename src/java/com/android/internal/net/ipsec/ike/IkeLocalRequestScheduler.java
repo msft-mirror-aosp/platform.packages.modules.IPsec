@@ -64,15 +64,18 @@ public final class IkeLocalRequestScheduler {
      * Notifies the scheduler that the caller is ready for a new procedure
      *
      * <p>Synchronously triggers the call to onNewProcedureReady.
+     *
+     * @return whether or not a new procedure was scheduled.
      */
-    public void readyForNextProcedure() {
+    public boolean readyForNextProcedure() {
         while (!mRequestQueue.isEmpty()) {
             LocalRequest request = mRequestQueue.poll();
             if (!request.isCancelled()) {
                 mConsumer.onNewProcedureReady(request);
-                return;
+                return true;
             }
         }
+        return false;
     }
 
     /**
