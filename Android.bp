@@ -83,6 +83,7 @@ droidstubs {
         "framework-module-api-defaults-module_libs_api",
         "ike-stubs-defaults",
     ],
+    dist: { dest: "android.net.ipsec.ike.txt" },
 }
 
 droidstubs {
@@ -97,5 +98,6 @@ java_library {
     name: "android.net.ipsec.ike.stubs.module_libs_api",
     srcs: [":android.net.ipsec.ike.stubs.sources.module_libs_api"],
     defaults: ["framework-module-stubs-lib-defaults-module_libs_api"],
+    dist: { dest: "android.net.ipsec.ike.jar" },
 }
 
