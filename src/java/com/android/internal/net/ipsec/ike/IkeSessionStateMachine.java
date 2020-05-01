@@ -2952,7 +2952,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             IkeUdpEncapSocket.getIkeUdpEncapSocket(
                                     mIkeSessionParams.getNetwork(),
                                     mIpSecManager,
-                                    IkeSessionStateMachine.this);
+                                    IkeSessionStateMachine.this,
+                                    getHandler().getLooper());
                     switchToIkeSocket(initIkeSpi, newSocket);
                 } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                     handleIkeFatalError(e);
