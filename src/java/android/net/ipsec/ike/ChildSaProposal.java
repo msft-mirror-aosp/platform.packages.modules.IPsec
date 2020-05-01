@@ -117,6 +117,15 @@ public final class ChildSaProposal extends SaProposal {
                 && isTransformSelectedFrom(mEsns, ((ChildSaProposal) saProposal).mEsns);
     }
 
+    /** @hide */
+    public ChildSaProposal getCopyWithAdditionalDhTransform(int dhGroup) {
+        return new ChildSaProposal(
+                getEncryptionTransforms(),
+                getIntegrityTransforms(),
+                new DhGroupTransform[] {new DhGroupTransform(dhGroup)},
+                getEsnTransforms());
+    }
+
     /**
      * This class is used to incrementally construct a ChildSaProposal. ChildSaProposal instances
      * are immutable once built.

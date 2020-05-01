@@ -1482,9 +1482,20 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         IkePayload.getPayloadForTypeInProvidedList(
                                 PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
 
-                // TODO: Handle first child remote rekey request with KE payload.
+                IkeKePayload reqKePayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloads);
 
-                byte respProposalNumber = reqSaPayload.getNegotiatedProposalNumber(mSaProposal);
+                ChildSaProposal saProposal = mSaProposal;
+
+                // Try accepting a DH group requested during remote rekey for both first and
+                // additional Child Sessions even if it is different from the previously negotiated
+                // proposal.
+                if (reqKePayload != null && isKePayloadAcceptable(reqKePayload)) {
+                    saProposal = mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
+                }
+
+                byte respProposalNumber = reqSaPayload.getNegotiatedProposalNumber(saProposal);
 
                 respPayloads =
                         CreateChildSaHelper.getRekeyChildCreateRespPayloads(
@@ -1492,7 +1503,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mIpSecSpiGenerator,
                                 mLocalAddress,
                                 respProposalNumber,
-                                mSaProposal,
+                                saProposal,
                                 mLocalTs,
                                 mRemoteTs,
                                 mCurrentChildSaRecord.getLocalSpi(),
@@ -1519,8 +1530,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             switch (createChildResult.status) {
                 case CREATE_STATUS_OK:
                     try {
-                        // Do not need to update the negotiated proposal and TS
-                        // because they are not changed.
+                        // Do not need to update TS because they are not changed.
+                        mSaProposal = createChildResult.negotiatedProposal;
 
                         ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
 
@@ -1602,6 +1613,20 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             new IllegalStateException(
                                     "Unrecognized status: " + createChildResult.status));
             }
+        }
+
+        private boolean isKePayloadAcceptable(IkeKePayload reqKePayload) {
+            ChildSaProposal proposal =
+                    mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
+
+            // Verify if this proposal is accepted by user
+            for (SaProposal saProposal : mChildSessionParams.getSaProposals()) {
+                if (proposal.isNegotiatedFrom(saProposal)) {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void handleCreationFailureAndBackToIdle(IkeProtocolException e) {
