@@ -748,11 +748,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         mSkD,
                                         mChildSessionParams.isTransportMode(),
                                         true /*isLocalInit*/,
-                                        rekeyLocalRequest,
                                         buildSaLifetimeAlarmSched(
                                                 createChildResult.respSpi.getSpi()));
-
-                        mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
 
                         ChildSessionConfiguration sessionConfig =
                                 buildChildSessionConfigFromResp(createChildResult, respPayloads);
@@ -1336,12 +1333,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                                 mSkD,
                                                 mChildSessionParams.isTransportMode(),
                                                 true /*isLocalInit*/,
-                                                rekeyLocalRequest,
                                                 buildSaLifetimeAlarmSched(
                                                         createChildResult.respSpi.getSpi()));
-
-                                mChildSmCallback.scheduleLocalRequest(
-                                        rekeyLocalRequest, getRekeyTimeout());
 
                                 executeUserCallback(
                                         () -> {
@@ -1530,11 +1523,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         mSkD,
                                         mChildSessionParams.isTransportMode(),
                                         false /*isLocalInit*/,
-                                        rekeyLocalRequest,
                                         buildSaLifetimeAlarmSched(
                                                 createChildResult.initSpi.getSpi()));
-
-                        mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
 
                         mChildSmCallback.onChildSaCreated(
                                 mRemoteInitNewChildSaRecord.getRemoteSpi(),
