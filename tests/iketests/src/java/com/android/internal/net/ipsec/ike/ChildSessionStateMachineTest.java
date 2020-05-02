@@ -76,6 +76,7 @@ import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionConfiguration;
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeManager;
+import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeTrafficSelector;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.TunnelModeChildSessionParams;
@@ -1662,7 +1663,7 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testFirstChildLocalRekey() throws Exception {
-        ChildSaProposal saProposal = buildSaProposalWithDhGroup();
+        ChildSaProposal saProposal = buildSaProposalWithDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP);
         ChildSessionParams childSessionParams =
                 new TunnelModeChildSessionParams.Builder()
                         .addSaProposal(saProposal)
@@ -1681,9 +1682,11 @@ public final class ChildSessionStateMachineTest {
         // Send Rekey-Create request
         mChildSessionStateMachine.rekeyChildSession();
         mLooper.dispatchAll();
+
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
+
         verifyOutboundRekeyKePayload(false /*isResp*/);
     }
 
@@ -1718,12 +1721,62 @@ public final class ChildSessionStateMachineTest {
                 mMockChildSessionSmCallback);
     }
 
-    private ChildSaProposal buildSaProposalWithDhGroup() {
+    private ChildSaProposal buildSaProposalWithDhGroup(int dhGroup) {
         return new ChildSaProposal.Builder()
                 .addEncryptionAlgorithm(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128)
                 .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
-                .addDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP)
+                .addDhGroup(dhGroup)
                 .build();
+    }
+
+    @Test
+    public void testRemoteRekeyWithKePayload() throws Exception {
+        // Use child session params with dh group to initiate the state machine
+        ChildSaProposal saProposal = buildSaProposalWithDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP);
+        ChildSessionParams childSessionParams =
+                new TunnelModeChildSessionParams.Builder()
+                        .addSaProposal(saProposal)
+                        .addInternalAddressRequest(AF_INET)
+                        .addInternalAddressRequest(INTERNAL_ADDRESS)
+                        .build();
+        mChildSessionStateMachine = buildChildSession(childSessionParams);
+        mChildSessionStateMachine.setDbg(true);
+        mChildSessionStateMachine.start();
+
+        setupIdleStateMachine();
+
+        // Setup for new Child SA negotiation.
+        setUpSpiResource(LOCAL_ADDRESS, REMOTE_INIT_NEW_CHILD_SA_SPI_IN);
+        setUpSpiResource(REMOTE_ADDRESS, REMOTE_INIT_NEW_CHILD_SA_SPI_OUT);
+
+        IkeSaPayload saPayload =
+                IkeSaPayload.createChildSaRequestPayload(
+                        new ChildSaProposal[] {saProposal}, mIpSecSpiGenerator, LOCAL_ADDRESS);
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT, saPayload, false /*isLocalInitRekey*/);
+
+        rekeyReqPayloads.add(
+                new IkeKePayload(IkeSaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
+
+        when(mMockSaRecordHelper.makeChildSaRecord(
+                        eq(rekeyReqPayloads), any(List.class), any(ChildSaRecordConfig.class)))
+                .thenReturn(mSpyRemoteInitNewChildSaRecord);
+
+        assertEquals(0, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
+
+        // Receive rekey Child request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildRemoteDelete);
+
+        verifyOutboundRekeyKePayload(true /*isResp*/);
+
+        assertEquals(1, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
     }
 }
