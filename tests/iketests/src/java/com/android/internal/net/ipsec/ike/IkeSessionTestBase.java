@@ -18,8 +18,11 @@ package com.android.internal.net.ipsec.ike;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 
@@ -33,6 +36,7 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.SocketKeepalive;
 import android.os.Handler;
+import android.os.PowerManager;
 
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
@@ -50,9 +54,12 @@ public abstract class IkeSessionTestBase {
             (Inet4Address) (InetAddresses.parseNumericAddress("127.0.0.1"));
     protected static final String REMOTE_HOSTNAME = "ike.test.android.com";
 
+    protected PowerManager.WakeLock mMockBusyWakelock;
+
     protected MockIpSecTestUtils mMockIpSecTestUtils;
     protected Context mSpyContext;
     protected IpSecManager mIpSecManager;
+    protected PowerManager mPowerManager;
 
     protected ConnectivityManager mMockConnectManager;
     protected Network mMockDefaultNetwork;
@@ -73,6 +80,11 @@ public abstract class IkeSessionTestBase {
                         any(),
                         any(Handler.class));
         doNothing().when(mSpyContext).unregisterReceiver(any(IkeAlarmReceiver.class));
+
+        mPowerManager = mock(PowerManager.class);
+        mMockBusyWakelock = mock(PowerManager.WakeLock.class);
+        doReturn(mPowerManager).when(mSpyContext).getSystemService(eq(PowerManager.class));
+        doReturn(mMockBusyWakelock).when(mPowerManager).newWakeLock(anyInt(), anyString());
 
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
@@ -102,6 +114,6 @@ public abstract class IkeSessionTestBase {
                 .getNetworkCapabilities(any(Network.class));
         doReturn(false)
                 .when(mMockNetworkCapabilities)
-                .hasCapability(RandomnessFactory.NETWORK_CAPABILITY_TRANSPORT_TEST);
+                .hasTransport(RandomnessFactory.TRANSPORT_TEST);
     }
 }

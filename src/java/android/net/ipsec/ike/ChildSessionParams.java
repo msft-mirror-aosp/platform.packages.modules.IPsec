@@ -35,6 +35,17 @@ import java.util.concurrent.TimeUnit;
  * <p>Note that references to negotiated configurations will be held, and the same parameters will
  * be reused during rekey. This includes SA Proposals, lifetimes and traffic selectors.
  *
+ * <p>IKE library will send out KE payload only if user has configured one or more DH groups. The KE
+ * payload in a request will use the first DH group from the first user provided SA proposal (or the
+ * peer selected SA proposal if it's a rekey request). The KE payload in a response will depend on
+ * the SA proposal negotiation result.
+ *
+ * <p>When requesting the first Child Session in IKE AUTH, IKE library will not propose any DH group
+ * even if user has configured it, as per RFC 7296. When rekeying this child session, IKE library
+ * will accept DH groups that are configured in its ChildSessionParams. If after rekeying user needs
+ * to have the same DH group as that of the IKE Session, then they need to explicitly set the same
+ * DH Group in ChildSessionParams.
+ *
  * @see {@link TunnelModeChildSessionParams} and {@link TransportModeChildSessionParams}
  * @hide
  */
@@ -238,8 +249,9 @@ public abstract class ChildSessionParams {
                 break;
             case IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV6_ADDR_RANGE:
                 startAddress = InetAddresses.parseNumericAddress("::");
-                endAddress = InetAddresses.parseNumericAddress(
-                        "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff");
+                endAddress =
+                        InetAddresses.parseNumericAddress(
+                                "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff");
                 break;
             default:
                 throw new IllegalArgumentException("Invalid Traffic Selector type: " + tsType);
