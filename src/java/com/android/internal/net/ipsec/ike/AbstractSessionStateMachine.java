@@ -78,6 +78,9 @@ abstract class AbstractSessionStateMachine extends StateMachine {
     // Use a value greater than the retransmit-failure timeout.
     static final long REKEY_DELETE_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(180L);
 
+    // Default delay time for retrying a request
+    static final long RETRY_INTERVAL_MS = TimeUnit.SECONDS.toMillis(15L);
+
     protected final Executor mUserCbExecutor;
     private final String mLogTag;
 

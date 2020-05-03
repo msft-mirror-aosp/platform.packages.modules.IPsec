@@ -22,6 +22,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_I
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ErrorType;
+import static android.os.PowerManager.PARTIAL_WAKE_LOCK;
 
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -74,6 +75,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -213,9 +215,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     // Default fragment size in bytes.
     @VisibleForTesting static final int DEFAULT_FRAGMENT_SIZE = 1280;
-
-    // Default delay time for retrying a request
-    @VisibleForTesting static final long RETRY_INTERVAL_MS = TimeUnit.SECONDS.toMillis(15L);
 
     // Close IKE Session when all responses during this time were TEMPORARY_FAILURE(s). This
     // indicates that something has gone wrong, and we are out of sync.
@@ -368,6 +367,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      */
     private final IpSecSpiGenerator mIpSecSpiGenerator;
 
+    /** Ensures that the system does not go to sleep in the middle of an exchange. */
+    private final PowerManager.WakeLock mBusyWakeLock;
+
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
     final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
@@ -495,6 +497,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // callback instance in the future
         }
 
+        PowerManager pm = context.getSystemService(PowerManager.class);
+        mBusyWakeLock = pm.newWakeLock(PARTIAL_WAKE_LOCK, TAG + "mBusyWakeLock");
+        mBusyWakeLock.setReferenceCounted(false);
+
         mIkeSessionId = sIkeSessionIdGenerator.getAndIncrement();
         sIkeAlarmReceiver.registerIkeSession(mIkeSessionId, getHandler());
 
@@ -551,6 +557,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             sendMessageAtFrontOfQueue(CMD_EXECUTE_LOCAL_REQ, localReq);
                         });
 
+        mBusyWakeLock.acquire();
         start();
     }
 
@@ -731,15 +738,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        /** Schedule retry when a request got rejected by TEMPORARY_FAILURE. */
-        public void handleTempFailure(LocalRequest localRequest) {
-            logd(
-                    "TempFailureHandler: Receive TEMPORARY FAILURE. Reschedule request: "
-                            + localRequest.procedureType);
-
-            // TODO: Support customized delay time when this is a rekey request and SA is going to
-            // expire soon.
-            scheduleRetry(localRequest);
+        /**
+         * Schedule temporary failure timeout.
+         *
+         * <p>Caller of this method is responsible for scheduling retry of the rejected request.
+         */
+        public void handleTempFailure() {
+            logd("TempFailureHandler: Receive TEMPORARY FAILURE");
 
             if (!mTempFailureReceived) {
                 sendEmptyMessageDelayed(TEMP_FAILURE_RETRY_TIMEOUT, TEMP_FAILURE_RETRY_TIMEOUT_MS);
@@ -773,8 +778,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         // IkeSaRecord is created. Calling this method at the end of exchange will double-register
         // the SPI but it is safe because the key and value are not changed.
         mIkeSocket.registerIke(record.getLocalSpi(), this);
-
-        scheduleRekeySession(record.getFutureRekeyEvent());
     }
 
     @VisibleForTesting
@@ -963,6 +966,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
             // TODO: Remove the stored ikeSessionCallback
         }
+
+        mBusyWakeLock.release();
     }
 
     private void closeAllSaRecords(boolean expectSaClosed) {
@@ -1065,7 +1070,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void enterState() {
-            mScheduler.readyForNextProcedure();
+            if (!mScheduler.readyForNextProcedure()) {
+                mBusyWakeLock.release();
+            }
 
             if (mDpdIntent == null) {
                 long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
@@ -1097,6 +1104,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // #exitState is guaranteed to be invoked when quit() or quitNow() is called
             mAlarmManager.cancel(mDpdIntent);
             logd("DPD Alarm canceled");
+
+            mBusyWakeLock.acquire();
         }
 
         @Override
@@ -1200,7 +1209,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         return obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, localRequestType, spiBundle);
     }
 
-    private SaLifetimeAlarmScheduler buildSaLifetimeAlarmScheduler(long remoteSpi) {
+    @VisibleForTesting
+    SaLifetimeAlarmScheduler buildSaLifetimeAlarmScheduler(long remoteSpi) {
         PendingIntent deleteSaIntent =
                 buildIkeAlarmIntent(
                         mContext,
@@ -1470,14 +1480,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     // Software keepalive alarm is fired
                     mIkeNattKeepalive.onAlarmFired();
                     return;
-                case CMD_LOCAL_REQUEST_DELETE_CHILD:
-                    // Child SA (identified by remoteChildSpi) has hit its hard lifetime
+                case CMD_LOCAL_REQUEST_DELETE_CHILD: // Hits hard lifetime; fall through
+                case CMD_LOCAL_REQUEST_REKEY_CHILD: // Hits soft lifetime
                     enqueueChildLocalRequest(message);
                     return;
-                case CMD_LOCAL_REQUEST_DELETE_IKE:
-                    // IKE SA hits its hard lifetime
-                    enqueueIkeLocalRequest(message);
-                    return;
+                case CMD_LOCAL_REQUEST_DELETE_IKE: // Hits hard lifetime; fall through
+                case CMD_LOCAL_REQUEST_REKEY_IKE: // Hits soft lifetime; fall through
                 case CMD_LOCAL_REQUEST_DPD:
                     // IKE Session has not received any protectd IKE packet for the whole DPD delay
                     enqueueIkeLocalRequest(message);
@@ -2215,7 +2223,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         protected void handleTempFailure() {
-            mTempFailHandler.handleTempFailure(mLocalRequestOngoing);
+            // The ChildSessionStateMachine will be responsible for rescheduling the rejected
+            // request.
+            mTempFailHandler.handleTempFailure();
         }
 
         private void transitionToIdleIfAllProceduresDone() {
@@ -2694,7 +2704,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 mIkePrf,
                                 mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
                                 mIkeCipher.getKeyLength(),
-                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
                                 buildSaLifetimeAlarmScheduler(mRemoteIkeSpiResource.getSpi()));
 
                 addIkeSaRecord(mCurrentIkeSaRecord);
@@ -2952,7 +2961,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             IkeUdpEncapSocket.getIkeUdpEncapSocket(
                                     mIkeSessionParams.getNetwork(),
                                     mIpSecManager,
-                                    IkeSessionStateMachine.this);
+                                    IkeSessionStateMachine.this,
+                                    getHandler().getLooper());
                     switchToIkeSocket(initIkeSpi, newSocket);
                 } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                     handleIkeFatalError(e);
@@ -3878,7 +3888,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 + firstErrorNotifyPayload.notifyType
                                 + " for rekey IKE. Schedule a retry");
                 if (!isSimulRekey) {
-                    scheduleRetry(mCurrentIkeSaRecord.getFutureRekeyEvent());
+                    mCurrentIkeSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
                 }
             }
 
@@ -3940,7 +3950,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 newIntegrity == null ? 0 : newIntegrity.getKeyLength(),
                                 newCipher.getKeyLength(),
                                 isLocalInit,
-                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
                                 buildSaLifetimeAlarmScheduler(remoteSpi));
                 addIkeSaRecord(newSaRecord);
 
@@ -3969,7 +3978,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 mRetransmitter = new EncryptedRetransmitter(buildIkeRekeyReq());
             } catch (IOException e) {
                 loge("Fail to assign IKE SPI for rekey. Schedule a retry.", e);
-                scheduleRetry(mCurrentIkeSaRecord.getFutureRekeyEvent());
+                mCurrentIkeSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
                 transitionTo(mIdle);
             }
         }
@@ -3981,7 +3990,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         protected void handleTempFailure() {
-            mTempFailHandler.handleTempFailure(mCurrentIkeSaRecord.getFutureRekeyEvent());
+            mTempFailHandler.handleTempFailure();
+            mCurrentIkeSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
         }
 
         /**
