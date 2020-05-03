@@ -115,3 +115,28 @@ java_library {
     defaults: ["framework-module-stubs-lib-defaults-module_libs_api"],
     dist: { dest: "android.net.ipsec.ike.jar" },
 }
+
+// Implicitly references by android.net.ipsec.ike.stubs.module_libs_api
+filegroup {
+  name: "android.net.ipsec.ike-removed.api.public.latest",
+  srcs: [
+      "api/removed.txt"
+  ]
+}
+
+// Implicitly references by android.net.ipsec.ike.stubs.module_libs_api
+filegroup {
+  name: "android.net.ipsec.ike-removed.api.system.latest",
+  srcs: [
+      "api/system-removed.txt"
+  ]
+}
+
+// Implicitly references by android.net.ipsec.ike.stubs.module_libs_api
+filegroup {
+  name: "android.net.ipsec.ike-removed.api.test.latest",
+  srcs: [
+      "api/test-removed.txt"
+  ]
+}
+
