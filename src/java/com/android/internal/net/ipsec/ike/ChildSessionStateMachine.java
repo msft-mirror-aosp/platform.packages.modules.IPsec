@@ -79,7 +79,6 @@ import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.ipsec.ike.exceptions.TemporaryFailureException;
 import com.android.internal.net.ipsec.ike.exceptions.TsUnacceptableException;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
@@ -749,11 +748,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         mSkD,
                                         mChildSessionParams.isTransportMode(),
                                         true /*isLocalInit*/,
-                                        rekeyLocalRequest,
                                         buildSaLifetimeAlarmSched(
                                                 createChildResult.respSpi.getSpi()));
-
-                        mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
 
                         ChildSessionConfiguration sessionConfig =
                                 buildChildSessionConfigFromResp(createChildResult, respPayloads);
@@ -1292,8 +1288,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         ChildSessionStateMachine.this);
             } catch (SpiUnavailableException | ResourceUnavailableException e) {
                 loge("Fail to assign Child SPI. Schedule a retry for rekey Child");
-                mChildSmCallback.scheduleRetryLocalRequest(
-                        (ChildLocalRequest) mCurrentChildSaRecord.getFutureRekeyEvent());
+                mCurrentChildSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
                 transitionTo(mIdle);
             }
         }
@@ -1338,12 +1333,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                                 mSkD,
                                                 mChildSessionParams.isTransportMode(),
                                                 true /*isLocalInit*/,
-                                                rekeyLocalRequest,
                                                 buildSaLifetimeAlarmSched(
                                                         createChildResult.respSpi.getSpi()));
-
-                                mChildSmCallback.scheduleLocalRequest(
-                                        rekeyLocalRequest, getRekeyTimeout());
 
                                 executeUserCallback(
                                         () -> {
@@ -1373,18 +1364,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     resp.registeredSpi, createChildResult.exception);
                             break;
                         case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
-                            if (createChildResult.exception instanceof TemporaryFailureException) {
-                                loge(
-                                        "Received TEMPORARY_FAILURE for rekey Child. Retry has"
-                                                + "already been scheduled by IKE Session.");
-                            } else {
-                                loge(
-                                        "Received error notification for rekey Child. Schedule a"
-                                                + " retry");
-                                mChildSmCallback.scheduleRetryLocalRequest(
-                                        (ChildLocalRequest)
-                                                mCurrentChildSaRecord.getFutureRekeyEvent());
-                            }
+                            loge(
+                                    "Received error notification for rekey Child. Schedule a"
+                                            + " retry");
+                            mCurrentChildSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
 
                             transitionTo(mIdle);
                             break;
@@ -1551,11 +1534,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                         mSkD,
                                         mChildSessionParams.isTransportMode(),
                                         false /*isLocalInit*/,
-                                        rekeyLocalRequest,
                                         buildSaLifetimeAlarmSched(
                                                 createChildResult.initSpi.getSpi()));
-
-                        mChildSmCallback.scheduleLocalRequest(rekeyLocalRequest, getRekeyTimeout());
 
                         mChildSmCallback.onChildSaCreated(
                                 mRemoteInitNewChildSaRecord.getRemoteSpi(),
