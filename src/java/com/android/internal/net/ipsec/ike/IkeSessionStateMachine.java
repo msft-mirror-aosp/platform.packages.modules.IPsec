@@ -768,8 +768,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         // IkeSaRecord is created. Calling this method at the end of exchange will double-register
         // the SPI but it is safe because the key and value are not changed.
         mIkeSocket.registerIke(record.getLocalSpi(), this);
-
-        scheduleRekeySession(record.getFutureRekeyEvent());
     }
 
     @VisibleForTesting
@@ -1195,7 +1193,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         return obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, localRequestType, spiBundle);
     }
 
-    private SaLifetimeAlarmScheduler buildSaLifetimeAlarmScheduler(long remoteSpi) {
+    @VisibleForTesting
+    SaLifetimeAlarmScheduler buildSaLifetimeAlarmScheduler(long remoteSpi) {
         PendingIntent deleteSaIntent =
                 buildIkeAlarmIntent(
                         mContext,
@@ -1465,14 +1464,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     // Software keepalive alarm is fired
                     mIkeNattKeepalive.onAlarmFired();
                     return;
-                case CMD_LOCAL_REQUEST_DELETE_CHILD:
-                    // Child SA (identified by remoteChildSpi) has hit its hard lifetime
+                case CMD_LOCAL_REQUEST_DELETE_CHILD: // Hits hard lifetime; fall through
+                case CMD_LOCAL_REQUEST_REKEY_CHILD: // Hits soft lifetime
                     enqueueChildLocalRequest(message);
                     return;
-                case CMD_LOCAL_REQUEST_DELETE_IKE:
-                    // IKE SA hits its hard lifetime
-                    enqueueIkeLocalRequest(message);
-                    return;
+                case CMD_LOCAL_REQUEST_DELETE_IKE: // Hits hard lifetime; fall through
+                case CMD_LOCAL_REQUEST_REKEY_IKE: // Hits soft lifetime; fall through
                 case CMD_LOCAL_REQUEST_DPD:
                     // IKE Session has not received any protectd IKE packet for the whole DPD delay
                     enqueueIkeLocalRequest(message);
@@ -2691,7 +2688,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 mIkePrf,
                                 mIkeIntegrity == null ? 0 : mIkeIntegrity.getKeyLength(),
                                 mIkeCipher.getKeyLength(),
-                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
                                 buildSaLifetimeAlarmScheduler(mRemoteIkeSpiResource.getSpi()));
 
                 addIkeSaRecord(mCurrentIkeSaRecord);
@@ -3938,7 +3934,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 newIntegrity == null ? 0 : newIntegrity.getKeyLength(),
                                 newCipher.getKeyLength(),
                                 isLocalInit,
-                                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
                                 buildSaLifetimeAlarmScheduler(remoteSpi));
                 addIkeSaRecord(newSaRecord);
 

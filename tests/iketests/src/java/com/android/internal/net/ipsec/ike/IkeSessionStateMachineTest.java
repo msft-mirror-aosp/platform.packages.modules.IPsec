@@ -29,7 +29,6 @@ import static android.system.OsConstants.AF_INET6;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
@@ -643,8 +642,23 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 new byte[KEY_LEN_IKE_ENCR],
                 TestUtils.hexStringToByteArray(PRF_KEY_INIT_HEX_STRING),
                 TestUtils.hexStringToByteArray(PRF_KEY_RESP_HEX_STRING),
-                new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE),
                 mock(SaLifetimeAlarmScheduler.class));
+    }
+
+    private void mockScheduleRekey(SaLifetimeAlarmScheduler mockSaLifetimeAlarmScheduler) {
+        IkeLocalRequest rekeyReq =
+                new IkeLocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE);
+        doAnswer(
+                (invocation) -> {
+                        mIkeSessionStateMachine.sendMessageDelayed(
+                                IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE,
+                                rekeyReq,
+                                mIkeSessionStateMachine.mIkeSessionParams
+                                        .getSoftLifetimeMsInternal());
+                        return null;
+                })
+                .when(mockSaLifetimeAlarmScheduler)
+                .scheduleLifetimeExpiryAlarm(anyString());
     }
 
     @Before
@@ -1215,6 +1229,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .thenAnswer(
                         (invocation) -> {
                             captureAndReleaseIkeSpiResource(invocation, 2);
+                            mockScheduleRekey(mSpyCurrentIkeSaRecord.mSaLifetimeAlarmScheduler);
+                            mSpyCurrentIkeSaRecord.mSaLifetimeAlarmScheduler
+                                    .scheduleLifetimeExpiryAlarm(anyString());
                             return mSpyCurrentIkeSaRecord;
                         });
     }
@@ -1227,6 +1244,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .thenAnswer(
                         (invocation) -> {
                             captureAndReleaseIkeSpiResource(invocation, 4);
+                            mockScheduleRekey(rekeySaRecord.mSaLifetimeAlarmScheduler);
+                            rekeySaRecord.mSaLifetimeAlarmScheduler.scheduleLifetimeExpiryAlarm(
+                                    anyString());
                             return rekeySaRecord;
                         });
     }
@@ -1399,7 +1419,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(KEY_LEN_IKE_PRF, ikeSaRecordConfig.prf.getKeyLength());
         assertEquals(KEY_LEN_IKE_INTE, ikeSaRecordConfig.integrityKeyLength);
         assertEquals(KEY_LEN_IKE_ENCR, ikeSaRecordConfig.encryptionKeyLength);
-        assertEquals(CMD_LOCAL_REQUEST_REKEY_IKE, ikeSaRecordConfig.futureRekeyEvent.procedureType);
+        assertNotNull(ikeSaRecordConfig.saLifetimeAlarmScheduler);
 
         // Validate NAT detection
         assertTrue(mIkeSessionStateMachine.mIsLocalBehindNat);
