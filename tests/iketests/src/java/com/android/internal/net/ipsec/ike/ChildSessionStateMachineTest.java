@@ -22,6 +22,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static android.system.OsConstants.AF_INET;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
+import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
@@ -1058,9 +1059,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify rekey has been rescheduled and Child Session is alive
-        verify(mMockChildSessionSmCallback)
-                .scheduleRetryLocalRequest(
-                        (ChildLocalRequest) mSpyCurrentChildSaRecord.getFutureRekeyEvent());
+        verify(mSpyCurrentChildSaRecord).rescheduleRekey(eq(RETRY_INTERVAL_MS));
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
