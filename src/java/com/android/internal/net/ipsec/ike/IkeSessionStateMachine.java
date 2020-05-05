@@ -22,6 +22,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_I
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ErrorType;
+import static android.os.PowerManager.PARTIAL_WAKE_LOCK;
 
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -74,6 +75,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -365,6 +367,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      */
     private final IpSecSpiGenerator mIpSecSpiGenerator;
 
+    /** Ensures that the system does not go to sleep in the middle of an exchange. */
+    private final PowerManager.WakeLock mBusyWakeLock;
+
     @VisibleForTesting
     @GuardedBy("mChildCbToSessions")
     final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
@@ -492,6 +497,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // callback instance in the future
         }
 
+        PowerManager pm = context.getSystemService(PowerManager.class);
+        mBusyWakeLock = pm.newWakeLock(PARTIAL_WAKE_LOCK, TAG + "mBusyWakeLock");
+        mBusyWakeLock.setReferenceCounted(false);
+
         mIkeSessionId = sIkeSessionIdGenerator.getAndIncrement();
         sIkeAlarmReceiver.registerIkeSession(mIkeSessionId, getHandler());
 
@@ -548,6 +557,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             sendMessageAtFrontOfQueue(CMD_EXECUTE_LOCAL_REQ, localReq);
                         });
 
+        mBusyWakeLock.acquire();
         start();
     }
 
@@ -956,6 +966,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
             // TODO: Remove the stored ikeSessionCallback
         }
+
+        mBusyWakeLock.release();
     }
 
     private void closeAllSaRecords(boolean expectSaClosed) {
@@ -1058,7 +1070,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         public void enterState() {
-            mScheduler.readyForNextProcedure();
+            if (!mScheduler.readyForNextProcedure()) {
+                mBusyWakeLock.release();
+            }
 
             if (mDpdIntent == null) {
                 long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
@@ -1090,6 +1104,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // #exitState is guaranteed to be invoked when quit() or quitNow() is called
             mAlarmManager.cancel(mDpdIntent);
             logd("DPD Alarm canceled");
+
+            mBusyWakeLock.acquire();
         }
 
         @Override

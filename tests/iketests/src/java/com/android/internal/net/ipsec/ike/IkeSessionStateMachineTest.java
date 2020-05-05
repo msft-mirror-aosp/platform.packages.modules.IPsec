@@ -1196,6 +1196,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         verify(mSpyCurrentIkeSocket).releaseReference(eq(mIkeSessionStateMachine));
+        verify(mMockBusyWakelock).release();
     }
 
     @Test
@@ -1457,6 +1458,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     /** Initializes the mIkeSessionStateMachine in the IDLE state. */
     private void setupIdleStateMachine() throws Exception {
+        verify(mMockBusyWakelock).acquire();
+
         setIkeInitResults();
 
         mIkeSessionStateMachine.sendMessage(
@@ -1469,6 +1472,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        verify(mMockBusyWakelock).release();
+
+        // For convenience to verify wakelocks in all other places.
+        reset(mMockBusyWakelock);
     }
 
     private void mockIkeInitAndTransitionToIkeAuth(State authState) throws Exception {
@@ -1630,6 +1638,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
         verify(mMockChildSessionStateMachine).deleteChildSession();
+        verify(mMockBusyWakelock).acquire();
     }
 
     @Test
@@ -1664,6 +1673,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
         verify(mMockChildSessionStateMachine).rekeyChildSession();
+        verify(mMockBusyWakelock).acquire();
     }
 
     @Test
@@ -1803,6 +1813,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         List<IkePayload> payloadList = verifyOutInfoMsgHeaderAndGetPayloads(true /*isResp*/);
         assertEquals(1, payloadList.size());
         assertEquals(outDelPayload, ((IkeDeletePayload) payloadList.get(0)));
+        verify(mMockBusyWakelock).acquire();
     }
 
     @Test
@@ -4108,6 +4119,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockBusyWakelock).release();
     }
 
     @Test
