@@ -98,6 +98,15 @@ droidstubs {
         "framework-module-api-defaults-module_libs_api",
         "ike-stubs-defaults",
     ],
+    check_api: {
+        last_released: {
+            api_file: ":android.net.ipsec.ike.api.public.latest",
+            removed_api_file: ":android.net.ipsec.ike-removed.api.public.latest",
+        },
+        api_lint: {
+            new_since: ":android.net.ipsec.ike.api.public.latest",
+        },
+    },
     dist: { dest: "android.net.ipsec.ike.txt" },
 }
 
