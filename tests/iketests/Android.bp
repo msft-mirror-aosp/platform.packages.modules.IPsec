@@ -25,6 +25,8 @@ android_test {
 
     libs: ["android.test.runner"],
 
+    test_config: "FrameworksIkeTests.xml",
+
     static_libs: [
         // TODO (b/149494912): Do not statically link ike and test against <uses-library>
         "ike_test", // Runs against a test version of the IKE library, not on the system's copy.
