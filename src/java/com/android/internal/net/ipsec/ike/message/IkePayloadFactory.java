@@ -60,7 +60,6 @@ final class IkePayloadFactory {
                 int payloadType, boolean isCritical, boolean isResp, byte[] payloadBody)
                 throws IkeProtocolException {
             switch (payloadType) {
-                    // TODO: Add cases for creating supported payloads.
                 case IkePayload.PAYLOAD_TYPE_SA:
                     return new IkeSaPayload(isCritical, isResp, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_KE:
@@ -71,6 +70,8 @@ final class IkePayloadFactory {
                     return new IkeIdPayload(isCritical, payloadBody, false);
                 case IkePayload.PAYLOAD_TYPE_CERT:
                     return IkeCertPayload.getIkeCertPayload(isCritical, payloadBody);
+                case IkeCertReqPayload.PAYLOAD_TYPE_CERT_REQUEST:
+                    return new IkeCertReqPayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_AUTH:
                     return IkeAuthPayload.getIkeAuthPayload(isCritical, payloadBody);
                 case IkePayload.PAYLOAD_TYPE_NONCE:
