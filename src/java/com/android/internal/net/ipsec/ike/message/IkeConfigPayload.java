@@ -538,7 +538,6 @@ public final class IkeConfigPayload extends IkePayload {
             super(CONFIG_ATTR_INTERNAL_IP4_DHCP, value);
         }
 
-        @Override
         public Inet4Address getAddress() {
             return address;
         }
@@ -572,7 +571,6 @@ public final class IkeConfigPayload extends IkePayload {
             super(CONFIG_ATTR_INTERNAL_IP4_DNS, value);
         }
 
-        @Override
         public Inet4Address getAddress() {
             return address;
         }
@@ -979,7 +977,6 @@ public final class IkeConfigPayload extends IkePayload {
             super(CONFIG_ATTR_INTERNAL_IP6_DNS, value);
         }
 
-        @Override
         public Inet6Address getAddress() {
             return address;
         }
