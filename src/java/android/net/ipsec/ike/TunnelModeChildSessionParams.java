@@ -95,29 +95,10 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     }
 
     /** Represents an IPv4 DHCP server request */
-    public interface ConfigRequestIpv4DhcpServer extends TunnelModeChildConfigRequest {
-        /**
-         * Retrieves the requested IPv4 DHCP server address
-         *
-         * @return The requested DHCP server address, or null if no specific DHCP server was
-         *     requested
-         * @hide
-         */
-        @Nullable
-        Inet4Address getAddress();
-    }
+    public interface ConfigRequestIpv4DhcpServer extends TunnelModeChildConfigRequest {}
 
     /** Represents an IPv4 DNS Server request */
-    public interface ConfigRequestIpv4DnsServer extends TunnelModeChildConfigRequest {
-        /**
-         * Retrieves the requested IPv4 DNS server address
-         *
-         * @return The requested DNS server address, or null if no specific DNS server was requested
-         * @hide
-         */
-        @Nullable
-        Inet4Address getAddress();
-    }
+    public interface ConfigRequestIpv4DnsServer extends TunnelModeChildConfigRequest {}
 
     /** Represents an IPv4 Netmask request */
     public interface ConfigRequestIpv4Netmask extends TunnelModeChildConfigRequest {}
@@ -141,16 +122,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     }
 
     /** Represents an IPv6 DNS Server request */
-    public interface ConfigRequestIpv6DnsServer extends TunnelModeChildConfigRequest {
-        /**
-         * Retrieves the requested IPv6 DNS server address
-         *
-         * @return The requested DNS server address, or null if no specific DNS server was requested
-         * @hide
-         */
-        @Nullable
-        Inet6Address getAddress();
-    }
+    public interface ConfigRequestIpv6DnsServer extends TunnelModeChildConfigRequest {}
 
     /** This class can be used to incrementally construct a {@link TunnelModeChildSessionParams}. */
     public static final class Builder extends ChildSessionParams.Builder {
