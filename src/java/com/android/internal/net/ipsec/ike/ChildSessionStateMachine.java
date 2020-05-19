@@ -885,19 +885,21 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Initial state of ChildSessionStateMachine. */
     class Initial extends CreateChildLocalCreateBase {
+        List<IkePayload> mRequestPayloads;
+
         @Override
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_HANDLE_FIRST_CHILD_EXCHANGE:
                     FirstChildNegotiationData childNegotiationData =
                             (FirstChildNegotiationData) message.obj;
-                    List<IkePayload> reqPayloads = childNegotiationData.requestPayloads;
+                    mRequestPayloads = childNegotiationData.requestPayloads;
                     List<IkePayload> respPayloads = childNegotiationData.responsePayloads;
 
                     // Negotiate Child SA. The exchangeType has been validated in
                     // IkeSessionStateMachine. Won't validate it again here.
                     validateAndBuildChild(
-                            reqPayloads,
+                            mRequestPayloads,
                             respPayloads,
                             EXCHANGE_TYPE_IKE_AUTH,
                             EXCHANGE_TYPE_IKE_AUTH,
@@ -921,6 +923,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        @Override
+        public void exitState() {
+            CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
         }
     }
 
@@ -976,6 +983,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        @Override
+        public void exitState() {
+            CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
         }
     }
 
@@ -1401,6 +1413,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 mChildSmCallback.onChildSaDeleted(registeredSpi);
             }
             handleChildFatalError(exception);
+        }
+
+        @Override
+        public void exitState() {
+            CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
         }
     }
 
@@ -2052,6 +2069,19 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
 
             return hasExpectedRekeyNotify;
+        }
+
+        public static void releaseSpiResources(List<IkePayload> reqPayloads) {
+            if (reqPayloads == null) {
+                return;
+            }
+
+            IkeSaPayload saPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class, reqPayloads);
+            if (saPayload != null) {
+                saPayload.releaseChildSpiResourcesIfExists();
+            }
         }
 
         /** Validate the received payload list and negotiate Child SA. */
