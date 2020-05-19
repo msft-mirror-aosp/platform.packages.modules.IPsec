@@ -773,9 +773,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         // TODO: Initiate deletion
                         mChildSmCallback.onChildSaDeleted(createChildResult.respSpi.getSpi());
+                        handleChildFatalError(e);
+                    } finally {
+                        // In the successful case the transform in ChildSaRecord has taken ownership
+                        // of the SPI (in IpSecService), and will keep it alive.
                         createChildResult.initSpi.close();
                         createChildResult.respSpi.close();
-                        handleChildFatalError(e);
                     }
                     break;
                 case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
@@ -1355,6 +1358,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     | IOException e) {
                                 // #makeChildSaRecord failed
                                 handleProcessRespOrSaCreationFailAndQuit(resp.registeredSpi, e);
+                            } finally {
+                                // In the successful case the transform in ChildSaRecord has taken
+                                // ownership of the SPI (in IpSecService), and will keep it alive.
                                 createChildResult.initSpi.close();
                                 createChildResult.respSpi.close();
                             }
@@ -1564,12 +1570,14 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             | SpiUnavailableException
                             | IOException e) {
                         // #makeChildSaRecord failed.
-                        createChildResult.initSpi.close();
-                        createChildResult.respSpi.close();
-
                         handleCreationFailureAndBackToIdle(
                                 new NoValidProposalChosenException(
                                         "Error in Child SA creation", e));
+                    } finally {
+                        // In the successful case the transform in ChildSaRecord has taken ownership
+                        // of the SPI (in IpSecService), and will keep it alive.
+                        createChildResult.initSpi.close();
+                        createChildResult.respSpi.close();
                     }
                     break;
                 case CREATE_STATUS_CHILD_ERROR_INVALID_MSG:
