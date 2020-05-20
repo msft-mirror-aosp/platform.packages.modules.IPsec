@@ -132,7 +132,6 @@ import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
-import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
@@ -3085,50 +3084,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         protected List<IkePayload> extractChildPayloadsFromMessage(IkeMessage ikeMessage)
                 throws InvalidSyntaxException {
-            IkeSaPayload saPayload =
-                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
-            IkeTsPayload tsInitPayload =
-                    ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class);
-            IkeTsPayload tsRespPayload =
-                    ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class);
-
-            List<IkeNotifyPayload> notifyPayloads =
-                    ikeMessage.getPayloadListForType(
-                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
-
-            IkeConfigPayload configPayload =
-                    ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_CP, IkeConfigPayload.class);
-
-            boolean hasErrorNotify = false;
             List<IkePayload> list = new LinkedList<>();
-            for (IkeNotifyPayload payload : notifyPayloads) {
-                if (payload.isNewChildSaNotify()) {
-                    list.add(payload);
-                    if (payload.isErrorNotify()) {
-                        hasErrorNotify = true;
-                    }
+            for (IkePayload payload : ikeMessage.ikePayloadList) {
+                switch (payload.payloadType) {
+                    case PAYLOAD_TYPE_SA: // fall through
+                    case PAYLOAD_TYPE_TS_INITIATOR: // fall through
+                    case PAYLOAD_TYPE_TS_RESPONDER: // fall through
+                    case PAYLOAD_TYPE_CP:
+                        list.add(payload);
+                        break;
+                    case PAYLOAD_TYPE_NOTIFY:
+                        if (((IkeNotifyPayload) payload).isNewChildSaNotify()) {
+                            list.add(payload);
+                        }
+                        break;
+                    default:
+                        // Ignore payloads unrelated with Child negotiation
                 }
             }
 
-            // If there is no error notification, SA, TS-initiator and TS-responder MUST all be
-            // included in this message.
-            if (!hasErrorNotify
-                    && (saPayload == null || tsInitPayload == null || tsRespPayload == null)) {
-                throw new InvalidSyntaxException(
-                        "SA, TS-Initiator or TS-Responder payload is missing.");
-            }
-
-            list.add(saPayload);
-            list.add(tsInitPayload);
-            list.add(tsRespPayload);
-
-            if (configPayload != null) {
-                list.add(configPayload);
-            }
-
+            // Payload validation is done in ChildSessionStateMachine
             return list;
         }
 
