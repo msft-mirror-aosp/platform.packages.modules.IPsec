@@ -85,19 +85,6 @@ public final class IkeNotifyPayloadTest {
     }
 
     @Test
-    public void testDecodeNotifyPayloadThrowException() throws Exception {
-        byte[] inputPacket =
-                TestUtils.hexStringToByteArray(NOTIFY_NAT_DETECTION_PAYLOAD_BODY_HEX_STRING);
-        // Change Protocol ID to ESP
-        inputPacket[PROTOCOL_ID_OFFSET] = (byte) (IkePayload.PROTOCOL_ID_ESP & 0xFF);
-        try {
-            IkeNotifyPayload payload = new IkeNotifyPayload(false, inputPacket);
-            fail("Expected InvalidSyntaxException: Protocol ID should not be ESP");
-        } catch (InvalidSyntaxException expected) {
-        }
-    }
-
-    @Test
     public void testGenerateNatDetectionData() throws Exception {
         long initiatorIkeSpi = Long.parseLong(IKE_INITIATOR_SPI_HEX_STRING, 16);
         long responderIkespi = Long.parseLong(IKE_RESPODNER_SPI_HEX_STRING, 16);
