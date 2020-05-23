@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.message;
 
+import static android.net.ipsec.ike.IkeManager.getIkeLog;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_FAILED_CP_REQUIRED;
@@ -74,6 +75,8 @@ import java.util.Set;
  *     Version 2 (IKEv2)</a>
  */
 public final class IkeNotifyPayload extends IkeInformationalPayload {
+    private static final String TAG = IkeNotifyPayload.class.getSimpleName();
+
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         NOTIFY_TYPE_ADDITIONAL_TS_POSSIBLE,
@@ -267,8 +270,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
 
     private void validateNotifyPayloadForIkeAndNewChild() throws InvalidSyntaxException {
         if (protocolId != PROTOCOL_ID_UNSET) {
-            throw new InvalidSyntaxException(
-                    "Expected Procotol ID unset: Protocol ID is " + protocolId);
+            getIkeLog().w(TAG, "Expected Procotol ID unset: Protocol ID is " + protocolId);
         }
 
         if (notifyType == ERROR_TYPE_INVALID_SELECTORS
