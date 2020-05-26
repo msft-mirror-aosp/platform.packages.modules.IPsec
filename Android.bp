@@ -17,6 +17,9 @@ java_sdk_library {
     defaults: ["framework-module-defaults"],
     installable: true,
 
+    // ike is used as a shared library.
+    shared_library: true,
+
     aidl: {
         local_include_dirs: ["src/java"],
     },
