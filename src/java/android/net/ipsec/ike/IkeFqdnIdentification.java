@@ -19,7 +19,10 @@ package android.net.ipsec.ike;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
 
+import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+
 import java.nio.charset.Charset;
+import java.security.cert.X509Certificate;
 import java.util.Objects;
 
 /**
@@ -75,6 +78,20 @@ public class IkeFqdnIdentification extends IkeIdentification {
 
         // idType already verified based on class type; no need to check again.
         return fqdn.equals(((IkeFqdnIdentification) o).fqdn);
+    }
+
+    /** @hide */
+    @Override
+    public String getIdTypeString() {
+        return "FQDN";
+    }
+
+    /** @hide */
+    @Override
+    public void validateEndCertIdOrThrow(X509Certificate endCert)
+            throws AuthenticationFailedException {
+        // The corresponding SAN type is DNS Name as per RFC 7296
+        validateEndCertSanOrThrow(endCert, SAN_TYPE_DNS, fqdn);
     }
 
     /**

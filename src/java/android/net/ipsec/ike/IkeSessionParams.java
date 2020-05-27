@@ -562,6 +562,9 @@ public final class IkeSessionParams {
         /**
          * Sets local IKE identification for the {@link IkeSessionParams} being built.
          *
+         * <p>It is not allowed to use KEY ID together with digital-signature-based authentication
+         * as per RFC 7296.
+         *
          * @param identification the local IKE identification.
          * @return Builder this, to facilitate chaining.
          */
@@ -952,6 +955,13 @@ public final class IkeSessionParams {
                     throw new IllegalArgumentException(
                             "Only EAP-only safe method allowed" + " when using EAP-only option.");
                 }
+            }
+
+            if (mLocalAuthConfig.mAuthMethod == IKE_AUTH_METHOD_PUB_KEY_SIGNATURE
+                    && mLocalIdentification.idType == IkeIdentification.ID_TYPE_KEY_ID) {
+                throw new IllegalArgumentException(
+                        "It is not allowed to use KEY_ID as local ID when local authentication"
+                                + " method is digital-signature-based");
             }
 
             return new IkeSessionParams(

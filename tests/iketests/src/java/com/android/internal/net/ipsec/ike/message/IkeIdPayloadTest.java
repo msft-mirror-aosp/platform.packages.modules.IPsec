@@ -20,6 +20,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import android.net.InetAddresses;
 import android.net.ipsec.ike.IkeDerAsn1DnIdentification;
 import android.net.ipsec.ike.IkeFqdnIdentification;
 import android.net.ipsec.ike.IkeIdentification;
@@ -30,12 +31,15 @@ import android.net.ipsec.ike.IkeRfc822AddrIdentification;
 
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.nio.ByteBuffer;
+import java.security.cert.X509Certificate;
 
 import javax.security.auth.x500.X500Principal;
 
@@ -83,6 +87,19 @@ public final class IkeIdPayloadTest {
             "CN=small.server.test.android.net, O=Android, C=US";
 
     private static final int ID_TYPE_OFFSET = 0;
+
+    private static X509Certificate sEndCertWithSanDns;
+    private static X509Certificate sEndCertWithSanIp;
+
+    private static final String CERT_SAN_DNS = "server.test.android.net";
+    private static final Inet4Address CERT_SAN_IP =
+            (Inet4Address) InetAddresses.parseNumericAddress("192.168.43.138");
+
+    @BeforeClass
+    public static void setUpBeforeClass() throws Exception {
+        sEndCertWithSanDns = CertUtils.createCertFromPemFile("end-cert-a.pem");
+        sEndCertWithSanIp = CertUtils.createCertFromPemFile("end-cert-small.pem");
+    }
 
     @Test
     public void testDecodeIpv4AddrIdPayload() throws Exception {
@@ -260,5 +277,32 @@ public final class IkeIdPayloadTest {
 
         byte[] expectedBytes = TestUtils.hexStringToByteArray(ASN1_DN_PAYLOAD_HEX_STRING);
         assertArrayEquals(expectedBytes, inputBuffer.array());
+    }
+
+    @Test
+    public void validatCertSanDns() throws Exception {
+        IkeIdPayload payload =
+                new IkeIdPayload(false /*isInitiator*/, new IkeFqdnIdentification(CERT_SAN_DNS));
+        payload.validateEndCertIdOrThrow(sEndCertWithSanDns);
+    }
+
+    @Test
+    public void validatCertSanIp() throws Exception {
+        IkeIdPayload payload =
+                new IkeIdPayload(false /*isInitiator*/, new IkeIpv4AddrIdentification(CERT_SAN_IP));
+
+        payload.validateEndCertIdOrThrow(sEndCertWithSanIp);
+    }
+
+    @Test
+    public void testThrowWhenCertAndIdMismtached() throws Exception {
+        IkeIdPayload payload =
+                new IkeIdPayload(false /*isInitiator*/, new IkeIpv4AddrIdentification(CERT_SAN_IP));
+        try {
+            payload.validateEndCertIdOrThrow(sEndCertWithSanDns);
+            fail("Expected to fail because ID and certificate are mismatched");
+        } catch (Exception expected) {
+
+        }
     }
 }

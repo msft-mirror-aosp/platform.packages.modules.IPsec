@@ -23,6 +23,7 @@ import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedExcepti
 
 import java.net.Inet6Address;
 import java.net.UnknownHostException;
+import java.security.cert.X509Certificate;
 import java.util.Objects;
 
 /**
@@ -75,6 +76,20 @@ public class IkeIpv6AddrIdentification extends IkeIdentification {
 
         // idType already verified based on class type; no need to check again.
         return ipv6Address.equals(((IkeIpv6AddrIdentification) o).ipv6Address);
+    }
+
+    /** @hide */
+    @Override
+    public String getIdTypeString() {
+        return "IPv6 Address";
+    }
+
+    /** @hide */
+    @Override
+    public void validateEndCertIdOrThrow(X509Certificate endCert)
+            throws AuthenticationFailedException {
+        // The corresponding SAN type is IP Address as per RFC 7296
+        validateEndCertSanOrThrow(endCert, SAN_TYPE_IP_ADDRESS, ipv6Address.getHostAddress());
     }
 
     /**

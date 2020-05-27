@@ -20,8 +20,14 @@ import android.annotation.IntDef;
 import android.annotation.SystemApi;
 import android.util.ArraySet;
 
+import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.security.cert.CertificateParsingException;
+import java.security.cert.X509Certificate;
+import java.util.Collection;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -38,6 +44,9 @@ import java.util.Set;
 public abstract class IkeIdentification {
     // Set of supported ID types.
     private static final Set<Integer> SUPPORTED_ID_TYPES;
+
+    private static final int INDEX_SAN_TYPE = 0;
+    private static final int INDEX_SAN_DATA = 1;
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -74,6 +83,13 @@ public abstract class IkeIdentification {
         SUPPORTED_ID_TYPES.add(ID_TYPE_KEY_ID);
     }
 
+    /** @hide Subject Alternative Name Type for RFC822 Email Address defined in RFC 5280 */
+    protected static final int SAN_TYPE_RFC822_NAME = 1;
+    /** @hide Subject Alternative Name Type for DNS Name defined in RFC 5280 */
+    protected static final int SAN_TYPE_DNS = 2;
+    /** @hide Subject Alternative Name Type for IP Address defined in RFC 5280 */
+    protected static final int SAN_TYPE_IP_ADDRESS = 7;
+
     /** @hide */
     public final int idType;
 
@@ -82,6 +98,54 @@ public abstract class IkeIdentification {
         idType = type;
     }
 
+    /**
+     * Returns ID type as a String
+     *
+     * @hide
+     */
+    public abstract String getIdTypeString();
+
+    /**
+     * Check if the end certificate's subject DN or SAN matches this identification
+     *
+     * @hide
+     */
+    public abstract void validateEndCertIdOrThrow(X509Certificate endCert)
+            throws AuthenticationFailedException;
+
+    /**
+     * Check if the end certificate SAN matches the identification
+     *
+     * <p>According to RFC 7296, the received IKE ID that types are FQDN, IPv4/IPv6 Address and
+     * RFC822 Address should match the end certificate Subject Alternative Name (SAN).
+     *
+     * @hide
+     */
+    protected void validateEndCertSanOrThrow(
+            X509Certificate endCert, int expectedSanType, Object expectedSanData)
+            throws AuthenticationFailedException {
+        try {
+            // Each List is one SAN whose first entry is an Integer that represents a SAN type and
+            // second entry is a String or a byte array that represents the SAN data
+            Collection<List<?>> allSans = endCert.getSubjectAlternativeNames();
+            if (allSans == null) {
+                throw new AuthenticationFailedException("End certificate does not contain SAN");
+            }
+
+            for (List<?> san : allSans) {
+                if ((Integer) san.get(INDEX_SAN_TYPE) == expectedSanType) {
+                    Object item = san.get(INDEX_SAN_DATA);
+                    if (expectedSanData.equals(item)) {
+                        return;
+                    }
+                }
+            }
+            throw new AuthenticationFailedException(
+                    "End certificate SAN and " + getIdTypeString() + " ID mismatched");
+        } catch (CertificateParsingException e) {
+            throw new AuthenticationFailedException(e);
+        }
+    }
     /**
      * Return the encoded identification data in a byte array.
      *
