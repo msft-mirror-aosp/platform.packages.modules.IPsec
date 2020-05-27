@@ -16,8 +16,15 @@
 
 package android.net.ipsec.ike;
 
+import static android.net.ipsec.ike.SaProposal.DH_GROUP_1024_BIT_MODP;
+import static android.net.ipsec.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
+import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12;
+import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8;
+import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_NONE;
 import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_128;
 import static android.net.ipsec.ike.SaProposal.KEY_LEN_UNUSED;
+import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC;
+import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -317,5 +324,31 @@ public final class SaProposalTest {
                 SaProposal.isTransformSelectedFrom(
                         new Transform[] {mIntegrityNoneTransform},
                         new Transform[] {mIntegrityHmacSha1Transform}));
+    }
+
+    @Test
+    public void testIsNegotiatedFromProposalWithIntegrityNone() throws Exception {
+        SaProposal respProposal =
+                new IkeSaProposal.Builder()
+                        .addEncryptionAlgorithm(
+                                ENCRYPTION_ALGORITHM_AES_GCM_12, SaProposal.KEY_LEN_AES_128)
+                        .addDhGroup(DH_GROUP_2048_BIT_MODP)
+                        .addPseudorandomFunction(PSEUDORANDOM_FUNCTION_AES128_XCBC)
+                        .build();
+
+        SaProposal reqProposal =
+                new IkeSaProposal.Builder()
+                        .addEncryptionAlgorithm(
+                                ENCRYPTION_ALGORITHM_AES_GCM_12, SaProposal.KEY_LEN_AES_128)
+                        .addEncryptionAlgorithm(
+                                ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_128)
+                        .addIntegrityAlgorithm(INTEGRITY_ALGORITHM_NONE)
+                        .addDhGroup(DH_GROUP_1024_BIT_MODP)
+                        .addDhGroup(DH_GROUP_2048_BIT_MODP)
+                        .addPseudorandomFunction(PSEUDORANDOM_FUNCTION_AES128_XCBC)
+                        .addPseudorandomFunction(PSEUDORANDOM_FUNCTION_SHA2_256)
+                        .build();
+
+        assertTrue(respProposal.isNegotiatedFrom(reqProposal));
     }
 }
