@@ -870,7 +870,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         mContext,
                         ACTION_REKEY_CHILD,
                         getIntentIdentifier(remoteSpi),
-                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_CHILD, remoteSpi));
+                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_CHILD, remoteSpi));
 
         return new SaLifetimeAlarmScheduler(
                 mChildSessionParams.getHardLifetimeMsInternal(),
