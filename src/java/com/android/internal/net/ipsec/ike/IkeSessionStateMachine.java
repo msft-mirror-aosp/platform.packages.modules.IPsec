@@ -689,14 +689,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         quitNow();
     }
 
-    private void scheduleRekeySession(LocalRequest rekeyRequest) {
-        // TODO: Make rekey timeout fuzzy
-        sendMessageDelayed(
-                CMD_LOCAL_REQUEST_REKEY_IKE,
-                rekeyRequest,
-                mIkeSessionParams.getSoftLifetimeMsInternal());
-    }
-
     private void scheduleRetry(LocalRequest localRequest) {
         sendMessageDelayed(localRequest.procedureType, localRequest, RETRY_INTERVAL_MS);
     }
@@ -868,11 +860,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void onChildSaDeleted(int remoteSpi) {
             mRemoteSpiToChildSessionMap.remove(remoteSpi);
-        }
-
-        @Override
-        public void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime) {
-            sendMessageDelayed(futureRequest.procedureType, futureRequest, delayedTime);
         }
 
         @Override
@@ -1439,8 +1426,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
          * @param req The instance of the LocalRequest to be queued.
          */
         protected void handleLocalRequest(int requestVal, LocalRequest req) {
-            if (req.isCancelled()) return;
-
             switch (requestVal) {
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     mScheduler.addRequestAtFront(req);
@@ -2929,6 +2914,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
 
             if (mRemoteAddress instanceof Inet4Address) {
+                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
+                // IPv6, the best we can currently do is try non-encap'd anyways
                 handleNatDetection(respMsg, natSourcePayloads, natDestPayload);
             }
         }
