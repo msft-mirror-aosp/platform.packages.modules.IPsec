@@ -1678,27 +1678,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockBusyWakelock).acquire();
     }
 
-    @Test
-    public void testScheduleAndTriggerRekeyChildLocal() throws Exception {
-        setupIdleStateMachine();
-        long dummyRekeyTimeout = 10000L;
-
-        ChildLocalRequest rekeyRequest =
-                new ChildLocalRequest(
-                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
-                        mMockChildSessionCallback,
-                        null /*childParams*/);
-        mDummyChildSmCallback.scheduleLocalRequest(rekeyRequest, dummyRekeyTimeout);
-
-        mLooper.moveTimeForward(dummyRekeyTimeout);
-        mLooper.dispatchAll();
-
-        assertTrue(
-                mIkeSessionStateMachine.getCurrentState()
-                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
-        verify(mMockChildSessionStateMachine).rekeyChildSession();
-    }
-
     private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
             ChildSessionStateMachine child, int remoteSpi) throws Exception {
         return createChildAndGetChildSessionSmCallback(

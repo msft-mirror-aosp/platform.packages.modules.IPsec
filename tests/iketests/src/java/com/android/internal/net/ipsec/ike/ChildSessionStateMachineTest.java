@@ -24,7 +24,6 @@ import static android.system.OsConstants.AF_INET;
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
@@ -89,7 +88,6 @@ import androidx.test.InstrumentationRegistry;
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.IChildSessionSmCallback;
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecordConfig;
 import com.android.internal.net.ipsec.ike.SaRecord.ISaRecordHelper;
@@ -128,7 +126,6 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatcher;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -221,13 +218,6 @@ public final class ChildSessionStateMachineTest {
             ArgumentCaptor.forClass(List.class);
     private ArgumentCaptor<ChildSessionConfiguration> mChildConfigCaptor =
             ArgumentCaptor.forClass(ChildSessionConfiguration.class);
-
-    private ArgumentMatcher<ChildLocalRequest> mRekeyChildLocalReqMatcher =
-            (argument) -> {
-                return (CMD_LOCAL_REQUEST_REKEY_CHILD == argument.procedureType
-                                && mMockChildSessionCallback == argument.childSessionCallback
-                        || CURRENT_CHILD_SA_SPI_OUT == argument.remoteSpi);
-            };
 
     public ChildSessionStateMachineTest() {
         mMockSaRecordHelper = mock(SaRecord.ISaRecordHelper.class);

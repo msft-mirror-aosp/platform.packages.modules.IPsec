@@ -15,6 +15,7 @@
 java_sdk_library {
     name: "android.net.ipsec.ike",
     installable: true,
+    defaults: ["framework-module-defaults"],
     sdk_version: "module_current",
 
     // ike is used as a shared library.
@@ -45,20 +46,11 @@ java_sdk_library {
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
 
-    plugins: ["java_api_finder"],
-
     hostdex: true, // for hiddenapi check
     apex_available: [
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
-
-    system: {
-        enabled: true,
-    },
-    module_lib: {
-        enabled: true,
-    },
 
     stubs_library_visibility: ["//visibility:public"],
 }
