@@ -1783,6 +1783,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // States that accept a TEMPORARY MUST override this method to schedule a retry.
         }
 
+        protected void handleGenericInfoRequest(IkeMessage ikeMessage) {
+            // TODO(b/150327849): Respond with vendor ID or config payload responses.
+
+            IkeMessage emptyInfoResp =
+                    buildEncryptedInformationalMessage(
+                            new IkeInformationalPayload[0],
+                            true /* isResponse */,
+                            ikeMessage.ikeHeader.messageId);
+            sendEncryptedIkeMessage(emptyInfoResp);
+        }
+
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
             // Subclasses MUST override it if they care
@@ -2078,14 +2089,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     mProcedureFinished = false;
                     return;
                 case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
-                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
-
-                    IkeMessage responseIkeMessage =
-                            buildEncryptedInformationalMessage(
-                                    new IkeInformationalPayload[0],
-                                    true /*isResponse*/,
-                                    ikeMessage.ikeHeader.messageId);
-                    sendEncryptedIkeMessage(responseIkeMessage);
+                    handleGenericInfoRequest(ikeMessage);
                     return;
                 default:
             }
@@ -2330,14 +2334,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     handleInboundRekeyChildRequest(ikeMessage);
                     break;
                 case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
-                    // TODO(b/150327849): Respond with vendor ID or config payload responses.
-
-                    IkeMessage responseIkeMessage =
-                            buildEncryptedInformationalMessage(
-                                    new IkeInformationalPayload[0],
-                                    true /*isResponse*/,
-                                    ikeMessage.ikeHeader.messageId);
-                    sendEncryptedIkeMessage(responseIkeMessage);
+                    handleGenericInfoRequest(ikeMessage);
                     break;
                 default:
                     cleanUpAndQuit(
@@ -4596,9 +4593,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         protected void handleRequestIkeMessage(
                 IkeMessage ikeMessage, int ikeExchangeSubType, Message message) {
-            // TODO: Ignore DPD response in Idle and any remotely initiated exchange
-            deferMessage(message);
-            transitionTo(mIdle);
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
+                    handleGenericInfoRequest(ikeMessage);
+                    return;
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
+                    // Reply and close IKE
+                    handleDeleteSessionRequest(ikeMessage);
+                    return;
+                default:
+                    // Reply and stay in current state
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            ikeMessage.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
+                    return;
+            }
         }
 
         @Override
