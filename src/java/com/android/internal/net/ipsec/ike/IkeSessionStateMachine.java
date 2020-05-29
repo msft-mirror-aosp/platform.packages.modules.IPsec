@@ -186,6 +186,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     // Package private
     static final String TAG = "IkeSessionStateMachine";
 
+    @VisibleForTesting static final String BUSY_WAKE_LOCK_TAG = "mBusyWakeLock";
+
     // TODO: b/140579254 Allow users to configure fragment size.
 
     private static final Object IKE_SESSION_LOCK = new Object();
@@ -502,7 +504,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         PowerManager pm = context.getSystemService(PowerManager.class);
-        mBusyWakeLock = pm.newWakeLock(PARTIAL_WAKE_LOCK, TAG + "mBusyWakeLock");
+        mBusyWakeLock = pm.newWakeLock(PARTIAL_WAKE_LOCK, TAG + BUSY_WAKE_LOCK_TAG);
         mBusyWakeLock.setReferenceCounted(false);
 
         mIkeSessionId = sIkeSessionIdGenerator.getAndIncrement();
@@ -555,11 +557,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         addState(mDpdIkeLocalInfo);
 
         setInitialState(mInitial);
+
+        // TODO: Find a way to make it safe to release WakeLock when #onNewProcedureReady is called
         mScheduler =
                 new IkeLocalRequestScheduler(
                         localReq -> {
                             sendMessageAtFrontOfQueue(CMD_EXECUTE_LOCAL_REQ, localReq);
-                        });
+                        },
+                        mContext);
 
         mBusyWakeLock.acquire();
         start();
@@ -963,6 +968,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         mBusyWakeLock.release();
+        mScheduler.releaseAllLocalRequestWakeLocks();
     }
 
     private void closeAllSaRecords(boolean expectSaClosed) {
@@ -1139,6 +1145,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         private void executeLocalRequest(LocalRequest req, Message message) {
+            req.releaseWakeLock();
+
             if (!isRequestForCurrentSa(req)) {
                 logd("Request is for a deleted SA. Ignore it.");
                 mScheduler.readyForNextProcedure();
@@ -1475,13 +1483,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     return;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD: // Hits hard lifetime; fall through
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // Hits soft lifetime
-                    enqueueChildLocalRequest(message);
+                    int remoteChildSpi = ((Bundle) message.obj).getInt(BUNDLE_KEY_CHILD_REMOTE_SPI);
+                    enqueueLocalRequestSynchronously(
+                            new ChildLocalRequest(message.arg2, remoteChildSpi));
                     return;
                 case CMD_LOCAL_REQUEST_DELETE_IKE: // Hits hard lifetime; fall through
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Hits soft lifetime; fall through
                 case CMD_LOCAL_REQUEST_DPD:
                     // IKE Session has not received any protectd IKE packet for the whole DPD delay
-                    enqueueIkeLocalRequest(message);
+                    long remoteIkeSpi = ((Bundle) message.obj).getLong(BUNDLE_KEY_IKE_REMOTE_SPI);
+                    enqueueLocalRequestSynchronously(
+                            new IkeLocalRequest(message.arg2, remoteIkeSpi));
 
                     // TODO(b/152442041): Cancel the scheduled DPD request if IKE Session starts any
                     // procedure before DPD get executed.
@@ -1489,17 +1501,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 default:
                     logWtf("Invalid alarm action: " + message.arg2);
             }
-            // TODO: Handle rekey IKE/Child SA
         }
 
-        private void enqueueIkeLocalRequest(Message message) {
-            long remoteIkeSpi = ((Bundle) message.obj).getLong(BUNDLE_KEY_IKE_REMOTE_SPI);
-            sendMessage(message.arg2, new IkeLocalRequest(message.arg2, remoteIkeSpi));
-        }
-
-        private void enqueueChildLocalRequest(Message message) {
-            int remoteChildSpi = ((Bundle) message.obj).getInt(BUNDLE_KEY_CHILD_REMOTE_SPI);
-            sendMessage(message.arg2, new ChildLocalRequest(message.arg2, remoteChildSpi));
+        private void enqueueLocalRequestSynchronously(LocalRequest request) {
+            // Use dispatchMessage to synchronously handle this message so that the AlarmManager
+            // WakeLock can keep protecting this message until it is enquequed in mScheduler. It is
+            // safe because the alarmReceiver is called on the Ike HandlerThread, and the
+            // IkeSessionStateMachine is not currently in a state transition.
+            getHandler().dispatchMessage(obtainMessage(request.procedureType, request));
         }
     }
 
@@ -2260,6 +2269,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
+            req.releaseWakeLock();
             mChildInLocalProcedure = getChildSession(req);
             mLocalRequestOngoing = req;
 
