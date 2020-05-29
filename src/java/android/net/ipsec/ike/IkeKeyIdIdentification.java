@@ -19,6 +19,9 @@ package android.net.ipsec.ike;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
 
+import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+
+import java.security.cert.X509Certificate;
 import java.util.Objects;
 
 /**
@@ -58,6 +61,20 @@ public final class IkeKeyIdIdentification extends IkeIdentification {
 
         // idType already verified based on class type; no need to check again.
         return keyId.equals(((IkeKeyIdIdentification) o).keyId);
+    }
+
+    /** @hide */
+    @Override
+    public String getIdTypeString() {
+        return "Key ID";
+    }
+
+    /** @hide */
+    @Override
+    public void validateEndCertIdOrThrow(X509Certificate endCert)
+            throws AuthenticationFailedException {
+        throw new AuthenticationFailedException(
+                "Key ID cannot be used together with digital-signature-based authentication");
     }
 
     /**
