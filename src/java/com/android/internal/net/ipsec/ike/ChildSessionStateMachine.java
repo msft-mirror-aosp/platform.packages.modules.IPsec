@@ -301,10 +301,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         /** Notify that a Child SA is deleted. */
         void onChildSaDeleted(int remoteSpi);
 
-        /** Schedule a future Child Rekey Request on the LocalRequestScheduler. */
-        void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime);
-
-        /** Schedule retry for a Child Rekey Request on the LocalRequestScheduler. */
+        /** Schedule retry for a Create Child Request on the LocalRequestScheduler. */
         void scheduleRetryLocalRequest(ChildLocalRequest futureRequest);
 
         /** Notify the IKE Session to send out IKE message for this Child Session. */
@@ -426,16 +423,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      */
     public void killSession() {
         sendMessage(CMD_KILL_SESSION);
-    }
-
-    private ChildLocalRequest makeRekeyLocalRequest() {
-        return new ChildLocalRequest(
-                CMD_LOCAL_REQUEST_REKEY_CHILD, mUserCallback, null /*childParams*/);
-    }
-
-    private long getRekeyTimeout() {
-        // TODO: Make rekey timout fuzzy
-        return mChildSessionParams.getSoftLifetimeMsInternal();
     }
 
     /**
@@ -730,8 +717,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     try {
                         setUpNegotiatedResult(createChildResult);
 
-                        ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
-
                         mCurrentChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
                                         mContext,
@@ -873,7 +858,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         mContext,
                         ACTION_REKEY_CHILD,
                         getIntentIdentifier(remoteSpi),
-                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_CHILD, remoteSpi));
+                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_CHILD, remoteSpi));
 
         return new SaLifetimeAlarmScheduler(
                 mChildSessionParams.getHardLifetimeMsInternal(),
@@ -1330,8 +1315,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 // Do not need to update TS because they are not changed.
                                 mSaProposal = createChildResult.negotiatedProposal;
 
-                                ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
-
                                 mLocalInitNewChildSaRecord =
                                         ChildSaRecord.makeChildSaRecord(
                                                 mContext,
@@ -1538,8 +1521,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     try {
                         // Do not need to update TS because they are not changed.
                         mSaProposal = createChildResult.negotiatedProposal;
-
-                        ChildLocalRequest rekeyLocalRequest = makeRekeyLocalRequest();
 
                         mRemoteInitNewChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
