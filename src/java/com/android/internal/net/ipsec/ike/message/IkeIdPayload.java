@@ -29,6 +29,7 @@ import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedExcepti
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import java.nio.ByteBuffer;
+import java.security.cert.X509Certificate;
 
 /**
  * IkeIdPayload represents an Identification Initiator Payload or an Identification Responder
@@ -123,6 +124,12 @@ public final class IkeIdPayload extends IkePayload {
                 .put(new byte[ID_HEADER_RESERVED_LEN])
                 .put(ikeId.getEncodedIdData());
         return byteBuffer.array();
+    }
+
+    /** Validate if the end certificate matches the ID */
+    public void validateEndCertIdOrThrow(X509Certificate endCert)
+            throws AuthenticationFailedException {
+        ikeId.validateEndCertIdOrThrow(endCert);
     }
 
     /**
