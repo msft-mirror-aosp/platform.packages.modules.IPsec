@@ -4677,17 +4677,39 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testIdleHandlesUnprotectedPacket() throws Exception {
+    public void testIdleHandlesDecryptPacketFailed() throws Exception {
         setupIdleStateMachine();
 
-        ReceivedIkePacket req =
+        ReceivedIkePacket packet =
                 makeDummyReceivedIkePacketWithUnprotectedError(
                         mSpyCurrentIkeSaRecord,
                         false /*isResp*/,
                         EXCHANGE_TYPE_INFORMATIONAL,
                         mock(IkeException.class));
-
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, packet);
         mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    @Test
+    public void testHandlesUnencryptedPacket() throws Exception {
+        setupIdleStateMachine();
+        IkeMessage.setIkeMessageHelper(new IkeMessageHelper());
+
+        ReceivedIkePacket packet =
+                makeDummyUnencryptedReceivedIkePacket(
+                        mSpyCurrentIkeSaRecord.getLocalSpi(),
+                        mSpyCurrentIkeSaRecord.getRemoteSpi(),
+                        IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                        false /*isResp*/,
+                        false /*fromIkeInit*/,
+                        new LinkedList<>());
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, packet);
+        mLooper.dispatchAll();
+
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
     }
