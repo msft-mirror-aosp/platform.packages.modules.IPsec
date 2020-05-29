@@ -514,7 +514,20 @@ public final class IkeSaPayload extends IkePayload {
         Transform[] decodeTransforms(int count, ByteBuffer inputBuffer) throws IkeProtocolException;
     }
 
-    // TODO: Add another constructor for building outbound message.
+    /**
+     * Release IPsec SPI resources in the outbound Create Child request
+     *
+     * <p>This method is usually called when an IKE library fails to receive a Create Child response
+     * before it is terminated. It is also safe to call after the Create Child exchange has
+     * succeeded because the newly created IpSecTransform pair will hold the IPsec SPI resource.
+     */
+    public void releaseChildSpiResourcesIfExists() {
+        for (Proposal proposal : proposalList) {
+            if (proposal instanceof ChildProposal) {
+                proposal.releaseSpiResourceIfExists();
+            }
+        }
+    }
 
     /**
      * This class represents the common information of an IKE Proposal and a Child Proposal.

@@ -503,10 +503,12 @@ public final class IkeMessage {
 
                 int fragNum = i + 1; // 1-based
 
+                int fragFirstInnerPayload =
+                        i == 0 ? firstInnerPayload : IkePayload.PAYLOAD_TYPE_NO_NEXT;
                 IkeSkfPayload skfPayload =
                         new IkeSkfPayload(
-                                ikeHeader,
-                                firstInnerPayload,
+                                skfHeader,
+                                fragFirstInnerPayload,
                                 unencryptedData,
                                 integrityMac,
                                 encryptCipher,
@@ -515,11 +517,7 @@ public final class IkeMessage {
                                 fragNum,
                                 totalFragments);
 
-                packetList[i] =
-                        encodeHeaderAndBody(
-                                skfHeader,
-                                skfPayload,
-                                i == 0 ? firstInnerPayload : IkePayload.PAYLOAD_TYPE_NO_NEXT);
+                packetList[i] = encodeHeaderAndBody(skfHeader, skfPayload, fragFirstInnerPayload);
                 getIkeLog()
                         .d(
                                 "IkeMessage",
@@ -528,7 +526,7 @@ public final class IkeMessage {
                                         + "/"
                                         + totalFragments
                                         + "): "
-                                        + getIkeLog().pii(packetList[0]));
+                                        + getIkeLog().pii(packetList[i]));
             }
 
             return packetList;
