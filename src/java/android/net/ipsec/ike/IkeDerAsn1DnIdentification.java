@@ -20,6 +20,7 @@ import android.annotation.SystemApi;
 
 import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
+import java.security.cert.X509Certificate;
 import java.util.Objects;
 
 import javax.security.auth.x500.X500Principal;
@@ -81,6 +82,22 @@ public final class IkeDerAsn1DnIdentification extends IkeIdentification {
 
         // idType already verified based on class type; no need to check again.
         return derAsn1Dn.equals(((IkeDerAsn1DnIdentification) o).derAsn1Dn);
+    }
+
+    /** @hide */
+    @Override
+    public String getIdTypeString() {
+        return "DER ASN.1 DN";
+    }
+
+    /** @hide */
+    @Override
+    public void validateEndCertIdOrThrow(X509Certificate endCert)
+            throws AuthenticationFailedException {
+        if (!derAsn1Dn.equals(endCert.getSubjectX500Principal())) {
+            throw new AuthenticationFailedException(
+                    "End cert subject DN and DER ASN1 DN ID mismtached");
+        }
     }
 
     /**
