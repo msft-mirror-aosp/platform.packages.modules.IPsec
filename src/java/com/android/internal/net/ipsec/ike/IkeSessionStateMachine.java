@@ -951,6 +951,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
+        // Release IPsec SPIs if IKE Session is terminated before receiving the IKE AUTH response
+        // that contains the first child SA proposal
+        CreateChildSaHelper.releaseSpiResources(mFirstChildReqList);
+
         if (mIkeNattKeepalive != null) {
             mIkeNattKeepalive.stop();
         }
