@@ -2891,12 +2891,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             if (respSaPayload == null
                     || respKePayload == null
-                    || natSourcePayloads.isEmpty()
-                    || natDestPayload == null
                     || !hasNoncePayload) {
-                throw new InvalidSyntaxException(
-                        "SA, KE, Nonce, Notify-NAT-Detection-Source, or"
-                                + " Notify-NAT-Detection-Destination payload missing.");
+                throw new InvalidSyntaxException("SA, KE, or Nonce payload missing.");
             }
 
             IkeSaPayload reqSaPayload =
@@ -2922,6 +2918,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             if (reqKePayload.dhGroup != respKePayload.dhGroup
                     && respKePayload.dhGroup != mPeerSelectedDhGroup) {
                 throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
+            }
+
+            if (mRemoteAddress instanceof Inet4Address) {
+                handleNatDetection(respMsg, natSourcePayloads, natDestPayload);
+            }
+        }
+
+        private void handleNatDetection(
+                IkeMessage respMsg,
+                List<IkeNotifyPayload> natSourcePayloads,
+                IkeNotifyPayload natDestPayload)
+                throws InvalidSyntaxException, IOException {
+            if (natSourcePayloads.isEmpty() || natDestPayload == null) {
+                throw new InvalidSyntaxException("NAT detection notifications missing.");
             }
 
             // NAT detection
@@ -4676,21 +4686,23 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             selectedDhGroup,
                             IkeSaPayload.createInitialIkeSaPayload(saProposals),
                             randomFactory);
+            if (localAddr instanceof Inet4Address) {
+                // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
+                // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
+                // in which the payloads were not in the "right" order" due to the lack of clarity
+                // of the payload order.
+                payloadList.add(
+                        new IkeNotifyPayload(
+                                NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
+                                IkeNotifyPayload.generateNatDetectionData(
+                                        initIkeSpi, respIkeSpi, localAddr, localPort)));
+                payloadList.add(
+                        new IkeNotifyPayload(
+                                NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
+                                IkeNotifyPayload.generateNatDetectionData(
+                                        initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
+            }
 
-            // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
-            // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in
-            // which the payloads were not in the "right" order" due to the lack of clarity of the
-            // payload order.
-            payloadList.add(
-                    new IkeNotifyPayload(
-                            NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
-                            IkeNotifyPayload.generateNatDetectionData(
-                                    initIkeSpi, respIkeSpi, localAddr, localPort)));
-            payloadList.add(
-                    new IkeNotifyPayload(
-                            NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
-                            IkeNotifyPayload.generateNatDetectionData(
-                                    initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
             return payloadList;
         }
 
