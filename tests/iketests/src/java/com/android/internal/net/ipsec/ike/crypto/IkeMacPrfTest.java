@@ -16,6 +16,8 @@
 
 package com.android.internal.net.ipsec.ike.crypto;
 
+import static com.android.internal.net.TestUtils.hexStringToByteArray;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 
@@ -322,5 +324,33 @@ public final class IkeMacPrfTest {
         byte[] expectedSKeySeed =
                 TestUtils.hexStringToByteArray(PRF_AES128XCBC_CALCULATED_MAC_HEX_STRING1);
         assertArrayEquals(expectedSKeySeed, calculatedSKeySeed);
+    }
+
+    @Test
+    public void testGenerateRekeySKeySeedAes128XCbc() throws Exception {
+        final String nonceInitHex =
+                "89BB8717030645EF008FE594C95F5E0950F9C84073678695FFD9B45AB4E2A3A2";
+        final String nonceRespHex =
+                "46B8ECA226DE2F7510A755867F370A891154591AF34342C5C2E87DD5D0E1037A";
+        final String sharedDhKeyHex =
+                "3A814834D7695D62AA523B7728315F16342DFDE1AB0A955C6E75DEB2269CB34E"
+                        + "4588CA9ADED563E2037A1D88EDB6A6AF7D8444313395ED0DBD994D6CB2E3878F"
+                        + "E54E4701C320793BAB8A74E4CD7EDE787EC600E2E375A5FC899936062724E2DC"
+                        + "20B1B24283E607A314F3E7B3D07565A75525968E097F7BEEBB688E09256CFCBA";
+        final String oldSkdHex = "291560590304CDC3BCF5CF0402E4F83E";
+        final String expectedSKeySeedHex = "73DEE6B57953E561CD55306D64B726EF";
+
+        byte[] nonceInit = hexStringToByteArray(nonceInitHex);
+        byte[] nonceResp = hexStringToByteArray(nonceRespHex);
+        byte[] sharedDhKey = hexStringToByteArray(sharedDhKeyHex);
+        byte[] oldSkd = hexStringToByteArray(oldSkdHex);
+
+        byte[] calculatedSKeySeed =
+                mIkeAes128XCbcPrf.generateRekeyedSKeySeed(
+                        hexStringToByteArray(oldSkdHex),
+                        hexStringToByteArray(nonceInitHex),
+                        hexStringToByteArray(nonceRespHex),
+                        hexStringToByteArray(sharedDhKeyHex));
+        assertArrayEquals(hexStringToByteArray(expectedSKeySeedHex), calculatedSKeySeed);
     }
 }

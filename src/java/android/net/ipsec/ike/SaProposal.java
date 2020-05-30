@@ -228,6 +228,11 @@ public abstract class SaProposal {
      * Check if the current SaProposal from the SA responder is consistent with the selected
      * reqProposal from the SA initiator.
      *
+     * <p>As per RFC 7296, The accepted cryptographic suite MUST contain exactly one transform of
+     * each type included in the proposal. But for interoperability reason, IKE library allows
+     * exceptions when the accepted suite or the request proposal has a NONE value transform.
+     * Currently only IntegrityTransform and DhGroupTransform have NONE value transform ID defined.
+     *
      * @param reqProposal selected SaProposal from SA initiator
      * @return if current SaProposal from SA responder is consistent with the selected reqProposal
      *     from SA initiator.
@@ -236,11 +241,16 @@ public abstract class SaProposal {
     public boolean isNegotiatedFrom(SaProposal reqProposal) {
         return this.mProtocolId == reqProposal.mProtocolId
                 && isTransformSelectedFrom(mEncryptionAlgorithms, reqProposal.mEncryptionAlgorithms)
-                && isTransformSelectedFrom(mIntegrityAlgorithms, reqProposal.mIntegrityAlgorithms)
-                && isTransformSelectedFrom(mDhGroups, reqProposal.mDhGroups);
+                && isIntegrityTransformSelectedFrom(
+                        mIntegrityAlgorithms, reqProposal.mIntegrityAlgorithms)
+                && isDhGroupTransformSelectedFrom(mDhGroups, reqProposal.mDhGroups);
     }
 
-    /** Package private */
+    /**
+     * Check if the response transform can be selected from the request transforms
+     *
+     * <p>Package private
+     */
     static boolean isTransformSelectedFrom(Transform[] selected, Transform[] selectFrom) {
         // If the selected proposal has multiple transforms with the same type, the responder MUST
         // choose a single one.
@@ -251,6 +261,45 @@ public abstract class SaProposal {
         if (selected.length == 0) return true;
 
         return Arrays.asList(selectFrom).contains(selected[0]);
+    }
+
+    /**
+     * Check if the response integrity transform can be selected from the request integrity
+     * transforms.
+     *
+     * <p>For interoperability reason, it is allowed to do not include integrity transform in the
+     * response proposal when the request proposal has a NONE value integrity transform; and it is
+     * also allowed to have a NONE value integrity transform when the request proposal does not have
+     * integrity transforms.
+     */
+    private static boolean isIntegrityTransformSelectedFrom(
+            IntegrityTransform[] selected, IntegrityTransform[] selectFrom) {
+        if (selected.length == 0) {
+            selected = new IntegrityTransform[] {new IntegrityTransform(INTEGRITY_ALGORITHM_NONE)};
+        }
+        if (selectFrom.length == 0) {
+            selectFrom =
+                    new IntegrityTransform[] {new IntegrityTransform(INTEGRITY_ALGORITHM_NONE)};
+        }
+        return isTransformSelectedFrom(selected, selectFrom);
+    }
+
+    /**
+     * Check if the response DH group can be selected from the request DH groups
+     *
+     * <p>For interoperability reason, it is allowed to do not include DH group in the response
+     * proposal when the request proposal has a NONE value DH group; and it is also allowed to have
+     * a NONE value DH group when the request proposal does not have DH groups.
+     */
+    private static boolean isDhGroupTransformSelectedFrom(
+            DhGroupTransform[] selected, DhGroupTransform[] selectFrom) {
+        if (selected.length == 0) {
+            selected = new DhGroupTransform[] {new DhGroupTransform(DH_GROUP_NONE)};
+        }
+        if (selectFrom.length == 0) {
+            selectFrom = new DhGroupTransform[] {new DhGroupTransform(DH_GROUP_NONE)};
+        }
+        return isTransformSelectedFrom(selected, selectFrom);
     }
 
     /** @hide */
