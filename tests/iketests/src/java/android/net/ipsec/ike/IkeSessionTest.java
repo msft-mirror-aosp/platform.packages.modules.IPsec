@@ -19,8 +19,11 @@ package android.net.ipsec.ike;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
+import android.content.pm.PackageManager;
 import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
@@ -145,5 +148,27 @@ public final class IkeSessionTest extends IkeSessionTestBase {
         assertTrue(
                 ikeSession.mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeInit);
+    }
+
+    @Test
+    public void testThrowWhenSetupTunnelWithMissingFeature() {
+        PackageManager mockPackageMgr = mock(PackageManager.class);
+        doReturn(mockPackageMgr).when(mSpyContext).getPackageManager();
+        doReturn(false).when(mockPackageMgr).hasSystemFeature(PackageManager.FEATURE_IPSEC_TUNNELS);
+
+        try {
+            IkeSession ikeSession =
+                    new IkeSession(
+                            mSpyContext,
+                            mIpSecManager,
+                            mIkeSessionParams,
+                            mock(TunnelModeChildSessionParams.class),
+                            mUserCbExecutor,
+                            mMockIkeSessionCb,
+                            mMockChildSessionCb);
+            fail("Expected to fail due to missing FEATURE_IPSEC_TUNNELS");
+        } catch (Exception expected) {
+
+        }
     }
 }
