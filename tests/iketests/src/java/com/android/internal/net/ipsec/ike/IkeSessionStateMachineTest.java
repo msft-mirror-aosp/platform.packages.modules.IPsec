@@ -18,7 +18,9 @@ package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
@@ -1676,27 +1678,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockBusyWakelock).acquire();
     }
 
-    @Test
-    public void testScheduleAndTriggerRekeyChildLocal() throws Exception {
-        setupIdleStateMachine();
-        long dummyRekeyTimeout = 10000L;
-
-        ChildLocalRequest rekeyRequest =
-                new ChildLocalRequest(
-                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD,
-                        mMockChildSessionCallback,
-                        null /*childParams*/);
-        mDummyChildSmCallback.scheduleLocalRequest(rekeyRequest, dummyRekeyTimeout);
-
-        mLooper.moveTimeForward(dummyRekeyTimeout);
-        mLooper.dispatchAll();
-
-        assertTrue(
-                mIkeSessionStateMachine.getCurrentState()
-                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
-        verify(mMockChildSessionStateMachine).rekeyChildSession();
-    }
-
     private IChildSessionSmCallback createChildAndGetChildSessionSmCallback(
             ChildSessionStateMachine child, int remoteSpi) throws Exception {
         return createChildAndGetChildSessionSmCallback(
@@ -2525,6 +2506,48 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
                 .onClosedExceptionally(any(AuthenticationFailedException.class));
+    }
+
+    @Test
+    public void testAuthHandlesIkeErrorNotify() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+        resetMockIkeMessageHelper();
+
+        // Mock rejecting IKE AUTH with Authenticatio Failure notification
+        ReceivedIkePacket mockAuthFailPacket =
+                makeIkeAuthRespWithoutChildPayloads(
+                        Arrays.asList(new IkeNotifyPayload(ERROR_TYPE_AUTHENTICATION_FAILED)));
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockAuthFailPacket);
+        mLooper.dispatchAll();
+
+        // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback)
+                .onClosedExceptionally(any(AuthenticationFailedException.class));
+    }
+
+    @Test
+    public void testAuthHandlesCreateChildErrorNotify() throws Exception {
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        verifyRetransmissionStarted();
+        resetMockIkeMessageHelper();
+
+        // Mock rejecting IKE AUTH with a Create Child error notification
+        ReceivedIkePacket mockAuthFailPacket =
+                makeIkeAuthRespWithoutChildPayloads(
+                        Arrays.asList(new IkeNotifyPayload(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE)));
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockAuthFailPacket);
+        mLooper.dispatchAll();
+
+        // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+
+        ArgumentCaptor<IkeProtocolException> captor =
+                ArgumentCaptor.forClass(IkeProtocolException.class);
+        verify(mMockIkeSessionCallback).onClosedExceptionally(captor.capture());
+        IkeProtocolException exception = captor.getValue();
+        assertEquals(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE, exception.getErrorType());
     }
 
     @Test

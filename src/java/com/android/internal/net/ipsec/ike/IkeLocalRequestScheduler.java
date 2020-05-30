@@ -68,12 +68,9 @@ public final class IkeLocalRequestScheduler {
      * @return whether or not a new procedure was scheduled.
      */
     public boolean readyForNextProcedure() {
-        while (!mRequestQueue.isEmpty()) {
-            LocalRequest request = mRequestQueue.poll();
-            if (!request.isCancelled()) {
-                mConsumer.onNewProcedureReady(request);
-                return true;
-            }
+        if (!mRequestQueue.isEmpty()) {
+            mConsumer.onNewProcedureReady(mRequestQueue.poll());
+            return true;
         }
         return false;
     }
@@ -84,20 +81,9 @@ public final class IkeLocalRequestScheduler {
     public abstract static class LocalRequest {
         public final int procedureType;
 
-        private boolean mIsCancelled;
-
         LocalRequest(int type) {
             validateTypeOrThrow(type);
             procedureType = type;
-            mIsCancelled = false;
-        }
-
-        boolean isCancelled() {
-            return mIsCancelled;
-        }
-
-        void cancel() {
-            mIsCancelled = true;
         }
 
         protected abstract void validateTypeOrThrow(int type);

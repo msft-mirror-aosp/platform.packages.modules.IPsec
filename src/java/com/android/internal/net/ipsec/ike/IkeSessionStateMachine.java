@@ -35,9 +35,14 @@ import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_CP;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_DELETE;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_EAP;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_SA;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_VENDOR;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_IKE;
@@ -127,7 +132,6 @@ import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
-import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
@@ -685,14 +689,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         quitNow();
     }
 
-    private void scheduleRekeySession(LocalRequest rekeyRequest) {
-        // TODO: Make rekey timeout fuzzy
-        sendMessageDelayed(
-                CMD_LOCAL_REQUEST_REKEY_IKE,
-                rekeyRequest,
-                mIkeSessionParams.getSoftLifetimeMsInternal());
-    }
-
     private void scheduleRetry(LocalRequest localRequest) {
         sendMessageDelayed(localRequest.procedureType, localRequest, RETRY_INTERVAL_MS);
     }
@@ -867,11 +863,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         @Override
-        public void scheduleLocalRequest(ChildLocalRequest futureRequest, long delayedTime) {
-            sendMessageDelayed(futureRequest.procedureType, futureRequest, delayedTime);
-        }
-
-        @Override
         public void scheduleRetryLocalRequest(ChildLocalRequest childRequest) {
             scheduleRetry(childRequest);
         }
@@ -946,6 +937,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 child.killSession();
             }
         }
+
+        // Release IPsec SPIs if IKE Session is terminated before receiving the IKE AUTH response
+        // that contains the first child SA proposal
+        CreateChildSaHelper.releaseSpiResources(mFirstChildReqList);
 
         if (mIkeNattKeepalive != null) {
             mIkeNattKeepalive.stop();
@@ -1431,8 +1426,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
          * @param req The instance of the LocalRequest to be queued.
          */
         protected void handleLocalRequest(int requestVal, LocalRequest req) {
-            if (req.isCancelled()) return;
-
             switch (requestVal) {
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     mScheduler.addRequestAtFront(req);
@@ -2891,12 +2884,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             if (respSaPayload == null
                     || respKePayload == null
-                    || natSourcePayloads.isEmpty()
-                    || natDestPayload == null
                     || !hasNoncePayload) {
-                throw new InvalidSyntaxException(
-                        "SA, KE, Nonce, Notify-NAT-Detection-Source, or"
-                                + " Notify-NAT-Detection-Destination payload missing.");
+                throw new InvalidSyntaxException("SA, KE, or Nonce payload missing.");
             }
 
             IkeSaPayload reqSaPayload =
@@ -2922,6 +2911,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             if (reqKePayload.dhGroup != respKePayload.dhGroup
                     && respKePayload.dhGroup != mPeerSelectedDhGroup) {
                 throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
+            }
+
+            if (mRemoteAddress instanceof Inet4Address) {
+                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
+                // IPv6, the best we can currently do is try non-encap'd anyways
+                handleNatDetection(respMsg, natSourcePayloads, natDestPayload);
+            }
+        }
+
+        private void handleNatDetection(
+                IkeMessage respMsg,
+                List<IkeNotifyPayload> natSourcePayloads,
+                IkeNotifyPayload natDestPayload)
+                throws InvalidSyntaxException, IOException {
+            if (natSourcePayloads.isEmpty() || natDestPayload == null) {
+                throw new InvalidSyntaxException("NAT detection notifications missing.");
             }
 
             // NAT detection
@@ -3080,50 +3085,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         protected List<IkePayload> extractChildPayloadsFromMessage(IkeMessage ikeMessage)
                 throws InvalidSyntaxException {
-            IkeSaPayload saPayload =
-                    ikeMessage.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
-            IkeTsPayload tsInitPayload =
-                    ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_TS_INITIATOR, IkeTsPayload.class);
-            IkeTsPayload tsRespPayload =
-                    ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_TS_RESPONDER, IkeTsPayload.class);
-
-            List<IkeNotifyPayload> notifyPayloads =
-                    ikeMessage.getPayloadListForType(
-                            IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
-
-            IkeConfigPayload configPayload =
-                    ikeMessage.getPayloadForType(
-                            IkePayload.PAYLOAD_TYPE_CP, IkeConfigPayload.class);
-
-            boolean hasErrorNotify = false;
             List<IkePayload> list = new LinkedList<>();
-            for (IkeNotifyPayload payload : notifyPayloads) {
-                if (payload.isNewChildSaNotify()) {
-                    list.add(payload);
-                    if (payload.isErrorNotify()) {
-                        hasErrorNotify = true;
-                    }
+            for (IkePayload payload : ikeMessage.ikePayloadList) {
+                switch (payload.payloadType) {
+                    case PAYLOAD_TYPE_SA: // fall through
+                    case PAYLOAD_TYPE_TS_INITIATOR: // fall through
+                    case PAYLOAD_TYPE_TS_RESPONDER: // fall through
+                    case PAYLOAD_TYPE_CP:
+                        list.add(payload);
+                        break;
+                    case PAYLOAD_TYPE_NOTIFY:
+                        if (((IkeNotifyPayload) payload).isNewChildSaNotify()) {
+                            list.add(payload);
+                        }
+                        break;
+                    default:
+                        // Ignore payloads unrelated with Child negotiation
                 }
             }
 
-            // If there is no error notification, SA, TS-initiator and TS-responder MUST all be
-            // included in this message.
-            if (!hasErrorNotify
-                    && (saPayload == null || tsInitPayload == null || tsRespPayload == null)) {
-                throw new InvalidSyntaxException(
-                        "SA, TS-Initiator or TS-Responder payload is missing.");
-            }
-
-            list.add(saPayload);
-            list.add(tsInitPayload);
-            list.add(tsRespPayload);
-
-            if (configPayload != null) {
-                list.add(configPayload);
-            }
-
+            // Payload validation is done in ChildSessionStateMachine
             return list;
         }
 
@@ -3204,12 +3185,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
                 }
 
+                validateIkeAuthResp(ikeMessage);
+
                 List<IkePayload> childReqList =
                         extractChildPayloadsFromMessage(mRetransmitter.getMessage());
-
                 if (mUseEap) {
-                    validateIkeAuthRespWithEapPayload(ikeMessage);
-
                     // childReqList needed after EAP completed, so persist to IkeSessionStateMachine
                     // state.
                     mFirstChildReqList = childReqList;
@@ -3217,12 +3197,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     IkeEapPayload ikeEapPayload =
                             ikeMessage.getPayloadForType(
                                     IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
-
+                    if (ikeEapPayload == null) {
+                        throw new AuthenticationFailedException("Missing EAP payload");
+                    }
                     deferMessage(obtainMessage(CMD_EAP_START_EAP_AUTH, ikeEapPayload));
                     transitionTo(mCreateIkeLocalIkeAuthInEap);
                 } else {
-                    validateIkeAuthRespWithChildPayloads(ikeMessage);
-
                     notifyIkeSessionSetup(ikeMessage);
 
                     performFirstChildNegotiation(
@@ -3335,40 +3315,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             return buildIkeAuthReqMessage(payloadList);
         }
 
-        private void validateIkeAuthRespWithEapPayload(IkeMessage respMsg)
-                throws IkeProtocolException {
-            IkeEapPayload ikeEapPayload =
-                    respMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_EAP, IkeEapPayload.class);
-            if (ikeEapPayload == null) {
-                throw new AuthenticationFailedException("Missing EAP payload");
-            }
-
-            // TODO: check that we don't receive any ChildSaRespPayloads here
-
-            List<IkePayload> nonEapPayloads = new LinkedList<>();
-            nonEapPayloads.addAll(respMsg.ikePayloadList);
-            nonEapPayloads.remove(ikeEapPayload);
-            validateIkeAuthResp(nonEapPayloads);
-        }
-
-        private void validateIkeAuthRespWithChildPayloads(IkeMessage respMsg)
-                throws IkeProtocolException {
-            // Extract and validate existence of payloads for first Child SA setup.
-            List<IkePayload> childSaRespPayloads = extractChildPayloadsFromMessage(respMsg);
-
-            List<IkePayload> nonChildPayloads = new LinkedList<>();
-            nonChildPayloads.addAll(respMsg.ikePayloadList);
-            nonChildPayloads.removeAll(childSaRespPayloads);
-
-            validateIkeAuthResp(nonChildPayloads);
-        }
-
-        private void validateIkeAuthResp(List<IkePayload> payloadList) throws IkeProtocolException {
+        private void validateIkeAuthResp(IkeMessage authResp) throws IkeProtocolException {
             // Validate IKE Authentication
             IkeAuthPayload authPayload = null;
             List<IkeCertPayload> certPayloads = new LinkedList<>();
 
-            for (IkePayload payload : payloadList) {
+            for (IkePayload payload : authResp.ikePayloadList) {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
                         mRespIdPayload = (IkeIdPayload) payload;
@@ -3390,7 +3342,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
                         if (notifyPayload.isErrorNotify()) {
-                            throw notifyPayload.validateAndBuildIkeException();
+                            if (notifyPayload.isNewChildSaNotify()
+                                    && authResp.getPayloadForType(
+                                                    PAYLOAD_TYPE_AUTH, IkeAuthPayload.class)
+                                            != null) {
+                                // If error is for creating Child and Auth payload is included, try
+                                // to do authentication first and let ChildSessionStateMachine
+                                // handle the error later.
+                                continue;
+                            } else {
+                                throw notifyPayload.validateAndBuildIkeException();
+                            }
+
                         } else {
                             // Unknown and unexpected status notifications are ignored as per
                             // RFC7296.
@@ -3399,6 +3362,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                             + " notify type: "
                                             + notifyPayload.notifyType);
                         }
+                        break;
+                    case PAYLOAD_TYPE_SA: // Will be handled separately; fall through
+                    case PAYLOAD_TYPE_CP: // Will be handled separately; fall through
+                    case PAYLOAD_TYPE_TS_INITIATOR: // Will be handled separately; fall through
+                    case PAYLOAD_TYPE_TS_RESPONDER: // Will be handled separately; fall through
+                    case PAYLOAD_TYPE_EAP: // Will be handled separately
                         break;
                     default:
                         logw(
@@ -3685,18 +3654,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
                 }
 
-                // Extract and validate existence of payloads for first Child SA setup.
-                List<IkePayload> childSaRespPayloads = extractChildPayloadsFromMessage(ikeMessage);
-
-                List<IkePayload> nonChildPayloads = new LinkedList<>();
-                nonChildPayloads.addAll(ikeMessage.ikePayloadList);
-                nonChildPayloads.removeAll(childSaRespPayloads);
-
-                validateIkeAuthRespPostEap(nonChildPayloads);
-
+                validateIkeAuthRespPostEap(ikeMessage);
                 notifyIkeSessionSetup(ikeMessage);
 
-                performFirstChildNegotiation(mFirstChildReqList, childSaRespPayloads);
+                performFirstChildNegotiation(
+                        mFirstChildReqList, extractChildPayloadsFromMessage(ikeMessage));
             } catch (IkeProtocolException e) {
                 // Notify the remote because they may have set up the IKE SA.
                 sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
@@ -3713,11 +3675,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             handleIkeFatalError(ikeException);
         }
 
-        private void validateIkeAuthRespPostEap(List<IkePayload> payloadList)
-                throws IkeProtocolException {
+        private void validateIkeAuthRespPostEap(IkeMessage authResp) throws IkeProtocolException {
             IkeAuthPayload authPayload = null;
 
-            for (IkePayload payload : payloadList) {
+            for (IkePayload payload : authResp.ikePayloadList) {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_AUTH:
                         authPayload = (IkeAuthPayload) payload;
@@ -3725,7 +3686,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
                         IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
                         if (notifyPayload.isErrorNotify()) {
-                            throw notifyPayload.validateAndBuildIkeException();
+                            if (notifyPayload.isNewChildSaNotify()
+                                    && authResp.getPayloadForType(
+                                                    PAYLOAD_TYPE_AUTH, IkeAuthPayload.class)
+                                            != null) {
+                                // If error is for creating Child and Auth payload is included, try
+                                // to do authentication first and let ChildSessionStateMachine
+                                // handle the error later.
+                                continue;
+                            } else {
+                                throw notifyPayload.validateAndBuildIkeException();
+                            }
+
                         } else {
                             // Unknown and unexpected status notifications are ignored as per
                             // RFC7296.
@@ -3734,6 +3706,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                             + " notify type: "
                                             + notifyPayload.notifyType);
                         }
+                        break;
+                    case PAYLOAD_TYPE_SA: // Will be handled separately; fall through
+                    case PAYLOAD_TYPE_CP: // Will be handled separately; fall through
+                    case PAYLOAD_TYPE_TS_INITIATOR: // Will be handled separately; fall through
+                    case PAYLOAD_TYPE_TS_RESPONDER: // Will be handled separately; fall through
                         break;
                     default:
                         logw(
@@ -4676,21 +4653,23 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             selectedDhGroup,
                             IkeSaPayload.createInitialIkeSaPayload(saProposals),
                             randomFactory);
+            if (localAddr instanceof Inet4Address) {
+                // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
+                // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
+                // in which the payloads were not in the "right" order" due to the lack of clarity
+                // of the payload order.
+                payloadList.add(
+                        new IkeNotifyPayload(
+                                NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
+                                IkeNotifyPayload.generateNatDetectionData(
+                                        initIkeSpi, respIkeSpi, localAddr, localPort)));
+                payloadList.add(
+                        new IkeNotifyPayload(
+                                NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
+                                IkeNotifyPayload.generateNatDetectionData(
+                                        initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
+            }
 
-            // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before the
-            // optional CERTREQ payload)", it also says recipient MUST NOT reject " messages in
-            // which the payloads were not in the "right" order" due to the lack of clarity of the
-            // payload order.
-            payloadList.add(
-                    new IkeNotifyPayload(
-                            NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
-                            IkeNotifyPayload.generateNatDetectionData(
-                                    initIkeSpi, respIkeSpi, localAddr, localPort)));
-            payloadList.add(
-                    new IkeNotifyPayload(
-                            NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
-                            IkeNotifyPayload.generateNatDetectionData(
-                                    initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
             return payloadList;
         }
 
