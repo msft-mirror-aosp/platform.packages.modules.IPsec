@@ -88,6 +88,8 @@ import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
+import android.net.ipsec.ike.IkeFqdnIdentification;
+import android.net.ipsec.ike.IkeIdentification;
 import android.net.ipsec.ike.IkeIpv4AddrIdentification;
 import android.net.ipsec.ike.IkeManager;
 import android.net.ipsec.ike.IkeSaProposal;
@@ -276,6 +278,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private static final byte[] EAP_DUMMY_MSG = "EAP Message".getBytes();
     private static final byte[] REMOTE_VENDOR_ID_ONE = "Remote Vendor ID One".getBytes();
     private static final byte[] REMOTE_VENDOR_ID_TWO = "Remote Vendor ID Two".getBytes();
+
+    private static final IkeIdentification LOCAL_ID_IPV4 =
+            new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS);
+    private static final IkeIdentification REMOTE_ID_FQDN =
+            new IkeFqdnIdentification("server.test.android.net");
+    private static final IkeIdentification REMOTE_ID_IPV4 =
+            new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS);
 
     private static final int KEY_LEN_IKE_INTE = 20;
     private static final int KEY_LEN_IKE_ENCR = 16;
@@ -811,9 +820,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return new IkeSessionParams.Builder(mMockConnectManager)
                 .setServerHostname(REMOTE_ADDRESS.getHostAddress())
                 .addSaProposal(buildSaProposal())
-                .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
-                .setRemoteIdentification(
-                        new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
+                .setLocalIdentification(LOCAL_ID_IPV4)
+                .setRemoteIdentification(REMOTE_ID_FQDN)
                 .addPcscfServerRequest(AF_INET)
                 .addPcscfServerRequest(AF_INET6)
                 .setRetransmissionTimeoutsMillis(
@@ -2358,14 +2366,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return spyAuthPayload;
     }
 
-    private IkeIdPayload makeRespIdPayload() throws Exception {
-        return makeRespIdPayload(ID_PAYLOAD_RESPONDER_HEX_STRING);
+    private IkeIdPayload makeRespIdPayload() {
+        return makeRespIdPayload(REMOTE_ID_FQDN);
     }
 
-    private IkeIdPayload makeRespIdPayload(String idRespPayloadHex) throws Exception {
-        return (IkeIdPayload)
-                IkeTestUtils.hexStringToIkePayload(
-                        IkePayload.PAYLOAD_TYPE_ID_RESPONDER, true /*isResp*/, idRespPayloadHex);
+    private IkeIdPayload makeRespIdPayload(IkeIdentification ikeId) {
+        return new IkeIdPayload(false /* isInitiator */, ikeId);
     }
 
     private void verifyEmptyInformationalSent(int count, boolean expectedResp) {
@@ -2476,6 +2482,25 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    public void testCreateIkeLocalIkeAuthDigitalSignatureIdMismatch() throws Exception {
+        // Quit and restart IKE Session with Digital Signature Auth params
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsDigitalSignature());
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+        resetMockIkeMessageHelper();
+
+        // Build IKE AUTH response with Digital Signature Auth, ID-Responder and config payloads.
+        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        IkeAuthDigitalSignPayload spyAuthPayload = makeSpyDigitalSignAuthPayload();
+        authRelatedPayloads.add(spyAuthPayload);
+        authRelatedPayloads.add(new IkeCertX509CertPayload(mServerEndCertificate));
+
+        authRelatedPayloads.add(makeRespIdPayload(REMOTE_ID_IPV4));
+
+        sendAuthFailRespAndVerifyCloseIke(makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+    }
+
+    @Test
     public void testCreateIkeLocalIkeAuthPskVerifyFail() throws Exception {
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
         verifyRetransmissionStarted();
@@ -2492,10 +2517,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeIdPayload respIdPayload = makeRespIdPayload();
         authRelatedPayloads.add(respIdPayload);
 
+        sendAuthFailRespAndVerifyCloseIke(makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+    }
+
+    private void sendAuthFailRespAndVerifyCloseIke(ReceivedIkePacket authFailResp)
+            throws Exception {
         // Send response to IKE state machine
         mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
-                makeIkeAuthRespWithChildPayloads(authRelatedPayloads));
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, authFailResp);
         mLooper.dispatchAll();
 
         // Verify Delete request was sent
@@ -2583,8 +2612,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeSessionParams ikeSessionParams =
                 buildIkeSessionParamsCommon()
                         .setAuthPsk(mPsk)
-                        .setRemoteIdentification(
-                                new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
                         .addIkeOption(IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID)
                         .build();
         mIkeSessionStateMachine = makeAndStartIkeSession(ikeSessionParams);
@@ -2599,7 +2626,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
-        IkeIdPayload respIdPayload = makeRespIdPayload(ID_PAYLOAD_RESPONDER_FQDN_HEX_STRING);
+        IkeIdPayload respIdPayload = makeRespIdPayload(REMOTE_ID_IPV4);
         authRelatedPayloads.add(respIdPayload);
 
         // Send response to IKE state machine and verify authentication is done.
@@ -2623,7 +2650,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
-        IkeIdPayload respIdPayload = makeRespIdPayload(ID_PAYLOAD_RESPONDER_FQDN_HEX_STRING);
+        IkeIdPayload respIdPayload = makeRespIdPayload(REMOTE_ID_IPV4);
         authRelatedPayloads.add(respIdPayload);
 
         // Send response to IKE state machine
@@ -2842,12 +2869,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Setup dummy state from IkeAuthPreEap for next state.
         mIkeSessionStateMachine.mInitIdPayload = mock(IkeIdPayload.class);
         doReturn(new byte[0]).when(mIkeSessionStateMachine.mInitIdPayload).getEncodedPayloadBody();
-        mIkeSessionStateMachine.mRespIdPayload =
-                (IkeIdPayload)
-                        IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_ID_RESPONDER,
-                                true /*isResp*/,
-                                ID_PAYLOAD_RESPONDER_HEX_STRING);
+        mIkeSessionStateMachine.mRespIdPayload = makeRespIdPayload();
 
         List<Integer> payloadTypeList = new LinkedList<>();
         List<String> payloadHexStringList = new LinkedList<>();
