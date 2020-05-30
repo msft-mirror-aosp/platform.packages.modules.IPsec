@@ -945,4 +945,19 @@ public final class IkeSaPayloadTest {
         } catch (NoValidProposalChosenException expected) {
         }
     }
+
+    @Test
+    public void testDecodeSaPayloadWithUnsupportedTransformId() throws Exception {
+        final String saPayloadBodyHex =
+                "0000002c010100040300000c0100000c800e0080030000080300000c"
+                        + "0300000802000005000000080400001f";
+        IkeSaPayload saPayload =
+                new IkeSaPayload(
+                        false /* isCritical*/,
+                        true /* isResp */,
+                        TestUtils.hexStringToByteArray(saPayloadBodyHex));
+        IkeProposal proposal = (IkeProposal) saPayload.proposalList.get(0);
+        DhGroupTransform unsupportedDh = proposal.saProposal.getDhGroupTransforms()[0];
+        assertFalse(unsupportedDh.isSupported);
+    }
 }
