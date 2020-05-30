@@ -17,11 +17,23 @@
 package com.android.internal.net.ipsec.ike;
 
 import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+
+import android.content.Context;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
+
+import androidx.test.InstrumentationRegistry;
 
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IProcedureConsumer;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
@@ -40,10 +52,22 @@ public final class IkeLocalRequestSchedulerTest {
     private ArgumentCaptor<LocalRequest> mLocalRequestCaptor =
             ArgumentCaptor.forClass(LocalRequest.class);
 
+    private Context mSpyContext;
+    private PowerManager mMockPowerManager;
+    protected PowerManager.WakeLock mMockWakelock;
+
     @Before
     public void setUp() {
         mMockConsumer = mock(IProcedureConsumer.class);
-        mScheduler = new IkeLocalRequestScheduler(mMockConsumer);
+
+        mSpyContext = spy(InstrumentationRegistry.getContext());
+        mMockPowerManager = mock(PowerManager.class);
+        mMockWakelock = mock(WakeLock.class);
+
+        doReturn(mMockPowerManager).when(mSpyContext).getSystemService(eq(PowerManager.class));
+        doReturn(mMockWakelock).when(mMockPowerManager).newWakeLock(anyInt(), anyString());
+
+        mScheduler = new IkeLocalRequestScheduler(mMockConsumer, mSpyContext);
 
         mMockRequestArray = new LocalRequest[10];
         for (int i = 0; i < mMockRequestArray.length; i++) {

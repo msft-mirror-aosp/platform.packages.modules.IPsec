@@ -216,6 +216,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mInitial = new Initial();
     @VisibleForTesting final State mCreateChildLocalCreate = new CreateChildLocalCreate();
     @VisibleForTesting final State mIdle = new Idle();
+    @VisibleForTesting final State mIdleWithDeferredRequest = new IdleWithDeferredRequest();
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
     @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
     @VisibleForTesting final State mRekeyChildLocalCreate = new RekeyChildLocalCreate();
@@ -266,6 +267,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         addState(mInitial, mKillChildSessionParent);
         addState(mCreateChildLocalCreate, mKillChildSessionParent);
         addState(mIdle, mKillChildSessionParent);
+        addState(mIdleWithDeferredRequest, mKillChildSessionParent);
         addState(mDeleteChildLocalDelete, mKillChildSessionParent);
         addState(mDeleteChildRemoteDelete, mKillChildSessionParent);
         addState(mRekeyChildLocalCreate, mKillChildSessionParent);
@@ -982,6 +984,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     class Idle extends ExceptionHandler {
         @Override
         public void enterState() {
+            maybeNotifyIkeSessionStateMachine();
+        }
+
+        protected void maybeNotifyIkeSessionStateMachine() {
             mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
         }
 
@@ -1014,6 +1020,23 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 default:
                     return NOT_HANDLED;
             }
+        }
+    }
+
+    /**
+     * This class is for handling the case when the previous procedure was finished by a new request
+     *
+     * <p>This state is the destination state when Child Session receives a new procedure request in
+     * Rekey Delete. When entering this state, Child Session will process the deferred request as
+     * Idle state does but will not notify IKE Session that Child Session has finished all the
+     * procedures. It prevents IKE Session from going back to Idle state when its Child Session is
+     * still busy.
+     */
+    class IdleWithDeferredRequest extends Idle {
+        @Override
+        public void maybeNotifyIkeSessionStateMachine() {
+            // Do not notify IkeSessionStateMachine because Child Session needs to process the
+            // deferred request and start a new procedure
         }
     }
 
@@ -1642,7 +1665,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         if (isOnNewSa((ReceivedRequest) message.obj)) {
                             finishRekey();
                             deferMessage(message);
-                            transitionTo(mIdle);
+                            transitionTo(mIdleWithDeferredRequest);
                             return HANDLED;
                         }
                         return NOT_HANDLED;
