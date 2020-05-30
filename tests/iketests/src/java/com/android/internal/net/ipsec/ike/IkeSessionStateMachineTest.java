@@ -31,6 +31,7 @@ import static android.system.OsConstants.AF_INET6;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
@@ -2367,7 +2368,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         IkePayload.PAYLOAD_TYPE_ID_RESPONDER, true /*isResp*/, idRespPayloadHex);
     }
 
-    private void verifyEmptyInformationalSent(int count) {
+    private void verifyEmptyInformationalSent(int count, boolean expectedResp) {
         verify(mMockIkeMessageHelper, times(count))
                 .encryptAndEncode(
                         anyObject(),
@@ -2376,7 +2377,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         argThat(
                                 msg -> {
                                     return msg.ikePayloadList.isEmpty()
-                                            && msg.ikeHeader.isResponseMsg
+                                            && msg.ikeHeader.isResponseMsg == expectedResp
                                             && msg.ikeHeader.fromIkeInitiator
                                             && msg.ikeHeader.exchangeType
                                                     == IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -2404,7 +2405,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         Collections.emptyList());
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, req);
 
-        verifyEmptyInformationalSent(0);
+        verifyEmptyInformationalSent(0, true /* expcetedResp*/);
 
         // Send IKE AUTH response to IKE state machine to trigger moving to next state
         IkeIdPayload respIdPayload = makeRespIdPayload();
@@ -2416,7 +2417,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, authResp);
         mLooper.dispatchAll();
 
-        verifyEmptyInformationalSent(1);
+        verifyEmptyInformationalSent(1, true /* expcetedResp*/);
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
@@ -4085,7 +4086,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStarted();
         verifyIncrementRemoteReqMsgId();
 
-        // Verify outbound response
+        verifySendTempFailResponse();
+    }
+
+    private void verifySendTempFailResponse() {
         IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
 
         IkeHeader ikeHeader = resp.ikeHeader;
@@ -4198,6 +4202,53 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(ikeHeader.isResponseMsg);
         assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
         assertTrue(resp.ikePayloadList.isEmpty());
+    }
+
+    private void executeAndVerifySendLocalDPD() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mDpdIkeLocalInfo);
+        mLooper.dispatchAll();
+
+        verifyEmptyInformationalSent(1, false /* expectedResp*/);
+        resetMockIkeMessageHelper();
+    }
+
+    @Test
+    public void testDpdIkeLocalInfoRcvDpdReq() throws Exception {
+        executeAndVerifySendLocalDPD();
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET, makeDpdIkeRequest(mSpyCurrentIkeSaRecord));
+        mLooper.dispatchAll();
+
+        verifyEmptyInformationalSent(1, true /* expectedResp*/);
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.DpdIkeLocalInfo);
+    }
+
+    @Test
+    public void testDpdIkeLocalInfoRcvDeleteIkeReq() throws Exception {
+        executeAndVerifySendLocalDPD();
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET, makeDeleteIkeRequest(mSpyCurrentIkeSaRecord));
+        mLooper.dispatchAll();
+
+        verifyEmptyInformationalSent(1, true /* expectedResp*/);
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
+    public void testDpdIkeLocalInfoRcvRekeyIkeReq() throws Exception {
+        executeAndVerifySendLocalDPD();
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, makeRekeyIkeRequest());
+        mLooper.dispatchAll();
+
+        verifySendTempFailResponse();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.DpdIkeLocalInfo);
     }
 
     @Test
