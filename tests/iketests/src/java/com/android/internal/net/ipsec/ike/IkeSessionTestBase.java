@@ -16,10 +16,13 @@
 
 package com.android.internal.net.ipsec.ike;
 
+import static com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LOCAL_REQUEST_WAKE_LOCK_TAG;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.BUSY_WAKE_LOCK_TAG;
+
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyInt;
-import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
@@ -55,6 +58,7 @@ public abstract class IkeSessionTestBase {
     protected static final String REMOTE_HOSTNAME = "ike.test.android.com";
 
     protected PowerManager.WakeLock mMockBusyWakelock;
+    protected PowerManager.WakeLock mMockLocalRequestWakelock;
 
     protected MockIpSecTestUtils mMockIpSecTestUtils;
     protected Context mSpyContext;
@@ -83,8 +87,16 @@ public abstract class IkeSessionTestBase {
 
         mPowerManager = mock(PowerManager.class);
         mMockBusyWakelock = mock(PowerManager.WakeLock.class);
+        mMockLocalRequestWakelock = mock(PowerManager.WakeLock.class);
         doReturn(mPowerManager).when(mSpyContext).getSystemService(eq(PowerManager.class));
-        doReturn(mMockBusyWakelock).when(mPowerManager).newWakeLock(anyInt(), anyString());
+        doReturn(mMockBusyWakelock)
+                .when(mPowerManager)
+                .newWakeLock(anyInt(), argThat(tag -> tag.contains(BUSY_WAKE_LOCK_TAG)));
+        // Only in test that all local requests will get the same WakeLock instance but in function
+        // code each local request will have a separate WakeLock.
+        doReturn(mMockLocalRequestWakelock)
+                .when(mPowerManager)
+                .newWakeLock(anyInt(), argThat(tag -> tag.contains(LOCAL_REQUEST_WAKE_LOCK_TAG)));
 
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
