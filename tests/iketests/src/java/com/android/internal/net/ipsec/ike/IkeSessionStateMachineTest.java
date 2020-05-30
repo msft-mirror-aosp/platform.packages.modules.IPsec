@@ -4726,4 +4726,43 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         return false;
     }
+
+    @Test
+    public void testAcquireAndReleaseLocalReqWakeLock() throws Exception {
+        setupIdleStateMachine();
+
+        ChildSessionCallback cb = mock(ChildSessionCallback.class);
+        mIkeSessionStateMachine.openChildSession(mChildSessionParams, cb);
+
+        mLooper.dispatchAll();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(mMockLocalRequestWakelock).acquire();
+        verify(mMockLocalRequestWakelock).release();
+    }
+
+    @Test
+    public void testQuitClearAllLocalReqWakeLocks() throws Exception {
+        final int localReqCnt = 3;
+        setupIdleStateMachine();
+
+        // Leave a Idle state so that the LocalRequest won't be executed
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mReceiving);
+        mLooper.dispatchAll();
+
+        // Only in test that all local requests will get the same WakeLock instance but in function
+        // code each local request will have a separate WakeLock.
+        for (int i = 0; i < localReqCnt; i++) {
+            mIkeSessionStateMachine.openChildSession(
+                    mChildSessionParams, mock(ChildSessionCallback.class));
+        }
+        mLooper.dispatchAll();
+        verify(mMockLocalRequestWakelock, times(localReqCnt)).acquire();
+
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+        verify(mMockLocalRequestWakelock, times(localReqCnt)).release();
+    }
 }
