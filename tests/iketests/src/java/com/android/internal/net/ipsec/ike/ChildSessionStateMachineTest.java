@@ -88,6 +88,7 @@ import androidx.test.InstrumentationRegistry;
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.IChildSessionSmCallback;
+import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.IdleWithDeferredRequest;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecordConfig;
 import com.android.internal.net.ipsec.ike.SaRecord.ISaRecordHelper;
@@ -1389,6 +1390,7 @@ public final class ChildSessionStateMachineTest {
     @Test
     public void testRekeyChildLocalDeleteWithReqForNewSa() throws Exception {
         setupIdleStateMachine();
+        reset(mMockChildSessionSmCallback);
 
         // Seed fake rekey data and force transition to RekeyChildLocalDelete
         mChildSessionStateMachine.mLocalInitNewChildSaRecord = mSpyLocalInitNewChildSaRecord;
@@ -1401,6 +1403,13 @@ public final class ChildSessionStateMachineTest {
                 IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
                 EXCHANGE_TYPE_INFORMATIONAL,
                 makeDeletePayloads(mSpyLocalInitNewChildSaRecord.getRemoteSpi()));
+
+        // Only dispatch the Message of receiving request
+        mLooper.dispatchNext();
+        assertTrue(mChildSessionStateMachine.getCurrentState() instanceof IdleWithDeferredRequest);
+        verify(mMockChildSessionSmCallback, never()).onProcedureFinished(mChildSessionStateMachine);
+
+        // Continue dispatching the deferred request
         mLooper.dispatchAll();
 
         // Verify outbound Delete response on new Child SA
@@ -1417,11 +1426,15 @@ public final class ChildSessionStateMachineTest {
         verifyNotifyUserDeleteChildSa(mSpyLocalInitNewChildSaRecord);
 
         verify(mMockChildSessionCallback).onClosed();
+
+        // #onProcedureFinished is only called when Child Session is closed
+        verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
     }
 
     @Test
     public void testRekeyChildRemoteDeleteWithReqForNewSa() throws Exception {
         setupIdleStateMachine();
+        reset(mMockChildSessionSmCallback);
 
         // Seed fake rekey data and force transition to RekeyChildRemoteDelete
         mChildSessionStateMachine.mRemoteInitNewChildSaRecord = mSpyRemoteInitNewChildSaRecord;
@@ -1434,6 +1447,13 @@ public final class ChildSessionStateMachineTest {
                 IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
                 EXCHANGE_TYPE_INFORMATIONAL,
                 makeDeletePayloads(mSpyRemoteInitNewChildSaRecord.getRemoteSpi()));
+
+        // Only dispatch the Message of receiving request
+        mLooper.dispatchNext();
+        assertTrue(mChildSessionStateMachine.getCurrentState() instanceof IdleWithDeferredRequest);
+        verify(mMockChildSessionSmCallback, never()).onProcedureFinished(mChildSessionStateMachine);
+
+        // Continue dispatching the deferred request
         mLooper.dispatchAll();
 
         // Verify outbound Delete response on new Child SA
@@ -1451,6 +1471,9 @@ public final class ChildSessionStateMachineTest {
         verifyNotifyUsersCreateIpSecSa(mSpyRemoteInitNewChildSaRecord, false /*expectInbound*/);
 
         verify(mMockChildSessionCallback).onClosed();
+
+        // #onProcedureFinished is only called when Child Session is closed
+        verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
     }
 
     @Test
