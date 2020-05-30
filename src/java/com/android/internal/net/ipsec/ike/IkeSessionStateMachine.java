@@ -3452,6 +3452,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         "The remote/server failed to provide a end certificate");
             }
 
+            respIdPayload.validateEndCertIdOrThrow(endCert);
+
             Set<TrustAnchor> trustAnchorSet =
                     trustAnchor == null ? null : Collections.singleton(trustAnchor);
 
