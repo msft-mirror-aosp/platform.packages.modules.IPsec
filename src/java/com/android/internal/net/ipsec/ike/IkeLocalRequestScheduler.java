@@ -15,13 +15,21 @@
  */
 package com.android.internal.net.ipsec.ike;
 
+import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.os.PowerManager.PARTIAL_WAKE_LOCK;
+
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DPD;
 
+import android.content.Context;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
+
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.LinkedList;
 
@@ -32,31 +40,37 @@ import java.util.LinkedList;
  * <p>LocalRequestScheduler is running on the IkeSessionStateMachine thread.
  */
 public final class IkeLocalRequestScheduler {
+    private static final String TAG = "IkeLocalRequestScheduler";
+
+    @VisibleForTesting static final String LOCAL_REQUEST_WAKE_LOCK_TAG = "LocalRequestWakeLock";
+
     public static int SPI_NOT_INCLUDED = 0;
+
+    private final PowerManager mPowerManager;
 
     private final LinkedList<LocalRequest> mRequestQueue = new LinkedList<>();
 
     private final IProcedureConsumer mConsumer;
-
-    private boolean mLocalProcedureOngoing;
-    private boolean mRemoteProcedureOngoing;
 
     /**
      * Construct an instance of IkeLocalRequestScheduler
      *
      * @param consumer the interface to initiate new procedure.
      */
-    public IkeLocalRequestScheduler(IProcedureConsumer consumer) {
+    public IkeLocalRequestScheduler(IProcedureConsumer consumer, Context context) {
         mConsumer = consumer;
+        mPowerManager = context.getSystemService(PowerManager.class);
     }
 
     /** Add a new local request to the queue. */
     public void addRequest(LocalRequest request) {
+        request.acquireWakeLock(mPowerManager);
         mRequestQueue.offer(request);
     }
 
     /** Add a new local request to the front of the queue. */
     public void addRequestAtFront(LocalRequest request) {
+        request.acquireWakeLock(mPowerManager);
         mRequestQueue.offerFirst(request);
     }
 
@@ -75,15 +89,52 @@ public final class IkeLocalRequestScheduler {
         return false;
     }
 
+    /** Release WakeLocks of all LocalRequests in the queue */
+    public void releaseAllLocalRequestWakeLocks() {
+        for (LocalRequest req : mRequestQueue) {
+            req.releaseWakeLock();
+        }
+        mRequestQueue.clear();
+    }
+
     /**
      * This class represents the common information of procedures that will be locally initiated.
      */
     public abstract static class LocalRequest {
         public final int procedureType;
+        private WakeLock mWakeLock;
 
         LocalRequest(int type) {
             validateTypeOrThrow(type);
             procedureType = type;
+        }
+
+        /**
+         * Acquire a WakeLock for the LocalRequest.
+         *
+         * <p>This method will only be called from IkeLocalRequestScheduler#addRequest or
+         * IkeLocalRequestScheduler#addRequestAtFront
+         */
+        private void acquireWakeLock(PowerManager powerManager) {
+            if (mWakeLock != null && mWakeLock.isHeld()) {
+                getIkeLog().wtf(TAG, "This LocalRequest already acquired a WakeLock");
+                return;
+            }
+
+            mWakeLock =
+                    powerManager.newWakeLock(
+                            PARTIAL_WAKE_LOCK,
+                            TAG + LOCAL_REQUEST_WAKE_LOCK_TAG + "_" + procedureType);
+            mWakeLock.setReferenceCounted(false);
+            mWakeLock.acquire();
+        }
+
+        /** Release WakeLock of the LocalRequest */
+        public void releaseWakeLock() {
+            if (mWakeLock != null) {
+                mWakeLock.release();
+                mWakeLock = null;
+            }
         }
 
         protected abstract void validateTypeOrThrow(int type);
