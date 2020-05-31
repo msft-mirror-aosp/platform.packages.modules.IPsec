@@ -599,8 +599,8 @@ public final class IkeMessage {
                 DecodeResultPartial collectedFragments) {
             if (header.nextPayloadType != IkePayload.PAYLOAD_TYPE_SK
                     && header.nextPayloadType != IkePayload.PAYLOAD_TYPE_SKF) {
-                // TODO: b/123372339 Handle message containing unprotected payloads.
-                throw new UnsupportedOperationException("Message contains unprotected payloads");
+                return new DecodeResultUnprotectedError(
+                        new InvalidSyntaxException("Message contains unprotected payloads"));
             }
 
             // Decrypt message and do authentication

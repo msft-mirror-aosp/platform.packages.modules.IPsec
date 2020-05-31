@@ -557,9 +557,7 @@ public final class IkeSaPayload extends IkePayload {
                         Transform[] transformArray = new Transform[count];
                         for (int i = 0; i < count; i++) {
                             Transform transform = Transform.readFrom(inputBuffer);
-                            if (transform.isSupported) {
                                 transformArray[i] = transform;
-                            }
                         }
                         return transformArray;
                     }
@@ -1274,10 +1272,14 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return SaProposal.getEncryptionAlgorithmString(id)
-                    + "("
-                    + getSpecifiedKeyLength()
-                    + ")";
+            if (isSupported) {
+                return SaProposal.getEncryptionAlgorithmString(id)
+                        + "("
+                        + getSpecifiedKeyLength()
+                        + ")";
+            } else {
+                return "ENCR(" + id + ")";
+            }
         }
     }
 
@@ -1350,7 +1352,11 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return SaProposal.getPseudorandomFunctionString(id);
+            if (isSupported) {
+                return SaProposal.getPseudorandomFunctionString(id);
+            } else {
+                return "PRF(" + id + ")";
+            }
         }
     }
 
@@ -1427,7 +1433,11 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return SaProposal.getIntegrityAlgorithmString(id);
+            if (isSupported) {
+                return SaProposal.getIntegrityAlgorithmString(id);
+            } else {
+                return "AUTH(" + id + ")";
+            }
         }
     }
 
@@ -1504,7 +1514,11 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return SaProposal.getDhGroupString(id);
+            if (isSupported) {
+                return SaProposal.getDhGroupString(id);
+            } else {
+                return "DH(" + id + ")";
+            }
         }
     }
 
