@@ -83,6 +83,7 @@ public final class IkeSessionTest extends IkeSessionTestBase {
                         mMockIkeSessionCb,
                         mMockChildSessionCb);
         assertNotNull(ikeSession.mIkeSessionStateMachine.getHandler().getLooper());
+        ikeSession.kill();
     }
 
     /**
@@ -125,6 +126,10 @@ public final class IkeSessionTest extends IkeSessionTestBase {
         assertEquals(
                 sessions[0].mIkeSessionStateMachine.getHandler().getLooper(),
                 sessions[1].mIkeSessionStateMachine.getHandler().getLooper());
+
+        for (IkeSession s : sessions) {
+            s.kill();
+        }
     }
 
     @Test
@@ -145,5 +150,8 @@ public final class IkeSessionTest extends IkeSessionTestBase {
         assertTrue(
                 ikeSession.mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeInit);
+
+        ikeSession.kill();
+        testLooper.dispatchAll();
     }
 }

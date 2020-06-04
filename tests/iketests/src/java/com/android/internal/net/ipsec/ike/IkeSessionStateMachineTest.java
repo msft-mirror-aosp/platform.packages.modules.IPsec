@@ -750,7 +750,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     @After
     public void tearDown() throws Exception {
-        mIkeSessionStateMachine.quit();
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
         mIkeSessionStateMachine.setDbg(false);
 
         mSpyCurrentIkeSaRecord.close();
