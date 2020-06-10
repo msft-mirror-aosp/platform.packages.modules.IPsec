@@ -13,15 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package com.android.internal.net.ipsec.ike.utils;
 
 import android.util.CloseGuard;
 import android.util.Pair;
 
-import java.io.IOException;
 import java.net.InetAddress;
-import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -40,59 +37,19 @@ import java.util.Set;
  * <p>This class follows the pattern of {@link IpSecManager.SecurityParameterIndex}.
  */
 public final class IkeSecurityParameterIndex implements AutoCloseable {
-    // Remember assigned IKE SPIs to avoid SPI collision.
-    private static final Set<Pair<InetAddress, Long>> sAssignedIkeSpis = new HashSet<>();
-    private static final int MAX_ASSIGN_IKE_SPI_ATTEMPTS = 100;
-    private static final SecureRandom IKE_SPI_RANDOM = new SecureRandom();
+    // Package private Set to remember assigned IKE SPIs to avoid SPI collision. MUST be
+    // accessed only by IkeSecurityParameterIndex and IkeSpiGenerator
+    static final Set<Pair<InetAddress, Long>> sAssignedIkeSpis = new HashSet<>();
 
     private final InetAddress mSourceAddress;
     private final long mSpi;
     private final CloseGuard mCloseGuard = new CloseGuard();
 
-    private IkeSecurityParameterIndex(InetAddress sourceAddress, long spi) {
+    // Package private constructor that MUST only be called from IkeSpiGenerator
+    IkeSecurityParameterIndex(InetAddress sourceAddress, long spi) {
         mSourceAddress = sourceAddress;
         mSpi = spi;
         mCloseGuard.open("close");
-    }
-
-    /**
-     * Get a new IKE SPI and maintain the reservation.
-     *
-     * @return an instance of IkeSecurityParameterIndex.
-     */
-    public static IkeSecurityParameterIndex allocateSecurityParameterIndex(
-            InetAddress sourceAddress) throws IOException {
-        // TODO: Create specific Exception for SPI assigning error.
-
-        for (int i = 0; i < MAX_ASSIGN_IKE_SPI_ATTEMPTS; i++) {
-            long spi = IKE_SPI_RANDOM.nextLong();
-            // Zero value can only be used in the IKE responder SPI field of an IKE INIT
-            // request.
-            if (spi != 0L
-                    && sAssignedIkeSpis.add(new Pair<InetAddress, Long>(sourceAddress, spi))) {
-                return new IkeSecurityParameterIndex(sourceAddress, spi);
-            }
-        }
-
-        throw new IOException("Failed to generate IKE SPI.");
-    }
-
-    /**
-     * Get a new IKE SPI and maintain the reservation.
-     *
-     * @return an instance of IkeSecurityParameterIndex.
-     */
-    public static IkeSecurityParameterIndex allocateSecurityParameterIndex(
-            InetAddress sourceAddress, long requestedSpi) throws IOException {
-        if (sAssignedIkeSpis.add(new Pair<InetAddress, Long>(sourceAddress, requestedSpi))) {
-            return new IkeSecurityParameterIndex(sourceAddress, requestedSpi);
-        }
-
-        throw new IOException(
-                "Failed to generate IKE SPI for "
-                        + requestedSpi
-                        + " with source address "
-                        + sourceAddress.getHostAddress());
     }
 
     /**

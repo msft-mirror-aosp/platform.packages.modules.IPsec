@@ -93,7 +93,6 @@ public final class IkeSessionParams {
      * request that the remote (also) use an EAP-only authentication flow.
      *
      * <p>@see {@link Builder#setAuthEap(X509Certificate, EapSessionConfig)}
-     *
      */
     public static final int IKE_OPTION_EAP_ONLY_AUTH = 1;
 
@@ -350,9 +349,7 @@ public final class IkeSessionParams {
         Inet6Address getAddress();
     }
 
-    /**
-     * This class contains common information of an IKEv2 authentication configuration.
-     */
+    /** This class contains common information of an IKEv2 authentication configuration. */
     public abstract static class IkeAuthConfig {
         /** @hide */
         @IkeAuthMethod public final int mAuthMethod;
@@ -564,6 +561,9 @@ public final class IkeSessionParams {
 
         /**
          * Sets local IKE identification for the {@link IkeSessionParams} being built.
+         *
+         * <p>It is not allowed to use KEY ID together with digital-signature-based authentication
+         * as per RFC 7296.
          *
          * @param identification the local IKE identification.
          * @return Builder this, to facilitate chaining.
@@ -864,10 +864,11 @@ public final class IkeSessionParams {
          * Sets the retransmission timeout list in milliseconds.
          *
          * <p>Configures the retransmission by providing an array of relative retransmission
-         * timeouts in milliseconds, where the array length represents the maximum retransmission
-         * attempts before terminating the IKE Session. Each element in the array MUST be a value
-         * from 500 ms to 1800000 ms (30 minutes). The length of the array MUST NOT exceed 10. This
-         * retransmission timeout list defaults to {0.5s, 1s, 2s, 4s, 8s}
+         * timeouts in milliseconds, where each timeout is the waiting time before next retry,
+         * except the last timeout is the waiting time before terminating the IKE Session. Each
+         * element in the array MUST be a value from 500 ms to 1800000 ms (30 minutes). The length
+         * of the array MUST NOT exceed 10. This retransmission timeout list defaults to {0.5s, 1s,
+         * 2s, 4s, 8s}
          *
          * @param retransTimeoutMillisList the array of relative retransmission timeout in
          *     milliseconds.
@@ -877,6 +878,7 @@ public final class IkeSessionParams {
         public Builder setRetransmissionTimeoutsMillis(@NonNull int[] retransTimeoutMillisList) {
             boolean isValid = true;
             if (retransTimeoutMillisList == null
+                    || retransTimeoutMillisList.length == 0
                     || retransTimeoutMillisList.length > IKE_RETRANS_MAX_ATTEMPTS_MAX) {
                 isValid = false;
             }
@@ -943,15 +945,23 @@ public final class IkeSessionParams {
 
             if ((mIkeOptions & getOptionBitValue(IKE_OPTION_EAP_ONLY_AUTH)) != 0) {
                 if (!(mLocalAuthConfig instanceof IkeAuthEapConfig)) {
-                    throw new IllegalArgumentException("If IKE_OPTION_EAP_ONLY_AUTH is set,"
-                            + " eap authentication needs to be configured.");
+                    throw new IllegalArgumentException(
+                            "If IKE_OPTION_EAP_ONLY_AUTH is set,"
+                                    + " eap authentication needs to be configured.");
                 }
 
                 IkeAuthEapConfig ikeAuthEapConfig = (IkeAuthEapConfig) mLocalAuthConfig;
                 if (!ikeAuthEapConfig.getEapConfig().areAllMethodsEapOnlySafe()) {
-                    throw new IllegalArgumentException("Only EAP-only safe method allowed"
-                            + " when using EAP-only option.");
+                    throw new IllegalArgumentException(
+                            "Only EAP-only safe method allowed" + " when using EAP-only option.");
                 }
+            }
+
+            if (mLocalAuthConfig.mAuthMethod == IKE_AUTH_METHOD_PUB_KEY_SIGNATURE
+                    && mLocalIdentification.idType == IkeIdentification.ID_TYPE_KEY_ID) {
+                throw new IllegalArgumentException(
+                        "It is not allowed to use KEY_ID as local ID when local authentication"
+                                + " method is digital-signature-based");
             }
 
             return new IkeSessionParams(

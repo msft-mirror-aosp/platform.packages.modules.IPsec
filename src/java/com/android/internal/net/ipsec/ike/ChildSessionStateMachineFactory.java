@@ -25,6 +25,8 @@ import android.os.Looper;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.IChildSessionSmCallback;
+import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
+import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 
 import java.util.concurrent.Executor;
 
@@ -40,6 +42,8 @@ final class ChildSessionStateMachineFactory {
             Context context,
             int ikeSessionUniqueId,
             AlarmManager alarmManager,
+            RandomnessFactory randomFactory,
+            IpSecSpiGenerator ipSecSpiGenerator,
             ChildSessionParams sessionParams,
             Executor userCbExecutor,
             ChildSessionCallback userCallbacks,
@@ -49,6 +53,8 @@ final class ChildSessionStateMachineFactory {
                 context,
                 ikeSessionUniqueId,
                 alarmManager,
+                randomFactory,
+                ipSecSpiGenerator,
                 sessionParams,
                 userCbExecutor,
                 userCallbacks,
@@ -72,6 +78,8 @@ final class ChildSessionStateMachineFactory {
                 Context context,
                 int ikeSessionUniqueId,
                 AlarmManager alarmManager,
+                RandomnessFactory randomFactory,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 ChildSessionParams sessionParams,
                 Executor userCbExecutor,
                 ChildSessionCallback userCallbacks,
@@ -89,6 +97,8 @@ final class ChildSessionStateMachineFactory {
                 Context context,
                 int ikeSessionUniqueId,
                 AlarmManager alarmManager,
+                RandomnessFactory randomFactory,
+                IpSecSpiGenerator ipSecSpiGenerator,
                 ChildSessionParams sessionParams,
                 Executor userCbExecutor,
                 ChildSessionCallback userCallbacks,
@@ -99,7 +109,9 @@ final class ChildSessionStateMachineFactory {
                             context,
                             ikeSessionUniqueId,
                             alarmManager,
+                            randomFactory,
                             (IpSecManager) context.getSystemService(Context.IPSEC_SERVICE),
+                            ipSecSpiGenerator,
                             sessionParams,
                             userCbExecutor,
                             userCallbacks,

@@ -14,8 +14,11 @@
 
 java_sdk_library {
     name: "android.net.ipsec.ike",
+    defaults: ["framework-module-defaults"],
     installable: true,
-    sdk_version: "module_current",
+
+    // ike is used as a shared library.
+    shared_library: true,
 
     aidl: {
         local_include_dirs: ["src/java"],
@@ -28,7 +31,6 @@ java_sdk_library {
 
     libs: [
         "unsupportedappusage",
-        "framework-annotations-lib",
     ],
 
     api_packages: [
@@ -41,13 +43,13 @@ java_sdk_library {
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
 
-    plugins: ["java_api_finder"],
-
     hostdex: true, // for hiddenapi check
     apex_available: [
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
+
+    stubs_library_visibility: ["//visibility:public"],
 }
 
 filegroup {
@@ -85,31 +87,4 @@ java_library {
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
-}
-
-stubs_defaults {
-    name: "ike-stubs-defaults",
-    srcs: [":ike-api-srcs"],
-}
-
-droidstubs {
-    name: "android.net.ipsec.ike.api.sources.module_libs_api",
-    defaults: [
-        "framework-module-api-defaults-module_libs_api",
-        "ike-stubs-defaults",
-    ],
-}
-
-droidstubs {
-    name: "android.net.ipsec.ike.stubs.sources.module_libs_api",
-    defaults: [
-        "framework-module-stubs-defaults-module_libs_api",
-        "ike-stubs-defaults",
-    ],
-}
-
-java_library {
-    name: "android.net.ipsec.ike.stubs.module_libs_api",
-    srcs: [":android.net.ipsec.ike.stubs.sources.module_libs_api"],
-    defaults: ["framework-module-stubs-lib-defaults-module_libs_api"],
 }

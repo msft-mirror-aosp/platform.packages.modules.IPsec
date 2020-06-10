@@ -19,7 +19,6 @@ import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_RETR
 
 import android.os.Handler;
 
-import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.message.IkeMessage;
 
 /**
@@ -30,34 +29,15 @@ import com.android.internal.net.ipsec.ike.message.IkeMessage;
  * instance of this class.
  */
 public abstract class Retransmitter {
-    private static IBackoffTimeoutCalculator sBackoffTimeoutCalculator =
-            new BackoffTimeoutCalculator();
-
-    /*
-     * Retransmit parameters
-     *
-     * (Re)transmission count   | Relative timeout  | Absolute timeout
-     * -------------------------+-------------------+------------------
-     * 0                        | 500ms             | 500ms
-     * 1                        | 1s                | 1.5s
-     * 2                        | 2s                | 3.5s
-     * 3                        | 4s                | 7.5s
-     * 4                        | 8s                | 15.5s
-     * 5                        | 16s               | 31.5s
-     *
-     * TODO: Add retransmitter configurability
-     */
-    static final double RETRANSMIT_BACKOFF_FACTOR = 2.0;
-    static final long RETRANSMIT_TIMEOUT_MS = 500L;
-    static final int RETRANSMIT_MAX_ATTEMPTS = 5;
-
     private final Handler mHandler;
     private final IkeMessage mRetransmitMsg;
     private int mRetransmitCount = 0;
+    private int[] mRetransmissionTimeouts;
 
-    public Retransmitter(Handler handler, IkeMessage msg) {
+    public Retransmitter(Handler handler, IkeMessage msg, int[] retransmissionTimeouts) {
         mHandler = handler;
         mRetransmitMsg = msg;
+        mRetransmissionTimeouts = retransmissionTimeouts;
     }
 
     /**
@@ -69,14 +49,14 @@ public abstract class Retransmitter {
         }
 
         // If the failed iteration is beyond the max attempts, clean up and shut down.
-        if (mRetransmitCount > RETRANSMIT_MAX_ATTEMPTS) {
+        if (mRetransmitCount >= mRetransmissionTimeouts.length) {
             handleRetransmissionFailure();
             return;
         }
 
         send(mRetransmitMsg);
 
-        long timeout = sBackoffTimeoutCalculator.getExponentialBackoffTimeout(mRetransmitCount++);
+        long timeout = mRetransmissionTimeouts[mRetransmitCount++];
         mHandler.sendMessageDelayed(mHandler.obtainMessage(CMD_RETRANSMIT, this), timeout);
     }
 
@@ -105,35 +85,4 @@ public abstract class Retransmitter {
      * <p>For Retransmitter-internal use only.
      */
     protected abstract void handleRetransmissionFailure();
-
-    /**
-     * IBackoffTimeoutCalculator provides interface for calculating retransmission backoff timeout.
-     *
-     * <p>IBackoffTimeoutCalculator exists so that the interface is injectable for testing.
-     */
-    @VisibleForTesting
-    public interface IBackoffTimeoutCalculator {
-        /** Calculate retransmission backoff timeout */
-        long getExponentialBackoffTimeout(int retransmitCount);
-    }
-
-    private static final class BackoffTimeoutCalculator implements IBackoffTimeoutCalculator {
-        @Override
-        public long getExponentialBackoffTimeout(int retransmitCount) {
-            double expBackoffFactor = Math.pow(RETRANSMIT_BACKOFF_FACTOR, retransmitCount);
-            return (long) (RETRANSMIT_TIMEOUT_MS * expBackoffFactor);
-        }
-    }
-
-    /** Sets IBackoffTimeoutCalculator */
-    @VisibleForTesting
-    public static void setBackoffTimeoutCalculator(IBackoffTimeoutCalculator calculator) {
-        sBackoffTimeoutCalculator = calculator;
-    }
-
-    /** Resets BackoffTimeoutCalculator of retransmitter */
-    @VisibleForTesting
-    public static void resetBackoffTimeoutCalculator() {
-        sBackoffTimeoutCalculator = new BackoffTimeoutCalculator();
-    }
 }

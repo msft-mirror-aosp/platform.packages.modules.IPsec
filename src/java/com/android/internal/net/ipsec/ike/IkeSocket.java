@@ -27,11 +27,13 @@ import android.util.LongSparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
-import com.android.internal.net.ipsec.ike.utils.PacketReader;
 
 import java.io.FileDescriptor;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -53,7 +55,7 @@ import java.util.Set;
  * IkeSessionStateMachine}. Since all {@link IkeSessionStateMachine}s run on the same working
  * thread, there will not be concurrent modification problems.
  */
-public abstract class IkeSocket extends PacketReader implements AutoCloseable {
+public abstract class IkeSocket implements AutoCloseable {
     private static final String TAG = "IkeSocket";
 
     /** Non-udp-encapsulated IKE packets MUST be sent to 500. */
@@ -63,6 +65,7 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
 
     // Network this socket bound to.
     private final Network mNetwork;
+    private final Handler mHandler;
 
     // Map from locally generated IKE SPI to IkeSessionStateMachine instances.
     @VisibleForTesting
@@ -74,7 +77,7 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
     protected final Set<IkeSessionStateMachine> mAliveIkeSessions = new HashSet<>();
 
     protected IkeSocket(Network network, Handler handler) {
-        super(handler);
+        mHandler = handler;
         mNetwork = network;
     }
 
@@ -107,6 +110,53 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
         }
     }
 
+    /** Starts the packet reading poll-loop. */
+    public void start() {
+        // Start background reader thread
+        new Thread(
+                () -> {
+                    try {
+                        // Loop will exit and thread will quit when the retrieved fd is closed.
+                        // Receiving either EOF or an exception will exit this reader loop.
+                        // FileInputStream in uninterruptable, so there's no good way to ensure that
+                        // that this thread shuts down except upon FD closure.
+                        while (true) {
+                            byte[] intercepted = receiveFromFd();
+                            if (intercepted == null) {
+                                // Exit once we've hit EOF
+                                return;
+                            } else if (intercepted.length > 0) {
+                                // Only save packet if we've received any bytes.
+                                getIkeLog()
+                                        .d(
+                                                this.getClass().getSimpleName(),
+                                                "Received packet");
+                                mHandler.post(
+                                        () -> {
+                                            handlePacket(intercepted, intercepted.length);
+                                        });
+                            }
+                        }
+                    } catch (IOException ignored) {
+                        // Simply exit this reader thread
+                        return;
+                    }
+                }).start();
+    }
+
+    private byte[] receiveFromFd() throws IOException {
+        FileInputStream in = new FileInputStream(getFd());
+        byte[] inBytes = new byte[4096];
+        int bytesRead = in.read(inBytes);
+
+        if (bytesRead < 0) {
+            return null; // return null for EOF
+        } else if (bytesRead >= 4096) {
+            throw new IllegalStateException("Too big packet. Fragmentation unsupported");
+        }
+        return Arrays.copyOf(inBytes, bytesRead);
+    }
+
     /**
      * Returns the port that this IKE socket is listening on (bound to).
      */
@@ -116,6 +166,12 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
     }
 
     protected abstract FileDescriptor getFd();
+
+    protected FileDescriptor createFd() {
+        return getFd();
+    }
+
+    protected abstract void handlePacket(byte[] recvbuf, int length);
 
     /**
      * Return Network this socket bound to
@@ -174,6 +230,12 @@ public abstract class IkeSocket extends PacketReader implements AutoCloseable {
     @Override
     public void close() {
         stop();
+    }
+
+    /** Stops the packet reading loop */
+    public void stop() {
+        // No additional cleanup at this time. Subclasses are in charge of closing their sockets,
+        // which will result in the packet reading poll loop exiting.
     }
 
     /**

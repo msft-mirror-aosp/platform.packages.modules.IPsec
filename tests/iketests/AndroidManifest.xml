@@ -22,6 +22,8 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!--Allow tests to call ConnectivityManager#getActiveNetwork()-->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
+    <!--Allow tests to use wake locks-->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
 
     <!--
        'debuggable=true' is required to properly load mockito jvmti dependencies,

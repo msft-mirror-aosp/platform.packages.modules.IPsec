@@ -16,12 +16,15 @@
 
 package com.android.internal.net.ipsec.ike;
 
+import static com.android.internal.net.TestUtils.createMockRandomFactory;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.AdditionalMatchers.aryEq;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -36,8 +39,6 @@ import android.net.IpSecTransform;
 import android.net.ipsec.ike.SaProposal;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecordConfig;
 import com.android.internal.net.ipsec.ike.SaRecord.IIpSecTransformHelper;
@@ -54,6 +55,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransfor
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
 import com.android.server.IpSecService;
 
 import org.junit.Before;
@@ -69,6 +71,9 @@ public final class SaRecordTest {
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+
+    private static final IkeSpiGenerator IKE_SPI_GENERATOR =
+            new IkeSpiGenerator(createMockRandomFactory());
 
     private static final String PRF_KEY_HEX_STRING = "094787780EE466E2CB049FA327B43908BC57E485";
     private static final String DATA_TO_SIGN_HEX_STRING = "010000000a50500d";
@@ -142,9 +147,6 @@ public final class SaRecordTest {
     private IkeMacIntegrity mHmacSha1IntegrityMac;
     private IkeCipher mAesCbcCipher;
 
-    private LocalRequest mMockFutureRekeyIkeEvent;
-    private ChildLocalRequest mMockFutureRekeyChildEvent;
-
     private SaLifetimeAlarmScheduler mMockLifetimeAlarmScheduler;
 
     private SaRecordHelper mSaRecordHelper = new SaRecordHelper();
@@ -162,8 +164,6 @@ public final class SaRecordTest {
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_CBC,
                                 SaProposal.KEY_LEN_AES_128));
 
-        mMockFutureRekeyIkeEvent = mock(LocalRequest.class);
-        mMockFutureRekeyChildEvent = mock(ChildLocalRequest.class);
         mMockLifetimeAlarmScheduler = mock(SaLifetimeAlarmScheduler.class);
     }
 
@@ -175,11 +175,9 @@ public final class SaRecordTest {
         byte[] nonceResp = TestUtils.hexStringToByteArray(IKE_NONCE_RESP_HEX_STRING);
 
         IkeSecurityParameterIndex ikeInitSpi =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                        LOCAL_ADDRESS, IKE_INIT_SPI);
+                IKE_SPI_GENERATOR.allocateSpi(LOCAL_ADDRESS, IKE_INIT_SPI);
         IkeSecurityParameterIndex ikeRespSpi =
-                IkeSecurityParameterIndex.allocateSecurityParameterIndex(
-                        REMOTE_ADDRESS, IKE_RESP_SPI);
+                IKE_SPI_GENERATOR.allocateSpi(REMOTE_ADDRESS, IKE_RESP_SPI);
         IkeSaRecordConfig ikeSaRecordConfig =
                 new IkeSaRecordConfig(
                         ikeInitSpi,
@@ -188,8 +186,7 @@ public final class SaRecordTest {
                         IKE_AUTH_ALGO_KEY_LEN,
                         IKE_ENCR_ALGO_KEY_LEN,
                         true /*isLocalInit*/,
-                        mMockFutureRekeyIkeEvent,
-                        mock(SaLifetimeAlarmScheduler.class));
+                        mMockLifetimeAlarmScheduler);
 
         int keyMaterialLen =
                 IKE_SK_D_KEY_LEN
@@ -221,10 +218,10 @@ public final class SaRecordTest {
                 TestUtils.hexStringToByteArray(IKE_SK_PRF_INIT_HEX_STRING), ikeSaRecord.getSkPi());
         assertArrayEquals(
                 TestUtils.hexStringToByteArray(IKE_SK_PRF_RESP_HEX_STRING), ikeSaRecord.getSkPr());
+        verify(mMockLifetimeAlarmScheduler).scheduleLifetimeExpiryAlarm(anyString());
 
         ikeSaRecord.close();
-
-        verify(mMockFutureRekeyIkeEvent).cancel();
+        verify(mMockLifetimeAlarmScheduler).cancelLifetimeExpiryAlarm(anyString());
     }
 
     // Test generating keying material and building IpSecTransform for making Child SA.
@@ -302,7 +299,6 @@ public final class SaRecordTest {
                         TestUtils.hexStringToByteArray(IKE_SK_D_HEX_STRING),
                         false /*isTransport*/,
                         true /*isLocalInit*/,
-                        mMockFutureRekeyChildEvent,
                         mMockLifetimeAlarmScheduler);
 
         ChildSaRecord childSaRecord =
@@ -328,8 +324,10 @@ public final class SaRecordTest {
                 TestUtils.hexStringToByteArray(FIRST_CHILD_ENCR_RESP_HEX_STRING),
                 childSaRecord.getInboundDecryptionKey());
 
+        verify(mMockLifetimeAlarmScheduler).scheduleLifetimeExpiryAlarm(anyString());
+
         childSaRecord.close();
-        verify(mMockFutureRekeyChildEvent).cancel();
+        verify(mMockLifetimeAlarmScheduler).cancelLifetimeExpiryAlarm(anyString());
 
         SaRecord.setIpSecTransformHelper(new IpSecTransformHelper());
     }
