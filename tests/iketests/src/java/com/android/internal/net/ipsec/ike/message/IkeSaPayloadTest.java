@@ -66,6 +66,7 @@ import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 import com.android.server.IpSecService;
 
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -174,6 +175,8 @@ public final class IkeSaPayloadTest {
     @Before
     public void setUp() throws Exception {
         mMockedAttributeDecoder = mock(AttributeDecoder.class);
+        Transform.setAttributeDecoder(mMockedAttributeDecoder);
+
         mAttributeKeyLength128 = new KeyLengthAttribute(SaProposal.KEY_LEN_AES_128);
         mAttributeListWithKeyLength128 = new LinkedList<>();
         mAttributeListWithKeyLength128.add(mAttributeKeyLength128);
@@ -252,7 +255,11 @@ public final class IkeSaPayloadTest {
         mIpSecSpiGenerator = new IpSecSpiGenerator(mIpSecManager, createMockRandomFactory());
     }
 
-    // TODO: Add tearDown() to reset Proposal.sTransformDecoder and Transform.sAttributeDecoder.
+    @After
+    public void tearDown() throws Exception {
+        Proposal.resetTransformDecoder();
+        Transform.resetAttributeDecoder();
+    }
 
     @Test
     public void testDecodeAttribute() throws Exception {
@@ -285,7 +292,6 @@ public final class IkeSaPayloadTest {
         doReturn(mAttributeListWithKeyLength128)
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
         assertTrue(transform instanceof EncryptionTransform);
@@ -304,7 +310,6 @@ public final class IkeSaPayloadTest {
         attributeList.add(keyLengAttr);
 
         doReturn(attributeList).when(mMockedAttributeDecoder).decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         try {
             Transform.readFrom(inputBuffer);
@@ -349,7 +354,6 @@ public final class IkeSaPayloadTest {
         doReturn(new LinkedList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
         assertTrue(transform instanceof PrfTransform);
@@ -385,7 +389,6 @@ public final class IkeSaPayloadTest {
         doReturn(new LinkedList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
         assertTrue(transform instanceof IntegrityTransform);
@@ -402,7 +405,6 @@ public final class IkeSaPayloadTest {
         doReturn(mAttributeListWithKeyLength128)
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
         assertTrue(transform instanceof IntegrityTransform);
@@ -438,7 +440,6 @@ public final class IkeSaPayloadTest {
         doReturn(new LinkedList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
         assertTrue(transform instanceof DhGroupTransform);
@@ -474,7 +475,6 @@ public final class IkeSaPayloadTest {
         doReturn(new LinkedList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
         assertTrue(transform instanceof EsnTransform);
@@ -492,7 +492,6 @@ public final class IkeSaPayloadTest {
         doReturn(new LinkedList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
         assertTrue(transform instanceof EsnTransform);
@@ -508,7 +507,6 @@ public final class IkeSaPayloadTest {
         doReturn(mAttributeListWithKeyLength128)
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
         assertTrue(transform instanceof EsnTransform);
@@ -537,7 +535,6 @@ public final class IkeSaPayloadTest {
         doReturn(mAttributeListWithKeyLength128)
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
 
@@ -554,7 +551,6 @@ public final class IkeSaPayloadTest {
         attributeList.add(mAttributeKeyLength128);
 
         doReturn(attributeList).when(mMockedAttributeDecoder).decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         try {
             Transform.readFrom(inputBuffer);
@@ -572,7 +568,6 @@ public final class IkeSaPayloadTest {
         doReturn(mAttributeListWithKeyLength128)
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
 
@@ -590,7 +585,6 @@ public final class IkeSaPayloadTest {
         attributeList.add(attributeUnrecognized);
 
         doReturn(attributeList).when(mMockedAttributeDecoder).decodeAttributes(anyInt(), any());
-        Transform.sAttributeDecoder = mMockedAttributeDecoder;
 
         Transform transform = Transform.readFrom(inputBuffer);
 
@@ -618,7 +612,7 @@ public final class IkeSaPayloadTest {
         assertEquals(mIntegHmacSha1Transform, mIntegHmacSha1TransformOther);
     }
 
-    private TransformDecoder getDummyTransformDecoder(Transform[] decodedTransforms) {
+    private TransformDecoder createTestTransformDecoder(Transform[] decodedTransforms) {
         return new TransformDecoder() {
             @Override
             public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
@@ -639,7 +633,7 @@ public final class IkeSaPayloadTest {
     public void testDecodeSingleProposal() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_PROPOSAL_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
-        Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
+        Proposal.setTransformDecoder(createTestTransformDecoder(new Transform[0]));
 
         Proposal proposal = Proposal.readFrom(inputBuffer);
 
@@ -654,7 +648,7 @@ public final class IkeSaPayloadTest {
     @Test
     public void testDecodeSaRequestWithMultipleProposal() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_TWO_PROPOSAL_RAW_PACKET);
-        Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
+        Proposal.setTransformDecoder(createTestTransformDecoder(new Transform[0]));
 
         IkeSaPayload payload = new IkeSaPayload(false, false, inputPacket);
 
@@ -688,7 +682,7 @@ public final class IkeSaPayloadTest {
     @Test
     public void testDecodeSaResponseWithMultipleProposal() throws Exception {
         byte[] inputPacket = TestUtils.hexStringToByteArray(INBOUND_TWO_PROPOSAL_RAW_PACKET);
-        Proposal.sTransformDecoder = getDummyTransformDecoder(new Transform[0]);
+        Proposal.setTransformDecoder(createTestTransformDecoder(new Transform[0]));
 
         try {
             new IkeSaPayload(false, true, inputPacket);
@@ -772,7 +766,7 @@ public final class IkeSaPayloadTest {
     private void buildAndVerifyIkeSaRespProposal(
             byte[] saResponseBytes, Transform[] decodedTransforms) throws Exception {
         // Build response SA payload from decoding bytes.
-        Proposal.sTransformDecoder = getDummyTransformDecoder(decodedTransforms);
+        Proposal.setTransformDecoder(createTestTransformDecoder(decodedTransforms));
         IkeSaPayload respPayload = new IkeSaPayload(false, true, saResponseBytes);
 
         // Build request SA payload for IKE INIT exchange from SaProposal.
@@ -836,8 +830,8 @@ public final class IkeSaPayloadTest {
                         mTwoChildSaProposalsArray, mIpSecSpiGenerator, LOCAL_ADDRESS);
 
         // Build remote response
-        Proposal.sTransformDecoder =
-                getDummyTransformDecoder(mChildSaProposalOne.getAllTransforms());
+        Proposal.setTransformDecoder(
+                createTestTransformDecoder(mChildSaProposalOne.getAllTransforms()));
         IkeSaPayload respPayload =
                 new IkeSaPayload(
                         false /*critical*/,
@@ -858,7 +852,7 @@ public final class IkeSaPayloadTest {
                 transformsTwo, 0, decodedTransforms, transformsOne.length, transformsTwo.length);
 
         // Build remote request
-        Proposal.sTransformDecoder = getDummyTransformDecoder(decodedTransforms);
+        Proposal.setTransformDecoder(createTestTransformDecoder(decodedTransforms));
         IkeSaPayload reqPayload =
                 new IkeSaPayload(
                         false /*critical*/,
@@ -948,6 +942,9 @@ public final class IkeSaPayloadTest {
 
     @Test
     public void testDecodeSaPayloadWithUnsupportedTransformId() throws Exception {
+        Proposal.resetTransformDecoder();
+        Transform.resetAttributeDecoder();
+
         final String saPayloadBodyHex =
                 "0000002c010100040300000c0100000c800e0080030000080300000c"
                         + "0300000802000005000000080400001f";
