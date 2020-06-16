@@ -965,20 +965,25 @@ public final class ChildSessionStateMachineTest {
         return inboundPayloads;
     }
 
-    @Test
-    public void testRekeyChildLocalCreateValidatesResponse() throws Exception {
-        setupIdleStateMachine();
-        setUpSpiResource(LOCAL_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_IN);
-        setUpSpiResource(REMOTE_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
+    private List<IkePayload> receiveRekeyChildRequest() throws Exception {
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
+                        REKEY_CHILD_REQ_SA_PAYLOAD,
+                        false /*isLocalInitRekey*/);
+        when(mMockSaRecordHelper.makeChildSaRecord(
+                        eq(rekeyReqPayloads), any(List.class), any(ChildSaRecordConfig.class)))
+                .thenReturn(mSpyRemoteInitNewChildSaRecord);
 
-        // Send Rekey-Create request
-        mChildSessionStateMachine.rekeyChildSession();
+        // Receive rekey Child request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
         mLooper.dispatchAll();
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
 
-        // Prepare "rekeyed" SA and receive Rekey response
+        return rekeyReqPayloads;
+    }
+
+    private List<IkePayload> receiveRekeyChildResponse() throws Exception {
         List<IkePayload> rekeyRespPayloads =
                 makeInboundRekeyChildPayloads(
                         LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
@@ -991,6 +996,31 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyRespPayloads);
         mLooper.dispatchAll();
 
+        return rekeyRespPayloads;
+    }
+
+    private void setupStateMachineAndSpiForLocalRekey() throws Exception {
+        setupIdleStateMachine();
+        setUpSpiResource(LOCAL_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_IN);
+        setUpSpiResource(REMOTE_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
+    }
+
+    @Test
+    public void testRekeyChildLocalCreateValidatesResponse() throws Exception {
+        setupStateMachineAndSpiForLocalRekey();
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
+
+        List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
+        verifyLocalRekeyCreateIsDone(rekeyRespPayloads);
+    }
+
+    private void verifyLocalRekeyCreateIsDone(List<IkePayload> rekeyRespPayloads) throws Exception {
         // Verify state transition
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
@@ -1048,6 +1078,52 @@ public final class ChildSessionStateMachineTest {
         // Verify no SPI for provisional Child was registered.
         verify(mMockChildSessionSmCallback, never())
                 .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
+    }
+
+    @Test
+    public void testRekeyLocalCreateHandlesRekeyRequest() throws Exception {
+        setupStateMachineAndSpiForLocalRekey();
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+
+        receiveRekeyChildRequest();
+
+        // Verify error notification was sent and state machine stays in the same state
+        verifyOutboundErrorNotify(EXCHANGE_TYPE_INFORMATIONAL, ERROR_TYPE_TEMPORARY_FAILURE);
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
+
+        // Receive Rekey Create response and verify creation is done
+        List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
+        verifyLocalRekeyCreateIsDone(rekeyRespPayloads);
+    }
+
+    @Test
+    public void testRekeyLocalCreateHandlesDeleteRequest() throws Exception {
+        setupStateMachineAndSpiForLocalRekey();
+
+        // Send Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSession();
+        mLooper.dispatchAll();
+
+        // Receive Delete request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                EXCHANGE_TYPE_INFORMATIONAL,
+                makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        // Verify Delete response was sent, users were notified and statemachine is still running
+        verifyOutboundDeletePayload(mSpyCurrentChildSaRecord.getLocalSpi(), true /*isResp*/);
+        verifyNotifyUsersDeleteSession();
+        assertNotNull(mChildSessionStateMachine.getCurrentState());
+
+        // Receive Rekey Create response and verify Child Session is closed
+        List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
+        assertNull(mChildSessionStateMachine.getCurrentState());
     }
 
     @Test
@@ -1158,8 +1234,7 @@ public final class ChildSessionStateMachineTest {
         assertEquals(newSaRecord, mChildSessionStateMachine.mCurrentChildSaRecord);
     }
 
-    @Test
-    public void testRekeyChildLocalDeleteValidatesResponse() throws Exception {
+    private void mockRekeyChildLocalCreate() throws Exception {
         setupIdleStateMachine();
 
         // Seed fake rekey data and force transition to RekeyChildLocalDelete
@@ -1167,6 +1242,11 @@ public final class ChildSessionStateMachineTest {
         mChildSessionStateMachine.sendMessage(
                 CMD_FORCE_TRANSITION, mChildSessionStateMachine.mRekeyChildLocalDelete);
         mLooper.dispatchAll();
+    }
+
+    @Test
+    public void testRekeyChildLocalDeleteValidatesResponse() throws Exception {
+        mockRekeyChildLocalCreate();
 
         // Test receiving Delete response
         mChildSessionStateMachine.receiveResponse(
@@ -1174,6 +1254,10 @@ public final class ChildSessionStateMachineTest {
                 makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
         mLooper.dispatchAll();
 
+        verifyRekeyChildLocalDeleteIsDone();
+    }
+
+    private void verifyRekeyChildLocalDeleteIsDone() throws Exception {
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
                         instanceof ChildSessionStateMachine.Idle);
@@ -1187,6 +1271,55 @@ public final class ChildSessionStateMachineTest {
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockChildSessionCallback, never()).onClosed();
         verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
+    }
+
+    @Test
+    public void testRekeyLocalDeleteHandlesRekeyRequest() throws Exception {
+        mockRekeyChildLocalCreate();
+
+        receiveRekeyChildRequest();
+
+        // Verify error notification was sent and state machine stays in the same state
+        verifyOutboundErrorNotify(EXCHANGE_TYPE_INFORMATIONAL, ERROR_TYPE_TEMPORARY_FAILURE);
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalDelete);
+
+        // Test receiving Delete response
+        mChildSessionStateMachine.receiveResponse(
+                EXCHANGE_TYPE_INFORMATIONAL,
+                makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+        verifyRekeyChildLocalDeleteIsDone();
+    }
+
+    @Test
+    public void testRekeyLocalDeleteHandlesDeleteRequest() throws Exception {
+        mockRekeyChildLocalCreate();
+
+        // Test receiving Delete request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_DELETE_CHILD,
+                EXCHANGE_TYPE_INFORMATIONAL,
+                makeDeletePayloads(mSpyCurrentChildSaRecord.getRemoteSpi()));
+        mLooper.dispatchAll();
+
+        // Verify empty message was sent and state machine stays in the same state
+        verify(mMockChildSessionSmCallback)
+                .onOutboundPayloadsReady(
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        eq(true /*isResp*/),
+                        mPayloadListCaptor.capture(),
+                        eq(mChildSessionStateMachine));
+        assertTrue(mPayloadListCaptor.getValue().isEmpty());
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.RekeyChildLocalDelete);
+
+        // Test receiving Delete response
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new ArrayList<>());
+        mLooper.dispatchAll();
+        verifyRekeyChildLocalDeleteIsDone();
     }
 
     @Test
@@ -1224,19 +1357,7 @@ public final class ChildSessionStateMachineTest {
         setUpSpiResource(LOCAL_ADDRESS, REMOTE_INIT_NEW_CHILD_SA_SPI_IN);
         setUpSpiResource(REMOTE_ADDRESS, REMOTE_INIT_NEW_CHILD_SA_SPI_OUT);
 
-        List<IkePayload> rekeyReqPayloads =
-                makeInboundRekeyChildPayloads(
-                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT,
-                        REKEY_CHILD_REQ_SA_PAYLOAD,
-                        false /*isLocalInitRekey*/);
-        when(mMockSaRecordHelper.makeChildSaRecord(
-                        eq(rekeyReqPayloads), any(List.class), any(ChildSaRecordConfig.class)))
-                .thenReturn(mSpyRemoteInitNewChildSaRecord);
-
-        // Receive rekey Child request
-        mChildSessionStateMachine.receiveRequest(
-                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
-        mLooper.dispatchAll();
+        List<IkePayload> rekeyReqPayloads = receiveRekeyChildRequest();
 
         assertEquals(0, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
 
