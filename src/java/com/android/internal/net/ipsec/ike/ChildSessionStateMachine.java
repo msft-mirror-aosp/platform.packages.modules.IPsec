@@ -217,6 +217,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mCreateChildLocalCreate = new CreateChildLocalCreate();
     @VisibleForTesting final State mIdle = new Idle();
     @VisibleForTesting final State mIdleWithDeferredRequest = new IdleWithDeferredRequest();
+    @VisibleForTesting final State mClosedAndAwaitResponse = new ClosedAndAwaitResponse();
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
     @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
     @VisibleForTesting final State mRekeyChildLocalCreate = new RekeyChildLocalCreate();
@@ -268,6 +269,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         addState(mCreateChildLocalCreate, mKillChildSessionParent);
         addState(mIdle, mKillChildSessionParent);
         addState(mIdleWithDeferredRequest, mKillChildSessionParent);
+        addState(mClosedAndAwaitResponse, mKillChildSessionParent);
         addState(mDeleteChildLocalDelete, mKillChildSessionParent);
         addState(mDeleteChildRemoteDelete, mKillChildSessionParent);
         addState(mRekeyChildLocalCreate, mKillChildSessionParent);
@@ -1041,6 +1043,30 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     /**
+     * This class represents the state that Child Session was closed by the remote while waiting for
+     * a response.
+     *
+     * <p>This state is the destination state when Child Session receives a Delete request while
+     * waitng for a Rekey Create response. When that happens, Child Session should close all IPsec
+     * SAs and notify the user immediately to prevent security risk. Child Session also needs to
+     * continue waiting for the response and keep its parent IKE Session retransmitting the request,
+     * as required by the IKE spec.
+     */
+    private class ClosedAndAwaitResponse extends ExceptionHandler {
+        @Override
+        public boolean processStateMessage(Message message) {
+            switch (message.what) {
+                case CMD_HANDLE_RECEIVED_RESPONSE:
+                    // Do not need to verify the response since the Child Session is already closed
+                    quitNow();
+                    return HANDLED;
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+    }
+
+    /**
      * DeleteResponderBase represents all states after Child Session is established
      *
      * <p>All post-init states share common functionality of being able to respond to Delete Child
@@ -1110,6 +1136,22 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 mCurrentChildSaRecord.close();
                 mCurrentChildSaRecord = null;
 
+                quitNow();
+            }
+        }
+
+        protected void closeSessionAndNotifyUser(boolean quitStateMachine) {
+            executeUserCallback(
+                    () -> {
+                        mUserCallback.onClosed();
+                        onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                    });
+
+            mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
+            mCurrentChildSaRecord.close();
+            mCurrentChildSaRecord = null;
+
+            if (quitStateMachine) {
                 quitNow();
             }
         }
@@ -1199,17 +1241,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                             + " deletion case");
                         }
 
-                        executeUserCallback(
-                                () -> {
-                                    mUserCallback.onClosed();
-                                    onIpSecTransformPairDeleted(mCurrentChildSaRecord);
-                                });
-
-                        mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
-                        mCurrentChildSaRecord.close();
-                        mCurrentChildSaRecord = null;
-
-                        quitNow();
+                        closeSessionAndNotifyUser(true /* quitStateMachine */);
                     } catch (IkeProtocolException e) {
                         // Shut down Child Session and notify users the error.
                         handleChildFatalError(e);
@@ -1319,6 +1351,19 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public boolean processStateMessage(Message message) {
             switch (message.what) {
+                case CMD_HANDLE_RECEIVED_REQUEST:
+                    ReceivedRequest req = (ReceivedRequest) message.obj;
+
+                    if (req.exchangeSubtype == IKE_EXCHANGE_SUBTYPE_DELETE_CHILD) {
+                        // Handle Delete request, notify users and do state transition to continue
+                        // waiting for the response
+                        sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
+                        closeSessionAndNotifyUser(false /* quitStateMachine */);
+                        transitionTo(mClosedAndAwaitResponse);
+                    } else {
+                        replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
+                    }
+                    return HANDLED;
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     ReceivedCreateResponse resp = (ReceivedCreateResponse) message.obj;
                     CreateChildResult createChildResult =
@@ -1402,7 +1447,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     }
                     return HANDLED;
                 default:
-                    // TODO: Handle rekey and delete request
                     return NOT_HANDLED;
             }
         }
@@ -1714,8 +1758,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * procedure.
      */
     class RekeyChildLocalDelete extends RekeyChildDeleteBase {
+        private boolean mSimulDeleteDetected;
+
         @Override
         public void enterState() {
+            mSimulDeleteDetected = false;
             mChildSaRecordSurviving = mLocalInitNewChildSaRecord;
             sendDeleteChild(mCurrentChildSaRecord, false /*isResp*/);
         }
@@ -1727,6 +1774,22 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
 
             switch (message.what) {
+                case CMD_HANDLE_RECEIVED_REQUEST:
+                    ReceivedRequest req = (ReceivedRequest) message.obj;
+
+                    if (req.exchangeSubtype == IKE_EXCHANGE_SUBTYPE_DELETE_CHILD) {
+                        // Reply with empty message during simultaneous deleting and keep waiting
+                        // for Delete response.
+                        mChildSmCallback.onOutboundPayloadsReady(
+                                EXCHANGE_TYPE_INFORMATIONAL,
+                                true /*isResp*/,
+                                new ArrayList<>(),
+                                ChildSessionStateMachine.this);
+                        mSimulDeleteDetected = true;
+                    } else {
+                        replyErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
+                    }
+                    return HANDLED;
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     try {
                         ReceivedResponse resp = (ReceivedResponse) message.obj;
@@ -1736,7 +1799,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         boolean currentSaSpiFound =
                                 hasRemoteChildSpiForDelete(
                                         resp.responsePayloads, mCurrentChildSaRecord);
-                        if (!currentSaSpiFound) {
+                        if (!mSimulDeleteDetected && !currentSaSpiFound) {
                             loge(
                                     "Found no remote SPI for current SA in received Delete"
                                         + " response. Shutting down old SA and finishing rekey.");
@@ -1751,8 +1814,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     transitionTo(mIdle);
                     return HANDLED;
                 default:
-                    // TODO: Handle requests on mCurrentChildSaRecord: Reply TEMPORARY_FAILURE to
-                    // a rekey request and reply empty INFORMATIONAL message to a delete request.
                     return NOT_HANDLED;
             }
         }
