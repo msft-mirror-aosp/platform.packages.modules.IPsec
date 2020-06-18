@@ -1668,8 +1668,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     if (ikeSaRecord.isRetransmittedRequest(ikePacketBytes)) {
                         logd("Received re-transmitted request. Retransmitting response");
 
-                        for (byte[] packet : ikeSaRecord.getLastSentRespAllPackets()) {
-                            mIkeSocket.sendIkePacket(packet, mRemoteAddress);
+                        if (ikeSaRecord.getLastSentRespAllPackets() != null) {
+                            for (byte[] packet : ikeSaRecord.getLastSentRespAllPackets()) {
+                                mIkeSocket.sendIkePacket(packet, mRemoteAddress);
+                            }
                         }
 
                         // TODO:Support resetting remote rekey delete timer.
