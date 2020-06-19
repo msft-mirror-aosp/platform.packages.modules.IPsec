@@ -548,20 +548,7 @@ public final class IkeSaPayload extends IkePayload {
         private static final int PROPOSAL_RESERVED_FIELD_LEN = 1;
         private static final int PROPOSAL_HEADER_LEN = 8;
 
-        @VisibleForTesting
-        static TransformDecoder sTransformDecoder =
-                new TransformDecoder() {
-                    @Override
-                    public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
-                            throws IkeProtocolException {
-                        Transform[] transformArray = new Transform[count];
-                        for (int i = 0; i < count; i++) {
-                            Transform transform = Transform.readFrom(inputBuffer);
-                                transformArray[i] = transform;
-                        }
-                        return transformArray;
-                    }
-                };
+        private static TransformDecoder sTransformDecoder = new TransformDecoderImpl();
 
         public final byte number;
         /** All supported protocol will fall into {@link ProtocolId} */
@@ -675,6 +662,31 @@ public final class IkeSaPayload extends IkePayload {
                                 esnList.toArray(new EsnTransform[esnList.size()]));
                 return new ChildProposal(number, spi, saProposal, hasUnrecognizedTransform);
             }
+        }
+
+        private static class TransformDecoderImpl implements TransformDecoder {
+            @Override
+            public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
+                    throws IkeProtocolException {
+                Transform[] transformArray = new Transform[count];
+                for (int i = 0; i < count; i++) {
+                    Transform transform = Transform.readFrom(inputBuffer);
+                    transformArray[i] = transform;
+                }
+                return transformArray;
+            }
+        }
+
+        /** Package private method to set TransformDecoder for testing purposes */
+        @VisibleForTesting
+        static void setTransformDecoder(TransformDecoder decoder) {
+            sTransformDecoder = decoder;
+        }
+
+        /** Package private method to reset TransformDecoder */
+        @VisibleForTesting
+        static void resetTransformDecoder() {
+            sTransformDecoder = new TransformDecoderImpl();
         }
 
         /** Package private */
@@ -962,22 +974,7 @@ public final class IkeSaPayload extends IkePayload {
 
         // TODO: Add constants for supported algorithms
 
-        @VisibleForTesting
-        static AttributeDecoder sAttributeDecoder =
-                new AttributeDecoder() {
-                    public List<Attribute> decodeAttributes(int length, ByteBuffer inputBuffer)
-                            throws IkeProtocolException {
-                        List<Attribute> list = new LinkedList<>();
-                        int parsedLength = BASIC_TRANSFORM_LEN;
-                        while (parsedLength < length) {
-                            Pair<Attribute, Integer> pair = Attribute.readFrom(inputBuffer);
-                            parsedLength += pair.second;
-                            list.add(pair.first);
-                        }
-                        // TODO: Validate that parsedLength equals to length.
-                        return list;
-                    }
-                };
+        private static AttributeDecoder sAttributeDecoder = new AttributeDecoderImpl();
 
         // Only supported type falls into {@link TransformType}
         public final int type;
@@ -1041,6 +1038,34 @@ public final class IkeSaPayload extends IkePayload {
                 default:
                     return new UnrecognizedTransform(type, id, attributeList);
             }
+        }
+
+        private static class AttributeDecoderImpl implements AttributeDecoder {
+            @Override
+            public List<Attribute> decodeAttributes(int length, ByteBuffer inputBuffer)
+                    throws IkeProtocolException {
+                List<Attribute> list = new LinkedList<>();
+                int parsedLength = BASIC_TRANSFORM_LEN;
+                while (parsedLength < length) {
+                    Pair<Attribute, Integer> pair = Attribute.readFrom(inputBuffer);
+                    parsedLength += pair.second; // Increase parsedLength by the Atrribute length
+                    list.add(pair.first);
+                }
+                // TODO: Validate that parsedLength equals to length.
+                return list;
+            }
+        }
+
+        /** Package private method to set AttributeDecoder for testing purpose */
+        @VisibleForTesting
+        static void setAttributeDecoder(AttributeDecoder decoder) {
+            sAttributeDecoder = decoder;
+        }
+
+        /** Package private method to reset AttributeDecoder */
+        @VisibleForTesting
+        static void resetAttributeDecoder() {
+            sAttributeDecoder = new AttributeDecoderImpl();
         }
 
         // Throw InvalidSyntaxException if there are multiple Attributes of the same type
