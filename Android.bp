@@ -58,7 +58,6 @@ filegroup {
     name: "ike-srcs",
     srcs: [
         "src/java/**/*.java",
-        ":bouncycastle_ike_digests",
         ":framework-ike-shared-srcs",
     ],
 }
@@ -70,14 +69,13 @@ filegroup {
 }
 
 // Provides internal classes needed to build the ike sources.
-//
-// TODO(b/152328618) - Add dependency on bouncycastle_ike_digests code.
 java_library {
     name: "ike-internals",
     apex_available: [
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
+    static_libs: ["bouncycastle_ike_digests"],
     sdk_version: "core_current",
 }
 
