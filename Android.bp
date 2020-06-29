@@ -26,6 +26,10 @@ java_sdk_library {
     },
     srcs: [":ike-srcs"],
 
+    static_libs: [
+        "ike-internals",
+    ],
+
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
@@ -54,7 +58,6 @@ filegroup {
     name: "ike-srcs",
     srcs: [
         "src/java/**/*.java",
-        ":bouncycastle_ike_digests",
         ":framework-ike-shared-srcs",
     ],
 }
@@ -65,11 +68,23 @@ filegroup {
     path: "src/java/",
 }
 
+// Provides internal classes needed to build the ike sources.
+java_library {
+    name: "ike-internals",
+    apex_available: [
+        "com.android.ipsec",
+        "test_com.android.ipsec",
+    ],
+    static_libs: ["bouncycastle_ike_digests"],
+    sdk_version: "core_current",
+}
+
 java_library {
     name: "ike_test",
     installable: false, // Used only for testing; never installed alone.
     srcs: [":ike-srcs"],
     libs: ["unsupportedappusage"],
+    static_libs: ["ike-internals"],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
