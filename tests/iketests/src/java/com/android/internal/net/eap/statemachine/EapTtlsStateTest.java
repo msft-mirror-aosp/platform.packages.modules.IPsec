@@ -40,6 +40,7 @@ import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.EapResult.EapFailure;
 import com.android.internal.net.eap.EapResult.EapResponse;
+import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapMessage;
@@ -54,9 +55,10 @@ import java.security.SecureRandom;
 
 public class EapTtlsStateTest {
 
-    Context mContext;
-    SecureRandom mMockSecureRandom;
-    EapTtlsTypeDataDecoder mMockTypeDataDecoder;
+    protected Context mContext;
+    protected SecureRandom mMockSecureRandom;
+    protected EapTtlsTypeDataDecoder mMockTypeDataDecoder;
+    protected TlsSessionFactory mMockTlsSessionFactory;
 
     EapSessionConfig mEapSessionConfig;
     EapTtlsConfig mEapTtlsConfig;
@@ -70,6 +72,7 @@ public class EapTtlsStateTest {
         mContext = getInstrumentation().getContext();
         mMockSecureRandom = mock(SecureRandom.class);
         mMockTypeDataDecoder = mock(EapTtlsTypeDataDecoder.class);
+        mMockTlsSessionFactory = mock(TlsSessionFactory.class);
 
         mEapTtlsConfig = new EapTtlsConfig(null);
 
@@ -79,7 +82,8 @@ public class EapTtlsStateTest {
                         getDummyEapSessionConfig(),
                         mEapTtlsConfig,
                         mMockSecureRandom,
-                        mMockTypeDataDecoder);
+                        mMockTypeDataDecoder,
+                        mMockTlsSessionFactory);
     }
 
     @Test
