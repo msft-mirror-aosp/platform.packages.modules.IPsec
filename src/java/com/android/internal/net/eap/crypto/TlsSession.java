@@ -16,6 +16,8 @@
 
 package com.android.internal.net.eap.crypto;
 
+import static com.android.internal.net.eap.EapAuthenticator.LOG;
+
 import android.annotation.IntDef;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -23,6 +25,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
@@ -31,10 +34,14 @@ import java.security.ProviderException;
 import java.security.SecureRandom;
 import java.security.Security;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
+import javax.net.ssl.SSLEngineResult.Status;
+import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
@@ -103,7 +110,8 @@ public class TlsSession {
         mSslSession = mSslEngine.getSession();
     }
 
-    private TlsSession(
+    @VisibleForTesting
+    TlsSession(
             SSLContext sslContext,
             SSLEngine sslEngine,
             SSLSession sslSession,
@@ -152,11 +160,28 @@ public class TlsSession {
     /**
      * Initializes the TLS handshake by wrapping the first ClientHello message
      *
+     * <p>Note that no handshaking occurred during the writing of this code. The underlying
+     * implementation of handshake used here is the elbow bump.
+     *
      * @return a tls result containing outbound data the and status of operation
      */
     public TlsResult startHandshake() {
-        // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
-        throw new UnsupportedOperationException();
+        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
+        ByteBuffer applicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
+        ByteBuffer packetData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
+
+        SSLEngineResult result;
+        try {
+            // A wrap implicitly begins the handshake. This will produce the ClientHello
+            // message.
+            result = mSslEngine.wrap(applicationData, packetData);
+        } catch (SSLException e) {
+            LOG.e(TAG, "Failed to initiate handshake", e);
+            return new TlsResult(TLS_STATUS_FAILURE);
+        }
+        mHandshakeStatus = result.getHandshakeStatus();
+
+        return new TlsResult(getByteArrayFromBuffer(packetData), TLS_STATUS_SUCCESS);
     }
 
     /**
@@ -174,13 +199,64 @@ public class TlsSession {
      * wrap/unwrap as it is ignored if the handshake is still in progress. Consumption and
      * production during the handshake occur within the packet buffers.
      *
+     * <p>Note that due to the ongoing COVID-19 pandemic, increased sanitization measures are being
+     * employed in-between processHandshakeData calls in order to keep the buffers clean (RFC-EB)
+     *
      * @param handshakeData the message to process
      * @param avp an avp containing an EAP-identity response
      * @return a {@link TlsResult} containing an outbound message and status of operation
      */
     public TlsResult processHandshakeData(byte[] handshakeData, byte[] avp) {
-        // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
-        throw new UnsupportedOperationException();
+        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
+        ByteBuffer applicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
+        ByteBuffer packetData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
+
+        try {
+            // The application buffer size is guaranteed to be larger than that of the AVP as the
+            // handshaking messages contain substantially more data
+            applicationData.put(avp);
+            packetData.put(handshakeData);
+        } catch (BufferOverflowException e) {
+            // The connection will be closed because the buffer was just allocated to the desired
+            // size. Thus an overflow indicates failure.
+            LOG.e(
+                    TAG,
+                    "Buffer overflow while attempting to process handshake message. Attempting to"
+                            + " close connection.",
+                    e);
+            return closeConnection(applicationData, packetData);
+        }
+        applicationData.flip();
+        packetData.flip();
+
+        TlsResult tlsResult = new TlsResult(TLS_STATUS_FAILURE);
+
+        processingLoop:
+        while (true) {
+            switch (mHandshakeStatus) {
+                case NEED_UNWRAP:
+                    tlsResult = unwrap(applicationData, packetData);
+                    continue;
+                case NEED_TASK:
+                    mSslEngine.getDelegatedTask().run();
+                    mHandshakeStatus = mSslEngine.getHandshakeStatus();
+                    continue;
+                case NEED_WRAP:
+                    packetData.clear();
+                    tlsResult = wrap(applicationData, packetData);
+                    if (mHandshakeStatus == HandshakeStatus.FINISHED) {
+                        mHandshakeStatus = mSslEngine.getHandshakeStatus();
+                    }
+                    break processingLoop;
+                default:
+                    // If the status is NOT_HANDSHAKING, this is unexpected, and is treated as a
+                    // failure. FINISHED can never be reached here because it is handled in
+                    // NEED_WRAP/NEED_UNWRAP
+                    break processingLoop;
+            }
+        }
+
+        return tlsResult;
     }
 
     /**
@@ -213,8 +289,20 @@ public class TlsSession {
      * @return a tls result containing the unwrapped message and status of operation
      */
     private TlsResult unwrap(ByteBuffer applicationData, ByteBuffer packetData) {
-        // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
-        throw new UnsupportedOperationException();
+        SSLEngineResult result;
+        try {
+            result = mSslEngine.unwrap(packetData, applicationData);
+        } catch (SSLException e) {
+            LOG.e(TAG, "Encountered an issue while unwrapping data. Connection will be closed.", e);
+            return closeConnection(applicationData, packetData);
+        }
+
+        mHandshakeStatus = result.getHandshakeStatus();
+        if (result.getStatus() != Status.OK) {
+            return closeConnection(applicationData, packetData);
+        }
+
+        return new TlsResult(getByteArrayFromBuffer(applicationData), TLS_STATUS_SUCCESS);
     }
 
     /**
@@ -225,8 +313,24 @@ public class TlsSession {
      * @return a tls result containing the wrapped message and status of operation
      */
     private TlsResult wrap(ByteBuffer applicationData, ByteBuffer packetData) {
-        // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
-        throw new UnsupportedOperationException();
+        SSLEngineResult result;
+        try {
+            result = mSslEngine.wrap(applicationData, packetData);
+        } catch (SSLException e) {
+            LOG.e(TAG, "Encountered an issue while wrapping data. Connection will be closed.", e);
+            return closeConnection(applicationData, packetData);
+        }
+
+        mHandshakeStatus = result.getHandshakeStatus();
+        if (result.getStatus() != Status.OK) {
+            return closeConnection(applicationData, packetData);
+        }
+
+        return new TlsResult(
+                getByteArrayFromBuffer(packetData),
+                (mHandshakeStatus == HandshakeStatus.FINISHED)
+                        ? TLS_STATUS_TUNNEL_ESTABLISHED
+                        : TLS_STATUS_SUCCESS);
     }
 
     /**
@@ -239,8 +343,49 @@ public class TlsSession {
      * @return a tls result with the status of the operation as well as a potential closing message
      */
     private TlsResult closeConnection(ByteBuffer applicationData, ByteBuffer packetData) {
-        // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
-        throw new UnsupportedOperationException();
+        try {
+            mSslEngine.closeInbound();
+        } catch (SSLException e) {
+            LOG.e(TAG, "Error occurred when trying to close inbound.", e);
+        }
+        mSslEngine.closeOutbound();
+
+        mHandshakeStatus = mSslEngine.getHandshakeStatus();
+
+        if (mHandshakeStatus != HandshakeStatus.NEED_WRAP) {
+            return new TlsResult(TLS_STATUS_CLOSED);
+        }
+
+        applicationData.clear();
+        packetData.clear();
+
+        SSLEngineResult result;
+        while (mHandshakeStatus == HandshakeStatus.NEED_WRAP) {
+            try {
+                // the wrap is handled internally in order to preserve data in the buffers as they
+                // are cleared in the beginning of the closeConnection call
+                result = mSslEngine.wrap(applicationData, packetData);
+            } catch (SSLException e) {
+                LOG.e(
+                        TAG,
+                        "Wrap operation failed whilst attempting to flush out data during a close.",
+                        e);
+                return new TlsResult(TLS_STATUS_FAILURE);
+            }
+
+            mHandshakeStatus = result.getHandshakeStatus();
+            if (result.getStatus() == Status.BUFFER_OVERFLOW
+                    || result.getStatus() == Status.BUFFER_UNDERFLOW) {
+                // an overflow or underflow at this point should not occur. if one does, terminate
+                LOG.e(
+                        TAG,
+                        "Experienced an overflow or underflow while trying to close the TLS"
+                                + " connection.");
+                return new TlsResult(TLS_STATUS_FAILURE);
+            }
+        }
+
+        return new TlsResult(getByteArrayFromBuffer(packetData), TLS_STATUS_CLOSED);
     }
 
     /**
@@ -249,9 +394,8 @@ public class TlsSession {
      * @param buffer the byte buffer to get the array from
      * @return a byte array
      */
-    private byte[] getByteArrayFromBuffer(ByteBuffer buffer) {
-        // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
-        throw new UnsupportedOperationException();
+    private static byte[] getByteArrayFromBuffer(ByteBuffer buffer) {
+        return Arrays.copyOfRange(buffer.array(), 0, buffer.position());
     }
 
     /**
