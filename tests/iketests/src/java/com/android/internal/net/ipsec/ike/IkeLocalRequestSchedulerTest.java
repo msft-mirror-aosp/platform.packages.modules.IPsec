@@ -16,18 +16,26 @@
 
 package com.android.internal.net.ipsec.ike;
 
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
-
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import android.content.Context;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
+
+import androidx.test.InstrumentationRegistry;
+
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IProcedureConsumer;
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IkeLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
 
 import org.junit.Before;
@@ -44,10 +52,22 @@ public final class IkeLocalRequestSchedulerTest {
     private ArgumentCaptor<LocalRequest> mLocalRequestCaptor =
             ArgumentCaptor.forClass(LocalRequest.class);
 
+    private Context mSpyContext;
+    private PowerManager mMockPowerManager;
+    protected PowerManager.WakeLock mMockWakelock;
+
     @Before
     public void setUp() {
         mMockConsumer = mock(IProcedureConsumer.class);
-        mScheduler = new IkeLocalRequestScheduler(mMockConsumer);
+
+        mSpyContext = spy(InstrumentationRegistry.getContext());
+        mMockPowerManager = mock(PowerManager.class);
+        mMockWakelock = mock(WakeLock.class);
+
+        doReturn(mMockPowerManager).when(mSpyContext).getSystemService(eq(PowerManager.class));
+        doReturn(mMockWakelock).when(mMockPowerManager).newWakeLock(anyInt(), anyString());
+
+        mScheduler = new IkeLocalRequestScheduler(mMockConsumer, mSpyContext);
 
         mMockRequestArray = new LocalRequest[10];
         for (int i = 0; i < mMockRequestArray.length; i++) {
@@ -106,26 +126,5 @@ public final class IkeLocalRequestSchedulerTest {
         for (LocalRequest r : mMockRequestArray) {
             inOrder.verify(mMockConsumer).onNewProcedureReady(r);
         }
-    }
-
-    @Test
-    public void testDoNotProcessCanceledRequest() {
-        LocalRequest[] requestArray = new IkeLocalRequest[4];
-
-        for (int i = 0; i < requestArray.length; i++) {
-            requestArray[i] = new IkeLocalRequest(CMD_LOCAL_REQUEST_REKEY_IKE);
-            mScheduler.addRequest(requestArray[i]);
-        }
-
-        mScheduler.readyForNextProcedure();
-        verify(mMockConsumer).onNewProcedureReady(eq(requestArray[0]));
-
-        requestArray[1].cancel();
-        mScheduler.readyForNextProcedure();
-        verify(mMockConsumer, never()).onNewProcedureReady(eq(requestArray[1]));
-        verify(mMockConsumer).onNewProcedureReady(eq(requestArray[2]));
-
-        mScheduler.readyForNextProcedure();
-        verify(mMockConsumer).onNewProcedureReady(eq(requestArray[3]));
     }
 }

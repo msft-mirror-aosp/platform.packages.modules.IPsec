@@ -514,7 +514,20 @@ public final class IkeSaPayload extends IkePayload {
         Transform[] decodeTransforms(int count, ByteBuffer inputBuffer) throws IkeProtocolException;
     }
 
-    // TODO: Add another constructor for building outbound message.
+    /**
+     * Release IPsec SPI resources in the outbound Create Child request
+     *
+     * <p>This method is usually called when an IKE library fails to receive a Create Child response
+     * before it is terminated. It is also safe to call after the Create Child exchange has
+     * succeeded because the newly created IpSecTransform pair will hold the IPsec SPI resource.
+     */
+    public void releaseChildSpiResourcesIfExists() {
+        for (Proposal proposal : proposalList) {
+            if (proposal instanceof ChildProposal) {
+                proposal.releaseSpiResourceIfExists();
+            }
+        }
+    }
 
     /**
      * This class represents the common information of an IKE Proposal and a Child Proposal.
@@ -535,22 +548,7 @@ public final class IkeSaPayload extends IkePayload {
         private static final int PROPOSAL_RESERVED_FIELD_LEN = 1;
         private static final int PROPOSAL_HEADER_LEN = 8;
 
-        @VisibleForTesting
-        static TransformDecoder sTransformDecoder =
-                new TransformDecoder() {
-                    @Override
-                    public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
-                            throws IkeProtocolException {
-                        Transform[] transformArray = new Transform[count];
-                        for (int i = 0; i < count; i++) {
-                            Transform transform = Transform.readFrom(inputBuffer);
-                            if (transform.isSupported) {
-                                transformArray[i] = transform;
-                            }
-                        }
-                        return transformArray;
-                    }
-                };
+        private static TransformDecoder sTransformDecoder = new TransformDecoderImpl();
 
         public final byte number;
         /** All supported protocol will fall into {@link ProtocolId} */
@@ -664,6 +662,31 @@ public final class IkeSaPayload extends IkePayload {
                                 esnList.toArray(new EsnTransform[esnList.size()]));
                 return new ChildProposal(number, spi, saProposal, hasUnrecognizedTransform);
             }
+        }
+
+        private static class TransformDecoderImpl implements TransformDecoder {
+            @Override
+            public Transform[] decodeTransforms(int count, ByteBuffer inputBuffer)
+                    throws IkeProtocolException {
+                Transform[] transformArray = new Transform[count];
+                for (int i = 0; i < count; i++) {
+                    Transform transform = Transform.readFrom(inputBuffer);
+                    transformArray[i] = transform;
+                }
+                return transformArray;
+            }
+        }
+
+        /** Package private method to set TransformDecoder for testing purposes */
+        @VisibleForTesting
+        static void setTransformDecoder(TransformDecoder decoder) {
+            sTransformDecoder = decoder;
+        }
+
+        /** Package private method to reset TransformDecoder */
+        @VisibleForTesting
+        static void resetTransformDecoder() {
+            sTransformDecoder = new TransformDecoderImpl();
         }
 
         /** Package private */
@@ -951,22 +974,7 @@ public final class IkeSaPayload extends IkePayload {
 
         // TODO: Add constants for supported algorithms
 
-        @VisibleForTesting
-        static AttributeDecoder sAttributeDecoder =
-                new AttributeDecoder() {
-                    public List<Attribute> decodeAttributes(int length, ByteBuffer inputBuffer)
-                            throws IkeProtocolException {
-                        List<Attribute> list = new LinkedList<>();
-                        int parsedLength = BASIC_TRANSFORM_LEN;
-                        while (parsedLength < length) {
-                            Pair<Attribute, Integer> pair = Attribute.readFrom(inputBuffer);
-                            parsedLength += pair.second;
-                            list.add(pair.first);
-                        }
-                        // TODO: Validate that parsedLength equals to length.
-                        return list;
-                    }
-                };
+        private static AttributeDecoder sAttributeDecoder = new AttributeDecoderImpl();
 
         // Only supported type falls into {@link TransformType}
         public final int type;
@@ -1030,6 +1038,34 @@ public final class IkeSaPayload extends IkePayload {
                 default:
                     return new UnrecognizedTransform(type, id, attributeList);
             }
+        }
+
+        private static class AttributeDecoderImpl implements AttributeDecoder {
+            @Override
+            public List<Attribute> decodeAttributes(int length, ByteBuffer inputBuffer)
+                    throws IkeProtocolException {
+                List<Attribute> list = new LinkedList<>();
+                int parsedLength = BASIC_TRANSFORM_LEN;
+                while (parsedLength < length) {
+                    Pair<Attribute, Integer> pair = Attribute.readFrom(inputBuffer);
+                    parsedLength += pair.second; // Increase parsedLength by the Atrribute length
+                    list.add(pair.first);
+                }
+                // TODO: Validate that parsedLength equals to length.
+                return list;
+            }
+        }
+
+        /** Package private method to set AttributeDecoder for testing purpose */
+        @VisibleForTesting
+        static void setAttributeDecoder(AttributeDecoder decoder) {
+            sAttributeDecoder = decoder;
+        }
+
+        /** Package private method to reset AttributeDecoder */
+        @VisibleForTesting
+        static void resetAttributeDecoder() {
+            sAttributeDecoder = new AttributeDecoderImpl();
         }
 
         // Throw InvalidSyntaxException if there are multiple Attributes of the same type
@@ -1261,10 +1297,14 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return SaProposal.getEncryptionAlgorithmString(id)
-                    + "("
-                    + getSpecifiedKeyLength()
-                    + ")";
+            if (isSupported) {
+                return SaProposal.getEncryptionAlgorithmString(id)
+                        + "("
+                        + getSpecifiedKeyLength()
+                        + ")";
+            } else {
+                return "ENCR(" + id + ")";
+            }
         }
     }
 
@@ -1337,7 +1377,11 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return SaProposal.getPseudorandomFunctionString(id);
+            if (isSupported) {
+                return SaProposal.getPseudorandomFunctionString(id);
+            } else {
+                return "PRF(" + id + ")";
+            }
         }
     }
 
@@ -1414,7 +1458,11 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return SaProposal.getIntegrityAlgorithmString(id);
+            if (isSupported) {
+                return SaProposal.getIntegrityAlgorithmString(id);
+            } else {
+                return "AUTH(" + id + ")";
+            }
         }
     }
 
@@ -1491,7 +1539,11 @@ public final class IkeSaPayload extends IkePayload {
         @Override
         @NonNull
         public String toString() {
-            return SaProposal.getDhGroupString(id);
+            if (isSupported) {
+                return SaProposal.getDhGroupString(id);
+            } else {
+                return "DH(" + id + ")";
+            }
         }
     }
 

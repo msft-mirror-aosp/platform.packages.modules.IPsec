@@ -503,10 +503,12 @@ public final class IkeMessage {
 
                 int fragNum = i + 1; // 1-based
 
+                int fragFirstInnerPayload =
+                        i == 0 ? firstInnerPayload : IkePayload.PAYLOAD_TYPE_NO_NEXT;
                 IkeSkfPayload skfPayload =
                         new IkeSkfPayload(
-                                ikeHeader,
-                                firstInnerPayload,
+                                skfHeader,
+                                fragFirstInnerPayload,
                                 unencryptedData,
                                 integrityMac,
                                 encryptCipher,
@@ -515,11 +517,7 @@ public final class IkeMessage {
                                 fragNum,
                                 totalFragments);
 
-                packetList[i] =
-                        encodeHeaderAndBody(
-                                skfHeader,
-                                skfPayload,
-                                i == 0 ? firstInnerPayload : IkePayload.PAYLOAD_TYPE_NO_NEXT);
+                packetList[i] = encodeHeaderAndBody(skfHeader, skfPayload, fragFirstInnerPayload);
                 getIkeLog()
                         .d(
                                 "IkeMessage",
@@ -528,7 +526,7 @@ public final class IkeMessage {
                                         + "/"
                                         + totalFragments
                                         + "): "
-                                        + getIkeLog().pii(packetList[0]));
+                                        + getIkeLog().pii(packetList[i]));
             }
 
             return packetList;
@@ -601,8 +599,8 @@ public final class IkeMessage {
                 DecodeResultPartial collectedFragments) {
             if (header.nextPayloadType != IkePayload.PAYLOAD_TYPE_SK
                     && header.nextPayloadType != IkePayload.PAYLOAD_TYPE_SKF) {
-                // TODO: b/123372339 Handle message containing unprotected payloads.
-                throw new UnsupportedOperationException("Message contains unprotected payloads");
+                return new DecodeResultUnprotectedError(
+                        new InvalidSyntaxException("Message contains unprotected payloads"));
             }
 
             // Decrypt message and do authentication

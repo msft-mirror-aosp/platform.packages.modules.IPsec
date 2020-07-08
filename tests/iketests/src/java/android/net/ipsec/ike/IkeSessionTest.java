@@ -19,8 +19,11 @@ package android.net.ipsec.ike;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
+import android.content.pm.PackageManager;
 import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
@@ -83,6 +86,7 @@ public final class IkeSessionTest extends IkeSessionTestBase {
                         mMockIkeSessionCb,
                         mMockChildSessionCb);
         assertNotNull(ikeSession.mIkeSessionStateMachine.getHandler().getLooper());
+        ikeSession.kill();
     }
 
     /**
@@ -125,6 +129,10 @@ public final class IkeSessionTest extends IkeSessionTestBase {
         assertEquals(
                 sessions[0].mIkeSessionStateMachine.getHandler().getLooper(),
                 sessions[1].mIkeSessionStateMachine.getHandler().getLooper());
+
+        for (IkeSession s : sessions) {
+            s.kill();
+        }
     }
 
     @Test
@@ -145,5 +153,30 @@ public final class IkeSessionTest extends IkeSessionTestBase {
         assertTrue(
                 ikeSession.mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeInit);
+
+        ikeSession.kill();
+        testLooper.dispatchAll();
+    }
+
+    @Test
+    public void testThrowWhenSetupTunnelWithMissingFeature() {
+        PackageManager mockPackageMgr = mock(PackageManager.class);
+        doReturn(mockPackageMgr).when(mSpyContext).getPackageManager();
+        doReturn(false).when(mockPackageMgr).hasSystemFeature(PackageManager.FEATURE_IPSEC_TUNNELS);
+
+        try {
+            IkeSession ikeSession =
+                    new IkeSession(
+                            mSpyContext,
+                            mIpSecManager,
+                            mIkeSessionParams,
+                            mock(TunnelModeChildSessionParams.class),
+                            mUserCbExecutor,
+                            mMockIkeSessionCb,
+                            mMockChildSessionCb);
+            fail("Expected to fail due to missing FEATURE_IPSEC_TUNNELS");
+        } catch (Exception expected) {
+
+        }
     }
 }
