@@ -4157,7 +4157,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testKillSession() throws Exception {
+    public void testKillSessionDeleteIkeRequestSent() throws Exception {
         setupIdleStateMachine();
 
         mIkeSessionStateMachine.killSession();
@@ -4166,6 +4166,39 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mSpyCurrentIkeSaRecord).close();
         verify(mSpyCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
         verifyNotifyUserCloseSession();
+
+        // Verify outbound request
+        IkeMessage req = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
+        IkeHeader ikeHeader = req.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertEquals(1, req.ikePayloadList.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, req.ikePayloadList.get(0).payloadType);
+
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockBusyWakelock).release();
+    }
+
+    @Test
+    public void testKillSessionNoDeleteIkeRequestSent() throws Exception {
+        setupIdleStateMachine();
+
+        // Transition to state that does not send IKE delete requests
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mCreateIkeLocalIkeInit);
+
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mSpyCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
+        verifyNotifyUserCloseSession();
+
+        // Verify no outbound request
+        verifyEncryptAndEncodeNeverCalled();
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -4713,6 +4746,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        // Reset the IkeMessageHelper to be a mock. This is needed for #killSession (called in
+        // #tearDown), which attempts to notify the remote about the IKE session dying in the Idle
+        // state.
+        IkeMessage.setIkeMessageHelper(mMockIkeMessageHelper);
+        resetMockIkeMessageHelper();
     }
 
     @Test
