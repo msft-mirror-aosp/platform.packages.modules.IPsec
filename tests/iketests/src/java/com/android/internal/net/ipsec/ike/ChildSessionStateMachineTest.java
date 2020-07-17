@@ -22,6 +22,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static android.system.OsConstants.AF_INET;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
+import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
@@ -52,6 +53,7 @@ import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -593,19 +595,23 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionCallback).onClosedExceptionally(any(exceptionClass));
     }
 
-    @Test
-    public void testCreateChildHandlesErrorNotifyResp() throws Exception {
+    private void createChildSessionAndReceiveErrorNotification(int notifyType) throws Exception {
         // Send out Create request
         mChildSessionStateMachine.createChildSession(
                 LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket, mIkePrf, SK_D);
         mLooper.dispatchAll();
 
         // Receive error notification in Create response
-        IkeNotifyPayload notifyPayload = new IkeNotifyPayload(ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+        IkeNotifyPayload notifyPayload = new IkeNotifyPayload(notifyType);
         List<IkePayload> respPayloads = new LinkedList<>();
         respPayloads.add(notifyPayload);
         mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
         mLooper.dispatchAll();
+    }
+
+    @Test
+    public void testCreateChildHandlesErrorNotifyResp() throws Exception {
+        createChildSessionAndReceiveErrorNotification(ERROR_TYPE_NO_PROPOSAL_CHOSEN);
 
         // Verify no SPI for provisional Child was registered.
         verify(mMockChildSessionSmCallback, never())
@@ -613,6 +619,27 @@ public final class ChildSessionStateMachineTest {
 
         // Verify user was notified and state machine has quit.
         verifyHandleFatalErrorAndQuit(NoValidProposalChosenException.class);
+    }
+
+    @Test
+    public void testCreateChildHandlesTemporaryFailure() throws Exception {
+        createChildSessionAndReceiveErrorNotification(ERROR_TYPE_TEMPORARY_FAILURE);
+
+        // Verify no SPI for provisional Child was registered.
+        verify(mMockChildSessionSmCallback, never())
+                .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
+
+        // Verify that Create Child re-enqueued
+        verify(mMockChildSessionSmCallback)
+                .scheduleRetryLocalRequest(
+                        argThat(
+                                childLocalRequest ->
+                                        childLocalRequest.procedureType
+                                                == CMD_LOCAL_REQUEST_CREATE_CHILD));
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Initial);
     }
 
     @Test
