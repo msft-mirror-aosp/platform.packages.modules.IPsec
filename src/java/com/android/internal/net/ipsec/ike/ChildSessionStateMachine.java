@@ -79,6 +79,7 @@ import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import com.android.internal.net.ipsec.ike.exceptions.TemporaryFailureException;
 import com.android.internal.net.ipsec.ike.exceptions.TsUnacceptableException;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
@@ -707,7 +708,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 @ExchangeType int exchangeType,
                 @ExchangeType int expectedExchangeType,
                 int registeredSpi) {
-            CreateChildResult createChildResult =
+            validateAndBuildChild(
+                    reqPayloads,
+                    respPayloads,
+                    registeredSpi,
                     CreateChildSaHelper.validateAndNegotiateInitChild(
                             reqPayloads,
                             respPayloads,
@@ -715,7 +719,14 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             expectedExchangeType,
                             mChildSessionParams.isTransportMode(),
                             mIpSecSpiGenerator,
-                            mRemoteAddress);
+                            mRemoteAddress));
+        }
+
+        protected void validateAndBuildChild(
+                List<IkePayload> reqPayloads,
+                List<IkePayload> respPayloads,
+                int registeredSpi,
+                CreateChildResult createChildResult) {
             switch (createChildResult.status) {
                 case CREATE_STATUS_OK:
                     try {
@@ -962,12 +973,34 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     ReceivedCreateResponse rcvResp = (ReceivedCreateResponse) message.obj;
+                    CreateChildResult createChildResult =
+                            CreateChildSaHelper.validateAndNegotiateInitChild(
+                                    mRequestPayloads,
+                                    rcvResp.responsePayloads,
+                                    rcvResp.exchangeType,
+                                    EXCHANGE_TYPE_CREATE_CHILD_SA,
+                                    mChildSessionParams.isTransportMode(),
+                                    mIpSecSpiGenerator,
+                                    mRemoteAddress);
+
+                    // If the response includes the error notification for TEMPORARY_FAILURE, retry
+                    // creating the Child.
+                    if (isTemporaryFailure(createChildResult)) {
+                        transitionTo(mInitial);
+
+                        mChildSmCallback.scheduleRetryLocalRequest(
+                                new ChildLocalRequest(
+                                        CMD_LOCAL_REQUEST_CREATE_CHILD,
+                                        mUserCallback,
+                                        mChildSessionParams));
+                        return HANDLED;
+                    }
+
                     validateAndBuildChild(
                             mRequestPayloads,
                             rcvResp.responsePayloads,
-                            rcvResp.exchangeType,
-                            EXCHANGE_TYPE_CREATE_CHILD_SA,
-                            rcvResp.registeredSpi);
+                            rcvResp.registeredSpi,
+                            createChildResult);
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -977,6 +1010,13 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void exitState() {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
+        }
+
+        private boolean isTemporaryFailure(CreateChildResult createChildResult) {
+            if (createChildResult.status != CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY) {
+                return false;
+            }
+            return createChildResult.exception instanceof TemporaryFailureException;
         }
     }
 
