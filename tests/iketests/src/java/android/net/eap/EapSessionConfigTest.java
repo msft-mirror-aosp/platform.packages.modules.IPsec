@@ -19,6 +19,7 @@ package android.net.eap;
 import static android.net.eap.EapSessionConfig.DEFAULT_IDENTITY;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
+import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
@@ -34,6 +35,7 @@ import android.net.eap.EapSessionConfig.EapAkaPrimeConfig;
 import android.net.eap.EapSessionConfig.EapMethodConfig;
 import android.net.eap.EapSessionConfig.EapMsChapV2Config;
 import android.net.eap.EapSessionConfig.EapSimConfig;
+import android.net.eap.EapSessionConfig.EapTtlsConfig;
 
 import org.junit.Test;
 
@@ -105,6 +107,15 @@ public class EapSessionConfigTest {
         assertEquals(EAP_TYPE_MSCHAP_V2, config.methodType);
         assertEquals(USERNAME, config.username);
         assertEquals(PASSWORD, config.password);
+    }
+
+    @Test
+    public void testBuildEapTtls() {
+        EapSessionConfig result = new EapSessionConfig.Builder().setEapTtlsConfig().build();
+
+        assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
+        EapTtlsConfig config = (EapTtlsConfig) result.eapConfigs.get(EAP_TTLS);
+        assertEquals(EAP_TTLS, config.methodType);
     }
 
     @Test
