@@ -16,6 +16,7 @@
 
 package android.net.eap;
 
+import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
@@ -105,6 +106,17 @@ public final class EapSessionConfig {
         return (EapMsChapV2Config) eapConfigs.get(EAP_TYPE_MSCHAP_V2);
     }
 
+    /**
+     * Retrieves configuration for EAP-TTLS
+     *
+     * @return the configuration for EAP-TTLS, or null if it was not set
+     * @hide
+     */
+    @Nullable
+    public EapTtlsConfig getEapTtlsConfig() {
+        return (EapTtlsConfig) eapConfigs.get(EAP_TTLS);
+    }
+
     /** This class can be used to incrementally construct an {@link EapSessionConfig}. */
     public static final class Builder {
         private final Map<Integer, EapMethodConfig> mEapConfigs;
@@ -189,6 +201,18 @@ public final class EapSessionConfig {
         @NonNull
         public Builder setEapMsChapV2Config(@NonNull String username, @NonNull String password) {
             mEapConfigs.put(EAP_TYPE_MSCHAP_V2, new EapMsChapV2Config(username, password));
+            return this;
+        }
+
+        /**
+         * Sets the configuration for EAP-TTLS
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @NonNull
+        public Builder setEapTtlsConfig() {
+            mEapConfigs.put(EAP_TTLS, new EapTtlsConfig());
             return this;
         }
 
@@ -398,6 +422,26 @@ public final class EapSessionConfig {
         @NonNull
         public String getPassword() {
             return password;
+        }
+    }
+
+    /**
+     * EapTtlsConfig represents the configs needed for an EAP-TTLS session.
+     *
+     * @hide
+     */
+    public static class EapTtlsConfig extends EapMethodConfig {
+
+        /** @hide */
+        @VisibleForTesting
+        public EapTtlsConfig() {
+            super(EAP_TTLS);
+        }
+
+        /** @hide */
+        @Override
+        public boolean isEapOnlySafeMethod() {
+            return true;
         }
     }
 
