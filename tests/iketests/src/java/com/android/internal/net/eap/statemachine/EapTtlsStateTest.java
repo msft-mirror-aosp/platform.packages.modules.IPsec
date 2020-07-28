@@ -71,7 +71,8 @@ public class EapTtlsStateTest {
         mMockSecureRandom = mock(SecureRandom.class);
         mMockTypeDataDecoder = mock(EapTtlsTypeDataDecoder.class);
 
-        mEapTtlsConfig = new EapTtlsConfig();
+        mEapTtlsConfig = new EapTtlsConfig(null);
+
         mStateMachine =
                 new EapTtlsMethodStateMachine(
                         mContext,

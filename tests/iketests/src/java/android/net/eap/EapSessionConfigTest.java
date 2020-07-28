@@ -37,9 +37,12 @@ import android.net.eap.EapSessionConfig.EapMsChapV2Config;
 import android.net.eap.EapSessionConfig.EapSimConfig;
 import android.net.eap.EapSessionConfig.EapTtlsConfig;
 
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+
 import org.junit.Test;
 
 import java.nio.charset.StandardCharsets;
+import java.security.cert.X509Certificate;
 
 public class EapSessionConfigTest {
     private static final byte[] EAP_IDENTITY =
@@ -110,12 +113,16 @@ public class EapSessionConfigTest {
     }
 
     @Test
-    public void testBuildEapTtls() {
-        EapSessionConfig result = new EapSessionConfig.Builder().setEapTtlsConfig().build();
+    public void testBuildEapTtls() throws Exception {
+        X509Certificate trustedCa = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
+
+        EapSessionConfig result =
+                new EapSessionConfig.Builder().setEapTtlsConfig(trustedCa).build();
 
         assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
         EapTtlsConfig config = (EapTtlsConfig) result.eapConfigs.get(EAP_TYPE_TTLS);
         assertEquals(EAP_TYPE_TTLS, config.methodType);
+        assertEquals(trustedCa, config.trustedCa);
     }
 
     @Test
