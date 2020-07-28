@@ -41,6 +41,10 @@ java_sdk_library {
         "android.net.ipsec.ike.exceptions",
     ],
 
+    hidden_api_packages: [
+        "com.android.internal.net",
+    ],
+
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
