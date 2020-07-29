@@ -326,4 +326,10 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray(
                     "02" + ID + "0008" // EAP-Response | ID | length in bytes
                             + "32020000"); // EAP-AKA' | Authentication Reject | 2B padding
+
+    // EAP-TTLS test vectors
+    public static final byte[] EAP_REQUEST_TTLS_START =
+            hexStringToByteArray(
+                    "01" + ID + "0006" // EAP-REQUEST | ID | length in bytes
+                            + "1520"); // EAP-TTLS | Flags
 }
