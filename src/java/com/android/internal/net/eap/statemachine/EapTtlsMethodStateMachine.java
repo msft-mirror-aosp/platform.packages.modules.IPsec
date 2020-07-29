@@ -16,6 +16,7 @@
 
 package com.android.internal.net.eap.statemachine;
 
+import static com.android.internal.net.eap.EapAuthenticator.LOG;
 import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
 
 import android.content.Context;
@@ -24,9 +25,12 @@ import android.net.eap.EapSessionConfig.EapTtlsConfig;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapResult;
+import com.android.internal.net.eap.EapResult.EapError;
+import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
+import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 
 import java.security.SecureRandom;
 
@@ -91,10 +95,29 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
      * (RFC5281#7.1)
      */
     protected class CreatedState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/159933218): Implement created state for EAP-TTLS (RFC5281#7.1)
-            return null;
+            // TODO(b/160781895): Support decoding AVP's pre-tunnel in EAP-TTLS
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            DecodeResult decodeResult =
+                    mTypeDataDecoder.decodeEapTtlsRequestPacket(message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                LOG.e(mTAG, "Error parsing EAP-TTLS packet type data", decodeResult.eapError.cause);
+                return decodeResult.eapError;
+            } else if (!decodeResult.eapTypeData.isStart) {
+                return new EapError(
+                        new EapInvalidRequestException(
+                                "Unexpected request received in EAP-TTLS: Received first request"
+                                        + " without start bit set."));
+            }
+
+            return transitionAndProcess(new HandshakeState(), message);
         }
     }
 
