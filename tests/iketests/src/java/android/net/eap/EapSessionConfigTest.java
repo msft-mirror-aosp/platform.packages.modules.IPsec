@@ -19,11 +19,11 @@ package android.net.eap;
 import static android.net.eap.EapSessionConfig.DEFAULT_IDENTITY;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
-import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -114,8 +114,8 @@ public class EapSessionConfigTest {
         EapSessionConfig result = new EapSessionConfig.Builder().setEapTtlsConfig().build();
 
         assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
-        EapTtlsConfig config = (EapTtlsConfig) result.eapConfigs.get(EAP_TTLS);
-        assertEquals(EAP_TTLS, config.methodType);
+        EapTtlsConfig config = (EapTtlsConfig) result.eapConfigs.get(EAP_TYPE_TTLS);
+        assertEquals(EAP_TYPE_TTLS, config.methodType);
     }
 
     @Test
