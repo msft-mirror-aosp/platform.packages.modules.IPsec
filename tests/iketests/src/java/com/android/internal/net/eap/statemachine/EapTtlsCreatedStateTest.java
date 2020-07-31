@@ -16,7 +16,7 @@
 
 package com.android.internal.net.eap.statemachine;
 
-import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
 
@@ -40,7 +40,7 @@ public class EapTtlsCreatedStateTest extends EapTtlsStateTest {
 
     @Test
     public void testStartRequest() throws Exception {
-        EapData eapData = new EapData(EAP_TTLS, DUMMY_EAP_TYPE_DATA);
+        EapData eapData = new EapData(EAP_TYPE_TTLS, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
         when(mMockTypeDataDecoder.decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA)))
@@ -56,7 +56,7 @@ public class EapTtlsCreatedStateTest extends EapTtlsStateTest {
 
     @Test
     public void testUnexpectedRequest() throws Exception {
-        EapData eapData = new EapData(EAP_TTLS, DUMMY_EAP_TYPE_DATA);
+        EapData eapData = new EapData(EAP_TYPE_TTLS, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
         when(mMockTypeDataDecoder.decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA)))
