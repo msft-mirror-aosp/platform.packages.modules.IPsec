@@ -18,6 +18,7 @@ package com.android.internal.net.eap.statemachine;
 
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_EMSK;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_MSK;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_NT_RESPONSE;
 
@@ -48,7 +49,7 @@ public class EapMsChapV2AwaitingEapSuccessStateTest extends EapMsChapV2StateTest
         EapResult result = mStateMachine.process(new EapMessage(EAP_CODE_SUCCESS, ID_INT, null));
         EapSuccess eapSuccess = (EapSuccess) result;
         assertArrayEquals(MSCHAP_V2_MSK, eapSuccess.msk);
-        assertArrayEquals(new byte[0], eapSuccess.emsk);
+        assertArrayEquals(MSCHAP_V2_EMSK, eapSuccess.emsk);
         assertTrue(mStateMachine.getState() instanceof FinalState);
     }
 }
