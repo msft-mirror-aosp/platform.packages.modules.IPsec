@@ -18,7 +18,7 @@ package com.android.internal.net.eap.statemachine;
 
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
-import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_HEADER_LENGTH;
@@ -154,7 +154,7 @@ public class MethodStateTest extends EapStateTest {
         assertTrue(mEapStateMachine.getState() instanceof MethodState);
         MethodState methodState = (MethodState) mEapStateMachine.getState();
         assertTrue(methodState.mEapMethodStateMachine instanceof EapTtlsMethodStateMachine);
-        assertEquals(methodState.mEapMethodStateMachine.getEapMethod(), EAP_TTLS);
+        assertEquals(methodState.mEapMethodStateMachine.getEapMethod(), EAP_TYPE_TTLS);
     }
 
     @Test
