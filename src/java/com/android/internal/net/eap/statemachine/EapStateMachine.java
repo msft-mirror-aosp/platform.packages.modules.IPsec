@@ -20,12 +20,12 @@ import static com.android.internal.net.eap.EapAuthenticator.LOG;
 import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_NAK;
 import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
-import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_STRING;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
@@ -341,7 +341,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 case EAP_TYPE_MSCHAP_V2:
                     EapMsChapV2Config eapMsChapV2Config = (EapMsChapV2Config) eapMethodConfig;
                     return new EapMsChapV2MethodStateMachine(eapMsChapV2Config, mSecureRandom);
-                case EAP_TTLS:
+                case EAP_TYPE_TTLS:
                     EapTtlsConfig eapTtlsConfig = (EapTtlsConfig) eapMethodConfig;
                     return new EapTtlsMethodStateMachine(
                             mContext, mEapSessionConfig, eapTtlsConfig, mSecureRandom);

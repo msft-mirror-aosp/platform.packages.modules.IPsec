@@ -16,11 +16,11 @@
 
 package android.net.eap;
 
-import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -114,7 +114,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapTtlsConfig getEapTtlsConfig() {
-        return (EapTtlsConfig) eapConfigs.get(EAP_TTLS);
+        return (EapTtlsConfig) eapConfigs.get(EAP_TYPE_TTLS);
     }
 
     /** This class can be used to incrementally construct an {@link EapSessionConfig}. */
@@ -212,7 +212,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public Builder setEapTtlsConfig() {
-            mEapConfigs.put(EAP_TTLS, new EapTtlsConfig());
+            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig());
             return this;
         }
 
@@ -435,7 +435,7 @@ public final class EapSessionConfig {
         /** @hide */
         @VisibleForTesting
         public EapTtlsConfig() {
-            super(EAP_TTLS);
+            super(EAP_TYPE_TTLS);
         }
 
         /** @hide */
