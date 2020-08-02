@@ -17,7 +17,7 @@
 package com.android.internal.net.eap.statemachine;
 
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
-import static com.android.internal.net.eap.message.EapData.EAP_TTLS;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 
 import android.content.Context;
 import android.net.eap.EapSessionConfig;
@@ -82,7 +82,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     @Override
     @EapMethod
     int getEapMethod() {
-        return EAP_TTLS;
+        return EAP_TYPE_TTLS;
     }
 
     @Override
