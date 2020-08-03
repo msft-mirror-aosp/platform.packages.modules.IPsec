@@ -113,7 +113,10 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
     private static final int SHS_PAD_LEN = 40;
     private static final int MASTER_KEY_LEN = 16;
     private static final int SESSION_KEY_LEN = 16;
-    private static final int MASTER_SESSION_KEY_LEN = 2 * SESSION_KEY_LEN;
+
+    // 32B (2 * SESSION_KEY_LEN) of data zero-padded to 64B
+    private static final int MSK_LEN = MIN_MSK_LEN_BYTES;
+    private static final int EMSK_LEN = MIN_EMSK_LEN_BYTES;
 
     // Reserved for future use and must be 0 (EAP MSCHAPv2#2.2)
     private static final int FLAGS = 0;
@@ -451,7 +454,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
             try {
                 byte[] msk = generateMsk(mEapMsChapV2Config.password, mNtResponse);
                 transitionTo(new FinalState());
-                return new EapSuccess(msk, new byte[0]);
+                return new EapSuccess(msk, new byte[EMSK_LEN]);
             } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
                 LOG.e(mTAG, "Error generating MSK for EAP MSCHAPv2", ex);
                 return new EapError(ex);
@@ -665,8 +668,8 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
         byte[] passwordHashHash = hashNtPasswordHash(passwordHash);
         byte[] masterKey = getMasterKey(passwordHashHash, ntResponse);
 
-        // MSK: SendKey + ReceiveKey
-        ByteBuffer msk = ByteBuffer.allocate(MASTER_SESSION_KEY_LEN);
+        // MSK: SendKey + ReceiveKey (zero-padded to 64B)
+        ByteBuffer msk = ByteBuffer.allocate(MSK_LEN);
         msk.put(getAsymmetricStartKey(masterKey, true /* isSend */));
         msk.put(getAsymmetricStartKey(masterKey, false /* isSend */));
 
