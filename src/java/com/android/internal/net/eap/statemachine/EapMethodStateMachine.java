@@ -37,6 +37,10 @@ import com.android.internal.net.utils.SimpleStateMachine;
  * implementations.
  */
 public abstract class EapMethodStateMachine extends SimpleStateMachine<EapMessage, EapResult> {
+    // Minimum key lengths specified in RFC 3748#1.2
+    public static final int MIN_MSK_LEN_BYTES = 64;
+    public static final int MIN_EMSK_LEN_BYTES = 64;
+
     /*
      * Used for transitioning to a state where EAP-Failure messages are expected next. This
      * allows all EAP methods to easily transition to a pre-failure state in the event of errors,
