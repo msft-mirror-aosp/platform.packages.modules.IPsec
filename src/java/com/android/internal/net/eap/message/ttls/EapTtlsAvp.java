@@ -104,6 +104,67 @@ public class EapTtlsAvp {
         buffer.get(new byte[paddingSize]);
     }
 
+    private EapTtlsAvp(int avpCode, int vendorId, boolean isMandatory, byte[] data) {
+        this.avpCode = avpCode;
+        this.vendorId = vendorId;
+        this.isMandatory = isMandatory;
+        this.data = data;
+        // A vendor ID of 0 is equivalent to not sending the vendor ID at all (RFC5281#10.1)
+        if (vendorId != 0) {
+            avpLength = data.length + AVP_HEADER_LEN_BYTES + AVP_VENDOR_ID_LEN_BYTES;
+            isVendorIdPresent = true;
+        } else {
+            avpLength = data.length + AVP_HEADER_LEN_BYTES;
+            isVendorIdPresent = false;
+        }
+    }
+
+    /**
+     * Assembles each bit from the flag byte into a byte
+     *
+     * @return a byte that compromises the avp flags
+     */
+    private byte getFlagByte() {
+        int flag = 0;
+        flag |= isVendorIdPresent ? FLAG_VENDOR_ID_INCLUDED : 0;
+        flag |= isMandatory ? FLAG_AVP_MANDATORY : 0;
+        return (byte) flag;
+    }
+
+    /**
+     * Encodes this AVP instance into a byte array.
+     *
+     * @return byte[] representing the encoded value of this EapTtlsAvp instance
+     */
+    public byte[] encode() {
+        // Each AVP must be padded to the next 4 byte boundary (RFC5281#10.2), so 0 to 3 padding
+        // bytes may be added to the original length
+        int paddedAvpLength = avpLength + getAvpPadding(avpLength);
+
+        ByteBuffer encodedBuffer = ByteBuffer.allocate(paddedAvpLength);
+
+        encodedBuffer.putInt(avpCode);
+        encodedBuffer.put(getFlagByte());
+        encodeAvpLength(encodedBuffer, avpLength);
+        if (isVendorIdPresent) {
+            encodedBuffer.putInt(vendorId);
+        }
+        encodedBuffer.put(data);
+
+        return encodedBuffer.array();
+    }
+
+    /**
+     * Produces an EAP-MESSAGE AVP (RFC5281#10.1)
+     *
+     * @param data the data to encode in the avp
+     * @param vendorId the vendorId or 0 if not specified
+     * @return an EAP-MESSAGE AVP
+     */
+    public static EapTtlsAvp getEapMessageAvp(int vendorId, byte[] data) {
+        return new EapTtlsAvp(EAP_MESSAGE_AVP_CODE, vendorId, true /* isMandatory */, data);
+    }
+
     /**
      * Retrieves the required padding bytes (4 byte aligned) for a given length
      *
@@ -116,6 +177,21 @@ public class EapTtlsAvp {
             return 0;
         }
         return AVP_BYTE_ALIGNMENT - (avpLength % AVP_BYTE_ALIGNMENT);
+    }
+
+    /**
+     * Encodes an AVP length into a given bytebuffer
+     *
+     * <p>As per RFC5281#10.2, the avp length field is 3 bytes
+     *
+     * @param buffer the bytebuffer to encode the length into
+     * @param length the length to encode
+     */
+    @VisibleForTesting
+    static void encodeAvpLength(ByteBuffer buffer, int length) {
+        buffer.put((byte) (length >> 16));
+        buffer.put((byte) (length >> 8));
+        buffer.put((byte) length);
     }
 
     /**
