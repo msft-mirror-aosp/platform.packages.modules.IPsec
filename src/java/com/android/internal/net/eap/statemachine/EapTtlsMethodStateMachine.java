@@ -17,7 +17,9 @@
 package com.android.internal.net.eap.statemachine;
 
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
+import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
+import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
 
 import android.content.Context;
 import android.net.eap.EapSessionConfig;
@@ -28,8 +30,11 @@ import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
+import com.android.internal.net.eap.exceptions.EapSilentException;
+import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
+import com.android.internal.net.eap.message.ttls.EapTtlsAvp;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 
@@ -141,10 +146,32 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
      * the first response sent by the client.
      */
     protected class HandshakeState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
+        private static final int DEFAULT_VENDOR_ID = 0;
+
         @Override
         public EapResult process(EapMessage message) {
             // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS (RFC5281#7.1)
-            return null;
+            return handleEapSuccessFailureNotification(mTAG, message);
+        }
+
+        /**
+         * Builds an EAP-MESSAGE AVP containing an EAP-Identity response
+         *
+         * <p>Note that this uses the EAP-Identity in the session config nested within EapTtlsConfig
+         * which may be different than the identity in the top-level EapSessionConfig
+         *
+         * @param eapIdentifier the eap identifier for the response
+         * @throws EapSilentException if an error occurs creating the eap message
+         */
+        @VisibleForTesting
+        byte[] buildEapIdentityResponseAvp(int eapIdentifier) throws EapSilentException {
+            EapData eapData =
+                    new EapData(
+                            EAP_IDENTITY, mEapTtlsConfig.getInnerEapSessionConfig().eapIdentity);
+            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, eapData);
+            return EapTtlsAvp.getEapMessageAvp(DEFAULT_VENDOR_ID, eapMessage.encode()).encode();
         }
     }
 
