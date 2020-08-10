@@ -66,6 +66,11 @@ filegroup {
     path: "src/java/",
 }
 
+filegroup {
+    name: "ike-aes-xcbc",
+    srcs: ["src/java/**/AesXCbcImpl.java"],
+}
+
 // Provides internal classes needed to build the ike sources.
 java_library {
     name: "ike-internals",
