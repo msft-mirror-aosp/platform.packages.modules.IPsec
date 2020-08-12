@@ -329,26 +329,6 @@ public class EapTtlsHandshakeStateTest extends EapTtlsStateTest {
     }
 
     /**
-     * Completes a run of operations in the handshake state that requires CloseConnection to be
-     * called
-     *
-     * @param decodedTypeData the type data that is decoded by the type data decoder
-     */
-    private void processMessageAndVerifyConnectionClosed(EapTtlsTypeData decodedTypeData)
-            throws Exception {
-        mockTypeDataDecoding(decodedTypeData);
-        when(mMockTlsSession.closeConnection())
-                .thenReturn(
-                        mMockTlsSession
-                        .new TlsResult(EAP_TTLS_DUMMY_DATA_BYTES, TLS_STATUS_CLOSED));
-
-        processMessageAndVerifyEapResponse(EAP_RESPONSE_TTLS_WITH_LENGTH);
-        verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
-        verify(mMockTlsSession).closeConnection();
-        assertTrue(mStateMachine.getState() instanceof AwaitingClosureState);
-    }
-
-    /**
      * Completes a run of operations in the handshake state that results in an EapError
      *
      * @param decodedTypeData the type data that is decoded by the type data decoder

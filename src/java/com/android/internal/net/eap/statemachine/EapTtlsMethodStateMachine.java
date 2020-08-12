@@ -41,6 +41,7 @@ import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.EapResult.EapFailure;
 import com.android.internal.net.eap.EapResult.EapResponse;
+import com.android.internal.net.eap.EapResult.EapSuccess;
 import com.android.internal.net.eap.crypto.TlsSession;
 import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
 import com.android.internal.net.eap.crypto.TlsSessionFactory;
@@ -52,6 +53,8 @@ import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp;
+import com.android.internal.net.eap.message.ttls.EapTtlsAvp.EapTtlsAvpDecoder;
+import com.android.internal.net.eap.message.ttls.EapTtlsAvp.EapTtlsAvpDecoder.AvpDecodeResult;
 import com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper;
 import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper;
 import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper.FragmentationResult;
@@ -63,6 +66,8 @@ import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeData
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
+
+import javax.net.ssl.SSLException;
 
 /**
  * EapTtlsMethodStateMachine represents the valid paths possible for the EAP-TTLS protocol
@@ -78,6 +83,8 @@ import java.security.SecureRandom;
  *     Tunneled Transport Layer Security Authenticated Protocol Version 0 (EAP-TTLSv0)</a>
  */
 public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
+
+    private static final int DEFAULT_AVP_VENDOR_ID = 0;
 
     private final Context mContext;
     private final EapSessionConfig mEapSessionConfig;
@@ -344,7 +351,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                     new EapData(
                             EAP_IDENTITY, mEapTtlsConfig.getInnerEapSessionConfig().eapIdentity);
             EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, eapData);
-            return EapTtlsAvp.getEapMessageAvp(DEFAULT_VENDOR_ID, eapMessage.encode()).encode();
+            return EapTtlsAvp.getEapMessageAvp(DEFAULT_AVP_VENDOR_ID, eapMessage.encode()).encode();
         }
 
         /**
@@ -385,10 +392,194 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
      * <p>The tunnel state creates an inner EAP instance via a new EAP state machine and handles
      * decryption and encryption of data using the previously established TLS tunnel (RFC5281#7.2)
      */
-    protected class TunnelState extends EapMethodState {
+    protected class TunnelState extends CloseableTtlsMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
+        @VisibleForTesting EapStateMachine mInnerEapStateMachine;
+        @VisibleForTesting EapTtlsAvpDecoder mEapTtlsAvpDecoder = new EapTtlsAvpDecoder();
+
+        public TunnelState() {
+            mInnerEapStateMachine =
+                    new EapStateMachine(
+                            mContext, mEapTtlsConfig.getInnerEapSessionConfig(), mSecureRandom);
+        }
+
+        /**
+         * Processes a message for the inner tunneled authentication method.
+         *
+         * <ol>
+         *   <li>Checks for EAP-success, EAP-failure, or EAP notification, returns early if one
+         *       needs to be handled
+         *   <li>Decodes type data, closes the connection if decoding fails
+         *   <li>If outbound data is being fragmented, returns early with the next fragment to be
+         *       sent
+         *   <li>If inbound data is being reassembled, returns early with an ack etc. If nothing has
+         *       returned yet, generates an EAP response for the incoming message
+         *   <li>Decodes AVP, closes the connection if decoding fails.
+         *   <li>Processes data through inner state machine. Encodes response in AVP, encrypts it
+         *       and sends EAP-Response.
+         * </ol>
+         */
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/159926139): Implement tunnel state (phase 2) of EAP-TTLS (RFC5281#7.2)
+            EapResult eapResult = handleEapSuccessFailureNotification(mTAG, message);
+            if (eapResult != null) {
+                return eapResult;
+            }
+
+            DecodeResult decodeResult =
+                    mTypeDataDecoder.decodeEapTtlsRequestPacket(message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                LOG.e(mTAG, "Error parsing EAP-TTLS packet type data", decodeResult.eapError.cause);
+                return transitionToAwaitingClosureState(
+                        mTAG, message.eapIdentifier, decodeResult.eapError);
+            }
+
+            EapTtlsTypeData eapTtlsRequest = decodeResult.eapTypeData;
+
+            EapResult nextOutboundFragment =
+                    getNextOutboundFragment(mTAG, eapTtlsRequest, message.eapIdentifier);
+            if (nextOutboundFragment != null) {
+                return nextOutboundFragment;
+            }
+
+            EapResult inboundFragmentAck =
+                    handleInboundFragmentation(mTAG, eapTtlsRequest, message.eapIdentifier);
+            if (inboundFragmentAck != null) {
+                return inboundFragmentAck;
+            }
+
+            TlsResult decryptResult =
+                    mTlsSession.processIncomingData(
+                            mInboundFragmentationHelper.getAssembledInboundFragment());
+
+            EapResult errorResult = handleTunnelTlsResult(decryptResult, message.eapIdentifier);
+            if (errorResult != null) {
+                return errorResult;
+            }
+
+            AvpDecodeResult avpDecodeResult = mEapTtlsAvpDecoder.decode(decryptResult.data);
+            if (!avpDecodeResult.isSuccessfulDecode()) {
+                LOG.e(mTAG, "Error parsing EAP-TTLS AVP", avpDecodeResult.eapError.cause);
+                return transitionToAwaitingClosureState(
+                        mTAG, message.eapIdentifier, avpDecodeResult.eapError);
+            }
+
+            EapTtlsAvp avp = avpDecodeResult.eapTtlsAvp;
+            LOG.d(
+                    mTAG,
+                    "Incoming AVP has been decrypted and processed. AVP data will be passed to the"
+                            + " inner state machine.");
+
+            EapResult innerResult = mInnerEapStateMachine.process(avp.data);
+
+            if (innerResult instanceof EapError) {
+                return transitionToAwaitingClosureState(
+                        mTAG, message.eapIdentifier, (EapError) innerResult);
+            } else if (innerResult instanceof EapFailure) {
+                LOG.e(mTAG, "Tunneled authentication failed");
+                mTlsSession.closeConnection();
+                transitionTo(new FinalState());
+                return innerResult;
+            } else if (innerResult instanceof EapSuccess) {
+                Exception invalidSuccess =
+                        new EapInvalidRequestException(
+                                "Received an unexpected EapSuccess from the inner state machine.");
+                transitionToAwaitingClosureState(
+                        mTAG, message.eapIdentifier, new EapError(invalidSuccess));
+            }
+
+            LOG.d(mTAG, "Received EapResponse from innerStateMachine");
+            TlsResult encryptResult;
+
+            EapResponse innerResponse = (EapResponse) innerResult;
+            EapTtlsAvp outgoingAvp =
+                    EapTtlsAvp.getEapMessageAvp(DEFAULT_AVP_VENDOR_ID, innerResponse.packet);
+            encryptResult = mTlsSession.processOutgoingData(outgoingAvp.encode());
+
+            errorResult = handleTunnelTlsResult(encryptResult, message.eapIdentifier);
+            if (errorResult != null) {
+                return errorResult;
+            }
+
+            LOG.d(mTAG, "Outbound AVP has been assembled and encrypted. Building EAP Response.");
+
+            return buildEapMessageResponse(mTAG, message.eapIdentifier, encryptResult.data);
+        }
+
+        /**
+         * Validates the results of an encryption or decryption operation
+         *
+         * <p>If the result is an error state, the tunnel will be closed and a response or EapError
+         * will be returned. Otherwise, null is returned to indicate that processing can continue.
+         *
+         * @param result a TlsResult encapsulating the results of an encrypt or decrypt operation
+         * @param eapIdentifier the eap identifier from the latest message
+         * @return an eap response if an error occurs or null if processing can continue
+         */
+        @Nullable
+        EapResult handleTunnelTlsResult(TlsResult result, int eapIdentifier) {
+            switch (result.status) {
+                case TLS_STATUS_SUCCESS:
+                    return null;
+                case TLS_STATUS_CLOSED:
+                    Exception closeException =
+                            new SSLException(
+                                    "TLS Session failed to encrypt or decrypt data"
+                                            + " and was closed.");
+                    transitionTo(new AwaitingClosureState(new EapError(closeException)));
+                    return buildEapMessageResponse(mTAG, eapIdentifier, result.data);
+                case TLS_STATUS_FAILURE:
+                    transitionTo(new FinalState());
+                    return new EapError(
+                            new SSLException(
+                                    "Failed to encrypt or decrypt message. Tunnel could not be"
+                                            + " closed properly"));
+                default:
+                    Exception illegalStateException =
+                            new IllegalStateException(
+                                    "Received an unexpected TLS result with code " + result.status);
+                    return transitionToAwaitingClosureState(
+                            mTAG, eapIdentifier, new EapError(illegalStateException));
+            }
+        }
+
+        /**
+         * Handles EAP-Success and EAP-Failure messages in the tunnel state
+         *
+         * <p>Both success/failure messages are passed into the inner state machine for processing.
+         * If the inner state machine returns an EapSuccess, the same EapSuccess is returned as a
+         * temporary measure until keying material generation is implemented (b/161233250). The same
+         * is done for an EapFailure. In both cases, the state transitions to the FinalState.
+         *
+         * <p>As for EapErrors, this will simply be returned.
+         *
+         * @param message the EapMessage to be checked for Success/Failure
+         * @return the EapResult generated from handling the give EapMessage, or null if the message
+         *     Type matches that of the current EAP method
+         */
+        @Nullable
+        @Override
+        EapResult handleEapSuccessFailure(String tag, EapMessage message) {
+            if (message.eapCode == EAP_CODE_SUCCESS || message.eapCode == EAP_CODE_FAILURE) {
+                mTlsSession.closeConnection();
+                EapResult innerResult = mInnerEapStateMachine.process(message.encode());
+                if (innerResult instanceof EapSuccess) {
+                    // TODO(b/161233250): Implement keying material generation in EAP-TTLS
+                    // Once implemented, EapSuccess should be handled separately and a new
+                    // EapSuccess with TLS keying material should be returned
+                    LOG.d(tag, "Tunneled Authentication Successful");
+                    transitionTo(new FinalState());
+                    return innerResult;
+                } else if (innerResult instanceof EapFailure) {
+                    LOG.d(tag, "Tunneled Authentication failed");
+                    transitionTo(new FinalState());
+                    return innerResult;
+                }
+
+                return innerResult;
+            }
+
             return null;
         }
     }
