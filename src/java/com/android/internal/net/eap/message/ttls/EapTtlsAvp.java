@@ -16,7 +16,10 @@
 
 package com.android.internal.net.eap.message.ttls;
 
+import static com.android.internal.net.eap.EapAuthenticator.LOG;
+
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsParsingException;
 
 import java.nio.BufferUnderflowException;
@@ -129,5 +132,110 @@ public class EapTtlsAvp {
         return (Byte.toUnsignedInt(buffer.get()) << 16)
                 | (Byte.toUnsignedInt(buffer.get()) << 8)
                 | Byte.toUnsignedInt(buffer.get());
+    }
+
+    /** EapTtlsAvpDecoder will be used for decoding {@link EapTtlsAvp} objects. */
+    public static class EapTtlsAvpDecoder {
+
+        /**
+         * Decodes and returns an EapTtlsAvp for the specified EAP-TTLS AVP.
+         *
+         * <p>In the case that multiple AVPs are received, all AVPs will be decoded, but only the
+         * EAP-MESSAGE AVP will be stored. All AVP codes and Vendor-IDs will be logged. Furthermore,
+         * if multiple EAP-MESSAGE AVPs are received, this will be treated as an error.
+         *
+         * @param avp a byte array representing the AVP
+         * @return DecodeResult wrapping an EapTtlsAvp instance for the given EapTtlsAvp iff the
+         *     eapTtlsAvp is formatted correctly. Otherwise, the DecodeResult wraps the appropriate
+         *     EapError.
+         */
+        public AvpDecodeResult decode(byte[] avp) {
+            try {
+                // AVPs must be 4 byte aligned (RFC5281#10.2)
+                if (avp.length % AVP_BYTE_ALIGNMENT != 0) {
+                    return new AvpDecodeResult(
+                            new EapError(
+                                    new EapTtlsParsingException(
+                                            "Received one or more invalid AVPs: AVPs must be 4"
+                                                    + " byte aligned.")));
+                }
+                ByteBuffer avpBuffer = ByteBuffer.wrap(avp);
+                EapTtlsAvp eapMessageAvp = null;
+
+                while (avpBuffer.hasRemaining()) {
+                    EapTtlsAvp decodedAvp = new EapTtlsAvp(avpBuffer);
+                    LOG.i(
+                            TAG,
+                            "Decoded AVP with code "
+                                    + decodedAvp.avpCode
+                                    + " and vendor ID "
+                                    + decodedAvp.vendorId);
+
+                    if (decodedAvp.avpCode == EAP_MESSAGE_AVP_CODE) {
+                        if (eapMessageAvp != null) {
+                            // Only one EAP-MESSAGE AVP is expected at a time
+                            return new AvpDecodeResult(
+                                    new EapError(
+                                            new EapTtlsParsingException(
+                                                    "Received multiple EAP-MESSAGE AVPs in one"
+                                                            + " message")));
+                        }
+                        eapMessageAvp = decodedAvp;
+                    } else if (decodedAvp.isMandatory) {
+                        // As per RFC5281#10.1, if an AVP tagged as mandatory is unsupported, the
+                        // negotiation should fail
+                        return new AvpDecodeResult(
+                                new EapError(
+                                        new EapTtlsParsingException(
+                                                "Received an AVP that requires support for AVP code"
+                                                        + decodedAvp.avpCode)));
+                    }
+                }
+
+                if (eapMessageAvp == null) {
+                    return new AvpDecodeResult(
+                            new EapError(
+                                    new EapTtlsParsingException(
+                                            "No EAP-MESSAGE (79) AVP was found")));
+                }
+
+                return new AvpDecodeResult(eapMessageAvp);
+            } catch (BufferUnderflowException | EapTtlsParsingException e) {
+                return new AvpDecodeResult(new EapError(e));
+            }
+        }
+
+        /**
+         * DecodeResult represents the result from attempting to decode a sequence of EAP-TTLS
+         * AVPs. It will contain either an EapTtlsAvp or an EapError.
+         *
+         * <p>In the case that multiple AVPs are received, all AVPs will be decoded and their AVP
+         * codes/Vendor-ID will be logged. However, only the EAP-MESSAGE AVP will be stored in the
+         * decode result. Furthermore, if zero, or multiple EAP-MESSAGE AVPs are received, this will
+         * be treated as an error.
+         */
+        public static class AvpDecodeResult {
+            public final EapTtlsAvp eapTtlsAvp;
+            public final EapError eapError;
+
+            public AvpDecodeResult(EapTtlsAvp eapTtlsAvp) {
+                this.eapTtlsAvp = eapTtlsAvp;
+                this.eapError = null;
+            }
+
+            public AvpDecodeResult(EapError eapError) {
+                this.eapTtlsAvp = null;
+                this.eapError = eapError;
+            }
+
+            /**
+             * Checks whether this instance represents a successful decode operation.
+             *
+             * @return true iff this DecodeResult represents a successfully decoded Type Data
+             */
+            public boolean isSuccessfulDecode() {
+                return eapTtlsAvp != null;
+            }
+        }
     }
 }
