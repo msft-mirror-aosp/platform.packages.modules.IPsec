@@ -146,7 +146,7 @@ public class MethodStateTest extends EapStateTest {
     public void testProcessTransitionToEapTtls() {
         // make EapStateMachine with EAP TTLS configurations
         EapSessionConfig eapSessionConfig =
-                new EapSessionConfig.Builder().setEapTtlsConfig().build();
+                new EapSessionConfig.Builder().setEapTtlsConfig(null).build();
         mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
 
         mEapStateMachine.process(EAP_REQUEST_TTLS_START);
