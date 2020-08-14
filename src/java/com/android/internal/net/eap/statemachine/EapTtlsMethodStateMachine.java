@@ -26,6 +26,7 @@ import android.net.eap.EapSessionConfig.EapTtlsConfig;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
+import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
@@ -54,13 +55,20 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     private final EapTtlsConfig mEapTtlsConfig;
     private final EapTtlsTypeDataDecoder mTypeDataDecoder;
     private final SecureRandom mSecureRandom;
+    private final TlsSessionFactory mTlsSessionFactory;
 
     public EapTtlsMethodStateMachine(
             Context context,
             EapSessionConfig eapSessionConfig,
             EapTtlsConfig eapTtlsConfig,
             SecureRandom secureRandom) {
-        this(context, eapSessionConfig, eapTtlsConfig, secureRandom, new EapTtlsTypeDataDecoder());
+        this(
+                context,
+                eapSessionConfig,
+                eapTtlsConfig,
+                secureRandom,
+                new EapTtlsTypeDataDecoder(),
+                new TlsSessionFactory());
     }
 
     @VisibleForTesting
@@ -69,12 +77,14 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             EapSessionConfig eapSessionConfig,
             EapTtlsConfig eapTtlsConfig,
             SecureRandom secureRandom,
-            EapTtlsTypeDataDecoder typeDataDecoder) {
+            EapTtlsTypeDataDecoder typeDataDecoder,
+            TlsSessionFactory tlsSessionFactory) {
         mContext = context;
         mEapSessionConfig = eapSessionConfig;
         mEapTtlsConfig = eapTtlsConfig;
         mTypeDataDecoder = typeDataDecoder;
         mSecureRandom = secureRandom;
+        mTlsSessionFactory = tlsSessionFactory;
 
         transitionTo(new CreatedState());
     }

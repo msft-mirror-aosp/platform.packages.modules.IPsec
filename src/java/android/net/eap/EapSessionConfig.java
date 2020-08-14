@@ -30,6 +30,7 @@ import android.telephony.Annotation.UiccAppType;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 
+import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -207,12 +208,15 @@ public final class EapSessionConfig {
         /**
          * Sets the configuration for EAP-TTLS
          *
+         * <p>If a null trustedCa is provided, the system-default CA's will be used instead
+         *
+         * @param trustedCa specifies a specific CA to trust
          * @return Builder this, to facilitate chaining
          * @hide
          */
         @NonNull
-        public Builder setEapTtlsConfig() {
-            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig());
+        public Builder setEapTtlsConfig(@Nullable X509Certificate trustedCa) {
+            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(trustedCa));
             return this;
         }
 
@@ -433,15 +437,31 @@ public final class EapSessionConfig {
     public static class EapTtlsConfig extends EapMethodConfig {
 
         /** @hide */
+        @Nullable public final X509Certificate trustedCa;
+
+        /** @hide */
         @VisibleForTesting
-        public EapTtlsConfig() {
+        public EapTtlsConfig(@Nullable X509Certificate trustedCa) {
             super(EAP_TYPE_TTLS);
+            // TODO(b/163572466): Translate root certificate to TrustAnchor in TTLS session config
+            this.trustedCa = trustedCa;
         }
 
         /** @hide */
         @Override
         public boolean isEapOnlySafeMethod() {
             return true;
+        }
+
+        /**
+         * Retrieves the root certificate
+         *
+         * @return an X509Certificate representing the root certificate
+         * @hide
+         */
+        @Nullable
+        public X509Certificate getTrustedCa() {
+            return trustedCa;
         }
     }
 
