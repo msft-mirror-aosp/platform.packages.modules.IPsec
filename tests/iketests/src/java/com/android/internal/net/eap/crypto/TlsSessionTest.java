@@ -64,6 +64,11 @@ public class TlsSessionTest {
             ByteBuffer.allocate(APPLICATION_BUFFER_SIZE_TLS_MESSAGE);
     static final ByteBuffer EMPTY_PACKET_BUFFER =
             ByteBuffer.allocate(PACKET_BUFFER_SIZE_TLS_MESSAGE);
+    static final ByteBuffer APPLICATION_BUFFER_POSITION_RESET =
+            (ByteBuffer)
+                    ByteBuffer.allocate(APPLICATION_BUFFER_SIZE_TLS_MESSAGE)
+                            .put(SAMPLE_APPLICATION_TLS_MESSAGE)
+                            .flip();
     static final ByteBuffer PACKET_BUFFER_POSITION_RESET =
             (ByteBuffer)
                     ByteBuffer.allocate(PACKET_BUFFER_SIZE_TLS_MESSAGE)
@@ -71,6 +76,10 @@ public class TlsSessionTest {
                             .flip();
     static final ByteBuffer PACKET_BUFFER_POSITION_LIMIT =
             ByteBuffer.allocate(PACKET_BUFFER_SIZE_TLS_MESSAGE).put(SAMPLE_PACKET_TLS_MESSAGE);
+    static final ByteBuffer APPLICATION_BUFFER_POSITION_LIMIT =
+            (ByteBuffer)
+                    ByteBuffer.allocate(APPLICATION_BUFFER_SIZE_TLS_MESSAGE)
+                            .put(SAMPLE_APPLICATION_TLS_MESSAGE);
 
     static final SSLEngineResult RESULT_NEED_WRAP_OK =
             new SSLEngineResult(Status.OK, HandshakeStatus.NEED_WRAP, 0, 0);
@@ -88,6 +97,10 @@ public class TlsSessionTest {
             new SSLEngineResult(Status.OK, HandshakeStatus.FINISHED, 0, 0);
     static final SSLEngineResult RESULT_NOT_HANDSHAKING_OK =
             new SSLEngineResult(Status.OK, HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+    static final SSLEngineResult RESULT_NOT_HANDSHAKING_OVERFLOW =
+            new SSLEngineResult(Status.BUFFER_OVERFLOW, HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+    static final SSLEngineResult RESULT_NOT_HANDSHAKING_UNDERFLOW =
+            new SSLEngineResult(Status.BUFFER_UNDERFLOW, HandshakeStatus.NOT_HANDSHAKING, 0, 0);
     static final SSLEngineResult RESULT_NOT_HANDSHAKING_CLOSED =
             new SSLEngineResult(Status.CLOSED, HandshakeStatus.NOT_HANDSHAKING, 0, 0);
 
@@ -120,6 +133,48 @@ public class TlsSessionTest {
                         invocation -> {
                             ByteBuffer buffer = invocation.getArgument(1);
                             buffer.put(SAMPLE_PACKET_TLS_MESSAGE);
+                            return result;
+                        });
+    }
+
+    /**
+     * Mocks a chained wrap operation and inserts data into the packet buffer
+     *
+     * @param applicationBuffer the application (source) buffer
+     * @param packetBuffer the packet (destination) buffer
+     * @param firstResult the first SSLEngineResult to return
+     * @param secondResult the second SSLEngineResult to return
+     */
+    void setupChainedWrap(
+            ByteBuffer applicationBuffer,
+            ByteBuffer packetBuffer,
+            SSLEngineResult firstResult,
+            SSLEngineResult secondResult)
+            throws Exception {
+        when(mMockSslEngine.wrap(eq(applicationBuffer), eq(packetBuffer)))
+                .thenReturn(firstResult)
+                .thenAnswer(
+                        invocation -> {
+                            ByteBuffer buffer = invocation.getArgument(1);
+                            buffer.put(SAMPLE_PACKET_TLS_MESSAGE);
+                            return secondResult;
+                        });
+    }
+
+    /**
+     * Mocks an unwrap operation and inserts data into the application buffer
+     *
+     * @param applicationBuffer the application (destination) buffer
+     * @param packetBuffer the packet (source) buffer
+     * @param result the SSLEngineResult to return
+     */
+    void setupUnwrap(ByteBuffer applicationBuffer, ByteBuffer packetBuffer, SSLEngineResult result)
+            throws Exception {
+        when(mMockSslEngine.unwrap(eq(packetBuffer), eq(applicationBuffer)))
+                .thenAnswer(
+                        invocation -> {
+                            ByteBuffer buffer = invocation.getArgument(1);
+                            buffer.put(SAMPLE_APPLICATION_TLS_MESSAGE);
                             return result;
                         });
     }

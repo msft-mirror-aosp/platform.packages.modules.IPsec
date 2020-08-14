@@ -218,7 +218,7 @@ public class TlsSession {
             packetData.put(handshakeData);
         } catch (BufferOverflowException e) {
             // The connection will be closed because the buffer was just allocated to the desired
-            // size. Thus an overflow indicates failure.
+            // size.
             LOG.e(
                     TAG,
                     "Buffer overflow while attempting to process handshake message. Attempting to"
@@ -266,8 +266,10 @@ public class TlsSession {
      * @return a tls result containing the decrypted data and status of operation
      */
     public TlsResult processIncomingData(byte[] data) {
-        // TODO(b/159926139): Implement tunnel state (phase 2) of EAP-TTLS
-        throw new UnsupportedOperationException();
+        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
+        ByteBuffer applicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
+        ByteBuffer packetData = ByteBuffer.wrap(data);
+        return unwrap(applicationData, packetData);
     }
 
     /**
@@ -277,8 +279,10 @@ public class TlsSession {
      * @return a tls result containing the encrypted data and status of operation
      */
     public TlsResult processOutgoingData(byte[] data) {
-        // TODO(b/159926139): Implement tunnel state (phase 2) of EAP-TTLS
-        throw new UnsupportedOperationException();
+        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
+        ByteBuffer applicationData = ByteBuffer.wrap(data);
+        ByteBuffer packetData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
+        return wrap(applicationData, packetData);
     }
 
     /**
