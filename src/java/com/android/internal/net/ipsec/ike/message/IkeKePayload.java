@@ -60,6 +60,7 @@ public final class IkeKePayload extends IkePayload {
 
     // Key exchange data length in octets
     private static final int DH_GROUP_1024_BIT_MODP_DATA_LEN = 128;
+    private static final int DH_GROUP_1536_BIT_MODP_DATA_LEN = 192;
     private static final int DH_GROUP_2048_BIT_MODP_DATA_LEN = 256;
     private static final int DH_GROUP_3072_BIT_MODP_DATA_LEN = 384;
     private static final int DH_GROUP_4096_BIT_MODP_DATA_LEN = 512;
@@ -117,6 +118,9 @@ public final class IkeKePayload extends IkePayload {
             case SaProposal.DH_GROUP_1024_BIT_MODP:
                 isValidSyntax = DH_GROUP_1024_BIT_MODP_DATA_LEN == dataSize;
                 break;
+            case SaProposal.DH_GROUP_1536_BIT_MODP:
+                isValidSyntax = DH_GROUP_1536_BIT_MODP_DATA_LEN == dataSize;
+                break;
             case SaProposal.DH_GROUP_2048_BIT_MODP:
                 isValidSyntax = DH_GROUP_2048_BIT_MODP_DATA_LEN == dataSize;
                 break;
@@ -165,6 +169,12 @@ public final class IkeKePayload extends IkePayload {
                         BigIntegerUtils.unsignedHexStringToBigInteger(
                                 IkeDhParams.PRIME_1024_BIT_MODP);
                 keySize = DH_GROUP_1024_BIT_MODP_DATA_LEN;
+                break;
+            case SaProposal.DH_GROUP_1536_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_1536_BIT_MODP);
+                keySize = DH_GROUP_1536_BIT_MODP_DATA_LEN;
                 break;
             case SaProposal.DH_GROUP_2048_BIT_MODP:
                 prime =
