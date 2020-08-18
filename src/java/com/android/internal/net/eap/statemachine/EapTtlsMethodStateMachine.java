@@ -23,6 +23,7 @@ import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
 
+import android.annotation.Nullable;
 import android.content.Context;
 import android.net.eap.EapSessionConfig;
 import android.net.eap.EapSessionConfig.EapTtlsConfig;
@@ -41,6 +42,8 @@ import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp;
+import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper;
+import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper.FragmentationResult;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
@@ -71,6 +74,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     private final SecureRandom mSecureRandom;
     private final TlsSessionFactory mTlsSessionFactory;
 
+    @VisibleForTesting final EapTtlsOutboundFragmentationHelper mOutboundFragmentationHelper;
     @VisibleForTesting TlsSession mTlsSession;
 
     public EapTtlsMethodStateMachine(
@@ -84,7 +88,8 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 eapTtlsConfig,
                 secureRandom,
                 new EapTtlsTypeDataDecoder(),
-                new TlsSessionFactory());
+                new TlsSessionFactory(),
+                new EapTtlsOutboundFragmentationHelper());
     }
 
     @VisibleForTesting
@@ -94,13 +99,15 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             EapTtlsConfig eapTtlsConfig,
             SecureRandom secureRandom,
             EapTtlsTypeDataDecoder typeDataDecoder,
-            TlsSessionFactory tlsSessionFactory) {
+            TlsSessionFactory tlsSessionFactory,
+            EapTtlsOutboundFragmentationHelper outboundFragmentationHelper) {
         mContext = context;
         mEapSessionConfig = eapSessionConfig;
         mEapTtlsConfig = eapTtlsConfig;
         mTypeDataDecoder = typeDataDecoder;
         mSecureRandom = secureRandom;
         mTlsSessionFactory = tlsSessionFactory;
+        mOutboundFragmentationHelper = outboundFragmentationHelper;
 
         transitionTo(new CreatedState());
     }
@@ -195,6 +202,13 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 return startHandshake(message.eapIdentifier);
             }
 
+            EapResult nextOutboundFragment =
+                    getNextOutboundFragment(mTAG, eapTtlsRequest, message.eapIdentifier);
+            if (nextOutboundFragment != null) {
+                // Skip further processing, send remaining outbound fragments
+                return nextOutboundFragment;
+            }
+
             // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
             return null;
         }
@@ -222,16 +236,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 return new EapError(new EapTtlsHandshakeException("Failed to start handshake."));
             }
 
-            // TODO(b/163053272): Implement fragmentation support in EAP-TTLS
-            return buildEapMessageResponse(
-                    mTAG,
-                    eapIdentifier,
-                    EapTtlsTypeData.getEapTtlsTypeData(
-                            false /* isFragmented */,
-                            false /* isStart */,
-                            0 /* version */,
-                            tlsResult.data.length,
-                            tlsResult.data));
+            return buildEapMessageResponse(mTAG, eapIdentifier, tlsResult.data);
         }
 
         /**
@@ -340,6 +345,80 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                         0 /* version 0 */,
                         closureResult.data.length,
                         closureResult.data));
+    }
+
+    /**
+     * Verifies whether outbound fragmentation is in progress and constructs the next fragment if
+     * necessary
+     *
+     * @param tag the tag for the calling class
+     * @param eapTtlsRequest the request received from the server
+     * @param eapIdentifier the eap identifier from the latest message
+     * @return an eap response if the next fragment exists, or null if no fragmentation is in
+     *     progress
+     */
+    @Nullable
+    private EapResult getNextOutboundFragment(
+            String tag, EapTtlsTypeData eapTtlsRequest, int eapIdentifier) {
+        if (eapTtlsRequest.isAcknowledgmentPacket()) {
+            if (mOutboundFragmentationHelper.hasRemainingFragments()) {
+                FragmentationResult result = mOutboundFragmentationHelper.getNextOutboundFragment();
+                return buildEapMessageResponse(
+                        tag,
+                        eapIdentifier,
+                        EapTtlsTypeData.getEapTtlsTypeData(
+                                result.hasRemainingFragments,
+                                false /* start */,
+                                0 /* version 0 */,
+                                0 /* messageLength */,
+                                result.fragmentedData));
+            } else {
+                return transitionToAwaitingClosureState(
+                        tag,
+                        eapIdentifier,
+                        new EapError(
+                                new EapInvalidRequestException(
+                                        "Received an ack but no packet was in the process of"
+                                                + " being fragmented.")));
+            }
+        } else if (mOutboundFragmentationHelper.hasRemainingFragments()) {
+            return transitionToAwaitingClosureState(
+                    tag,
+                    eapIdentifier,
+                    new EapError(
+                            new EapInvalidRequestException(
+                                    "Received a standard EAP-Request but was expecting an ack to a"
+                                            + " fragment.")));
+        }
+
+        return null;
+    }
+
+    /**
+     * Takes outbound data and assembles an EAP-Response.
+     *
+     * <p>The data will be fragmented if necessary
+     *
+     * @param tag the tag of the calling class
+     * @param eapIdentifier the EAP identifier from the most recent EAP request
+     * @param data the data used to build the EAP-TTLS type data
+     * @return an EAP result that is either an EAP response or an EAP error
+     */
+    private EapResult buildEapMessageResponse(String tag, int eapIdentifier, byte[] data) {
+        // TODO(b/165668196): Modify outbound fragmentation helper to be per-message in EAP-TTLS
+        mOutboundFragmentationHelper.setupOutboundFragmentation(data);
+        FragmentationResult result = mOutboundFragmentationHelper.getNextOutboundFragment();
+
+        // As per RFC5281#9.2.2, an unfragmented packet may have the length bit set
+        return buildEapMessageResponse(
+                tag,
+                eapIdentifier,
+                EapTtlsTypeData.getEapTtlsTypeData(
+                        result.hasRemainingFragments,
+                        false /* start */,
+                        0 /* version 0 */,
+                        data.length,
+                        result.fragmentedData));
     }
 
     /**
