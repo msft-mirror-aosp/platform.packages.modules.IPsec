@@ -53,6 +53,7 @@ import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapMessage;
+import com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper;
 import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
@@ -84,6 +85,7 @@ public class EapTtlsStateTest {
 
     EapTtlsConfig mEapTtlsConfig;
     EapTtlsMethodStateMachine mStateMachine;
+    EapTtlsInboundFragmentationHelper mInboundFragmentationHelper;
     EapTtlsOutboundFragmentationHelper mOutboundFragmentationHelper;
 
     @Before
@@ -104,6 +106,7 @@ public class EapTtlsStateTest {
                         .build();
         mEapTtlsConfig = eapSessionConfig.getEapTtlsConfig();
 
+        mInboundFragmentationHelper = new EapTtlsInboundFragmentationHelper();
         mOutboundFragmentationHelper =
                 new EapTtlsOutboundFragmentationHelper(BUFFER_SIZE_FRAGMENT_ONE);
 
@@ -115,6 +118,7 @@ public class EapTtlsStateTest {
                         mMockSecureRandom,
                         mMockTypeDataDecoder,
                         mMockTlsSessionFactory,
+                        mInboundFragmentationHelper,
                         mOutboundFragmentationHelper);
         when(mMockTlsSessionFactory.newInstance(any(), any())).thenReturn(mMockTlsSession);
     }
@@ -149,6 +153,11 @@ public class EapTtlsStateTest {
     EapTtlsTypeData getEapTtlsStartTypeData() throws Exception {
         return getEapTtlsTypeData(
                 false /* isFragmented */, true /* isStart */, 0 /* length */, EMPTY_BYTE_ARRAY);
+    }
+
+    EapTtlsTypeData getEapTtlsFragmentTypeData(boolean isFragment, int length, byte[] data)
+            throws Exception {
+        return getEapTtlsTypeData(isFragment, false /* isStart */, length, data);
     }
 
     EapTtlsTypeData getEapTtlsTypeData(byte[] data) throws Exception {
