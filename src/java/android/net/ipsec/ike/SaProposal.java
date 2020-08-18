@@ -182,14 +182,14 @@ public abstract class SaProposal {
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({DH_GROUP_NONE, DH_GROUP_1024_BIT_MODP, DH_GROUP_2048_BIT_MODP})
+    @IntDef({DH_GROUP_NONE, DH_GROUP_1024_BIT_MODP, DH_GROUP_1536_BIT_MODP, DH_GROUP_2048_BIT_MODP})
     public @interface DhGroup {}
 
     /** None Diffie-Hellman Group. */
     public static final int DH_GROUP_NONE = 0;
     /** 1024-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_1024_BIT_MODP = 2;
-    /** 1536-bit MODP Diffie-Hellman Group. @hide */
+    /** 1536-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_1536_BIT_MODP = 5;
     /** 2048-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_2048_BIT_MODP = 14;
