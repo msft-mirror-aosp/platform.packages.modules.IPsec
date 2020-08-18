@@ -18,6 +18,7 @@ package com.android.internal.net.eap.statemachine;
 
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
+import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
 import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
@@ -35,6 +36,7 @@ import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
 import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.exceptions.EapSilentException;
+import com.android.internal.net.eap.exceptions.ttls.EapTtlsHandshakeException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
@@ -43,6 +45,8 @@ import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 
+import java.io.IOException;
+import java.security.GeneralSecurityException;
 import java.security.SecureRandom;
 
 /**
@@ -159,8 +163,75 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
 
         @Override
         public EapResult process(EapMessage message) {
-            // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS (RFC5281#7.1)
-            return handleEapSuccessFailureNotification(mTAG, message);
+            EapResult eapResult = handleEapSuccessFailureNotification(mTAG, message);
+            if (eapResult != null) {
+                return eapResult;
+            }
+
+            DecodeResult decodeResult =
+                    mTypeDataDecoder.decodeEapTtlsRequestPacket(message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                LOG.e(mTAG, "Error parsing EAP-TTLS packet type data", decodeResult.eapError.cause);
+                if (mTlsSession == null) {
+                    return decodeResult.eapError;
+                }
+                return transitionToAwaitingClosureState(
+                        mTAG, message.eapIdentifier, decodeResult.eapError);
+            }
+
+            EapTtlsTypeData eapTtlsRequest = decodeResult.eapTypeData;
+
+            if (eapTtlsRequest.isStart) {
+                if (mTlsSession != null) {
+                    return transitionToAwaitingClosureState(
+                            mTAG,
+                            message.eapIdentifier,
+                            new EapError(
+                                    new EapInvalidRequestException(
+                                            "Received a start request when a session is already in"
+                                                    + " progress")));
+                }
+
+                return startHandshake(message.eapIdentifier);
+            }
+
+            // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
+            return null;
+        }
+
+        /**
+         * Initializes the TlsSession and starts a TLS handshake
+         *
+         * @param eapIdentifier the eap identifier for the response
+         * @return an EAP response containing the ClientHello message, or an EAP error if the TLS
+         *     handshake fails to begin
+         */
+        private EapResult startHandshake(int eapIdentifier) {
+            try {
+                mTlsSession =
+                        mTlsSessionFactory.newInstance(
+                                mEapTtlsConfig.getTrustedCa(), mSecureRandom);
+            } catch (GeneralSecurityException | IOException e) {
+                return new EapError(
+                        new EapTtlsHandshakeException(
+                                "There was an error creating the TLS Session.", e));
+            }
+
+            TlsResult tlsResult = mTlsSession.startHandshake();
+            if (tlsResult.status == TLS_STATUS_FAILURE) {
+                return new EapError(new EapTtlsHandshakeException("Failed to start handshake."));
+            }
+
+            // TODO(b/163053272): Implement fragmentation support in EAP-TTLS
+            return buildEapMessageResponse(
+                    mTAG,
+                    eapIdentifier,
+                    EapTtlsTypeData.getEapTtlsTypeData(
+                            false /* isFragmented */,
+                            false /* isStart */,
+                            0 /* version */,
+                            tlsResult.data.length,
+                            tlsResult.data));
         }
 
         /**

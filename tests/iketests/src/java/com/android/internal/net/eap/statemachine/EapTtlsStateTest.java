@@ -66,6 +66,7 @@ public class EapTtlsStateTest {
 
     static final String NOTIFICATION_MESSAGE = "test";
     static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
+    static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
     Context mContext;
     SecureRandom mMockSecureRandom;
@@ -132,6 +133,11 @@ public class EapTtlsStateTest {
         assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
     }
 
+    EapTtlsTypeData getEapTtlsStartTypeData() throws Exception {
+        return getEapTtlsTypeData(
+                false /* isFragmented */, true /* isStart */, 0 /* length */, EMPTY_BYTE_ARRAY);
+    }
+
     EapTtlsTypeData getEapTtlsTypeData(byte[] data) throws Exception {
         return getEapTtlsTypeData(
                 false /* isFragmented */, false /* isStart */, 0 /* length */, data);
@@ -146,6 +152,16 @@ public class EapTtlsStateTest {
     void mockTypeDataDecoding(EapTtlsTypeData decodedTypeData) throws Exception {
         when(mMockTypeDataDecoder.decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA)))
                 .thenReturn(new DecodeResult(decodedTypeData));
+    }
+
+    /** Runs a test and verifies the EAP response returned by the state */
+    void processMessageAndVerifyEapResponse(byte[] expectedResponse) throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_TTLS, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        EapResult result = mStateMachine.process(eapMessage);
+        EapResponse eapResponse = (EapResponse) result;
+        assertArrayEquals(expectedResponse, eapResponse.packet);
     }
 
     /**
