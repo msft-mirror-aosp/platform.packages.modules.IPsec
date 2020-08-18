@@ -83,13 +83,13 @@ import javax.net.ssl.SSLException;
  */
 public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
 
+    @VisibleForTesting public static TlsSessionFactory sTlsSessionFactory = new TlsSessionFactory();
     private static final int DEFAULT_AVP_VENDOR_ID = 0;
 
     private final Context mContext;
     private final EapTtlsConfig mEapTtlsConfig;
     private final EapTtlsTypeDataDecoder mTypeDataDecoder;
     private final SecureRandom mSecureRandom;
-    private final TlsSessionFactory mTlsSessionFactory;
 
     @VisibleForTesting final EapTtlsInboundFragmentationHelper mInboundFragmentationHelper;
     @VisibleForTesting final EapTtlsOutboundFragmentationHelper mOutboundFragmentationHelper;
@@ -104,7 +104,6 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 eapTtlsConfig,
                 secureRandom,
                 new EapTtlsTypeDataDecoder(),
-                new TlsSessionFactory(),
                 new EapTtlsInboundFragmentationHelper(),
                 new EapTtlsOutboundFragmentationHelper());
     }
@@ -115,14 +114,12 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             EapTtlsConfig eapTtlsConfig,
             SecureRandom secureRandom,
             EapTtlsTypeDataDecoder typeDataDecoder,
-            TlsSessionFactory tlsSessionFactory,
             EapTtlsInboundFragmentationHelper inboundFragmentationHelper,
             EapTtlsOutboundFragmentationHelper outboundFragmentationHelper) {
         mContext = context;
         mEapTtlsConfig = eapTtlsConfig;
         mTypeDataDecoder = typeDataDecoder;
         mSecureRandom = secureRandom;
-        mTlsSessionFactory = tlsSessionFactory;
         mInboundFragmentationHelper = inboundFragmentationHelper;
         mOutboundFragmentationHelper = outboundFragmentationHelper;
 
@@ -310,7 +307,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
         private EapResult startHandshake(int eapIdentifier) {
             try {
                 mTlsSession =
-                        mTlsSessionFactory.newInstance(
+                        sTlsSessionFactory.newInstance(
                                 mEapTtlsConfig.getServerCaCert(), mSecureRandom);
             } catch (GeneralSecurityException | IOException e) {
                 return new EapError(
