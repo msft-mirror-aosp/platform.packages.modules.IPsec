@@ -38,9 +38,11 @@ public abstract class IkeCipher extends IkeCrypto {
 
     private static final int IV_LEN_3DES = 8;
     private static final int IV_LEN_AES_CBC = 16;
+    private static final int IV_LEN_AES_CTR = 8;
     private static final int IV_LEN_AES_GCM = 8;
 
     private static final int SALT_LEN_AES_GCM = 4;
+    private static final int SALT_LEN_AES_CTR = 4;
 
     protected static final int SALT_LEN_NOT_INCLUDED = 0;
 
@@ -90,6 +92,13 @@ public abstract class IkeCipher extends IkeCrypto {
                         encryptionTransform.getSpecifiedKeyLength() / 8,
                         IV_LEN_AES_CBC,
                         "AES/CBC/NoPadding");
+            case SaProposal.ENCRYPTION_ALGORITHM_AES_CTR:
+                return new IkeNormalModeCipher(
+                        algorithmId,
+                        encryptionTransform.getSpecifiedKeyLength() / 8,
+                        IV_LEN_AES_CTR,
+                        "AES/CTR/NoPadding",
+                        SALT_LEN_AES_CTR);
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
                 // Fall through
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
