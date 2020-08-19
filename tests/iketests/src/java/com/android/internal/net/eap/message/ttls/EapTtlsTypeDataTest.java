@@ -63,12 +63,14 @@ public class EapTtlsTypeDataTest {
                                 0 /* version */,
                                 0 /* isLengthIncluded */,
                                 EAP_TTLS_REQUEST_DATA_BYTES));
+
         assertTrue(result.isSuccessfulDecode());
     }
 
     @Test
     public void testDecodeResult_unsuccessfulDecode() throws Exception {
         DecodeResult result = new DecodeResult(new EapError(new Exception()));
+
         assertFalse(result.isSuccessfulDecode());
     }
 
@@ -90,6 +92,7 @@ public class EapTtlsTypeDataTest {
     public void testDecodeEapTtlsRequest_incorrectMessageLength() {
         DecodeResult decodeResult =
                 mTypeDataDecoder.decodeEapTtlsRequestPacket(EAP_TTLS_REQUEST_NO_FRAG_LENGTH_SET);
+
         assertFalse(decodeResult.isSuccessfulDecode());
         EapError eapError = decodeResult.eapError;
         assertTrue(eapError.cause instanceof EapTtlsParsingException);
@@ -120,6 +123,7 @@ public class EapTtlsTypeDataTest {
                         0 /* isLengthIncluded */,
                         EAP_TTLS_REQUEST_DATA_BYTES);
         byte[] encodeResult = typeData.encode();
+
         assertArrayEquals(EAP_TTLS_REQUEST, encodeResult);
     }
 
@@ -128,6 +132,42 @@ public class EapTtlsTypeDataTest {
         EapTtlsAcknowledgement eapTtlsAcknowledgement =
                 EapTtlsAcknowledgement.getEapTtlsAcknowledgement();
         byte[] encodeResult = eapTtlsAcknowledgement.encode();
+
         assertArrayEquals(EAP_TTLS_RESPONSE_ACK, encodeResult);
+    }
+
+    @Test
+    public void testEapTtlsIsAcknowledgment_valid() {
+        EapTtlsAcknowledgement eapTtlsAcknowledgement =
+                EapTtlsAcknowledgement.getEapTtlsAcknowledgement();
+
+        assertTrue(eapTtlsAcknowledgement.isAcknowledgmentPacket());
+        assertArrayEquals(EAP_TTLS_RESPONSE_ACK, eapTtlsAcknowledgement.encode());
+    }
+
+    @Test
+    public void testEapTtlsIsAcknowledgment_invalidWithData() {
+        EapTtlsTypeData eapTtlsTypeData =
+                EapTtlsTypeData.getEapTtlsTypeData(
+                        false /* packetFragmented */,
+                        false /* start */,
+                        0 /* version */,
+                        0 /* messageLength */,
+                        EAP_TTLS_REQUEST);
+
+        assertFalse(eapTtlsTypeData.isAcknowledgmentPacket());
+    }
+
+    @Test
+    public void testEapTtlsIsAcknowledgment_invalidWithoutData() {
+        EapTtlsTypeData eapTtlsTypeData =
+                EapTtlsTypeData.getEapTtlsTypeData(
+                        false /* packetFragmented */,
+                        true /* start */,
+                        0 /* version */,
+                        0 /* messageLength */,
+                        new byte[0]);
+
+        assertFalse(eapTtlsTypeData.isAcknowledgmentPacket());
     }
 }
