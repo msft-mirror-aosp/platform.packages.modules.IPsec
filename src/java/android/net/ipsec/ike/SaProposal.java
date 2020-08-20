@@ -56,9 +56,11 @@ public abstract class SaProposal {
     @IntDef({
         ENCRYPTION_ALGORITHM_3DES,
         ENCRYPTION_ALGORITHM_AES_CBC,
+        ENCRYPTION_ALGORITHM_AES_CTR,
         ENCRYPTION_ALGORITHM_AES_GCM_8,
         ENCRYPTION_ALGORITHM_AES_GCM_12,
-        ENCRYPTION_ALGORITHM_AES_GCM_16
+        ENCRYPTION_ALGORITHM_AES_GCM_16,
+        ENCRYPTION_ALGORITHM_CHACHA20_POLY1305
     })
     public @interface EncryptionAlgorithm {}
 
@@ -66,7 +68,7 @@ public abstract class SaProposal {
     public static final int ENCRYPTION_ALGORITHM_3DES = 3;
     /** AES-CBC Encryption/Ciphering Algorithm. */
     public static final int ENCRYPTION_ALGORITHM_AES_CBC = 12;
-    /** AES-CTR Encryption/Ciphering Algorithm. @hide */
+    /** AES-CTR Encryption/Ciphering Algorithm. */
     public static final int ENCRYPTION_ALGORITHM_AES_CTR = 13;
     /**
      * AES-GCM Authentication/Integrity + Encryption/Ciphering Algorithm with 8-octet ICV
@@ -86,8 +88,6 @@ public abstract class SaProposal {
     /**
      * ChaCha20-Poly1305 Authentication/Integrity + Encryption/Ciphering Algorithm with 16-octet ICV
      * (truncation).
-     *
-     * @hide
      */
     public static final int ENCRYPTION_ALGORITHM_CHACHA20_POLY1305 = 28;
 

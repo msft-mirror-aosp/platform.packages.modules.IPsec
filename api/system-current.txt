@@ -249,9 +249,11 @@ package android.net.ipsec.ike {
     field public static final int DH_GROUP_NONE = 0; // 0x0
     field public static final int ENCRYPTION_ALGORITHM_3DES = 3; // 0x3
     field public static final int ENCRYPTION_ALGORITHM_AES_CBC = 12; // 0xc
+    field public static final int ENCRYPTION_ALGORITHM_AES_CTR = 13; // 0xd
     field public static final int ENCRYPTION_ALGORITHM_AES_GCM_12 = 19; // 0x13
     field public static final int ENCRYPTION_ALGORITHM_AES_GCM_16 = 20; // 0x14
     field public static final int ENCRYPTION_ALGORITHM_AES_GCM_8 = 18; // 0x12
+    field public static final int ENCRYPTION_ALGORITHM_CHACHA20_POLY1305 = 28; // 0x1c
     field public static final int INTEGRITY_ALGORITHM_AES_XCBC_96 = 5; // 0x5
     field public static final int INTEGRITY_ALGORITHM_HMAC_SHA1_96 = 2; // 0x2
     field public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_256_128 = 12; // 0xc
