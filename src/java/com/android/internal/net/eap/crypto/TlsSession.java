@@ -398,7 +398,8 @@ public class TlsSession {
      * @param buffer the byte buffer to get the array from
      * @return a byte array
      */
-    private static byte[] getByteArrayFromBuffer(ByteBuffer buffer) {
+    @VisibleForTesting
+    public static byte[] getByteArrayFromBuffer(ByteBuffer buffer) {
         return Arrays.copyOfRange(buffer.array(), 0, buffer.position());
     }
 
