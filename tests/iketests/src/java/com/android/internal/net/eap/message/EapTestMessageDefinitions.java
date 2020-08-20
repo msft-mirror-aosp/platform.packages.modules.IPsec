@@ -358,4 +358,9 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray(
                     "01" + ID + "0006" // EAP-REQUEST | ID | length in bytes
                             + "1520"); // EAP-TTLS | Flags
+    public static final byte[] EAP_RESPONSE_TTLS_WITH_LENGTH =
+            hexStringToByteArray(
+                    "02" + ID + "004A" // EAP-RESPONSE | ID | length in bytes
+                            + "158000000040" // EAP-TTLS | flags | message length in bytes
+                            + EAP_TTLS_DUMMY_DATA);
 }

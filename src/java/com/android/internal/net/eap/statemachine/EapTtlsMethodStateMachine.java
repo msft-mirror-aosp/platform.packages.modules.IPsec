@@ -17,6 +17,7 @@
 package com.android.internal.net.eap.statemachine;
 
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
+import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
 import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
@@ -28,6 +29,9 @@ import android.net.eap.EapSessionConfig.EapTtlsConfig;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
+import com.android.internal.net.eap.EapResult.EapResponse;
+import com.android.internal.net.eap.crypto.TlsSession;
+import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
 import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.exceptions.EapSilentException;
@@ -35,6 +39,7 @@ import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp;
+import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 
@@ -61,6 +66,8 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     private final EapTtlsTypeDataDecoder mTypeDataDecoder;
     private final SecureRandom mSecureRandom;
     private final TlsSessionFactory mTlsSessionFactory;
+
+    @VisibleForTesting TlsSession mTlsSession;
 
     public EapTtlsMethodStateMachine(
             Context context,
@@ -188,4 +195,100 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             return null;
         }
     }
+
+    /**
+     * The closure state handles closure of the TLS session in EAP-TTLS
+     *
+     * <p>Note that this state is only entered following an error. If EAP authentication
+     * completes successfully or fails, the tunnel is assumed to have implicitly closed.
+     */
+    protected class AwaitingClosureState extends EapMethodState {
+        private final String mTAG = this.getClass().getSimpleName();
+
+        private final EapError mEapError;
+
+        /**
+         * Initializes the closure state
+         *
+         * <p>The awaiting closure state is an error state. If a server responds to a close-notify,
+         * the data is processed and the EAP error which encapsulates the initial error is returned
+         *
+         * @param eapError an EAP error that contains the error that initially caused a close to
+         *     occur
+         */
+        public AwaitingClosureState(EapError eapError) {
+            mEapError = eapError;
+        }
+
+        @Override
+        public EapResult process(EapMessage message) {
+            EapResult result = handleEapSuccessFailureNotification(mTAG, message);
+            if (result != null) {
+                return result;
+            }
+
+            DecodeResult decodeResult =
+                    mTypeDataDecoder.decodeEapTtlsRequestPacket(message.eapData.eapTypeData);
+            if (!decodeResult.isSuccessfulDecode()) {
+                LOG.e(mTAG, "Error parsing EAP-TTLS packet type data", decodeResult.eapError.cause);
+                return decodeResult.eapError;
+            }
+
+            // if the server sent data, we process it and return an EapError.
+            // A response is not required and is additionally unlikely as we have already sent the
+            // closure-notify
+            mTlsSession.processIncomingData(decodeResult.eapTypeData.data);
+
+            return mEapError;
+        }
+    }
+
+    /**
+     * Transitions to the awaiting closure state and attempts to close the TLS tunnel
+     *
+     * @param tag the tag of the calling class
+     * @param eapIdentifier the EAP identifier from the most recent EAP request
+     * @param eapError the EAP error to return if closure fails
+     * @return a closure notify TLS message or an EAP error if one cannot be generated
+     */
+    @VisibleForTesting
+    EapResult transitionToAwaitingClosureState(String tag, int eapIdentifier, EapError eapError) {
+        TlsResult closureResult = mTlsSession.closeConnection();
+        if (closureResult.status != TLS_STATUS_CLOSED) {
+            LOG.e(tag, "Failed to close the TLS session");
+            return eapError;
+        }
+
+        transitionTo(new AwaitingClosureState(eapError));
+        return buildEapMessageResponse(
+                tag,
+                eapIdentifier,
+                EapTtlsTypeData.getEapTtlsTypeData(
+                        false /* isFragmented */,
+                        false /* start */,
+                        0 /* version 0 */,
+                        closureResult.data.length,
+                        closureResult.data));
+    }
+
+    /**
+     * Takes an already constructed EapTtlsTypeData and builds an EAP-Response
+     *
+     * @param tag the tag of the calling class
+     * @param eapIdentifier the EAP identifier from the most recent EAP request
+     * @param eapTtlsTypeData the type data to use in the EAP Response
+     * @return an EAP result that is either an EAP response or an EAP error
+     */
+    private EapResult buildEapMessageResponse(
+            String tag, int eapIdentifier, EapTtlsTypeData eapTtlsTypeData) {
+        try {
+            EapData eapData = new EapData(getEapMethod(), eapTtlsTypeData.encode());
+            EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, eapData);
+            return EapResponse.getEapResponse(eapMessage);
+        } catch (EapSilentException ex) {
+            LOG.e(tag, "Error building response EapMessage", ex);
+            return new EapError(ex);
+        }
+    }
 }
+

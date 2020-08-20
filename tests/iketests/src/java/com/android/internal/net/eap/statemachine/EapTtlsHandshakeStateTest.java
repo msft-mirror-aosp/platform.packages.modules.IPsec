@@ -38,7 +38,7 @@ public class EapTtlsHandshakeStateTest extends EapTtlsStateTest {
 
     @Before
     @Override
-    public void setUp() {
+    public void setUp() throws Exception {
         super.setUp();
 
         mHandshakeState = mStateMachine.new HandshakeState();

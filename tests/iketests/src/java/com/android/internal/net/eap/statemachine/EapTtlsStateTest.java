@@ -20,6 +20,7 @@ import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
 import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
@@ -31,7 +32,11 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSC
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.net.eap.EapSessionConfig;
@@ -41,11 +46,14 @@ import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.EapResult.EapFailure;
 import com.android.internal.net.eap.EapResult.EapResponse;
+import com.android.internal.net.eap.crypto.TlsSession;
 import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapMessage;
+import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
+import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 import com.android.internal.net.eap.statemachine.EapMethodStateMachine.EapMethodState;
 import com.android.internal.net.eap.statemachine.EapMethodStateMachine.FinalState;
 
@@ -59,20 +67,22 @@ public class EapTtlsStateTest {
     static final String NOTIFICATION_MESSAGE = "test";
     static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
 
-    protected Context mContext;
-    protected SecureRandom mMockSecureRandom;
-    protected EapTtlsTypeDataDecoder mMockTypeDataDecoder;
-    protected TlsSessionFactory mMockTlsSessionFactory;
+    Context mContext;
+    SecureRandom mMockSecureRandom;
+    EapTtlsTypeDataDecoder mMockTypeDataDecoder;
+    TlsSessionFactory mMockTlsSessionFactory;
+    TlsSession mMockTlsSession;
 
     EapTtlsConfig mEapTtlsConfig;
     EapTtlsMethodStateMachine mStateMachine;
 
     @Before
-    public void setUp() {
+    public void setUp() throws Exception {
         mContext = getInstrumentation().getContext();
         mMockSecureRandom = mock(SecureRandom.class);
         mMockTypeDataDecoder = mock(EapTtlsTypeDataDecoder.class);
         mMockTlsSessionFactory = mock(TlsSessionFactory.class);
+        mMockTlsSession = mock(TlsSession.class);
 
         EapSessionConfig innerEapSessionConfig =
                 new EapSessionConfig.Builder()
@@ -92,6 +102,7 @@ public class EapTtlsStateTest {
                         mMockSecureRandom,
                         mMockTypeDataDecoder,
                         mMockTlsSessionFactory);
+        when(mMockTlsSessionFactory.newInstance(any(), any())).thenReturn(mMockTlsSession);
     }
 
     @Test
@@ -119,5 +130,35 @@ public class EapTtlsStateTest {
 
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_RESPONSE_NOTIFICATION_PACKET, eapResponse.packet);
+    }
+
+    EapTtlsTypeData getEapTtlsTypeData(byte[] data) throws Exception {
+        return getEapTtlsTypeData(
+                false /* isFragmented */, false /* isStart */, 0 /* length */, data);
+    }
+
+    EapTtlsTypeData getEapTtlsTypeData(
+            boolean isFragmented, boolean isStart, int length, byte[] data) throws Exception {
+        return EapTtlsTypeData.getEapTtlsTypeData(
+                isFragmented, isStart, 0 /* version */, length, data);
+    }
+
+    void mockTypeDataDecoding(EapTtlsTypeData decodedTypeData) throws Exception {
+        when(mMockTypeDataDecoder.decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA)))
+                .thenReturn(new DecodeResult(decodedTypeData));
+    }
+
+    /**
+     * Runs a test and verifies the EAP error returned by the state
+     *
+     * @param error the exception within the EapError
+     */
+    void processMessageAndVerifyEapError(Class<? extends Exception> error) throws Exception {
+        EapData eapData = new EapData(EAP_TYPE_TTLS, DUMMY_EAP_TYPE_DATA);
+        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+
+        EapResult result = mStateMachine.process(eapMessage);
+        EapError eapError = (EapError) result;
+        assertTrue(error.isInstance(eapError.cause));
     }
 }
