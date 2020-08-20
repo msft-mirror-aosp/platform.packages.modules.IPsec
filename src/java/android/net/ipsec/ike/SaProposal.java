@@ -83,6 +83,13 @@ public abstract class SaProposal {
      * (truncation).
      */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_16 = 20;
+    /**
+     * ChaCha20-Poly1305 Authentication/Integrity + Encryption/Ciphering Algorithm with 16-octet ICV
+     * (truncation).
+     *
+     * @hide
+     */
+    public static final int ENCRYPTION_ALGORITHM_CHACHA20_POLY1305 = 28;
 
     private static final SparseArray<String> SUPPORTED_ENCRYPTION_ALGO_TO_STR;
 
@@ -94,6 +101,8 @@ public abstract class SaProposal {
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_8, "ENCR_AES_GCM_8");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_12, "ENCR_AES_GCM_12");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_16, "ENCR_AES_GCM_16");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(
+                ENCRYPTION_ALGORITHM_CHACHA20_POLY1305, "ENCR_CHACHA20_POLY1305");
     }
 
     /**
@@ -425,6 +434,8 @@ public abstract class SaProposal {
                 case ENCRYPTION_ALGORITHM_AES_GCM_12:
                     // Fall through
                 case ENCRYPTION_ALGORITHM_AES_GCM_16:
+                    // Fall through
+                case ENCRYPTION_ALGORITHM_CHACHA20_POLY1305:
                     return true;
                 default:
                     // Won't hit here.
