@@ -24,6 +24,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 import com.android.internal.net.eap.EapResult.EapError;
+import com.android.internal.net.eap.crypto.TlsSession;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsParsingException;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp.EapTtlsAvpDecoder;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp.EapTtlsAvpDecoder.AvpDecodeResult;
@@ -40,8 +41,12 @@ public class EapTtlsAvpTest {
     private static final int DEFAULT_VENDOR_ID = 0;
 
     private static final String AVP_DUMMY_DATA_PADDING_REQUIRED = "160304";
+    private static final String AVP_DUMMY_DATA_PADDING_NOT_REQUIRED = "16030406";
+
     private static final byte[] AVP_DUMMY_DATA_PADDING_REQUIRED_BYTES =
             hexStringToByteArray(AVP_DUMMY_DATA_PADDING_REQUIRED);
+    private static final byte[] AVP_DUMMY_DATA_PADDING_NOT_REQUIRED_BYTES =
+            hexStringToByteArray(AVP_DUMMY_DATA_PADDING_NOT_REQUIRED);
 
     private static final String EAP_MESSAGE_AVP_WITHOUT_VENDOR_ID_PADDING_REQUIRED =
             "0000004F" + "40" + "00000B" // AVP Code | AVP Flags | AVP Length
@@ -89,6 +94,15 @@ public class EapTtlsAvpTest {
                     OTHER_AVP_WITHOUT_VENDOR_ID
                             + OTHER_AVP_WITH_VENDOR_ID
                             + OTHER_AVP_WITH_VENDOR_ID);
+    private static final byte[] EAP_MESSAGE_AVP_WITHOUT_VENDOR_ID_PADDING_NOT_REQUIRED_BYTES =
+            hexStringToByteArray(
+                    "0000004F" + "40" + "00000C" // AVP Code | AVP Flags | AVP Length
+                            + AVP_DUMMY_DATA_PADDING_NOT_REQUIRED);
+    private static final byte[] EAP_MESSAGE_AVP_WITH_VENDOR_ID_PADDING_NOT_REQUIRED_BYTES =
+            hexStringToByteArray(
+                    "0000004F" + "C0" + "000010" // AVP Code | AVP Flags | AVP Length
+                            + "00000064" // Vendor-ID
+                            + AVP_DUMMY_DATA_PADDING_NOT_REQUIRED);
     private static final byte[] EAP_MESSAGE_AVP_INVALID_UNDERFLOW_BYTES =
             hexStringToByteArray(
                     "0000004F" + "40" + "00000F" // AVP Code | AVP Flags | AVP Length
@@ -116,8 +130,8 @@ public class EapTtlsAvpTest {
 
     // This is an unreastically large number in order to validate behaviour when the most
     // significant bit is set
-    private static final ByteBuffer AVP_LENGTH_BUFFER =
-            ByteBuffer.wrap(hexStringToByteArray("FFEEED"));
+    private static final byte[] AVP_LENGTH_BYTE_ARRAY = hexStringToByteArray("FFEEED");
+    private static final ByteBuffer AVP_LENGTH_BUFFER = ByteBuffer.wrap(AVP_LENGTH_BYTE_ARRAY);
     private static final int AVP_LENGTH_BUFFER_DECIMAL = 0xFFEEED;
 
     private final EapTtlsAvpDecoder mAvpDecoder = new EapTtlsAvpDecoder();
@@ -217,6 +231,54 @@ public class EapTtlsAvpTest {
     }
 
     @Test
+    public void testEapMessageAvpEncoding_withoutVendorId_paddingRequired() {
+        verifyEapMessageAvpEncoding(
+                DEFAULT_VENDOR_ID,
+                AVP_DUMMY_DATA_PADDING_REQUIRED_BYTES,
+                EAP_MESSAGE_AVP_WITHOUT_VENDOR_ID_PADDING_REQUIRED_BYTES);
+    }
+
+    @Test
+    public void testEapMessageAvpEncoding_withoutVendorId_paddingNotRequired() {
+        verifyEapMessageAvpEncoding(
+                DEFAULT_VENDOR_ID,
+                AVP_DUMMY_DATA_PADDING_NOT_REQUIRED_BYTES,
+                EAP_MESSAGE_AVP_WITHOUT_VENDOR_ID_PADDING_NOT_REQUIRED_BYTES);
+    }
+
+    @Test
+    public void testEapMessageAvpEncoding_withVendorId_paddingRequired() {
+        verifyEapMessageAvpEncoding(
+                SAMPLE_VENDOR_ID,
+                AVP_DUMMY_DATA_PADDING_REQUIRED_BYTES,
+                EAP_MESSAGE_AVP_WITH_VENDOR_ID_PADDING_REQUIRED_BYTES);
+    }
+
+    @Test
+    public void testEapMessageAvpEncoding_withVendorId_paddingNotRequired() {
+        verifyEapMessageAvpEncoding(
+                SAMPLE_VENDOR_ID,
+                AVP_DUMMY_DATA_PADDING_NOT_REQUIRED_BYTES,
+                EAP_MESSAGE_AVP_WITH_VENDOR_ID_PADDING_NOT_REQUIRED_BYTES);
+    }
+
+    private void verifyEapMessageAvpEncoding(int vendorId, byte[] avpData, byte[] expectedResult) {
+        EapTtlsAvp eapTtlsAvp = EapTtlsAvp.getEapMessageAvp(vendorId, avpData);
+
+        assertArrayEquals(expectedResult, eapTtlsAvp.encode());
+    }
+
+    @Test
+    public void testDecodeAndEncodeAvp() {
+        AvpDecodeResult decodeResult =
+                mAvpDecoder.decode(MULTIPLE_AVPS_EAP_MESSAGE_WITHOUT_VENDOR_ID_BYTES);
+        assertTrue(decodeResult.isSuccessfulDecode());
+        byte[] encodedAvp = decodeResult.eapTtlsAvp.encode();
+
+        assertArrayEquals(EAP_MESSAGE_AVP_WITHOUT_VENDOR_ID_PADDING_REQUIRED_BYTES, encodedAvp);
+    }
+
+    @Test
     public void testGetAvpPadding() throws Exception {
         assertEquals(1, EapTtlsAvp.getAvpPadding(AVP_LENGTH_WITHOUT_VENDOR_ID_PADDING_REQUIRED));
     }
@@ -230,5 +292,13 @@ public class EapTtlsAvpTest {
     @Test
     public void testGetAvpLengthFromBuffer_success() throws Exception {
         assertEquals(AVP_LENGTH_BUFFER_DECIMAL, EapTtlsAvp.getAvpLength(AVP_LENGTH_BUFFER));
+    }
+
+    @Test
+    public void testEncodeAvpLength_success() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(AVP_LENGTH_WITH_VENDOR_ID_PADDING_REQUIRED);
+        EapTtlsAvp.encodeAvpLength(buffer, AVP_LENGTH_BUFFER_DECIMAL);
+
+        assertArrayEquals(AVP_LENGTH_BYTE_ARRAY, TlsSession.getByteArrayFromBuffer(buffer));
     }
 }
