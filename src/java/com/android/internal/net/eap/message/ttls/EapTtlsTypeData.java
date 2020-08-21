@@ -123,6 +123,15 @@ public class EapTtlsTypeData {
     }
 
     /**
+     * Determines if the type data represents an acknowledgment packet (RFC5281#9.2.3)
+     *
+     * @return true if it is an ack
+     */
+    public boolean isAcknowledgmentPacket() {
+        return data.length == 0 && !isStart && !isLengthIncluded && !isDataFragmented;
+    }
+
+    /**
      * Constructs and returns new EAP-TTLS response type data.
      *
      * @param packetFragmented a boolean that indicates whether this is a fragmented message
