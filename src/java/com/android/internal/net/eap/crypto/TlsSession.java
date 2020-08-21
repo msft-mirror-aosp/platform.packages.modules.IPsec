@@ -342,6 +342,20 @@ public class TlsSession {
      *
      * <p>Once a session has been closed, it cannot be reopened.
      *
+     * @return a tls result with the status of the operation as well as a potential closing message
+     */
+    public TlsResult closeConnection() {
+        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
+        return closeConnection(
+                ByteBuffer.allocate(mSslSession.getApplicationBufferSize()),
+                ByteBuffer.allocate(mSslSession.getPacketBufferSize()));
+    }
+
+    /**
+     * Attempts to close the TLS tunnel.
+     *
+     * <p>Once a session has been closed, it cannot be reopened.
+     *
      * @param applicationData a bytebuffer for the client side
      * @param packetData a bytebuffer for the server side
      * @return a tls result with the status of the operation as well as a potential closing message
