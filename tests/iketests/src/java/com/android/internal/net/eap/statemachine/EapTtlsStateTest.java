@@ -19,13 +19,14 @@ package com.android.internal.net.eap.statemachine;
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.EapTestUtils.getDummyEapSessionConfig;
 import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_USERNAME;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -55,17 +56,16 @@ import java.security.SecureRandom;
 
 public class EapTtlsStateTest {
 
+    static final String NOTIFICATION_MESSAGE = "test";
+    static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
+
     protected Context mContext;
     protected SecureRandom mMockSecureRandom;
     protected EapTtlsTypeDataDecoder mMockTypeDataDecoder;
     protected TlsSessionFactory mMockTlsSessionFactory;
 
-    EapSessionConfig mEapSessionConfig;
     EapTtlsConfig mEapTtlsConfig;
     EapTtlsMethodStateMachine mStateMachine;
-
-    static final String NOTIFICATION_MESSAGE = "test";
-    static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
 
     @Before
     public void setUp() {
@@ -74,12 +74,20 @@ public class EapTtlsStateTest {
         mMockTypeDataDecoder = mock(EapTtlsTypeDataDecoder.class);
         mMockTlsSessionFactory = mock(TlsSessionFactory.class);
 
-        mEapTtlsConfig = new EapTtlsConfig(null);
+        EapSessionConfig innerEapSessionConfig =
+                new EapSessionConfig.Builder()
+                        .setEapMsChapV2Config(MSCHAP_V2_USERNAME, MSCHAP_V2_PASSWORD)
+                        .build();
+        EapSessionConfig eapSessionConfig =
+                new EapSessionConfig.Builder()
+                        .setEapTtlsConfig(null /* trustedCa */, innerEapSessionConfig)
+                        .build();
+        mEapTtlsConfig = eapSessionConfig.getEapTtlsConfig();
 
         mStateMachine =
                 new EapTtlsMethodStateMachine(
                         mContext,
-                        getDummyEapSessionConfig(),
+                        eapSessionConfig,
                         mEapTtlsConfig,
                         mMockSecureRandom,
                         mMockTypeDataDecoder,

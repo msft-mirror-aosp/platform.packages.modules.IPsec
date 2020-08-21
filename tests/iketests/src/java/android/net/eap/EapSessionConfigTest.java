@@ -114,15 +114,40 @@ public class EapSessionConfigTest {
 
     @Test
     public void testBuildEapTtls() throws Exception {
+        EapSessionConfig innerConfig =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
         X509Certificate trustedCa = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
 
         EapSessionConfig result =
-                new EapSessionConfig.Builder().setEapTtlsConfig(trustedCa).build();
+                new EapSessionConfig.Builder().setEapTtlsConfig(trustedCa, innerConfig).build();
 
         assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
         EapTtlsConfig config = (EapTtlsConfig) result.eapConfigs.get(EAP_TYPE_TTLS);
         assertEquals(EAP_TYPE_TTLS, config.methodType);
         assertEquals(trustedCa, config.trustedCa);
+        assertEquals(innerConfig, config.innerEapSessionConfig);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBuildEapTtls_invalidInnerConfig() throws Exception {
+        EapSessionConfig msChapConfig =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
+        EapSessionConfig innerTtlsConfig =
+                new EapSessionConfig.Builder()
+                        .setEapTtlsConfig(null /* trustedCa */, msChapConfig)
+                        .build();
+        X509Certificate trustedCa = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
+
+        EapSessionConfig result =
+                new EapSessionConfig.Builder().setEapTtlsConfig(trustedCa, innerTtlsConfig).build();
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testBuildEapTtls_missingInnerConfig() throws Exception {
+        X509Certificate trustedCa = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
+
+        EapSessionConfig result =
+                new EapSessionConfig.Builder().setEapTtlsConfig(trustedCa, null).build();
     }
 
     @Test
