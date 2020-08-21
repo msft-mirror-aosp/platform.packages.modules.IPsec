@@ -17,12 +17,20 @@
 package com.android.internal.net.eap.crypto;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
+import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
+import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
 
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
+
 import org.junit.Before;
+import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.security.SecureRandom;
@@ -117,6 +125,54 @@ public class TlsSessionTest {
         when(mMockSslSession.getPacketBufferSize()).thenReturn(PACKET_BUFFER_SIZE_TLS_MESSAGE);
         mTlsSession =
                 new TlsSession(mMockSslContext, mMockSslEngine, mMockSslSession, mMockSecureRandom);
+    }
+
+    @Test
+    public void testCloseConnection_success_withData() throws Exception {
+        when(mMockSslEngine.getHandshakeStatus()).thenReturn(HandshakeStatus.NEED_WRAP);
+        setupWrap(EMPTY_APPLICATION_BUFFER, EMPTY_PACKET_BUFFER, RESULT_NOT_HANDSHAKING_CLOSED);
+
+        TlsResult result = mTlsSession.closeConnection();
+
+        assertEquals(TLS_STATUS_CLOSED, result.status);
+        assertArrayEquals(SAMPLE_PACKET_TLS_MESSAGE, result.data);
+        verify(mMockSslEngine).wrap(eq(EMPTY_APPLICATION_BUFFER), eq(PACKET_BUFFER_POSITION_LIMIT));
+    }
+
+    @Test
+    public void testCloseConnection_success_withoutData() throws Exception {
+        when(mMockSslEngine.getHandshakeStatus()).thenReturn(HandshakeStatus.NOT_HANDSHAKING);
+
+        TlsResult result = mTlsSession.closeConnection();
+
+        assertEquals(TLS_STATUS_CLOSED, result.status);
+        assertArrayEquals(EMPTY_BYTE_ARRAY, result.data);
+    }
+
+    @Test
+    public void testCloseConnection_failure_sslException() throws Exception {
+        when(mMockSslEngine.getHandshakeStatus()).thenReturn(HandshakeStatus.NEED_WRAP);
+        when(mMockSslEngine.wrap(eq(EMPTY_APPLICATION_BUFFER), eq(EMPTY_PACKET_BUFFER)))
+                .thenThrow(SSLException.class);
+
+        TlsResult result = mTlsSession.closeConnection();
+
+        assertEquals(TLS_STATUS_FAILURE, result.status);
+        assertArrayEquals(EMPTY_BYTE_ARRAY, result.data);
+        verify(mMockSslEngine).wrap(eq(EMPTY_APPLICATION_BUFFER), eq(EMPTY_PACKET_BUFFER));
+    }
+
+    @Test
+    public void testCloseConnection_failure_bufferOverflow() throws Exception {
+        when(mMockSslEngine.getHandshakeStatus()).thenReturn(HandshakeStatus.NEED_WRAP);
+        when(mMockSslEngine.wrap(eq(EMPTY_APPLICATION_BUFFER), eq(EMPTY_PACKET_BUFFER)))
+                .thenReturn(RESULT_NEED_UNWRAP_OVERFLOW);
+
+        TlsResult result = mTlsSession.closeConnection();
+
+        assertEquals(TLS_STATUS_FAILURE, result.status);
+        assertArrayEquals(EMPTY_BYTE_ARRAY, result.data);
+        verify(mMockSslEngine).wrap(eq(EMPTY_APPLICATION_BUFFER), eq(EMPTY_PACKET_BUFFER));
     }
 
     /**
