@@ -21,6 +21,7 @@ import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_FINISHED
 import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NEED_UNWRAP_OK;
 import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NEED_WRAP_OK;
 import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NOT_HANDSHAKING_OK;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
@@ -514,6 +515,46 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         verifyEapSuccess(MSCHAPV2_MSK, MSCHAPV2_EMSK);
     }
 
+    @Test
+    public void testEapMsChapV2EndToEndFailure() throws Exception {
+        processAndVerifyStartRequest();
+        processAndVerifyServerHello_initialFragment();
+        processAndVerifyServerHello_finalFragment();
+        processAndVerifyServerFinished();
+        processAndVerifyMsChapV2ChallengeRequest();
+        processMessageAndVerifyMsChapV2FailureRequest();
+        verifyEapFailure();
+    }
+
+    @Test
+    public void testEapTtlsUnsupportedType() throws Exception {
+        verifyUnsupportedType(EAP_REQUEST_AKA_IDENTITY_PACKET, EAP_RESPONSE_NAK_PACKET_TTLS);
+
+        processAndVerifyStartRequest();
+        processAndVerifyServerHello_initialFragment();
+        processAndVerifyServerHello_finalFragment();
+        processAndVerifyServerFinished();
+        processAndVerifyMsChapV2ChallengeRequest();
+        processAndVerifyMsChapV2SuccessRequest();
+        // TODO(b/161233250): Implement keying material generation in EAP-TTLS
+        verifyEapSuccess(MSCHAPV2_MSK, MSCHAPV2_EMSK);
+    }
+
+    @Test
+    public void testEapTtlsTunneledUnsupportedType() throws Exception {
+        processAndVerifyStartRequest();
+        processAndVerifyServerHello_initialFragment();
+        processAndVerifyServerHello_finalFragment();
+        processAndVerifyServerFinished();
+
+        processAndVerifyTunneledUnsupportedType();
+
+        processAndVerifyMsChapV2ChallengeRequest();
+        processAndVerifyMsChapV2SuccessRequest();
+        // TODO(b/161233250): Implement keying material generation in EAP-TTLS
+        verifyEapSuccess(MSCHAPV2_MSK, MSCHAPV2_EMSK);
+    }
+
     private void processAndVerifyStartRequest() throws Exception {
         setupWrap(EMPTY_BYTE_ARRAY, CLIENT_HELLO_BYTES, RESULT_NEED_UNWRAP_OK);
 
@@ -629,6 +670,44 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         // TODO(b/166794957): Verify SSLEngine wrap/unwrap in EAP-TTLS end-to-end tests
         verify(mMockCallback, times(callsToVerify))
                 .onResponse(eq(EAP_TTLS_TUNNELED_EAP_NOTIFICATION_RESPONSE));
+        verifyNoMoreInteractions(mMockCallback);
+    }
+
+    private void processMessageAndVerifyMsChapV2FailureRequest() throws Exception {
+        setupUnwrap(
+                EAP_MSCHAP_V2_DECRYPTED_FAILURE_REQUEST_AVP_BYTES,
+                EAP_MSCHAP_V2_ENCRYPTED_FAILURE_REQUEST_AVP_BYTES,
+                RESULT_NOT_HANDSHAKING_OK);
+        setupWrap(
+                EAP_MSCHAP_V2_DECRYPTED_FAILURE_RESPONSE_AVP_BYTES,
+                EAP_MSCHAP_V2_ENCRYPTED_FAILURE_RESPONSE_AVP_BYTES,
+                RESULT_NOT_HANDSHAKING_OK);
+
+        mEapAuthenticator.processEapMessage(EAP_TTLS_TUNNELED_FAILURE_REQUEST);
+        mTestLooper.dispatchAll();
+
+        // TODO(b/166794957): Verify SSLEngine wrap/unwrap in EAP-TTLS end-to-end tests
+        verify(mMockCallback).onResponse(eq(EAP_TTLS_TUNNELED_FAILURE_RESPONSE));
+        verifyNoMoreInteractions(mMockCallback);
+    }
+
+    private void processAndVerifyTunneledUnsupportedType()
+            throws Exception {
+        setupUnwrap(
+                DECRYPTED_EAP_AKA_IDENTITY_REQUEST_AVP_BYTES,
+                ENCRYPTED_EAP_AKA_IDENTITY_REQUEST_AVP_BYTES,
+                RESULT_NOT_HANDSHAKING_OK);
+        setupWrap(
+                DECRYPTED_NAK_RESPONSE_AVP_BYTES,
+                ENCRYPTED_NAK_RESPONSE_AVP_BYTES,
+                RESULT_NOT_HANDSHAKING_OK);
+
+        mEapAuthenticator.processEapMessage(EAP_TTLS_TUNNELED_AKA_IDENTITY_AVP_REQUEST);
+        mTestLooper.dispatchAll();
+
+        // TODO(b/166794957): Verify SSLEngine wrap/unwrap in EAP-TTLS end-to-end tests
+        // verify EAP-Response/Nak returned
+        verify(mMockCallback).onResponse(eq(EAP_TTLS_TUNNELED_NAK_RESPONSE));
         verifyNoMoreInteractions(mMockCallback);
     }
 
