@@ -22,6 +22,8 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.mock;
 
 import android.net.ipsec.ike.SaProposal;
 
@@ -35,8 +37,12 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.security.KeyStore;
 import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.security.interfaces.RSAKey;
+import java.security.interfaces.RSAPrivateKey;
 
 public final class IkeAuthDigitalSignPayloadTest {
     // TODO: Build a RSA_SHA1 signature and add tests for it.
@@ -76,6 +82,8 @@ public final class IkeAuthDigitalSignPayloadTest {
     private static final String ID_RESP_PAYLOAD_BODY_HEX_STRING = "01000000c0a82b8a";
     private static final String SKP_RESP_HEX_STRING = "8FE8EC3153EDE924C23D6630D3C992A494E2F256";
 
+    private static final String ANDROID_KEY_STORE_NAME = "AndroidKeyStore";
+
     private static final byte[] IKE_INIT_RESP_REQUEST =
             TestUtils.hexStringToByteArray(IKE_INIT_RESP_HEX_STRING);
     private static final byte[] NONCE_INIT_RESP =
@@ -108,10 +116,47 @@ public final class IkeAuthDigitalSignPayloadTest {
     public void testSignAndEncode() throws Exception {
         PrivateKey key = CertUtils.createRsaPrivateKeyFromKeyFile("end-cert-key-a.key");
 
+        assertTrue(key instanceof RSAPrivateKey);
+        verifySignAndEncode(key);
+    }
+
+    @Test
+    public void testSignAndEncodeWithAndroidKeyStoreKey() throws Exception {
+        KeyStore keyStore = KeyStore.getInstance(ANDROID_KEY_STORE_NAME);
+        keyStore.load(null);
+
+        String keyAlias = "testPrivateKey";
+        char[] pwd = new char[0];
+        PrivateKey rsaPrivateKey = CertUtils.createRsaPrivateKeyFromKeyFile("end-cert-key-a.key");
+        X509Certificate endCertA = CertUtils.createCertFromPemFile("end-cert-a.pem");
+        keyStore.setKeyEntry(keyAlias, rsaPrivateKey, pwd, new Certificate[] {endCertA});
+        PrivateKey androidPrivateKey = (PrivateKey) keyStore.getKey(keyAlias, pwd);
+
+        assertTrue(androidPrivateKey instanceof RSAKey);
+        verifySignAndEncode(androidPrivateKey);
+    }
+
+    private interface TestRSAPrivateKey extends PrivateKey, RSAKey {}
+
+    @Test
+    public void testSignAndEncodeWithRSATypePrivateKey() throws Exception {
+        RSAPrivateKey rsaPrivateKey =
+                (RSAPrivateKey) CertUtils.createRsaPrivateKeyFromKeyFile("end-cert-key-a.key");
+
+        TestRSAPrivateKey mMockKey = mock(TestRSAPrivateKey.class);
+        doReturn(rsaPrivateKey.getAlgorithm()).when(mMockKey).getAlgorithm();
+        doReturn(rsaPrivateKey.getEncoded()).when(mMockKey).getEncoded();
+        doReturn(rsaPrivateKey.getFormat()).when(mMockKey).getFormat();
+        doReturn(rsaPrivateKey.getModulus()).when(mMockKey).getModulus();
+
+        verifySignAndEncode(mMockKey);
+    }
+
+    private void verifySignAndEncode(PrivateKey privateKey) throws Exception {
         IkeAuthDigitalSignPayload authPayload =
                 new IkeAuthDigitalSignPayload(
                         SIGNATURE_ALGO_RSA_SHA2_256,
-                        key,
+                        privateKey,
                         IKE_INIT_RESP_REQUEST,
                         NONCE_INIT_RESP,
                         ID_RESP_PAYLOAD_BODY,
