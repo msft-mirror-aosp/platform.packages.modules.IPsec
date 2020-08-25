@@ -44,7 +44,7 @@ import java.net.InetAddress;
 import java.security.PrivateKey;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
-import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAKey;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -703,8 +703,8 @@ public final class IkeSessionParams {
          *     truststore is considered acceptable.
          * @param clientEndCert the end certificate for remote server to verify the locally
          *     generated signature.
-         * @param clientPrivateKey private key to generate outbound digital signature. Only {@link
-         *     RSAPrivateKey} is supported.
+         * @param clientPrivateKey private key to generate outbound digital signature. The {@link
+         *     PrivateKey} MUST be an instance of {@link RSAKey}.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
@@ -737,8 +737,8 @@ public final class IkeSessionParams {
          *     signature.
          * @param clientIntermediateCerts intermediate certificates for the remote server to
          *     validate the end certificate.
-         * @param clientPrivateKey private key to generate outbound digital signature. Only {@link
-         *     RSAPrivateKey} is supported.
+         * @param clientPrivateKey private key to generate outbound digital signature. The {@link
+         *     PrivateKey} MUST be an instance of {@link RSAKey}.
          * @return Builder this, to facilitate chaining.
          */
         @NonNull
@@ -753,7 +753,7 @@ public final class IkeSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            if (!(clientPrivateKey instanceof RSAPrivateKey)) {
+            if (!(clientPrivateKey instanceof RSAKey)) {
                 throw new IllegalArgumentException("Unsupported private key type");
             }
 
