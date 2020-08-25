@@ -39,7 +39,6 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.times;
@@ -79,6 +78,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
     private StartState mStartState;
     private LinkedHashMap<Integer, EapSimAkaAttribute> mAttributes;
 
+    @Override
     @Before
     public void setUp() {
         super.setUp();
@@ -87,7 +87,7 @@ public class EapSimStartStateTest extends EapSimStateTest {
         try {
             atNonceMt = new AtNonceMt(NONCE_MT);
         } catch (Exception e) {
-            fail("Failed to create AtNonceMt attribute in setUp()");
+            throw new AssertionError("Failed to create AtNonceMt attribute in setUp()", e);
         }
 
         mStartState = mEapSimMethodStateMachine.new StartState(atNonceMt);

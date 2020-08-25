@@ -56,17 +56,17 @@ public final class TunnelModeChildSessionParamsTest {
     private static final int INVALID_ADDR_FAMILY = 5;
 
     private static final Inet4Address IPV4_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.100");
     private static final Inet6Address IPV6_ADDRESS =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::1");
 
     private static final Inet4Address IPV4_DNS_SERVER =
-            (Inet4Address) (InetAddresses.parseNumericAddress("8.8.8.8"));
+            (Inet4Address) InetAddresses.parseNumericAddress("8.8.8.8");
     private static final Inet6Address IPV6_DNS_SERVER =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:4860:4860::8888"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:4860:4860::8888");
 
     private static final Inet4Address IPV4_DHCP_SERVER =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.200");
     private ChildSaProposal mSaProposal;
 
     @Before

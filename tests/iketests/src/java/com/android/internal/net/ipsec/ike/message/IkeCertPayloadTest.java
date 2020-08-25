@@ -26,8 +26,8 @@ import org.junit.Test;
 
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Set;
 
@@ -68,7 +68,7 @@ public final class IkeCertPayloadTest {
 
     @Test
     public void testValidateCertsNoIntermediateCerts() throws Exception {
-        List<X509Certificate> certList = new LinkedList<>();
+        List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertA);
 
         Set<TrustAnchor> trustAnchors = new HashSet<>();
@@ -79,7 +79,7 @@ public final class IkeCertPayloadTest {
 
     @Test
     public void testValidateCertsWithIntermediateCerts() throws Exception {
-        List<X509Certificate> certList = new LinkedList<>();
+        List<X509Certificate> certList = new ArrayList<>();
 
         certList.add(mEndCertB);
         certList.add(mIntermediateCertBTwo);
@@ -93,7 +93,7 @@ public final class IkeCertPayloadTest {
 
     @Test
     public void testValidateCertsWithMultiTrustAnchors() throws Exception {
-        List<X509Certificate> certList = new LinkedList<>();
+        List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertA);
 
         Set<TrustAnchor> trustAnchors = new HashSet<>();
@@ -105,7 +105,7 @@ public final class IkeCertPayloadTest {
 
     @Test
     public void testValidateCertsWithWrongTrustAnchor() throws Exception {
-        List<X509Certificate> certList = new LinkedList<>();
+        List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertA);
 
         Set<TrustAnchor> trustAnchors = new HashSet<>();
@@ -121,7 +121,7 @@ public final class IkeCertPayloadTest {
 
     @Test
     public void testValidateCertsWithMissingIntermediateCerts() throws Exception {
-        List<X509Certificate> certList = new LinkedList<>();
+        List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertB);
         certList.add(mIntermediateCertBOne);
 
@@ -138,7 +138,7 @@ public final class IkeCertPayloadTest {
 
     @Test
     public void testValidateCertsWithSmallSizeKey() throws Exception {
-        List<X509Certificate> certList = new LinkedList<>();
+        List<X509Certificate> certList = new ArrayList<>();
         certList.add(mEndCertSmall);
 
         Set<TrustAnchor> trustAnchors = new HashSet<>();

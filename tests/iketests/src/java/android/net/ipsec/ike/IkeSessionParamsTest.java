@@ -21,8 +21,8 @@ import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAU
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
@@ -76,18 +76,18 @@ public final class IkeSessionParamsTest {
     private static final String REMOTE_HOSTNAME = "server.test.android.net";
 
     private static final Inet4Address LOCAL_IPV4_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress(LOCAL_IPV4_HOST_ADDRESS));
+            (Inet4Address) InetAddresses.parseNumericAddress(LOCAL_IPV4_HOST_ADDRESS);
     private static final Inet4Address REMOTE_IPV4_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress(REMOTE_IPV4_HOST_ADDRESS));
+            (Inet4Address) InetAddresses.parseNumericAddress(REMOTE_IPV4_HOST_ADDRESS);
 
     private static final Inet4Address PCSCF_IPV4_ADDRESS_1 =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.1"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.1");
     private static final Inet4Address PCSCF_IPV4_ADDRESS_2 =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.2"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.2");
     private static final Inet6Address PCSCF_IPV6_ADDRESS_1 =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:DB8::1"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:DB8::1");
     private static final Inet6Address PCSCF_IPV6_ADDRESS_2 =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:DB8::2"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:DB8::2");
 
     private ConnectivityManager mMockConnectManager;
     private Network mMockDefaultNetwork;
