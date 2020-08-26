@@ -16,22 +16,24 @@
 
 package com.android.internal.net.eap.statemachine;
 
+import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_SUCCESS;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.internal.net.eap.EapResult;
-import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapMessage;
-import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
-import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
+import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
+import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.CreatedState;
 import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.HandshakeState;
 
 import org.junit.Test;
@@ -43,31 +45,24 @@ public class EapTtlsCreatedStateTest extends EapTtlsStateTest {
         EapData eapData = new EapData(EAP_TYPE_TTLS, DUMMY_EAP_TYPE_DATA);
         EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
 
-        when(mMockTypeDataDecoder.decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA)))
+        mockTypeDataDecoding(getEapTtlsStartTypeData());
+        when(mMockTlsSessionFactory.newInstance(any(), any())).thenReturn(mMockTlsSession);
+        when(mMockTlsSession.startHandshake())
                 .thenReturn(
-                        new DecodeResult(
-                                EapTtlsTypeData.getEapTtlsTypeData(
-                                        false, true, 0, 0, new byte[0])));
+                        mMockTlsSession
+                        .new TlsResult(EAP_TTLS_DUMMY_DATA_BYTES, TLS_STATUS_SUCCESS));
 
         mStateMachine.process(eapMessage);
+        verify(mMockTypeDataDecoder, times(2)).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
         assertTrue(mStateMachine.getState() instanceof HandshakeState);
-        verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
     }
 
     @Test
     public void testUnexpectedRequest() throws Exception {
-        EapData eapData = new EapData(EAP_TYPE_TTLS, DUMMY_EAP_TYPE_DATA);
-        EapMessage eapMessage = new EapMessage(EAP_CODE_REQUEST, ID_INT, eapData);
+        mockTypeDataDecoding(EapTtlsAcknowledgement.getEapTtlsAcknowledgement());
 
-        when(mMockTypeDataDecoder.decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA)))
-                .thenReturn(
-                        new DecodeResult(
-                                EapTtlsTypeData.getEapTtlsTypeData(
-                                        false, false, 0, 0, new byte[0])));
-
-        EapResult eapResult = mStateMachine.process(eapMessage);
-        EapError eapError = (EapError) eapResult;
-        assertTrue(eapError.cause instanceof EapInvalidRequestException);
+        processMessageAndVerifyEapError(EapInvalidRequestException.class);
         verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
+        assertTrue(mStateMachine.getState() instanceof CreatedState);
     }
 }

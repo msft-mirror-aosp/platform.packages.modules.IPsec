@@ -145,8 +145,12 @@ public class MethodStateTest extends EapStateTest {
     @Test
     public void testProcessTransitionToEapTtls() {
         // make EapStateMachine with EAP TTLS configurations
+        EapSessionConfig innerEapSessionConfig =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
         EapSessionConfig eapSessionConfig =
-                new EapSessionConfig.Builder().setEapTtlsConfig(null).build();
+                new EapSessionConfig.Builder()
+                        .setEapTtlsConfig(null /* trustedCa */, innerEapSessionConfig)
+                        .build();
         mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
 
         mEapStateMachine.process(EAP_REQUEST_TTLS_START);

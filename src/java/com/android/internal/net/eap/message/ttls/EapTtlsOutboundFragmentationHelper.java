@@ -31,6 +31,7 @@ public class EapTtlsOutboundFragmentationHelper {
 
     @VisibleForTesting ByteBuffer mFragmentedData;
 
+    // TODO(b/165668196): Modify outbound fragmentation helper to be per-message in EAP-TTLS
     public EapTtlsOutboundFragmentationHelper() {
         this(DEFAULT_FRAGMENTATION_SIZE);
     }
