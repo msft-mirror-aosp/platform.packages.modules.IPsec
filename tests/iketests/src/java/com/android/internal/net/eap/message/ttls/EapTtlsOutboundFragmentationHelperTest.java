@@ -30,8 +30,6 @@ import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHel
 import org.junit.Before;
 import org.junit.Test;
 
-import java.nio.ByteBuffer;
-
 public class EapTtlsOutboundFragmentationHelperTest {
     private static final int FRAGMENT_SIZE = EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES.length;
 
@@ -58,7 +56,7 @@ public class EapTtlsOutboundFragmentationHelperTest {
     public void testOutboundFragmentation_finalFragment() {
         mFragmentationHelper.setupOutboundFragmentation(
                 EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES);
-        mFragmentationHelper.mFragmentedData.put(EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES);
+        mFragmentationHelper.getNextOutboundFragment();
 
         FragmentationResult result = mFragmentationHelper.getNextOutboundFragment();
 
@@ -80,14 +78,14 @@ public class EapTtlsOutboundFragmentationHelperTest {
 
     @Test(expected = IllegalStateException.class)
     public void testOutboundFragmentation_nullBuffer() {
-        mFragmentationHelper.mFragmentedData = null;
         mFragmentationHelper.getNextOutboundFragment();
     }
 
     @Test(expected = IllegalStateException.class)
     public void testOutboundFragmentation_endOfBuffer() {
-        mFragmentationHelper.mFragmentedData =
-                (ByteBuffer) ByteBuffer.allocate(FRAGMENT_SIZE).position(FRAGMENT_SIZE);
+        mFragmentationHelper.setupOutboundFragmentation(EAP_TTLS_DUMMY_DATA_BYTES);
+        mFragmentationHelper.getNextOutboundFragment();
+
         mFragmentationHelper.getNextOutboundFragment();
     }
 }
