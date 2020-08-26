@@ -20,9 +20,12 @@ import static com.android.internal.net.TestUtils.hexStringToByteArray;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_SUCCESS;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_ACK;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_WITH_LENGTH;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -109,6 +112,60 @@ public class EapTtlsHandshakeStateTest extends EapTtlsStateTest {
         processMessageAndVerifyConnectionClosed(getEapTtlsStartTypeData());
     }
 
+    @Test
+    public void testHandshake_inboundFragmentation_initialFragment() throws Exception {
+        mockTypeDataDecoding(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_ASSEMBLED_FRAGMENTS,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+
+        processMessageAndVerifyEapResponse(EAP_RESPONSE_TTLS_ACK);
+        assertTrue(mInboundFragmentationHelper.isAwaitingFragments());
+        verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
+        assertTrue(mStateMachine.getState() instanceof HandshakeState);
+    }
+
+    @Test
+    public void testHandshake_inboundFragmentation_noLength() throws Exception {
+        processMessageAndVerifyConnectionClosed(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        0 /* messageLength */,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+    }
+
+    @Test
+    public void testHandshake_inboundFragmentation_overflow() throws Exception {
+        mInboundFragmentationHelper.assembleInboundMessage(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_FRAGMENT_ONE,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+
+        processMessageAndVerifyConnectionClosed(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        0 /* messageLength */,
+                        EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES));
+    }
+
+    @Test
+    public void testHandshake_inboundFragmentation_lengthBitSet() throws Exception {
+        mInboundFragmentationHelper.assembleInboundMessage(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_ASSEMBLED_FRAGMENTS,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+
+        processMessageAndVerifyConnectionClosed(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_ASSEMBLED_FRAGMENTS,
+                        EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES));
+    }
+
+    @Test
     public void testHandshake_outboundFragmentation_receivedNonAck() throws Exception {
         mOutboundFragmentationHelper.setupOutboundFragmentation(
                 EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES);

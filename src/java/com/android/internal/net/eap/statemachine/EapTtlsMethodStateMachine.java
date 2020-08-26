@@ -22,6 +22,9 @@ import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
 import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
+import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_ACK;
+import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_ASSEMBLED;
+import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_INVALID;
 
 import android.annotation.Nullable;
 import android.content.Context;
@@ -38,13 +41,16 @@ import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.exceptions.EapSilentException;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsHandshakeException;
+import com.android.internal.net.eap.exceptions.ttls.EapTtlsParsingException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp;
+import com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper;
 import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper;
 import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper.FragmentationResult;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
+import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 
@@ -74,6 +80,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     private final SecureRandom mSecureRandom;
     private final TlsSessionFactory mTlsSessionFactory;
 
+    @VisibleForTesting final EapTtlsInboundFragmentationHelper mInboundFragmentationHelper;
     @VisibleForTesting final EapTtlsOutboundFragmentationHelper mOutboundFragmentationHelper;
     @VisibleForTesting TlsSession mTlsSession;
 
@@ -89,6 +96,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 secureRandom,
                 new EapTtlsTypeDataDecoder(),
                 new TlsSessionFactory(),
+                new EapTtlsInboundFragmentationHelper(),
                 new EapTtlsOutboundFragmentationHelper());
     }
 
@@ -100,6 +108,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             SecureRandom secureRandom,
             EapTtlsTypeDataDecoder typeDataDecoder,
             TlsSessionFactory tlsSessionFactory,
+            EapTtlsInboundFragmentationHelper inboundFragmentationHelper,
             EapTtlsOutboundFragmentationHelper outboundFragmentationHelper) {
         mContext = context;
         mEapSessionConfig = eapSessionConfig;
@@ -107,6 +116,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
         mTypeDataDecoder = typeDataDecoder;
         mSecureRandom = secureRandom;
         mTlsSessionFactory = tlsSessionFactory;
+        mInboundFragmentationHelper = inboundFragmentationHelper;
         mOutboundFragmentationHelper = outboundFragmentationHelper;
 
         transitionTo(new CreatedState());
@@ -187,6 +197,14 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             }
 
             EapTtlsTypeData eapTtlsRequest = decodeResult.eapTypeData;
+
+            // If the remote is in the midst of sending a fragmented message, ack the fragment and
+            // return
+            EapResult inboundFragmentAck =
+                    handleInboundFragmentation(mTAG, eapTtlsRequest, message.eapIdentifier);
+            if (inboundFragmentAck != null) {
+                return inboundFragmentAck;
+            }
 
             if (eapTtlsRequest.isStart) {
                 if (mTlsSession != null) {
@@ -392,6 +410,48 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
         }
 
         return null;
+    }
+
+    /**
+     * Processes incoming data, and if necessary, assembles fragments
+     *
+     * @param tag the tag for the calling class
+     * @param eapTtlsRequest the request received from the server
+     * @param eapIdentifier the eap identifier from the latest message
+     * @return an acknowledgment if the received data is a fragment, null if data is ready to
+     *     process
+     */
+    @Nullable
+    private EapResult handleInboundFragmentation(
+            String tag, EapTtlsTypeData eapTtlsRequest, int eapIdentifier) {
+        int fragmentationStatus =
+                mInboundFragmentationHelper.assembleInboundMessage(eapTtlsRequest);
+
+        switch (fragmentationStatus) {
+            case FRAGMENTATION_STATUS_ASSEMBLED:
+                return null;
+            case FRAGMENTATION_STATUS_ACK:
+                LOG.d(tag, "Packet is fragmented. Generating an acknowledgement response.");
+                return buildEapMessageResponse(
+                        tag, eapIdentifier, EapTtlsAcknowledgement.getEapTtlsAcknowledgement());
+            case FRAGMENTATION_STATUS_INVALID:
+                return transitionToAwaitingClosureState(
+                        tag,
+                        eapIdentifier,
+                        new EapError(
+                                new EapTtlsParsingException(
+                                        "Fragmentation failure: There was an error decoding the"
+                                                + " fragmented request.")));
+            default:
+                return transitionToAwaitingClosureState(
+                        tag,
+                        eapIdentifier,
+                        new EapError(
+                                new IllegalStateException(
+                                        "Received an unknown fragmentation status when assembling"
+                                                + " an inbound fragment: "
+                                                + fragmentationStatus)));
+        }
     }
 
     /**
