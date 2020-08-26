@@ -33,7 +33,6 @@ import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentat
 
 import android.annotation.Nullable;
 import android.content.Context;
-import android.net.eap.EapSessionConfig;
 import android.net.eap.EapSessionConfig.EapTtlsConfig;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -87,7 +86,6 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     private static final int DEFAULT_AVP_VENDOR_ID = 0;
 
     private final Context mContext;
-    private final EapSessionConfig mEapSessionConfig;
     private final EapTtlsConfig mEapTtlsConfig;
     private final EapTtlsTypeDataDecoder mTypeDataDecoder;
     private final SecureRandom mSecureRandom;
@@ -99,12 +97,10 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
 
     public EapTtlsMethodStateMachine(
             Context context,
-            EapSessionConfig eapSessionConfig,
             EapTtlsConfig eapTtlsConfig,
             SecureRandom secureRandom) {
         this(
                 context,
-                eapSessionConfig,
                 eapTtlsConfig,
                 secureRandom,
                 new EapTtlsTypeDataDecoder(),
@@ -116,7 +112,6 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     @VisibleForTesting
     public EapTtlsMethodStateMachine(
             Context context,
-            EapSessionConfig eapSessionConfig,
             EapTtlsConfig eapTtlsConfig,
             SecureRandom secureRandom,
             EapTtlsTypeDataDecoder typeDataDecoder,
@@ -124,7 +119,6 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             EapTtlsInboundFragmentationHelper inboundFragmentationHelper,
             EapTtlsOutboundFragmentationHelper outboundFragmentationHelper) {
         mContext = context;
-        mEapSessionConfig = eapSessionConfig;
         mEapTtlsConfig = eapTtlsConfig;
         mTypeDataDecoder = typeDataDecoder;
         mSecureRandom = secureRandom;
