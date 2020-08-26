@@ -18,6 +18,7 @@ package com.android.internal.net.eap.statemachine;
 
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_HEADER_LENGTH;
@@ -28,6 +29,7 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_MSCHAP_V2;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_NOTIFICATION_PACKET;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_TTLS_START;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NAK_PACKET;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SUCCESS_PACKET;
@@ -36,6 +38,7 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSK;
 
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doReturn;
@@ -137,6 +140,25 @@ public class MethodStateTest extends EapStateTest {
         assertTrue(mEapStateMachine.getState() instanceof MethodState);
         MethodState methodState = (MethodState) mEapStateMachine.getState();
         assertTrue(methodState.mEapMethodStateMachine instanceof EapMsChapV2MethodStateMachine);
+    }
+
+    @Test
+    public void testProcessTransitionToEapTtls() {
+        // make EapStateMachine with EAP TTLS configurations
+        EapSessionConfig innerEapSessionConfig =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
+        EapSessionConfig eapSessionConfig =
+                new EapSessionConfig.Builder()
+                        .setEapTtlsConfig(null /* trustedCa */, innerEapSessionConfig)
+                        .build();
+        mEapStateMachine = new EapStateMachine(mContext, eapSessionConfig, new SecureRandom());
+
+        mEapStateMachine.process(EAP_REQUEST_TTLS_START);
+
+        assertTrue(mEapStateMachine.getState() instanceof MethodState);
+        MethodState methodState = (MethodState) mEapStateMachine.getState();
+        assertTrue(methodState.mEapMethodStateMachine instanceof EapTtlsMethodStateMachine);
+        assertEquals(methodState.mEapMethodStateMachine.getEapMethod(), EAP_TYPE_TTLS);
     }
 
     @Test

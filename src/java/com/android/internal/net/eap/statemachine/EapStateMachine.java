@@ -25,6 +25,7 @@ import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA_PRIME;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_STRING;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
@@ -40,6 +41,7 @@ import android.net.eap.EapSessionConfig.EapAkaPrimeConfig;
 import android.net.eap.EapSessionConfig.EapMethodConfig;
 import android.net.eap.EapSessionConfig.EapMsChapV2Config;
 import android.net.eap.EapSessionConfig.EapSimConfig;
+import android.net.eap.EapSessionConfig.EapTtlsConfig;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapResult;
@@ -339,6 +341,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                 case EAP_TYPE_MSCHAP_V2:
                     EapMsChapV2Config eapMsChapV2Config = (EapMsChapV2Config) eapMethodConfig;
                     return new EapMsChapV2MethodStateMachine(eapMsChapV2Config, mSecureRandom);
+                case EAP_TYPE_TTLS:
+                    EapTtlsConfig eapTtlsConfig = (EapTtlsConfig) eapMethodConfig;
+                    return new EapTtlsMethodStateMachine(
+                            mContext, mEapSessionConfig, eapTtlsConfig, mSecureRandom);
                 default:
                     // received unsupported EAP Type. This should never happen.
                     LOG.e(mTAG, "Received unsupported EAP Type=" + eapType);

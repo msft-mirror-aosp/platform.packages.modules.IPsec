@@ -39,6 +39,10 @@ java_sdk_library {
         "android.net.ipsec.ike.exceptions",
     ],
 
+    hidden_api_packages: [
+        "com.android.internal.net",
+    ],
+
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
@@ -64,6 +68,11 @@ filegroup {
     name: "ike-api-srcs",
     srcs: ["src/java/android/**/*.java"],
     path: "src/java/",
+}
+
+filegroup {
+    name: "ike-aes-xcbc",
+    srcs: ["src/java/**/AesXCbcImpl.java"],
 }
 
 // Provides internal classes needed to build the ike sources.

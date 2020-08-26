@@ -55,17 +55,19 @@ public class EapData {
         EAP_TYPE_SIM,
         EAP_TYPE_AKA,
         EAP_TYPE_MSCHAP_V2,
-        EAP_TYPE_AKA_PRIME
+        EAP_TYPE_AKA_PRIME,
+        EAP_TYPE_TTLS
     })
     public @interface EapType {}
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
-            EAP_TYPE_SIM,
-            EAP_TYPE_AKA,
-            EAP_TYPE_MSCHAP_V2,
-            EAP_TYPE_AKA_PRIME
-    })
+        EAP_TYPE_SIM,
+        EAP_TYPE_AKA,
+        EAP_TYPE_MSCHAP_V2,
+        EAP_TYPE_AKA_PRIME,
+        EAP_TYPE_TTLS
+})
     public @interface EapMethod {}
 
     // EAP Type values defined by IANA
@@ -75,6 +77,7 @@ public class EapData {
     public static final int EAP_NAK = 3;
     // EAP_MD5_CHALLENGE unsupported, allowable based on RFC 3748, Section 5.4
     public static final int EAP_TYPE_SIM = 18;
+    public static final int EAP_TYPE_TTLS = 21;
     public static final int EAP_TYPE_AKA = 23;
     public static final int EAP_TYPE_MSCHAP_V2 = 26;
     public static final int EAP_TYPE_AKA_PRIME = 50;
@@ -88,6 +91,7 @@ public class EapData {
         EAP_TYPE_STRING.put(EAP_TYPE_AKA, "EAP-AKA");
         EAP_TYPE_STRING.put(EAP_TYPE_MSCHAP_V2, "EAP-MSCHAP-V2");
         EAP_TYPE_STRING.put(EAP_TYPE_AKA_PRIME, "EAP-AKA-PRIME");
+        EAP_TYPE_STRING.put(EAP_TYPE_TTLS, "EAP-TTLS");
     }
 
     private static final Set<Integer> SUPPORTED_TYPES = new HashSet<>();
@@ -101,6 +105,7 @@ public class EapData {
         SUPPORTED_TYPES.add(EAP_TYPE_AKA);
         SUPPORTED_TYPES.add(EAP_TYPE_MSCHAP_V2);
         SUPPORTED_TYPES.add(EAP_TYPE_AKA_PRIME);
+        SUPPORTED_TYPES.add(EAP_TYPE_TTLS);
     }
 
     @EapType public final int eapType;

@@ -303,6 +303,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     static final int CMD_ALARM_FIRED = CMD_GENERAL_BASE + 15;
     /** Send keepalive packet */
     static final int CMD_SEND_KEEPALIVE = CMD_GENERAL_BASE + 16;
+    /** Force close the session. This is initiated locally, but will not go into the scheduler */
+    static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 17;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -449,6 +451,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting IkeSaRecord mIkeSaRecordAwaitingRemoteDel;
 
     // States
+    @VisibleForTesting final State mKillIkeSessionParent = new KillIkeSessionParent();
+
     @VisibleForTesting final State mInitial = new Initial();
     @VisibleForTesting final State mIdle = new Idle();
     @VisibleForTesting final State mChildProcedureOngoing = new ChildProcedureOngoing();
@@ -538,23 +542,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         mFirstChildCallbacks = firstChildSessionCallback;
         registerChildSessionCallback(firstChildParams, firstChildSessionCallback, true);
 
-        addState(mInitial);
-        addState(mCreateIkeLocalIkeInit);
-        addState(mCreateIkeLocalIkeAuth);
-        addState(mCreateIkeLocalIkeAuthInEap);
-        addState(mCreateIkeLocalIkeAuthPostEap);
-        addState(mIdle);
-        addState(mChildProcedureOngoing);
-        addState(mReceiving);
-        addState(mRekeyIkeLocalCreate);
-        addState(mSimulRekeyIkeLocalCreate, mRekeyIkeLocalCreate);
-        addState(mSimulRekeyIkeLocalDeleteRemoteDelete);
-        addState(mSimulRekeyIkeLocalDelete, mSimulRekeyIkeLocalDeleteRemoteDelete);
-        addState(mSimulRekeyIkeRemoteDelete, mSimulRekeyIkeLocalDeleteRemoteDelete);
-        addState(mRekeyIkeLocalDelete);
-        addState(mRekeyIkeRemoteDelete);
-        addState(mDeleteIkeLocalDelete);
-        addState(mDpdIkeLocalInfo);
+        // CHECKSTYLE:OFF IndentationCheck
+        addState(mKillIkeSessionParent);
+            addState(mInitial, mKillIkeSessionParent);
+            addState(mCreateIkeLocalIkeInit, mKillIkeSessionParent);
+            addState(mCreateIkeLocalIkeAuth, mKillIkeSessionParent);
+            addState(mCreateIkeLocalIkeAuthInEap, mKillIkeSessionParent);
+            addState(mCreateIkeLocalIkeAuthPostEap, mKillIkeSessionParent);
+            addState(mIdle, mKillIkeSessionParent);
+            addState(mChildProcedureOngoing, mKillIkeSessionParent);
+            addState(mReceiving, mKillIkeSessionParent);
+            addState(mRekeyIkeLocalCreate, mKillIkeSessionParent);
+                addState(mSimulRekeyIkeLocalCreate, mRekeyIkeLocalCreate);
+            addState(mSimulRekeyIkeLocalDeleteRemoteDelete, mKillIkeSessionParent);
+                addState(mSimulRekeyIkeLocalDelete, mSimulRekeyIkeLocalDeleteRemoteDelete);
+                addState(mSimulRekeyIkeRemoteDelete, mSimulRekeyIkeLocalDeleteRemoteDelete);
+            addState(mRekeyIkeLocalDelete, mKillIkeSessionParent);
+            addState(mRekeyIkeRemoteDelete, mKillIkeSessionParent);
+            addState(mDeleteIkeLocalDelete, mKillIkeSessionParent);
+            addState(mDpdIkeLocalInfo, mKillIkeSessionParent);
+        // CHECKSTYLE:ON IndentationCheck
 
         setInitialState(mInitial);
 
@@ -683,15 +690,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Forcibly close IKE Session. */
     public void killSession() {
-        // TODO(b/150327466): Notify remote serve when there is no outstanding request
-
-        closeAllSaRecords(false /*expectSaClosed*/);
-        executeUserCallback(
-                () -> {
-                    mIkeSessionCallback.onClosed();
-                });
-
-        quitNow();
+        sendMessage(CMD_KILL_SESSION);
     }
 
     private void scheduleRetry(LocalRequest localRequest) {
@@ -1012,6 +1011,25 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         quitNow();
     }
 
+    /** Parent state used to delete IKE sessions */
+    class KillIkeSessionParent extends ExceptionHandler {
+        @Override
+        public boolean processStateMessage(Message message) {
+            switch (message.what) {
+                case CMD_KILL_SESSION:
+                    closeAllSaRecords(false /*expectSaClosed*/);
+                    executeUserCallback(
+                            () -> {
+                                mIkeSessionCallback.onClosed();
+                            });
+                    quitNow();
+                    return HANDLED;
+                default:
+                    return NOT_HANDLED;
+            }
+        }
+    }
+
     /** Initial state of IkeSessionStateMachine. */
     class Initial extends ExceptionHandler {
         @Override
@@ -1128,6 +1146,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 case CMD_EXECUTE_LOCAL_REQ:
                     executeLocalRequest((LocalRequest) message.obj, message);
                     return HANDLED;
+
+                case CMD_KILL_SESSION:
+                    // Notify the remote that the IKE Session is being deleted. This notification is
+                    // sent as a best-effort, so don't worry about retransmitting.
+                    sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+
+                    // Let KillIkeSessionParent handle the rest of the cleanup.
+                    return NOT_HANDLED;
 
                 default:
                     // Queue local requests, and trigger next procedure
@@ -1510,6 +1536,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // IkeSessionStateMachine is not currently in a state transition.
             getHandler().dispatchMessage(obtainMessage(request.procedureType, request));
         }
+
+        /** Builds a IKE Delete Request for the given IKE SA. */
+        protected IkeMessage buildIkeDeleteReq(IkeSaRecord ikeSaRecord) {
+            IkeInformationalPayload[] payloads =
+                    new IkeInformationalPayload[] {new IkeDeletePayload()};
+            return buildEncryptedInformationalMessage(
+                    ikeSaRecord,
+                    payloads,
+                    false /* isResp */,
+                    ikeSaRecord.getLocalRequestMessageId());
+        }
     }
 
     /**
@@ -1668,8 +1705,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     if (ikeSaRecord.isRetransmittedRequest(ikePacketBytes)) {
                         logd("Received re-transmitted request. Retransmitting response");
 
-                        for (byte[] packet : ikeSaRecord.getLastSentRespAllPackets()) {
-                            mIkeSocket.sendIkePacket(packet, mRemoteAddress);
+                        if (ikeSaRecord.getLastSentRespAllPackets() != null) {
+                            for (byte[] packet : ikeSaRecord.getLastSentRespAllPackets()) {
+                                mIkeSocket.sendIkePacket(packet, mRemoteAddress);
+                            }
                         }
 
                         // TODO:Support resetting remote rekey delete timer.
@@ -1960,17 +1999,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
      * and the response is received.
      */
     private abstract class DeleteBase extends DeleteResponderBase {
-        /** Builds a IKE Delete Request for the given IKE SA. */
-        protected IkeMessage buildIkeDeleteReq(IkeSaRecord ikeSaRecord) {
-            IkeInformationalPayload[] payloads =
-                    new IkeInformationalPayload[] {new IkeDeletePayload()};
-            return buildEncryptedInformationalMessage(
-                    ikeSaRecord,
-                    payloads,
-                    false /* isResp */,
-                    ikeSaRecord.getLocalRequestMessageId());
-        }
-
         protected void validateIkeDeleteResp(IkeMessage resp, IkeSaRecord expectedSaRecord)
                 throws InvalidSyntaxException {
             if (expectedSaRecord != getIkeSaRecordForPacket(resp.ikeHeader)) {
@@ -2222,6 +2250,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 case CMD_EXECUTE_LOCAL_REQ:
                     executeLocalRequest((ChildLocalRequest) message.obj);
                     return HANDLED;
+                case CMD_KILL_SESSION:
+                    // If mChildInLocalProcedure is null, there are no unfinished locally initiated
+                    // procedures. It is safe to notify the remote that the session is being
+                    // deleted.
+                    if (mChildInLocalProcedure == null) {
+                        // The delete notification is sent as a best-effort, so don't worry about
+                        // retransmitting.
+                        sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
+                    }
+
+                    // Let KillIkeSessionParent handle the rest of the cleanup.
+                    return NOT_HANDLED;
                 default:
                     return super.processStateMessage(message);
             }

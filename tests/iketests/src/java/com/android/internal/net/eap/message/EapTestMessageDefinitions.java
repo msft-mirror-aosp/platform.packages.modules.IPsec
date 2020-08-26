@@ -285,8 +285,14 @@ public class EapTestMessageDefinitions {
     public static final String RECEIVE_KEY = "8B7CDC149B993A1BA118CB153F56DCCB";
     public static final byte[] MSCHAP_V2_RECEIVE_START_KEY = hexStringToByteArray(RECEIVE_KEY);
 
-    // MSK: MSCHAP_V2_SEND_START_KEY + MSCHAP_V2_RECEIVE_START_KEY
-    public static final byte[] MSCHAP_V2_MSK = hexStringToByteArray(SEND_KEY + RECEIVE_KEY);
+    // MSK: MSCHAP_V2_SEND_START_KEY + MSCHAP_V2_RECEIVE_START_KEY, padded to 64B
+    public static final byte[] MSCHAP_V2_MSK =
+            hexStringToByteArray(
+                    SEND_KEY
+                            + RECEIVE_KEY
+                            + "0000000000000000000000000000000000000000000000000000000000000000");
+    public static final int MSCHAP_V2_EMSK_LEN = 64;
+    public static final byte[] MSCHAP_V2_EMSK = new byte[MSCHAP_V2_EMSK_LEN];
 
     public static final String MSCHAP_V2_ID = "42";
     public static final int MSCHAP_V2_ID_INT = Integer.parseInt(MSCHAP_V2_ID, 16 /* radix */);
@@ -326,4 +332,40 @@ public class EapTestMessageDefinitions {
             hexStringToByteArray(
                     "02" + ID + "0008" // EAP-Response | ID | length in bytes
                             + "32020000"); // EAP-AKA' | Authentication Reject | 2B padding
+
+    // EAP-TTLS test vectors
+    public static final String EAP_TTLS_DUMMY_DATA =
+            "17010160301000E050010a516030100a010000a151603010036313233343"
+                    + "5363738393031323334003A31316030100a55a51603320500000100a516030100a50";
+    public static final String EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT =
+            "36313233343536373839303132333435030100a010000a151603010036313"
+                    + "2333435363738393031323334003A31316030100a55a51603320500000100a51603";
+    public static final String EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT =
+            "010000a10E050010320200000000000000000000";
+    public static final String EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT =
+            EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT + EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT;
+
+    public static final byte[] EAP_TTLS_DUMMY_DATA_BYTES =
+            hexStringToByteArray(EAP_TTLS_DUMMY_DATA);
+    public static final byte[] EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES =
+            hexStringToByteArray(EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT);
+    public static final byte[] EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES =
+            hexStringToByteArray(EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT);
+    public static final byte[] EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES =
+            hexStringToByteArray(EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT);
+
+    public static final byte[] EAP_REQUEST_TTLS_START =
+            hexStringToByteArray(
+                    "01" + ID + "0006" // EAP-REQUEST | ID | length in bytes
+                            + "1520"); // EAP-TTLS | flags
+    public static final byte[] EAP_RESPONSE_TTLS_WITH_LENGTH =
+            hexStringToByteArray(
+                    "02" + ID + "004A" // EAP-RESPONSE | ID | length in bytes
+                            + "158000000040" // EAP-TTLS | flags | message length in bytes
+                            + EAP_TTLS_DUMMY_DATA);
+    public static final byte[] EAP_RESPONSE_TTLS_WITHOUT_LENGTH =
+            hexStringToByteArray(
+                    "02" + ID + "0046" // EAP-RESPONSE | ID | length in bytes
+                            + "1500" // EAP-TTLS | flags
+                            + EAP_TTLS_DUMMY_DATA);
 }

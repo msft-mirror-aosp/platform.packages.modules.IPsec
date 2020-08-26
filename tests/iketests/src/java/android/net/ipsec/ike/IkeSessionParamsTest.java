@@ -21,8 +21,8 @@ import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAU
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
@@ -62,7 +62,7 @@ import java.net.Inet6Address;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.DSAPrivateKey;
-import java.security.interfaces.RSAPrivateKey;
+import java.security.interfaces.RSAKey;
 import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionParamsTest {
@@ -97,9 +97,11 @@ public final class IkeSessionParamsTest {
     private IkeIdentification mLocalIdentification;
     private IkeIdentification mRemoteIdentification;
 
+    private interface TestRSAPrivateKey extends PrivateKey, RSAKey {}
+
     private X509Certificate mMockServerCaCert;
     private X509Certificate mMockClientEndCert;
-    private PrivateKey mMockRsaPrivateKey;
+    private TestRSAPrivateKey mMockRsaPrivateKey;
 
     @Before
     public void setUp() throws Exception {
@@ -121,7 +123,7 @@ public final class IkeSessionParamsTest {
 
         mMockServerCaCert = mock(X509Certificate.class);
         mMockClientEndCert = mock(X509Certificate.class);
-        mMockRsaPrivateKey = mock(RSAPrivateKey.class);
+        mMockRsaPrivateKey = mock(TestRSAPrivateKey.class);
     }
 
     private void verifyIkeParamsWithSeverIpAndDefaultValues(IkeSessionParams sessionParams) {
