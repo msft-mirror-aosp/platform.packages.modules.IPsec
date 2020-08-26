@@ -33,8 +33,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 
 public class EapTtlsOutboundFragmentationHelperTest {
-
-    private static final int FRAGMENT_SIZE = 5;
+    private static final int FRAGMENT_SIZE = EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES.length;
 
     private EapTtlsOutboundFragmentationHelper mFragmentationHelper;
 
