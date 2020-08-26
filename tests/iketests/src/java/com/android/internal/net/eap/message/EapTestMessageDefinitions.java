@@ -368,4 +368,18 @@ public class EapTestMessageDefinitions {
                     "02" + ID + "0046" // EAP-RESPONSE | ID | length in bytes
                             + "1500" // EAP-TTLS | flags
                             + EAP_TTLS_DUMMY_DATA);
+    public static final byte[] EAP_RESPONSE_TTLS_INITIAL_FRAGMENT =
+            hexStringToByteArray(
+                    "02" + ID + "004A" // EAP-RESPONSE | ID | length in bytes
+                            + "15C000000054" // EAP-TTLS | flags | message length in bytes
+                            + EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT);
+    public static final byte[] EAP_RESPONSE_TTLS_FINAL_FRAGMENT =
+            hexStringToByteArray(
+                    "02" + ID + "001A" // EAP-RESPONSE | ID | length in bytes
+                            + "1500" // EAP-TTLS | flags
+                            + EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT);
+    public static final byte[] EAP_RESPONSE_TTLS_ACK =
+            hexStringToByteArray(
+                    "02" + ID + "0006" // EAP-RESPONSE | ID | length in bytes
+                            + "1500"); // EAP-TTLS | flags
 }
