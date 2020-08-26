@@ -212,7 +212,6 @@ public class EapTtlsAvp {
 
     /** EapTtlsAvpDecoder will be used for decoding {@link EapTtlsAvp} objects. */
     public static class EapTtlsAvpDecoder {
-
         /**
          * Decodes and returns an EapTtlsAvp for the specified EAP-TTLS AVP.
          *

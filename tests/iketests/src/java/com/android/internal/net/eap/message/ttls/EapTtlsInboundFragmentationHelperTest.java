@@ -38,9 +38,9 @@ import java.nio.ByteBuffer;
 
 public class EapTtlsInboundFragmentationHelperTest {
 
-    static final int BUFFER_SIZE_INVALID = 3;
-    static final int BUFFER_SIZE_FRAGMENT_ONE = 5;
-    static final int BUFFER_SIZE_FRAGMENT_TWO = 4;
+    static final int BUFFER_SIZE_INVALID = EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES.length / 2;
+    static final int BUFFER_SIZE_FRAGMENT_ONE = EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES.length;
+    static final int BUFFER_SIZE_FRAGMENT_TWO = EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES.length;
     static final int BUFFER_SIZE_ASSEMBLED_FRAGMENTS =
             BUFFER_SIZE_FRAGMENT_ONE + BUFFER_SIZE_FRAGMENT_TWO;
 
