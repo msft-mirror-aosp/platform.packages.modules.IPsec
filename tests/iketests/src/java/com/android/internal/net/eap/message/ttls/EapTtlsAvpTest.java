@@ -35,7 +35,6 @@ import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 
 public class EapTtlsAvpTest {
-
     private static final int EAP_MESSAGE_AVP_CODE = 79;
     private static final int SAMPLE_VENDOR_ID = 100;
     private static final int DEFAULT_VENDOR_ID = 0;
@@ -132,7 +131,7 @@ public class EapTtlsAvpTest {
     // significant bit is set
     private static final byte[] AVP_LENGTH_BYTE_ARRAY = hexStringToByteArray("FFEEED");
     private static final ByteBuffer AVP_LENGTH_BUFFER = ByteBuffer.wrap(AVP_LENGTH_BYTE_ARRAY);
-    private static final int AVP_LENGTH_BUFFER_DECIMAL = 0xFFEEED;
+    private static final int AVP_LENGTH_BUFFER_HEX = 0xFFEEED;
 
     private final EapTtlsAvpDecoder mAvpDecoder = new EapTtlsAvpDecoder();
 
@@ -291,13 +290,13 @@ public class EapTtlsAvpTest {
 
     @Test
     public void testGetAvpLengthFromBuffer_success() throws Exception {
-        assertEquals(AVP_LENGTH_BUFFER_DECIMAL, EapTtlsAvp.getAvpLength(AVP_LENGTH_BUFFER));
+        assertEquals(AVP_LENGTH_BUFFER_HEX, EapTtlsAvp.getAvpLength(AVP_LENGTH_BUFFER));
     }
 
     @Test
     public void testEncodeAvpLength_success() throws Exception {
         ByteBuffer buffer = ByteBuffer.allocate(AVP_LENGTH_WITH_VENDOR_ID_PADDING_REQUIRED);
-        EapTtlsAvp.encodeAvpLength(buffer, AVP_LENGTH_BUFFER_DECIMAL);
+        EapTtlsAvp.encodeAvpLength(buffer, AVP_LENGTH_BUFFER_HEX);
 
         assertArrayEquals(AVP_LENGTH_BYTE_ARRAY, TlsSession.getByteArrayFromBuffer(buffer));
     }
