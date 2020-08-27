@@ -343,8 +343,7 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
                     return new EapMsChapV2MethodStateMachine(eapMsChapV2Config, mSecureRandom);
                 case EAP_TYPE_TTLS:
                     EapTtlsConfig eapTtlsConfig = (EapTtlsConfig) eapMethodConfig;
-                    return new EapTtlsMethodStateMachine(
-                            mContext, mEapSessionConfig, eapTtlsConfig, mSecureRandom);
+                    return new EapTtlsMethodStateMachine(mContext, eapTtlsConfig, mSecureRandom);
                 default:
                     // received unsupported EAP Type. This should never happen.
                     LOG.e(mTAG, "Received unsupported EAP Type=" + eapType);
