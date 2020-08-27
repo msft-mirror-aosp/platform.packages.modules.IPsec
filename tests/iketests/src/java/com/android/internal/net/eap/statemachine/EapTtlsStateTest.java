@@ -25,6 +25,8 @@ import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_NOTIFICATION_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_PASSWORD;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_USERNAME;
@@ -51,6 +53,7 @@ import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapMessage;
+import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
@@ -68,6 +71,11 @@ public class EapTtlsStateTest {
     static final byte[] DUMMY_EAP_TYPE_DATA = hexStringToByteArray("112233445566");
     static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
+    static final int BUFFER_SIZE_FRAGMENT_ONE = EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES.length;
+    static final int BUFFER_SIZE_FRAGMENT_TWO = EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES.length;
+    static final int BUFFER_SIZE_ASSEMBLED_FRAGMENTS =
+            BUFFER_SIZE_FRAGMENT_ONE + BUFFER_SIZE_FRAGMENT_TWO;
+
     Context mContext;
     SecureRandom mMockSecureRandom;
     EapTtlsTypeDataDecoder mMockTypeDataDecoder;
@@ -76,6 +84,7 @@ public class EapTtlsStateTest {
 
     EapTtlsConfig mEapTtlsConfig;
     EapTtlsMethodStateMachine mStateMachine;
+    EapTtlsOutboundFragmentationHelper mOutboundFragmentationHelper;
 
     @Before
     public void setUp() throws Exception {
@@ -95,6 +104,9 @@ public class EapTtlsStateTest {
                         .build();
         mEapTtlsConfig = eapSessionConfig.getEapTtlsConfig();
 
+        mOutboundFragmentationHelper =
+                new EapTtlsOutboundFragmentationHelper(BUFFER_SIZE_FRAGMENT_ONE);
+
         mStateMachine =
                 new EapTtlsMethodStateMachine(
                         mContext,
@@ -102,7 +114,8 @@ public class EapTtlsStateTest {
                         mEapTtlsConfig,
                         mMockSecureRandom,
                         mMockTypeDataDecoder,
-                        mMockTlsSessionFactory);
+                        mMockTlsSessionFactory,
+                        mOutboundFragmentationHelper);
         when(mMockTlsSessionFactory.newInstance(any(), any())).thenReturn(mMockTlsSession);
     }
 
