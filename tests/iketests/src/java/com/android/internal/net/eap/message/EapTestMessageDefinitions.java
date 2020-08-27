@@ -334,10 +334,16 @@ public class EapTestMessageDefinitions {
                             + "32020000"); // EAP-AKA' | Authentication Reject | 2B padding
 
     // EAP-TTLS test vectors
-    public static final String EAP_TTLS_DUMMY_DATA = "1701000006";
-    public static final String EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT = "16030100a5010000a1";
-    public static final String EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT = "16030100a5";
-    public static final String EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT = "010000a1";
+    public static final String EAP_TTLS_DUMMY_DATA =
+            "17010160301000E050010a516030100a010000a151603010036313233343"
+                    + "5363738393031323334003A31316030100a55a51603320500000100a516030100a50";
+    public static final String EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT =
+            "36313233343536373839303132333435030100a010000a151603010036313"
+                    + "2333435363738393031323334003A31316030100a55a51603320500000100a51603";
+    public static final String EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT =
+            "010000a10E050010320200000000000000000000";
+    public static final String EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT =
+            EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT + EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT;
 
     public static final byte[] EAP_TTLS_DUMMY_DATA_BYTES =
             hexStringToByteArray(EAP_TTLS_DUMMY_DATA);
@@ -351,5 +357,15 @@ public class EapTestMessageDefinitions {
     public static final byte[] EAP_REQUEST_TTLS_START =
             hexStringToByteArray(
                     "01" + ID + "0006" // EAP-REQUEST | ID | length in bytes
-                            + "1520"); // EAP-TTLS | Flags
+                            + "1520"); // EAP-TTLS | flags
+    public static final byte[] EAP_RESPONSE_TTLS_WITH_LENGTH =
+            hexStringToByteArray(
+                    "02" + ID + "004A" // EAP-RESPONSE | ID | length in bytes
+                            + "158000000040" // EAP-TTLS | flags | message length in bytes
+                            + EAP_TTLS_DUMMY_DATA);
+    public static final byte[] EAP_RESPONSE_TTLS_WITHOUT_LENGTH =
+            hexStringToByteArray(
+                    "02" + ID + "0046" // EAP-RESPONSE | ID | length in bytes
+                            + "1500" // EAP-TTLS | flags
+                            + EAP_TTLS_DUMMY_DATA);
 }
