@@ -317,7 +317,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             try {
                 mTlsSession =
                         mTlsSessionFactory.newInstance(
-                                mEapTtlsConfig.getTrustedCa(), mSecureRandom);
+                                mEapTtlsConfig.getServerCaCert(), mSecureRandom);
             } catch (GeneralSecurityException | IOException e) {
                 return new EapError(
                         new EapTtlsHandshakeException(
