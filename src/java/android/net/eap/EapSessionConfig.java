@@ -30,6 +30,7 @@ import android.telephony.Annotation.UiccAppType;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 
+import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.HashMap;
@@ -209,21 +210,22 @@ public final class EapSessionConfig {
         /**
          * Sets the configuration for EAP-TTLS
          *
-         * <p>If a null trustedCa is provided, the system-default CA's will be used instead
-         *
          * <p>The inner EAP session config MUST NOT have an EapTtlsConfig. Only the outer session
          * config can contain EAP-TTLS.
          *
-         * @param trustedCa specifies a specific CA to trust
+         * @param serverCaCert the CA certificate for validating the received server certificate(s).
+         *     If a certificate is provided, it MUST be the root CA used by the server, or
+         *     authentication will fail. If no certificate is provided, any root CA in the system's
+         *     truststore is considered acceptable.
          * @param innerEapSessionConfig represents the configuration for the inner EAP instance
          * @return Builder this, to facilitate chaining
          * @hide
          */
         @NonNull
         public Builder setEapTtlsConfig(
-                @Nullable X509Certificate trustedCa,
+                @Nullable X509Certificate serverCaCert,
                 @NonNull EapSessionConfig innerEapSessionConfig) {
-            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(trustedCa, innerEapSessionConfig));
+            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(serverCaCert, innerEapSessionConfig));
             return this;
         }
 
@@ -444,7 +446,7 @@ public final class EapSessionConfig {
     public static class EapTtlsConfig extends EapMethodConfig {
 
         /** @hide */
-        @Nullable public final X509Certificate trustedCa;
+        @Nullable public final TrustAnchor overrideTrustAnchor;
 
         /** @hide */
         @NonNull public final EapSessionConfig innerEapSessionConfig;
@@ -452,12 +454,9 @@ public final class EapSessionConfig {
         /** @hide */
         @VisibleForTesting
         public EapTtlsConfig(
-                @Nullable X509Certificate trustedCa,
+                @Nullable X509Certificate serverCaCert,
                 @NonNull EapSessionConfig innerEapSessionConfig) {
             super(EAP_TYPE_TTLS);
-            // TODO(b/163572466): Translate root certificate to TrustAnchor in TTLS session config
-            this.trustedCa = trustedCa;
-
             Objects.requireNonNull(
                     innerEapSessionConfig,
                     "EAP-TTLS config must contain an inner EAP session config for tunnelled"
@@ -466,6 +465,10 @@ public final class EapSessionConfig {
                 throw new IllegalArgumentException("Recursive EAP-TTLS method configs not allowed");
             }
 
+            overrideTrustAnchor =
+                    (serverCaCert == null)
+                            ? null
+                            : new TrustAnchor(serverCaCert, null /* nameConstraints */);
             this.innerEapSessionConfig = innerEapSessionConfig;
         }
 
@@ -476,14 +479,15 @@ public final class EapSessionConfig {
         }
 
         /**
-         * Retrieves the root certificate
+         * Retrieves the provided CA certificate for validating the remote certificate(s)
          *
-         * @return an X509Certificate representing the root certificate
+         * @return the CA certificate for validating the received server certificate or null if the
+         *     system default is preferred
          * @hide
          */
         @Nullable
-        public X509Certificate getTrustedCa() {
-            return trustedCa;
+        public X509Certificate getServerCaCert() {
+            return (overrideTrustAnchor == null) ? null : overrideTrustAnchor.getTrustedCert();
         }
 
         /**

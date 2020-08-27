@@ -98,10 +98,10 @@ public class TlsSession {
     private TrustManager[] mTrustManagers;
 
     // Package-private
-    TlsSession(X509Certificate trustedCa, SecureRandom secureRandom)
+    TlsSession(X509Certificate serverCaCert, SecureRandom secureRandom)
             throws GeneralSecurityException, IOException {
         mSecureRandom = secureRandom;
-        initTrustManagers(trustedCa);
+        initTrustManagers(serverCaCert);
         mSslContext = SSLContext.getInstance("TLSv1.2");
         mSslContext.init(null, mTrustManagers, secureRandom);
         mSslEngine = mSslContext.createSSLEngine();
@@ -125,21 +125,24 @@ public class TlsSession {
     /**
      * Creates the trust manager instance needed to instantiate the SSLContext
      *
-     * @param trustedCa a specific CA to trust or null if the system-default is preferred
+     * @param serverCaCert the CA certificate for validating the received server certificate(s). If
+     *     no certificate is provided, any root CA in the system's truststore is considered
+     *     acceptable.
      * @throws GeneralSecurityException if the trust manager cannot be initialized
      * @throws IOException if there is an I/O issue with keystore data
      */
-    private void initTrustManagers(X509Certificate trustedCa)
+    private void initTrustManagers(X509Certificate serverCaCert)
             throws GeneralSecurityException, IOException {
         // TODO(b/160798904): Pass TrustManager through EAP authenticator in EAP-TTLS
 
         KeyStore keyStore = null;
 
-        if (trustedCa != null) {
+        if (serverCaCert != null) {
             keyStore = KeyStore.getInstance(KEY_STORE_TYPE_PKCS12);
             keyStore.load(null);
-            String alias = trustedCa.getSubjectX500Principal().getName() + trustedCa.hashCode();
-            keyStore.setCertificateEntry(alias, trustedCa);
+            String alias =
+                    serverCaCert.getSubjectX500Principal().getName() + serverCaCert.hashCode();
+            keyStore.setCertificateEntry(alias, serverCaCert);
         }
 
         TrustManagerFactory tmFactory =
