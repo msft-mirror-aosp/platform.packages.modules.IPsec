@@ -119,7 +119,6 @@ public class EapTtlsStateTest {
         mStateMachine =
                 new EapTtlsMethodStateMachine(
                         mContext,
-                        eapSessionConfig,
                         mEapTtlsConfig,
                         mMockSecureRandom,
                         mMockTypeDataDecoder,
