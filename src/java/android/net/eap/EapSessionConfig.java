@@ -34,6 +34,7 @@ import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * EapSessionConfig represents a container for EAP method configuration.
@@ -210,13 +211,19 @@ public final class EapSessionConfig {
          *
          * <p>If a null trustedCa is provided, the system-default CA's will be used instead
          *
+         * <p>The inner EAP session config MUST NOT have an EapTtlsConfig. Only the outer session
+         * config can contain EAP-TTLS.
+         *
          * @param trustedCa specifies a specific CA to trust
+         * @param innerEapSessionConfig represents the configuration for the inner EAP instance
          * @return Builder this, to facilitate chaining
          * @hide
          */
         @NonNull
-        public Builder setEapTtlsConfig(@Nullable X509Certificate trustedCa) {
-            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(trustedCa));
+        public Builder setEapTtlsConfig(
+                @Nullable X509Certificate trustedCa,
+                @NonNull EapSessionConfig innerEapSessionConfig) {
+            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(trustedCa, innerEapSessionConfig));
             return this;
         }
 
@@ -440,11 +447,26 @@ public final class EapSessionConfig {
         @Nullable public final X509Certificate trustedCa;
 
         /** @hide */
+        @NonNull public final EapSessionConfig innerEapSessionConfig;
+
+        /** @hide */
         @VisibleForTesting
-        public EapTtlsConfig(@Nullable X509Certificate trustedCa) {
+        public EapTtlsConfig(
+                @Nullable X509Certificate trustedCa,
+                @NonNull EapSessionConfig innerEapSessionConfig) {
             super(EAP_TYPE_TTLS);
             // TODO(b/163572466): Translate root certificate to TrustAnchor in TTLS session config
             this.trustedCa = trustedCa;
+
+            Objects.requireNonNull(
+                    innerEapSessionConfig,
+                    "EAP-TTLS config must contain an inner EAP session config for tunnelled"
+                            + " authentication");
+            if (innerEapSessionConfig.eapConfigs.containsKey(EAP_TYPE_TTLS)) {
+                throw new IllegalArgumentException("Recursive EAP-TTLS method configs not allowed");
+            }
+
+            this.innerEapSessionConfig = innerEapSessionConfig;
         }
 
         /** @hide */
@@ -462,6 +484,17 @@ public final class EapSessionConfig {
         @Nullable
         public X509Certificate getTrustedCa() {
             return trustedCa;
+        }
+
+        /**
+         * Retrieves the inner EAP session config
+         *
+         * @return an EapSessionConfig representing the config for tunnelled EAP authentication
+         * @hide
+         */
+        @NonNull
+        public EapSessionConfig getInnerEapSessionConfig() {
+            return innerEapSessionConfig;
         }
     }
 
