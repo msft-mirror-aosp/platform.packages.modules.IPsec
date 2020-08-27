@@ -27,14 +27,15 @@ public class TlsSessionFactory {
     /**
      * Retrieves a new instance of TlsSession
      *
-     * @param trustedCa a specific CA to trust or null if the system-default is preferred
-     * @param secureRandom the secure random to use
+     * @param serverCaCert the CA certificate for validating the received server certificate(s).If
+     *     no certificate is provided, any root CA in the system's truststore is considered
+     *     acceptable. * @param secureRandom the secure random to use
      * @return a {@link TlsSession}
      * @throws GeneralSecurityException if the TLS session cannot be intiailized
      * @throws IOException if there is an I/O issue with keystore data
      */
-    public TlsSession newInstance(X509Certificate trustedCa, SecureRandom secureRandom)
+    public TlsSession newInstance(X509Certificate serverCaCert, SecureRandom secureRandom)
             throws GeneralSecurityException, IOException {
-        return new TlsSession(trustedCa, secureRandom);
+        return new TlsSession(serverCaCert, secureRandom);
     }
 }
