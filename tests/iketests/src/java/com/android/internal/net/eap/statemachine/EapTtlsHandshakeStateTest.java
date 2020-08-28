@@ -44,7 +44,7 @@ import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
 import com.android.internal.net.eap.statemachine.EapMethodStateMachine.EapMethodState;
 import com.android.internal.net.eap.statemachine.EapMethodStateMachine.FinalState;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.AwaitingClosureState;
+import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.ErroredAndAwaitingClosureState;
 import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.HandshakeState;
 import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.TunnelState;
 
@@ -160,7 +160,7 @@ public class EapTtlsHandshakeStateTest extends EapTtlsStateTest {
                 TLS_STATUS_CLOSED,
                 EAP_TTLS_DUMMY_DATA_BYTES,
                 EAP_RESPONSE_TTLS_WITH_LENGTH,
-                AwaitingClosureState.class);
+                ErroredAndAwaitingClosureState.class);
     }
 
     @Test
