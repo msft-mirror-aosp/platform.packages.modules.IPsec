@@ -116,7 +116,7 @@ public class TlsSession {
     }
 
     @VisibleForTesting
-    TlsSession(
+    public TlsSession(
             SSLContext sslContext,
             SSLEngine sslEngine,
             SSLSession sslSession,
