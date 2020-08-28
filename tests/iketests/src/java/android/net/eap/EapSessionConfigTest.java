@@ -124,8 +124,8 @@ public class EapSessionConfigTest {
         assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
         EapTtlsConfig config = (EapTtlsConfig) result.eapConfigs.get(EAP_TYPE_TTLS);
         assertEquals(EAP_TYPE_TTLS, config.methodType);
-        assertEquals(trustedCa, config.trustedCa);
         assertEquals(innerConfig, config.innerEapSessionConfig);
+        assertEquals(trustedCa, config.getServerCaCert());
     }
 
     @Test(expected = IllegalArgumentException.class)
