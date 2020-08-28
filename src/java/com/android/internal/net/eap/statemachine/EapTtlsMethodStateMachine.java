@@ -19,10 +19,19 @@ package com.android.internal.net.eap.statemachine;
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
+import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_SUCCESS;
+import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_TUNNEL_ESTABLISHED;
 import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
+import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
+import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
+import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_ACK;
+import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_ASSEMBLED;
+import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_INVALID;
 
+import android.annotation.Nullable;
 import android.content.Context;
 import android.net.eap.EapSessionConfig;
 import android.net.eap.EapSessionConfig.EapTtlsConfig;
@@ -30,6 +39,7 @@ import android.net.eap.EapSessionConfig.EapTtlsConfig;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
+import com.android.internal.net.eap.EapResult.EapFailure;
 import com.android.internal.net.eap.EapResult.EapResponse;
 import com.android.internal.net.eap.crypto.TlsSession;
 import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
@@ -37,11 +47,16 @@ import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.exceptions.EapSilentException;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsHandshakeException;
+import com.android.internal.net.eap.exceptions.ttls.EapTtlsParsingException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp;
+import com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper;
+import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper;
+import com.android.internal.net.eap.message.ttls.EapTtlsOutboundFragmentationHelper.FragmentationResult;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
+import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 
@@ -71,6 +86,8 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     private final SecureRandom mSecureRandom;
     private final TlsSessionFactory mTlsSessionFactory;
 
+    @VisibleForTesting final EapTtlsInboundFragmentationHelper mInboundFragmentationHelper;
+    @VisibleForTesting final EapTtlsOutboundFragmentationHelper mOutboundFragmentationHelper;
     @VisibleForTesting TlsSession mTlsSession;
 
     public EapTtlsMethodStateMachine(
@@ -84,7 +101,9 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 eapTtlsConfig,
                 secureRandom,
                 new EapTtlsTypeDataDecoder(),
-                new TlsSessionFactory());
+                new TlsSessionFactory(),
+                new EapTtlsInboundFragmentationHelper(),
+                new EapTtlsOutboundFragmentationHelper());
     }
 
     @VisibleForTesting
@@ -94,13 +113,17 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             EapTtlsConfig eapTtlsConfig,
             SecureRandom secureRandom,
             EapTtlsTypeDataDecoder typeDataDecoder,
-            TlsSessionFactory tlsSessionFactory) {
+            TlsSessionFactory tlsSessionFactory,
+            EapTtlsInboundFragmentationHelper inboundFragmentationHelper,
+            EapTtlsOutboundFragmentationHelper outboundFragmentationHelper) {
         mContext = context;
         mEapSessionConfig = eapSessionConfig;
         mEapTtlsConfig = eapTtlsConfig;
         mTypeDataDecoder = typeDataDecoder;
         mSecureRandom = secureRandom;
         mTlsSessionFactory = tlsSessionFactory;
+        mInboundFragmentationHelper = inboundFragmentationHelper;
+        mOutboundFragmentationHelper = outboundFragmentationHelper;
 
         transitionTo(new CreatedState());
     }
@@ -156,11 +179,29 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
      * version of EAP-TTLS at the time of writing. The initiation of the handshake (RFC5281#7.1) is
      * the first response sent by the client.
      */
-    protected class HandshakeState extends EapMethodState {
+    protected class HandshakeState extends CloseableTtlsMethodState {
         private final String mTAG = this.getClass().getSimpleName();
 
         private static final int DEFAULT_VENDOR_ID = 0;
 
+        /**
+         * Processes a message for the handshake state
+         *
+         * <ol>
+         *   <li>Checks for EAP-success, EAP-failure, or EAP notification, returns early if one
+         *       needs to be handled
+         *   <li>Decodes type data, closes the connection if decoding fails
+         *   <li>If outbound data is being fragmented, returns early with the next fragment to be
+         *       sent
+         *   <li>If inbound data is being reassembled, returns early with an ack etc. If nothing has
+         *       returned yet, generates an EAP response for the incoming message
+         *   <li>If this is a start request, and the first message in the handshake state, starts
+         *       the handshake and returns an EAP-Response. Otherwise, processes the incoming
+         *       message in TlsSession, and then sends an EAP-Response.
+         *   <li>If the handshake is complete, sends a tunnelled EAP-Response/Identity and
+         *       transitions to the tunnel state.
+         * </ol>
+         */
         @Override
         public EapResult process(EapMessage message) {
             EapResult eapResult = handleEapSuccessFailureNotification(mTAG, message);
@@ -181,6 +222,14 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
 
             EapTtlsTypeData eapTtlsRequest = decodeResult.eapTypeData;
 
+            // If the remote is in the midst of sending a fragmented message, ack the fragment and
+            // return
+            EapResult inboundFragmentAck =
+                    handleInboundFragmentation(mTAG, eapTtlsRequest, message.eapIdentifier);
+            if (inboundFragmentAck != null) {
+                return inboundFragmentAck;
+            }
+
             if (eapTtlsRequest.isStart) {
                 if (mTlsSession != null) {
                     return transitionToAwaitingClosureState(
@@ -195,8 +244,59 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 return startHandshake(message.eapIdentifier);
             }
 
-            // TODO(b/159929700): Implement handshake (phase 1) of EAP-TTLS
-            return null;
+            EapResult nextOutboundFragment =
+                    getNextOutboundFragment(mTAG, eapTtlsRequest, message.eapIdentifier);
+            if (nextOutboundFragment != null) {
+                // Skip further processing, send remaining outbound fragments
+                return nextOutboundFragment;
+            }
+
+            TlsResult tlsResult;
+
+            try {
+                tlsResult =
+                        mTlsSession.processHandshakeData(
+                                mInboundFragmentationHelper.getAssembledInboundFragment(),
+                                buildEapIdentityResponseAvp(message.eapIdentifier));
+            } catch (EapSilentException e) {
+                LOG.e(mTAG, "Error building an identity response.", e);
+                return transitionToAwaitingClosureState(
+                        mTAG, message.eapIdentifier, new EapError(e));
+            }
+
+            switch (tlsResult.status) {
+                case TLS_STATUS_TUNNEL_ESTABLISHED:
+                    LOG.d(mTAG, "Tunnel established. Generating a response.");
+                    transitionTo(new TunnelState());
+                    // fallthrough
+                case TLS_STATUS_SUCCESS:
+                    return buildEapMessageResponse(mTAG, message.eapIdentifier, tlsResult.data);
+                case TLS_STATUS_CLOSED:
+                    EapError eapError =
+                            new EapError(
+                                    new EapTtlsHandshakeException(
+                                            "Handshake failed to complete and the"
+                                                    + " connection was closed."));
+                    transitionTo(new AwaitingClosureState(eapError));
+                    return buildEapMessageResponse(mTAG, message.eapIdentifier, tlsResult.data);
+                case TLS_STATUS_FAILURE:
+                    // Handshake failed and attempts to successfully close the tunnel also failed.
+                    // Processing more messages is not possible due to the state of TlsSession so
+                    // transition to FinalState.
+                    transitionTo(new FinalState());
+                    return new EapError(
+                            new EapTtlsHandshakeException(
+                                    "Handshake failed to complete and may not have been closed"
+                                            + " properly."));
+                default:
+                    return transitionToAwaitingClosureState(
+                            mTAG,
+                            message.eapIdentifier,
+                            new EapError(
+                                    new IllegalStateException(
+                                            "Received an unknown TLS result with code "
+                                                    + tlsResult.status)));
+            }
         }
 
         /**
@@ -219,19 +319,14 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
 
             TlsResult tlsResult = mTlsSession.startHandshake();
             if (tlsResult.status == TLS_STATUS_FAILURE) {
+                // Handshake failed and attempts to successfully close the tunnel also failed.
+                // Processing more messages is not possible due to the state of TlsSession so
+                // transition to FinalState.
+                transitionTo(new FinalState());
                 return new EapError(new EapTtlsHandshakeException("Failed to start handshake."));
             }
 
-            // TODO(b/163053272): Implement fragmentation support in EAP-TTLS
-            return buildEapMessageResponse(
-                    mTAG,
-                    eapIdentifier,
-                    EapTtlsTypeData.getEapTtlsTypeData(
-                            false /* isFragmented */,
-                            false /* isStart */,
-                            0 /* version */,
-                            tlsResult.data.length,
-                            tlsResult.data));
+            return buildEapMessageResponse(mTAG, eapIdentifier, tlsResult.data);
         }
 
         /**
@@ -250,6 +345,37 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                             EAP_IDENTITY, mEapTtlsConfig.getInnerEapSessionConfig().eapIdentity);
             EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, eapData);
             return EapTtlsAvp.getEapMessageAvp(DEFAULT_VENDOR_ID, eapMessage.encode()).encode();
+        }
+
+        /**
+         * Handles premature EAP-Success and EAP-Failure messages in the handshake state.
+         *
+         * <p>In the case of an EAP-Success or EAP-Failure, the TLS session will be closed but an
+         * EapError or EAP-Failure will be returned. For an invalid type error, the TLS session will
+         * be closed and the state will transition to AwaitingClosure.
+         *
+         * @param message the EapMessage to be checked for early Success/Failure/Notification
+         *     messages
+         * @return the EapResult generated from handling the give EapMessage, or null if the message
+         *     Type matches that of the current EAP method
+         */
+        @Nullable
+        @Override
+        public EapResult handleEapSuccessFailure(String tag, EapMessage message) {
+            if (message.eapCode == EAP_CODE_SUCCESS) {
+                // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
+                // so receiving a premature SUCCESS message is an unrecoverable error.
+                mTlsSession.closeConnection();
+                return new EapError(
+                        new EapInvalidRequestException(
+                                "Received an EAP-Success in the handshake state"));
+            } else if (message.eapCode == EAP_CODE_FAILURE) {
+                mTlsSession.closeConnection();
+                transitionTo(new FinalState());
+                return new EapFailure();
+            }
+
+            return null;
         }
     }
 
@@ -343,6 +469,122 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     }
 
     /**
+     * Verifies whether outbound fragmentation is in progress and constructs the next fragment if
+     * necessary
+     *
+     * @param tag the tag for the calling class
+     * @param eapTtlsRequest the request received from the server
+     * @param eapIdentifier the eap identifier from the latest message
+     * @return an eap response if the next fragment exists, or null if no fragmentation is in
+     *     progress
+     */
+    @Nullable
+    private EapResult getNextOutboundFragment(
+            String tag, EapTtlsTypeData eapTtlsRequest, int eapIdentifier) {
+        if (eapTtlsRequest.isAcknowledgmentPacket()) {
+            if (mOutboundFragmentationHelper.hasRemainingFragments()) {
+                FragmentationResult result = mOutboundFragmentationHelper.getNextOutboundFragment();
+                return buildEapMessageResponse(
+                        tag,
+                        eapIdentifier,
+                        EapTtlsTypeData.getEapTtlsTypeData(
+                                result.hasRemainingFragments,
+                                false /* start */,
+                                0 /* version 0 */,
+                                0 /* messageLength */,
+                                result.fragmentedData));
+            } else {
+                return transitionToAwaitingClosureState(
+                        tag,
+                        eapIdentifier,
+                        new EapError(
+                                new EapInvalidRequestException(
+                                        "Received an ack but no packet was in the process of"
+                                                + " being fragmented.")));
+            }
+        } else if (mOutboundFragmentationHelper.hasRemainingFragments()) {
+            return transitionToAwaitingClosureState(
+                    tag,
+                    eapIdentifier,
+                    new EapError(
+                            new EapInvalidRequestException(
+                                    "Received a standard EAP-Request but was expecting an ack to a"
+                                            + " fragment.")));
+        }
+
+        return null;
+    }
+
+    /**
+     * Processes incoming data, and if necessary, assembles fragments
+     *
+     * @param tag the tag for the calling class
+     * @param eapTtlsRequest the request received from the server
+     * @param eapIdentifier the eap identifier from the latest message
+     * @return an acknowledgment if the received data is a fragment, null if data is ready to
+     *     process
+     */
+    @Nullable
+    private EapResult handleInboundFragmentation(
+            String tag, EapTtlsTypeData eapTtlsRequest, int eapIdentifier) {
+        int fragmentationStatus =
+                mInboundFragmentationHelper.assembleInboundMessage(eapTtlsRequest);
+
+        switch (fragmentationStatus) {
+            case FRAGMENTATION_STATUS_ASSEMBLED:
+                return null;
+            case FRAGMENTATION_STATUS_ACK:
+                LOG.d(tag, "Packet is fragmented. Generating an acknowledgement response.");
+                return buildEapMessageResponse(
+                        tag, eapIdentifier, EapTtlsAcknowledgement.getEapTtlsAcknowledgement());
+            case FRAGMENTATION_STATUS_INVALID:
+                return transitionToAwaitingClosureState(
+                        tag,
+                        eapIdentifier,
+                        new EapError(
+                                new EapTtlsParsingException(
+                                        "Fragmentation failure: There was an error decoding the"
+                                                + " fragmented request.")));
+            default:
+                return transitionToAwaitingClosureState(
+                        tag,
+                        eapIdentifier,
+                        new EapError(
+                                new IllegalStateException(
+                                        "Received an unknown fragmentation status when assembling"
+                                                + " an inbound fragment: "
+                                                + fragmentationStatus)));
+        }
+    }
+
+    /**
+     * Takes outbound data and assembles an EAP-Response.
+     *
+     * <p>The data will be fragmented if necessary
+     *
+     * @param tag the tag of the calling class
+     * @param eapIdentifier the EAP identifier from the most recent EAP request
+     * @param data the data used to build the EAP-TTLS type data
+     * @return an EAP result that is either an EAP response or an EAP error
+     */
+    private EapResult buildEapMessageResponse(String tag, int eapIdentifier, byte[] data) {
+        // TODO(b/165668196): Modify outbound fragmentation helper to be per-message in EAP-TTLS
+        mOutboundFragmentationHelper.setupOutboundFragmentation(data);
+        FragmentationResult result = mOutboundFragmentationHelper.getNextOutboundFragment();
+
+        // As per RFC5281#9.2.2, an unfragmented packet may have the length bit set
+        return buildEapMessageResponse(
+                tag,
+                eapIdentifier,
+                EapTtlsTypeData.getEapTtlsTypeData(
+                        result.hasRemainingFragments,
+                        false /* start */,
+                        0 /* version 0 */,
+                        data.length,
+                        result.fragmentedData));
+    }
+
+    /**
      * Takes an already constructed EapTtlsTypeData and builds an EAP-Response
      *
      * @param tag the tag of the calling class
@@ -359,6 +601,43 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
         } catch (EapSilentException ex) {
             LOG.e(tag, "Error building response EapMessage", ex);
             return new EapError(ex);
+        }
+    }
+
+    /**
+     * CloseableTtlsMethodState defines specific behaviour for handling EAP-Messages in EAP-TTLS
+     *
+     * <p>EAP-TTLS requires specific handling compared to what is defined in {@link EapMethodState}
+     * as the tunnel needs to be closed. Furthermore, EAP-Success/EAP-Failure handling differs in
+     * the tunnel state as it needs to be processed by the inner authentication method.
+     *
+     * <p>
+     */
+    abstract class CloseableTtlsMethodState extends EapMethodState {
+        abstract EapResult handleEapSuccessFailure(String tag, EapMessage message);
+
+        @Override
+        @Nullable
+        EapResult handleEapSuccessFailureNotification(String tag, EapMessage message) {
+            EapResult eapResult = handleEapSuccessFailure(tag, message);
+            if (eapResult != null) {
+                return eapResult;
+            }
+
+            if (message.eapData.eapType == EAP_NOTIFICATION) {
+                return handleEapNotification(tag, message);
+            } else if (message.eapData.eapType != EAP_TYPE_TTLS) {
+                EapError eapError =
+                        new EapError(
+                                new EapInvalidRequestException(
+                                        "Expected EAP Type "
+                                                + getEapMethod()
+                                                + ", received "
+                                                + message.eapData.eapType));
+                return transitionToAwaitingClosureState(tag, message.eapIdentifier, eapError);
+            }
+
+            return null;
         }
     }
 }
