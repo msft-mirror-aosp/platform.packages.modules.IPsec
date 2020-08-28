@@ -67,6 +67,7 @@ import com.android.internal.net.eap.statemachine.EapMethodStateMachine.EapMethod
 import com.android.internal.net.eap.statemachine.EapMethodStateMachine.FinalState;
 import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.AwaitingClosureState;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -122,10 +123,15 @@ public class EapTtlsStateTest {
                         mEapTtlsConfig,
                         mMockSecureRandom,
                         mMockTypeDataDecoder,
-                        mMockTlsSessionFactory,
                         mInboundFragmentationHelper,
                         mOutboundFragmentationHelper);
+        EapTtlsMethodStateMachine.sTlsSessionFactory = mMockTlsSessionFactory;
         when(mMockTlsSessionFactory.newInstance(any(), any())).thenReturn(mMockTlsSession);
+    }
+
+    @AfterClass
+    public static void teardown() {
+        EapTtlsMethodStateMachine.sTlsSessionFactory = new TlsSessionFactory();
     }
 
     @Test
