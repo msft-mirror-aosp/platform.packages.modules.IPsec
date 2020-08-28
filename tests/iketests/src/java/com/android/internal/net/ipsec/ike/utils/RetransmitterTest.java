@@ -45,7 +45,7 @@ public final class RetransmitterTest {
     private static final int[] IKE_RETRANS_TIMEOUT_MS_LIST =
             new int[] {500, 1000, 2000, 4000, 8000};
 
-    private class TestRetransmitter extends Retransmitter {
+    private static class TestRetransmitter extends Retransmitter {
         int mSendCallCount; // Defaults to 0
         boolean mFailed; // Defaults to false
 
@@ -82,8 +82,7 @@ public final class RetransmitterTest {
         assertEquals(1, mRetransmitter.mSendCallCount);
         verify(mMockHandler).obtainMessage(eq(CMD_RETRANSMIT), eq(mRetransmitter));
         verify(mMockHandler)
-                .sendMessageDelayed(
-                        any(Message.class), eq((long) (IKE_RETRANS_TIMEOUT_MS_LIST[0])));
+                .sendMessageDelayed(any(Message.class), eq((long) IKE_RETRANS_TIMEOUT_MS_LIST[0]));
     }
 
     @Test

@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class EapAkaPrimeIdentityStateTest extends EapAkaPrimeStateTest {
+    @Override
     @Before
     public void setUp() {
         super.setUp();

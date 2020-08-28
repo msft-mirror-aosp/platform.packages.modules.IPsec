@@ -135,7 +135,6 @@ import java.net.InetAddress;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executor;
 
@@ -143,11 +142,11 @@ public final class ChildSessionStateMachineTest {
     private static final String TAG = "ChildSessionStateMachineTest";
 
     private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.200");
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.100");
     private static final Inet4Address INTERNAL_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("203.0.113.100"));
+            (Inet4Address) InetAddresses.parseNumericAddress("203.0.113.100");
 
     private static final int IPV4_PREFIX_LEN = 32;
 
@@ -193,8 +192,8 @@ public final class ChildSessionStateMachineTest {
     private IpSecSpiGenerator mIpSecSpiGenerator;
     private ChildSessionStateMachine mChildSessionStateMachine;
 
-    private List<IkePayload> mFirstSaReqPayloads = new LinkedList<>();
-    private List<IkePayload> mFirstSaRespPayloads = new LinkedList<>();
+    private List<IkePayload> mFirstSaReqPayloads = new ArrayList<>();
+    private List<IkePayload> mFirstSaRespPayloads = new ArrayList<>();
 
     private ChildSaRecord mSpyCurrentChildSaRecord;
     private ChildSaRecord mSpyLocalInitNewChildSaRecord;
@@ -328,8 +327,8 @@ public final class ChildSessionStateMachineTest {
         setUpSpiResource(REMOTE_ADDRESS, CURRENT_CHILD_SA_SPI_OUT);
         IkeSaPayload respSaPayload =
                 (IkeSaPayload)
-                        (IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_SA, true, IKE_AUTH_RESP_SA_PAYLOAD));
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_SA, true, IKE_AUTH_RESP_SA_PAYLOAD);
         mFirstSaRespPayloads.add(respSaPayload);
 
         // Build TS Payloads
@@ -352,13 +351,13 @@ public final class ChildSessionStateMachineTest {
         mFirstSaRespPayloads.add(new IkeNoncePayload(createMockRandomFactory()));
 
         // Build Config Request Payload
-        List<ConfigAttribute> attrReqList = new LinkedList<>();
+        List<ConfigAttribute> attrReqList = new ArrayList<>();
         attrReqList.add(new ConfigAttributeIpv4Address(INTERNAL_ADDRESS));
         attrReqList.add(new ConfigAttributeIpv4Netmask());
         mFirstSaReqPayloads.add(new IkeConfigPayload(false /*isReply*/, attrReqList));
 
         // Build Config Reply Payload
-        List<ConfigAttribute> attrRespList = new LinkedList<>();
+        List<ConfigAttribute> attrRespList = new ArrayList<>();
         attrRespList.add(new ConfigAttributeIpv4Address(INTERNAL_ADDRESS));
         mFirstSaRespPayloads.add(new IkeConfigPayload(true /*isReply*/, attrRespList));
     }
@@ -603,7 +602,7 @@ public final class ChildSessionStateMachineTest {
 
         // Receive error notification in Create response
         IkeNotifyPayload notifyPayload = new IkeNotifyPayload(notifyType);
-        List<IkePayload> respPayloads = new LinkedList<>();
+        List<IkePayload> respPayloads = new ArrayList<>();
         respPayloads.add(notifyPayload);
         mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
         mLooper.dispatchAll();
@@ -650,7 +649,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Receive response with no Nonce Payload
-        List<IkePayload> respPayloads = new LinkedList<>();
+        List<IkePayload> respPayloads = new ArrayList<>();
         for (IkePayload payload : mFirstSaRespPayloads) {
             if (IkePayload.PAYLOAD_TYPE_NONCE == payload.payloadType) continue;
             respPayloads.add(payload);
@@ -792,7 +791,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Test receiving response with no Delete Payload
-        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new ArrayList<>());
         mLooper.dispatchAll();
 
         assertNull(mChildSessionStateMachine.getCurrentState());
@@ -830,7 +829,7 @@ public final class ChildSessionStateMachineTest {
         List<IkePayload> respPayloadList = mPayloadListCaptor.getValue();
         assertTrue(respPayloadList.isEmpty());
 
-        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new LinkedList<>());
+        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_INFORMATIONAL, new ArrayList<>());
         mLooper.dispatchAll();
 
         assertNull(mChildSessionStateMachine.getCurrentState());
@@ -945,19 +944,19 @@ public final class ChildSessionStateMachineTest {
 
     private List<IkePayload> makeInboundRekeyChildPayloads(
             int remoteSpi, String inboundSaHexString, boolean isLocalInitRekey) throws Exception {
-        List<IkePayload> inboundPayloads = new LinkedList<>();
+        List<IkePayload> inboundPayloads = new ArrayList<>();
 
         IkeSaPayload saPayload =
                 (IkeSaPayload)
-                        (IkeTestUtils.hexStringToIkePayload(
-                                IkePayload.PAYLOAD_TYPE_SA, true, inboundSaHexString));
+                        IkeTestUtils.hexStringToIkePayload(
+                                IkePayload.PAYLOAD_TYPE_SA, true, inboundSaHexString);
 
         return makeInboundRekeyChildPayloads(remoteSpi, saPayload, isLocalInitRekey);
     }
 
     private List<IkePayload> makeInboundRekeyChildPayloads(
             int remoteSpi, IkeSaPayload saPayload, boolean isLocalInitRekey) throws Exception {
-        List<IkePayload> inboundPayloads = new LinkedList<>();
+        List<IkePayload> inboundPayloads = new ArrayList<>();
 
         inboundPayloads.add(saPayload);
 
@@ -1091,7 +1090,7 @@ public final class ChildSessionStateMachineTest {
 
         // Receive error notification in Create response
         IkeNotifyPayload notifyPayload = new IkeNotifyPayload(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE);
-        List<IkePayload> respPayloads = new LinkedList<>();
+        List<IkePayload> respPayloads = new ArrayList<>();
         respPayloads.add(notifyPayload);
         mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
         mLooper.dispatchAll();
@@ -1169,7 +1168,7 @@ public final class ChildSessionStateMachineTest {
                         LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
                         REKEY_CHILD_RESP_SA_PAYLOAD,
                         true /*isLocalInitRekey*/);
-        List<IkePayload> respPayloads = new LinkedList<>();
+        List<IkePayload> respPayloads = new ArrayList<>();
         for (IkePayload payload : validRekeyRespPayloads) {
             if (IkePayload.PAYLOAD_TYPE_SA == payload.payloadType) continue;
             respPayloads.add(payload);
@@ -1721,7 +1720,7 @@ public final class ChildSessionStateMachineTest {
         doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
                 .when(mMockNegotiatedProposal)
                 .getDhGroupTransforms();
-        List<IkePayload> payloadList = new LinkedList<>();
+        List<IkePayload> payloadList = new ArrayList<>();
         payloadList.add(
                 new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP, createMockRandomFactory()));
 
@@ -1734,7 +1733,7 @@ public final class ChildSessionStateMachineTest {
     @Test
     public void testValidateExpectNoKeExistCase() throws Exception {
         doReturn(new DhGroupTransform[0]).when(mMockNegotiatedProposal).getDhGroupTransforms();
-        List<IkePayload> payloadList = new LinkedList<>();
+        List<IkePayload> payloadList = new ArrayList<>();
 
         CreateChildSaHelper.validateKePayloads(
                 payloadList, true /*isResp*/, mMockNegotiatedProposal);
@@ -1747,7 +1746,7 @@ public final class ChildSessionStateMachineTest {
         doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
                 .when(mMockNegotiatedProposal)
                 .getDhGroupTransforms();
-        List<IkePayload> payloadList = new LinkedList<>();
+        List<IkePayload> payloadList = new ArrayList<>();
 
         try {
             CreateChildSaHelper.validateKePayloads(
@@ -1769,7 +1768,7 @@ public final class ChildSessionStateMachineTest {
         doReturn(new DhGroupTransform[] {mChildDhGroupTransform})
                 .when(mMockNegotiatedProposal)
                 .getDhGroupTransforms();
-        List<IkePayload> payloadList = new LinkedList<>();
+        List<IkePayload> payloadList = new ArrayList<>();
         payloadList.add(
                 new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
 
@@ -1794,7 +1793,7 @@ public final class ChildSessionStateMachineTest {
         doReturn(new DhGroupTransform[] {noneGroup})
                 .when(mMockNegotiatedProposal)
                 .getDhGroupTransforms();
-        List<IkePayload> payloadList = new LinkedList<>();
+        List<IkePayload> payloadList = new ArrayList<>();
         payloadList.add(
                 new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
 
