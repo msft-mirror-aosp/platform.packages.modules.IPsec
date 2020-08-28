@@ -643,6 +643,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
         TlsResult closureResult = mTlsSession.closeConnection();
         if (closureResult.status != TLS_STATUS_CLOSED) {
             LOG.e(tag, "Failed to close the TLS session");
+            transitionTo(new FinalState());
             return eapError;
         }
 
