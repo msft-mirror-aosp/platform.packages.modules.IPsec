@@ -214,7 +214,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 if (mTlsSession == null) {
                     return decodeResult.eapError;
                 }
-                return transitionToAwaitingClosureState(
+                return transitionToErroredAndAwaitingClosureState(
                         mTAG, message.eapIdentifier, decodeResult.eapError);
             }
 
@@ -230,7 +230,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
 
             if (eapTtlsRequest.isStart) {
                 if (mTlsSession != null) {
-                    return transitionToAwaitingClosureState(
+                    return transitionToErroredAndAwaitingClosureState(
                             mTAG,
                             message.eapIdentifier,
                             new EapError(
@@ -258,7 +258,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                                 buildEapIdentityResponseAvp(message.eapIdentifier));
             } catch (EapSilentException e) {
                 LOG.e(mTAG, "Error building an identity response.", e);
-                return transitionToAwaitingClosureState(
+                return transitionToErroredAndAwaitingClosureState(
                         mTAG, message.eapIdentifier, new EapError(e));
             }
 
@@ -275,7 +275,10 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                                     new EapTtlsHandshakeException(
                                             "Handshake failed to complete and the"
                                                     + " connection was closed."));
-                    transitionTo(new AwaitingClosureState(eapError));
+                    // Because the TLS session is already closed, we only transition to
+                    // ErroredAndAwaitingClosureState as the tls result has data to return from the
+                    // closure
+                    transitionTo(new ErroredAndAwaitingClosureState(eapError));
                     return buildEapMessageResponse(mTAG, message.eapIdentifier, tlsResult.data);
                 case TLS_STATUS_FAILURE:
                     // Handshake failed and attempts to successfully close the tunnel also failed.
@@ -287,7 +290,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                                     "Handshake failed to complete and may not have been closed"
                                             + " properly."));
                 default:
-                    return transitionToAwaitingClosureState(
+                    return transitionToErroredAndAwaitingClosureState(
                             mTAG,
                             message.eapIdentifier,
                             new EapError(
@@ -360,7 +363,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
          */
         @Nullable
         @Override
-        public EapResult handleEapSuccessFailure(String tag, EapMessage message) {
+        public EapResult handleEapSuccessFailure(EapMessage message) {
             if (message.eapCode == EAP_CODE_SUCCESS) {
                 // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
                 // so receiving a premature SUCCESS message is an unrecoverable error.
@@ -423,7 +426,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                     mTypeDataDecoder.decodeEapTtlsRequestPacket(message.eapData.eapTypeData);
             if (!decodeResult.isSuccessfulDecode()) {
                 LOG.e(mTAG, "Error parsing EAP-TTLS packet type data", decodeResult.eapError.cause);
-                return transitionToAwaitingClosureState(
+                return transitionToErroredAndAwaitingClosureState(
                         mTAG, message.eapIdentifier, decodeResult.eapError);
             }
 
@@ -453,7 +456,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             AvpDecodeResult avpDecodeResult = mEapTtlsAvpDecoder.decode(decryptResult.data);
             if (!avpDecodeResult.isSuccessfulDecode()) {
                 LOG.e(mTAG, "Error parsing EAP-TTLS AVP", avpDecodeResult.eapError.cause);
-                return transitionToAwaitingClosureState(
+                return transitionToErroredAndAwaitingClosureState(
                         mTAG, message.eapIdentifier, avpDecodeResult.eapError);
             }
 
@@ -466,7 +469,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
             EapResult innerResult = mInnerEapStateMachine.process(avp.data);
 
             if (innerResult instanceof EapError) {
-                return transitionToAwaitingClosureState(
+                return transitionToErroredAndAwaitingClosureState(
                         mTAG, message.eapIdentifier, (EapError) innerResult);
             } else if (innerResult instanceof EapFailure) {
                 LOG.e(mTAG, "Tunneled authentication failed");
@@ -477,7 +480,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 Exception invalidSuccess =
                         new EapInvalidRequestException(
                                 "Received an unexpected EapSuccess from the inner state machine.");
-                transitionToAwaitingClosureState(
+                transitionToErroredAndAwaitingClosureState(
                         mTAG, message.eapIdentifier, new EapError(invalidSuccess));
             }
 
@@ -519,7 +522,10 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                             new SSLException(
                                     "TLS Session failed to encrypt or decrypt data"
                                             + " and was closed.");
-                    transitionTo(new AwaitingClosureState(new EapError(closeException)));
+                    // Because the TLS session is already closed, we only transition to
+                    // ErroredAndAwaitingClosureState as the tls result has data to return from the
+                    // closure
+                    transitionTo(new ErroredAndAwaitingClosureState(new EapError(closeException)));
                     return buildEapMessageResponse(mTAG, eapIdentifier, result.data);
                 case TLS_STATUS_FAILURE:
                     transitionTo(new FinalState());
@@ -531,7 +537,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                     Exception illegalStateException =
                             new IllegalStateException(
                                     "Received an unexpected TLS result with code " + result.status);
-                    return transitionToAwaitingClosureState(
+                    return transitionToErroredAndAwaitingClosureState(
                             mTAG, eapIdentifier, new EapError(illegalStateException));
             }
         }
@@ -552,7 +558,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
          */
         @Nullable
         @Override
-        EapResult handleEapSuccessFailure(String tag, EapMessage message) {
+        EapResult handleEapSuccessFailure(EapMessage message) {
             if (message.eapCode == EAP_CODE_SUCCESS || message.eapCode == EAP_CODE_FAILURE) {
                 mTlsSession.closeConnection();
                 EapResult innerResult = mInnerEapStateMachine.process(message.encode());
@@ -560,11 +566,11 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                     // TODO(b/161233250): Implement keying material generation in EAP-TTLS
                     // Once implemented, EapSuccess should be handled separately and a new
                     // EapSuccess with TLS keying material should be returned
-                    LOG.d(tag, "Tunneled Authentication Successful");
+                    LOG.d(mTAG, "Tunneled Authentication Successful");
                     transitionTo(new FinalState());
                     return innerResult;
                 } else if (innerResult instanceof EapFailure) {
-                    LOG.d(tag, "Tunneled Authentication failed");
+                    LOG.d(mTAG, "Tunneled Authentication failed");
                     transitionTo(new FinalState());
                     return innerResult;
                 }
@@ -579,10 +585,10 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     /**
      * The closure state handles closure of the TLS session in EAP-TTLS
      *
-     * <p>Note that this state is only entered following an error. If EAP authentication
-     * completes successfully or fails, the tunnel is assumed to have implicitly closed.
+     * <p>Note that this state is only entered following an error. If EAP authentication completes
+     * successfully or fails, the tunnel is assumed to have implicitly closed.
      */
-    protected class AwaitingClosureState extends EapMethodState {
+    protected class ErroredAndAwaitingClosureState extends EapMethodState {
         private final String mTAG = this.getClass().getSimpleName();
 
         private final EapError mEapError;
@@ -590,13 +596,14 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
         /**
          * Initializes the closure state
          *
-         * <p>The awaiting closure state is an error state. If a server responds to a close-notify,
-         * the data is processed and the EAP error which encapsulates the initial error is returned
+         * <p>The errored and awaiting closure state is an error state. If a server responds to a
+         * close-notify, the data is processed and the EAP error which encapsulates the initial
+         * error that caused the closure is returned
          *
          * @param eapError an EAP error that contains the error that initially caused a close to
          *     occur
          */
-        public AwaitingClosureState(EapError eapError) {
+        public ErroredAndAwaitingClosureState(EapError eapError) {
             mEapError = eapError;
         }
 
@@ -624,7 +631,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
     }
 
     /**
-     * Transitions to the awaiting closure state and attempts to close the TLS tunnel
+     * Transitions to the ErroredAndAwaitingClosureState and attempts to close the TLS tunnel
      *
      * @param tag the tag of the calling class
      * @param eapIdentifier the EAP identifier from the most recent EAP request
@@ -632,14 +639,16 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
      * @return a closure notify TLS message or an EAP error if one cannot be generated
      */
     @VisibleForTesting
-    EapResult transitionToAwaitingClosureState(String tag, int eapIdentifier, EapError eapError) {
+    EapResult transitionToErroredAndAwaitingClosureState(
+            String tag, int eapIdentifier, EapError eapError) {
         TlsResult closureResult = mTlsSession.closeConnection();
         if (closureResult.status != TLS_STATUS_CLOSED) {
             LOG.e(tag, "Failed to close the TLS session");
+            transitionTo(new FinalState());
             return eapError;
         }
 
-        transitionTo(new AwaitingClosureState(eapError));
+        transitionTo(new ErroredAndAwaitingClosureState(eapError));
         return buildEapMessageResponse(
                 tag,
                 eapIdentifier,
@@ -677,7 +686,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                                 0 /* messageLength */,
                                 result.fragmentedData));
             } else {
-                return transitionToAwaitingClosureState(
+                return transitionToErroredAndAwaitingClosureState(
                         tag,
                         eapIdentifier,
                         new EapError(
@@ -686,7 +695,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                                                 + " being fragmented.")));
             }
         } else if (mOutboundFragmentationHelper.hasRemainingFragments()) {
-            return transitionToAwaitingClosureState(
+            return transitionToErroredAndAwaitingClosureState(
                     tag,
                     eapIdentifier,
                     new EapError(
@@ -721,7 +730,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                 return buildEapMessageResponse(
                         tag, eapIdentifier, EapTtlsAcknowledgement.getEapTtlsAcknowledgement());
             case FRAGMENTATION_STATUS_INVALID:
-                return transitionToAwaitingClosureState(
+                return transitionToErroredAndAwaitingClosureState(
                         tag,
                         eapIdentifier,
                         new EapError(
@@ -729,7 +738,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                                         "Fragmentation failure: There was an error decoding the"
                                                 + " fragmented request.")));
             default:
-                return transitionToAwaitingClosureState(
+                return transitionToErroredAndAwaitingClosureState(
                         tag,
                         eapIdentifier,
                         new EapError(
@@ -797,12 +806,12 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
      * <p>
      */
     abstract class CloseableTtlsMethodState extends EapMethodState {
-        abstract EapResult handleEapSuccessFailure(String tag, EapMessage message);
+        abstract EapResult handleEapSuccessFailure(EapMessage message);
 
         @Override
         @Nullable
         EapResult handleEapSuccessFailureNotification(String tag, EapMessage message) {
-            EapResult eapResult = handleEapSuccessFailure(tag, message);
+            EapResult eapResult = handleEapSuccessFailure(message);
             if (eapResult != null) {
                 return eapResult;
             }
@@ -817,7 +826,8 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                                                 + getEapMethod()
                                                 + ", received "
                                                 + message.eapData.eapType));
-                return transitionToAwaitingClosureState(tag, message.eapIdentifier, eapError);
+                return transitionToErroredAndAwaitingClosureState(
+                        tag, message.eapIdentifier, eapError);
             }
 
             return null;
