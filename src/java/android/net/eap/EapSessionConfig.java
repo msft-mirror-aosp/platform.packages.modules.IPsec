@@ -72,7 +72,7 @@ public final class EapSessionConfig {
     /** Retrieves client's EAP Identity */
     @NonNull
     public byte[] getEapIdentity() {
-        return mEapIdentity;
+        return mEapIdentity.clone();
     }
 
     /**
