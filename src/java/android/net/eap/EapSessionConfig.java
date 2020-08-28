@@ -210,8 +210,7 @@ public final class EapSessionConfig {
         /**
          * Sets the configuration for EAP-TTLS
          *
-         * <p>The inner EAP session config MUST NOT have an EapTtlsConfig. Only the outer session
-         * config can contain EAP-TTLS.
+         * <p>Nested tunnel authentications are disallowed.
          *
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
          *     If a certificate is provided, it MUST be the root CA used by the server, or
@@ -459,7 +458,7 @@ public final class EapSessionConfig {
             super(EAP_TYPE_TTLS);
             Objects.requireNonNull(
                     innerEapSessionConfig,
-                    "EAP-TTLS config must contain an inner EAP session config for tunnelled"
+                    "EAP-TTLS config must contain an inner EAP session config for tunneled"
                             + " authentication");
             if (innerEapSessionConfig.eapConfigs.containsKey(EAP_TYPE_TTLS)) {
                 throw new IllegalArgumentException("Recursive EAP-TTLS method configs not allowed");
@@ -493,7 +492,7 @@ public final class EapSessionConfig {
         /**
          * Retrieves the inner EAP session config
          *
-         * @return an EapSessionConfig representing the config for tunnelled EAP authentication
+         * @return an EapSessionConfig representing the config for tunneled EAP authentication
          * @hide
          */
         @NonNull
