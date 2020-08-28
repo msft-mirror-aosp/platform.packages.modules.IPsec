@@ -42,15 +42,15 @@ import org.junit.Test;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class ChildSessionConfigurationTest {
     private static final int IP4_PREFIX_LEN = 28;
     private static final Inet4Address IPV4_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.100");
     private static final Inet4Address IPV4_NETMASK =
-            (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.240"));
+            (Inet4Address) InetAddresses.parseNumericAddress("255.255.255.240");
     private static final LinkAddress IPV4_LINK_ADDRESS =
             new LinkAddress(IPV4_ADDRESS, IP4_PREFIX_LEN);
     private static final IpPrefix IPV4_SUBNET_IP_PREFIX_ADDRESS = new IpPrefix("198.51.100.0/24");
@@ -78,10 +78,10 @@ public final class ChildSessionConfigurationTest {
 
     @Before
     public void setUp() throws Exception {
-        mMockInTsList = new LinkedList<IkeTrafficSelector>();
+        mMockInTsList = new ArrayList<IkeTrafficSelector>();
         mMockInTsList.add(mock(IkeTrafficSelector.class));
 
-        mMockOutTsList = new LinkedList<IkeTrafficSelector>();
+        mMockOutTsList = new ArrayList<IkeTrafficSelector>();
         mMockOutTsList.add(mock(IkeTrafficSelector.class));
         mMockOutTsList.add(mock(IkeTrafficSelector.class));
 
@@ -123,7 +123,7 @@ public final class ChildSessionConfigurationTest {
 
     @Test
     public void testBuildWithNetmaskAttr() {
-        List<ConfigAttribute> attributeList = new LinkedList<>();
+        List<ConfigAttribute> attributeList = new ArrayList<>();
         attributeList.add(mIpv4Attr);
         attributeList.add(mNetmaskAttr);
         attributeList.add(mIpv6Attr);
@@ -135,7 +135,7 @@ public final class ChildSessionConfigurationTest {
 
         verifySessionConfigCommon(sessionConfig);
 
-        List<LinkAddress> expectedInternalAddrList = new LinkedList<>();
+        List<LinkAddress> expectedInternalAddrList = new ArrayList<>();
         expectedInternalAddrList.add(IPV4_LINK_ADDRESS);
         expectedInternalAddrList.add(IPV6_LINK_ADDRESS);
 
@@ -148,7 +148,7 @@ public final class ChildSessionConfigurationTest {
 
     @Test
     public void testBuildWithoutNetmaskAttr() {
-        List<ConfigAttribute> attributeList = new LinkedList<>();
+        List<ConfigAttribute> attributeList = new ArrayList<>();
         attributeList.add(mIpv4Attr);
         attributeList.add(mIpv6Attr);
 
@@ -159,7 +159,7 @@ public final class ChildSessionConfigurationTest {
 
         verifySessionConfigCommon(sessionConfig);
 
-        List<LinkAddress> expectedInternalAddrList = new LinkedList<>();
+        List<LinkAddress> expectedInternalAddrList = new ArrayList<>();
         expectedInternalAddrList.add(new LinkAddress(IPV4_ADDRESS, 32));
         expectedInternalAddrList.add(IPV6_LINK_ADDRESS);
 
@@ -172,7 +172,7 @@ public final class ChildSessionConfigurationTest {
 
     @Test
     public void testBuildWithConfigReq() {
-        List<ConfigAttribute> attributeList = new LinkedList<>();
+        List<ConfigAttribute> attributeList = new ArrayList<>();
         attributeList.add(mIpv4Attr);
         attributeList.add(mIpv6Attr);
 
@@ -188,7 +188,7 @@ public final class ChildSessionConfigurationTest {
 
     @Test
     public void testBuildWithDnsAttr() {
-        List<ConfigAttribute> attributeList = new LinkedList<>();
+        List<ConfigAttribute> attributeList = new ArrayList<>();
         attributeList.add(mIpv4Dns);
         attributeList.add(mIpv6Dns);
         attributeList.add(mIpv4Pcscf);
@@ -200,7 +200,7 @@ public final class ChildSessionConfigurationTest {
 
         verifySessionConfigCommon(sessionConfig);
 
-        List<InetAddress> expectedDnsAddrList = new LinkedList<>();
+        List<InetAddress> expectedDnsAddrList = new ArrayList<>();
         expectedDnsAddrList.add(IPV4_ADDRESS);
         expectedDnsAddrList.add(IPV6_ADDRESS);
 
@@ -212,7 +212,7 @@ public final class ChildSessionConfigurationTest {
 
     @Test
     public void testBuildWithSubnetAttr() {
-        List<ConfigAttribute> attributeList = new LinkedList<>();
+        List<ConfigAttribute> attributeList = new ArrayList<>();
         attributeList.add(mIpv4Subnet);
         attributeList.add(mIpv6Subnet);
 
@@ -223,7 +223,7 @@ public final class ChildSessionConfigurationTest {
 
         verifySessionConfigCommon(sessionConfig);
 
-        List<IpPrefix> expectedSubnetAddrList = new LinkedList<>();
+        List<IpPrefix> expectedSubnetAddrList = new ArrayList<>();
         expectedSubnetAddrList.add(IPV4_SUBNET_IP_PREFIX_ADDRESS);
         expectedSubnetAddrList.add(IPV6_SUBNET_IP_PREFIX_ADDRESS);
 
@@ -235,7 +235,7 @@ public final class ChildSessionConfigurationTest {
 
     @Test
     public void testBuildWithDhcpAttr() {
-        List<ConfigAttribute> attributeList = new LinkedList<>();
+        List<ConfigAttribute> attributeList = new ArrayList<>();
         attributeList.add(mIpv4Dhcp);
 
         IkeConfigPayload configPayload = new IkeConfigPayload(true /*isReply*/, attributeList);

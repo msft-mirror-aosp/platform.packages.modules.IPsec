@@ -190,7 +190,7 @@ public class EapSimAkaMethodStateMachineTest {
                         EAP_SIM_START,
                         identifier,
                         attributes);
-        assertTrue(result instanceof EapResult);
+        assertTrue(result instanceof EapResponse);
         EapResponse eapResponse = (EapResponse) result;
         assertArrayEquals(EAP_SIM_RESPONSE_PACKET, eapResponse.packet);
     }

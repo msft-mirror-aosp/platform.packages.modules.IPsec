@@ -68,9 +68,9 @@ import java.net.Inet4Address;
 @RunWith(JUnit4.class)
 public final class SaRecordTest {
     private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.200");
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.100");
 
     private static final IkeSpiGenerator IKE_SPI_GENERATOR =
             new IkeSpiGenerator(createMockRandomFactory());
