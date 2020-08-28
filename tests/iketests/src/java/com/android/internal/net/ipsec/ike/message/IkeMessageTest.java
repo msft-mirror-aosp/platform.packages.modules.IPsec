@@ -66,8 +66,8 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
 
 import javax.crypto.IllegalBlockSizeException;
 
@@ -193,7 +193,7 @@ public final class IkeMessageTest {
         IkePayload.PAYLOAD_TYPE_VENDOR
     };
 
-    class TestIkeSupportedPayload extends IkePayload {
+    static class TestIkeSupportedPayload extends IkePayload {
         TestIkeSupportedPayload(int payload, boolean critical) {
             super(payload, critical);
         }
@@ -520,7 +520,7 @@ public final class IkeMessageTest {
                         true /*isResp*/,
                         true /*fromInit*/,
                         0);
-        IkeMessage ikeMessage = new IkeMessage(ikeHeader, new LinkedList<>());
+        IkeMessage ikeMessage = new IkeMessage(ikeHeader, new ArrayList<>());
 
         byte[][] ikeMessageBytes =
                 ikeMessage.encryptAndEncode(

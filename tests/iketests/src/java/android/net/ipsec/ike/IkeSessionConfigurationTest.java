@@ -37,16 +37,15 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 
 public final class IkeSessionConfigurationTest {
     private static final String REMOTE_APP_VERSION = "Test IKE Server 1.0";
 
     private static final Inet4Address PCSCF_IPV4_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.100");
     private static final Inet6Address PCSCF_IPV6_ADDRESS =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::1");
 
     private static final IkeSessionConnectionInfo IKE_CONNECT_INFO =
             mock(IkeSessionConnectionInfo.class);
@@ -93,7 +92,7 @@ public final class IkeSessionConfigurationTest {
 
     @Test
     public void testBuildWithConfigPayload() {
-        List<ConfigAttribute> attributeList = new LinkedList<>();
+        List<ConfigAttribute> attributeList = new ArrayList<>();
         attributeList.add(new ConfigAttributeIpv4Pcscf(PCSCF_IPV4_ADDRESS));
         attributeList.add(new ConfigAttributeIpv6Pcscf(PCSCF_IPV6_ADDRESS));
         attributeList.add(new ConfigAttributeAppVersion(REMOTE_APP_VERSION));

@@ -67,6 +67,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
     private UdpEncapsulationSocket mSpyDummyUdpEncapSocketTwo;
     private IpSecManager mSpyIpSecManager;
 
+    @Override
     @Before
     public void setUp() throws Exception {
         super.setUp();
@@ -94,6 +95,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
                 .openUdpEncapsulationSocket();
     }
 
+    @Override
     @After
     public void tearDown() throws Exception {
         mSpyUdpEncapSocket.close();
