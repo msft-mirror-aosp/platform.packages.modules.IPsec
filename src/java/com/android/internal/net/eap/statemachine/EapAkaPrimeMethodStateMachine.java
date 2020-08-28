@@ -206,9 +206,9 @@ public class EapAkaPrimeMethodStateMachine extends EapAkaMethodStateMachine {
 
             boolean hasMatchingNetworkNames =
                     hasMatchingNetworkNames(
-                            mEapAkaPrimeConfig.networkName,
+                            mEapAkaPrimeConfig.getNetworkName(),
                             new String(atKdfInput.networkName, StandardCharsets.UTF_8));
-            return mEapAkaPrimeConfig.allowMismatchedNetworkNames || hasMatchingNetworkNames;
+            return mEapAkaPrimeConfig.allowsMismatchedNetworkNames() || hasMatchingNetworkNames;
         }
 
         /**

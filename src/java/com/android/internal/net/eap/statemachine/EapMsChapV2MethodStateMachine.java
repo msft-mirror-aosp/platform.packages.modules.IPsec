@@ -272,8 +272,8 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                         generateNtResponse(
                                 challengeRequest.challenge,
                                 peerChallenge,
-                                mEapMsChapV2Config.username,
-                                mEapMsChapV2Config.password);
+                                mEapMsChapV2Config.getUsername(),
+                                mEapMsChapV2Config.getPassword());
             } catch (GeneralSecurityException ex) {
                 LOG.e(mTAG, "Error generating EAP MSCHAPv2 Challenge response", ex);
                 return new EapError(ex);
@@ -282,7 +282,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
             LOG.d(
                     mTAG,
                     "Generating Challenge Response:"
-                            + " Username=" + LOG.pii(mEapMsChapV2Config.username)
+                            + " Username=" + LOG.pii(mEapMsChapV2Config.getUsername())
                             + " Peer-Challenge=" + LOG.pii(peerChallenge)
                             + " NT-Response=" + LOG.pii(ntResponse));
 
@@ -293,7 +293,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                                 peerChallenge,
                                 ntResponse,
                                 FLAGS,
-                                usernameToBytes(mEapMsChapV2Config.username));
+                                usernameToBytes(mEapMsChapV2Config.getUsername()));
                 transitionTo(
                         new ValidateAuthenticatorState(
                                 challengeRequest.challenge, peerChallenge, ntResponse));
@@ -362,11 +362,11 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
                     try {
                         isSuccessfulAuth =
                                 checkAuthenticatorResponse(
-                                        mEapMsChapV2Config.password,
+                                        mEapMsChapV2Config.getPassword(),
                                         mNtResponse,
                                         mPeerChallenge,
                                         mAuthenticatorChallenge,
-                                        mEapMsChapV2Config.username,
+                                        mEapMsChapV2Config.getUsername(),
                                         successRequest.authBytes);
                     } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
                         LOG.e(mTAG, "Error validating MSCHAPv2 Authenticator Response", ex);
@@ -452,7 +452,7 @@ public class EapMsChapV2MethodStateMachine extends EapMethodStateMachine {
             }
 
             try {
-                byte[] msk = generateMsk(mEapMsChapV2Config.password, mNtResponse);
+                byte[] msk = generateMsk(mEapMsChapV2Config.getPassword(), mNtResponse);
                 transitionTo(new FinalState());
                 return new EapSuccess(msk, new byte[EMSK_LEN]);
             } catch (GeneralSecurityException | UnsupportedEncodingException ex) {
