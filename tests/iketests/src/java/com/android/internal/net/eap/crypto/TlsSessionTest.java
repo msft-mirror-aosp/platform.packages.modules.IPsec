@@ -89,22 +89,23 @@ public class TlsSessionTest {
                     ByteBuffer.allocate(APPLICATION_BUFFER_SIZE_TLS_MESSAGE)
                             .put(SAMPLE_APPLICATION_TLS_MESSAGE);
 
-    static final SSLEngineResult RESULT_NEED_WRAP_OK =
+    public static final SSLEngineResult RESULT_NEED_WRAP_OK =
             new SSLEngineResult(Status.OK, HandshakeStatus.NEED_WRAP, 0, 0);
+    public static final SSLEngineResult RESULT_NEED_UNWRAP_OK =
+            new SSLEngineResult(Status.OK, HandshakeStatus.NEED_UNWRAP, 0, 0);
+    public static final SSLEngineResult RESULT_FINISHED_OK =
+            new SSLEngineResult(Status.OK, HandshakeStatus.FINISHED, 0, 0);
+    public static final SSLEngineResult RESULT_NOT_HANDSHAKING_OK =
+            new SSLEngineResult(Status.OK, HandshakeStatus.NOT_HANDSHAKING, 0, 0);
+
     static final SSLEngineResult RESULT_NEED_WRAP_CLOSED =
             new SSLEngineResult(Status.CLOSED, HandshakeStatus.NEED_WRAP, 0, 0);
-    static final SSLEngineResult RESULT_NEED_UNWRAP_OK =
-            new SSLEngineResult(Status.OK, HandshakeStatus.NEED_UNWRAP, 0, 0);
     static final SSLEngineResult RESULT_NEED_UNWRAP_OVERFLOW =
             new SSLEngineResult(Status.BUFFER_OVERFLOW, HandshakeStatus.NEED_UNWRAP, 0, 0);
     static final SSLEngineResult RESULT_NEED_UNWRAP_UNDERFLOW =
             new SSLEngineResult(Status.BUFFER_UNDERFLOW, HandshakeStatus.NEED_UNWRAP, 0, 0);
     static final SSLEngineResult RESULT_NEED_UNWRAP_CLOSED =
             new SSLEngineResult(Status.CLOSED, HandshakeStatus.NEED_UNWRAP, 0, 0);
-    static final SSLEngineResult RESULT_FINISHED_OK =
-            new SSLEngineResult(Status.OK, HandshakeStatus.FINISHED, 0, 0);
-    static final SSLEngineResult RESULT_NOT_HANDSHAKING_OK =
-            new SSLEngineResult(Status.OK, HandshakeStatus.NOT_HANDSHAKING, 0, 0);
     static final SSLEngineResult RESULT_NOT_HANDSHAKING_OVERFLOW =
             new SSLEngineResult(Status.BUFFER_OVERFLOW, HandshakeStatus.NOT_HANDSHAKING, 0, 0);
     static final SSLEngineResult RESULT_NOT_HANDSHAKING_UNDERFLOW =
