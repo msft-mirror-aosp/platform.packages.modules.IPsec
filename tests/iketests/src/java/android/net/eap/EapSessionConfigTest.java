@@ -16,7 +16,6 @@
 
 package android.net.eap;
 
-import static android.net.eap.EapSessionConfig.DEFAULT_IDENTITY;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA;
@@ -28,7 +27,6 @@ import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
 
 import android.net.eap.EapSessionConfig.EapAkaConfig;
 import android.net.eap.EapSessionConfig.EapAkaPrimeConfig;
@@ -45,6 +43,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 
 public class EapSessionConfigTest {
+    private static final byte[] DEFAULT_IDENTITY = new byte[0];
     private static final byte[] EAP_IDENTITY =
             "test@android.net".getBytes(StandardCharsets.US_ASCII);
     private static final int SUB_ID = 1;
@@ -60,13 +59,13 @@ public class EapSessionConfigTest {
                 .setEapSimConfig(SUB_ID, APPTYPE_USIM)
                 .build();
 
-        assertArrayEquals(EAP_IDENTITY, result.eapIdentity);
+        assertArrayEquals(EAP_IDENTITY, result.getEapIdentity());
 
-        EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_SIM);
-        assertEquals(EAP_TYPE_SIM, eapMethodConfig.methodType);
+        EapMethodConfig eapMethodConfig = result.getEapConfigs().get(EAP_TYPE_SIM);
+        assertEquals(EAP_TYPE_SIM, eapMethodConfig.getMethodType());
         EapSimConfig eapSimConfig = (EapSimConfig) eapMethodConfig;
-        assertEquals(SUB_ID, eapSimConfig.subId);
-        assertEquals(APPTYPE_USIM, eapSimConfig.apptype);
+        assertEquals(SUB_ID, eapSimConfig.getSubId());
+        assertEquals(APPTYPE_USIM, eapSimConfig.getAppType());
     }
 
     @Test
@@ -75,12 +74,12 @@ public class EapSessionConfigTest {
                 .setEapAkaConfig(SUB_ID, APPTYPE_USIM)
                 .build();
 
-        assertArrayEquals(DEFAULT_IDENTITY, result.eapIdentity);
-        EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_AKA);
-        assertEquals(EAP_TYPE_AKA, eapMethodConfig.methodType);
+        assertArrayEquals(DEFAULT_IDENTITY, result.getEapIdentity());
+        EapMethodConfig eapMethodConfig = result.getEapConfigs().get(EAP_TYPE_AKA);
+        assertEquals(EAP_TYPE_AKA, eapMethodConfig.getMethodType());
         EapAkaConfig eapAkaConfig = (EapAkaConfig) eapMethodConfig;
-        assertEquals(SUB_ID, eapAkaConfig.subId);
-        assertEquals(APPTYPE_USIM, eapAkaConfig.apptype);
+        assertEquals(SUB_ID, eapAkaConfig.getSubId());
+        assertEquals(APPTYPE_USIM, eapAkaConfig.getAppType());
     }
 
     @Test
@@ -91,14 +90,14 @@ public class EapSessionConfigTest {
                                 SUB_ID, APPTYPE_USIM, NETWORK_NAME, ALLOW_MISMATCHED_NETWORK_NAMES)
                         .build();
 
-        assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
-        EapMethodConfig eapMethodConfig = result.eapConfigs.get(EAP_TYPE_AKA_PRIME);
-        assertEquals(EAP_TYPE_AKA_PRIME, eapMethodConfig.methodType);
+        assertArrayEquals(DEFAULT_IDENTITY, result.getEapIdentity());
+        EapMethodConfig eapMethodConfig = result.getEapConfigs().get(EAP_TYPE_AKA_PRIME);
+        assertEquals(EAP_TYPE_AKA_PRIME, eapMethodConfig.getMethodType());
         EapAkaPrimeConfig eapAkaPrimeConfig = (EapAkaPrimeConfig) eapMethodConfig;
-        assertEquals(SUB_ID, eapAkaPrimeConfig.subId);
-        assertEquals(APPTYPE_USIM, eapAkaPrimeConfig.apptype);
-        assertEquals(NETWORK_NAME, eapAkaPrimeConfig.networkName);
-        assertTrue(eapAkaPrimeConfig.allowMismatchedNetworkNames);
+        assertEquals(SUB_ID, eapAkaPrimeConfig.getSubId());
+        assertEquals(APPTYPE_USIM, eapAkaPrimeConfig.getAppType());
+        assertEquals(NETWORK_NAME, eapAkaPrimeConfig.getNetworkName());
+        assertTrue(eapAkaPrimeConfig.allowsMismatchedNetworkNames());
     }
 
     @Test
@@ -106,10 +105,11 @@ public class EapSessionConfigTest {
         EapSessionConfig result =
                 new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
 
-        EapMsChapV2Config config = (EapMsChapV2Config) result.eapConfigs.get(EAP_TYPE_MSCHAP_V2);
-        assertEquals(EAP_TYPE_MSCHAP_V2, config.methodType);
-        assertEquals(USERNAME, config.username);
-        assertEquals(PASSWORD, config.password);
+        EapMsChapV2Config config =
+                (EapMsChapV2Config) result.getEapConfigs().get(EAP_TYPE_MSCHAP_V2);
+        assertEquals(EAP_TYPE_MSCHAP_V2, config.getMethodType());
+        assertEquals(USERNAME, config.getUsername());
+        assertEquals(PASSWORD, config.getPassword());
     }
 
     @Test
@@ -121,11 +121,32 @@ public class EapSessionConfigTest {
         EapSessionConfig result =
                 new EapSessionConfig.Builder().setEapTtlsConfig(trustedCa, innerConfig).build();
 
-        assertEquals(DEFAULT_IDENTITY, result.eapIdentity);
-        EapTtlsConfig config = (EapTtlsConfig) result.eapConfigs.get(EAP_TYPE_TTLS);
-        assertEquals(EAP_TYPE_TTLS, config.methodType);
-        assertEquals(innerConfig, config.innerEapSessionConfig);
+        assertArrayEquals(DEFAULT_IDENTITY, result.getEapIdentity());
+        EapTtlsConfig config = (EapTtlsConfig) result.getEapConfigs().get(EAP_TYPE_TTLS);
+        assertEquals(EAP_TYPE_TTLS, config.getMethodType());
+        assertEquals(innerConfig, config.getInnerEapSessionConfig());
         assertEquals(trustedCa, config.getServerCaCert());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testSetEapIdentityNull() {
+        new EapSessionConfig.Builder().setEapIdentity(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testBuildEapAkaPrimeNullNetworkName() {
+        new EapSessionConfig.Builder()
+                .setEapAkaPrimeConfig(SUB_ID, APPTYPE_USIM, null, ALLOW_MISMATCHED_NETWORK_NAMES);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testBuildEapMsChapV2NullUsername() {
+        new EapSessionConfig.Builder().setEapMsChapV2Config(null, PASSWORD);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testBuildEapMsChapV2NullPassword() {
+        new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, null);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -150,12 +171,8 @@ public class EapSessionConfigTest {
                 new EapSessionConfig.Builder().setEapTtlsConfig(trustedCa, null).build();
     }
 
-    @Test
+    @Test(expected = IllegalStateException.class)
     public void testBuildWithoutConfigs() {
-        try {
-            new EapSessionConfig.Builder().build();
-            fail("build() should throw an IllegalStateException if no EAP methods are configured");
-        } catch (IllegalStateException expected) {
-        }
+        new EapSessionConfig.Builder().build();
     }
 }

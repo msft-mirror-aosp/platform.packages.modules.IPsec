@@ -343,7 +343,8 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
         byte[] buildEapIdentityResponseAvp(int eapIdentifier) throws EapSilentException {
             EapData eapData =
                     new EapData(
-                            EAP_IDENTITY, mEapTtlsConfig.getInnerEapSessionConfig().eapIdentity);
+                            EAP_IDENTITY,
+                            mEapTtlsConfig.getInnerEapSessionConfig().getEapIdentity());
             EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, eapIdentifier, eapData);
             return EapTtlsAvp.getEapMessageAvp(DEFAULT_AVP_VENDOR_ID, eapMessage.encode()).encode();
         }
