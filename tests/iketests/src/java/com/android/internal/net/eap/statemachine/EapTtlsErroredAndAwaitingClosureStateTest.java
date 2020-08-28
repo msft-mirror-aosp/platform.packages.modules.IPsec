@@ -30,12 +30,12 @@ import static org.mockito.Mockito.when;
 import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.EapResult.EapResponse;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsParsingException;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.AwaitingClosureState;
+import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.ErroredAndAwaitingClosureState;
 
 import org.junit.Before;
 import org.junit.Test;
 
-public class EapTtlsAwaitingClosureStateTest extends EapTtlsStateTest {
+public class EapTtlsErroredAndAwaitingClosureStateTest extends EapTtlsStateTest {
     private static final String TAG = EapTtlsHandshakeStateTest.class.getSimpleName();
 
     @Before
@@ -54,12 +54,12 @@ public class EapTtlsAwaitingClosureStateTest extends EapTtlsStateTest {
 
         EapResponse eapResponse =
                 (EapResponse)
-                        mStateMachine.transitionToAwaitingClosureState(
+                        mStateMachine.transitionToErroredAndAwaitingClosureState(
                                 TAG,
                                 ID_INT,
                                 new EapError(new EapTtlsParsingException("Sample Exception")));
         assertArrayEquals(EAP_RESPONSE_TTLS_WITH_LENGTH, eapResponse.packet);
-        assertTrue(mStateMachine.getState() instanceof AwaitingClosureState);
+        assertTrue(mStateMachine.getState() instanceof ErroredAndAwaitingClosureState);
         verify(mMockTlsSession).closeConnection();
     }
 
@@ -70,7 +70,7 @@ public class EapTtlsAwaitingClosureStateTest extends EapTtlsStateTest {
 
         EapError eapError =
                 (EapError)
-                        mStateMachine.transitionToAwaitingClosureState(
+                        mStateMachine.transitionToErroredAndAwaitingClosureState(
                                 TAG,
                                 ID_INT,
                                 new EapError(new EapTtlsParsingException("Sample Exception")));
@@ -81,7 +81,8 @@ public class EapTtlsAwaitingClosureStateTest extends EapTtlsStateTest {
     @Test
     public void testClosureState_closureNotifyRequest() throws Exception {
         mStateMachine.transitionTo(
-                mStateMachine.new AwaitingClosureState(
+                mStateMachine
+                .new ErroredAndAwaitingClosureState(
                         new EapError(new EapTtlsParsingException("Sample Exception"))));
         mockTypeDataDecoding(getEapTtlsTypeData(EAP_TTLS_DUMMY_DATA_BYTES));
 
