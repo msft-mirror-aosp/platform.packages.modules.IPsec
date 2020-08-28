@@ -359,7 +359,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
          */
         @Nullable
         @Override
-        public EapResult handleEapSuccessFailure(String tag, EapMessage message) {
+        public EapResult handleEapSuccessFailure(EapMessage message) {
             if (message.eapCode == EAP_CODE_SUCCESS) {
                 // EAP-SUCCESS is required to be the last EAP message sent during the EAP protocol,
                 // so receiving a premature SUCCESS message is an unrecoverable error.
@@ -551,7 +551,7 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
          */
         @Nullable
         @Override
-        EapResult handleEapSuccessFailure(String tag, EapMessage message) {
+        EapResult handleEapSuccessFailure(EapMessage message) {
             if (message.eapCode == EAP_CODE_SUCCESS || message.eapCode == EAP_CODE_FAILURE) {
                 mTlsSession.closeConnection();
                 EapResult innerResult = mInnerEapStateMachine.process(message.encode());
@@ -559,11 +559,11 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
                     // TODO(b/161233250): Implement keying material generation in EAP-TTLS
                     // Once implemented, EapSuccess should be handled separately and a new
                     // EapSuccess with TLS keying material should be returned
-                    LOG.d(tag, "Tunneled Authentication Successful");
+                    LOG.d(mTAG, "Tunneled Authentication Successful");
                     transitionTo(new FinalState());
                     return innerResult;
                 } else if (innerResult instanceof EapFailure) {
-                    LOG.d(tag, "Tunneled Authentication failed");
+                    LOG.d(mTAG, "Tunneled Authentication failed");
                     transitionTo(new FinalState());
                     return innerResult;
                 }
@@ -796,12 +796,12 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
      * <p>
      */
     abstract class CloseableTtlsMethodState extends EapMethodState {
-        abstract EapResult handleEapSuccessFailure(String tag, EapMessage message);
+        abstract EapResult handleEapSuccessFailure(EapMessage message);
 
         @Override
         @Nullable
         EapResult handleEapSuccessFailureNotification(String tag, EapMessage message) {
-            EapResult eapResult = handleEapSuccessFailure(tag, message);
+            EapResult eapResult = handleEapSuccessFailure(message);
             if (eapResult != null) {
                 return eapResult;
             }
