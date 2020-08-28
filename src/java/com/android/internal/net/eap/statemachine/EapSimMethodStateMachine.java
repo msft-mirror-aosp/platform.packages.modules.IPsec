@@ -113,7 +113,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
             SecureRandom secureRandom,
             EapSimTypeDataDecoder eapSimTypeDataDecoder) {
         super(
-                telephonyManager.createForSubscriptionId(eapSimConfig.subId),
+                telephonyManager.createForSubscriptionId(eapSimConfig.getSubId()),
                 eapIdentity,
                 eapSimConfig);
 
@@ -264,7 +264,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 LOG.wtf(mTAG, "Exception thrown while making AtIdentity attribute", ex);
                 return new EapError(ex);
             } catch (EapSimAkaIdentityUnavailableException ex) {
-                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapUiccConfig.subId);
+                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapUiccConfig.getSubId());
                 return new EapError(ex);
             }
 
@@ -327,7 +327,7 @@ class EapSimMethodStateMachine extends EapSimAkaMethodStateMachine {
                 String imsi = mTelephonyManager.getSubscriberId();
                 if (imsi == null) {
                     throw new EapSimAkaIdentityUnavailableException(
-                            "IMSI for subId (" + mEapUiccConfig.subId + ") not available");
+                            "IMSI for subId (" + mEapUiccConfig.getSubId() + ") not available");
                 }
 
                 // Permanent Identity is "1" + IMSI (RFC 4186 Section 4.1.2.6)

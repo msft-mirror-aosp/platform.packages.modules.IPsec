@@ -89,6 +89,9 @@ public final class IkeSessionParamsTest {
     private static final Inet6Address PCSCF_IPV6_ADDRESS_2 =
             (Inet6Address) (InetAddresses.parseNumericAddress("2001:DB8::2"));
 
+    private static final String EAP_MSCHAP_V2_USERNAME = "username";
+    private static final String EAP_MSCHAP_V2_PASSWORD = "password";
+
     private ConnectivityManager mMockConnectManager;
     private Network mMockDefaultNetwork;
     private Network mMockUserConfigNetwork;
@@ -591,10 +594,11 @@ public final class IkeSessionParamsTest {
     @Test
     public void testExceptionOnEapOnlyOptionWithEapOnlyUnsafeMethod() throws Exception {
         try {
-            EapSessionConfig eapSessionConfig = new EapSessionConfig.Builder()
-                    .setEapMsChapV2Config(null, null)
-                    .setEapAkaConfig(0, 0)
-                    .build();
+            EapSessionConfig eapSessionConfig =
+                    new EapSessionConfig.Builder()
+                            .setEapMsChapV2Config(EAP_MSCHAP_V2_USERNAME, EAP_MSCHAP_V2_PASSWORD)
+                            .setEapAkaConfig(0, 0)
+                            .build();
 
             IkeSessionParams sessionParams =
                     buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)

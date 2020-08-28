@@ -131,7 +131,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
             EapAkaTypeDataDecoder eapAkaTypeDataDecoder,
             boolean supportsEapAkaPrime) {
         super(
-                telephonyManager.createForSubscriptionId(eapAkaConfig.subId),
+                telephonyManager.createForSubscriptionId(eapAkaConfig.getSubId()),
                 eapIdentity,
                 eapAkaConfig);
         mEapAkaTypeDataDecoder = eapAkaTypeDataDecoder;
@@ -251,10 +251,11 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
             String imsi = mTelephonyManager.getSubscriberId();
             if (imsi == null) {
-                LOG.e(mTAG, "Unable to get IMSI for subId=" + mEapUiccConfig.subId);
+                int subId = mEapUiccConfig.getSubId();
+                LOG.e(mTAG, "Unable to get IMSI for subId=" + subId);
                 return new EapError(
                         new EapSimAkaIdentityUnavailableException(
-                                "IMSI for subId (" + mEapUiccConfig.subId + ") not available"));
+                                "IMSI for subId (" + subId + ") not available"));
             }
             String identityString = getIdentityPrefix() + imsi;
             mIdentity = identityString.getBytes(StandardCharsets.US_ASCII);
