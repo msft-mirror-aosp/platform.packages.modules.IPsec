@@ -97,21 +97,26 @@ public class TlsSession {
     @VisibleForTesting HandshakeStatus mHandshakeStatus;
     private TrustManager[] mTrustManagers;
 
+    private ByteBuffer mApplicationData;
+    private ByteBuffer mPacketData;
+
     // Package-private
-    TlsSession(X509Certificate trustedCa, SecureRandom secureRandom)
+    TlsSession(X509Certificate serverCaCert, SecureRandom secureRandom)
             throws GeneralSecurityException, IOException {
         mSecureRandom = secureRandom;
-        initTrustManagers(trustedCa);
+        initTrustManagers(serverCaCert);
         mSslContext = SSLContext.getInstance("TLSv1.2");
         mSslContext.init(null, mTrustManagers, secureRandom);
         mSslEngine = mSslContext.createSSLEngine();
         mSslEngine.setEnabledProtocols(ENABLED_TLS_PROTOCOLS);
         mSslEngine.setUseClientMode(true);
         mSslSession = mSslEngine.getSession();
+        mApplicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
+        mPacketData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
     }
 
     @VisibleForTesting
-    TlsSession(
+    public TlsSession(
             SSLContext sslContext,
             SSLEngine sslEngine,
             SSLSession sslSession,
@@ -120,26 +125,31 @@ public class TlsSession {
         mSslEngine = sslEngine;
         mSecureRandom = secureRandom;
         mSslSession = sslSession;
+        mApplicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
+        mPacketData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
     }
 
     /**
      * Creates the trust manager instance needed to instantiate the SSLContext
      *
-     * @param trustedCa a specific CA to trust or null if the system-default is preferred
+     * @param serverCaCert the CA certificate for validating the received server certificate(s). If
+     *     no certificate is provided, any root CA in the system's truststore is considered
+     *     acceptable.
      * @throws GeneralSecurityException if the trust manager cannot be initialized
      * @throws IOException if there is an I/O issue with keystore data
      */
-    private void initTrustManagers(X509Certificate trustedCa)
+    private void initTrustManagers(X509Certificate serverCaCert)
             throws GeneralSecurityException, IOException {
         // TODO(b/160798904): Pass TrustManager through EAP authenticator in EAP-TTLS
 
         KeyStore keyStore = null;
 
-        if (trustedCa != null) {
+        if (serverCaCert != null) {
             keyStore = KeyStore.getInstance(KEY_STORE_TYPE_PKCS12);
             keyStore.load(null);
-            String alias = trustedCa.getSubjectX500Principal().getName() + trustedCa.hashCode();
-            keyStore.setCertificateEntry(alias, trustedCa);
+            String alias =
+                    serverCaCert.getSubjectX500Principal().getName() + serverCaCert.hashCode();
+            keyStore.setCertificateEntry(alias, serverCaCert);
         }
 
         TrustManagerFactory tmFactory =
@@ -166,22 +176,21 @@ public class TlsSession {
      * @return a tls result containing outbound data the and status of operation
      */
     public TlsResult startHandshake() {
-        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
-        ByteBuffer applicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
-        ByteBuffer packetData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
+        clearAndGrowApplicationBufferIfNeeded();
+        clearAndGrowPacketBufferIfNeeded();
 
         SSLEngineResult result;
         try {
             // A wrap implicitly begins the handshake. This will produce the ClientHello
             // message.
-            result = mSslEngine.wrap(applicationData, packetData);
+            result = mSslEngine.wrap(mApplicationData, mPacketData);
         } catch (SSLException e) {
             LOG.e(TAG, "Failed to initiate handshake", e);
             return new TlsResult(TLS_STATUS_FAILURE);
         }
         mHandshakeStatus = result.getHandshakeStatus();
 
-        return new TlsResult(getByteArrayFromBuffer(packetData), TLS_STATUS_SUCCESS);
+        return new TlsResult(getByteArrayFromBuffer(mPacketData), TLS_STATUS_SUCCESS);
     }
 
     /**
@@ -207,15 +216,14 @@ public class TlsSession {
      * @return a {@link TlsResult} containing an outbound message and status of operation
      */
     public TlsResult processHandshakeData(byte[] handshakeData, byte[] avp) {
-        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
-        ByteBuffer applicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
-        ByteBuffer packetData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
+        clearAndGrowApplicationBufferIfNeeded();
+        clearAndGrowPacketBufferIfNeeded();
 
         try {
             // The application buffer size is guaranteed to be larger than that of the AVP as the
             // handshaking messages contain substantially more data
-            applicationData.put(avp);
-            packetData.put(handshakeData);
+            mApplicationData.put(avp);
+            mPacketData.put(handshakeData);
         } catch (BufferOverflowException e) {
             // The connection will be closed because the buffer was just allocated to the desired
             // size.
@@ -224,10 +232,10 @@ public class TlsSession {
                     "Buffer overflow while attempting to process handshake message. Attempting to"
                             + " close connection.",
                     e);
-            return closeConnection(applicationData, packetData);
+            return closeConnection();
         }
-        applicationData.flip();
-        packetData.flip();
+        mApplicationData.flip();
+        mPacketData.flip();
 
         TlsResult tlsResult = new TlsResult(TLS_STATUS_FAILURE);
 
@@ -235,15 +243,15 @@ public class TlsSession {
         while (true) {
             switch (mHandshakeStatus) {
                 case NEED_UNWRAP:
-                    tlsResult = unwrap(applicationData, packetData);
+                    tlsResult = doUnwrap();
                     continue;
                 case NEED_TASK:
                     mSslEngine.getDelegatedTask().run();
                     mHandshakeStatus = mSslEngine.getHandshakeStatus();
                     continue;
                 case NEED_WRAP:
-                    packetData.clear();
-                    tlsResult = wrap(applicationData, packetData);
+                    mPacketData.clear();
+                    tlsResult = doWrap();
                     if (mHandshakeStatus == HandshakeStatus.FINISHED) {
                         mHandshakeStatus = mSslEngine.getHandshakeStatus();
                     }
@@ -266,10 +274,9 @@ public class TlsSession {
      * @return a tls result containing the decrypted data and status of operation
      */
     public TlsResult processIncomingData(byte[] data) {
-        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
-        ByteBuffer applicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
-        ByteBuffer packetData = ByteBuffer.wrap(data);
-        return unwrap(applicationData, packetData);
+        clearAndGrowApplicationBufferIfNeeded();
+        mPacketData = ByteBuffer.wrap(data);
+        return doUnwrap();
     }
 
     /**
@@ -279,10 +286,9 @@ public class TlsSession {
      * @return a tls result containing the encrypted data and status of operation
      */
     public TlsResult processOutgoingData(byte[] data) {
-        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
-        ByteBuffer applicationData = ByteBuffer.wrap(data);
-        ByteBuffer packetData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
-        return wrap(applicationData, packetData);
+        clearAndGrowPacketBufferIfNeeded();
+        mApplicationData = ByteBuffer.wrap(data);
+        return doWrap();
     }
 
     /**
@@ -292,21 +298,21 @@ public class TlsSession {
      * @param packetData a bytebuffer containing inbound data from the server
      * @return a tls result containing the unwrapped message and status of operation
      */
-    private TlsResult unwrap(ByteBuffer applicationData, ByteBuffer packetData) {
+    private TlsResult doUnwrap() {
         SSLEngineResult result;
         try {
-            result = mSslEngine.unwrap(packetData, applicationData);
+            result = mSslEngine.unwrap(mPacketData, mApplicationData);
         } catch (SSLException e) {
             LOG.e(TAG, "Encountered an issue while unwrapping data. Connection will be closed.", e);
-            return closeConnection(applicationData, packetData);
+            return closeConnection();
         }
 
         mHandshakeStatus = result.getHandshakeStatus();
         if (result.getStatus() != Status.OK) {
-            return closeConnection(applicationData, packetData);
+            return closeConnection();
         }
 
-        return new TlsResult(getByteArrayFromBuffer(applicationData), TLS_STATUS_SUCCESS);
+        return new TlsResult(getByteArrayFromBuffer(mApplicationData), TLS_STATUS_SUCCESS);
     }
 
     /**
@@ -316,22 +322,22 @@ public class TlsSession {
      * @param packetData a destination buffer for outbound data
      * @return a tls result containing the wrapped message and status of operation
      */
-    private TlsResult wrap(ByteBuffer applicationData, ByteBuffer packetData) {
+    private TlsResult doWrap() {
         SSLEngineResult result;
         try {
-            result = mSslEngine.wrap(applicationData, packetData);
+            result = mSslEngine.wrap(mApplicationData, mPacketData);
         } catch (SSLException e) {
             LOG.e(TAG, "Encountered an issue while wrapping data. Connection will be closed.", e);
-            return closeConnection(applicationData, packetData);
+            return closeConnection();
         }
 
         mHandshakeStatus = result.getHandshakeStatus();
         if (result.getStatus() != Status.OK) {
-            return closeConnection(applicationData, packetData);
+            return closeConnection();
         }
 
         return new TlsResult(
-                getByteArrayFromBuffer(packetData),
+                getByteArrayFromBuffer(mPacketData),
                 (mHandshakeStatus == HandshakeStatus.FINISHED)
                         ? TLS_STATUS_TUNNEL_ESTABLISHED
                         : TLS_STATUS_SUCCESS);
@@ -345,22 +351,6 @@ public class TlsSession {
      * @return a tls result with the status of the operation as well as a potential closing message
      */
     public TlsResult closeConnection() {
-        // TODO(b/163561894): Revert to persistent ByteBuffers in TLS Session
-        return closeConnection(
-                ByteBuffer.allocate(mSslSession.getApplicationBufferSize()),
-                ByteBuffer.allocate(mSslSession.getPacketBufferSize()));
-    }
-
-    /**
-     * Attempts to close the TLS tunnel.
-     *
-     * <p>Once a session has been closed, it cannot be reopened.
-     *
-     * @param applicationData a bytebuffer for the client side
-     * @param packetData a bytebuffer for the server side
-     * @return a tls result with the status of the operation as well as a potential closing message
-     */
-    private TlsResult closeConnection(ByteBuffer applicationData, ByteBuffer packetData) {
         try {
             mSslEngine.closeInbound();
         } catch (SSLException e) {
@@ -374,15 +364,15 @@ public class TlsSession {
             return new TlsResult(TLS_STATUS_CLOSED);
         }
 
-        applicationData.clear();
-        packetData.clear();
+        clearAndGrowPacketBufferIfNeeded();
+        clearAndGrowApplicationBufferIfNeeded();
 
         SSLEngineResult result;
         while (mHandshakeStatus == HandshakeStatus.NEED_WRAP) {
             try {
                 // the wrap is handled internally in order to preserve data in the buffers as they
                 // are cleared in the beginning of the closeConnection call
-                result = mSslEngine.wrap(applicationData, packetData);
+                result = mSslEngine.wrap(mApplicationData, mPacketData);
             } catch (SSLException e) {
                 LOG.e(
                         TAG,
@@ -403,7 +393,29 @@ public class TlsSession {
             }
         }
 
-        return new TlsResult(getByteArrayFromBuffer(packetData), TLS_STATUS_CLOSED);
+        return new TlsResult(getByteArrayFromBuffer(mPacketData), TLS_STATUS_CLOSED);
+    }
+
+    /**
+     * Verifies whether the packet data buffer is in need of additional memory and reallocates if
+     * necessary
+     */
+    private void clearAndGrowPacketBufferIfNeeded() {
+        mPacketData.clear();
+        if (mPacketData.capacity() < mSslSession.getPacketBufferSize()) {
+            mPacketData = ByteBuffer.allocate(mSslSession.getPacketBufferSize());
+        }
+    }
+
+    /**
+     * Verifies whether the application data buffer is in need of additional memory and reallocates
+     * if necessary
+     */
+    private void clearAndGrowApplicationBufferIfNeeded() {
+        mApplicationData.clear();
+        if (mApplicationData.capacity() < mSslSession.getApplicationBufferSize()) {
+            mApplicationData = ByteBuffer.allocate(mSslSession.getApplicationBufferSize());
+        }
     }
 
     /**

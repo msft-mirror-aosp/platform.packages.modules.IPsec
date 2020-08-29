@@ -30,6 +30,7 @@ import android.telephony.Annotation.UiccAppType;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.message.EapData.EapMethod;
 
+import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.HashMap;
@@ -46,26 +47,36 @@ import java.util.Objects;
  */
 @SystemApi
 public final class EapSessionConfig {
-    /** @hide */
-    @VisibleForTesting static final byte[] DEFAULT_IDENTITY = new byte[0];
+    private static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     // IANA -> EapMethodConfig for that method
-    /** @hide */
-    public final Map<Integer, EapMethodConfig> eapConfigs;
-    /** @hide */
-    public final byte[] eapIdentity;
+    private final Map<Integer, EapMethodConfig> mEapConfigs;
+    private final byte[] mEapIdentity;
 
     /** @hide */
     @VisibleForTesting
     public EapSessionConfig(Map<Integer, EapMethodConfig> eapConfigs, byte[] eapIdentity) {
-        this.eapConfigs = Collections.unmodifiableMap(eapConfigs);
-        this.eapIdentity = eapIdentity;
+        Objects.requireNonNull(eapConfigs, "eapConfigs must not be null");
+        Objects.requireNonNull(eapIdentity, "eapIdentity must not be null");
+
+        mEapConfigs = Collections.unmodifiableMap(eapConfigs);
+        mEapIdentity = eapIdentity;
+    }
+
+    /**
+     * Gets the EAP configs set in this EapSessionConfig.
+     *
+     * @hide
+     */
+    public Map<Integer, EapMethodConfig> getEapConfigs() {
+        // Return the underlying Collection directly because it's unmodifiable
+        return mEapConfigs;
     }
 
     /** Retrieves client's EAP Identity */
     @NonNull
     public byte[] getEapIdentity() {
-        return eapIdentity;
+        return mEapIdentity.clone();
     }
 
     /**
@@ -75,7 +86,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapSimConfig getEapSimConfig() {
-        return (EapSimConfig) eapConfigs.get(EAP_TYPE_SIM);
+        return (EapSimConfig) mEapConfigs.get(EAP_TYPE_SIM);
     }
 
     /**
@@ -85,7 +96,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapAkaConfig getEapAkaConfig() {
-        return (EapAkaConfig) eapConfigs.get(EAP_TYPE_AKA);
+        return (EapAkaConfig) mEapConfigs.get(EAP_TYPE_AKA);
     }
 
     /**
@@ -95,7 +106,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapAkaPrimeConfig getEapAkaPrimeConfig() {
-        return (EapAkaPrimeConfig) eapConfigs.get(EAP_TYPE_AKA_PRIME);
+        return (EapAkaPrimeConfig) mEapConfigs.get(EAP_TYPE_AKA_PRIME);
     }
 
     /**
@@ -105,7 +116,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapMsChapV2Config getEapMsChapV2onfig() {
-        return (EapMsChapV2Config) eapConfigs.get(EAP_TYPE_MSCHAP_V2);
+        return (EapMsChapV2Config) mEapConfigs.get(EAP_TYPE_MSCHAP_V2);
     }
 
     /**
@@ -116,7 +127,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapTtlsConfig getEapTtlsConfig() {
-        return (EapTtlsConfig) eapConfigs.get(EAP_TYPE_TTLS);
+        return (EapTtlsConfig) mEapConfigs.get(EAP_TYPE_TTLS);
     }
 
     /** This class can be used to incrementally construct an {@link EapSessionConfig}. */
@@ -138,6 +149,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public Builder setEapIdentity(@NonNull byte[] eapIdentity) {
+            Objects.requireNonNull(eapIdentity, "eapIdentity must not be null");
             this.mEapIdentity = eapIdentity.clone();
             return this;
         }
@@ -209,21 +221,21 @@ public final class EapSessionConfig {
         /**
          * Sets the configuration for EAP-TTLS
          *
-         * <p>If a null trustedCa is provided, the system-default CA's will be used instead
+         * <p>Nested tunnel authentications are disallowed.
          *
-         * <p>The inner EAP session config MUST NOT have an EapTtlsConfig. Only the outer session
-         * config can contain EAP-TTLS.
-         *
-         * @param trustedCa specifies a specific CA to trust
+         * @param serverCaCert the CA certificate for validating the received server certificate(s).
+         *     If a certificate is provided, it MUST be the root CA used by the server, or
+         *     authentication will fail. If no certificate is provided, any root CA in the system's
+         *     truststore is considered acceptable.
          * @param innerEapSessionConfig represents the configuration for the inner EAP instance
          * @return Builder this, to facilitate chaining
          * @hide
          */
         @NonNull
         public Builder setEapTtlsConfig(
-                @Nullable X509Certificate trustedCa,
+                @Nullable X509Certificate serverCaCert,
                 @NonNull EapSessionConfig innerEapSessionConfig) {
-            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(trustedCa, innerEapSessionConfig));
+            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(serverCaCert, innerEapSessionConfig));
             return this;
         }
 
@@ -247,12 +259,11 @@ public final class EapSessionConfig {
      * EapMethodConfig represents a generic EAP method configuration.
      */
     public abstract static class EapMethodConfig {
-        /** @hide */
-        @EapMethod public final int methodType;
+        @EapMethod private final int mMethodType;
 
         /** @hide */
         EapMethodConfig(@EapMethod int methodType) {
-            this.methodType = methodType;
+            mMethodType = methodType;
         }
 
         /**
@@ -261,7 +272,7 @@ public final class EapSessionConfig {
          * @return the IANA-defined EAP method constant
          */
         public int getMethodType() {
-            return methodType;
+            return mMethodType;
         }
 
         /**
@@ -284,15 +295,13 @@ public final class EapSessionConfig {
      * authentication.
      */
     public abstract static class EapUiccConfig extends EapMethodConfig {
-        /** @hide */
-        public final int subId;
-        /** @hide */
-        public final int apptype;
+        private final int mSubId;
+        private final int mApptype;
 
         private EapUiccConfig(@EapMethod int methodType, int subId, @UiccAppType int apptype) {
             super(methodType);
-            this.subId = subId;
-            this.apptype = apptype;
+            mSubId = subId;
+            mApptype = apptype;
         }
 
         /**
@@ -301,7 +310,7 @@ public final class EapSessionConfig {
          * @return the subId
          */
         public int getSubId() {
-            return subId;
+            return mSubId;
         }
 
         /**
@@ -310,7 +319,7 @@ public final class EapSessionConfig {
          * @return the {@link UiccAppType} constant
          */
         public int getAppType() {
-            return apptype;
+            return mApptype;
         }
 
         /** @hide */
@@ -351,10 +360,8 @@ public final class EapSessionConfig {
      * EapAkaPrimeConfig represents the configs needed for an EAP-AKA' session.
      */
     public static class EapAkaPrimeConfig extends EapAkaConfig {
-        /** @hide */
-        @NonNull public final String networkName;
-        /** @hide */
-        public final boolean allowMismatchedNetworkNames;
+        @NonNull private final String mNetworkName;
+        private final boolean mAllowMismatchedNetworkNames;
 
         /** @hide */
         @VisibleForTesting
@@ -365,12 +372,10 @@ public final class EapSessionConfig {
                 boolean allowMismatchedNetworkNames) {
             super(EAP_TYPE_AKA_PRIME, subId, apptype);
 
-            if (networkName == null) {
-                throw new IllegalArgumentException("NetworkName was null");
-            }
+            Objects.requireNonNull(networkName, "networkName must not be null");
 
-            this.networkName = networkName;
-            this.allowMismatchedNetworkNames = allowMismatchedNetworkNames;
+            mNetworkName = networkName;
+            mAllowMismatchedNetworkNames = allowMismatchedNetworkNames;
         }
 
         /**
@@ -380,7 +385,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public String getNetworkName() {
-            return networkName;
+            return mNetworkName;
         }
 
         /**
@@ -389,7 +394,7 @@ public final class EapSessionConfig {
          * @return whether network name mismatches are allowed
          */
         public boolean allowsMismatchedNetworkNames() {
-            return allowMismatchedNetworkNames;
+            return mAllowMismatchedNetworkNames;
         }
     }
 
@@ -397,22 +402,19 @@ public final class EapSessionConfig {
      * EapMsChapV2Config represents the configs needed for an EAP MSCHAPv2 session.
      */
     public static class EapMsChapV2Config extends EapMethodConfig {
-        /** @hide */
-        @NonNull public final String username;
-        /** @hide */
-        @NonNull public final String password;
+        @NonNull private final String mUsername;
+        @NonNull private final String mPassword;
 
         /** @hide */
         @VisibleForTesting
         public EapMsChapV2Config(String username, String password) {
             super(EAP_TYPE_MSCHAP_V2);
 
-            if (username == null || password == null) {
-                throw new IllegalArgumentException("Username or password was null");
-            }
+            Objects.requireNonNull(username, "username must not be null");
+            Objects.requireNonNull(password, "password must not be null");
 
-            this.username = username;
-            this.password = password;
+            mUsername = username;
+            mPassword = password;
         }
 
         /**
@@ -422,7 +424,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public String getUsername() {
-            return username;
+            return mUsername;
         }
 
         /**
@@ -432,7 +434,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public String getPassword() {
-            return password;
+            return mPassword;
         }
     }
 
@@ -442,31 +444,26 @@ public final class EapSessionConfig {
      * @hide
      */
     public static class EapTtlsConfig extends EapMethodConfig {
-
-        /** @hide */
-        @Nullable public final X509Certificate trustedCa;
-
-        /** @hide */
-        @NonNull public final EapSessionConfig innerEapSessionConfig;
+        @Nullable private final TrustAnchor mOverrideTrustAnchor;
+        @NonNull private final EapSessionConfig mInnerEapSessionConfig;
 
         /** @hide */
         @VisibleForTesting
         public EapTtlsConfig(
-                @Nullable X509Certificate trustedCa,
+                @Nullable X509Certificate serverCaCert,
                 @NonNull EapSessionConfig innerEapSessionConfig) {
             super(EAP_TYPE_TTLS);
-            // TODO(b/163572466): Translate root certificate to TrustAnchor in TTLS session config
-            this.trustedCa = trustedCa;
-
-            Objects.requireNonNull(
-                    innerEapSessionConfig,
-                    "EAP-TTLS config must contain an inner EAP session config for tunnelled"
-                            + " authentication");
-            if (innerEapSessionConfig.eapConfigs.containsKey(EAP_TYPE_TTLS)) {
+            mInnerEapSessionConfig =
+                    Objects.requireNonNull(
+                            innerEapSessionConfig, "innerEapSessionConfig must not be null");
+            if (mInnerEapSessionConfig.getEapConfigs().containsKey(EAP_TYPE_TTLS)) {
                 throw new IllegalArgumentException("Recursive EAP-TTLS method configs not allowed");
             }
 
-            this.innerEapSessionConfig = innerEapSessionConfig;
+            mOverrideTrustAnchor =
+                    (serverCaCert == null)
+                            ? null
+                            : new TrustAnchor(serverCaCert, null /* nameConstraints */);
         }
 
         /** @hide */
@@ -476,25 +473,26 @@ public final class EapSessionConfig {
         }
 
         /**
-         * Retrieves the root certificate
+         * Retrieves the provided CA certificate for validating the remote certificate(s)
          *
-         * @return an X509Certificate representing the root certificate
+         * @return the CA certificate for validating the received server certificate or null if the
+         *     system default is preferred
          * @hide
          */
         @Nullable
-        public X509Certificate getTrustedCa() {
-            return trustedCa;
+        public X509Certificate getServerCaCert() {
+            return (mOverrideTrustAnchor == null) ? null : mOverrideTrustAnchor.getTrustedCert();
         }
 
         /**
          * Retrieves the inner EAP session config
          *
-         * @return an EapSessionConfig representing the config for tunnelled EAP authentication
+         * @return an EapSessionConfig representing the config for tunneled EAP authentication
          * @hide
          */
         @NonNull
         public EapSessionConfig getInnerEapSessionConfig() {
-            return innerEapSessionConfig;
+            return mInnerEapSessionConfig;
         }
     }
 
@@ -509,7 +507,7 @@ public final class EapSessionConfig {
      * @hide
      */
     public boolean areAllMethodsEapOnlySafe() {
-        for(Map.Entry<Integer, EapMethodConfig> eapConfigsEntry : eapConfigs.entrySet()) {
+        for (Map.Entry<Integer, EapMethodConfig> eapConfigsEntry : mEapConfigs.entrySet()) {
             if (!eapConfigsEntry.getValue().isEapOnlySafeMethod()) {
                 return false;
             }
