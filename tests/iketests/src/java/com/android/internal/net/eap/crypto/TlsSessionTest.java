@@ -55,14 +55,14 @@ public class TlsSessionTest {
 
     static final byte[] SAMPLE_PACKET_TLS_MESSAGE =
             hexStringToByteArray(
-                    "16030100a5010000a10303000102030405060708090a0b0c0d0e0f10"
-                            + "1112131415161718191a1b1c1d1e1f000020cca8cca9c02fc030c0"
-                            + "2bc02cc013c009c014c00a009c009d002f0035c012000a01000058"
-                            + "0000001800160000136578616d706c652e75");
+                    "17030300800A7516313DA811E690BAF1E76B5C25A1B57B891FC03AECDE89B5C75044B3111"
+                            + "966EF9149ADA96F07255C9A169105B0C57E2C57780CDA72CD43B3316F923AB2"
+                            + "1074BE70CC87F5C862F85E862F69105B0C57E2C57780C9C8D74BE705CC87F5C"
+                            + "8");
     static final byte[] SAMPLE_APPLICATION_TLS_MESSAGE =
             hexStringToByteArray(
-                    "16030300310200002d0303707172737475767778797a7b7c7d7e7f808182838485868788"
-                            + "898a8b8c8d8e8f00c013000005ff");
+                    "1603010085010000810303DE76A65F038E90315BB25B49CB9AB4E2540586C3B25851604C8"
+                            + "D6EFECA11C16D00001CC02BC02C");
     static final byte[] EMPTY_BYTE_ARRAY = new byte[0];
 
     static final int APPLICATION_BUFFER_SIZE_TLS_MESSAGE = 50;
