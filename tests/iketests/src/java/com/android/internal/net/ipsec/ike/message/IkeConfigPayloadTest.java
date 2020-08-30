@@ -73,7 +73,7 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
+import java.util.ArrayList;
 import java.util.List;
 
 public final class IkeConfigPayloadTest {
@@ -96,9 +96,9 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray(CONFIG_RESP_PAYLOAD_HEX);
 
     private static final Inet4Address IPV4_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.100"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.100");
     private static final Inet4Address IPV4_NETMASK =
-            (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.240"));
+            (Inet4Address) InetAddresses.parseNumericAddress("255.255.255.240");
     private static final int IP4_PREFIX_LEN = 28;
     private static final LinkAddress IPV4_LINK_ADDRESS =
             new LinkAddress(IPV4_ADDRESS, IP4_PREFIX_LEN);
@@ -112,14 +112,14 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("00020000");
 
     private static final Inet4Address IPV4_DNS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("8.8.8.8"));
+            (Inet4Address) InetAddresses.parseNumericAddress("8.8.8.8");
     private static final byte[] IPV4_DNS_ATTRIBUTE_VALUE =
             TestUtils.hexStringToByteArray("08080808");
     private static final byte[] IPV4_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00030000");
 
     private static final Inet4Address IPV4_DHCP =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.200");
     private static final byte[] IPV4_DHCP_ATTRIBUTE_WITH_VALUE =
             TestUtils.hexStringToByteArray("00060004c00002c8");
     private static final byte[] IPV4_DHCP_ATTRIBUTE_WITHOUT_VALUE =
@@ -133,14 +133,14 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("000d0000");
 
     private static final Inet4Address IPV4_PCSCF_ADDR =
-            (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.1"));
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.1");
     private static final byte[] IPV4_PCSCF_ATTRIBUTE_WITH_VALUE =
             TestUtils.hexStringToByteArray("00140004c0000201");
     private static final byte[] IPV4_PCSCF_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("00140000");
 
     private static final Inet6Address IPV6_ADDRESS =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::1");
     private static final int IP6_PREFIX_LEN = 64;
     private static final LinkAddress IPV6_LINK_ADDRESS =
             new LinkAddress(IPV6_ADDRESS, IP6_PREFIX_LEN);
@@ -159,12 +159,12 @@ public final class IkeConfigPayloadTest {
             TestUtils.hexStringToByteArray("000f0000");
 
     private static final Inet6Address IPV6_DNS =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8:100::1"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8:100::1");
     private static final byte[] IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE =
             TestUtils.hexStringToByteArray("000a0000");
 
     private static final Inet6Address IPV6_PCSCF_ADDR =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::1");
     private static final byte[] IPV6_PCSCF_ATTRIBUTE_WITH_VALUE =
             TestUtils.hexStringToByteArray("0015001020010db8000000000000000000000001");
     private static final byte[] IPV6_PCSCF_ATTRIBUTE_WITHOUT_VALUE =
@@ -183,9 +183,9 @@ public final class IkeConfigPayloadTest {
     public void setUp() throws Exception {
         mNetMasks =
                 new Inet4Address[] {
-                    (Inet4Address) (InetAddresses.parseNumericAddress("0.0.0.0")),
-                    (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.255")),
-                    (Inet4Address) (InetAddresses.parseNumericAddress("255.255.255.240"))
+                    (Inet4Address) InetAddresses.parseNumericAddress("0.0.0.0"),
+                    (Inet4Address) InetAddresses.parseNumericAddress("255.255.255.255"),
+                    (Inet4Address) InetAddresses.parseNumericAddress("255.255.255.240")
                 };
         mIpv4PrefixLens = new int[] {0, 32, 28};
     }
@@ -322,7 +322,7 @@ public final class IkeConfigPayloadTest {
 
     @Test
     public void testBuildAndEncodeOutboundConfig() throws Exception {
-        List<ConfigAttribute> mockAttributeList = new LinkedList<>();
+        List<ConfigAttribute> mockAttributeList = new ArrayList<>();
         mockAttributeList.add(makeMockAttribute(IPV4_ADDRESS_ATTRIBUTE_WITHOUT_VALUE));
         mockAttributeList.add(makeMockAttribute(IPV6_ADDRESS_ATTRIBUTE_WITHOUT_VALUE));
         mockAttributeList.add(makeMockAttribute(IPV4_DNS_ATTRIBUTE_WITHOUT_VALUE));

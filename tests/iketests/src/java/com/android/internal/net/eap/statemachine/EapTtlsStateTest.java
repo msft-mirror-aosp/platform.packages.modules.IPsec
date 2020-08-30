@@ -65,8 +65,9 @@ import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeData
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 import com.android.internal.net.eap.statemachine.EapMethodStateMachine.EapMethodState;
 import com.android.internal.net.eap.statemachine.EapMethodStateMachine.FinalState;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.AwaitingClosureState;
+import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.ErroredAndAwaitingClosureState;
 
+import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -122,10 +123,15 @@ public class EapTtlsStateTest {
                         mEapTtlsConfig,
                         mMockSecureRandom,
                         mMockTypeDataDecoder,
-                        mMockTlsSessionFactory,
                         mInboundFragmentationHelper,
                         mOutboundFragmentationHelper);
+        EapTtlsMethodStateMachine.sTlsSessionFactory = mMockTlsSessionFactory;
         when(mMockTlsSessionFactory.newInstance(any(), any())).thenReturn(mMockTlsSession);
+    }
+
+    @AfterClass
+    public static void teardown() {
+        EapTtlsMethodStateMachine.sTlsSessionFactory = new TlsSessionFactory();
     }
 
     @Test
@@ -206,7 +212,7 @@ public class EapTtlsStateTest {
         processMessageAndVerifyEapResponse(EAP_RESPONSE_TTLS_WITH_LENGTH);
         verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
         verify(mMockTlsSession).closeConnection();
-        assertTrue(mStateMachine.getState() instanceof AwaitingClosureState);
+        assertTrue(mStateMachine.getState() instanceof ErroredAndAwaitingClosureState);
     }
 
     /**

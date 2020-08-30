@@ -54,6 +54,7 @@ import java.util.LinkedHashMap;
 public class EapAkaIdentityStateTest extends EapAkaStateTest {
     private IdentityState mIdentityState;
 
+    @Override
     @Before
     public void setUp() {
         super.setUp();

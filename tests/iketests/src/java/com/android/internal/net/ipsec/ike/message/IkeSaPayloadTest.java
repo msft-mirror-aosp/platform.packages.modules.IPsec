@@ -73,8 +73,8 @@ import org.junit.Test;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedList;
 import java.util.List;
 
 public final class IkeSaPayloadTest {
@@ -178,7 +178,7 @@ public final class IkeSaPayloadTest {
         Transform.setAttributeDecoder(mMockedAttributeDecoder);
 
         mAttributeKeyLength128 = new KeyLengthAttribute(SaProposal.KEY_LEN_AES_128);
-        mAttributeListWithKeyLength128 = new LinkedList<>();
+        mAttributeListWithKeyLength128 = new ArrayList<>();
         mAttributeListWithKeyLength128.add(mAttributeKeyLength128);
 
         mEncrAesCbc128Transform =
@@ -305,7 +305,7 @@ public final class IkeSaPayloadTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        List<Attribute> attributeList = new LinkedList<>();
+        List<Attribute> attributeList = new ArrayList<>();
         Attribute keyLengAttr = new KeyLengthAttribute(SaProposal.KEY_LEN_AES_128 + 1);
         attributeList.add(keyLengAttr);
 
@@ -351,7 +351,7 @@ public final class IkeSaPayloadTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(PRF_TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        doReturn(new LinkedList<Attribute>())
+        doReturn(new ArrayList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
 
@@ -386,7 +386,7 @@ public final class IkeSaPayloadTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(INTEG_TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        doReturn(new LinkedList<Attribute>())
+        doReturn(new ArrayList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
 
@@ -437,7 +437,7 @@ public final class IkeSaPayloadTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(DH_GROUP_TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        doReturn(new LinkedList<Attribute>())
+        doReturn(new ArrayList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
 
@@ -472,7 +472,7 @@ public final class IkeSaPayloadTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(ESN_TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        doReturn(new LinkedList<Attribute>())
+        doReturn(new ArrayList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
 
@@ -489,7 +489,7 @@ public final class IkeSaPayloadTest {
         inputPacket[TRANSFORM_ID_OFFSET] = -1;
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        doReturn(new LinkedList<Attribute>())
+        doReturn(new ArrayList<Attribute>())
                 .when(mMockedAttributeDecoder)
                 .decodeAttributes(anyInt(), any());
 
@@ -546,7 +546,7 @@ public final class IkeSaPayloadTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        List<Attribute> attributeList = new LinkedList<>();
+        List<Attribute> attributeList = new ArrayList<>();
         attributeList.add(mAttributeKeyLength128);
         attributeList.add(mAttributeKeyLength128);
 
@@ -579,7 +579,7 @@ public final class IkeSaPayloadTest {
         byte[] inputPacket = TestUtils.hexStringToByteArray(ENCR_TRANSFORM_RAW_PACKET);
         ByteBuffer inputBuffer = ByteBuffer.wrap(inputPacket);
 
-        List<Attribute> attributeList = new LinkedList<>();
+        List<Attribute> attributeList = new ArrayList<>();
         attributeList.add(mAttributeKeyLength128);
         Attribute attributeUnrecognized = new UnrecognizedAttribute(1, new byte[0]);
         attributeList.add(attributeUnrecognized);
@@ -876,7 +876,7 @@ public final class IkeSaPayloadTest {
         Transform[] negotiatedTransformSet =
                 Arrays.copyOfRange(
                         mValidNegotiatedTransformSet, 0, mValidNegotiatedTransformSet.length);
-        negotiatedTransformSet[0] = new UnrecognizedTransform(-1, 1, new LinkedList<>());
+        negotiatedTransformSet[0] = new UnrecognizedTransform(-1, 1, new ArrayList<>());
 
         try {
             buildAndVerifyIkeSaRespProposal(inputPacket, negotiatedTransformSet);

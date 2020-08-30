@@ -112,6 +112,7 @@ public class EapAkaChallengeStateTest extends EapAkaStateTest {
     private static final byte[] BIDDING_DOWN_MAC =
             hexStringToByteArray("427055D060BC9B52059F297C6D482312");
 
+    @Override
     @Before
     public void setUp() {
         super.setUp();
