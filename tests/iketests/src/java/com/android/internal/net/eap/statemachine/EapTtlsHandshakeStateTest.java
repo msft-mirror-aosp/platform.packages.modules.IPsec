@@ -20,8 +20,15 @@ import static com.android.internal.net.TestUtils.hexStringToByteArray;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_SUCCESS;
+import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_TUNNEL_ESTABLISHED;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_ACK;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_FINAL_FRAGMENT;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_INITIAL_FRAGMENT;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_WITH_LENGTH;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -34,8 +41,12 @@ import static org.mockito.Mockito.when;
 import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsHandshakeException;
 import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.AwaitingClosureState;
+import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
+import com.android.internal.net.eap.statemachine.EapMethodStateMachine.EapMethodState;
+import com.android.internal.net.eap.statemachine.EapMethodStateMachine.FinalState;
+import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.ErroredAndAwaitingClosureState;
 import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.HandshakeState;
+import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.TunnelState;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -58,6 +69,7 @@ public class EapTtlsHandshakeStateTest extends EapTtlsStateTest {
         super.setUp();
 
         mHandshakeState = mStateMachine.new HandshakeState();
+        mStateMachine.mTlsSession = mMockTlsSession;
         mStateMachine.transitionTo(mHandshakeState);
     }
 
@@ -69,6 +81,7 @@ public class EapTtlsHandshakeStateTest extends EapTtlsStateTest {
 
     @Test
     public void testStartHandshake_success() throws Exception {
+        mStateMachine.mTlsSession = null;
         mockTypeDataDecoding(getEapTtlsStartTypeData());
         when(mMockTlsSessionFactory.newInstance(any(), any())).thenReturn(mMockTlsSession);
         when(mMockTlsSession.startHandshake())
@@ -83,6 +96,7 @@ public class EapTtlsHandshakeStateTest extends EapTtlsStateTest {
 
     @Test
     public void testStartHandshake_tlsSetUpFailure() throws Exception {
+        mStateMachine.mTlsSession = null;
         when(mMockTlsSessionFactory.newInstance(any(), any()))
                 .thenThrow(GeneralSecurityException.class);
 
@@ -91,37 +105,227 @@ public class EapTtlsHandshakeStateTest extends EapTtlsStateTest {
 
     @Test
     public void testStartHandshake_failure() throws Exception {
+        mStateMachine.mTlsSession = null;
         when(mMockTlsSessionFactory.newInstance(any(), any())).thenReturn(mMockTlsSession);
         when(mMockTlsSession.startHandshake())
                 .thenReturn(mMockTlsSession.new TlsResult(TLS_STATUS_FAILURE));
 
         testHandshakeFailure_eapError(getEapTtlsStartTypeData(), EapTtlsHandshakeException.class);
+        assertTrue(mStateMachine.getState() instanceof FinalState);
     }
 
     @Test
     public void testSecondStartRequest() throws Exception {
-        mStateMachine.mTlsSession = mMockTlsSession;
         processMessageAndVerifyConnectionClosed(getEapTtlsStartTypeData());
     }
 
+    @Test
+    public void testHandshake_handshakeComplete() throws Exception {
+        testHandshake(
+                getEapTtlsTypeData(EAP_TTLS_DUMMY_DATA_BYTES),
+                TLS_STATUS_TUNNEL_ESTABLISHED,
+                EAP_TTLS_DUMMY_DATA_BYTES,
+                EAP_RESPONSE_TTLS_WITH_LENGTH,
+                TunnelState.class);
+    }
+
+    @Test
+    public void testHandshake_intermediateResponse() throws Exception {
+        testHandshake(
+                getEapTtlsTypeData(EAP_TTLS_DUMMY_DATA_BYTES),
+                TLS_STATUS_SUCCESS,
+                EAP_TTLS_DUMMY_DATA_BYTES,
+                EAP_RESPONSE_TTLS_WITH_LENGTH,
+                HandshakeState.class);
+    }
+
+    @Test
+    public void testHandshake_failure() throws Exception {
+        when(mMockTlsSession.processHandshakeData(
+                        eq(EAP_TTLS_DUMMY_DATA_BYTES), eq(DUMMY_EAP_IDENTITY_AVP)))
+                .thenReturn(mMockTlsSession.new TlsResult(TLS_STATUS_FAILURE));
+
+        testHandshakeFailure_eapError(
+                getEapTtlsTypeData(EAP_TTLS_DUMMY_DATA_BYTES), EapTtlsHandshakeException.class);
+
+        verify(mMockTlsSession)
+                .processHandshakeData(eq(EAP_TTLS_DUMMY_DATA_BYTES), eq(DUMMY_EAP_IDENTITY_AVP));
+        assertTrue(mStateMachine.getState() instanceof FinalState);
+    }
+
+    @Test
+    public void testHandshake_closed() throws Exception {
+        testHandshake(
+                getEapTtlsTypeData(EAP_TTLS_DUMMY_DATA_BYTES),
+                TLS_STATUS_CLOSED,
+                EAP_TTLS_DUMMY_DATA_BYTES,
+                EAP_RESPONSE_TTLS_WITH_LENGTH,
+                ErroredAndAwaitingClosureState.class);
+    }
+
+    @Test
+    public void testHandshake_inboundFragmentation_initialFragment() throws Exception {
+        mockTypeDataDecoding(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_ASSEMBLED_FRAGMENTS,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+
+        processMessageAndVerifyEapResponse(EAP_RESPONSE_TTLS_ACK);
+        assertTrue(mInboundFragmentationHelper.isAwaitingFragments());
+        verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
+        assertTrue(mStateMachine.getState() instanceof HandshakeState);
+    }
+
+    @Test
+    public void testHandshake_inboundFragmentation_finalFragment() throws Exception {
+        mInboundFragmentationHelper.assembleInboundMessage(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_ASSEMBLED_FRAGMENTS,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+
+        testHandshake(
+                getEapTtlsTypeData(EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES),
+                EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES,
+                TLS_STATUS_SUCCESS,
+                EAP_TTLS_DUMMY_DATA_BYTES,
+                EAP_RESPONSE_TTLS_WITH_LENGTH,
+                HandshakeState.class);
+    }
+
+    @Test
+    public void testHandshake_inboundFragmentation_noLength() throws Exception {
+        processMessageAndVerifyConnectionClosed(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        0 /* messageLength */,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+    }
+
+    @Test
+    public void testHandshake_inboundFragmentation_overflow() throws Exception {
+        mInboundFragmentationHelper.assembleInboundMessage(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_FRAGMENT_ONE,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+
+        processMessageAndVerifyConnectionClosed(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        0 /* messageLength */,
+                        EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES));
+    }
+
+    @Test
+    public void testHandshake_inboundFragmentation_lengthBitSet() throws Exception {
+        mInboundFragmentationHelper.assembleInboundMessage(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_ASSEMBLED_FRAGMENTS,
+                        EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES));
+
+        processMessageAndVerifyConnectionClosed(
+                getEapTtlsFragmentTypeData(
+                        true /* isFragmented */,
+                        BUFFER_SIZE_ASSEMBLED_FRAGMENTS,
+                        EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES));
+    }
+
+    @Test
+    public void testHandshake_outboundFragmentation_initialFragment() throws Exception {
+        testHandshake(
+                getEapTtlsTypeData(EAP_TTLS_DUMMY_DATA_BYTES),
+                TLS_STATUS_SUCCESS,
+                EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES,
+                EAP_RESPONSE_TTLS_INITIAL_FRAGMENT,
+                HandshakeState.class);
+
+        verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
+    }
+
+    @Test
+    public void testHandshake_outboundFragmentation_finalFragment() throws Exception {
+        mOutboundFragmentationHelper.setupOutboundFragmentation(
+                EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES);
+        mOutboundFragmentationHelper.getNextOutboundFragment();
+
+        mockTypeDataDecoding(getEapTtlsTypeData(EMPTY_BYTE_ARRAY));
+
+        processMessageAndVerifyEapResponse(EAP_RESPONSE_TTLS_FINAL_FRAGMENT);
+        verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
+        assertTrue(mStateMachine.getState() instanceof HandshakeState);
+    }
+
+    @Test
+    public void testHandshake_outboundFragmentation_receivedNonAck() throws Exception {
+        mOutboundFragmentationHelper.setupOutboundFragmentation(
+                EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES);
+        mOutboundFragmentationHelper.getNextOutboundFragment();
+
+        processMessageAndVerifyConnectionClosed(getEapTtlsTypeData(EAP_TTLS_DUMMY_DATA_BYTES));
+    }
+
+    @Test
+    public void testHandshake_unexpectedAck() throws Exception {
+        processMessageAndVerifyConnectionClosed(EapTtlsAcknowledgement.getEapTtlsAcknowledgement());
+    }
+
     /**
-     * Completes a run of operations in the handshake state that requires CloseConnection to be
-     * called
+     * Completes an entire run of all operations in the handshake state
+     *
+     * <p>Note that in this case, the decoded data is used in processIncomingData. In other words,
+     * this method does not test for fragmentation.
      *
      * @param decodedTypeData the type data that is decoded by the type data decoder
+     * @param tlsStatus the status returned by processHandshakeData
+     * @param tlsResultData the data returned by processHandshakeData
+     * @param expectedResponse the expected EAP-Response
+     * @param expectedState the expected method state following a response
      */
-    private void processMessageAndVerifyConnectionClosed(EapTtlsTypeData decodedTypeData)
+    private void testHandshake(
+            EapTtlsTypeData decodedTypeData,
+            int tlsStatus,
+            byte[] tlsResultData,
+            byte[] expectedResponse,
+            Class<? extends EapMethodState> expectedState)
+            throws Exception {
+        testHandshake(
+                decodedTypeData,
+                decodedTypeData.data,
+                tlsStatus,
+                tlsResultData,
+                expectedResponse,
+                expectedState);
+    }
+
+    /**
+     * Completes an entire run of all operations in the handshake state
+     *
+     * @param decodedTypeData the type data that is decoded by the type data decoder
+     * @param assembledData the data passed into processHandshakeData
+     * @param tlsStatus the status returned by processHandshakeData
+     * @param tlsResultData the data returned by processHandshakeData
+     * @param expectedResponse the expected EAP-Response
+     * @param expectedState the expected method state following a response
+     */
+    private void testHandshake(
+            EapTtlsTypeData decodedTypeData,
+            byte[] assembledData,
+            int tlsStatus,
+            byte[] tlsResultData,
+            byte[] expectedResponse,
+            Class<? extends EapMethodState> expectedState)
             throws Exception {
         mockTypeDataDecoding(decodedTypeData);
-        when(mMockTlsSession.closeConnection())
-                .thenReturn(
-                        mMockTlsSession
-                        .new TlsResult(EAP_TTLS_DUMMY_DATA_BYTES, TLS_STATUS_CLOSED));
+        when(mMockTlsSession.processHandshakeData(eq(assembledData), eq(DUMMY_EAP_IDENTITY_AVP)))
+                .thenReturn(mMockTlsSession.new TlsResult(tlsResultData, tlsStatus));
 
-        processMessageAndVerifyEapResponse(EAP_RESPONSE_TTLS_WITH_LENGTH);
+        processMessageAndVerifyEapResponse(expectedResponse);
         verify(mMockTypeDataDecoder).decodeEapTtlsRequestPacket(eq(DUMMY_EAP_TYPE_DATA));
-        verify(mMockTlsSession).closeConnection();
-        assertTrue(mStateMachine.getState() instanceof AwaitingClosureState);
+        verify(mMockTlsSession).processHandshakeData(eq(assembledData), eq(DUMMY_EAP_IDENTITY_AVP));
+        assertTrue(expectedState.isInstance(mStateMachine.getState()));
     }
 
     /**
