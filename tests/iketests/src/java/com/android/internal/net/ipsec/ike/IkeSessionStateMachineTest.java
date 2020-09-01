@@ -234,7 +234,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             "2900001c00004005d915368ca036004cb578ae3e3fb268509aeab190";
     private static final String FRAGMENTATION_SUPPORTED_PAYLOAD_HEX_STRING = "290000080000402e";
     private static final String SIGNATURE_HASH_SUPPORTED_PAYLOAD_HEX_STRING =
-            "2b00000F0000402f0001000200030004";
+            "2b0000100000402f0001000200030004";
     private static final String DELETE_IKE_PAYLOAD_HEX_STRING = "0000000801000000";
     private static final String NOTIFY_REKEY_IKE_PAYLOAD_HEX_STRING = "2100000800004009";
     private static final String ID_PAYLOAD_INITIATOR_HEX_STRING =
@@ -1449,6 +1449,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(
                 Arrays.asList(EXTENSION_TYPE_FRAGMENTATION),
                 mIkeSessionStateMachine.mEnabledExtensions);
+
+        // Validate Signature Hash Algorithms received in IKE INIT response
+        assertEquals(
+                Arrays.asList(IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES),
+                mIkeSessionStateMachine.mPeerSignatureHashAlgorithms);
     }
 
     private void setIkeInitResults() throws Exception {
