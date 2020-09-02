@@ -2247,6 +2247,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     case IkeNotifyPayload.NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED:
                         // Ignore
                         break;
+                    case IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA:
+                        // Handled in Rekey State. Ignore here.
+                        break;
                     default:
                         // Unknown and unexpected status notifications are ignored as per RFC7296.
                         logw(
