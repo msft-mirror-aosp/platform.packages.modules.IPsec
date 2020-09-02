@@ -35,6 +35,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_CP;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_DELETE;
@@ -2912,6 +2913,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 mSupportFragment = true;
                                 mEnabledExtensions.add(EXTENSION_TYPE_FRAGMENTATION);
                                 break;
+                            case NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS:
+                                // TODO(b/164515741): decode the peer's Signature Hash Algorithms
+                                break;
                             default:
                                 // Unknown and unexpected status notifications are ignored as per
                                 // RFC7296.
@@ -3401,6 +3405,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 throw notifyPayload.validateAndBuildIkeException();
                             }
 
+                        } else if (notifyPayload.isNewChildSaNotify()) {
+                            // If payload is not an error but is for the new Child, it's reasonable
+                            // to receive here. Let the ChildSessionStateMachine handle it.
+                            continue;
                         } else {
                             // Unknown and unexpected status notifications are ignored as per
                             // RFC7296.
@@ -3747,6 +3755,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 throw notifyPayload.validateAndBuildIkeException();
                             }
 
+                        } else if (notifyPayload.isNewChildSaNotify()) {
+                            // If payload is not an error but is for the new Child, it's reasonable
+                            // to receive here. Let the ChildSessionStateMachine handle it.
+                            continue;
                         } else {
                             // Unknown and unexpected status notifications are ignored as per
                             // RFC7296.
