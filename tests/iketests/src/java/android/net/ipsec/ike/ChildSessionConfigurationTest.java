@@ -59,7 +59,7 @@ public final class ChildSessionConfigurationTest {
 
     private static final int IP6_PREFIX_LEN = 64;
     private static final Inet6Address IPV6_ADDRESS =
-            (Inet6Address) (InetAddresses.parseNumericAddress("2001:db8::1"));
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::1");
     private static final LinkAddress IPV6_LINK_ADDRESS =
             new LinkAddress(IPV6_ADDRESS, IP6_PREFIX_LEN);
 
