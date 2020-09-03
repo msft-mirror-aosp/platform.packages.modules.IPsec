@@ -114,7 +114,7 @@ public final class IkeTsPayloadTest {
                         IkeTrafficSelector.TRAFFIC_SELECTOR_TYPE_IPV4_ADDR_RANGE,
                         TS_ONE_START_PORT,
                         TS_ONE_END_PORT,
-                        (Inet4Address) (InetAddresses.parseNumericAddress("192.0.2.200")),
+                        (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.200"),
                         TS_ONE_END_ADDRESS);
 
         IkeTsPayload tsPayload =
