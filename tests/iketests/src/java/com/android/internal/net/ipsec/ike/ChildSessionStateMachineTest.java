@@ -944,8 +944,6 @@ public final class ChildSessionStateMachineTest {
 
     private List<IkePayload> makeInboundRekeyChildPayloads(
             int remoteSpi, String inboundSaHexString, boolean isLocalInitRekey) throws Exception {
-        List<IkePayload> inboundPayloads = new ArrayList<>();
-
         IkeSaPayload saPayload =
                 (IkeSaPayload)
                         IkeTestUtils.hexStringToIkePayload(
