@@ -129,9 +129,9 @@ public final class IkeSaPayloadTest {
     private static final byte[] PROPOSAL_NUMBER_LIST = {1, 2};
 
     private static final Inet4Address LOCAL_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("8.8.4.4"));
+            (Inet4Address) InetAddresses.parseNumericAddress("8.8.4.4");
     private static final Inet4Address REMOTE_ADDRESS =
-            (Inet4Address) (InetAddresses.parseNumericAddress("8.8.8.8"));
+            (Inet4Address) InetAddresses.parseNumericAddress("8.8.8.8");
 
     private static final int DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_ONE = 0x1234;
     private static final int DUMMY_CHILD_SPI_RESOURCE_ID_LOCAL_TWO = 0x1235;
