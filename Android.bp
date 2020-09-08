@@ -52,8 +52,6 @@ java_sdk_library {
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
-
-    stubs_library_visibility: ["//visibility:public"],
 }
 
 filegroup {
