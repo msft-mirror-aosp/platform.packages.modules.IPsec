@@ -19,6 +19,7 @@ package android.net.ipsec.ike;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
+import android.os.PersistableBundle;
 import android.util.Pair;
 import android.util.SparseArray;
 
@@ -28,6 +29,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransfo
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -36,6 +38,7 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * SaProposal represents a proposed configuration to negotiate an IKE or Child SA.
@@ -229,6 +232,14 @@ public abstract class SaProposal {
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_4096_BIT_MODP, "DH_4096_BIT_MODP");
     }
 
+    private static final String PROTOCOL_ID_KEY = "mProtocolId";
+    /** @hide */
+    protected static final String ENCRYPT_ALGO_KEY = "mEncryptionAlgorithms";
+    /** @hide */
+    protected static final String INTEGRITY_ALGO_KEY = "mIntegrityAlgorithms";
+    /** @hide */
+    protected static final String DH_GROUP_KEY = "mDhGroups";
+
     @IkePayload.ProtocolId private final int mProtocolId;
     private final EncryptionTransform[] mEncryptionAlgorithms;
     private final IntegrityTransform[] mIntegrityAlgorithms;
@@ -244,6 +255,52 @@ public abstract class SaProposal {
         mEncryptionAlgorithms = encryptionAlgos;
         mIntegrityAlgorithms = integrityAlgos;
         mDhGroups = dhGroups;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public static SaProposal fromPersistableBundle(@NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        int protocolId = in.getInt(PROTOCOL_ID_KEY);
+        switch (protocolId) {
+            case IkePayload.PROTOCOL_ID_IKE:
+                return IkeSaProposal.fromPersistableBundle(in);
+            case IkePayload.PROTOCOL_ID_ESP:
+                return ChildSaProposal.fromPersistableBundle(in);
+            default:
+                throw new IllegalArgumentException("Invalid protocol ID " + protocolId);
+        }
+    }
+
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = new PersistableBundle();
+
+        result.putInt(PROTOCOL_ID_KEY, mProtocolId);
+
+        PersistableBundle encryptionBundle =
+                PersistableBundleUtils.fromList(
+                        Arrays.asList(mEncryptionAlgorithms),
+                        EncryptionTransform::toPersistableBundle);
+        result.putPersistableBundle(ENCRYPT_ALGO_KEY, encryptionBundle);
+
+        int[] integrityAlgoIdArray = getIntegrityAlgorithms().stream().mapToInt(i -> i).toArray();
+        result.putIntArray(INTEGRITY_ALGO_KEY, integrityAlgoIdArray);
+
+        int[] dhGroupArray = getDhGroups().stream().mapToInt(i -> i).toArray();
+        result.putIntArray(DH_GROUP_KEY, dhGroupArray);
+
+        return result;
     }
 
     /**
@@ -507,6 +564,29 @@ public abstract class SaProposal {
         }
 
         return sb.toString();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                mProtocolId,
+                Arrays.hashCode(mEncryptionAlgorithms),
+                Arrays.hashCode(mIntegrityAlgorithms),
+                Arrays.hashCode(mDhGroups));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof SaProposal)) {
+            return false;
+        }
+
+        SaProposal other = (SaProposal) o;
+
+        return mProtocolId == other.mProtocolId
+                && Arrays.equals(mEncryptionAlgorithms, other.mEncryptionAlgorithms)
+                && Arrays.equals(mIntegrityAlgorithms, other.mIntegrityAlgorithms)
+                && Arrays.equals(mDhGroups, other.mDhGroups);
     }
 
     /**
