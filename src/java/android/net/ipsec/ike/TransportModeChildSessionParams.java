@@ -19,6 +19,7 @@ package android.net.ipsec.ike;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
+import android.os.PersistableBundle;
 
 import java.util.Objects;
 
@@ -43,6 +44,40 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
                 hardLifetimeSec,
                 softLifetimeSec,
                 true /*isTransport*/);
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle *
+     *
+     * <p>Constructed TransportModeChildSessionParams is guaranteed to be valid, as checked by the
+     * TransportModeChildSessionParams.Builder
+     *
+     * @hide
+     */
+    @NonNull
+    public static TransportModeChildSessionParams fromPersistableBundle(
+            @NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle not provided");
+
+        TransportModeChildSessionParams.Builder builder =
+                new TransportModeChildSessionParams.Builder();
+
+        for (ChildSaProposal p : getProposalsFromPersistableBundle(in)) {
+            builder.addSaProposal(p);
+        }
+
+        for (IkeTrafficSelector ts : getTsFromPersistableBundle(in, INBOUND_TS_KEY)) {
+            builder.addInboundTrafficSelectors(ts);
+        }
+
+        for (IkeTrafficSelector ts : getTsFromPersistableBundle(in, OUTBOUND_TS_KEY)) {
+            builder.addOutboundTrafficSelectors(ts);
+        }
+
+        builder.setLifetimeSeconds(
+                in.getInt(HARD_LIFETIME_SEC_KEY), in.getInt(SOFT_LIFETIME_SEC_KEY));
+
+        return builder.build();
     }
 
     /**
