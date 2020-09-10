@@ -26,6 +26,7 @@ import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -164,6 +165,20 @@ public class EapSessionConfigTest {
         assertEquals(EAP_TYPE_TTLS, config.getMethodType());
         assertEquals(innerConfig, config.getInnerEapSessionConfig());
         assertEquals(trustedCa, config.getServerCaCert());
+    }
+
+    @Test
+    public void testEqualsEapTtls() throws Exception {
+        EapSessionConfig innerConfig =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
+        X509Certificate trustedCa = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
+
+        assertEquals(
+                new EapTtlsConfig(trustedCa, innerConfig),
+                new EapTtlsConfig(trustedCa, innerConfig));
+        assertEquals(new EapTtlsConfig(null, innerConfig), new EapTtlsConfig(null, innerConfig));
+        assertNotEquals(
+                new EapTtlsConfig(trustedCa, innerConfig), new EapTtlsConfig(null, innerConfig));
     }
 
     @Test

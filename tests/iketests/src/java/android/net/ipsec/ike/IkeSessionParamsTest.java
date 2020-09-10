@@ -39,6 +39,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.Config
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -58,6 +59,7 @@ import android.telephony.TelephonyManager;
 import android.util.SparseArray;
 
 import com.android.internal.net.TestUtils;
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -68,6 +70,7 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.DSAPrivateKey;
 import java.security.interfaces.RSAKey;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionParamsTest {
@@ -661,6 +664,45 @@ public final class IkeSessionParamsTest {
     @Test
     public void testPersistableBundleEncodeDecodePskAuth() {
         verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthPskConfig(PSK));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeAuthDigitalSignRemote() throws Exception {
+        X509Certificate caCert = CertUtils.createCertFromPemFile("self-signed-ca-b.pem");
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthDigitalSignRemoteConfig(caCert));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeAuthDigitalSignRemoteWithoutCaCert()
+            throws Exception {
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthDigitalSignRemoteConfig(null));
+    }
+
+    @Test
+    public void testEqualsAuthConfigDigitalSignRemote() throws Exception {
+        X509Certificate caCert = CertUtils.createCertFromPemFile("self-signed-ca-b.pem");
+        assertEquals(
+                new IkeAuthDigitalSignRemoteConfig(caCert),
+                new IkeAuthDigitalSignRemoteConfig(caCert));
+        assertEquals(
+                new IkeAuthDigitalSignRemoteConfig(null), new IkeAuthDigitalSignRemoteConfig(null));
+        assertNotEquals(
+                new IkeAuthDigitalSignRemoteConfig(caCert),
+                new IkeAuthDigitalSignRemoteConfig(null));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeAuthDigitalSignLocal() throws Exception {
+        X509Certificate endCert = CertUtils.createCertFromPemFile("end-cert-b.pem");
+        X509Certificate intermediateCertOne =
+                CertUtils.createCertFromPemFile("intermediate-ca-b-one.pem");
+        X509Certificate intermediateCertTwo =
+                CertUtils.createCertFromPemFile("intermediate-ca-b-two.pem");
+        PrivateKey key = CertUtils.createRsaPrivateKeyFromKeyFile("end-cert-key-a.key");
+
+        verifyPersistableBundleEncodeDecodeIsLossless(
+                new IkeAuthDigitalSignLocalConfig(
+                        endCert, Arrays.asList(intermediateCertOne, intermediateCertTwo), key));
     }
 
     @Test

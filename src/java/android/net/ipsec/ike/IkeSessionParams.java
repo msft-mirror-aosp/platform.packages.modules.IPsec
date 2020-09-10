@@ -19,6 +19,9 @@ package android.net.ipsec.ike;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
+import static com.android.internal.net.ipsec.ike.utils.IkeCertUtils.certificateFromByteArray;
+import static com.android.internal.net.ipsec.ike.utils.IkeCertUtils.privateKeyFromByteArray;
+
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
@@ -45,6 +48,7 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.security.PrivateKey;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAKey;
@@ -78,6 +82,20 @@ public final class IkeSessionParams {
     public static final int IKE_AUTH_METHOD_PUB_KEY_SIGNATURE = 2;
     /** @hide */
     public static final int IKE_AUTH_METHOD_EAP = 3;
+
+    /** @hide */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({AUTH_DIRECTION_LOCAL, AUTH_DIRECTION_REMOTE, AUTH_DIRECTION_BOTH})
+    public @interface AuthDirection {}
+
+    // Constants to describe which side (local and/or remote) the authentication configuration will
+    // be used.
+    /** @hide */
+    public static final int AUTH_DIRECTION_LOCAL = 1;
+    /** @hide */
+    public static final int AUTH_DIRECTION_REMOTE = 2;
+    /** @hide */
+    public static final int AUTH_DIRECTION_BOTH = 3;
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -408,12 +426,16 @@ public final class IkeSessionParams {
     /** This class contains common information of an IKEv2 authentication configuration. */
     public abstract static class IkeAuthConfig {
         private static final String AUTH_METHOD_KEY = "mAuthMethod";
+        private static final String AUTH_DIRECTION_KEY = "mAuthDirection";
         /** @hide */
         @IkeAuthMethod public final int mAuthMethod;
+        /** @hide */
+        @AuthDirection public final int mAuthDirection;
 
         /** @hide */
-        IkeAuthConfig(@IkeAuthMethod int authMethod) {
+        IkeAuthConfig(@IkeAuthMethod int authMethod, @AuthDirection int authDirection) {
             mAuthMethod = authMethod;
+            mAuthDirection = authDirection;
         }
 
         /**
@@ -430,9 +452,17 @@ public final class IkeSessionParams {
                 case IKE_AUTH_METHOD_PSK:
                     return IkeAuthPskConfig.fromPersistableBundle(in);
                 case IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
-                    // TODO: Build IkeAuthDigitalSignRemoteConfig and IkeAuthDigitalSignLocalConfig
-                    // in the following CL
-                    throw new UnsupportedOperationException("Not Implemented");
+                    switch (in.getInt(AUTH_DIRECTION_KEY)) {
+                        case AUTH_DIRECTION_LOCAL:
+                            return IkeAuthDigitalSignLocalConfig.fromPersistableBundle(in);
+                        case AUTH_DIRECTION_REMOTE:
+                            return IkeAuthDigitalSignRemoteConfig.fromPersistableBundle(in);
+                        default:
+                            throw new IllegalArgumentException(
+                                    "Digital-signature-based auth configuration with invalid"
+                                            + " direction: "
+                                            + in.getInt(AUTH_DIRECTION_KEY));
+                    }
                 case IKE_AUTH_METHOD_EAP:
                     return IkeAuthEapConfig.fromPersistableBundle(in);
                 default:
@@ -450,12 +480,13 @@ public final class IkeSessionParams {
             final PersistableBundle result = new PersistableBundle();
 
             result.putInt(AUTH_METHOD_KEY, mAuthMethod);
+            result.putInt(AUTH_DIRECTION_KEY, mAuthDirection);
             return result;
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(mAuthMethod);
+            return Objects.hash(mAuthMethod, mAuthDirection);
         }
 
         @Override
@@ -464,7 +495,9 @@ public final class IkeSessionParams {
                 return false;
             }
 
-            return mAuthMethod == ((IkeAuthConfig) o).mAuthMethod;
+            IkeAuthConfig other = (IkeAuthConfig) o;
+
+            return mAuthMethod == other.mAuthMethod && mAuthDirection == other.mAuthDirection;
         }
     }
 
@@ -480,7 +513,7 @@ public final class IkeSessionParams {
         /** @hide */
         @VisibleForTesting
         IkeAuthPskConfig(byte[] psk) {
-            super(IKE_AUTH_METHOD_PSK);
+            super(IKE_AUTH_METHOD_PSK, AUTH_DIRECTION_BOTH);
             mPsk = psk;
         }
 
@@ -539,6 +572,7 @@ public final class IkeSessionParams {
      * authentication of the remote side.
      */
     public static class IkeAuthDigitalSignRemoteConfig extends IkeAuthConfig {
+        private static final String TRUST_CERT_KEY = "TRUST_CERT_KEY";
         /** @hide */
         @Nullable public final TrustAnchor mTrustAnchor;
 
@@ -546,9 +580,12 @@ public final class IkeSessionParams {
          * If a certificate is provided, it MUST be the root CA used by the remote (server), or
          * authentication will fail. If no certificate is provided, any root CA in the system's
          * truststore is considered acceptable.
+         *
+         * @hide
          */
-        private IkeAuthDigitalSignRemoteConfig(@Nullable X509Certificate caCert) {
-            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
+        @VisibleForTesting
+        IkeAuthDigitalSignRemoteConfig(@Nullable X509Certificate caCert) {
+            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, AUTH_DIRECTION_REMOTE);
             if (caCert == null) {
                 mTrustAnchor = null;
             } else {
@@ -561,11 +598,84 @@ public final class IkeSessionParams {
             }
         }
 
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthDigitalSignRemoteConfig fromPersistableBundle(
+                @NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            PersistableBundle trustCertBundle = in.getPersistableBundle(TRUST_CERT_KEY);
+
+            X509Certificate caCert = null;
+            if (trustCertBundle != null) {
+                byte[] encodedCert = PersistableBundleUtils.toByteArray(trustCertBundle);
+                caCert = certificateFromByteArray(encodedCert);
+            }
+
+            return new IkeAuthDigitalSignRemoteConfig(caCert);
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+
+            try {
+                if (mTrustAnchor != null) {
+                    result.putPersistableBundle(
+                            TRUST_CERT_KEY,
+                            PersistableBundleUtils.fromByteArray(
+                                    mTrustAnchor.getTrustedCert().getEncoded()));
+                }
+
+            } catch (CertificateEncodingException e) {
+                throw new IllegalArgumentException("Fail to encode the certificate");
+            }
+
+            return result;
+        }
+
         /** Retrieves the provided CA certificate for validating the remote certificate(s) */
         @Nullable
         public X509Certificate getRemoteCaCert() {
             if (mTrustAnchor == null) return null;
             return mTrustAnchor.getTrustedCert();
+        }
+
+        @Override
+        public int hashCode() {
+            // Use #getTrustedCert() because TrustAnchor does not override #hashCode()
+            return Objects.hash(
+                    super.hashCode(),
+                    (mTrustAnchor == null) ? null : mTrustAnchor.getTrustedCert());
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof IkeAuthDigitalSignRemoteConfig)) {
+                return false;
+            }
+
+            IkeAuthDigitalSignRemoteConfig other = (IkeAuthDigitalSignRemoteConfig) o;
+
+            if (mTrustAnchor == null && other.mTrustAnchor == null) {
+                return true;
+            }
+
+            // Compare #getTrustedCert() because TrustAnchor does not override #equals(Object)
+            return mTrustAnchor != null
+                    && other.mTrustAnchor != null
+                    && Objects.equals(
+                            mTrustAnchor.getTrustedCert(), other.mTrustAnchor.getTrustedCert());
         }
     }
 
@@ -574,6 +684,9 @@ public final class IkeSessionParams {
      * authentication of the local side.
      */
     public static class IkeAuthDigitalSignLocalConfig extends IkeAuthConfig {
+        private static final String END_CERT_KEY = "mEndCert";
+        private static final String INTERMEDIATE_CERTS_KEY = "mIntermediateCerts";
+        private static final String PRIVATE_KEY_KEY = "mPrivateKey";
         /** @hide */
         @NonNull public final X509Certificate mEndCert;
 
@@ -583,14 +696,83 @@ public final class IkeSessionParams {
         /** @hide */
         @NonNull public final PrivateKey mPrivateKey;
 
-        private IkeAuthDigitalSignLocalConfig(
+        /** @hide */
+        @VisibleForTesting
+        IkeAuthDigitalSignLocalConfig(
                 @NonNull X509Certificate clientEndCert,
                 @NonNull List<X509Certificate> clientIntermediateCerts,
                 @NonNull PrivateKey privateKey) {
-            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
+            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, AUTH_DIRECTION_LOCAL);
             mEndCert = clientEndCert;
             mIntermediateCerts = clientIntermediateCerts;
             mPrivateKey = privateKey;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthDigitalSignLocalConfig fromPersistableBundle(
+                @NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            PersistableBundle endCertBundle = in.getPersistableBundle(END_CERT_KEY);
+            Objects.requireNonNull(endCertBundle, "End cert not provided");
+            byte[] encodedCert = PersistableBundleUtils.toByteArray(endCertBundle);
+            X509Certificate endCert = certificateFromByteArray(encodedCert);
+
+            PersistableBundle certsBundle = in.getPersistableBundle(INTERMEDIATE_CERTS_KEY);
+            Objects.requireNonNull(certsBundle, "Intermediate certs not provided");
+            List<byte[]> encodedCertList =
+                    PersistableBundleUtils.toList(certsBundle, PersistableBundleUtils::toByteArray);
+            List<X509Certificate> certList = new ArrayList<>(encodedCertList.size());
+            for (byte[] encoded : encodedCertList) {
+                certList.add(certificateFromByteArray(encoded));
+            }
+
+            PersistableBundle privateKeyBundle = in.getPersistableBundle(PRIVATE_KEY_KEY);
+            Objects.requireNonNull(privateKeyBundle, "PrivateKey bundle is null");
+            PrivateKey privateKey =
+                    privateKeyFromByteArray(PersistableBundleUtils.toByteArray(privateKeyBundle));
+            Objects.requireNonNull(privateKeyBundle, "PrivateKey is null");
+
+            return new IkeAuthDigitalSignLocalConfig(endCert, certList, privateKey);
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+
+            try {
+                result.putPersistableBundle(
+                        END_CERT_KEY, PersistableBundleUtils.fromByteArray(mEndCert.getEncoded()));
+
+                List<byte[]> encodedCertList = new ArrayList<>(mIntermediateCerts.size());
+                for (X509Certificate cert : mIntermediateCerts) {
+                    encodedCertList.add(cert.getEncoded());
+                }
+                PersistableBundle certsBundle =
+                        PersistableBundleUtils.fromList(
+                                encodedCertList, PersistableBundleUtils::fromByteArray);
+                result.putPersistableBundle(INTERMEDIATE_CERTS_KEY, certsBundle);
+            } catch (CertificateEncodingException e) {
+                throw new IllegalArgumentException("Fail to encode certificate");
+            }
+
+            // TODO: b/170670506 Consider putting PrivateKey in Android KeyStore
+            result.putPersistableBundle(
+                    PRIVATE_KEY_KEY,
+                    PersistableBundleUtils.fromByteArray(mPrivateKey.getEncoded()));
+
+            return result;
         }
 
         /** Retrieves the client end certificate */
@@ -610,6 +792,24 @@ public final class IkeSessionParams {
         public PrivateKey getPrivateKey() {
             return mPrivateKey;
         }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mEndCert, mIntermediateCerts, mPrivateKey);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof IkeAuthDigitalSignLocalConfig)) {
+                return false;
+            }
+
+            IkeAuthDigitalSignLocalConfig other = (IkeAuthDigitalSignLocalConfig) o;
+
+            return mEndCert.equals(other.mEndCert)
+                    && mIntermediateCerts.equals(other.mIntermediateCerts)
+                    && mPrivateKey.equals(other.mPrivateKey);
+        }
     }
 
     /**
@@ -626,7 +826,7 @@ public final class IkeSessionParams {
         /** @hide */
         @VisibleForTesting
         IkeAuthEapConfig(EapSessionConfig eapConfig) {
-            super(IKE_AUTH_METHOD_EAP);
+            super(IKE_AUTH_METHOD_EAP, AUTH_DIRECTION_LOCAL);
 
             mEapConfig = eapConfig;
         }

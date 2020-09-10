@@ -859,10 +859,11 @@ public final class EapSessionConfig {
         @Override
         public int hashCode() {
             // Use #getTrustedCert() because TrustAnchor does not override #hashCode()
+
             return Objects.hash(
                     super.hashCode(),
-                    mOverrideTrustAnchor.getTrustedCert(),
-                    mInnerEapSessionConfig);
+                    mInnerEapSessionConfig,
+                    (mOverrideTrustAnchor == null) ? null : mOverrideTrustAnchor.getTrustedCert());
         }
 
         /** @hide */
@@ -874,10 +875,19 @@ public final class EapSessionConfig {
 
             EapTtlsConfig other = (EapTtlsConfig) o;
 
-            return Objects.equals(
+            if (!Objects.equals(mInnerEapSessionConfig, other.mInnerEapSessionConfig)) {
+                return false;
+            }
+
+            if (mOverrideTrustAnchor == null && other.mOverrideTrustAnchor == null) {
+                return true;
+            }
+
+            return mOverrideTrustAnchor != null
+                    && other.mOverrideTrustAnchor != null
+                    && Objects.equals(
                             mOverrideTrustAnchor.getTrustedCert(),
-                            other.mOverrideTrustAnchor.getTrustedCert())
-                    && Objects.equals(mInnerEapSessionConfig, other.mInnerEapSessionConfig);
+                            other.mOverrideTrustAnchor.getTrustedCert());
         }
     }
 
