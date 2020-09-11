@@ -17,6 +17,8 @@
 package android.net.ipsec.ike.ike3gpp;
 
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 
 /**
  * Ike3gppParams is used to configure 3GPP-specific parameters to be used during an IKE Session.
@@ -25,8 +27,11 @@ import android.annotation.NonNull;
  *     networks
  * @hide
  */
+@SystemApi
 public final class Ike3gppParams {
     /** If the PDU Session ID is not set, it will be reported as 0. */
+    // NoByteOrShort: using byte to be consistent with the PDU Session ID specification
+    @SuppressLint("NoByteOrShort")
     public static final byte PDU_SESSION_ID_UNSET = 0;
 
     private final byte mPduSessionId;
@@ -41,6 +46,8 @@ public final class Ike3gppParams {
      * <p>If the PDU Session ID was not set and this method is called, {@link PDU_SESSION_ID_UNSET}
      * will be returned.
      */
+    // NoByteOrShort: using byte to be consistent with the PDU Session ID specification
+    @SuppressLint("NoByteOrShort")
     public byte getPduSessionId() {
         return mPduSessionId;
     }
@@ -66,13 +73,15 @@ public final class Ike3gppParams {
          *
          * <p>{@link PDU_SESSION_ID_UNSET} will clear the previously-set PDU Session ID.
          *
-         * @see TS 24.302 Section 8.2.9.15 N1_MODE_CAPABILITY Notify payload
-         * @see TS 24.007 Section 11.2.3.1b PDU session identity
+         * @see TS 24.007 Section 11.2.3.1b for the definition of PDU Session ID encoding
+         * @see TS 24.302 Section 7.2.2 for context on PDU Session ID usage
+         * @see TS 24.302 Section 8.2.9.15 for a description of the N1_MODE_CAPABILITY payload
          * @param pduSessionId the PDU Session ID value to be used in this IKE Session
          * @return Builder this, to facilitate chaining
          */
+        // NoByteOrShort: using byte to be consistent with the PDU Session ID specification
         @NonNull
-        public Builder setPduSessionId(byte pduSessionId) {
+        public Builder setPduSessionId(@SuppressLint("NoByteOrShort") byte pduSessionId) {
             mPduSessionId = pduSessionId;
             return this;
         }

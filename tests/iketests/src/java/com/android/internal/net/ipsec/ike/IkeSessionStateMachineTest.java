@@ -27,8 +27,8 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_N
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
-import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.NOTIFY_ERROR_NETWORK_FAILURE;
-import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.NOTIFY_ERROR_NO_APN_SUBSCRIPTION;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.ERROR_TYPE_NETWORK_FAILURE;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.ERROR_TYPE_NO_APN_SUBSCRIPTION;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
@@ -5077,12 +5077,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     @Test
     public void testIkeAuthWithBackoffTimerNetworkError() throws Exception {
-        verifyIkeAuthWithBackoffTimer(NOTIFY_ERROR_NETWORK_FAILURE);
+        verifyIkeAuthWithBackoffTimer(ERROR_TYPE_NETWORK_FAILURE);
     }
 
     @Test
     public void testIkeAuthWithBackoffTimerNoApnSubscription() throws Exception {
-        verifyIkeAuthWithBackoffTimer(NOTIFY_ERROR_NO_APN_SUBSCRIPTION);
+        verifyIkeAuthWithBackoffTimer(ERROR_TYPE_NO_APN_SUBSCRIPTION);
     }
 
     private void verifyIkeAuthWithBackoffTimer(int expectedNotifyErrorCause) throws Exception {
