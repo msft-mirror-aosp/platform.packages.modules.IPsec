@@ -138,7 +138,7 @@ public class TlsSessionHandshakeTest extends TlsSessionTest {
     @Test
     public void testprocessHandshakeData_unwrapFailure() throws Exception {
         when(mMockSslEngine.unwrap(
-                        eq((PACKET_BUFFER_POSITION_RESET)),
+                        eq(PACKET_BUFFER_POSITION_RESET),
                         eq(APPLICATION_BUFFER_AVP_POSITION_RESET)))
                 .thenThrow(SSLException.class);
 
@@ -148,7 +148,7 @@ public class TlsSessionHandshakeTest extends TlsSessionTest {
     @Test
     public void testprocessHandshakeData_underflow() throws Exception {
         when(mMockSslEngine.unwrap(
-                        eq((PACKET_BUFFER_POSITION_RESET)),
+                        eq(PACKET_BUFFER_POSITION_RESET),
                         eq(APPLICATION_BUFFER_AVP_POSITION_RESET)))
                 .thenReturn(RESULT_NEED_UNWRAP_UNDERFLOW);
 
@@ -187,7 +187,7 @@ public class TlsSessionHandshakeTest extends TlsSessionTest {
     @Test
     public void testprocessHandshakeData_unwrapClosed() throws Exception {
         when(mMockSslEngine.unwrap(
-                        eq((PACKET_BUFFER_POSITION_RESET)),
+                        eq(PACKET_BUFFER_POSITION_RESET),
                         eq(APPLICATION_BUFFER_AVP_POSITION_RESET)))
                 .thenReturn(RESULT_NEED_WRAP_CLOSED);
 
@@ -197,7 +197,7 @@ public class TlsSessionHandshakeTest extends TlsSessionTest {
     @Test
     public void testprocessHandshakeData_wrapFinished() throws Exception {
         when(mMockSslEngine.unwrap(
-                        eq((PACKET_BUFFER_POSITION_RESET)),
+                        eq(PACKET_BUFFER_POSITION_RESET),
                         eq(APPLICATION_BUFFER_AVP_POSITION_RESET)))
                 .thenReturn(RESULT_NEED_UNWRAP_OK)
                 .thenReturn(RESULT_NEED_WRAP_OK);
