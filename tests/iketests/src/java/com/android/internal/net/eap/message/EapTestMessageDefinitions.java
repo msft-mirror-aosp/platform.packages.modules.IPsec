@@ -285,8 +285,14 @@ public class EapTestMessageDefinitions {
     public static final String RECEIVE_KEY = "8B7CDC149B993A1BA118CB153F56DCCB";
     public static final byte[] MSCHAP_V2_RECEIVE_START_KEY = hexStringToByteArray(RECEIVE_KEY);
 
-    // MSK: MSCHAP_V2_SEND_START_KEY + MSCHAP_V2_RECEIVE_START_KEY
-    public static final byte[] MSCHAP_V2_MSK = hexStringToByteArray(SEND_KEY + RECEIVE_KEY);
+    // MSK: MSCHAP_V2_SEND_START_KEY + MSCHAP_V2_RECEIVE_START_KEY, padded to 64B
+    public static final byte[] MSCHAP_V2_MSK =
+            hexStringToByteArray(
+                    SEND_KEY
+                            + RECEIVE_KEY
+                            + "0000000000000000000000000000000000000000000000000000000000000000");
+    public static final int MSCHAP_V2_EMSK_LEN = 64;
+    public static final byte[] MSCHAP_V2_EMSK = new byte[MSCHAP_V2_EMSK_LEN];
 
     public static final String MSCHAP_V2_ID = "42";
     public static final int MSCHAP_V2_ID_INT = Integer.parseInt(MSCHAP_V2_ID, 16 /* radix */);

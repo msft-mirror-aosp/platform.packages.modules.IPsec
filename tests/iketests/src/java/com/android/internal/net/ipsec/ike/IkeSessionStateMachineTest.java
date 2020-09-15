@@ -180,10 +180,10 @@ import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.X509Certificate;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Executor;
@@ -614,7 +614,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private static List<IkePayload> hexStrListToIkePayloadList(
             List<Integer> payloadTypeList, List<String> payloadHexStringList, boolean isResp)
             throws Exception {
-        List<IkePayload> payloadList = new LinkedList<>();
+        List<IkePayload> payloadList = new ArrayList<>();
         for (int i = 0; i < payloadTypeList.size(); i++) {
             payloadList.add(
                     IkeTestUtils.hexStringToIkePayload(
@@ -673,6 +673,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .scheduleLifetimeExpiryAlarm(anyString());
     }
 
+    @Override
     @Before
     public void setUp() throws Exception {
         super.setUp();
@@ -866,8 +867,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private ReceivedIkePacket makeIkeInitResponse() throws Exception {
         // TODO: Build real IKE INIT response when IKE INIT response validation is implemented.
-        List<Integer> payloadTypeList = new LinkedList<>();
-        List<String> payloadHexStringList = new LinkedList<>();
+        List<Integer> payloadTypeList = new ArrayList<>();
+        List<String> payloadHexStringList = new ArrayList<>();
 
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
@@ -903,8 +904,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private List<IkePayload> getIkeAuthPayloadListWithChildPayloads(
             List<IkePayload> authRelatedPayloads) throws Exception {
-        List<Integer> payloadTypeList = new LinkedList<>();
-        List<String> payloadHexStringList = new LinkedList<>();
+        List<Integer> payloadTypeList = new ArrayList<>();
+        List<String> payloadHexStringList = new ArrayList<>();
 
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_INITIATOR);
@@ -969,8 +970,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private List<IkePayload> makeCreateChildPayloadList(boolean isResp) throws Exception {
-        List<Integer> payloadTypeList = new LinkedList<>();
-        List<String> payloadHexStringList = new LinkedList<>();
+        List<Integer> payloadTypeList = new ArrayList<>();
+        List<String> payloadHexStringList = new ArrayList<>();
 
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
@@ -995,8 +996,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private ReceivedIkePacket makeRekeyIkeResponse() throws Exception {
-        List<Integer> payloadTypeList = new LinkedList<>();
-        List<String> payloadHexStringList = new LinkedList<>();
+        List<Integer> payloadTypeList = new ArrayList<>();
+        List<String> payloadHexStringList = new ArrayList<>();
 
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
@@ -1019,8 +1020,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 ikeSaRecord,
                 IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
                 true /*isResp*/,
-                new LinkedList<>(),
-                new LinkedList<>());
+                new ArrayList<>(),
+                new ArrayList<>());
     }
 
     private ReceivedIkePacket makeDpdIkeRequest(IkeSaRecord saRecord) throws Exception {
@@ -1028,8 +1029,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 saRecord,
                 IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
                 false /*isResp*/,
-                new LinkedList<>(),
-                new LinkedList<>());
+                new ArrayList<>(),
+                new ArrayList<>());
     }
 
     private ReceivedIkePacket makeDpdIkeRequest(int msgId, byte[] dummyIkePacketBytes)
@@ -1039,7 +1040,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 EXCHANGE_TYPE_INFORMATIONAL,
                 false /*isResp*/,
                 msgId,
-                new LinkedList<>(),
+                new ArrayList<>(),
                 dummyIkePacketBytes);
     }
 
@@ -1064,8 +1065,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private ReceivedIkePacket makeRekeyIkeRequest(IkeSaPayload saPayload) throws Exception {
-        List<Integer> payloadTypeList = new LinkedList<>();
-        List<String> payloadHexStringList = new LinkedList<>();
+        List<Integer> payloadTypeList = new ArrayList<>();
+        List<String> payloadHexStringList = new ArrayList<>();
 
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
@@ -1085,8 +1086,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private ReceivedIkePacket makeDeleteIkeRequest(IkeSaRecord saRecord) throws Exception {
-        List<Integer> payloadTypeList = new LinkedList<>();
-        List<String> payloadHexStringList = new LinkedList<>();
+        List<Integer> payloadTypeList = new ArrayList<>();
+        List<String> payloadHexStringList = new ArrayList<>();
 
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_DELETE);
 
@@ -1102,7 +1103,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private ReceivedIkePacket makeResponseWithErrorNotify(IkeNotifyPayload notify)
             throws Exception {
-        List<IkePayload> payloads = new LinkedList<>();
+        List<IkePayload> payloads = new ArrayList<>();
         payloads.add(notify);
         return makeDummyEncryptedReceivedIkePacketWithPayloadList(
                 mSpyCurrentIkeSaRecord, EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, payloads);
@@ -1439,8 +1440,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertFalse(mIkeSessionStateMachine.mIsRemoteBehindNat);
 
         // Validate vendor IDs
-        assertByteArrayListEquals(
-                Arrays.asList(REMOTE_VENDOR_ID_ONE), mIkeSessionStateMachine.mRemoteVendorIds);
+        List<byte[]> vendorIds = new ArrayList<>();
+        vendorIds.add(REMOTE_VENDOR_ID_ONE);
+        assertByteArrayListEquals(vendorIds, mIkeSessionStateMachine.mRemoteVendorIds);
 
         // Validate fragmentation support negotiation
         assertTrue(mIkeSessionStateMachine.mSupportFragment);
@@ -1589,7 +1591,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         cb.onOutboundPayloadsReady(
                 IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
                 false /*isResp*/,
-                new LinkedList<>(),
+                new ArrayList<>(),
                 childStateMachine);
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
@@ -1738,7 +1740,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             IkeDeletePayload delPayload,
             boolean isResp,
             ChildSessionStateMachine child) {
-        List<IkePayload> outPayloadList = new LinkedList<>();
+        List<IkePayload> outPayloadList = new ArrayList<>();
         outPayloadList.add(delPayload);
         childSmCb.onOutboundPayloadsReady(
                 IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, isResp, outPayloadList, child);
@@ -2399,7 +2401,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStarted();
 
         // Build IKE AUTH response with Auth-PSK, ID-Responder and config payloads.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
@@ -2440,7 +2442,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
 
         // Build IKE AUTH response with Digital Signature Auth, ID-Responder and config payloads.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthDigitalSignPayload spyAuthPayload = makeSpyDigitalSignAuthPayload();
         authRelatedPayloads.add(spyAuthPayload);
         authRelatedPayloads.add(new IkeCertX509CertPayload(mServerEndCertificate));
@@ -2465,7 +2467,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStarted();
 
         // Build IKE AUTH response with Auth-PSK, ID-Responder and config payloads.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
@@ -2491,7 +2493,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         resetMockIkeMessageHelper();
 
         // Build IKE AUTH response with Digital Signature Auth, ID-Responder and config payloads.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthDigitalSignPayload spyAuthPayload = makeSpyDigitalSignAuthPayload();
         authRelatedPayloads.add(spyAuthPayload);
         authRelatedPayloads.add(new IkeCertX509CertPayload(mServerEndCertificate));
@@ -2508,7 +2510,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         resetMockIkeMessageHelper();
 
         // Build IKE AUTH response with invalid Auth-PSK Payload and ID-Responder Payload.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         doThrow(new AuthenticationFailedException("DummyAuthFailException"))
                 .when(spyAuthPayload)
@@ -2623,7 +2625,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload that is different
         // from configured ID-Responder.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
@@ -2647,7 +2649,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload that is different
         // from configured ID-Responder.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
@@ -2676,7 +2678,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStarted();
 
         // Build IKE AUTH response with EAP. Auth, ID-Resp and Cert payloads.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
 
         authRelatedPayloads.add(new IkeEapPayload(EAP_DUMMY_MSG));
         authRelatedPayloads.add(makeSpyDigitalSignAuthPayload());
@@ -2782,7 +2784,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Send IKE AUTH response with no EAP Payload to IKE state machine
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
-                makeIkeAuthRespWithoutChildPayloads(new LinkedList<>()));
+                makeIkeAuthRespWithoutChildPayloads(new ArrayList<>()));
         mLooper.dispatchAll();
 
         // Verify state machine quit properly
@@ -2872,8 +2874,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         doReturn(new byte[0]).when(mIkeSessionStateMachine.mInitIdPayload).getEncodedPayloadBody();
         mIkeSessionStateMachine.mRespIdPayload = makeRespIdPayload();
 
-        List<Integer> payloadTypeList = new LinkedList<>();
-        List<String> payloadHexStringList = new LinkedList<>();
+        List<Integer> payloadTypeList = new ArrayList<>();
+        List<String> payloadHexStringList = new ArrayList<>();
 
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_TS_INITIATOR);
@@ -2893,7 +2895,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStarted();
 
         // Build IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
@@ -2957,7 +2959,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mSpyCurrentIkeSaRecord.updateCollectedFragments(mockCollectedFrags, true /*isResp*/);
 
         // Build reassembled IKE AUTH response with Auth-PSK Payload and ID-Responder Payload.
-        List<IkePayload> authRelatedPayloads = new LinkedList<>();
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
@@ -3226,7 +3228,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         resetMockIkeMessageHelper();
 
         // Build protocol exception
-        List<Integer> unsupportedPayloads = new LinkedList<>();
+        List<Integer> unsupportedPayloads = new ArrayList<>();
         unsupportedPayloads.add(PAYLOAD_TYPE_UNSUPPORTED);
         UnsupportedCriticalPayloadException exception =
                 new UnsupportedCriticalPayloadException(unsupportedPayloads);
@@ -3835,7 +3837,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                                         false /*isResp*/,
                                         mSpyCurrentIkeSaRecord.isLocalInit,
                                         mSpyCurrentIkeSaRecord.getLocalRequestMessageId()),
-                                new LinkedList<>()));
+                                new ArrayList<>()));
 
         // Use something unique as a sentinel value
         byte[][] dummyReqBytesList =
@@ -3968,7 +3970,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
                         true /*isResp*/,
                         mSpyCurrentIkeSaRecord.getLocalRequestMessageId() - 1,
-                        new LinkedList<>(),
+                        new ArrayList<>(),
                         new byte[0]);
 
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
@@ -4157,7 +4159,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testKillSession() throws Exception {
+    public void testKillSessionDeleteIkeRequestSent() throws Exception {
         setupIdleStateMachine();
 
         mIkeSessionStateMachine.killSession();
@@ -4166,6 +4168,39 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mSpyCurrentIkeSaRecord).close();
         verify(mSpyCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
         verifyNotifyUserCloseSession();
+
+        // Verify outbound request
+        IkeMessage req = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
+        IkeHeader ikeHeader = req.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertEquals(1, req.ikePayloadList.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, req.ikePayloadList.get(0).payloadType);
+
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockBusyWakelock).release();
+    }
+
+    @Test
+    public void testKillSessionNoDeleteIkeRequestSent() throws Exception {
+        setupIdleStateMachine();
+
+        // Transition to state that does not send IKE delete requests
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mCreateIkeLocalIkeInit);
+
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mSpyCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
+        verifyNotifyUserCloseSession();
+
+        // Verify no outbound request
+        verifyEncryptAndEncodeNeverCalled();
 
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -4330,6 +4365,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Expect failure - no callbacks provided
         try {
             mIkeSessionStateMachine.openChildSession(mChildSessionParams, null);
+            fail("Expected to fail due to missing ChildSessionCallback");
         } catch (IllegalArgumentException expected) {
         }
 
@@ -4337,6 +4373,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         try {
             mIkeSessionStateMachine.openChildSession(
                     mChildSessionParams, mMockChildSessionCallback);
+            fail("Expected to fail due to invalid ChildSessionCallback");
         } catch (IllegalArgumentException expected) {
         }
     }
@@ -4352,6 +4389,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // machine has a chance to process it.
         try {
             mIkeSessionStateMachine.openChildSession(mChildSessionParams, cb);
+            fail("Expected to fail due to invalid ChildSessionCallback");
         } catch (IllegalArgumentException expected) {
         }
 
@@ -4386,6 +4424,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Expect failure - callbacks not registered
         try {
             mIkeSessionStateMachine.closeChildSession(mock(ChildSessionCallback.class));
+            fail("Expected to fail since callback is not registered");
         } catch (IllegalArgumentException expected) {
         }
     }
@@ -4485,7 +4524,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStarted();
 
         // Receive IKE INIT response with erro notification.
-        List<IkePayload> payloads = new LinkedList<>();
+        List<IkePayload> payloads = new ArrayList<>();
         payloads.add(new IkeNotifyPayload(IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN));
         ReceivedIkePacket resp =
                 makeDummyUnencryptedReceivedIkePacket(
@@ -4529,7 +4568,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mDummyChildSmCallback.onOutboundPayloadsReady(
                 IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
                 false /*isResp*/,
-                new LinkedList<>(),
+                new ArrayList<>(),
                 mMockChildSessionStateMachine);
         mLooper.dispatchAll();
     }
@@ -4662,7 +4701,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         mSpyCurrentIkeSaRecord,
                         IkeHeader.EXCHANGE_TYPE_IKE_AUTH,
                         false /*isResp*/,
-                        new LinkedList<IkePayload>());
+                        new ArrayList<IkePayload>());
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
         mLooper.dispatchAll();
 
@@ -4706,13 +4745,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
                         false /*isResp*/,
                         false /*fromIkeInit*/,
-                        new LinkedList<>());
+                        new ArrayList<>());
 
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, packet);
         mLooper.dispatchAll();
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+
+        // Reset the IkeMessageHelper to be a mock. This is needed for #killSession (called in
+        // #tearDown), which attempts to notify the remote about the IKE session dying in the Idle
+        // state.
+        IkeMessage.setIkeMessageHelper(mMockIkeMessageHelper);
+        resetMockIkeMessageHelper();
     }
 
     @Test
