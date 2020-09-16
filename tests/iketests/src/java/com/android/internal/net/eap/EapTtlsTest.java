@@ -23,7 +23,6 @@ import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NEED_WRA
 import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NOT_HANDSHAKING_OK;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
 
-import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.argThat;
@@ -453,7 +452,7 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
             when(mMockTlsSessionFactory.newInstance(eq(null), eq(mMockSecureRandom)))
                     .thenReturn(tlsSession);
         } catch (Exception e) {
-            fail("TLS Session setup failed");
+            throw new AssertionError("TLS Session setup failed", e);
         }
     }
 
@@ -737,6 +736,8 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         return buffer -> Arrays.equals(getByteArrayFromBufferLimit(buffer), data);
     }
 
+    // The ByteBuffer is always initialized by ByteBuffer#allocate
+    @SuppressWarnings("ByteBufferBackingArray")
     private byte[] getByteArrayFromBufferLimit(ByteBuffer buffer) {
         return Arrays.copyOfRange(buffer.array(), 0, buffer.limit());
     }
