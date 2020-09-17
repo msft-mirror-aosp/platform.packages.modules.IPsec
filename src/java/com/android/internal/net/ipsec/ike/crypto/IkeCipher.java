@@ -40,16 +40,27 @@ public abstract class IkeCipher extends IkeCrypto {
     private static final int IV_LEN_AES_CBC = 16;
     private static final int IV_LEN_AES_GCM = 8;
 
+    private static final int SALT_LEN_AES_GCM = 4;
+
+    protected static final int SALT_LEN_NOT_INCLUDED = 0;
+
     private final boolean mIsAead;
     private final int mIvLen;
 
+    protected final int mSaltLen;
     protected final Cipher mCipher;
 
     protected IkeCipher(
-            int algorithmId, int keyLength, int ivLength, String algorithmName, boolean isAead) {
+            int algorithmId,
+            int keyLength,
+            int ivLength,
+            String algorithmName,
+            boolean isAead,
+            int saltLen) {
         super(algorithmId, keyLength, algorithmName);
         mIvLen = ivLength;
         mIsAead = isAead;
+        mSaltLen = saltLen;
 
         try {
             mCipher = Cipher.getInstance(getAlgorithmName());
@@ -89,7 +100,8 @@ public abstract class IkeCipher extends IkeCrypto {
                         algorithmId,
                         encryptionTransform.getSpecifiedKeyLength() / 8,
                         IV_LEN_AES_GCM,
-                        "AES/GCM/NoPadding");
+                        "AES/GCM/NoPadding",
+                        SALT_LEN_AES_GCM);
             default:
                 throw new IllegalArgumentException(
                         "Unrecognized Encryption Algorithm ID: " + algorithmId);
@@ -144,6 +156,11 @@ public abstract class IkeCipher extends IkeCrypto {
                             + " Received key with length of : "
                             + key.length);
         }
+    }
+
+    @Override
+    public int getKeyLength() {
+        return super.getKeyLength() + mSaltLen;
     }
 
     /**
