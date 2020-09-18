@@ -29,9 +29,18 @@ import java.lang.annotation.RetentionPolicy;
  * @hide
  */
 public abstract class Ike3gppInfo {
+    private static final int INFO_TYPE_SHARED_BASE = 0;
+    private static final int INFO_TYPE_CATEGORY_SIZE = 100;
+
+    private static final int INFO_TYPE_PAYLOAD_NOTIFY_BASE = INFO_TYPE_SHARED_BASE;
+
+    /** Info Type representing an {@link Ike3gppN1ModeInformation}. */
+    public static final int INFO_TYPE_NOTIFY_N1_MODE_INFORMATION =
+            INFO_TYPE_PAYLOAD_NOTIFY_BASE + 1;
+
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef()
+    @IntDef({INFO_TYPE_NOTIFY_N1_MODE_INFORMATION})
     public @interface InfoType {}
 
     /** Returns the enum that this Ike3gppInfo represents. */
