@@ -410,6 +410,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
     @VisibleForTesting boolean mSupportFragment;
 
+    /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
+    @VisibleForTesting Set<Short> mPeerSignatureHashAlgorithms;
+
     /** Package private IkeSaProposal that represents the negotiated IKE SA proposal. */
     @VisibleForTesting IkeSaProposal mSaProposal;
 
@@ -2914,7 +2917,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                                 mEnabledExtensions.add(EXTENSION_TYPE_FRAGMENTATION);
                                 break;
                             case NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS:
-                                // TODO(b/164515741): decode the peer's Signature Hash Algorithms
+                                mPeerSignatureHashAlgorithms =
+                                        IkeAuthDigitalSignPayload
+                                                .getSignatureHashAlgorithmsFromIkeNotifyPayload(
+                                                        notifyPayload);
                                 break;
                             default:
                                 // Unknown and unexpected status notifications are ignored as per
