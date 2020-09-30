@@ -245,7 +245,10 @@ package android.net.ipsec.ike {
     method @NonNull public java.util.List<android.util.Pair<java.lang.Integer,java.lang.Integer>> getEncryptionAlgorithms();
     method @NonNull public java.util.List<java.lang.Integer> getIntegrityAlgorithms();
     field public static final int DH_GROUP_1024_BIT_MODP = 2; // 0x2
+    field public static final int DH_GROUP_1536_BIT_MODP = 5; // 0x5
     field public static final int DH_GROUP_2048_BIT_MODP = 14; // 0xe
+    field public static final int DH_GROUP_3072_BIT_MODP = 15; // 0xf
+    field public static final int DH_GROUP_4096_BIT_MODP = 16; // 0x10
     field public static final int DH_GROUP_NONE = 0; // 0x0
     field public static final int ENCRYPTION_ALGORITHM_3DES = 3; // 0x3
     field public static final int ENCRYPTION_ALGORITHM_AES_CBC = 12; // 0xc
