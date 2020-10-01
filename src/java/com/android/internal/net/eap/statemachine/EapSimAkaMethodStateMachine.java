@@ -102,8 +102,8 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
         LOG.d(
                 this.getClass().getSimpleName(),
                 mEapUiccConfig.getClass().getSimpleName() + ":"
-                        + " subId=" + mEapUiccConfig.subId
-                        + " apptype=" + mEapUiccConfig.apptype);
+                        + " subId=" + mEapUiccConfig.getSubId()
+                        + " apptype=" + mEapUiccConfig.getAppType());
     }
 
     protected int getKEncrLength() {
@@ -196,9 +196,7 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
         String base64Challenge = Base64.encodeToString(formattedChallenge, Base64.NO_WRAP);
         String base64Response =
                 mTelephonyManager.getIccAuthentication(
-                        mEapUiccConfig.apptype,
-                        authType,
-                        base64Challenge);
+                        mEapUiccConfig.getAppType(), authType, base64Challenge);
 
         if (base64Response == null) {
             String msg = "UICC authentication failed. Input: " + LOG.pii(formattedChallenge);

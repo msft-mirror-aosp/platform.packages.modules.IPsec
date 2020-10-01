@@ -99,6 +99,7 @@ public class EapAkaPrimeChallengeStateTest extends EapAkaPrimeStateTest {
 
     private ChallengeState mState;
 
+    @Override
     @Before
     public void setUp() {
         super.setUp();

@@ -46,25 +46,20 @@ import javax.crypto.spec.SecretKeySpec;
  *     Protocol</a>
  */
 public final class IkeCombinedModeCipher extends IkeCipher {
-    private static final int SALT_LEN_GCM = 4;
-
     private final int mChecksumLen;
-    private final int mSaltLen;
 
     /** Package private */
-    IkeCombinedModeCipher(int algorithmId, int keyLength, int ivLength, String algorithmName) {
-        super(algorithmId, keyLength, ivLength, algorithmName, true /*isAead*/);
+    IkeCombinedModeCipher(
+            int algorithmId, int keyLength, int ivLength, String algorithmName, int saltLen) {
+        super(algorithmId, keyLength, ivLength, algorithmName, true /*isAead*/, saltLen);
         switch (algorithmId) {
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
-                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 8;
                 break;
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
-                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 12;
                 break;
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
-                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 16;
                 break;
             default:
@@ -178,16 +173,6 @@ public final class IkeCombinedModeCipher extends IkeCipher {
 
         int decryptPaddedDataLen = decryptPaddedDataAndAuthTag.length - mChecksumLen;
         return Arrays.copyOf(decryptPaddedDataAndAuthTag, decryptPaddedDataLen);
-    }
-
-    /**
-     * Gets key length of this algorithm (in bytes).
-     *
-     * @return the key length (in bytes).
-     */
-    @Override
-    public int getKeyLength() {
-        return super.getKeyLength() + mSaltLen;
     }
 
     /**

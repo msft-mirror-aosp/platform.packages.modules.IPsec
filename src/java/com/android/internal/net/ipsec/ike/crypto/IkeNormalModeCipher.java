@@ -39,7 +39,13 @@ import javax.crypto.spec.SecretKeySpec;
 public final class IkeNormalModeCipher extends IkeCipher {
     /** Package private */
     IkeNormalModeCipher(int algorithmId, int keyLength, int ivLength, String algorithmName) {
-        super(algorithmId, keyLength, ivLength, algorithmName, false /*isAead*/);
+        super(
+                algorithmId,
+                keyLength,
+                ivLength,
+                algorithmName,
+                false /*isAead*/,
+                SALT_LEN_NOT_INCLUDED);
     }
 
     private byte[] doCipherAction(byte[] data, byte[] keyBytes, byte[] ivBytes, int opmode)
