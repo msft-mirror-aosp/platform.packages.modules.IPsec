@@ -49,6 +49,9 @@ import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
+import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
 import android.telephony.TelephonyManager;
 import android.util.SparseArray;
 
@@ -627,5 +630,18 @@ public final class IkeSessionParamsTest {
         assertTrue(sessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH));
         IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
         assertTrue(localConfig instanceof IkeAuthEapConfig);
+    }
+
+    @Test
+    public void testBuildWithIke3gppExtension() throws Exception {
+        Ike3gppExtension ike3gppExtension =
+                new Ike3gppExtension(
+                        new Ike3gppParams.Builder().build(), mock(Ike3gppCallback.class));
+
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setIke3gppExtension(ike3gppExtension)
+                        .build();
+        assertEquals(ike3gppExtension, sessionParams.getIke3gppExtension());
     }
 }
