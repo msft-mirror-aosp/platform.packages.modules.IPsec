@@ -29,6 +29,7 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
@@ -149,6 +150,8 @@ public final class IkeSessionParams {
 
     @NonNull private final int[] mRetransTimeoutMsList;
 
+    @Nullable private final Ike3gppExtension mIke3gppExtension;
+
     private final long mIkeOptions;
 
     private final int mHardLifetimeSec;
@@ -168,6 +171,7 @@ public final class IkeSessionParams {
             @NonNull IkeAuthConfig remoteAuthConfig,
             @NonNull IkeConfigAttribute[] configRequests,
             @NonNull int[] retransTimeoutMsList,
+            @Nullable Ike3gppExtension ike3gppExtension,
             long ikeOptions,
             int hardLifetimeSec,
             int softLifetimeSec,
@@ -187,6 +191,8 @@ public final class IkeSessionParams {
         mConfigRequests = configRequests;
 
         mRetransTimeoutMsList = retransTimeoutMsList;
+
+        mIke3gppExtension = ike3gppExtension;
 
         mIkeOptions = ikeOptions;
 
@@ -288,6 +294,16 @@ public final class IkeSessionParams {
      */
     public int[] getRetransmissionTimeoutsMillis() {
         return mRetransTimeoutMsList;
+    }
+
+    /**
+     * Retrieves the configured Ike3gppExtension, or null if it was not set.
+     *
+     * @hide
+     */
+    @Nullable
+    public Ike3gppExtension getIke3gppExtension() {
+        return mIke3gppExtension;
     }
 
     /** Checks if the given IKE Session negotiation option is set */
@@ -501,6 +517,8 @@ public final class IkeSessionParams {
 
         @Nullable private IkeAuthConfig mLocalAuthConfig;
         @Nullable private IkeAuthConfig mRemoteAuthConfig;
+
+        @Nullable private Ike3gppExtension mIke3gppExtension;
 
         private long mIkeOptions = 0;
 
@@ -894,6 +912,27 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Sets the parameters to be used for 3GPP-specific behavior during the IKE Session.
+         *
+         * <p>Setting the Ike3gppExtension also enables support for non-configurable payloads, such
+         * as the Notify - BACKOFF_TIMER payload.
+         *
+         * @see <a href="http://www.3gpp.org/ftp//Specs/archive/24_series/24.302/24302-g40.zip">TS
+         *     124 302, Access to the 3GPP Evolved Packet Core (EPC) via non-3GPP access
+         *     networks</a>
+         * @param ike3gppExtension the Ike3gppExtension to use for this IKE Session.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @NonNull
+        public Builder setIke3gppExtension(@NonNull Ike3gppExtension ike3gppExtension) {
+            Objects.requireNonNull(ike3gppExtension, "ike3gppExtension must not be null");
+
+            mIke3gppExtension = ike3gppExtension;
+            return this;
+        }
+
+        /**
          * Sets the specified IKE Option as enabled.
          *
          * @param ikeOption the option to be enabled.
@@ -974,6 +1013,7 @@ public final class IkeSessionParams {
                     mRemoteAuthConfig,
                     mConfigRequestList.toArray(new IkeConfigAttribute[0]),
                     mRetransTimeoutMsList,
+                    mIke3gppExtension,
                     mIkeOptions,
                     mHardLifetimeSec,
                     mSoftLifetimeSec,
