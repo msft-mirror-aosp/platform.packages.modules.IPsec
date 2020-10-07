@@ -3922,7 +3922,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         setupIdleStateMachine();
         byte[][] dummyLastRespBytes =
                 new byte[][] {"testRetransmitterSendsRequestLastResp".getBytes()};
-        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyLastRespBytes));
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(
+                Arrays.asList(dummyLastRespBytes),
+                mSpyCurrentIkeSaRecord.getRemoteRequestMessageId() - 1);
 
         IkeMessage spyIkeReqMessage =
                 spy(
@@ -3964,7 +3966,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testCacheLastRequestAndResponse() throws Exception {
         setupIdleStateMachine();
         mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(null /*reqPacket*/);
-        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(null /*respPacketList*/);
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(
+                null /*respPacketList*/, mSpyCurrentIkeSaRecord.getRemoteRequestMessageId() - 1);
 
         byte[] dummyIkeReqFirstPacket = "testLastSentRequest".getBytes();
         byte[][] dummyIkeResp =
@@ -4009,8 +4012,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         byte[][] dummyIkeResp = new byte[][] {"testRcvRetransmittedRequestResp".getBytes()};
 
         mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(dummyIkeReqFirstPacket);
-        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyIkeResp));
-        mSpyCurrentIkeSaRecord.incrementRemoteRequestMessageId();
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(
+                Arrays.asList(dummyIkeResp),
+                mSpyCurrentIkeSaRecord.getRemoteRequestMessageId() - 1);
 
         // Build request with last validated message ID
         ReceivedIkePacket request =
@@ -4037,8 +4041,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         byte[] dummyIkeReqFirstPacket = "testDiscardFakeRetransmittedRequestReq".getBytes();
         byte[][] dummyIkeResp = new byte[][] {"testDiscardFakeRetransmittedRequestResp".getBytes()};
         mSpyCurrentIkeSaRecord.updateLastReceivedReqFirstPacket(dummyIkeReqFirstPacket);
-        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(Arrays.asList(dummyIkeResp));
-        mSpyCurrentIkeSaRecord.incrementRemoteRequestMessageId();
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(
+                Arrays.asList(dummyIkeResp),
+                mSpyCurrentIkeSaRecord.getRemoteRequestMessageId() - 1);
 
         // Build request with last validated message ID but different bytes
         ReceivedIkePacket request =
@@ -4054,6 +4059,42 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    @Test
+    public void testRcvRetransmittedRequestBeforeReplyOriginalRequest() throws Exception {
+        setupIdleStateMachine();
+
+        // Mock last sent response
+        byte[][] dummyIkeResp = new byte[][] {"testLastSentResponse".getBytes()};
+        mSpyCurrentIkeSaRecord.updateLastSentRespAllPackets(
+                Arrays.asList(dummyIkeResp),
+                mSpyCurrentIkeSaRecord.getRemoteRequestMessageId() - 1);
+
+        // Send request with next message ID
+        IkeDeletePayload[] inboundDelPayloads =
+                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {CHILD_SPI_REMOTE})};
+        ReceivedIkePacket request = makeDeleteChildPacket(inboundDelPayloads, false /*isResp*/);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
+        mLooper.dispatchAll();
+
+        // Verify that no response has been sent out since we didn't configure Child Session to
+        // respond
+        verify(mSpyCurrentIkeSocket, never()).sendIkePacket(any(), any());
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+
+        // Retransmit the request
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
+        mLooper.dispatchAll();
+
+        // Verify that no response has been sent out and state machine is still in
+        // ChildProcedureOngoing
+        verify(mSpyCurrentIkeSocket, never()).sendIkePacket(any(), any());
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
     }
 
     @Test
