@@ -38,9 +38,12 @@ public abstract class Ike3gppInfo {
     public static final int INFO_TYPE_NOTIFY_N1_MODE_INFORMATION =
             INFO_TYPE_PAYLOAD_NOTIFY_BASE + 1;
 
+    /** Info Type representing an {@link Ike3gppBackoffTimer}. */
+    public static final int INFO_TYPE_NOTIFY_BACKOFF_TIMER = INFO_TYPE_PAYLOAD_NOTIFY_BASE + 2;
+
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({INFO_TYPE_NOTIFY_N1_MODE_INFORMATION})
+    @IntDef({INFO_TYPE_NOTIFY_N1_MODE_INFORMATION, INFO_TYPE_NOTIFY_BACKOFF_TIMER})
     public @interface InfoType {}
 
     /** Returns the enum that this Ike3gppInfo represents. */
