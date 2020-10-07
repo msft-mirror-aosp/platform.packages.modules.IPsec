@@ -45,6 +45,15 @@ public final class Ike3gppParams {
         return mPduSessionId;
     }
 
+    /**
+     * Returns true if the PDU Session ID is set for this instance.
+     *
+     * @hide
+     */
+    public boolean hasPduSessionId() {
+        return mPduSessionId != PDU_SESSION_ID_UNSET;
+    }
+
     /** This class can be used to incrementally construct an {@link Ike3gppParams}. */
     public static final class Builder {
         private byte mPduSessionId = PDU_SESSION_ID_UNSET;
