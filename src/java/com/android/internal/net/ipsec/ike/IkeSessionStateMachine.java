@@ -1393,7 +1393,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             mIkeSocket.sendIkePacket(packet, mRemoteAddress);
         }
         if (msg.ikeHeader.isResponseMsg) {
-            ikeSaRecord.updateLastSentRespAllPackets(Arrays.asList(packetList));
+            ikeSaRecord.updateLastSentRespAllPackets(
+                    Arrays.asList(packetList), msg.ikeHeader.messageId);
         }
     }
 
@@ -1714,12 +1715,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 if (expectedMsgId - 1 == ikeHeader.messageId) {
 
                     if (ikeSaRecord.isRetransmittedRequest(ikePacketBytes)) {
-                        logd("Received re-transmitted request. Retransmitting response");
-
-                        if (ikeSaRecord.getLastSentRespAllPackets() != null) {
+                        if (ikeSaRecord.getLastSentRespMsgId() == ikeHeader.messageId) {
+                            logd(
+                                    "Received re-transmitted request "
+                                            + ikeHeader.messageId
+                                            + " Retransmitting response");
                             for (byte[] packet : ikeSaRecord.getLastSentRespAllPackets()) {
                                 mIkeSocket.sendIkePacket(packet, mRemoteAddress);
                             }
+                        } else {
+                            logd(
+                                    "Received re-transmitted request "
+                                            + ikeHeader.messageId
+                                            + " Original request is still being processed");
                         }
 
                         // TODO:Support resetting remote rekey delete timer.
