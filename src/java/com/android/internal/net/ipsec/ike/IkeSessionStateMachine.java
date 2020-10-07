@@ -107,6 +107,7 @@ import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedExcepti
 import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange;
 import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
@@ -246,17 +247,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     })
     @interface IkeExchangeSubType {}
 
-    static final int IKE_EXCHANGE_SUBTYPE_INVALID = 0;
-    static final int IKE_EXCHANGE_SUBTYPE_IKE_INIT = 1;
-    static final int IKE_EXCHANGE_SUBTYPE_IKE_AUTH = 2;
-    static final int IKE_EXCHANGE_SUBTYPE_CREATE_CHILD = 3;
-    static final int IKE_EXCHANGE_SUBTYPE_DELETE_IKE = 4;
-    static final int IKE_EXCHANGE_SUBTYPE_DELETE_CHILD = 5;
-    static final int IKE_EXCHANGE_SUBTYPE_REKEY_IKE = 6;
-    static final int IKE_EXCHANGE_SUBTYPE_REKEY_CHILD = 7;
-    static final int IKE_EXCHANGE_SUBTYPE_GENERIC_INFO = 8;
+    public static final int IKE_EXCHANGE_SUBTYPE_INVALID = 0;
+    public static final int IKE_EXCHANGE_SUBTYPE_IKE_INIT = 1;
+    public static final int IKE_EXCHANGE_SUBTYPE_IKE_AUTH = 2;
+    public static final int IKE_EXCHANGE_SUBTYPE_CREATE_CHILD = 3;
+    public static final int IKE_EXCHANGE_SUBTYPE_DELETE_IKE = 4;
+    public static final int IKE_EXCHANGE_SUBTYPE_DELETE_CHILD = 5;
+    public static final int IKE_EXCHANGE_SUBTYPE_REKEY_IKE = 6;
+    public static final int IKE_EXCHANGE_SUBTYPE_REKEY_CHILD = 7;
+    public static final int IKE_EXCHANGE_SUBTYPE_GENERIC_INFO = 8;
 
-    private static final SparseArray<String> EXCHANGE_SUBTYPE_TO_STRING;
+    public static final SparseArray<String> EXCHANGE_SUBTYPE_TO_STRING;
 
     static {
         EXCHANGE_SUBTYPE_TO_STRING = new SparseArray<>();
@@ -454,6 +455,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
     /** Package */
     @VisibleForTesting IkeSaRecord mIkeSaRecordAwaitingRemoteDel;
 
+    private final Ike3gppExtensionExchange mIke3gppExtensionExchange;
+
     // States
     @VisibleForTesting final State mKillIkeSessionParent = new KillIkeSessionParent();
 
@@ -545,6 +548,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         mFirstChildSessionParams = firstChildParams;
         mFirstChildCallbacks = firstChildSessionCallback;
         registerChildSessionCallback(firstChildParams, firstChildSessionCallback, true);
+
+        mIke3gppExtensionExchange =
+                new Ike3gppExtensionExchange(
+                        mIkeSessionParams.getIke3gppExtension(), mUserCbExecutor);
 
         // CHECKSTYLE:OFF IndentationCheck
         addState(mKillIkeSessionParent);
@@ -1897,6 +1904,21 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                     new IllegalStateException(
                             "Do not support handling generic processing error of encrypted"
                                     + " response"));
+        }
+
+        /**
+         * Method for extracting and handling 3GPP-specific payloads from the IKE response payloads.
+         *
+         * <p>Returns the extracted 3GPP payloads after they have been handled.
+         */
+        protected List<IkePayload> extractAndHandle3gppResponse(
+                int exchangeSubtype, List<IkePayload> respPayloads) throws InvalidSyntaxException {
+            List<IkePayload> ike3gppPayloads =
+                    mIke3gppExtensionExchange.extract3gppResponsePayloads(
+                            exchangeSubtype, respPayloads);
+            mIke3gppExtensionExchange.handle3gppResponsePayloads(exchangeSubtype, ike3gppPayloads);
+
+            return ike3gppPayloads;
         }
     }
 
@@ -3369,6 +3391,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             configAttributes.add(new IkeConfigPayload.ConfigAttributeAppVersion());
             payloadList.add(new IkeConfigPayload(false /*isReply*/, configAttributes));
 
+            // Add 3GPP-specific payloads for this exchange subtype
+            payloadList.addAll(
+                    mIke3gppExtensionExchange.getRequestPayloads(IKE_EXCHANGE_SUBTYPE_IKE_AUTH));
+
             return buildIkeAuthReqMessage(payloadList);
         }
 
@@ -3377,7 +3403,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeAuthPayload authPayload = null;
             List<IkeCertPayload> certPayloads = new LinkedList<>();
 
-            for (IkePayload payload : authResp.ikePayloadList) {
+            // Process 3GPP-specific payloads before verifying IKE_AUTH to ensure that the
+            // caller is informed of them.
+            List<IkePayload> ike3gppPayloads =
+                    extractAndHandle3gppResponse(
+                            IKE_EXCHANGE_SUBTYPE_IKE_AUTH, authResp.ikePayloadList);
+
+            List<IkePayload> payloadsWithout3gpp = new ArrayList<>(authResp.ikePayloadList);
+            payloadsWithout3gpp.removeAll(ike3gppPayloads);
+
+            for (IkePayload payload : payloadsWithout3gpp) {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_ID_RESPONDER:
                         mRespIdPayload = (IkeIdPayload) payload;
@@ -3410,7 +3445,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             } else {
                                 throw notifyPayload.validateAndBuildIkeException();
                             }
-
                         } else if (notifyPayload.isNewChildSaNotify()) {
                             // If payload is not an error but is for the new Child, it's reasonable
                             // to receive here. Let the ChildSessionStateMachine handle it.
@@ -3610,8 +3644,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             "Expected EXCHANGE_TYPE_IKE_AUTH but received: " + exchangeType);
                 }
 
+                // Process 3GPP-specific payloads before verifying IKE_AUTH to ensure that the
+                // caller is informed of them.
+                List<IkePayload> ike3gppPayloads =
+                        extractAndHandle3gppResponse(
+                                IKE_EXCHANGE_SUBTYPE_IKE_AUTH, ikeMessage.ikePayloadList);
+
+                List<IkePayload> payloadsWithout3gpp = new ArrayList<>(ikeMessage.ikePayloadList);
+                payloadsWithout3gpp.removeAll(ike3gppPayloads);
+
                 IkeEapPayload eapPayload = null;
-                for (IkePayload payload : ikeMessage.ikePayloadList) {
+                for (IkePayload payload : payloadsWithout3gpp) {
                     switch (payload.payloadType) {
                         case IkePayload.PAYLOAD_TYPE_EAP:
                             eapPayload = (IkeEapPayload) payload;
@@ -3741,7 +3784,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         private void validateIkeAuthRespPostEap(IkeMessage authResp) throws IkeProtocolException {
             IkeAuthPayload authPayload = null;
 
-            for (IkePayload payload : authResp.ikePayloadList) {
+            // Process 3GPP-specific payloads before verifying IKE_AUTH to ensure that the
+            // caller is informed of them.
+            List<IkePayload> ike3gppPayloads =
+                    extractAndHandle3gppResponse(
+                            IKE_EXCHANGE_SUBTYPE_IKE_AUTH, authResp.ikePayloadList);
+
+            List<IkePayload> payloadsWithout3gpp = new ArrayList<>(authResp.ikePayloadList);
+            payloadsWithout3gpp.removeAll(ike3gppPayloads);
+
+            for (IkePayload payload : payloadsWithout3gpp) {
                 switch (payload.payloadType) {
                     case IkePayload.PAYLOAD_TYPE_AUTH:
                         authPayload = (IkeAuthPayload) payload;
@@ -3760,7 +3812,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                             } else {
                                 throw notifyPayload.validateAndBuildIkeException();
                             }
-
                         } else if (notifyPayload.isNewChildSaNotify()) {
                             // If payload is not an error but is for the new Child, it's reasonable
                             // to receive here. Let the ChildSessionStateMachine handle it.
