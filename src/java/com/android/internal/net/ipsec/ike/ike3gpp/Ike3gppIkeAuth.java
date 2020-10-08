@@ -16,13 +16,18 @@
 package com.android.internal.net.ipsec.ike.ike3gpp;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.NOTIFY_ERROR_NETWORK_FAILURE;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.NOTIFY_ERROR_NO_APN_SUBSCRIPTION;
 
+import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_BACKOFF_TIMER;
 import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_INFORMATION;
 
 import android.annotation.NonNull;
+import android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.ike.ike3gpp.Ike3gppInfo;
 import android.net.ipsec.ike.ike3gpp.Ike3gppN1ModeInformation;
+import android.util.ArraySet;
 
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
@@ -30,6 +35,7 @@ import com.android.internal.net.ipsec.ike.message.IkePayload;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 /**
@@ -39,6 +45,14 @@ import java.util.concurrent.Executor;
  */
 class Ike3gppIkeAuth extends Ike3gppExchangeBase {
     private static final String TAG = Ike3gppIkeAuth.class.getSimpleName();
+    private static final Set<Integer> SUPPORTED_RESPONSE_NOTIFY_TYPES = new ArraySet<>();
+
+    static {
+        SUPPORTED_RESPONSE_NOTIFY_TYPES.add(NOTIFY_TYPE_N1_MODE_INFORMATION);
+        SUPPORTED_RESPONSE_NOTIFY_TYPES.add(NOTIFY_TYPE_BACKOFF_TIMER);
+        SUPPORTED_RESPONSE_NOTIFY_TYPES.add(NOTIFY_ERROR_NO_APN_SUBSCRIPTION);
+        SUPPORTED_RESPONSE_NOTIFY_TYPES.add(NOTIFY_ERROR_NETWORK_FAILURE);
+    }
 
     /** Initializes an Ike3gppIkeAuth. */
     Ike3gppIkeAuth(@NonNull Ike3gppExtension ike3gppExtension, @NonNull Executor userCbExecutor) {
@@ -63,7 +77,7 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
             switch (payload.payloadType) {
                 case IkePayload.PAYLOAD_TYPE_NOTIFY:
                     IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
-                    if (notifyPayload.notifyType == NOTIFY_TYPE_N1_MODE_INFORMATION) {
+                    if (SUPPORTED_RESPONSE_NOTIFY_TYPES.contains(notifyPayload.notifyType)) {
                         ike3gppPayloads.add(notifyPayload);
                     }
                     break;
@@ -82,19 +96,33 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
                 IkePayload.getPayloadListForTypeInProvidedList(
                         IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, ike3gppPayloads);
 
+        IkeNotifyPayload backoffTimerPayload = null;
+        IkeNotifyPayload backoffTimerCause = null;
         for (IkeNotifyPayload notifyPayload : notifyPayloads) {
             switch (notifyPayload.notifyType) {
                 case NOTIFY_TYPE_N1_MODE_INFORMATION:
                     // N1_MODE_CAPABILITY must be configured for the client to be notified
                     if (!mIke3gppExtension.getIke3gppParams().hasPduSessionId()) {
-                        getIkeLog()
-                                .w(TAG, "Received N1_MODE_INFORMATION when N1 Mode is not enabled");
+                        logw("Received N1_MODE_INFORMATION when N1 Mode is not enabled");
                         continue;
                     }
 
                     byte[] snssai =
                             Ike3gppN1ModeUtils.getSnssaiFromNotifyData(notifyPayload.notifyData);
                     ike3gppInfos.add(new Ike3gppN1ModeInformation(snssai));
+                    break;
+                case NOTIFY_TYPE_BACKOFF_TIMER:
+                    backoffTimerPayload = notifyPayload;
+                    break;
+                case NOTIFY_ERROR_NO_APN_SUBSCRIPTION: // fallthrough
+                case NOTIFY_ERROR_NETWORK_FAILURE:
+                    if (backoffTimerCause == null) {
+                        backoffTimerCause = notifyPayload;
+                    } else {
+                        logw(
+                                "Received multiple potential causes for BACKOFF_TIMER: "
+                                        + notifyPayload.notifyType);
+                    }
                     break;
                 default:
                     // non-3GPP payload. Can be ignored.
@@ -103,10 +131,23 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
             }
         }
 
+        if (backoffTimerPayload != null && backoffTimerCause != null) {
+            byte backoffTimer =
+                    Ike3gppBackoffTimerUtils.getBackoffTimerfromNotifyData(
+                            backoffTimerPayload.notifyData);
+            ike3gppInfos.add(new Ike3gppBackoffTimer(backoffTimer, backoffTimerCause.notifyType));
+        } else if (backoffTimerPayload != null) {
+            logw("Received BACKOFF_TIMER payload without an Error-Notify");
+        }
+
         maybeInvokeUserCallback(ike3gppInfos);
     }
 
     private void logd(String msg) {
         getIkeLog().d(TAG, msg);
+    }
+
+    private void logw(String msg) {
+        getIkeLog().w(TAG, msg);
     }
 }

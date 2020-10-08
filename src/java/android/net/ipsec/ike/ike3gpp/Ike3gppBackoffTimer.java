@@ -17,9 +17,11 @@
 package android.net.ipsec.ike.ike3gpp;
 
 import android.annotation.IntDef;
+import android.util.ArraySet;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.Set;
 
 /**
  * Class representing the data provided by the peer for a BACKOFF_TIMER payload.
@@ -54,6 +56,14 @@ public final class Ike3gppBackoffTimer extends Ike3gppInfo {
     @IntDef({NOTIFY_ERROR_NO_APN_SUBSCRIPTION, NOTIFY_ERROR_NETWORK_FAILURE})
     public @interface BackoffCause {}
 
+    private static final Set<Integer> VALID_BACKOFF_TIMER_CAUSES;
+
+    static {
+        VALID_BACKOFF_TIMER_CAUSES = new ArraySet<>();
+        VALID_BACKOFF_TIMER_CAUSES.add(NOTIFY_ERROR_NO_APN_SUBSCRIPTION);
+        VALID_BACKOFF_TIMER_CAUSES.add(NOTIFY_ERROR_NETWORK_FAILURE);
+    }
+
     private final byte mBackoffTimer;
     private final int mBackoffCause;
 
@@ -75,5 +85,10 @@ public final class Ike3gppBackoffTimer extends Ike3gppInfo {
     /** Returns the cause for this Backoff Timer specified by the peer. */
     public int getBackoffCause() {
         return mBackoffCause;
+    }
+
+    /** @hide */
+    public static boolean isValidErrorNotifyCause(int notifyType) {
+        return VALID_BACKOFF_TIMER_CAUSES.contains(notifyType);
     }
 }

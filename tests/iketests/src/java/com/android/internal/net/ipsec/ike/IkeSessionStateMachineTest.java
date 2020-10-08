@@ -26,6 +26,8 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_N
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.NOTIFY_ERROR_NETWORK_FAILURE;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.NOTIFY_ERROR_NO_APN_SUBSCRIPTION;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
@@ -37,6 +39,7 @@ import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCH
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
+import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_BACKOFF_TIMER;
 import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_CAPABILITY;
 import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_INFORMATION;
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
@@ -104,6 +107,7 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
 import android.net.ipsec.ike.ike3gpp.Ike3gppInfo;
@@ -133,6 +137,7 @@ import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
 import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import com.android.internal.net.ipsec.ike.exceptions.UnrecognizedIkeProtocolException;
 import com.android.internal.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
 import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
@@ -297,6 +302,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private static final byte PDU_SESSION_ID = (byte) 0x7B;
     private static final String N1_MODE_CAPABILITY_PAYLOAD_DATA = "017B";
     private static final byte[] SNSSAI = {(byte) 456};
+
+    private static final byte BACKOFF_TIMER = (byte) 0xAF;
+    private static final byte[] BACKOFF_TIMER_DATA = {0x01, BACKOFF_TIMER};
 
     private static final int KEY_LEN_IKE_INTE = 20;
     private static final int KEY_LEN_IKE_ENCR = 16;
@@ -2645,7 +2653,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyRetransmissionStarted();
         resetMockIkeMessageHelper();
 
-        // Mock rejecting IKE AUTH with Authenticatio Failure notification
+        // Mock rejecting IKE AUTH with Authentication Failure notification
         ReceivedIkePacket mockAuthFailPacket =
                 makeIkeAuthRespWithoutChildPayloads(
                         Arrays.asList(new IkeNotifyPayload(ERROR_TYPE_AUTHENTICATION_FAILED)));
@@ -4975,6 +4983,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     @Test
     public void testIkeAuthWithN1Mode() throws Exception {
+        verifyIkeAuthWith3gppEnabled(
+                makeN1ModeInformationPayload(), 1 /* ike3gppCallbackInvocations */);
+
+        verifyN1ModeReceived();
+    }
+
+    private void verifyIkeAuthWith3gppEnabled(
+            IkePayload ike3gppPayload, int ike3gppCallbackInvocations) throws Exception {
         // Quit and restart IKE Session with N1 Mode Capability params
         mIkeSessionStateMachine.quitNow();
         reset(mMockChildSessionFactoryHelper);
@@ -4985,13 +5001,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Build IKE AUTH response with Auth-PSK, ID-Responder and config payloads.
         List<IkePayload> authRelatedPayloads = new ArrayList<>();
+        authRelatedPayloads.add(ike3gppPayload);
         IkeAuthPskPayload spyAuthPayload = makeSpyRespPskPayload();
         authRelatedPayloads.add(spyAuthPayload);
 
         IkeIdPayload respIdPayload = makeRespIdPayload();
         authRelatedPayloads.add(respIdPayload);
         authRelatedPayloads.add(makeConfigPayload());
-        authRelatedPayloads.add(makeN1ModeInformationPayload());
 
         verifySharedKeyAuthentication(
                 spyAuthPayload,
@@ -4999,10 +5015,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 authRelatedPayloads,
                 true /*hasChildPayloads*/,
                 true /*hasConfigPayloadInResp*/,
-                1 /* ike3gppCallbackInvocations */);
+                ike3gppCallbackInvocations);
         verifyRetransmissionStopped();
-
-        verifyN1ModeReceived();
     }
 
     private IkeNotifyPayload makeN1ModeInformationPayload() {
@@ -5026,5 +5040,69 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertNotNull(n1ModeInformation);
         assertArrayEquals(SNSSAI, n1ModeInformation.getSnssai());
+    }
+
+    @Test
+    public void testIkeAuthWithBackoffTimerNetworkError() throws Exception {
+        verifyIkeAuthWithBackoffTimer(NOTIFY_ERROR_NETWORK_FAILURE);
+    }
+
+    @Test
+    public void testIkeAuthWithBackoffTimerNoApnSubscription() throws Exception {
+        verifyIkeAuthWithBackoffTimer(NOTIFY_ERROR_NO_APN_SUBSCRIPTION);
+    }
+
+    private void verifyIkeAuthWithBackoffTimer(int expectedNotifyErrorCause) throws Exception {
+        // Quit and restart IKE Session with N1 Mode Capability params
+        mIkeSessionStateMachine.quitNow();
+        reset(mMockChildSessionFactoryHelper);
+        setupChildStateMachineFactory(mMockChildSessionStateMachine);
+        mIkeSessionStateMachine =
+                makeAndStartIkeSession(buildIkeSessionParamsIke3gppExtension(PDU_SESSION_ID));
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+
+        // Build IKE AUTH response with BackoffTimer and Error-Notify
+        IkeNotifyPayload backoffTimerPayload =
+                new IkeNotifyPayload(NOTIFY_TYPE_BACKOFF_TIMER, BACKOFF_TIMER_DATA);
+        IkeNotifyPayload errorNotify = new IkeNotifyPayload(expectedNotifyErrorCause);
+
+        ReceivedIkePacket mockBackoffTimerResponsePacket =
+                makeIkeAuthRespWithoutChildPayloads(
+                        Arrays.asList(backoffTimerPayload, errorNotify));
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockBackoffTimerResponsePacket);
+        mLooper.dispatchAll();
+
+        // Verify IKE Session is closed properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockIkeSessionCallback)
+                .onClosedExceptionally(any(UnrecognizedIkeProtocolException.class));
+
+        verifyBackoffTimer(expectedNotifyErrorCause);
+    }
+
+    private void verifyBackoffTimer(int expectedNotifyErrorCause) {
+        ArgumentCaptor<List<Ike3gppInfo>> ike3gppInfoCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mMockIke3gppCallback).onIke3gppPayloadsReceived(ike3gppInfoCaptor.capture());
+
+        Ike3gppBackoffTimer backoffTimer = null;
+        for (Ike3gppInfo payload : ike3gppInfoCaptor.getValue()) {
+            if (payload.getInfoType() == Ike3gppInfo.INFO_TYPE_NOTIFY_BACKOFF_TIMER) {
+                backoffTimer = (Ike3gppBackoffTimer) payload;
+            }
+        }
+
+        assertNotNull(backoffTimer);
+        assertEquals(BACKOFF_TIMER, backoffTimer.getBackoffTimer());
+        assertEquals(expectedNotifyErrorCause, backoffTimer.getBackoffCause());
+    }
+
+    @Test
+    public void testIkeAuthWithBackoffTimerWithoutError() throws Exception {
+        verifyIkeAuthWith3gppEnabled(
+                new IkeNotifyPayload(NOTIFY_TYPE_BACKOFF_TIMER, BACKOFF_TIMER_DATA),
+                0 /* ike3gppCallbackInvocations */);
+
+        // BackoffTimer should be ignored
+        verify(mMockIke3gppCallback, never()).onIke3gppPayloadsReceived(any());
     }
 }

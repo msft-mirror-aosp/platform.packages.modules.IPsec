@@ -1915,16 +1915,29 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         /**
-         * Method for extracting and handling 3GPP-specific payloads from the IKE response payloads.
+         * Method for handling and extracting 3GPP-specific payloads from the IKE response payloads.
          *
-         * <p>Returns the extracted 3GPP payloads after they have been handled.
+         * <p>Returns the extracted 3GPP payloads after they have been handled. Only non
+         * error-notify payloads are returned.
          */
-        protected List<IkePayload> extractAndHandle3gppResponse(
+        protected List<IkePayload> handle3gppRespAndExtractNonError3gppPayloads(
                 int exchangeSubtype, List<IkePayload> respPayloads) throws InvalidSyntaxException {
             List<IkePayload> ike3gppPayloads =
                     mIke3gppExtensionExchange.extract3gppResponsePayloads(
                             exchangeSubtype, respPayloads);
+
             mIke3gppExtensionExchange.handle3gppResponsePayloads(exchangeSubtype, ike3gppPayloads);
+
+            List<IkePayload> ike3gppErrorNotifyPayloads = new ArrayList<>();
+            for (IkePayload payload : ike3gppPayloads) {
+                if (payload instanceof IkeNotifyPayload) {
+                    IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                    if (notifyPayload.isErrorNotify()) {
+                        ike3gppErrorNotifyPayloads.add(payload);
+                    }
+                }
+            }
+            ike3gppPayloads.removeAll(ike3gppErrorNotifyPayloads);
 
             return ike3gppPayloads;
         }
@@ -3414,7 +3427,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // Process 3GPP-specific payloads before verifying IKE_AUTH to ensure that the
             // caller is informed of them.
             List<IkePayload> ike3gppPayloads =
-                    extractAndHandle3gppResponse(
+                    handle3gppRespAndExtractNonError3gppPayloads(
                             IKE_EXCHANGE_SUBTYPE_IKE_AUTH, authResp.ikePayloadList);
 
             List<IkePayload> payloadsWithout3gpp = new ArrayList<>(authResp.ikePayloadList);
@@ -3655,7 +3668,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                 // Process 3GPP-specific payloads before verifying IKE_AUTH to ensure that the
                 // caller is informed of them.
                 List<IkePayload> ike3gppPayloads =
-                        extractAndHandle3gppResponse(
+                        handle3gppRespAndExtractNonError3gppPayloads(
                                 IKE_EXCHANGE_SUBTYPE_IKE_AUTH, ikeMessage.ikePayloadList);
 
                 List<IkePayload> payloadsWithout3gpp = new ArrayList<>(ikeMessage.ikePayloadList);
@@ -3795,7 +3808,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // Process 3GPP-specific payloads before verifying IKE_AUTH to ensure that the
             // caller is informed of them.
             List<IkePayload> ike3gppPayloads =
-                    extractAndHandle3gppResponse(
+                    handle3gppRespAndExtractNonError3gppPayloads(
                             IKE_EXCHANGE_SUBTYPE_IKE_AUTH, authResp.ikePayloadList);
 
             List<IkePayload> payloadsWithout3gpp = new ArrayList<>(authResp.ikePayloadList);
