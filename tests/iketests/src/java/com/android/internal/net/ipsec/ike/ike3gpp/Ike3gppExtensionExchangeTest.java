@@ -18,6 +18,7 @@ package com.android.internal.net.ipsec.ike.ike3gpp;
 
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_IKE_AUTH;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_IKE_INIT;
+import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_BACKOFF_TIMER;
 import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_CAPABILITY;
 import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_INFORMATION;
 
@@ -47,11 +48,14 @@ public class Ike3gppExtensionExchangeTest {
 
     private static final byte[] N1_MODE_INFORMATION_DATA =
             HexDump.hexStringToByteArray("0411223344");
+    private static final byte[] BACKOFF_TIMER_DATA = HexDump.hexStringToByteArray("01AF");
 
     private static final IkeNotifyPayload N1_MODE_INFORMATION =
             new IkeNotifyPayload(NOTIFY_TYPE_N1_MODE_INFORMATION, N1_MODE_INFORMATION_DATA);
     private static final IkeNotifyPayload FRAGMENTATION_SUPPORTED =
             new IkeNotifyPayload(IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED);
+    private static final IkeNotifyPayload BACKOFF_TIMER =
+            new IkeNotifyPayload(NOTIFY_TYPE_BACKOFF_TIMER, BACKOFF_TIMER_DATA);
 
     private static final Executor INLINE_EXECUTOR = Runnable::run;
 
@@ -106,13 +110,25 @@ public class Ike3gppExtensionExchangeTest {
         List<IkePayload> result =
                 mIke3gppExtensionExchange.extract3gppResponsePayloads(
                         IKE_EXCHANGE_SUBTYPE_IKE_AUTH,
-                        Arrays.asList(N1_MODE_INFORMATION, FRAGMENTATION_SUPPORTED));
+                        Arrays.asList(N1_MODE_INFORMATION, BACKOFF_TIMER, FRAGMENTATION_SUPPORTED));
 
-        assertEquals(1, result.size());
+        assertEquals(2, result.size());
 
-        IkeNotifyPayload n1ModeInformation = (IkeNotifyPayload) result.get(0);
-        assertEquals(NOTIFY_TYPE_N1_MODE_INFORMATION, n1ModeInformation.notifyType);
+        IkeNotifyPayload n1ModeInformation = null;
+        IkeNotifyPayload backoffTimer = null;
+        for (IkePayload payload : result) {
+            if (payload instanceof IkeNotifyPayload) {
+                IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                if (notifyPayload.notifyType == NOTIFY_TYPE_N1_MODE_INFORMATION) {
+                    n1ModeInformation = notifyPayload;
+                } else if (notifyPayload.notifyType == NOTIFY_TYPE_BACKOFF_TIMER) {
+                    backoffTimer = notifyPayload;
+                }
+            }
+        }
+
         assertArrayEquals(N1_MODE_INFORMATION_DATA, n1ModeInformation.notifyData);
+        assertArrayEquals(BACKOFF_TIMER_DATA, backoffTimer.notifyData);
     }
 
     @Test
@@ -122,7 +138,7 @@ public class Ike3gppExtensionExchangeTest {
         List<IkePayload> result =
                 mIke3gppExtensionExchange.extract3gppResponsePayloads(
                         IKE_EXCHANGE_SUBTYPE_IKE_INIT,
-                        Arrays.asList(N1_MODE_INFORMATION, FRAGMENTATION_SUPPORTED));
+                        Arrays.asList(N1_MODE_INFORMATION, BACKOFF_TIMER, FRAGMENTATION_SUPPORTED));
         assertTrue(result.isEmpty());
     }
 
@@ -131,7 +147,7 @@ public class Ike3gppExtensionExchangeTest {
         List<IkePayload> result =
                 mIke3gppExtensionExchange.extract3gppResponsePayloads(
                         IKE_EXCHANGE_SUBTYPE_IKE_INIT,
-                        Arrays.asList(N1_MODE_INFORMATION, FRAGMENTATION_SUPPORTED));
+                        Arrays.asList(N1_MODE_INFORMATION, BACKOFF_TIMER, FRAGMENTATION_SUPPORTED));
         assertTrue(result.isEmpty());
     }
 
