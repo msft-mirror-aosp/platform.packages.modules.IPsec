@@ -39,6 +39,17 @@ public class Ike3gppExtensionExchange {
     private static final String TAG = Ike3gppExtension.class.getSimpleName();
 
     /**
+     * Indicates that the caller must wait the specified time before attempting to open an IKE
+     * Session with the peer.
+     *
+     * <p>Note that this is not an IANA-specified value.
+     *
+     * <p>Must be accompanied by an Error-Notify(ERROR_TYPE_NO_APN_SUBSCRIPTION) or
+     * Error-Notify(ERROR_TYPE_NETWORK_FAILURE); otherwise, the payload will be logged and ignored.
+     */
+    public static final int NOTIFY_TYPE_BACKOFF_TIMER = 41041;
+
+    /**
      * Indicates that the UE supports N1 Mode during 5G SA ePDG tunnel setup.
      *
      * <p>Note that this is not an IANA-specified value.
