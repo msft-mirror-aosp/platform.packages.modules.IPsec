@@ -17,6 +17,10 @@
 package android.net.ipsec.ike.ike3gpp;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 import org.junit.Test;
 
@@ -31,5 +35,18 @@ public class Ike3gppBackoffTimerTest {
         assertEquals(Ike3gppInfo.INFO_TYPE_NOTIFY_BACKOFF_TIMER, backoffTimer.getInfoType());
         assertEquals(BACKOFF_TIMER, backoffTimer.getBackoffTimer());
         assertEquals(BACKOFF_CAUSE, backoffTimer.getBackoffCause());
+    }
+
+    @Test
+    public void testIsValidErrorNotifyCause() {
+        assertTrue(
+                Ike3gppBackoffTimer.isValidErrorNotifyCause(
+                        Ike3gppBackoffTimer.NOTIFY_ERROR_NO_APN_SUBSCRIPTION));
+        assertTrue(
+                Ike3gppBackoffTimer.isValidErrorNotifyCause(
+                        Ike3gppBackoffTimer.NOTIFY_ERROR_NETWORK_FAILURE));
+        assertFalse(
+                Ike3gppBackoffTimer.isValidErrorNotifyCause(
+                        IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED));
     }
 }
