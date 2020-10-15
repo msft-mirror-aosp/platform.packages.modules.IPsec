@@ -5105,4 +5105,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // BackoffTimer should be ignored
         verify(mMockIke3gppCallback, never()).onIke3gppPayloadsReceived(any());
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testIke3gppReuseCallback() throws Exception {
+        mIkeSessionStateMachine =
+                makeAndStartIkeSession(buildIkeSessionParamsIke3gppExtension(PDU_SESSION_ID));
+        makeAndStartIkeSession(buildIkeSessionParamsIke3gppExtension(PDU_SESSION_ID));
+    }
 }
