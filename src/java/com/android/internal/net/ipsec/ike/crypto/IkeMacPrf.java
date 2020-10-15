@@ -16,12 +16,15 @@
 
 package com.android.internal.net.ipsec.ike.crypto;
 
+import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC;
+
 import android.net.ipsec.ike.SaProposal;
 
 import com.android.internal.net.crypto.KeyGenerationUtils;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 
 import java.nio.ByteBuffer;
+import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
@@ -41,15 +44,14 @@ import javax.crypto.Mac;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public class IkeMacPrf extends IkeMac {
-    // STOPSHIP: b/130190639 Catch unchecked exceptions, notify users and close the IKE session.
     private static final int PSEUDORANDOM_FUNCTION_AES128_XCBC_KEY_LEN = 16;
 
     private IkeMacPrf(
             @SaProposal.PseudorandomFunction int algorithmId,
             int keyLength,
             String algorithmName,
-            boolean isEncryptAlgo) {
-        super(algorithmId, keyLength, algorithmName, isEncryptAlgo);
+            boolean isJceSupported) {
+        super(algorithmId, keyLength, algorithmName, isJceSupported);
     }
 
     /**
@@ -63,7 +65,7 @@ public class IkeMacPrf extends IkeMac {
 
         int keyLength = 0;
         String algorithmName = "";
-        boolean isEncryptAlgo = false;
+        boolean isJceSupported = true;
 
         switch (algorithmId) {
             case SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1:
@@ -72,8 +74,8 @@ public class IkeMacPrf extends IkeMac {
                 break;
             case SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC:
                 keyLength = 16;
-                isEncryptAlgo = true;
-                algorithmName = "AES_128/CBC/NoPadding";
+                isJceSupported = false;
+                algorithmName = ALGO_NAME_JCE_UNSUPPORTED;
                 break;
             case SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256:
                 keyLength = 32;
@@ -91,7 +93,43 @@ public class IkeMacPrf extends IkeMac {
                 throw new IllegalArgumentException("Unrecognized PRF ID: " + algorithmId);
         }
 
-        return new IkeMacPrf(algorithmId, keyLength, algorithmName, isEncryptAlgo);
+        return new IkeMacPrf(algorithmId, keyLength, algorithmName, isJceSupported);
+    }
+
+    @Override
+    public byte[] signBytes(byte[] keyBytes, byte[] dataToSign) {
+        if (getAlgorithmId() == PSEUDORANDOM_FUNCTION_AES128_XCBC) {
+            try {
+                keyBytes = modifyAesXCbcKeyIfNeeded(keyBytes);
+                return new AesXCbcImpl().mac(keyBytes, dataToSign, false /*needTruncation*/);
+            } catch (GeneralSecurityException | IllegalStateException e) {
+                throw new IllegalArgumentException("Failed to generate MAC: ", e);
+            }
+        } else {
+            return super.signBytes(keyBytes, dataToSign);
+        }
+    }
+
+    private byte[] modifyAesXCbcKeyIfNeeded(byte[] keyBytes) throws GeneralSecurityException {
+        // As per RFC 4434:
+        // The key for AES-XCBC-PRF-128 is created as follows:
+        //
+        // 1. If the key is exactly 128 bits long, use it as-is.
+        //
+        // 2. If the key has fewer than 128 bits, lengthen it to exactly 128 bits by padding it on
+        // the right with zero bits.
+        //
+        // 3. If the key is 129 bits or longer, shorten it to exactly 128 bits by performing the
+        // steps in AES-XCBC-PRF-128 (that is, the algorithm described in this document). In that
+        // re-application of this algorithm, the key is 128 zero bits; the message is the too-long
+        // current key.
+        if (keyBytes.length < 16) {
+            keyBytes = Arrays.copyOf(keyBytes, 16);
+        } else if (keyBytes.length > 16) {
+            keyBytes = new AesXCbcImpl().mac(new byte[16], keyBytes, false /*needTruncation*/);
+        }
+
+        return keyBytes;
     }
 
     /**
