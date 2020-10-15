@@ -977,6 +977,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             // TODO: Remove the stored ikeSessionCallback
         }
 
+        mIke3gppExtensionExchange.close();
+
         mBusyWakeLock.release();
         mScheduler.releaseAllLocalRequestWakeLocks();
     }
