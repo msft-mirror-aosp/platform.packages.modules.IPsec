@@ -1230,6 +1230,8 @@ public final class IkeSaPayload extends IkePayload {
         private void validateKeyLength() throws InvalidSyntaxException {
             switch (id) {
                 case SaProposal.ENCRYPTION_ALGORITHM_3DES:
+                    /* fall through */
+                case SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305:
                     if (mSpecifiedKeyLength != KEY_LEN_UNSPECIFIED) {
                         throw new InvalidSyntaxException(
                                 "Must not set Key Length value for this "
@@ -1239,6 +1241,8 @@ public final class IkeSaPayload extends IkePayload {
                     }
                     return;
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_CBC:
+                    /* fall through */
+                case SaProposal.ENCRYPTION_ALGORITHM_AES_CTR:
                     /* fall through */
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
                     /* fall through */
