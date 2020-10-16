@@ -1240,6 +1240,8 @@ public final class IkeSaPayload extends IkePayload {
                     return;
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_CBC:
                     /* fall through */
+                case SaProposal.ENCRYPTION_ALGORITHM_AES_CTR:
+                    /* fall through */
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
                     /* fall through */
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
