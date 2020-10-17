@@ -49,7 +49,14 @@ public final class IkeNormalModeCipher extends IkeCipher {
     /** Package private */
     IkeNormalModeCipher(
             int algorithmId, int keyLength, int ivLength, String algorithmName, int saltLen) {
-        super(algorithmId, keyLength, ivLength, algorithmName, false /*isAead*/, saltLen);
+        super(
+                algorithmId,
+                keyLength,
+                ivLength,
+                algorithmName,
+                false /*isAead*/,
+                saltLen,
+                BLOCK_SIZE_NOT_SPECIFIED);
     }
 
     private byte[] doCipherAction(byte[] data, byte[] keyBytes, byte[] ivBytes, int opmode)
