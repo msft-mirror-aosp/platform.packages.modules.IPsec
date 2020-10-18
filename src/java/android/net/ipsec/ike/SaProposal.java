@@ -56,9 +56,11 @@ public abstract class SaProposal {
     @IntDef({
         ENCRYPTION_ALGORITHM_3DES,
         ENCRYPTION_ALGORITHM_AES_CBC,
+        ENCRYPTION_ALGORITHM_AES_CTR,
         ENCRYPTION_ALGORITHM_AES_GCM_8,
         ENCRYPTION_ALGORITHM_AES_GCM_12,
-        ENCRYPTION_ALGORITHM_AES_GCM_16
+        ENCRYPTION_ALGORITHM_AES_GCM_16,
+        ENCRYPTION_ALGORITHM_CHACHA20_POLY1305
     })
     public @interface EncryptionAlgorithm {}
 
@@ -66,6 +68,8 @@ public abstract class SaProposal {
     public static final int ENCRYPTION_ALGORITHM_3DES = 3;
     /** AES-CBC Encryption/Ciphering Algorithm. */
     public static final int ENCRYPTION_ALGORITHM_AES_CBC = 12;
+    /** AES-CTR Encryption/Ciphering Algorithm. */
+    public static final int ENCRYPTION_ALGORITHM_AES_CTR = 13;
     /**
      * AES-GCM Authentication/Integrity + Encryption/Ciphering Algorithm with 8-octet ICV
      * (truncation).
@@ -81,6 +85,11 @@ public abstract class SaProposal {
      * (truncation).
      */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_16 = 20;
+    /**
+     * ChaCha20-Poly1305 Authentication/Integrity + Encryption/Ciphering Algorithm with 16-octet ICV
+     * (truncation).
+     */
+    public static final int ENCRYPTION_ALGORITHM_CHACHA20_POLY1305 = 28;
 
     private static final SparseArray<String> SUPPORTED_ENCRYPTION_ALGO_TO_STR;
 
@@ -88,9 +97,12 @@ public abstract class SaProposal {
         SUPPORTED_ENCRYPTION_ALGO_TO_STR = new SparseArray<>();
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_3DES, "ENCR_3DES");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_CBC, "ENCR_AES_CBC");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_CTR, "ENCR_AES_CTR");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_8, "ENCR_AES_GCM_8");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_12, "ENCR_AES_GCM_12");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_16, "ENCR_AES_GCM_16");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(
+                ENCRYPTION_ALGORITHM_CHACHA20_POLY1305, "ENCR_CHACHA20_POLY1305");
     }
 
     /**
@@ -421,12 +433,16 @@ public abstract class SaProposal {
                 case ENCRYPTION_ALGORITHM_3DES:
                     // Fall through
                 case ENCRYPTION_ALGORITHM_AES_CBC:
+                    // Fall through
+                case ENCRYPTION_ALGORITHM_AES_CTR:
                     return false;
                 case ENCRYPTION_ALGORITHM_AES_GCM_8:
                     // Fall through
                 case ENCRYPTION_ALGORITHM_AES_GCM_12:
                     // Fall through
                 case ENCRYPTION_ALGORITHM_AES_GCM_16:
+                    // Fall through
+                case ENCRYPTION_ALGORITHM_CHACHA20_POLY1305:
                     return true;
                 default:
                     // Won't hit here.
