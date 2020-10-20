@@ -19,7 +19,7 @@ package android.net.ipsec.ike;
 import static com.android.internal.net.ipsec.ike.message.IkeSaPayload.EsnTransform.ESN_POLICY_NO_EXTENDED;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
+import android.annotation.SuppressLint;
 import android.os.PersistableBundle;
 
 import com.android.internal.net.ipsec.ike.message.IkePayload;
@@ -44,9 +44,7 @@ import java.util.Objects;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public final class ChildSaProposal extends SaProposal {
     private static final String ESN_KEY = "mEsns";
     private final EsnTransform[] mEsns;
@@ -226,6 +224,9 @@ public final class ChildSaProposal extends SaProposal {
          *     3DES) only {@link SaProposal.KEY_LEN_UNUSED} is allowed.
          * @return Builder of ChildSaProposal.
          */
+        // The matching getter is defined in the super class. Please see {@link
+        // SaProposal#getEncryptionAlgorithms}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
             validateAndAddEncryptAlgo(algorithm, keyLength);
@@ -238,6 +239,9 @@ public final class ChildSaProposal extends SaProposal {
          * @param algorithm integrity algorithm to add to ChildSaProposal.
          * @return Builder of ChildSaProposal.
          */
+        // The matching getter is defined in the super class. Please see
+        // {@link SaProposal#getIntegrityAlgorithms}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
             addIntegrityAlgo(algorithm);
@@ -250,6 +254,9 @@ public final class ChildSaProposal extends SaProposal {
          * @param dhGroup to add to ChildSaProposal.
          * @return Builder of ChildSaProposal.
          */
+        // The matching getter is defined in the super class. Please see
+        // {@link SaProposal#getDhGroups}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addDhGroup(@DhGroup int dhGroup) {
             addDh(dhGroup);
