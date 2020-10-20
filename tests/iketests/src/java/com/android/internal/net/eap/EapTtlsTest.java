@@ -22,6 +22,7 @@ import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NEED_UNW
 import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NEED_WRAP_OK;
 import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NOT_HANDSHAKING_OK;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
@@ -29,6 +30,7 @@ import static org.mockito.Mockito.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -70,6 +72,20 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
     private static final int APPLICATION_BUFFER_SIZE_TLS_MESSAGE = 16384;
     private static final int PACKET_BUFFER_SIZE_TLS_MESSAGE = 16384;
     private static final byte[] EMPTY_BYTE_ARRAY = new byte[PACKET_BUFFER_SIZE_TLS_MESSAGE];
+
+    public static final byte[] TLS_MSK =
+            hexStringToByteArray(
+                    "00112233445566778899AABBCCDDEEFF"
+                            + "00112233445566778899AABBCCDDEEFF"
+                            + "00112233445566778899AABBCCDDEEFF"
+                            + "00112233445566778899AABBCCDDEEFF");
+
+    public static final byte[] TLS_EMSK =
+            hexStringToByteArray(
+                    "FFEEDDCCBBAA99887766554433221100"
+                            + "FFEEDDCCBBAA99887766554433221100"
+                            + "FFEEDDCCBBAA99887766554433221100"
+                            + "FFEEDDCCBBAA99887766554433221100");
 
     // TUNNELED MSCHAPV2 (Phase 2)
 
@@ -419,6 +435,7 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
     private final TlsSessionFactory mMockTlsSessionFactory = mock(TlsSessionFactory.class);
     private final SSLEngine mMockSslEngine = mock(SSLEngine.class);
     private final SSLSession mMockSslSession = mock(SSLSession.class);
+    private TlsSession mTlsSessionSpy;
 
     @Before
     @Override
@@ -443,14 +460,23 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         when(mMockSslSession.getApplicationBufferSize())
                 .thenReturn(APPLICATION_BUFFER_SIZE_TLS_MESSAGE);
         when(mMockSslSession.getPacketBufferSize()).thenReturn(PACKET_BUFFER_SIZE_TLS_MESSAGE);
-        TlsSession tlsSession =
-                new TlsSession(
-                        mock(SSLContext.class), mMockSslEngine, mMockSslSession, mMockSecureRandom);
+
+        // TODO(b/165823103): Switch EAP-TTLS to use CorePlatformApi for
+        // Conscrypt#exportKeyingMaterial
+        mTlsSessionSpy =
+                spy(
+                        new TlsSession(
+                                mock(SSLContext.class),
+                                mMockSslEngine,
+                                mMockSslSession,
+                                mMockSecureRandom));
+        when(mTlsSessionSpy.generateKeyingMaterial())
+                .thenReturn(mTlsSessionSpy.new EapTtlsKeyingMaterial(TLS_MSK, TLS_EMSK));
 
         EapTtlsMethodStateMachine.sTlsSessionFactory = mMockTlsSessionFactory;
         try {
             when(mMockTlsSessionFactory.newInstance(eq(null), eq(mMockSecureRandom)))
-                    .thenReturn(tlsSession);
+                    .thenReturn(mTlsSessionSpy);
         } catch (Exception e) {
             throw new AssertionError("TLS Session setup failed", e);
         }
@@ -469,8 +495,7 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         processAndVerifyServerFinished();
         processAndVerifyMsChapV2ChallengeRequest();
         processAndVerifyMsChapV2SuccessRequest();
-        // TODO(b/161233250): Implement keying material generation in EAP-TTLS
-        verifyEapSuccess(MSCHAPV2_MSK, MSCHAPV2_EMSK);
+        processAndVerifyEapSuccess(TLS_MSK, TLS_EMSK);
     }
 
     @Test
@@ -492,8 +517,7 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         processAndVerifyMsChapV2SuccessRequest();
 
         verifyEapNotification(6);
-        // TODO(b/161233250): Implement keying material generation in EAP-TTLS
-        verifyEapSuccess(MSCHAPV2_MSK, MSCHAPV2_EMSK);
+        processAndVerifyEapSuccess(TLS_MSK, TLS_EMSK);
     }
 
     @Test
@@ -510,8 +534,7 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         processAndVerifyMsChapV2SuccessRequest();
 
         processAndVerifyTunneledEapNotification(3);
-        // TODO(b/161233250): Implement keying material generation in EAP-TTLS
-        verifyEapSuccess(MSCHAPV2_MSK, MSCHAPV2_EMSK);
+        processAndVerifyEapSuccess(TLS_MSK, TLS_EMSK);
     }
 
     @Test
@@ -535,8 +558,7 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         processAndVerifyServerFinished();
         processAndVerifyMsChapV2ChallengeRequest();
         processAndVerifyMsChapV2SuccessRequest();
-        // TODO(b/161233250): Implement keying material generation in EAP-TTLS
-        verifyEapSuccess(MSCHAPV2_MSK, MSCHAPV2_EMSK);
+        processAndVerifyEapSuccess(TLS_MSK, TLS_EMSK);
     }
 
     @Test
@@ -550,8 +572,7 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
 
         processAndVerifyMsChapV2ChallengeRequest();
         processAndVerifyMsChapV2SuccessRequest();
-        // TODO(b/161233250): Implement keying material generation in EAP-TTLS
-        verifyEapSuccess(MSCHAPV2_MSK, MSCHAPV2_EMSK);
+        processAndVerifyEapSuccess(TLS_MSK, TLS_EMSK);
     }
 
     private void processAndVerifyStartRequest() throws Exception {
@@ -708,6 +729,17 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         // verify EAP-Response/Nak returned
         verify(mMockCallback).onResponse(eq(EAP_TTLS_TUNNELED_NAK_RESPONSE));
         verifyNoMoreInteractions(mMockCallback);
+    }
+
+    private void processAndVerifyEapSuccess(byte[] msk, byte[] emsk) throws Exception {
+        // EAP-Success
+        mEapAuthenticator.processEapMessage(EAP_SUCCESS);
+        mTestLooper.dispatchAll();
+
+        // verify that onSuccess callback made
+        verify(mMockCallback).onSuccess(eq(msk), eq(emsk));
+        verify(mTlsSessionSpy).generateKeyingMaterial();
+        verifyNoMoreInteractions(mMockContext, mMockSecureRandom, mMockCallback);
     }
 
     private void setupUnwrap(
