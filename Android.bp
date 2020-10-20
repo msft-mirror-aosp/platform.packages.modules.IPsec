@@ -33,6 +33,7 @@ java_sdk_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
+        "conscrypt.module.public.api",
     ],
 
     api_packages: [
