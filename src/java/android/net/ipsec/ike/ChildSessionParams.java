@@ -19,7 +19,6 @@ package android.net.ipsec.ike;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
-import android.annotation.SystemApi;
 import android.net.InetAddresses;
 import android.os.PersistableBundle;
 
@@ -51,9 +50,7 @@ import java.util.concurrent.TimeUnit;
  * DH Group in ChildSessionParams.
  *
  * @see {@link TunnelModeChildSessionParams} and {@link TransportModeChildSessionParams}
- * @hide
  */
-@SystemApi
 public abstract class ChildSessionParams {
     /** @hide */
     protected static final int CHILD_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
