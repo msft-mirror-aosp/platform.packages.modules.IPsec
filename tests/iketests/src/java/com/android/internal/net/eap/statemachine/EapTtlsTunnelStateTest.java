@@ -36,9 +36,11 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EMSK;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_EMSK;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_MSK;
+import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSK;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
@@ -131,13 +133,16 @@ public class EapTtlsTunnelStateTest extends EapTtlsStateTest {
         EapMessage eapMessage = new EapMessage(EAP_CODE_SUCCESS, ID_INT, null);
 
         when(mMockInnerEapStateMachine.process(eq(EAP_SUCCESS_PACKET))).thenReturn(msChapV2Success);
+        when(mMockTlsSession.generateKeyingMaterial())
+                .thenReturn(mMockTlsSession.new EapTtlsKeyingMaterial(MSK, EMSK));
 
         EapResult result = mStateMachine.process(eapMessage);
         EapSuccess eapSuccess = (EapSuccess) result;
-        assertArrayEquals(MSCHAP_V2_MSK, eapSuccess.msk);
-        assertArrayEquals(MSCHAP_V2_EMSK, eapSuccess.emsk);
+        assertArrayEquals(MSK, eapSuccess.msk);
+        assertArrayEquals(EMSK, eapSuccess.emsk);
         assertTrue(mStateMachine.getState() instanceof FinalState);
         verify(mMockInnerEapStateMachine).process(eq(EAP_SUCCESS_PACKET));
+        verify(mMockTlsSession).generateKeyingMaterial();
     }
 
     @Test

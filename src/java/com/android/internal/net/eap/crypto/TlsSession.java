@@ -17,14 +17,20 @@
 package com.android.internal.net.eap.crypto;
 
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
+import static com.android.internal.net.eap.statemachine.EapMethodStateMachine.MIN_EMSK_LEN_BYTES;
+import static com.android.internal.net.eap.statemachine.EapMethodStateMachine.MIN_MSK_LEN_BYTES;
 
 import android.annotation.IntDef;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.eap.EapResult.EapError;
+import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -87,6 +93,12 @@ public class TlsSession {
     private static final String KEY_STORE_TYPE_PKCS12 = "PKCS12";
     private static final Provider TRUST_MANAGER_PROVIDER = Security.getProvider("HarmonyJSSE");
 
+    // Label for key generation (RFC 5281#8)
+    private static final String TTLS_EXPORTER_LABEL = "ttls keying material";
+    // 128 bytes of keying material. First 64 bytes represent the MSK and the second 64 bytes
+    // represent the EMSK (RFC5281#8)
+    private static final int TTLS_KEYING_MATERIAL_LEN = 128;
+
     private final SSLContext mSslContext;
     private final SSLSession mSslSession;
     private final SSLEngine mSslEngine;
@@ -95,6 +107,7 @@ public class TlsSession {
     // this is kept as an outer variable as the finished state is returned exclusively by
     // wrap/unwrap so it is important to keep track of the handshake status separately
     @VisibleForTesting HandshakeStatus mHandshakeStatus;
+    @VisibleForTesting boolean mHandshakeComplete = false;
     private TrustManager[] mTrustManagers;
 
     private ByteBuffer mApplicationData;
@@ -253,6 +266,7 @@ public class TlsSession {
                     mPacketData.clear();
                     tlsResult = doWrap();
                     if (mHandshakeStatus == HandshakeStatus.FINISHED) {
+                        mHandshakeComplete = true;
                         mHandshakeStatus = mSslEngine.getHandshakeStatus();
                     }
                     break processingLoop;
@@ -397,6 +411,61 @@ public class TlsSession {
     }
 
     /**
+     * Generates the keying material required in EAP-TTLS (RFC5281#8)
+     *
+     * @return EapTtlsKeyingMaterial containing the MSK and EMSK
+     */
+    public EapTtlsKeyingMaterial generateKeyingMaterial() {
+        if (!mHandshakeComplete) {
+            EapInvalidRequestException invalidRequestException =
+                    new EapInvalidRequestException(
+                            "Keying material can only be generated once the handshake is"
+                                    + " complete.");
+            return new EapTtlsKeyingMaterial(new EapError(invalidRequestException));
+        }
+
+        try {
+            // TODO(b/165823103): Use CorePlatformApi for Conscrypt#exportKeyingMaterial
+            Class conscryptClass = Class.forName("com.android.org.conscrypt.Conscrypt");
+            Method getKeyingMaterial =
+                    conscryptClass.getMethod(
+                            "exportKeyingMaterial",
+                            SSLEngine.class,
+                            String.class,
+                            byte[].class,
+                            int.class);
+            // As per RFC5281#8 (and RFC5705#4), generation of keying material in EAP-TTLS does not
+            // require a context.
+            ByteBuffer keyingMaterial =
+                    ByteBuffer.wrap(
+                            (byte[])
+                                    getKeyingMaterial.invoke(
+                                            null /* static, no instance */,
+                                            mSslEngine,
+                                            TTLS_EXPORTER_LABEL,
+                                            null /* context */,
+                                            TTLS_KEYING_MATERIAL_LEN));
+
+            byte[] msk = new byte[MIN_MSK_LEN_BYTES];
+            byte[] emsk = new byte[MIN_EMSK_LEN_BYTES];
+            keyingMaterial.get(msk);
+            keyingMaterial.get(emsk);
+
+            return new EapTtlsKeyingMaterial(msk, emsk);
+        } catch (LinkageError
+                | ClassNotFoundException
+                | IllegalAccessException
+                | NoSuchMethodException
+                | InvocationTargetException e) {
+            // Catch LinkageError to prevent crashing the process and allow the caller to attempt
+            // another authentication method.
+            Exception cause = (e instanceof LinkageError) ? new RuntimeException(e) : (Exception) e;
+            LOG.e(TAG, "Failed to generate EAP-TTLS keying material", cause);
+            return new EapTtlsKeyingMaterial(new EapError(cause));
+        }
+    }
+
+    /**
      * Verifies whether the packet data buffer is in need of additional memory and reallocates if
      * necessary
      */
@@ -445,6 +514,29 @@ public class TlsSession {
 
         public TlsResult(@TlsStatus int status) {
             this(new byte[0], status);
+        }
+    }
+
+    /** EapTtlsKeyingMaterial encapsulates the result of keying material generation in EAP-TTLS */
+    public class EapTtlsKeyingMaterial {
+        public final byte[] msk;
+        public final byte[] emsk;
+        public final EapError eapError;
+
+        public EapTtlsKeyingMaterial(byte[] msk, byte[] emsk) {
+            this.msk = msk;
+            this.emsk = emsk;
+            this.eapError = null;
+        }
+
+        public EapTtlsKeyingMaterial(EapError eapError) {
+            this.msk = null;
+            this.emsk = null;
+            this.eapError = eapError;
+        }
+
+        public boolean isSuccessful() {
+            return eapError == null;
         }
     }
 }
