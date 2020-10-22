@@ -105,6 +105,7 @@ import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
@@ -4587,6 +4588,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         }
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testOpenChildSessionWithMobikeAndTransport() throws Exception {
+        mIkeSessionStateMachine = restartStateMachineWithMobike();
+
+        mIkeSessionStateMachine.openChildSession(
+                mock(TransportModeChildSessionParams.class), mock(ChildSessionCallback.class));
+    }
+
     @Test
     public void testCloseChildSessionValidatesArgs() throws Exception {
         setupIdleStateMachine();
@@ -5163,17 +5172,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private void verifyMobikeEnabled(boolean doesPeerSupportMobike) throws Exception {
-        // Quit and restart IKE Session with MOBIKE enabled
-        mIkeSessionStateMachine.quitNow();
-        reset(mMockChildSessionFactoryHelper);
-        setupChildStateMachineFactory(mMockChildSessionStateMachine);
-
-        IkeSessionParams ikeSessionParams =
-                buildIkeSessionParamsCommon()
-                        .setAuthPsk(mPsk)
-                        .addIkeOption(IKE_OPTION_MOBIKE)
-                        .build();
-        mIkeSessionStateMachine = makeAndStartIkeSession(ikeSessionParams);
+        mIkeSessionStateMachine = restartStateMachineWithMobike();
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
 
         // Build IKE AUTH response. Include MOBIKE_SUPPORTED if doesPeerSupportMobike is true
@@ -5213,5 +5212,18 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(isMobikeSupportIndicated);
 
         assertEquals(doesPeerSupportMobike, mIkeSessionStateMachine.mSupportMobike);
+    }
+
+    private IkeSessionStateMachine restartStateMachineWithMobike() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        reset(mMockChildSessionFactoryHelper);
+        setupChildStateMachineFactory(mMockChildSessionStateMachine);
+
+        IkeSessionParams ikeSessionParams =
+                buildIkeSessionParamsCommon()
+                        .setAuthPsk(mPsk)
+                        .addIkeOption(IKE_OPTION_MOBIKE)
+                        .build();
+        return makeAndStartIkeSession(ikeSessionParams);
     }
 }
