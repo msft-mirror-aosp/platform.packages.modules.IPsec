@@ -128,6 +128,11 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      * being negotiated. Only allowed in the request/response for negotiating a Child SA.
      */
     public static final int NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED = 16394;
+    /**
+     * Indicates that the sender supports MOBIKE functionality for the IKE Session. Only allowed in
+     * the request/response of IKE_AUTH exchange.
+     */
+    public static final int NOTIFY_TYPE_MOBIKE_SUPPORTED = 16396;
 
     /** Indicates that the sender prefers to use only eap based authentication */
     public static final int NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION = 16417;
@@ -207,6 +212,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_REKEY_SA, "Rekey SA");
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED, "ESP TCP Padding not supported");
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_MOBIKE_SUPPORTED, "MOBIKE supported");
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED, "Fragmentation supported");
         NOTIFY_TYPE_TO_STRING.put(
