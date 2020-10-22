@@ -77,6 +77,7 @@ import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
+import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -503,6 +504,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
         super(TAG, looper, userCbExecutor);
 
+        if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
+                && firstChildParams instanceof TransportModeChildSessionParams) {
+            throw new IllegalArgumentException(
+                    "Transport Mode SAs not supported when MOBIKE is enabled");
+        }
+
         synchronized (IKE_SESSION_LOCK) {
             if (!sContextToIkeSmMap.containsKey(context)) {
                 // Pass in a Handler so #onReceive will run on the StateMachine thread
@@ -673,6 +680,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         if (hasChildSessionCallback(childSessionCallback)) {
             throw new IllegalArgumentException("Child Session Callback handle already registered");
+        }
+
+        if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)
+                && childSessionParams instanceof TransportModeChildSessionParams) {
+            throw new IllegalArgumentException(
+                    "Transport Mode SAs not supported when MOBIKE is enabled");
         }
 
         registerChildSessionCallback(
