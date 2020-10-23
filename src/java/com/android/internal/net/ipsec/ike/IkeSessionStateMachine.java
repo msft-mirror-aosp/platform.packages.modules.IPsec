@@ -16,7 +16,9 @@
 package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
+import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -32,6 +34,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATU
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_MOBIKE_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
@@ -74,6 +77,7 @@ import android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
+import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -410,6 +414,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
     @VisibleForTesting boolean mSupportFragment;
+    /** Indicates if both sides support MOBIKE. Set in IKE AUTH */
+    @VisibleForTesting boolean mSupportMobike;
 
     /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
     @VisibleForTesting Set<Short> mPeerSignatureHashAlgorithms;
@@ -497,6 +503,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
             ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory) {
         super(TAG, looper, userCbExecutor);
+
+        if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
+                && firstChildParams instanceof TransportModeChildSessionParams) {
+            throw new IllegalArgumentException(
+                    "Transport Mode SAs not supported when MOBIKE is enabled");
+        }
 
         synchronized (IKE_SESSION_LOCK) {
             if (!sContextToIkeSmMap.containsKey(context)) {
@@ -668,6 +680,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
         if (hasChildSessionCallback(childSessionCallback)) {
             throw new IllegalArgumentException("Child Session Callback handle already registered");
+        }
+
+        if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)
+                && childSessionParams instanceof TransportModeChildSessionParams) {
+            throw new IllegalArgumentException(
+                    "Transport Mode SAs not supported when MOBIKE is enabled");
         }
 
         registerChildSessionCallback(
@@ -3253,6 +3271,37 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         mIkeSessionCallback.onOpened(ikeSessionConfig);
                     });
         }
+
+        protected void handleNotifyInLastAuthResp(
+                IkeNotifyPayload notifyPayload, IkeAuthPayload authPayload)
+                throws IkeProtocolException {
+            if (notifyPayload.isErrorNotify()) {
+                if (notifyPayload.isNewChildSaNotify() && authPayload != null) {
+                    // If error is for creating Child and Auth payload is included, try
+                    // to do authentication first and let ChildSessionStateMachine
+                    // handle the error later.
+                    return;
+                } else {
+                    throw notifyPayload.validateAndBuildIkeException();
+                }
+            } else if (notifyPayload.isNewChildSaNotify()) {
+                // If payload is not an error but is for the new Child, it's reasonable
+                // to receive here. Let the ChildSessionStateMachine handle it.
+                return;
+            } else if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)
+                    && notifyPayload.notifyType == NOTIFY_TYPE_MOBIKE_SUPPORTED) {
+                mSupportMobike = true;
+                mEnabledExtensions.add(EXTENSION_TYPE_MOBIKE);
+                return;
+            } else {
+                // Unknown and unexpected status notifications are ignored as per
+                // RFC7296.
+                logw(
+                        "Received unknown or unexpected status notifications with"
+                                + " notify type: "
+                                + notifyPayload.notifyType);
+            }
+        }
     }
 
     /**
@@ -3347,6 +3396,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             if (mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
                 payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION));
+            }
+            if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
+                payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_MOBIKE_SUPPORTED));
             }
 
             // Build Authentication payload
@@ -3455,31 +3507,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         certPayloads.add((IkeCertPayload) payload);
                         break;
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
-                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
-                        if (notifyPayload.isErrorNotify()) {
-                            if (notifyPayload.isNewChildSaNotify()
-                                    && authResp.getPayloadForType(
-                                                    PAYLOAD_TYPE_AUTH, IkeAuthPayload.class)
-                                            != null) {
-                                // If error is for creating Child and Auth payload is included, try
-                                // to do authentication first and let ChildSessionStateMachine
-                                // handle the error later.
-                                continue;
-                            } else {
-                                throw notifyPayload.validateAndBuildIkeException();
-                            }
-                        } else if (notifyPayload.isNewChildSaNotify()) {
-                            // If payload is not an error but is for the new Child, it's reasonable
-                            // to receive here. Let the ChildSessionStateMachine handle it.
-                            continue;
-                        } else {
-                            // Unknown and unexpected status notifications are ignored as per
-                            // RFC7296.
-                            logw(
-                                    "Received unknown or unexpected status notifications with"
-                                            + " notify type: "
-                                            + notifyPayload.notifyType);
-                        }
+                        handleNotifyInLastAuthResp(
+                                (IkeNotifyPayload) payload,
+                                authResp.getPayloadForType(
+                                        PAYLOAD_TYPE_AUTH, IkeAuthPayload.class));
                         break;
                     case PAYLOAD_TYPE_SA: // Will be handled separately; fall through
                     case PAYLOAD_TYPE_CP: // Will be handled separately; fall through
@@ -3822,31 +3853,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
                         authPayload = (IkeAuthPayload) payload;
                         break;
                     case IkePayload.PAYLOAD_TYPE_NOTIFY:
-                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
-                        if (notifyPayload.isErrorNotify()) {
-                            if (notifyPayload.isNewChildSaNotify()
-                                    && authResp.getPayloadForType(
-                                                    PAYLOAD_TYPE_AUTH, IkeAuthPayload.class)
-                                            != null) {
-                                // If error is for creating Child and Auth payload is included, try
-                                // to do authentication first and let ChildSessionStateMachine
-                                // handle the error later.
-                                continue;
-                            } else {
-                                throw notifyPayload.validateAndBuildIkeException();
-                            }
-                        } else if (notifyPayload.isNewChildSaNotify()) {
-                            // If payload is not an error but is for the new Child, it's reasonable
-                            // to receive here. Let the ChildSessionStateMachine handle it.
-                            continue;
-                        } else {
-                            // Unknown and unexpected status notifications are ignored as per
-                            // RFC7296.
-                            logw(
-                                    "Received unknown or unexpected status notifications with"
-                                            + " notify type: "
-                                            + notifyPayload.notifyType);
-                        }
+                        handleNotifyInLastAuthResp(
+                                (IkeNotifyPayload) payload,
+                                authResp.getPayloadForType(
+                                        PAYLOAD_TYPE_AUTH, IkeAuthPayload.class));
                         break;
                     case PAYLOAD_TYPE_SA: // Will be handled separately; fall through
                     case PAYLOAD_TYPE_CP: // Will be handled separately; fall through
