@@ -33,7 +33,6 @@ java_sdk_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
-        "framework-telephony-stubs",
         "conscrypt.module.public.api",
     ],
 
