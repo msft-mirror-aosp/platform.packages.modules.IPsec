@@ -40,6 +40,7 @@ java_sdk_library {
         "android.net.eap",
         "android.net.ipsec.ike",
         "android.net.ipsec.ike.exceptions",
+        "android.net.ipsec.ike.ike3gpp",
     ],
 
     hidden_api_packages: [
