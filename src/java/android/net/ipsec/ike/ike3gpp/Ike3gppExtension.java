@@ -17,6 +17,8 @@
 package android.net.ipsec.ike.ike3gpp;
 
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 
 import java.util.List;
 import java.util.Objects;
@@ -24,11 +26,14 @@ import java.util.Objects;
 /**
  * Ike3gppExtension is used to provide 3GPP-specific extensions for an IKE Session.
  *
+ * <p>Ike3gppExtension must be set in IkeSessionParams.Builder in order for it to be enabled during
+ * an IKE Session.
+ *
  * @see 3GPP ETSI TS 24.302: Access to the 3GPP Evolved Packet Core (EPC) via non-3GPP access
  *     networks
  * @hide
  */
-// TODO(b/169856575): Improve documentation for 3GPP source docs
+@SystemApi
 public final class Ike3gppExtension {
     @NonNull private final Ike3gppParams mIke3gppParams;
     @NonNull private final Ike3gppCallback mIke3gppCallback;
@@ -41,6 +46,10 @@ public final class Ike3gppExtension {
      * @param ike3gppCallback Ike3gppCallback used to notify the caller of 3GPP-specific payloads
      *     received during an IKE Session.
      */
+    // ExecutorRegistration: Not necessary to take an Executor for invoking the callback here, as
+    // this is not actually where the callback is registered. The caller's Executor provided in the
+    // IkeSession constructor will be used to invoke the Ike3gppCallback.
+    @SuppressLint("ExecutorRegistration")
     public Ike3gppExtension(
             @NonNull Ike3gppParams ike3gppParams, @NonNull Ike3gppCallback ike3gppCallback) {
         Objects.requireNonNull(ike3gppParams, "ike3gppParams must not be null");
@@ -66,8 +75,11 @@ public final class Ike3gppExtension {
      * Callback for receiving 3GPP-specific payloads.
      *
      * <p>MUST be unique to each IKE Session.
+     *
+     * <p>All Ike3gppCallback calls will be invoked on the Executor provided in the IkeSession
+     * constructor.
      */
-    public interface Ike3gppCallback {
+    public abstract static class Ike3gppCallback {
         /**
          * Invoked when the IKE Session receives one or more 3GPP-specific payloads.
          *
@@ -76,6 +88,6 @@ public final class Ike3gppExtension {
          *
          * @param payloads List<Ike3gppInfo> the 3GPP-payloads received
          */
-        void onIke3gppPayloadsReceived(@NonNull List<Ike3gppInfo> payloads);
+        public abstract void onIke3gppPayloadsReceived(@NonNull List<Ike3gppInfo> payloads);
     }
 }

@@ -16,8 +16,8 @@
 package com.android.internal.net.ipsec.ike.ike3gpp;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
-import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.NOTIFY_ERROR_NETWORK_FAILURE;
-import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.NOTIFY_ERROR_NO_APN_SUBSCRIPTION;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.ERROR_TYPE_NETWORK_FAILURE;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer.ERROR_TYPE_NO_APN_SUBSCRIPTION;
 
 import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_BACKOFF_TIMER;
 import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_INFORMATION;
@@ -50,8 +50,8 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
     static {
         SUPPORTED_RESPONSE_NOTIFY_TYPES.add(NOTIFY_TYPE_N1_MODE_INFORMATION);
         SUPPORTED_RESPONSE_NOTIFY_TYPES.add(NOTIFY_TYPE_BACKOFF_TIMER);
-        SUPPORTED_RESPONSE_NOTIFY_TYPES.add(NOTIFY_ERROR_NO_APN_SUBSCRIPTION);
-        SUPPORTED_RESPONSE_NOTIFY_TYPES.add(NOTIFY_ERROR_NETWORK_FAILURE);
+        SUPPORTED_RESPONSE_NOTIFY_TYPES.add(ERROR_TYPE_NETWORK_FAILURE);
+        SUPPORTED_RESPONSE_NOTIFY_TYPES.add(ERROR_TYPE_NO_APN_SUBSCRIPTION);
     }
 
     /** Initializes an Ike3gppIkeAuth. */
@@ -114,8 +114,8 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
                 case NOTIFY_TYPE_BACKOFF_TIMER:
                     backoffTimerPayload = notifyPayload;
                     break;
-                case NOTIFY_ERROR_NO_APN_SUBSCRIPTION: // fallthrough
-                case NOTIFY_ERROR_NETWORK_FAILURE:
+                case ERROR_TYPE_NO_APN_SUBSCRIPTION: // fallthrough
+                case ERROR_TYPE_NETWORK_FAILURE:
                     if (backoffTimerCause == null) {
                         backoffTimerCause = notifyPayload;
                     } else {
