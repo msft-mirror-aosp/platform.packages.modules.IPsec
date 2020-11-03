@@ -37,11 +37,15 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_U
 import android.annotation.IntDef;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.protocol.InternalAddressFailureException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidIkeSpiException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidKeException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidMajorVersionException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidMessageIdException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.protocol.NoAdditionalSasException;
 import android.net.ipsec.ike.exceptions.protocol.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.protocol.SinglePairRequiredException;
 import android.net.ipsec.ike.exceptions.protocol.TemporaryFailureException;
 import android.net.ipsec.ike.exceptions.protocol.TsUnacceptableException;
 import android.net.ipsec.ike.exceptions.protocol.UnrecognizedIkeProtocolException;
@@ -443,6 +447,8 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
             switch (notifyType) {
                 case ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD:
                     return new UnsupportedCriticalPayloadException(notifyData);
+                case ERROR_TYPE_INVALID_IKE_SPI:
+                    return new InvalidIkeSpiException(notifyData);
                 case ERROR_TYPE_INVALID_MAJOR_VERSION:
                     return new InvalidMajorVersionException(notifyData);
                 case ERROR_TYPE_INVALID_SYNTAX:
@@ -455,6 +461,12 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
                     return new InvalidKeException(notifyData);
                 case ERROR_TYPE_AUTHENTICATION_FAILED:
                     return new AuthenticationFailedException(notifyData);
+                case ERROR_TYPE_SINGLE_PAIR_REQUIRED:
+                    return new SinglePairRequiredException(notifyData);
+                case ERROR_TYPE_NO_ADDITIONAL_SAS:
+                    return new NoAdditionalSasException(notifyData);
+                case ERROR_TYPE_INTERNAL_ADDRESS_FAILURE:
+                    return new InternalAddressFailureException(notifyData);
                 case ERROR_TYPE_TS_UNACCEPTABLE:
                     return new TsUnacceptableException(notifyData);
                 case ERROR_TYPE_TEMPORARY_FAILURE:
