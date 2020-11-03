@@ -165,6 +165,7 @@ package android.net.ipsec.ike {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest> getConfigurationRequests();
     method @IntRange(from=0x14, to=0x708) public int getDpdDelaySeconds();
     method @IntRange(from=0x12c, to=0x15180) public int getHardLifetimeSeconds();
+    method @Nullable public android.net.ipsec.ike.ike3gpp.Ike3gppExtension getIke3gppExtension();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getLocalAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getLocalIdentification();
     method @NonNull public android.net.Network getNetwork();
@@ -192,6 +193,7 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthEap(@Nullable java.security.cert.X509Certificate, @NonNull android.net.eap.EapSessionConfig);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthPsk(@NonNull byte[]);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setDpdDelaySeconds(@IntRange(from=0x14, to=0x708) int);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setIke3gppExtension(@NonNull android.net.ipsec.ike.ike3gpp.Ike3gppExtension);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLifetimeSeconds(@IntRange(from=0x12c, to=0x15180) int, @IntRange(from=0x78, to=0x15180) int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLocalIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@NonNull android.net.Network);
@@ -357,6 +359,52 @@ package android.net.ipsec.ike.exceptions {
     field public static final int ERROR_TYPE_TEMPORARY_FAILURE = 43; // 0x2b
     field public static final int ERROR_TYPE_TS_UNACCEPTABLE = 38; // 0x26
     field public static final int ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1; // 0x1
+  }
+
+}
+
+package android.net.ipsec.ike.ike3gpp {
+
+  public final class Ike3gppBackoffTimer extends android.net.ipsec.ike.ike3gpp.Ike3gppInfo {
+    method public int getBackoffCause();
+    method public byte getBackoffTimer();
+    method public int getInfoType();
+    field public static final int ERROR_TYPE_NETWORK_FAILURE = 10500; // 0x2904
+    field public static final int ERROR_TYPE_NO_APN_SUBSCRIPTION = 9002; // 0x232a
+  }
+
+  public final class Ike3gppExtension {
+    ctor public Ike3gppExtension(@NonNull android.net.ipsec.ike.ike3gpp.Ike3gppParams, @NonNull android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback);
+    method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback getIke3gppCallback();
+    method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppParams getIke3gppParams();
+  }
+
+  public abstract static class Ike3gppExtension.Ike3gppCallback {
+    ctor public Ike3gppExtension.Ike3gppCallback();
+    method public abstract void onIke3gppPayloadsReceived(@NonNull java.util.List<android.net.ipsec.ike.ike3gpp.Ike3gppInfo>);
+  }
+
+  public abstract class Ike3gppInfo {
+    ctor public Ike3gppInfo();
+    method public abstract int getInfoType();
+    field public static final int INFO_TYPE_NOTIFY_BACKOFF_TIMER = 2; // 0x2
+    field public static final int INFO_TYPE_NOTIFY_N1_MODE_INFORMATION = 1; // 0x1
+  }
+
+  public final class Ike3gppN1ModeInformation extends android.net.ipsec.ike.ike3gpp.Ike3gppInfo {
+    method public int getInfoType();
+    method @NonNull public byte[] getSnssai();
+  }
+
+  public final class Ike3gppParams {
+    method public byte getPduSessionId();
+    field public static final byte PDU_SESSION_ID_UNSET = 0; // 0x0
+  }
+
+  public static final class Ike3gppParams.Builder {
+    ctor public Ike3gppParams.Builder();
+    method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppParams build();
+    method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppParams.Builder setPduSessionId(byte);
   }
 
 }
