@@ -170,9 +170,7 @@ public class IkeMacIntegrity extends IkeMac {
             case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96:
                 return new IpSecAlgorithm(IpSecAlgorithm.AUTH_HMAC_SHA1, key, mChecksumLength * 8);
             case SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96:
-                // TODO:Consider supporting AES128_XCBC in IpSecTransform.
-                throw new IllegalArgumentException(
-                        "Do not support IpSecAlgorithm with AES128_XCBC.");
+                return new IpSecAlgorithm(IpSecAlgorithm.AUTH_AES_XCBC, key, mChecksumLength * 8);
             case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128:
                 return new IpSecAlgorithm(
                         IpSecAlgorithm.AUTH_HMAC_SHA256, key, mChecksumLength * 8);
