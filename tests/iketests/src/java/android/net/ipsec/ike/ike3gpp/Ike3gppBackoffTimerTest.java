@@ -26,7 +26,7 @@ import org.junit.Test;
 
 public class Ike3gppBackoffTimerTest {
     private static final byte BACKOFF_TIMER = (byte) 0xAF;
-    private static final int BACKOFF_CAUSE = Ike3gppBackoffTimer.NOTIFY_ERROR_NETWORK_FAILURE;
+    private static final int BACKOFF_CAUSE = Ike3gppBackoffTimer.ERROR_TYPE_NETWORK_FAILURE;
 
     @Test
     public void testIke3gppBackoffTimer() {
@@ -41,10 +41,10 @@ public class Ike3gppBackoffTimerTest {
     public void testIsValidErrorNotifyCause() {
         assertTrue(
                 Ike3gppBackoffTimer.isValidErrorNotifyCause(
-                        Ike3gppBackoffTimer.NOTIFY_ERROR_NO_APN_SUBSCRIPTION));
+                        Ike3gppBackoffTimer.ERROR_TYPE_NO_APN_SUBSCRIPTION));
         assertTrue(
                 Ike3gppBackoffTimer.isValidErrorNotifyCause(
-                        Ike3gppBackoffTimer.NOTIFY_ERROR_NETWORK_FAILURE));
+                        Ike3gppBackoffTimer.ERROR_TYPE_NETWORK_FAILURE));
         assertFalse(
                 Ike3gppBackoffTimer.isValidErrorNotifyCause(
                         IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED));
