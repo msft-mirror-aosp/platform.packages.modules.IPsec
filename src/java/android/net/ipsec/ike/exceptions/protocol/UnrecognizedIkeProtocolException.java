@@ -15,24 +15,44 @@
  */
 package android.net.ipsec.ike.exceptions.protocol;
 
+import android.annotation.NonNull;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+
+import java.util.Objects;
 
 /**
  * This exception represents an unrecognized error notification in a received response.
- *
- * <p>When receiving an unrecognized error notification in a response, IKE Session MUST assume that
- * the corresponding request has failed entirely. If it is in a request, IKE Session MUST ignore it.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+// When receiving an unrecognized error notification in a response, IKE Session MUST assume that
+// the corresponding request has failed entirely. If it is in a request, IKE Session MUST ignore it.
 public final class UnrecognizedIkeProtocolException extends IkeProtocolException {
-    /** Constructs an instance of UnrecognizedIkeProtocolException */
-    public UnrecognizedIkeProtocolException(int errorType, byte[] notifyData) {
-        super(errorType, notifyData);
+    private final byte[] mUnrecognizedErrorData;
+    /**
+     * Constructs an instance of UnrecognizedIkeProtocolException
+     *
+     * <p>Except for testing, IKE library users normally do not instantiate this object themselves
+     * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
+     *
+     * @param errorType the error type
+     * @param errorData the error data in bytes
+     */
+    public UnrecognizedIkeProtocolException(int errorType, @NonNull byte[] errorData) {
+        super(errorType, errorData);
+        Objects.requireNonNull(errorData, "errorData is null");
+        mUnrecognizedErrorData = errorData.clone();
     }
 
+    /** Returns the included error data of this UnrecognizedIkeProtocolException */
+    @NonNull
+    public byte[] getUnrecognizedErrorData() {
+        return mUnrecognizedErrorData;
+    }
+
+    /** @hide */
     @Override
     protected boolean isValidDataLength(int dataLen) {
         // Unrecognized error does not have an expected error data length. Any non-negative length

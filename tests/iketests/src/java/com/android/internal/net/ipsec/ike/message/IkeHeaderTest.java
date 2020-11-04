@@ -106,7 +106,7 @@ public final class IkeHeaderTest {
                 IkeTestUtils.decodeAndVerifyUnprotectedErrorMsg(
                         inputPacket, InvalidMajorVersionException.class);
 
-        assertEquals(3, exception.getMajorVerion());
+        assertEquals(3, exception.getMajorVersion());
     }
 
     @Test
