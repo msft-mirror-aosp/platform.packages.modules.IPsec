@@ -139,6 +139,7 @@ import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
+import com.android.internal.net.ipsec.ike.net.IkeNetworkUpdater;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
@@ -188,7 +189,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *      Exchange Type = {IkeInit | IkeAuth | Create | Delete | Info}
  * </pre>
  */
-public class IkeSessionStateMachine extends AbstractSessionStateMachine {
+public class IkeSessionStateMachine extends AbstractSessionStateMachine
+        implements IkeNetworkUpdater {
     // Package private
     static final String TAG = "IkeSessionStateMachine";
 
@@ -4900,5 +4902,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
 
             return payloadList;
         }
+    }
+
+    @Override
+    public void onUnderlyingNetworkUpdated(Network network) {
+        // TODO(b/170781365): update IkeSessionStateMachine States to handle Network changes
+        throw new UnsupportedOperationException("Not yet implemented");
+    }
+
+    @Override
+    public void onUnderlyingNetworkDied() {
+        // TODO(b/170781365): update IkeSessionStateMachine States to handle the Network dying
+        throw new UnsupportedOperationException("Not yet implemented");
     }
 }
