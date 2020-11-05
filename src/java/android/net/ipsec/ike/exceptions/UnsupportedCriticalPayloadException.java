@@ -27,7 +27,6 @@ import java.util.Objects;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // Include UNSUPPORTED_CRITICAL_PAYLOAD Notify payloads in a response message. Each payload
 // contains only one payload type.

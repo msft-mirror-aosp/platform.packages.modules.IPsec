@@ -24,7 +24,6 @@ package android.net.ipsec.ike.exceptions;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-1.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // Responder should include an INVALID_KE_PAYLOAD Notify payload in a response message for both
 // IKE INIT exchange and other SA negotiation exchanges after IKE is setup, as per RFC 7296

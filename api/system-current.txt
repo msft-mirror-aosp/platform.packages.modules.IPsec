@@ -334,31 +334,8 @@ package android.net.ipsec.ike {
 
 package android.net.ipsec.ike.exceptions {
 
-  public abstract class IkeException extends java.lang.Exception {
-  }
-
-  public final class IkeInternalException extends android.net.ipsec.ike.exceptions.IkeException {
-  }
-
   public abstract class IkeProtocolException extends android.net.ipsec.ike.exceptions.IkeException {
     method @Nullable public byte[] getErrorData();
-    method public int getErrorType();
-    field public static final int ERROR_TYPE_AUTHENTICATION_FAILED = 24; // 0x18
-    field public static final int ERROR_TYPE_CHILD_SA_NOT_FOUND = 44; // 0x2c
-    field public static final int ERROR_TYPE_FAILED_CP_REQUIRED = 37; // 0x25
-    field public static final int ERROR_TYPE_INTERNAL_ADDRESS_FAILURE = 36; // 0x24
-    field public static final int ERROR_TYPE_INVALID_IKE_SPI = 4; // 0x4
-    field public static final int ERROR_TYPE_INVALID_KE_PAYLOAD = 17; // 0x11
-    field public static final int ERROR_TYPE_INVALID_MAJOR_VERSION = 5; // 0x5
-    field public static final int ERROR_TYPE_INVALID_MESSAGE_ID = 9; // 0x9
-    field public static final int ERROR_TYPE_INVALID_SELECTORS = 39; // 0x27
-    field public static final int ERROR_TYPE_INVALID_SYNTAX = 7; // 0x7
-    field public static final int ERROR_TYPE_NO_ADDITIONAL_SAS = 35; // 0x23
-    field public static final int ERROR_TYPE_NO_PROPOSAL_CHOSEN = 14; // 0xe
-    field public static final int ERROR_TYPE_SINGLE_PAIR_REQUIRED = 34; // 0x22
-    field public static final int ERROR_TYPE_TEMPORARY_FAILURE = 43; // 0x2b
-    field public static final int ERROR_TYPE_TS_UNACCEPTABLE = 38; // 0x26
-    field public static final int ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1; // 0x1
   }
 
 }

@@ -25,7 +25,6 @@ import android.annotation.NonNull;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.7">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // Include the NO_PROPOSAL_CHOSEN Notify payload in an encrypted response message if received
 // message is an encrypted request from SA initiator.

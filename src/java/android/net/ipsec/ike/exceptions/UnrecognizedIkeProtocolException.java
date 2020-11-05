@@ -24,7 +24,6 @@ import java.util.Objects;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // When receiving an unrecognized error notification in a response, IKE Session MUST assume that
 // the corresponding request has failed entirely. If it is in a request, IKE Session MUST ignore it.

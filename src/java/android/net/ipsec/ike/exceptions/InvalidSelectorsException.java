@@ -29,7 +29,6 @@ import java.util.Objects;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 public final class InvalidSelectorsException extends IkeProtocolException {
     // Minimum IP header length plus 64 bits

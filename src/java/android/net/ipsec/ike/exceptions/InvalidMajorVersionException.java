@@ -22,7 +22,6 @@ import android.annotation.SuppressLint;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // Include INVALID_MAJOR_VERSION Notify payload in an unencrypted response message containing
 // version number 2.

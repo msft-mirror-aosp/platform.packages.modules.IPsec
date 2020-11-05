@@ -23,7 +23,6 @@ package android.net.ipsec.ike.exceptions;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.25">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 public final class ChildSaNotFoundException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
