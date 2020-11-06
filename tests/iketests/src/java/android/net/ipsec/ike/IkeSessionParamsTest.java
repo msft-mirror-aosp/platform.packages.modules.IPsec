@@ -40,6 +40,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
@@ -182,6 +183,7 @@ public final class IkeSessionParamsTest {
         verifyAuthPskConfig(sessionParams);
 
         assertEquals(mMockDefaultNetwork, sessionParams.getNetwork());
+        assertNull(sessionParams.getConfiguredNetwork());
 
         assertEquals(IKE_HARD_LIFETIME_SEC_DEFAULT, sessionParams.getHardLifetimeSeconds());
         assertEquals(IKE_SOFT_LIFETIME_SEC_DEFAULT, sessionParams.getSoftLifetimeSeconds());
@@ -366,6 +368,7 @@ public final class IkeSessionParamsTest {
 
         verifyIkeParamsWithSeverIpAndDefaultValues(sessionParams);
         assertEquals(mMockDefaultNetwork, sessionParams.getNetwork());
+        assertNull(sessionParams.getConfiguredNetwork());
 
         IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
         assertTrue(localConfig instanceof IkeAuthEapConfig);
@@ -395,6 +398,7 @@ public final class IkeSessionParamsTest {
 
         verifyIkeParamsWithSeverIpAndDefaultValues(sessionParams);
         assertEquals(mMockUserConfigNetwork, sessionParams.getNetwork());
+        assertEquals(mMockUserConfigNetwork, sessionParams.getConfiguredNetwork());
 
         IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
         assertTrue(localConfig instanceof IkeAuthDigitalSignLocalConfig);
