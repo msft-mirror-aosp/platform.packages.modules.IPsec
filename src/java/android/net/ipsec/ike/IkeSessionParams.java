@@ -152,6 +152,7 @@ public final class IkeSessionParams {
 
     @NonNull private final String mServerHostname;
     @NonNull private final Network mNetwork;
+    @Nullable private final Network mCallerConfiguredNetwork;
 
     @NonNull private final IkeSaProposal[] mSaProposals;
 
@@ -179,6 +180,7 @@ public final class IkeSessionParams {
     private IkeSessionParams(
             @NonNull String serverHostname,
             @NonNull Network network,
+            @NonNull Network callerConfiguredNetwork,
             @NonNull IkeSaProposal[] proposals,
             @NonNull IkeIdentification localIdentification,
             @NonNull IkeIdentification remoteIdentification,
@@ -194,6 +196,7 @@ public final class IkeSessionParams {
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
         mNetwork = network;
+        mCallerConfiguredNetwork = callerConfiguredNetwork;
 
         mSaProposals = proposals;
 
@@ -239,7 +242,31 @@ public final class IkeSessionParams {
         return mServerHostname;
     }
 
-    /** Retrieves the configured {@link Network} */
+    // TODO: b/151984042 Keep #getNetwork @SystemApi and make #getConfiguredNetwork public
+
+    /**
+     * Retrieves the configured {@link Network}, or null if not configured
+     *
+     * <p>This is the initially-configured Network (with MOBIKE, the caller may later specify a new
+     * Network and that update will not persist to here).
+     *
+     * @hide
+     */
+    @Nullable
+    public Network getConfiguredNetwork() {
+        return mCallerConfiguredNetwork;
+    }
+
+    /**
+     * Retrieves the configured or default {@link Network}
+     *
+     * <p>If caller did not set any Network, this method will return the default Network resolved in
+     * {@link IkeSessionParams.Builder#build()}. The return value of this method is only
+     * informational because if MOBIKE is enabled, IKE Session may switch to a different default
+     * Network.
+     *
+     * <p>This is method will be deprecated. Callers should use {@link #getConfiguredNetwork}
+     */
     @NonNull
     public Network getNetwork() {
         return mNetwork;
@@ -521,7 +548,7 @@ public final class IkeSessionParams {
                         IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT.length);
 
         @NonNull private String mServerHostname;
-        @Nullable private Network mNetwork;
+        @Nullable private Network mCallerConfiguredNetwork;
 
         @Nullable private IkeIdentification mLocalIdentification;
         @Nullable private IkeIdentification mRemoteIdentification;
@@ -577,6 +604,25 @@ public final class IkeSessionParams {
          *
          * @param network the {@link Network} that IKE Session will use.
          * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @NonNull
+        public Builder setConfiguredNetwork(@NonNull Network network) {
+            return setNetwork(network);
+        }
+
+        // TODO: b/151984042 Keep #setNetwork @SystemApi and make #setConfiguredNetwork public
+
+        /**
+         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
+         *
+         * <p>If no {@link Network} is provided, the default Network (as per {@link
+         * ConnectivityManager#getActiveNetwork()}) will be used.
+         *
+         * <p>This is method will be deprecated. Callers should use {@link #setConfiguredNetwork}
+         *
+         * @param network the {@link Network} that IKE Session will use.
+         * @return Builder this, to facilitate chaining.
          */
         @NonNull
         public Builder setNetwork(@NonNull Network network) {
@@ -584,7 +630,7 @@ public final class IkeSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            mNetwork = network;
+            mCallerConfiguredNetwork = network;
             return this;
         }
 
@@ -978,7 +1024,10 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
 
-            Network network = mNetwork != null ? mNetwork : mConnectivityManager.getActiveNetwork();
+            Network network =
+                    mCallerConfiguredNetwork != null
+                            ? mCallerConfiguredNetwork
+                            : mConnectivityManager.getActiveNetwork();
             if (network == null) {
                 throw new IllegalArgumentException("Network not found");
             }
@@ -1015,6 +1064,7 @@ public final class IkeSessionParams {
             return new IkeSessionParams(
                     mServerHostname,
                     network,
+                    mCallerConfiguredNetwork,
                     mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,
                     mRemoteIdentification,
