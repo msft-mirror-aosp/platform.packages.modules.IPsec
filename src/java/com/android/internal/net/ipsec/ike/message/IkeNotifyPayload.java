@@ -36,19 +36,18 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_U
 
 import android.annotation.IntDef;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidKeException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidMajorVersionException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidMessageIdException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.protocol.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.protocol.TemporaryFailureException;
+import android.net.ipsec.ike.exceptions.protocol.TsUnacceptableException;
+import android.net.ipsec.ike.exceptions.protocol.UnrecognizedIkeProtocolException;
+import android.net.ipsec.ike.exceptions.protocol.UnsupportedCriticalPayloadException;
 import android.util.ArraySet;
 import android.util.SparseArray;
-
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidMajorVersionException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidMessageIdException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.ipsec.ike.exceptions.TemporaryFailureException;
-import com.android.internal.net.ipsec.ike.exceptions.TsUnacceptableException;
-import com.android.internal.net.ipsec.ike.exceptions.UnrecognizedIkeProtocolException;
-import com.android.internal.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;

@@ -28,9 +28,9 @@ import android.net.ipsec.ike.IkeIpv4AddrIdentification;
 import android.net.ipsec.ike.IkeIpv6AddrIdentification;
 import android.net.ipsec.ike.IkeKeyIdIdentification;
 import android.net.ipsec.ike.IkeRfc822AddrIdentification;
+import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
 import org.junit.BeforeClass;
