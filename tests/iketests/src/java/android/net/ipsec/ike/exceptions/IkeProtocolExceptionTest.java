@@ -22,8 +22,9 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_U
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
+import android.net.ipsec.ike.exceptions.protocol.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.protocol.UnsupportedCriticalPayloadException;
+
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 
 import org.junit.Test;
