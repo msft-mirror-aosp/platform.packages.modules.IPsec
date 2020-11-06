@@ -77,6 +77,7 @@ import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -804,6 +805,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         mLooper.getLooper(),
                         mSpyContext,
                         mIpSecManager,
+                        mMockConnectManager,
                         ikeParams,
                         mChildSessionParams,
                         mSpyUserCbExecutor,
@@ -815,6 +817,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
         ikeSession.mLocalAddress = LOCAL_ADDRESS;
         assertEquals(REMOTE_ADDRESS, ikeSession.mRemoteAddress);
+
+        if (ikeParams.getConfiguredNetwork() == null) {
+            verify(mMockConnectManager, atLeast(1)).getActiveNetwork();
+        } else {
+            verify(mMockConnectManager, never()).getActiveNetwork();
+        }
 
         // Setup socket instances used by the IkeSessionStateMachine
         // TODO: rename these from spy to mock.
@@ -4663,6 +4671,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         mLooper.getLooper(),
                         mSpyContext,
                         mIpSecManager,
+                        mMockConnectManager,
                         mockSessionParams,
                         mChildSessionParams,
                         mSpyUserCbExecutor,
