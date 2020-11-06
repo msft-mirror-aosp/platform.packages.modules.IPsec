@@ -19,10 +19,10 @@ package android.net.ipsec.ike;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
+import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
 import android.util.ArraySet;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
