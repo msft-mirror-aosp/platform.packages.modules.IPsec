@@ -24,9 +24,9 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.net.InetAddresses;
+import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import org.junit.Test;
 

@@ -28,12 +28,12 @@ import static org.junit.Assert.fail;
 
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidKeException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.protocol.UnrecognizedIkeProtocolException;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.UnrecognizedIkeProtocolException;
 
 import org.junit.Test;
 

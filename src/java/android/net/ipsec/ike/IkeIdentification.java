@@ -18,9 +18,8 @@ package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
 import android.annotation.SystemApi;
+import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
 import android.util.ArraySet;
-
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;

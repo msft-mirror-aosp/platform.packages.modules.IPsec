@@ -21,12 +21,12 @@ import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCH
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
 import android.util.ArraySet;
 
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 
 import java.util.Collections;
