@@ -25,10 +25,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
 
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.IkeDhParams;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.utils.BigIntegerUtils;
 
 import org.junit.Before;

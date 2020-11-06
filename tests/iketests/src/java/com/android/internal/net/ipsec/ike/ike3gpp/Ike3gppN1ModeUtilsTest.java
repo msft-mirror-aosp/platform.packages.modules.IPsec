@@ -19,7 +19,8 @@ package com.android.internal.net.ipsec.ike.ike3gpp;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.util.HexDump;
 

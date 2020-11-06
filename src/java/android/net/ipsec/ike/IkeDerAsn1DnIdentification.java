@@ -17,8 +17,7 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
-
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
 
 import java.security.cert.X509Certificate;
 import java.util.Objects;

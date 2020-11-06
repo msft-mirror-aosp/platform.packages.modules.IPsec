@@ -13,34 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.internal.net.ipsec.ike.exceptions;
+package android.net.ipsec.ike.exceptions.protocol;
 
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
- * This exception is thrown if the remote sever proposed unacceptable TS.
+ * This exception is thrown when local node or remote peer receives a request that cannot be
+ * completed due to a temporary condition such as a rekeying operation.
  *
- * <p>If remote server is the exchange initiator, IKE library should respond with a TS_UNACCEPTABLE
- * Notify message. If the remote server is the exchange responder, IKE library should initiate a
- * Delete IKE exchange and close the IKE Session.
+ * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.7">RFC 7296, Internet Key Exchange
+ *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
-public final class TsUnacceptableException extends IkeProtocolException {
+public final class TemporaryFailureException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
 
-    /** Construct an instance of TsUnacceptableException. */
-    public TsUnacceptableException() {
-        super(ERROR_TYPE_TS_UNACCEPTABLE);
+    /**
+     * Construct an instance of TemporaryFailureException.
+     *
+     * @param message the descriptive message.
+     */
+    public TemporaryFailureException(String message) {
+        super(ERROR_TYPE_TEMPORARY_FAILURE, message);
     }
 
     /**
-     * Construct a instance of TsUnacceptableException from a notify payload.
+     * Construct a instance of TemporaryFailureException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
      */
-    public TsUnacceptableException(byte[] notifyData) {
-        super(ERROR_TYPE_TS_UNACCEPTABLE, notifyData);
+    public TemporaryFailureException(byte[] notifyData) {
+        super(ERROR_TYPE_TEMPORARY_FAILURE, notifyData);
     }
 
     @Override
