@@ -173,6 +173,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSkfPayload;
 import com.android.internal.net.ipsec.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
+import com.android.internal.net.ipsec.ike.net.IkeDefaultNetworkCallback;
 import com.android.internal.net.ipsec.ike.testmode.DeterministicSecureRandom;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
@@ -4598,7 +4599,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     @Test(expected = IllegalArgumentException.class)
     public void testOpenChildSessionWithMobikeAndTransport() throws Exception {
-        mIkeSessionStateMachine = restartStateMachineWithMobike();
+        mIkeSessionStateMachine = restartStateMachineWithMobikeConfigured();
 
         mIkeSessionStateMachine.openChildSession(
                 mock(TransportModeChildSessionParams.class), mock(ChildSessionCallback.class));
@@ -5181,7 +5182,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private void verifyMobikeEnabled(boolean doesPeerSupportMobike) throws Exception {
-        mIkeSessionStateMachine = restartStateMachineWithMobike();
+        mIkeSessionStateMachine = restartStateMachineWithMobikeConfigured();
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
 
         // Build IKE AUTH response. Include MOBIKE_SUPPORTED if doesPeerSupportMobike is true
@@ -5221,9 +5222,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(isMobikeSupportIndicated);
 
         assertEquals(doesPeerSupportMobike, mIkeSessionStateMachine.mSupportMobike);
+
+        verify(mMockConnectManager, doesPeerSupportMobike ? times(1) : never())
+                .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
+
+        mIkeSessionStateMachine.killSession();
+        mLooper.dispatchAll();
+
+        verify(mMockConnectManager, doesPeerSupportMobike ? times(1) : never())
+                .unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
     }
 
-    private IkeSessionStateMachine restartStateMachineWithMobike() throws Exception {
+    /** Restarts the IkeSessionStateMachine with MOBIKE configured in the IkeSessionParams. */
+    private IkeSessionStateMachine restartStateMachineWithMobikeConfigured() throws Exception {
         mIkeSessionStateMachine.quitNow();
         reset(mMockChildSessionFactoryHelper);
         setupChildStateMachineFactory(mMockChildSessionStateMachine);
@@ -5234,5 +5245,29 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .addIkeOption(IKE_OPTION_MOBIKE)
                         .build();
         return makeAndStartIkeSession(ikeSessionParams);
+    }
+
+    @Test
+    public void testMobikeNetworkCallbackRegistrationFails() throws Exception {
+        doThrow(new RuntimeException("Failed to register IKE NetworkCallback"))
+                .when(mMockConnectManager)
+                .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
+
+        mIkeSessionStateMachine = restartStateMachineWithMobikeConfigured();
+        mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
+
+        // Send IKE_AUTH resp and indicate MOBIKE support
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
+        authRelatedPayloads.add(new IkeNotifyPayload(NOTIFY_TYPE_MOBIKE_SUPPORTED));
+        ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, authResp);
+        mLooper.dispatchAll();
+
+        verify(mMockConnectManager)
+                .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
+        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockConnectManager).unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
+        assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 }
