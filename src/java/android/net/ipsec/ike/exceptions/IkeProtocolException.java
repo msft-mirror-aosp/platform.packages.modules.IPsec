@@ -148,7 +148,7 @@ public abstract class IkeProtocolException extends IkeException {
         }
 
         mErrorType = code;
-        mErrorData = notifyData;
+        mErrorData = notifyData.clone();
     }
 
     /** @hide */
@@ -204,7 +204,9 @@ public abstract class IkeProtocolException extends IkeException {
      * they call this method.
      *
      * @return the included error data in byte array, or {@code null} if no error data is available.
+     * @hide
      */
+    @SystemApi
     @Nullable
     public byte[] getErrorData() {
         return mErrorData;
