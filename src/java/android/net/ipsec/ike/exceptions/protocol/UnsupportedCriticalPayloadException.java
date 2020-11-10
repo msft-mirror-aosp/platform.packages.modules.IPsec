@@ -17,25 +17,27 @@ package android.net.ipsec.ike.exceptions.protocol;
 
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
+import android.annotation.NonNull;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * This exception is thrown when payload type is not supported and critical bit is set
- *
- * <p>Include UNSUPPORTED_CRITICAL_PAYLOAD Notify payloads in a response message. Each payload
- * contains only one payload type.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+// Include UNSUPPORTED_CRITICAL_PAYLOAD Notify payloads in a response message. Each payload
+// contains only one payload type.
 public final class UnsupportedCriticalPayloadException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 1;
 
-    public final List<Integer> payloadTypeList;
+    private final List<Integer> mPayloadTypeList;
 
     /**
      * Construct an instance of UnsupportedCriticalPayloadException.
@@ -45,22 +47,23 @@ public final class UnsupportedCriticalPayloadException extends IkeProtocolExcept
      *
      * @param payloadList the list of all unsupported critical payload types.
      */
-    public UnsupportedCriticalPayloadException(List<Integer> payloadList) {
+    public UnsupportedCriticalPayloadException(@NonNull List<Integer> payloadList) {
         super(
                 ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD,
                 integerToByteArray(payloadList.get(0), EXPECTED_ERROR_DATA_LEN));
-        payloadTypeList = payloadList;
+        Objects.requireNonNull(payloadList, "payloadList is null");
+        mPayloadTypeList = Collections.unmodifiableList(new ArrayList<>(payloadList));
     }
 
     /**
      * Construct a instance of UnsupportedCriticalPayloadException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
+     * @hide
      */
     public UnsupportedCriticalPayloadException(byte[] notifyData) {
         super(ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD, notifyData);
-        payloadTypeList = new ArrayList<>(1);
-        payloadTypeList.add(byteArrayToInteger(notifyData));
+        mPayloadTypeList = Collections.singletonList(byteArrayToInteger(notifyData));
     }
 
     /**
@@ -68,10 +71,12 @@ public final class UnsupportedCriticalPayloadException extends IkeProtocolExcept
      *
      * @return the unsupported critical payload list.
      */
+    @NonNull
     public List<Integer> getUnsupportedCriticalPayloadList() {
-        return payloadTypeList;
+        return Collections.unmodifiableList(mPayloadTypeList);
     }
 
+    /** @hide */
     @Override
     protected boolean isValidDataLength(int dataLen) {
         return EXPECTED_ERROR_DATA_LEN == dataLen;
