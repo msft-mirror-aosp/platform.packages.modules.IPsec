@@ -17,7 +17,18 @@
 package com.android.internal.net.ipsec.ike.message;
 
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_FAILED_CP_REQUIRED;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_IKE_SPI;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SELECTORS;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_SINGLE_PAIR_REQUIRED;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -29,8 +40,18 @@ import static org.junit.Assert.fail;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.protocol.ChildSaNotFoundException;
+import android.net.ipsec.ike.exceptions.protocol.FailedCpRequiredException;
+import android.net.ipsec.ike.exceptions.protocol.InternalAddressFailureException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidIkeSpiException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidKeException;
+import android.net.ipsec.ike.exceptions.protocol.InvalidSelectorsException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.protocol.NoAdditionalSasException;
+import android.net.ipsec.ike.exceptions.protocol.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.protocol.SinglePairRequiredException;
+import android.net.ipsec.ike.exceptions.protocol.TemporaryFailureException;
+import android.net.ipsec.ike.exceptions.protocol.TsUnacceptableException;
 import android.net.ipsec.ike.exceptions.protocol.UnrecognizedIkeProtocolException;
 
 import com.android.internal.net.TestUtils;
@@ -47,9 +68,11 @@ public final class IkeNotifyPayloadTest {
             "00004004e54f73b7d83f6beb881eab2051d8663f421d10b0";
     private static final String NAT_DETECTION_DATA_HEX_STRING =
             "e54f73b7d83f6beb881eab2051d8663f421d10b0";
+    private static final String PACKET_INFO_HEX_STRING =
+            "4500009cafcd4000403208adc0a80064c0a800012ad4c0a200000001";
 
     private static final String NOTIFY_REKEY_PAYLOAD_BODY_HEX_STRING = "030440092ad4c0a2";
-    private static final int REKEY_SPI = 0x2ad4c0a2;
+    private static final int CHILD_SPI = 0x2ad4c0a2;
 
     private static final String IKE_INITIATOR_SPI_HEX_STRING = "5f54bf6d8b48e6e1";
     private static final String IKE_RESPODNER_SPI_HEX_STRING = "0000000000000000";
@@ -80,7 +103,7 @@ public final class IkeNotifyPayloadTest {
         assertEquals(IkePayload.PROTOCOL_ID_ESP, payload.protocolId);
         assertEquals(IkePayload.SPI_LEN_IPSEC, payload.spiSize);
         assertEquals(IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA, payload.notifyType);
-        assertEquals(REKEY_SPI, payload.spi);
+        assertEquals(CHILD_SPI, payload.spi);
         assertArrayEquals(new byte[0], payload.notifyData);
     }
 
@@ -171,14 +194,114 @@ public final class IkeNotifyPayloadTest {
     }
 
     @Test
-    public void testValidateAndBuildIkeExceptionWithoutData() throws Exception {
-        // Invalid Syntax
-        IkeNotifyPayload payload = new IkeNotifyPayload(ERROR_TYPE_AUTHENTICATION_FAILED);
-        IkeProtocolException exception = payload.validateAndBuildIkeException();
+    public void testValidateAndBuildInvalidSelectorsException() throws Exception {
+        byte[] packetInfoBytes = TestUtils.hexStringToByteArray(PACKET_INFO_HEX_STRING);
 
-        assertTrue(exception instanceof AuthenticationFailedException);
-        assertEquals(ERROR_TYPE_AUTHENTICATION_FAILED, exception.getErrorType());
+        IkeNotifyPayload errNotify =
+                new IkeNotifyPayload(
+                        IkePayload.PROTOCOL_ID_ESP,
+                        CHILD_SPI,
+                        ERROR_TYPE_INVALID_SELECTORS,
+                        packetInfoBytes);
+
+        InvalidSelectorsException exception =
+                (InvalidSelectorsException) errNotify.validateAndBuildIkeException();
+
+        assertEquals(ERROR_TYPE_INVALID_SELECTORS, exception.getErrorType());
+        assertEquals(CHILD_SPI, exception.getIpSecSpi());
+        assertArrayEquals(packetInfoBytes, exception.getIpSecPacketInfo());
+    }
+
+    private <T extends IkeProtocolException> void verifyValidateAndBuildIkeExceptionWithoutData(
+            int errorType, Class<T> exceptionClass) throws Exception {
+        IkeNotifyPayload payload = new IkeNotifyPayload(errorType);
+        verifyIkeExceptionWithoutData(
+                payload.validateAndBuildIkeException(), errorType, exceptionClass);
+    }
+
+    private <T extends IkeProtocolException> void verifyIkeExceptionWithoutData(
+            IkeProtocolException exception, int errorType, Class<T> exceptionClass)
+            throws Exception {
+        assertTrue(exceptionClass.isInstance(exception));
+        assertEquals(errorType, exception.getErrorType());
         assertArrayEquals(new byte[0], exception.getErrorData());
+    }
+
+    @Test
+    public void testValidateAndBuildAuthFailException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_AUTHENTICATION_FAILED, AuthenticationFailedException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildInvalidIkeSpiException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_INVALID_IKE_SPI, InvalidIkeSpiException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildInvalidSyntaxException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_INVALID_SYNTAX, InvalidSyntaxException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildNoProposalChosenException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_NO_PROPOSAL_CHOSEN, NoValidProposalChosenException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildSinglePairRequiredException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_SINGLE_PAIR_REQUIRED, SinglePairRequiredException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildNoAdditionalSasException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_NO_ADDITIONAL_SAS, NoAdditionalSasException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildInternalAddressFailException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_INTERNAL_ADDRESS_FAILURE, InternalAddressFailureException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildTsUnacceptableException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_TS_UNACCEPTABLE, TsUnacceptableException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildTemporaryFailureException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_TEMPORARY_FAILURE, TemporaryFailureException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildFailedCpRequiredException() throws Exception {
+        verifyValidateAndBuildIkeExceptionWithoutData(
+                ERROR_TYPE_FAILED_CP_REQUIRED, FailedCpRequiredException.class);
+    }
+
+    @Test
+    public void testValidateAndBuildChildSaNotFoundException() throws Exception {
+        IkeNotifyPayload errNotify =
+                new IkeNotifyPayload(
+                        IkePayload.PROTOCOL_ID_ESP,
+                        CHILD_SPI,
+                        ERROR_TYPE_CHILD_SA_NOT_FOUND,
+                        new byte[0]);
+        ChildSaNotFoundException exception =
+                (ChildSaNotFoundException) errNotify.validateAndBuildIkeException();
+
+        verifyIkeExceptionWithoutData(
+                exception, ERROR_TYPE_CHILD_SA_NOT_FOUND, ChildSaNotFoundException.class);
+
+        assertEquals(CHILD_SPI, exception.getIpSecSpi());
     }
 
     @Test

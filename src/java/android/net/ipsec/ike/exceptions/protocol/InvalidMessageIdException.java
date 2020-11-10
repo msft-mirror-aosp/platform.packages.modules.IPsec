@@ -20,21 +20,23 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_I
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
- * This exception is thrown when the message ID is out of window size.
- *
- * <p>Notifications based on this exception contains the four-octet invalid message ID. It MUST only
- * ever be sent in an INFORMATIONAL request. Sending this notification is OPTIONAL, and
- * notifications of this type MUST be rate limited.
+ * This exception is thrown when the remote server received a message with out-of-window-size ID.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
+// Notifications based on this exception contains the four-octet invalid message ID. It MUST only
+// ever be sent in an INFORMATIONAL request. Sending this notification is OPTIONAL, and
+// notifications of this type MUST be rate limited.
 public final class InvalidMessageIdException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 4;
 
     /**
      * Construct a instance of InvalidMessageIdException
+     *
+     * <p>Except for testing, IKE library users normally do not instantiate this object themselves
+     * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
      *
      * @param messageId the invalid Message ID.
      */
@@ -48,6 +50,7 @@ public final class InvalidMessageIdException extends IkeProtocolException {
      * Construct a instance of InvalidMessageIdException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
+     * @hide
      */
     public InvalidMessageIdException(byte[] notifyData) {
         super(ERROR_TYPE_INVALID_MESSAGE_ID, notifyData);
@@ -62,6 +65,7 @@ public final class InvalidMessageIdException extends IkeProtocolException {
         return byteArrayToInteger(getErrorData());
     }
 
+    /** @hide */
     @Override
     protected boolean isValidDataLength(int dataLen) {
         return EXPECTED_ERROR_DATA_LEN == dataLen;
