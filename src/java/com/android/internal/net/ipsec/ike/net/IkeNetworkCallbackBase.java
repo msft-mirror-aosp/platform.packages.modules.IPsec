@@ -25,7 +25,7 @@ import android.net.Network;
 import java.net.InetAddress;
 
 /** IkeNetworkCallbackBase is a template for IKE-specific NetworkCallback implementations. */
-abstract class IkeNetworkCallbackBase extends NetworkCallback {
+public abstract class IkeNetworkCallbackBase extends NetworkCallback {
     private static final String TAG = IkeNetworkCallbackBase.class.getSimpleName();
 
     protected final IkeNetworkUpdater mIkeNetworkUpdater;
@@ -67,6 +67,26 @@ abstract class IkeNetworkCallbackBase extends NetworkCallback {
                             + mCurrAddress);
             mIkeNetworkUpdater.onUnderlyingNetworkUpdated(mCurrNetwork);
         }
+    }
+
+    /**
+     * Sets the current Network that this NetworkCallback is monitoring for.
+     *
+     * <p>MUST be called on the Handler specified when registering this NetworkCallback with {@link
+     * ConnectivityManager}.
+     */
+    protected void setNetwork(Network network) {
+        mCurrNetwork = network;
+    }
+
+    /**
+     * Sets the current address that this NetworkCallback is monitoring for.
+     *
+     * <p>MUST be called on the Handler specified when registering this NetworkCallback with {@link
+     * ConnectivityManager}.
+     */
+    public void setAddress(InetAddress address) {
+        mCurrAddress = address;
     }
 
     protected void logd(String msg) {
