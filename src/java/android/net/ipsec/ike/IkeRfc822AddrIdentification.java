@@ -17,7 +17,6 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.nio.charset.Charset;
@@ -27,14 +26,11 @@ import java.util.Objects;
 /**
  * IkeRfc822AddrIdentification represents an IKE entity identification based on a fully-qualified
  * RFC 822 email address ID (e.g. ike@android.com).
- *
- * @hide
  */
-@SystemApi
 public final class IkeRfc822AddrIdentification extends IkeIdentification {
     private static final Charset UTF8 = Charset.forName("UTF-8");
 
-    /** The fully-qualified RFC 822 email addres. */
+    /** The fully-qualified RFC 822 email address. */
     @NonNull public final String rfc822Name;
 
     /**

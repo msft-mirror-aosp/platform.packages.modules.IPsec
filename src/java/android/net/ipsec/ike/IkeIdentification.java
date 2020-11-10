@@ -17,7 +17,6 @@
 package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
-import android.annotation.SystemApi;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.util.ArraySet;
 
@@ -37,9 +36,7 @@ import java.util.Set;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public abstract class IkeIdentification {
     // Set of supported ID types.
     private static final Set<Integer> SUPPORTED_ID_TYPES;

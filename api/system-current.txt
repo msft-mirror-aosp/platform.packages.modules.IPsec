@@ -67,54 +67,12 @@ package android.net.ipsec.ike {
     method public void onOpened(@NonNull android.net.ipsec.ike.ChildSessionConfiguration);
   }
 
-  public final class ChildSessionConfiguration {
-    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getInboundTrafficSelectors();
-    method @NonNull public java.util.List<android.net.LinkAddress> getInternalAddresses();
-    method @NonNull public java.util.List<java.net.InetAddress> getInternalDhcpServers();
-    method @NonNull public java.util.List<java.net.InetAddress> getInternalDnsServers();
-    method @NonNull public java.util.List<android.net.IpPrefix> getInternalSubnets();
-    method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getOutboundTrafficSelectors();
-  }
-
   public abstract class ChildSessionParams {
     method @IntRange(from=0x12c, to=0x3840) public int getHardLifetimeSeconds();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getInboundTrafficSelectors();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getOutboundTrafficSelectors();
     method @NonNull public java.util.List<android.net.ipsec.ike.ChildSaProposal> getSaProposals();
     method @IntRange(from=0x78, to=0x3840) public int getSoftLifetimeSeconds();
-  }
-
-  public final class IkeDerAsn1DnIdentification extends android.net.ipsec.ike.IkeIdentification {
-    ctor public IkeDerAsn1DnIdentification(@NonNull javax.security.auth.x500.X500Principal);
-    field @NonNull public final javax.security.auth.x500.X500Principal derAsn1Dn;
-  }
-
-  public class IkeFqdnIdentification extends android.net.ipsec.ike.IkeIdentification {
-    ctor public IkeFqdnIdentification(@NonNull String);
-    field @NonNull public final String fqdn;
-  }
-
-  public abstract class IkeIdentification {
-  }
-
-  public final class IkeIpv4AddrIdentification extends android.net.ipsec.ike.IkeIdentification {
-    ctor public IkeIpv4AddrIdentification(@NonNull java.net.Inet4Address);
-    field @NonNull public final java.net.Inet4Address ipv4Address;
-  }
-
-  public class IkeIpv6AddrIdentification extends android.net.ipsec.ike.IkeIdentification {
-    ctor public IkeIpv6AddrIdentification(@NonNull java.net.Inet6Address);
-    field @NonNull public final java.net.Inet6Address ipv6Address;
-  }
-
-  public final class IkeKeyIdIdentification extends android.net.ipsec.ike.IkeIdentification {
-    ctor public IkeKeyIdIdentification(@NonNull byte[]);
-    field @NonNull public final byte[] keyId;
-  }
-
-  public final class IkeRfc822AddrIdentification extends android.net.ipsec.ike.IkeIdentification {
-    ctor public IkeRfc822AddrIdentification(@NonNull String);
-    field @NonNull public final String rfc822Name;
   }
 
   public final class IkeSaProposal extends android.net.ipsec.ike.SaProposal {
@@ -143,22 +101,6 @@ package android.net.ipsec.ike {
     method public void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public void onError(@NonNull android.net.ipsec.ike.exceptions.IkeProtocolException);
     method public void onOpened(@NonNull android.net.ipsec.ike.IkeSessionConfiguration);
-  }
-
-  public final class IkeSessionConfiguration {
-    method @NonNull public android.net.ipsec.ike.IkeSessionConnectionInfo getIkeSessionConnectionInfo();
-    method @NonNull public java.util.List<java.net.InetAddress> getPcscfServers();
-    method @NonNull public String getRemoteApplicationVersion();
-    method @NonNull public java.util.List<byte[]> getRemoteVendorIds();
-    method public boolean isIkeExtensionEnabled(int);
-    field public static final int EXTENSION_TYPE_FRAGMENTATION = 1; // 0x1
-    field public static final int EXTENSION_TYPE_MOBIKE = 2; // 0x2
-  }
-
-  public final class IkeSessionConnectionInfo {
-    method @NonNull public java.net.InetAddress getLocalAddress();
-    method @NonNull public android.net.Network getNetwork();
-    method @NonNull public java.net.InetAddress getRemoteAddress();
   }
 
   public final class IkeSessionParams {
@@ -232,14 +174,6 @@ package android.net.ipsec.ike {
   }
 
   public static interface IkeSessionParams.IkeConfigRequest {
-  }
-
-  public final class IkeTrafficSelector {
-    ctor public IkeTrafficSelector(int, int, @NonNull java.net.InetAddress, @NonNull java.net.InetAddress);
-    field public final int endPort;
-    field @NonNull public final java.net.InetAddress endingAddress;
-    field public final int startPort;
-    field @NonNull public final java.net.InetAddress startingAddress;
   }
 
   public abstract class SaProposal {

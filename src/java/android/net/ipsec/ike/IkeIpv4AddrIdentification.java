@@ -17,7 +17,6 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.net.Inet4Address;
@@ -25,12 +24,7 @@ import java.net.UnknownHostException;
 import java.security.cert.X509Certificate;
 import java.util.Objects;
 
-/**
- * IkeIpv4AddrIdentification represents an IKE entity identification based on IPv4 address.
- *
- * @hide
- */
-@SystemApi
+/** IkeIpv4AddrIdentification represents an IKE entity identification based on IPv4 address. */
 public final class IkeIpv4AddrIdentification extends IkeIdentification {
     /** The IPv4 address. */
     @NonNull public final Inet4Address ipv4Address;
@@ -52,7 +46,7 @@ public final class IkeIpv4AddrIdentification extends IkeIdentification {
     }
 
     /**
-     * Construct an instance of {@link IkeIpv4AddrIdentification} with a IPv4 address.
+     * Construct an instance of {@link IkeIpv4AddrIdentification} with an IPv4 address.
      *
      * @param address the IPv4 address.
      */

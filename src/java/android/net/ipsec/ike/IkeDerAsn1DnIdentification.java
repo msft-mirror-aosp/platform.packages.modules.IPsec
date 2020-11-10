@@ -16,7 +16,6 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.security.cert.X509Certificate;
@@ -28,10 +27,7 @@ import javax.security.auth.x500.X500Principal;
  * This class represents an IKE entity ID based on a DER encoded ASN.1 X.500 Distinguished Name.
  *
  * <p>An example might be "CN=ike.test.android.net, O=Android, C=US".
- *
- * @hide
  */
-@SystemApi
 public final class IkeDerAsn1DnIdentification extends IkeIdentification {
     /** The ASN.1 X.500 Distinguished Name */
     @NonNull public final X500Principal derAsn1Dn;

@@ -17,7 +17,6 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.nio.charset.Charset;
@@ -27,10 +26,7 @@ import java.util.Objects;
 /**
  * IkeFqdnIdentification represents an IKE entity identification based on a fully-qualified domain
  * name (FQDN). An example might be ike.android.com
- *
- * @hide
  */
-@SystemApi
 public class IkeFqdnIdentification extends IkeIdentification {
     private static final Charset ASCII = Charset.forName("US-ASCII");
 
