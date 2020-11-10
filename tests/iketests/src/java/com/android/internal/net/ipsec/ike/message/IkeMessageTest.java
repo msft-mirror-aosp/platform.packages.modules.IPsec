@@ -348,7 +348,7 @@ public final class IkeMessageTest {
                 IkeTestUtils.decodeAndVerifyUnprotectedErrorMsg(
                         inputPacket, UnsupportedCriticalPayloadException.class);
 
-        assertEquals(1, exception.payloadTypeList.size());
+        assertEquals(1, exception.getUnsupportedCriticalPayloadList().size());
     }
 
     @Test
