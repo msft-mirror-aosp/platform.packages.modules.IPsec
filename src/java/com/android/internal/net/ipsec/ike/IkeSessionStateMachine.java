@@ -1112,9 +1112,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
-                    mIkeSocket = IkeUdp4Socket.getInstance(mNetwork, IkeSessionStateMachine.this);
+                    mIkeSocket =
+                            IkeUdp4Socket.getInstance(
+                                    mNetwork, IkeSessionStateMachine.this, getHandler());
                 } else {
-                    mIkeSocket = IkeUdp6Socket.getInstance(mNetwork, IkeSessionStateMachine.this);
+                    mIkeSocket =
+                            IkeUdp6Socket.getInstance(
+                                    mNetwork, IkeSessionStateMachine.this, getHandler());
                 }
 
                 FileDescriptor sock =
