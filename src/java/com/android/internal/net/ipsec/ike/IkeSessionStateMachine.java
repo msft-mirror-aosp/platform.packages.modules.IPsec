@@ -435,8 +435,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
     @VisibleForTesting boolean mSupportFragment;
-    /** Indicates if both sides support MOBIKE. Set in IKE AUTH */
-    @VisibleForTesting boolean mSupportMobike;
+    /**
+     * Indicates if both sides support MOBIKE. Set in IKE AUTH. volatile to ensure mSupportMobike
+     * can be checked in #setNetwork outside of the Handler.
+     */
+    @VisibleForTesting volatile boolean mSupportMobike;
 
     /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
     @VisibleForTesting Set<Short> mPeerSignatureHashAlgorithms;
@@ -757,6 +760,36 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** Forcibly close IKE Session. */
     public void killSession() {
         sendMessage(CMD_KILL_SESSION);
+    }
+
+    /** Update the IkeSessionStateMachine to use the specified Network. */
+    public void setNetwork(Network network) {
+        if (network == null) {
+            throw new IllegalArgumentException("network must not be null");
+        }
+
+        // Safe to check mSupportMobike outside the StateMachine Handler because mSupportMobike is
+        // always false until the last round of IKE_AUTH, where it may be set to true if the peer
+        // also supports MOBIKE. This means that this call will always fail as expected until
+        // IKE_AUTH updates it.
+        //
+        // There is a small race between updating this state and notifying the caller of MOBIKE
+        // support in IkeSessionCallback#onOpened where setNetwork may succeed before the caller
+        // knows it is supported. However, this is okay because the StateMachine has already
+        // established MOBIKE support.
+        if (!mSupportMobike) {
+            throw new IllegalStateException(
+                    "MOBIKE is not enabled or the remote server has not indicated MOBIKE support"
+                            + " yet");
+        }
+
+        if (mIkeSessionParams.getConfiguredNetwork() == null) {
+            throw new IllegalStateException(
+                    "setNetwork() requires this IkeSession to be configured to use caller-specified"
+                            + " network instead of default network");
+        }
+
+        // TODO(b/172013817): define + handle CMD for updating Network
     }
 
     private void scheduleRetry(LocalRequest localRequest) {

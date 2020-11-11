@@ -5338,4 +5338,25 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(REMOTE_ADDRESS),
                         eq(IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED));
     }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSetNetworkNull() throws Exception {
+        mIkeSessionStateMachine.setNetwork(null);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testSetNetworkMobikeNotActive() throws Exception {
+        Network newNetwork = mock(Network.class);
+
+        mIkeSessionStateMachine.setNetwork(newNetwork);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testSetNetworkMobikeActiveNetworkNotSpecified() throws Exception {
+        Network newNetwork = mock(Network.class);
+
+        verifyMobikeEnabled(true /* doesPeerSupportMobike */);
+
+        mIkeSessionStateMachine.setNetwork(newNetwork);
+    }
 }
