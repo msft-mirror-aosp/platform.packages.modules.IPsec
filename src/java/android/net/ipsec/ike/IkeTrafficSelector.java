@@ -19,7 +19,9 @@ package android.net.ipsec.ike;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
+import android.net.InetAddresses;
 import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.os.PersistableBundle;
 import android.util.ArraySet;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -102,6 +104,11 @@ public final class IkeTrafficSelector {
 
     @VisibleForTesting static final int TRAFFIC_SELECTOR_IPV4_LEN = 16;
     @VisibleForTesting static final int TRAFFIC_SELECTOR_IPV6_LEN = 40;
+
+    private static final String START_PORT_KEY = "startPort";
+    private static final String END_PORT_KEY = "endPort";
+    private static final String START_ADDRESS_KEY = "startingAddress";
+    private static final String END_ADDRESS_KEY = "endingAddress";
 
     /** @hide */
     public final int tsType;
@@ -220,6 +227,45 @@ public final class IkeTrafficSelector {
         this.endPort = endPort;
         this.startingAddress = startingAddress;
         this.endingAddress = endingAddress;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public static IkeTrafficSelector fromPersistableBundle(@NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle not provided");
+
+        int startPort = in.getInt(START_PORT_KEY);
+        int endPort = in.getInt(END_PORT_KEY);
+
+        InetAddress startingAddress =
+                InetAddresses.parseNumericAddress(in.getString(START_ADDRESS_KEY));
+        Objects.requireNonNull(in, "startAddress not provided");
+        InetAddress endingAddress =
+                InetAddresses.parseNumericAddress(in.getString(END_ADDRESS_KEY));
+        Objects.requireNonNull(in, "endAddress not provided");
+
+        return new IkeTrafficSelector(startPort, endPort, startingAddress, endingAddress);
+    }
+
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = new PersistableBundle();
+
+        result.putInt(START_PORT_KEY, startPort);
+        result.putInt(END_PORT_KEY, endPort);
+        result.putString(START_ADDRESS_KEY, startingAddress.getHostAddress());
+        result.putString(END_ADDRESS_KEY, endingAddress.getHostAddress());
+
+        return result;
     }
 
     /**
