@@ -90,6 +90,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.content.Context;
 import android.net.eap.EapSessionConfig;
@@ -110,6 +111,7 @@ import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
+import android.net.ipsec.ike.exceptions.IkeNetworkDiedException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
@@ -5159,11 +5161,15 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     @Test
     public void testMobikeEnabled() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportMobike */);
+
+        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
     }
 
     @Test
     public void testMobikeEnabledPeerUnsupported() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportMobike */);
+
+        killSessionAndVerifyNetworkCallback(false /* expectCallbackUnregistered */);
     }
 
     @Test
@@ -5181,7 +5187,15 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(mIkeSessionStateMachine.mSupportMobike);
     }
 
-    private void verifyMobikeEnabled(boolean doesPeerSupportMobike) throws Exception {
+    /**
+     * Restarts the IkeSessionStateMachine with MOBIKE enabled. If doesPeerSupportMobike, MOBIKE
+     * will be active for the Session.
+     *
+     * @return the registered IkeDefaultNetworkCallack is returned if MOBIKE is active, else null
+     */
+    @Nullable
+    private IkeDefaultNetworkCallback verifyMobikeEnabled(boolean doesPeerSupportMobike)
+            throws Exception {
         mIkeSessionStateMachine = restartStateMachineWithMobikeConfigured();
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
 
@@ -5223,13 +5237,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertEquals(doesPeerSupportMobike, mIkeSessionStateMachine.mSupportMobike);
 
+        ArgumentCaptor<IkeDefaultNetworkCallback> networkCallbackCaptor =
+                ArgumentCaptor.forClass(IkeDefaultNetworkCallback.class);
         verify(mMockConnectManager, doesPeerSupportMobike ? times(1) : never())
-                .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
+                .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
 
+        return doesPeerSupportMobike ? networkCallbackCaptor.getValue() : null;
+    }
+
+    private void killSessionAndVerifyNetworkCallback(boolean expectCallbackUnregistered) {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verify(mMockConnectManager, doesPeerSupportMobike ? times(1) : never())
+        verify(mMockConnectManager, expectCallbackUnregistered ? times(1) : never())
                 .unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
     }
 
@@ -5269,5 +5289,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
         verify(mMockConnectManager).unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
+    public void testMobikeEnabledNetworkDies() throws Exception {
+        IkeDefaultNetworkCallback callback = verifyMobikeEnabled(true /* doesPeerSupportMobike */);
+        callback.onLost(mMockDefaultNetwork);
+
+        verify(mMockIkeSessionCallback).onError(any(IkeNetworkDiedException.class));
     }
 }
