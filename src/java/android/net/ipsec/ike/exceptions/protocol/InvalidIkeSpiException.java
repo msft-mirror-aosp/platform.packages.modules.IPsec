@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2020 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,46 +14,42 @@
  * limitations under the License.
  */
 package android.net.ipsec.ike.exceptions.protocol;
+;
+import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_IKE_SPI;
 
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
-
-import android.annotation.NonNull;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
- * This exception is thrown if the remote server declined a request because of a temporary issue.
+ * This exception is thrown if an IKE message was received with an unrecognized destination SPI.
  *
- * <p>This exception indicates that the remote server receives a request that cannot be completed
- * due to a temporary condition such as a rekeying operation.
+ * <p>This usually indicates that the message recipient has rebooted and forgotten the existence of
+ * an IKE SA.
  *
- * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.7">RFC 7296, Internet Key Exchange
+ * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.21">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
-public final class TemporaryFailureException extends IkeProtocolException {
+public final class InvalidIkeSpiException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
 
     /**
-     * Construct an instance of TemporaryFailureException.
+     * Construct an instance of InvalidIkeSpiException.
      *
      * <p>Except for testing, IKE library users normally do not instantiate this object themselves
      * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
-     *
-     * @param message the descriptive message (which is saved for later retrieval by the {@link
-     *     #getMessage()} method).
      */
-    public TemporaryFailureException(@NonNull String message) {
-        super(ERROR_TYPE_TEMPORARY_FAILURE, message);
+    public InvalidIkeSpiException() {
+        super(ERROR_TYPE_INVALID_IKE_SPI);
     }
 
     /**
-     * Construct a instance of TemporaryFailureException from a notify payload.
+     * Construct a instance of InvalidIkeSpiException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
      * @hide
      */
-    public TemporaryFailureException(byte[] notifyData) {
-        super(ERROR_TYPE_TEMPORARY_FAILURE, notifyData);
+    public InvalidIkeSpiException(byte[] notifyData) {
+        super(ERROR_TYPE_INVALID_IKE_SPI, notifyData);
     }
 
     /** @hide */
