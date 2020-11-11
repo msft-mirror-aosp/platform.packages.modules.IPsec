@@ -28,8 +28,6 @@ import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
 
-import com.android.internal.annotations.VisibleForTesting;
-
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -63,16 +61,10 @@ public final class IkeUdp6Socket extends IkeUdpSocket {
      *
      * @param network the Network this socket will be bound to
      * @param ikeSession the IkeSessionStateMachine that is requesting an IkeUdp6Socket.
+     * @param handler the Handler used to process received packets
      * @return an IkeUdp6Socket instance
      */
-    public static IkeUdp6Socket getInstance(Network network, IkeSessionStateMachine ikeSession)
-            throws ErrnoException, IOException {
-        return getInstance(network, ikeSession, null);
-    }
-
-    // package protected; for testing purposes.
-    @VisibleForTesting
-    static IkeUdp6Socket getInstance(
+    public static IkeUdp6Socket getInstance(
             Network network, IkeSessionStateMachine ikeSession, Handler handler)
             throws ErrnoException, IOException {
         IkeUdp6Socket ikeSocket = sNetworkToUdp6SocketMap.get(network);
