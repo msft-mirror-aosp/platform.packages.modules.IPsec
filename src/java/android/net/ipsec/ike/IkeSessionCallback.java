@@ -68,4 +68,15 @@ public interface IkeSessionCallback {
      * @param exception the detailed error information.
      */
     void onError(@NonNull IkeProtocolException exception);
+
+    /**
+     * Called if a non-protocol, recoverable error is encountered in an established {@link
+     * IkeSession}.
+     *
+     * <p>This method can be triggered by non-protocol errors, such as the underlying Network for
+     * this IkeSession dying.
+     *
+     * @hide
+     */
+    void onError(@NonNull IkeException exception);
 }
