@@ -83,6 +83,7 @@ import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
+import android.net.ipsec.ike.exceptions.IkeNetworkDiedException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidKeException;
@@ -1111,9 +1112,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
-                    mIkeSocket = IkeUdp4Socket.getInstance(mNetwork, IkeSessionStateMachine.this);
+                    mIkeSocket =
+                            IkeUdp4Socket.getInstance(
+                                    mNetwork, IkeSessionStateMachine.this, getHandler());
                 } else {
-                    mIkeSocket = IkeUdp6Socket.getInstance(mNetwork, IkeSessionStateMachine.this);
+                    mIkeSocket =
+                            IkeUdp6Socket.getInstance(
+                                    mNetwork, IkeSessionStateMachine.this, getHandler());
                 }
 
                 FileDescriptor sock =
@@ -4966,7 +4971,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     @Override
     public void onUnderlyingNetworkDied() {
-        // TODO(b/170781365): update IkeSessionStateMachine States to handle the Network dying
-        throw new UnsupportedOperationException("Not yet implemented");
+        executeUserCallback(
+                () -> mIkeSessionCallback.onError(new IkeNetworkDiedException(mNetwork)));
     }
 }
