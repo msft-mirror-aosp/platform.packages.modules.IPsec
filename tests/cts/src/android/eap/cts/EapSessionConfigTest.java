@@ -28,18 +28,25 @@ import android.net.eap.EapSessionConfig.EapAkaConfig;
 import android.net.eap.EapSessionConfig.EapAkaPrimeConfig;
 import android.net.eap.EapSessionConfig.EapMsChapV2Config;
 import android.net.eap.EapSessionConfig.EapSimConfig;
+import android.net.eap.EapSessionConfig.EapTtlsConfig;
 import android.net.eap.EapSessionConfig.EapUiccConfig;
 
 import androidx.test.runner.AndroidJUnit4;
 
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import java.security.cert.X509Certificate;
 
 @RunWith(AndroidJUnit4.class)
 public class EapSessionConfigTest {
     // These constants are IANA-defined values and are copies of hidden constants in
     // frameworks/opt/net/ike/src/java/com/android/internal/net/eap/message/EapData.java.
     private static final int EAP_TYPE_SIM = 18;
+    private static final int EAP_TYPE_TTLS = 21;
     private static final int EAP_TYPE_AKA = 23;
     private static final int EAP_TYPE_MSCHAP_V2 = 26;
     private static final int EAP_TYPE_AKA_PRIME = 50;
@@ -49,6 +56,19 @@ public class EapSessionConfigTest {
     private static final String NETWORK_NAME = "android.net";
     private static final String EAP_MSCHAPV2_USERNAME = "username";
     private static final String EAP_MSCHAPV2_PASSWORD = "password";
+
+    private static final EapSessionConfig INNER_EAP_SESSION_CONFIG =
+            new EapSessionConfig.Builder()
+                    .setEapIdentity(EAP_IDENTITY)
+                    .setEapMsChapV2Config(EAP_MSCHAPV2_USERNAME, EAP_MSCHAPV2_PASSWORD)
+                    .build();
+
+    private X509Certificate mServerCaCert;
+
+    @Before
+    public void setUp() throws Exception {
+        mServerCaCert = CertUtils.createCertFromPemFile("server-a-self-signed-ca.pem");
+    }
 
     @Test
     public void testBuildWithAllEapMethods() {
@@ -63,6 +83,7 @@ public class EapSessionConfigTest {
                                 NETWORK_NAME,
                                 true /* allowMismatchedNetworkNames */)
                         .setEapMsChapV2Config(EAP_MSCHAPV2_USERNAME, EAP_MSCHAPV2_PASSWORD)
+                        .setEapTtlsConfig(mServerCaCert, INNER_EAP_SESSION_CONFIG)
                         .build();
 
         assertArrayEquals(EAP_IDENTITY, result.getEapIdentity());
@@ -89,6 +110,12 @@ public class EapSessionConfigTest {
         assertEquals(EAP_TYPE_MSCHAP_V2, eapMsChapV2Config.getMethodType());
         assertEquals(EAP_MSCHAPV2_USERNAME, eapMsChapV2Config.getUsername());
         assertEquals(EAP_MSCHAPV2_PASSWORD, eapMsChapV2Config.getPassword());
+
+        EapTtlsConfig eapTtlsConfig = result.getEapTtlsConfig();
+        assertNotNull(eapTtlsConfig);
+        assertEquals(EAP_TYPE_TTLS, eapTtlsConfig.getMethodType());
+        assertEquals(mServerCaCert, eapTtlsConfig.getServerCaCert());
+        assertEquals(INNER_EAP_SESSION_CONFIG, eapTtlsConfig.getInnerEapSessionConfig());
     }
 
     private void verifyEapUiccConfigCommon(EapUiccConfig config) {
