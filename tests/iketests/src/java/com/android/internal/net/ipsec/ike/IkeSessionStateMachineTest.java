@@ -5364,7 +5364,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         callback.onAvailable(newNetwork);
         mLooper.dispatchAll();
 
-        verifyNetworkAndLocalAddress(newNetwork, UPDATED_LOCAL_ADDRESS, callback);
+        verifyNetworkAndLocalAddress(newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
         verify(mMockIkeLocalAddressGenerator)
                 .generateLocalAddress(
                         eq(newNetwork),
@@ -5387,10 +5387,25 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private void verifyNetworkAndLocalAddress(
             Network underlyingNetwork,
             InetAddress localAddress,
+            InetAddress remoteAddress,
             IkeNetworkCallbackBase networkCallback) {
         assertEquals(underlyingNetwork, mIkeSessionStateMachine.mNetwork);
         assertEquals(underlyingNetwork, mIkeSessionStateMachine.mIkeSocket.getNetwork());
         assertEquals(localAddress, mIkeSessionStateMachine.mLocalAddress);
+        assertEquals(remoteAddress, mIkeSessionStateMachine.mRemoteAddress);
+
+        assertEquals(
+                localAddress,
+                mIkeSessionStateMachine
+                        .mCurrentIkeSaRecord
+                        .getInitiatorIkeSecurityParameterIndex()
+                        .getSourceAddress());
+        assertEquals(
+                remoteAddress,
+                mIkeSessionStateMachine
+                        .mCurrentIkeSaRecord
+                        .getResponderIkeSecurityParameterIndex()
+                        .getSourceAddress());
 
         assertEquals(underlyingNetwork, networkCallback.getNetwork());
         assertEquals(localAddress, networkCallback.getAddress());
@@ -5423,7 +5438,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.setNetwork(newNetwork);
         mLooper.dispatchAll();
 
-        verifyNetworkAndLocalAddress(newNetwork, UPDATED_LOCAL_ADDRESS, callback);
+        verifyNetworkAndLocalAddress(newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
         verify(mMockIkeLocalAddressGenerator)
                 .generateLocalAddress(
                         eq(newNetwork),
