@@ -53,6 +53,7 @@ import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
 import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
+import android.os.PersistableBundle;
 import android.telephony.TelephonyManager;
 import android.util.SparseArray;
 
@@ -71,6 +72,7 @@ import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionParamsTest {
     private static final int IKE_OPTION_INVALID = -1;
+    private static final int SUB_ID = 0;
 
     private static final String PSK_HEX_STRING = "6A756E69706572313233";
     private static final byte[] PSK = TestUtils.hexStringToByteArray(PSK_HEX_STRING);
@@ -647,5 +649,26 @@ public final class IkeSessionParamsTest {
                         .setIke3gppExtension(ike3gppExtension)
                         .build();
         assertEquals(ike3gppExtension, sessionParams.getIke3gppExtension());
+    }
+
+    private static void verifyPersistableBundleEncodeDecodeIsLossless(IkeAuthConfig config) {
+        PersistableBundle bundle = config.toPersistableBundle();
+        IkeAuthConfig result = IkeAuthConfig.fromPersistableBundle(bundle);
+
+        assertEquals(config, result);
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodePskAuth() {
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthPskConfig(PSK));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeAuthEap() {
+        EapSessionConfig eapSessionConfig =
+                new EapSessionConfig.Builder()
+                        .setEapAkaConfig(SUB_ID, TelephonyManager.APPTYPE_ISIM)
+                        .build();
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthEapConfig(eapSessionConfig));
     }
 }
