@@ -30,12 +30,14 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
+import android.os.PersistableBundle;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -405,12 +407,64 @@ public final class IkeSessionParams {
 
     /** This class contains common information of an IKEv2 authentication configuration. */
     public abstract static class IkeAuthConfig {
+        private static final String AUTH_METHOD_KEY = "mAuthMethod";
         /** @hide */
         @IkeAuthMethod public final int mAuthMethod;
 
         /** @hide */
         IkeAuthConfig(@IkeAuthMethod int authMethod) {
             mAuthMethod = authMethod;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthConfig fromPersistableBundle(PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            int authMethod = in.getInt(AUTH_METHOD_KEY);
+            switch (authMethod) {
+                case IKE_AUTH_METHOD_PSK:
+                    return IkeAuthPskConfig.fromPersistableBundle(in);
+                case IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
+                    // TODO: Build IkeAuthDigitalSignRemoteConfig and IkeAuthDigitalSignLocalConfig
+                    // in the following CL
+                    throw new UnsupportedOperationException("Not Implemented");
+                case IKE_AUTH_METHOD_EAP:
+                    return IkeAuthEapConfig.fromPersistableBundle(in);
+                default:
+                    throw new IllegalArgumentException("Invalid Auth Method: " + authMethod);
+            }
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = new PersistableBundle();
+
+            result.putInt(AUTH_METHOD_KEY, mAuthMethod);
+            return result;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mAuthMethod);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof IkeAuthConfig)) {
+                return false;
+            }
+
+            return mAuthMethod == ((IkeAuthConfig) o).mAuthMethod;
         }
     }
 
@@ -419,18 +473,64 @@ public final class IkeSessionParams {
      * of local or remote side.
      */
     public static class IkeAuthPskConfig extends IkeAuthConfig {
+        private static final String PSK_KEY = "mPsk";
         /** @hide */
         @NonNull public final byte[] mPsk;
 
-        private IkeAuthPskConfig(byte[] psk) {
+        /** @hide */
+        @VisibleForTesting
+        IkeAuthPskConfig(byte[] psk) {
             super(IKE_AUTH_METHOD_PSK);
             mPsk = psk;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthPskConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            PersistableBundle pskBundle = in.getPersistableBundle(PSK_KEY);
+            Objects.requireNonNull(in, "PSK bundle is null");
+
+            return new IkeAuthPskConfig(PersistableBundleUtils.toByteArray(pskBundle));
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+
+            result.putPersistableBundle(PSK_KEY, PersistableBundleUtils.fromByteArray(mPsk));
+            return result;
         }
 
         /** Retrieves the pre-shared key */
         @NonNull
         public byte[] getPsk() {
             return Arrays.copyOf(mPsk, mPsk.length);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), Arrays.hashCode(mPsk));
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof IkeAuthPskConfig)) {
+                return false;
+            }
+
+            return Arrays.equals(mPsk, ((IkeAuthPskConfig) o).mPsk);
         }
     }
 
@@ -518,19 +618,68 @@ public final class IkeSessionParams {
      * <p>@see {@link IkeSessionParams.Builder#setAuthEap(X509Certificate, EapSessionConfig)}
      */
     public static class IkeAuthEapConfig extends IkeAuthConfig {
+        private static final String EAP_CONFIG_KEY = "mEapConfig";
+
         /** @hide */
         @NonNull public final EapSessionConfig mEapConfig;
 
-        private IkeAuthEapConfig(EapSessionConfig eapConfig) {
+        /** @hide */
+        @VisibleForTesting
+        IkeAuthEapConfig(EapSessionConfig eapConfig) {
             super(IKE_AUTH_METHOD_EAP);
 
             mEapConfig = eapConfig;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthEapConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle null");
+
+            PersistableBundle eapBundle = in.getPersistableBundle(EAP_CONFIG_KEY);
+            Objects.requireNonNull(in, "EAP Config bundle is null");
+
+            EapSessionConfig eapConfig = EapSessionConfig.fromPersistableBundle(eapBundle);
+            Objects.requireNonNull(eapConfig, "EAP Config is null");
+
+            return new IkeAuthEapConfig(eapConfig);
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+            result.putPersistableBundle(EAP_CONFIG_KEY, mEapConfig.toPersistableBundle());
+            return result;
         }
 
         /** Retrieves EAP configuration */
         @NonNull
         public EapSessionConfig getEapConfig() {
             return mEapConfig;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mEapConfig);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof IkeAuthEapConfig)) {
+                return false;
+            }
+
+            return mEapConfig.equals(((IkeAuthEapConfig) o).mEapConfig);
         }
     }
 
