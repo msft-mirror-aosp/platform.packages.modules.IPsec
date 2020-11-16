@@ -16,8 +16,11 @@
 
 package android.net.ipsec.ike;
 
+import static com.android.internal.net.ipsec.ike.message.IkeSaPayload.EsnTransform.ESN_POLICY_NO_EXTENDED;
+
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
+import android.os.PersistableBundle;
 
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
@@ -25,9 +28,11 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransfo
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EsnTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * ChildSaProposal represents a proposed configuration to negotiate a Child SA.
@@ -43,6 +48,7 @@ import java.util.List;
  */
 @SystemApi
 public final class ChildSaProposal extends SaProposal {
+    private static final String ESN_KEY = "mEsns";
     private final EsnTransform[] mEsns;
 
     /**
@@ -65,6 +71,73 @@ public final class ChildSaProposal extends SaProposal {
             EsnTransform[] esns) {
         super(IkePayload.PROTOCOL_ID_ESP, encryptionAlgos, integrityAlgos, dhGroups);
         mEsns = esns;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * <p>Constructed proposals are guaranteed to be valid, as checked by the
+     * ChildSaProposal.Builder.
+     *
+     * @hide
+     */
+    @NonNull
+    public static ChildSaProposal fromPersistableBundle(@NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        ChildSaProposal.Builder builder = new ChildSaProposal.Builder();
+
+        PersistableBundle encryptionBundle = in.getPersistableBundle(ENCRYPT_ALGO_KEY);
+        Objects.requireNonNull(encryptionBundle, "Encryption algo bundle is null");
+        List<EncryptionTransform> encryptList =
+                PersistableBundleUtils.toList(
+                        encryptionBundle, EncryptionTransform::fromPersistableBundle);
+        for (EncryptionTransform t : encryptList) {
+            builder.addEncryptionAlgorithm(t.id, t.getSpecifiedKeyLength());
+        }
+
+        int[] integrityAlgoIdArray = in.getIntArray(INTEGRITY_ALGO_KEY);
+        Objects.requireNonNull(integrityAlgoIdArray, "Integrity algo array is null");
+        for (int algo : integrityAlgoIdArray) {
+            builder.addIntegrityAlgorithm(algo);
+        }
+
+        int[] dhGroupArray = in.getIntArray(DH_GROUP_KEY);
+        Objects.requireNonNull(dhGroupArray, "DH Group array is null");
+        for (int dh : dhGroupArray) {
+            builder.addDhGroup(dh);
+        }
+
+        int[] esnPolicies = in.getIntArray(ESN_KEY);
+        Objects.requireNonNull(esnPolicies, "ESN policy array is null");
+
+        for (int p : esnPolicies) {
+            switch (p) {
+                case ESN_POLICY_NO_EXTENDED:
+                    // Ignored. All ChildSaProposal(s) are proposed with this automatically
+                    break;
+                default:
+                    throw new IllegalArgumentException(
+                            "Proposing ESN policy: " + p + " is unsupported");
+            }
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @Override
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = super.toPersistableBundle();
+        int[] esnPolicies = Arrays.asList(mEsns).stream().mapToInt(esn -> esn.id).toArray();
+        result.putIntArray(ESN_KEY, esnPolicies);
+
+        return result;
     }
 
     /**
@@ -126,13 +199,25 @@ public final class ChildSaProposal extends SaProposal {
                 getEsnTransforms());
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), Arrays.hashCode(mEsns));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!super.equals(o) || !(o instanceof ChildSaProposal)) {
+            return false;
+        }
+
+        return Arrays.equals(mEsns, ((ChildSaProposal) o).mEsns);
+    }
+
     /**
      * This class is used to incrementally construct a ChildSaProposal. ChildSaProposal instances
      * are immutable once built.
      */
     public static final class Builder extends SaProposal.Builder {
-        // TODO: Support users to add algorithms from most preferred to least preferred.
-
         /**
          * Adds an encryption algorithm with a specific key length to the SA proposal being built.
          *
