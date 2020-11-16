@@ -32,6 +32,8 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import android.os.PersistableBundle;
+
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
@@ -131,6 +133,40 @@ public final class SaProposalTest {
                 proposal.getIntegrityTransforms());
         assertArrayEquals(
                 new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
+    }
+
+    private static void verifyPersistableBundleEncodeDecodeIsLossless(SaProposal proposal) {
+        PersistableBundle bundle = proposal.toPersistableBundle();
+        SaProposal resultProposal = SaProposal.fromPersistableBundle(bundle);
+
+        assertEquals(proposal, resultProposal);
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeIsLosslessChildProposal() throws Exception {
+        ChildSaProposal proposal =
+                new ChildSaProposal.Builder()
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED)
+                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
+                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
+                        .build();
+
+        verifyPersistableBundleEncodeDecodeIsLossless(proposal);
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeIsLosslessIkeProposal() throws Exception {
+        IkeSaProposal proposal =
+                new IkeSaProposal.Builder()
+                        .addEncryptionAlgorithm(
+                                SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED)
+                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
+                        .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
+                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
+                        .build();
+
+        verifyPersistableBundleEncodeDecodeIsLossless(proposal);
     }
 
     @Test
