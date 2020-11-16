@@ -42,8 +42,3 @@ android_test {
         "libmultiplejvmtiagentsinterferenceagent",
     ],
 }
-
-    filegroup {
-        name: "ike-test-utils",
-        srcs: ["src/java/**/CertUtils.java"],
-    }
