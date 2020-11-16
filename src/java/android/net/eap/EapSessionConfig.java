@@ -25,6 +25,7 @@ import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
+import android.os.PersistableBundle;
 import android.telephony.Annotation.UiccAppType;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -255,15 +256,51 @@ public final class EapSessionConfig {
         }
     }
 
-    /**
-     * EapMethodConfig represents a generic EAP method configuration.
-     */
+    /** EapMethodConfig represents a generic EAP method configuration. */
     public abstract static class EapMethodConfig {
+        private static final String METHOD_TYPE = "methodType";
+
         @EapMethod private final int mMethodType;
 
         /** @hide */
         EapMethodConfig(@EapMethod int methodType) {
             mMethodType = methodType;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapMethodConfig fromPersistableBundle(PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            int methodType = in.getInt(METHOD_TYPE);
+            switch (methodType) {
+                case EAP_TYPE_SIM:
+                    return EapSimConfig.fromPersistableBundle(in);
+                case EAP_TYPE_AKA:
+                    return EapAkaConfig.fromPersistableBundle(in);
+                case EAP_TYPE_AKA_PRIME:
+                    return EapAkaPrimeConfig.fromPersistableBundle(in);
+                case EAP_TYPE_MSCHAP_V2:
+                    return EapMsChapV2Config.fromPersistableBundle(in);
+                default:
+                    throw new IllegalArgumentException("Invalid EAP Type: " + methodType);
+            }
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = new PersistableBundle();
+            result.putInt(METHOD_TYPE, mMethodType);
+            return result;
         }
 
         /**
@@ -288,6 +325,22 @@ public final class EapSessionConfig {
         public boolean isEapOnlySafeMethod() {
             return false;
         }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            return Objects.hash(mMethodType);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof EapMethodConfig)) {
+                return false;
+            }
+
+            return mMethodType == ((EapMethodConfig) o).mMethodType;
+        }
     }
 
     /**
@@ -295,6 +348,11 @@ public final class EapSessionConfig {
      * authentication.
      */
     public abstract static class EapUiccConfig extends EapMethodConfig {
+        /** @hide */
+        protected static final String SUB_ID_KEY = "subId";
+        /** @hide */
+        protected static final String APP_TYPE_KEY = "apptype";
+
         private final int mSubId;
         private final int mApptype;
 
@@ -302,6 +360,21 @@ public final class EapSessionConfig {
             super(methodType);
             mSubId = subId;
             mApptype = apptype;
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+            result.putInt(SUB_ID_KEY, mSubId);
+            result.putInt(APP_TYPE_KEY, mApptype);
+
+            return result;
         }
 
         /**
@@ -327,6 +400,24 @@ public final class EapSessionConfig {
         public boolean isEapOnlySafeMethod() {
             return true;
         }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mSubId, mApptype);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof EapUiccConfig)) {
+                return false;
+            }
+
+            EapUiccConfig other = (EapUiccConfig) o;
+
+            return mSubId == other.mSubId && mApptype == other.mApptype;
+        }
     }
 
     /**
@@ -337,6 +428,17 @@ public final class EapSessionConfig {
         @VisibleForTesting
         public EapSimConfig(int subId, @UiccAppType int apptype) {
             super(EAP_TYPE_SIM, subId, apptype);
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapSimConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EapSimConfig(in.getInt(SUB_ID_KEY), in.getInt(APP_TYPE_KEY));
         }
     }
 
@@ -354,12 +456,26 @@ public final class EapSessionConfig {
         EapAkaConfig(int methodType, int subId, @UiccAppType int apptype) {
             super(methodType, subId, apptype);
         }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapAkaConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EapAkaConfig(in.getInt(SUB_ID_KEY), in.getInt(APP_TYPE_KEY));
+        }
     }
 
     /**
      * EapAkaPrimeConfig represents the configs needed for an EAP-AKA' session.
      */
     public static class EapAkaPrimeConfig extends EapAkaConfig {
+        private static final String NETWORK_NAME_KEY = "networkName";
+        private static final String ALL_MISMATCHED_NETWORK_KEY = "allowMismatchedNetworkNames";
+
         @NonNull private final String mNetworkName;
         private final boolean mAllowMismatchedNetworkNames;
 
@@ -376,6 +492,36 @@ public final class EapSessionConfig {
 
             mNetworkName = networkName;
             mAllowMismatchedNetworkNames = allowMismatchedNetworkNames;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapAkaPrimeConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EapAkaPrimeConfig(
+                    in.getInt(SUB_ID_KEY),
+                    in.getInt(APP_TYPE_KEY),
+                    in.getString(NETWORK_NAME_KEY),
+                    in.getBoolean(ALL_MISMATCHED_NETWORK_KEY));
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+            result.putString(NETWORK_NAME_KEY, mNetworkName);
+            result.putBoolean(ALL_MISMATCHED_NETWORK_KEY, mAllowMismatchedNetworkNames);
+
+            return result;
         }
 
         /**
@@ -396,12 +542,34 @@ public final class EapSessionConfig {
         public boolean allowsMismatchedNetworkNames() {
             return mAllowMismatchedNetworkNames;
         }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mNetworkName, mAllowMismatchedNetworkNames);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof EapAkaPrimeConfig)) {
+                return false;
+            }
+
+            EapAkaPrimeConfig other = (EapAkaPrimeConfig) o;
+
+            return mNetworkName.equals(other.mNetworkName)
+                    && mAllowMismatchedNetworkNames == other.mAllowMismatchedNetworkNames;
+        }
     }
 
     /**
      * EapMsChapV2Config represents the configs needed for an EAP MSCHAPv2 session.
      */
     public static class EapMsChapV2Config extends EapMethodConfig {
+        private static final String USERNAME_KEY = "username";
+        private static final String PASSWORD_KEY = "password";
+
         @NonNull private final String mUsername;
         @NonNull private final String mPassword;
 
@@ -415,6 +583,32 @@ public final class EapSessionConfig {
 
             mUsername = username;
             mPassword = password;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapMsChapV2Config fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EapMsChapV2Config(in.getString(USERNAME_KEY), in.getString(PASSWORD_KEY));
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+            result.putString(USERNAME_KEY, mUsername);
+            result.putString(PASSWORD_KEY, mPassword);
+
+            return result;
         }
 
         /**
@@ -435,6 +629,24 @@ public final class EapSessionConfig {
         @NonNull
         public String getPassword() {
             return mPassword;
+        }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mUsername, mPassword);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof EapMsChapV2Config)) {
+                return false;
+            }
+
+            EapMsChapV2Config other = (EapMsChapV2Config) o;
+
+            return mUsername.equals(other.mUsername) && mPassword.equals(other.mPassword);
         }
     }
 
