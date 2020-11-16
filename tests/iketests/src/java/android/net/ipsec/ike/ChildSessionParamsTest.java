@@ -16,12 +16,15 @@
 
 package android.net.ipsec.ike;
 
+import static android.system.OsConstants.AF_INET;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 import android.net.InetAddresses;
+import android.os.PersistableBundle;
 
 import org.junit.Test;
 
@@ -55,6 +58,30 @@ public final class ChildSessionParamsTest {
                 new IkeTrafficSelector[] {getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()},
                 sessionParams.getOutboundTrafficSelectorsInternal());
         assertFalse(sessionParams.isTransportMode());
+    }
+
+    private static void verifyPersistableBundleEncodeDecodeIsLossless(ChildSessionParams params) {
+        PersistableBundle bundle = params.toPersistableBundle();
+        ChildSessionParams result = ChildSessionParams.fromPersistableBundle(bundle);
+
+        assertEquals(params, result);
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeIsLosslessTunnelMode() throws Exception {
+        ChildSessionParams sessionParams =
+                new TunnelModeChildSessionParams.Builder()
+                        .addSaProposal(mSaProposal)
+                        .addInternalAddressRequest(AF_INET)
+                        .build();
+        verifyPersistableBundleEncodeDecodeIsLossless(sessionParams);
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeIsLosslessTransportMode() throws Exception {
+        ChildSessionParams sessionParams =
+                new TransportModeChildSessionParams.Builder().addSaProposal(mSaProposal).build();
+        verifyPersistableBundleEncodeDecodeIsLossless(sessionParams);
     }
 
     @Test

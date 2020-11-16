@@ -25,13 +25,18 @@ import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
+import android.os.PersistableBundle;
 import android.telephony.Annotation.UiccAppType;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.message.EapData.EapMethod;
+import com.android.internal.net.ipsec.ike.utils.IkeCertUtils;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -47,6 +52,9 @@ import java.util.Objects;
  */
 @SystemApi
 public final class EapSessionConfig {
+    private static final String EAP_ID_KEY = "eapIdentity";
+    private static final String EAP_METHOD_CONFIGS_KEY = "eapConfigs";
+
     private static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     // IANA -> EapMethodConfig for that method
@@ -71,6 +79,58 @@ public final class EapSessionConfig {
     public Map<Integer, EapMethodConfig> getEapConfigs() {
         // Return the underlying Collection directly because it's unmodifiable
         return mEapConfigs;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle *
+     *
+     * <p>Constructed EapSessionConfigs are guaranteed to be valid, as checked by the
+     * EapSessionConfig.Builder
+     *
+     * @hide
+     */
+    @NonNull
+    public static EapSessionConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        EapSessionConfig.Builder builder = new EapSessionConfig.Builder();
+
+        PersistableBundle eapIdBundle = in.getPersistableBundle(EAP_ID_KEY);
+        Objects.requireNonNull(eapIdBundle, "EAP ID bundle is null");
+        byte[] eapId = PersistableBundleUtils.toByteArray(eapIdBundle);
+        builder.setEapIdentity(eapId);
+
+        PersistableBundle configsBundle = in.getPersistableBundle(EAP_METHOD_CONFIGS_KEY);
+        Objects.requireNonNull(configsBundle, "EAP method configs bundle is null");
+        Map<Integer, EapMethodConfig> eapMethodConfigs =
+                PersistableBundleUtils.toMap(
+                        configsBundle,
+                        PersistableBundleUtils.INTEGER_DESERIALIZER,
+                        EapMethodConfig::fromPersistableBundle);
+        for (EapMethodConfig config : eapMethodConfigs.values()) {
+            builder.addEapMethodConfig(config);
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = new PersistableBundle();
+        result.putPersistableBundle(EAP_ID_KEY, PersistableBundleUtils.fromByteArray(mEapIdentity));
+
+        final PersistableBundle configsBundle =
+                PersistableBundleUtils.fromMap(
+                        mEapConfigs,
+                        PersistableBundleUtils.INTEGER_SERIALIZER,
+                        EapMethodConfig::toPersistableBundle);
+        result.putPersistableBundle(EAP_METHOD_CONFIGS_KEY, configsBundle);
+        return result;
     }
 
     /** Retrieves client's EAP Identity */
@@ -128,6 +188,24 @@ public final class EapSessionConfig {
     @Nullable
     public EapTtlsConfig getEapTtlsConfig() {
         return (EapTtlsConfig) mEapConfigs.get(EAP_TYPE_TTLS);
+    }
+
+    /** @hide */
+    @Override
+    public int hashCode() {
+        return Objects.hash(Arrays.hashCode(mEapIdentity), mEapConfigs);
+    }
+
+    /** @hide */
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof EapSessionConfig)) {
+            return false;
+        }
+
+        EapSessionConfig other = (EapSessionConfig) o;
+        return Arrays.equals(mEapIdentity, other.mEapIdentity)
+                && mEapConfigs.equals(other.mEapConfigs);
     }
 
     /** This class can be used to incrementally construct an {@link EapSessionConfig}. */
@@ -240,6 +318,20 @@ public final class EapSessionConfig {
         }
 
         /**
+         * Adds an EAP method configuration. Internal use only.
+         *
+         * <p>This method will override the previously set configuration with the same method type.
+         *
+         * @hide
+         */
+        @NonNull
+        public Builder addEapMethodConfig(@NonNull EapMethodConfig config) {
+            Objects.requireNonNull(config, "EapMethodConfig is null");
+            mEapConfigs.put(config.mMethodType, config);
+            return this;
+        }
+
+        /**
          * Constructs and returns an EapSessionConfig with the configurations applied to this
          * Builder.
          *
@@ -255,15 +347,53 @@ public final class EapSessionConfig {
         }
     }
 
-    /**
-     * EapMethodConfig represents a generic EAP method configuration.
-     */
+    /** EapMethodConfig represents a generic EAP method configuration. */
     public abstract static class EapMethodConfig {
+        private static final String METHOD_TYPE = "methodType";
+
         @EapMethod private final int mMethodType;
 
         /** @hide */
         EapMethodConfig(@EapMethod int methodType) {
             mMethodType = methodType;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapMethodConfig fromPersistableBundle(PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            int methodType = in.getInt(METHOD_TYPE);
+            switch (methodType) {
+                case EAP_TYPE_SIM:
+                    return EapSimConfig.fromPersistableBundle(in);
+                case EAP_TYPE_AKA:
+                    return EapAkaConfig.fromPersistableBundle(in);
+                case EAP_TYPE_AKA_PRIME:
+                    return EapAkaPrimeConfig.fromPersistableBundle(in);
+                case EAP_TYPE_MSCHAP_V2:
+                    return EapMsChapV2Config.fromPersistableBundle(in);
+                case EAP_TYPE_TTLS:
+                    return EapTtlsConfig.fromPersistableBundle(in);
+                default:
+                    throw new IllegalArgumentException("Invalid EAP Type: " + methodType);
+            }
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = new PersistableBundle();
+            result.putInt(METHOD_TYPE, mMethodType);
+            return result;
         }
 
         /**
@@ -288,6 +418,22 @@ public final class EapSessionConfig {
         public boolean isEapOnlySafeMethod() {
             return false;
         }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            return Objects.hash(mMethodType);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof EapMethodConfig)) {
+                return false;
+            }
+
+            return mMethodType == ((EapMethodConfig) o).mMethodType;
+        }
     }
 
     /**
@@ -295,6 +441,11 @@ public final class EapSessionConfig {
      * authentication.
      */
     public abstract static class EapUiccConfig extends EapMethodConfig {
+        /** @hide */
+        protected static final String SUB_ID_KEY = "subId";
+        /** @hide */
+        protected static final String APP_TYPE_KEY = "apptype";
+
         private final int mSubId;
         private final int mApptype;
 
@@ -302,6 +453,21 @@ public final class EapSessionConfig {
             super(methodType);
             mSubId = subId;
             mApptype = apptype;
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+            result.putInt(SUB_ID_KEY, mSubId);
+            result.putInt(APP_TYPE_KEY, mApptype);
+
+            return result;
         }
 
         /**
@@ -327,6 +493,24 @@ public final class EapSessionConfig {
         public boolean isEapOnlySafeMethod() {
             return true;
         }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mSubId, mApptype);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof EapUiccConfig)) {
+                return false;
+            }
+
+            EapUiccConfig other = (EapUiccConfig) o;
+
+            return mSubId == other.mSubId && mApptype == other.mApptype;
+        }
     }
 
     /**
@@ -337,6 +521,17 @@ public final class EapSessionConfig {
         @VisibleForTesting
         public EapSimConfig(int subId, @UiccAppType int apptype) {
             super(EAP_TYPE_SIM, subId, apptype);
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapSimConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EapSimConfig(in.getInt(SUB_ID_KEY), in.getInt(APP_TYPE_KEY));
         }
     }
 
@@ -354,12 +549,26 @@ public final class EapSessionConfig {
         EapAkaConfig(int methodType, int subId, @UiccAppType int apptype) {
             super(methodType, subId, apptype);
         }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapAkaConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EapAkaConfig(in.getInt(SUB_ID_KEY), in.getInt(APP_TYPE_KEY));
+        }
     }
 
     /**
      * EapAkaPrimeConfig represents the configs needed for an EAP-AKA' session.
      */
     public static class EapAkaPrimeConfig extends EapAkaConfig {
+        private static final String NETWORK_NAME_KEY = "networkName";
+        private static final String ALL_MISMATCHED_NETWORK_KEY = "allowMismatchedNetworkNames";
+
         @NonNull private final String mNetworkName;
         private final boolean mAllowMismatchedNetworkNames;
 
@@ -376,6 +585,36 @@ public final class EapSessionConfig {
 
             mNetworkName = networkName;
             mAllowMismatchedNetworkNames = allowMismatchedNetworkNames;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapAkaPrimeConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EapAkaPrimeConfig(
+                    in.getInt(SUB_ID_KEY),
+                    in.getInt(APP_TYPE_KEY),
+                    in.getString(NETWORK_NAME_KEY),
+                    in.getBoolean(ALL_MISMATCHED_NETWORK_KEY));
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+            result.putString(NETWORK_NAME_KEY, mNetworkName);
+            result.putBoolean(ALL_MISMATCHED_NETWORK_KEY, mAllowMismatchedNetworkNames);
+
+            return result;
         }
 
         /**
@@ -396,12 +635,34 @@ public final class EapSessionConfig {
         public boolean allowsMismatchedNetworkNames() {
             return mAllowMismatchedNetworkNames;
         }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mNetworkName, mAllowMismatchedNetworkNames);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof EapAkaPrimeConfig)) {
+                return false;
+            }
+
+            EapAkaPrimeConfig other = (EapAkaPrimeConfig) o;
+
+            return mNetworkName.equals(other.mNetworkName)
+                    && mAllowMismatchedNetworkNames == other.mAllowMismatchedNetworkNames;
+        }
     }
 
     /**
      * EapMsChapV2Config represents the configs needed for an EAP MSCHAPv2 session.
      */
     public static class EapMsChapV2Config extends EapMethodConfig {
+        private static final String USERNAME_KEY = "username";
+        private static final String PASSWORD_KEY = "password";
+
         @NonNull private final String mUsername;
         @NonNull private final String mPassword;
 
@@ -415,6 +676,32 @@ public final class EapSessionConfig {
 
             mUsername = username;
             mPassword = password;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapMsChapV2Config fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EapMsChapV2Config(in.getString(USERNAME_KEY), in.getString(PASSWORD_KEY));
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+            result.putString(USERNAME_KEY, mUsername);
+            result.putString(PASSWORD_KEY, mPassword);
+
+            return result;
         }
 
         /**
@@ -436,6 +723,24 @@ public final class EapSessionConfig {
         public String getPassword() {
             return mPassword;
         }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mUsername, mPassword);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof EapMsChapV2Config)) {
+                return false;
+            }
+
+            EapMsChapV2Config other = (EapMsChapV2Config) o;
+
+            return mUsername.equals(other.mUsername) && mPassword.equals(other.mPassword);
+        }
     }
 
     /**
@@ -444,6 +749,9 @@ public final class EapSessionConfig {
      * @hide
      */
     public static class EapTtlsConfig extends EapMethodConfig {
+        private static final String TRUST_CERT_KEY = "TRUST_CERT_KEY";
+        private static final String EAP_SESSION_CONFIG_KEY = "EAP_SESSION_CONFIG_KEY";
+
         @Nullable private final TrustAnchor mOverrideTrustAnchor;
         @NonNull private final EapSessionConfig mInnerEapSessionConfig;
 
@@ -464,6 +772,58 @@ public final class EapSessionConfig {
                     (serverCaCert == null)
                             ? null
                             : new TrustAnchor(serverCaCert, null /* nameConstraints */);
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle.
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapTtlsConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            PersistableBundle trustCertBundle = in.getPersistableBundle(TRUST_CERT_KEY);
+            X509Certificate caCert = null;
+            if (trustCertBundle != null) {
+                byte[] encodedCert = PersistableBundleUtils.toByteArray(trustCertBundle);
+                caCert = IkeCertUtils.certificateFromByteArray(encodedCert);
+            }
+
+            PersistableBundle eapSessionConfigBundle =
+                    in.getPersistableBundle(EAP_SESSION_CONFIG_KEY);
+            Objects.requireNonNull(eapSessionConfigBundle, "eapSessionConfigBundle is null");
+            EapSessionConfig eapSessionConfig =
+                    EapSessionConfig.fromPersistableBundle(eapSessionConfigBundle);
+
+            return new EapTtlsConfig(caCert, eapSessionConfig);
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle.
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+
+            try {
+                if (mOverrideTrustAnchor != null) {
+                    result.putPersistableBundle(
+                            TRUST_CERT_KEY,
+                            PersistableBundleUtils.fromByteArray(
+                                    mOverrideTrustAnchor.getTrustedCert().getEncoded()));
+                }
+
+                result.putPersistableBundle(
+                        EAP_SESSION_CONFIG_KEY, mInnerEapSessionConfig.toPersistableBundle());
+            } catch (CertificateEncodingException e) {
+                throw new IllegalArgumentException("Fail to encode the certificate");
+            }
+
+            return result;
         }
 
         /** @hide */
@@ -493,6 +853,31 @@ public final class EapSessionConfig {
         @NonNull
         public EapSessionConfig getInnerEapSessionConfig() {
             return mInnerEapSessionConfig;
+        }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            // Use #getTrustedCert() because TrustAnchor does not override #hashCode()
+            return Objects.hash(
+                    super.hashCode(),
+                    mOverrideTrustAnchor.getTrustedCert(),
+                    mInnerEapSessionConfig);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof EapTtlsConfig)) {
+                return false;
+            }
+
+            EapTtlsConfig other = (EapTtlsConfig) o;
+
+            return Objects.equals(
+                            mOverrideTrustAnchor.getTrustedCert(),
+                            other.mOverrideTrustAnchor.getTrustedCert())
+                    && Objects.equals(mInnerEapSessionConfig, other.mInnerEapSessionConfig);
         }
     }
 
