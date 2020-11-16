@@ -166,6 +166,15 @@ public class EapSessionConfigTest {
         assertEquals(trustedCa, config.getServerCaCert());
     }
 
+    @Test
+    public void testPersistableBundleEncodeDecodeEapTtls() throws Exception {
+        EapSessionConfig innerConfig =
+                new EapSessionConfig.Builder().setEapMsChapV2Config(USERNAME, PASSWORD).build();
+        X509Certificate trustedCa = CertUtils.createCertFromPemFile("self-signed-ca-a.pem");
+
+        verifyPersistableBundleEncodeDecodeIsLossless(new EapTtlsConfig(trustedCa, innerConfig));
+    }
+
     @Test(expected = NullPointerException.class)
     public void testSetEapIdentityNull() {
         new EapSessionConfig.Builder().setEapIdentity(null);
