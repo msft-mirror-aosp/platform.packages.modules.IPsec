@@ -67,6 +67,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
@@ -93,6 +94,7 @@ import static org.mockito.Mockito.when;
 import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.content.Context;
+import android.net.Network;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
@@ -176,6 +178,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSkfPayload;
 import com.android.internal.net.ipsec.ike.message.IkeTestUtils;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
 import com.android.internal.net.ipsec.ike.net.IkeDefaultNetworkCallback;
+import com.android.internal.net.ipsec.ike.net.IkeLocalAddressGenerator;
 import com.android.internal.net.ipsec.ike.testmode.DeterministicSecureRandom;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
@@ -373,6 +376,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private EapSessionConfig mEapSessionConfig;
     private IkeEapAuthenticatorFactory mMockEapAuthenticatorFactory;
     private EapAuthenticator mMockEapAuthenticator;
+
+    private IkeLocalAddressGenerator mMockIkeLocalAddressGenerator;
 
     private Ike3gppCallback mMockIke3gppCallback;
     private Ike3gppExtension mIke3gppExtension;
@@ -719,6 +724,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
                         .build();
 
+        mMockIkeLocalAddressGenerator = mock(IkeLocalAddressGenerator.class);
+        when(mMockIkeLocalAddressGenerator.generateLocalAddress(
+                        eq(mMockDefaultNetwork), eq(true /* isIpv4 */), any(), anyInt()))
+                .thenReturn(LOCAL_ADDRESS);
+
         mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
         mMockEapAuthenticator = mock(EapAuthenticator.class);
         doReturn(mMockEapAuthenticator)
@@ -814,7 +824,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         mSpyUserCbExecutor,
                         mMockIkeSessionCallback,
                         mMockChildSessionCallback,
-                        mMockEapAuthenticatorFactory);
+                        mMockEapAuthenticatorFactory,
+                        mMockIkeLocalAddressGenerator);
         ikeSession.setDbg(true);
 
         mLooper.dispatchAll();
@@ -4662,33 +4673,37 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeManager.setIkeLog(spyIkeLog);
 
         IkeSessionParams mockSessionParams = mock(IkeSessionParams.class);
-        when(mockSessionParams.getSaProposalsInternal()).thenThrow(mock(RuntimeException.class));
+        when(mockSessionParams.getServerHostname()).thenReturn(REMOTE_HOSTNAME);
+        when(mMockDefaultNetwork.getByName(REMOTE_HOSTNAME)).thenReturn(REMOTE_ADDRESS);
+
+        RuntimeException cause = new RuntimeException();
+        when(mockSessionParams.getSaProposalsInternal()).thenThrow(cause);
 
         DhGroupTransform dhGroupTransform = new DhGroupTransform(SaProposal.DH_GROUP_2048_BIT_MODP);
         IkeSaProposal mockSaProposal = mock(IkeSaProposal.class);
         when(mockSaProposal.getDhGroupTransforms())
                 .thenReturn(new DhGroupTransform[] {dhGroupTransform});
         when(mockSessionParams.getSaProposals()).thenReturn(Arrays.asList(mockSaProposal));
-        IkeSessionStateMachine ikeSession =
-                new IkeSessionStateMachine(
-                        mLooper.getLooper(),
-                        mSpyContext,
-                        mIpSecManager,
-                        mMockConnectManager,
-                        mockSessionParams,
-                        mChildSessionParams,
-                        mSpyUserCbExecutor,
-                        mMockIkeSessionCallback,
-                        mMockChildSessionCallback,
-                        mMockEapAuthenticatorFactory);
+
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(mockSessionParams);
+
         // Send IKE INIT request
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
         mLooper.dispatchAll();
 
-        assertNull(ikeSession.getCurrentState());
+        assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
+
+        ArgumentCaptor<IkeInternalException> internalExceptionCaptor =
+                ArgumentCaptor.forClass(IkeInternalException.class);
+        verify(mMockIkeSessionCallback).onClosedExceptionally(internalExceptionCaptor.capture());
+        IkeInternalException internalException = internalExceptionCaptor.getValue();
+
+        // Verify that the Exception which caused the IkeSessionStateMachine to close is the same
+        // one mocked for IkeSessionParams#getSaProposalsInternal
+        assertSame(cause, internalException.getCause());
     }
 
     @Test
@@ -5297,5 +5312,51 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         callback.onLost(mMockDefaultNetwork);
 
         verify(mMockIkeSessionCallback).onError(any(IkeNetworkDiedException.class));
+    }
+
+    @Test
+    public void testMobikeActiveMobilityEvent() throws Exception {
+        IkeDefaultNetworkCallback callback = verifyMobikeEnabled(true /* doesPeerSupportMobike */);
+
+        Network newNetwork = mock(Network.class);
+        when(mMockIkeLocalAddressGenerator.generateLocalAddress(
+                        eq(newNetwork),
+                        eq(true /* isIpv4 */),
+                        eq(REMOTE_ADDRESS),
+                        eq(IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED)))
+                .thenReturn(UPDATED_LOCAL_ADDRESS);
+
+        callback.onAvailable(newNetwork);
+        mLooper.dispatchAll();
+
+        assertEquals(UPDATED_LOCAL_ADDRESS, mIkeSessionStateMachine.mLocalAddress);
+        assertEquals(newNetwork, mIkeSessionStateMachine.mIkeSocket.getNetwork());
+        verify(mMockIkeLocalAddressGenerator)
+                .generateLocalAddress(
+                        eq(newNetwork),
+                        eq(true /* isIpv4 */),
+                        eq(REMOTE_ADDRESS),
+                        eq(IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSetNetworkNull() throws Exception {
+        mIkeSessionStateMachine.setNetwork(null);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testSetNetworkMobikeNotActive() throws Exception {
+        Network newNetwork = mock(Network.class);
+
+        mIkeSessionStateMachine.setNetwork(newNetwork);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testSetNetworkMobikeActiveNetworkNotSpecified() throws Exception {
+        Network newNetwork = mock(Network.class);
+
+        verifyMobikeEnabled(true /* doesPeerSupportMobike */);
+
+        mIkeSessionStateMachine.setNetwork(newNetwork);
     }
 }
