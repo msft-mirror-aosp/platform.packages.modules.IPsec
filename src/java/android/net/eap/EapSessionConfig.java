@@ -30,9 +30,11 @@ import android.telephony.Annotation.UiccAppType;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.message.EapData.EapMethod;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,6 +50,9 @@ import java.util.Objects;
  */
 @SystemApi
 public final class EapSessionConfig {
+    private static final String EAP_ID_KEY = "eapIdentity";
+    private static final String EAP_METHOD_CONFIGS_KEY = "eapConfigs";
+
     private static final byte[] DEFAULT_IDENTITY = new byte[0];
 
     // IANA -> EapMethodConfig for that method
@@ -72,6 +77,58 @@ public final class EapSessionConfig {
     public Map<Integer, EapMethodConfig> getEapConfigs() {
         // Return the underlying Collection directly because it's unmodifiable
         return mEapConfigs;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle *
+     *
+     * <p>Constructed EapSessionConfigs are guaranteed to be valid, as checked by the
+     * EapSessionConfig.Builder
+     *
+     * @hide
+     */
+    @NonNull
+    public static EapSessionConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        EapSessionConfig.Builder builder = new EapSessionConfig.Builder();
+
+        PersistableBundle eapIdBundle = in.getPersistableBundle(EAP_ID_KEY);
+        Objects.requireNonNull(eapIdBundle, "EAP ID bundle is null");
+        byte[] eapId = PersistableBundleUtils.toByteArray(eapIdBundle);
+        builder.setEapIdentity(eapId);
+
+        PersistableBundle configsBundle = in.getPersistableBundle(EAP_METHOD_CONFIGS_KEY);
+        Objects.requireNonNull(configsBundle, "EAP method configs bundle is null");
+        Map<Integer, EapMethodConfig> eapMethodConfigs =
+                PersistableBundleUtils.toMap(
+                        configsBundle,
+                        PersistableBundleUtils.INTEGER_DESERIALIZER,
+                        EapMethodConfig::fromPersistableBundle);
+        for (EapMethodConfig config : eapMethodConfigs.values()) {
+            builder.addEapMethodConfig(config);
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = new PersistableBundle();
+        result.putPersistableBundle(EAP_ID_KEY, PersistableBundleUtils.fromByteArray(mEapIdentity));
+
+        final PersistableBundle configsBundle =
+                PersistableBundleUtils.fromMap(
+                        mEapConfigs,
+                        PersistableBundleUtils.INTEGER_SERIALIZER,
+                        EapMethodConfig::toPersistableBundle);
+        result.putPersistableBundle(EAP_METHOD_CONFIGS_KEY, configsBundle);
+        return result;
     }
 
     /** Retrieves client's EAP Identity */
@@ -129,6 +186,24 @@ public final class EapSessionConfig {
     @Nullable
     public EapTtlsConfig getEapTtlsConfig() {
         return (EapTtlsConfig) mEapConfigs.get(EAP_TYPE_TTLS);
+    }
+
+    /** @hide */
+    @Override
+    public int hashCode() {
+        return Objects.hash(Arrays.hashCode(mEapIdentity), mEapConfigs);
+    }
+
+    /** @hide */
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof EapSessionConfig)) {
+            return false;
+        }
+
+        EapSessionConfig other = (EapSessionConfig) o;
+        return Arrays.equals(mEapIdentity, other.mEapIdentity)
+                && mEapConfigs.equals(other.mEapConfigs);
     }
 
     /** This class can be used to incrementally construct an {@link EapSessionConfig}. */
@@ -237,6 +312,20 @@ public final class EapSessionConfig {
                 @Nullable X509Certificate serverCaCert,
                 @NonNull EapSessionConfig innerEapSessionConfig) {
             mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(serverCaCert, innerEapSessionConfig));
+            return this;
+        }
+
+        /**
+         * Adds an EAP method configuration. Internal use only.
+         *
+         * <p>This method will override the previously set configuration with the same method type.
+         *
+         * @hide
+         */
+        @NonNull
+        public Builder addEapMethodConfig(@NonNull EapMethodConfig config) {
+            Objects.requireNonNull(config, "EapMethodConfig is null");
+            mEapConfigs.put(config.mMethodType, config);
             return this;
         }
 
