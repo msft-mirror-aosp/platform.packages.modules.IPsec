@@ -30,8 +30,10 @@ import android.telephony.Annotation.UiccAppType;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.message.EapData.EapMethod;
+import com.android.internal.net.ipsec.ike.utils.IkeCertUtils;
 import com.android.server.vcn.util.PersistableBundleUtils;
 
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
@@ -375,6 +377,8 @@ public final class EapSessionConfig {
                     return EapAkaPrimeConfig.fromPersistableBundle(in);
                 case EAP_TYPE_MSCHAP_V2:
                     return EapMsChapV2Config.fromPersistableBundle(in);
+                case EAP_TYPE_TTLS:
+                    return EapTtlsConfig.fromPersistableBundle(in);
                 default:
                     throw new IllegalArgumentException("Invalid EAP Type: " + methodType);
             }
@@ -745,6 +749,9 @@ public final class EapSessionConfig {
      * @hide
      */
     public static class EapTtlsConfig extends EapMethodConfig {
+        private static final String TRUST_CERT_KEY = "TRUST_CERT_KEY";
+        private static final String EAP_SESSION_CONFIG_KEY = "EAP_SESSION_CONFIG_KEY";
+
         @Nullable private final TrustAnchor mOverrideTrustAnchor;
         @NonNull private final EapSessionConfig mInnerEapSessionConfig;
 
@@ -765,6 +772,58 @@ public final class EapSessionConfig {
                     (serverCaCert == null)
                             ? null
                             : new TrustAnchor(serverCaCert, null /* nameConstraints */);
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle.
+         *
+         * @hide
+         */
+        @NonNull
+        public static EapTtlsConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            PersistableBundle trustCertBundle = in.getPersistableBundle(TRUST_CERT_KEY);
+            X509Certificate caCert = null;
+            if (trustCertBundle != null) {
+                byte[] encodedCert = PersistableBundleUtils.toByteArray(trustCertBundle);
+                caCert = IkeCertUtils.certificateFromByteArray(encodedCert);
+            }
+
+            PersistableBundle eapSessionConfigBundle =
+                    in.getPersistableBundle(EAP_SESSION_CONFIG_KEY);
+            Objects.requireNonNull(eapSessionConfigBundle, "eapSessionConfigBundle is null");
+            EapSessionConfig eapSessionConfig =
+                    EapSessionConfig.fromPersistableBundle(eapSessionConfigBundle);
+
+            return new EapTtlsConfig(caCert, eapSessionConfig);
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle.
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+
+            try {
+                if (mOverrideTrustAnchor != null) {
+                    result.putPersistableBundle(
+                            TRUST_CERT_KEY,
+                            PersistableBundleUtils.fromByteArray(
+                                    mOverrideTrustAnchor.getTrustedCert().getEncoded()));
+                }
+
+                result.putPersistableBundle(
+                        EAP_SESSION_CONFIG_KEY, mInnerEapSessionConfig.toPersistableBundle());
+            } catch (CertificateEncodingException e) {
+                throw new IllegalArgumentException("Fail to encode the certificate");
+            }
+
+            return result;
         }
 
         /** @hide */
@@ -794,6 +853,31 @@ public final class EapSessionConfig {
         @NonNull
         public EapSessionConfig getInnerEapSessionConfig() {
             return mInnerEapSessionConfig;
+        }
+
+        /** @hide */
+        @Override
+        public int hashCode() {
+            // Use #getTrustedCert() because TrustAnchor does not override #hashCode()
+            return Objects.hash(
+                    super.hashCode(),
+                    mOverrideTrustAnchor.getTrustedCert(),
+                    mInnerEapSessionConfig);
+        }
+
+        /** @hide */
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof EapTtlsConfig)) {
+                return false;
+            }
+
+            EapTtlsConfig other = (EapTtlsConfig) o;
+
+            return Objects.equals(
+                            mOverrideTrustAnchor.getTrustedCert(),
+                            other.mOverrideTrustAnchor.getTrustedCert())
+                    && Objects.equals(mInnerEapSessionConfig, other.mInnerEapSessionConfig);
         }
     }
 
