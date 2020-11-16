@@ -61,6 +61,13 @@ public class EapSessionConfigTest {
         assertEquals(config, resultConfig);
     }
 
+    private static void verifyPersistableBundleEncodeDecodeIsLossless(EapSessionConfig config) {
+        PersistableBundle bundle = config.toPersistableBundle();
+        EapSessionConfig resultConfig = EapSessionConfig.fromPersistableBundle(bundle);
+
+        assertEquals(config, resultConfig);
+    }
+
     @Test
     public void testBuildEapSim() {
         EapSessionConfig result = new EapSessionConfig.Builder()
@@ -200,6 +207,35 @@ public class EapSessionConfigTest {
 
         EapSessionConfig result =
                 new EapSessionConfig.Builder().setEapTtlsConfig(trustedCa, null).build();
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeEapSessioConfig() throws Exception {
+        EapSessionConfig config =
+                new EapSessionConfig.Builder()
+                        .setEapIdentity(EAP_IDENTITY)
+                        .setEapSimConfig(SUB_ID, APPTYPE_USIM)
+                        .setEapAkaConfig(SUB_ID, APPTYPE_USIM)
+                        .setEapAkaPrimeConfig(
+                                SUB_ID, APPTYPE_USIM, NETWORK_NAME, ALLOW_MISMATCHED_NETWORK_NAMES)
+                        .setEapMsChapV2Config(USERNAME, PASSWORD)
+                        .build();
+
+        verifyPersistableBundleEncodeDecodeIsLossless(config);
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeEapSessioConfigWithoutId() throws Exception {
+        EapSessionConfig config =
+                new EapSessionConfig.Builder()
+                        .setEapSimConfig(SUB_ID, APPTYPE_USIM)
+                        .setEapAkaConfig(SUB_ID, APPTYPE_USIM)
+                        .setEapAkaPrimeConfig(
+                                SUB_ID, APPTYPE_USIM, NETWORK_NAME, ALLOW_MISMATCHED_NETWORK_NAMES)
+                        .setEapMsChapV2Config(USERNAME, PASSWORD)
+                        .build();
+
+        verifyPersistableBundleEncodeDecodeIsLossless(config);
     }
 
     @Test
