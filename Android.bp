@@ -99,3 +99,11 @@ java_library {
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
 }
+
+filegroup {
+    name: "ike-test-utils",
+    srcs: [
+        "src/java/**/IkeCertUtils.java",
+        "tests/iketests/src/java/**/CertUtils.java",
+    ],
+}
