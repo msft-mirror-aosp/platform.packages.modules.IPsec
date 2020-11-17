@@ -13,18 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MESSAGE_ID;
-
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+package android.net.ipsec.ike.exceptions;
 
 /**
  * This exception is thrown when the remote server received a message with out-of-window-size ID.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // Notifications based on this exception contains the four-octet invalid message ID. It MUST only
 // ever be sent in an INFORMATIONAL request. Sending this notification is OPTIONAL, and

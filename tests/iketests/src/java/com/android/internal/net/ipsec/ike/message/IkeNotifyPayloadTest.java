@@ -38,21 +38,21 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.ChildSaNotFoundException;
+import android.net.ipsec.ike.exceptions.FailedCpRequiredException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
-import android.net.ipsec.ike.exceptions.protocol.ChildSaNotFoundException;
-import android.net.ipsec.ike.exceptions.protocol.FailedCpRequiredException;
-import android.net.ipsec.ike.exceptions.protocol.InternalAddressFailureException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidIkeSpiException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidKeException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSelectorsException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
-import android.net.ipsec.ike.exceptions.protocol.NoAdditionalSasException;
-import android.net.ipsec.ike.exceptions.protocol.NoValidProposalChosenException;
-import android.net.ipsec.ike.exceptions.protocol.SinglePairRequiredException;
-import android.net.ipsec.ike.exceptions.protocol.TemporaryFailureException;
-import android.net.ipsec.ike.exceptions.protocol.TsUnacceptableException;
-import android.net.ipsec.ike.exceptions.protocol.UnrecognizedIkeProtocolException;
+import android.net.ipsec.ike.exceptions.InternalAddressFailureException;
+import android.net.ipsec.ike.exceptions.InvalidIkeSpiException;
+import android.net.ipsec.ike.exceptions.InvalidKeException;
+import android.net.ipsec.ike.exceptions.InvalidSelectorsException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.NoAdditionalSasException;
+import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.SinglePairRequiredException;
+import android.net.ipsec.ike.exceptions.TemporaryFailureException;
+import android.net.ipsec.ike.exceptions.TsUnacceptableException;
+import android.net.ipsec.ike.exceptions.UnrecognizedIkeProtocolException;
 
 import com.android.internal.net.TestUtils;
 

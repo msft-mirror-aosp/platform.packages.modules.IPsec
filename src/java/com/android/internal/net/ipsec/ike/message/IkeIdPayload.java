@@ -23,9 +23,9 @@ import android.net.ipsec.ike.IkeIpv4AddrIdentification;
 import android.net.ipsec.ike.IkeIpv6AddrIdentification;
 import android.net.ipsec.ike.IkeKeyIdIdentification;
 import android.net.ipsec.ike.IkeRfc822AddrIdentification;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;

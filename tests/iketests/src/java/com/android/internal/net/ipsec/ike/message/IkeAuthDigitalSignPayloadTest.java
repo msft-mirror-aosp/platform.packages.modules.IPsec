@@ -26,8 +26,8 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
 import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.util.ArraySet;
 
 import com.android.internal.net.TestUtils;
