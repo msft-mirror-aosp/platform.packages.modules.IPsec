@@ -22,6 +22,8 @@ import android.net.ConnectivityManager.NetworkCallback;
 import android.net.LinkProperties;
 import android.net.Network;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.net.InetAddress;
 
 /** IkeNetworkCallbackBase is a template for IKE-specific NetworkCallback implementations. */
@@ -75,8 +77,14 @@ public abstract class IkeNetworkCallbackBase extends NetworkCallback {
      * <p>MUST be called on the Handler specified when registering this NetworkCallback with {@link
      * ConnectivityManager}.
      */
-    protected void setNetwork(Network network) {
+    public void setNetwork(Network network) {
         mCurrNetwork = network;
+    }
+
+    /** Returns the current Network that this NetworkCallback is monitoring for. */
+    @VisibleForTesting
+    public Network getNetwork() {
+        return mCurrNetwork;
     }
 
     /**
@@ -87,6 +95,12 @@ public abstract class IkeNetworkCallbackBase extends NetworkCallback {
      */
     public void setAddress(InetAddress address) {
         mCurrAddress = address;
+    }
+
+    /** Returns the current Address that this NetworkCallback is monitoring for. */
+    @VisibleForTesting
+    public InetAddress getAddress() {
+        return mCurrAddress;
     }
 
     protected void logd(String msg) {
