@@ -5349,7 +5349,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeDefaultNetworkCallback callback = verifyMobikeEnabled(true /* doesPeerSupportMobike */);
         callback.onLost(mMockDefaultNetwork);
 
-        verify(mMockIkeSessionCallback).onError(any(IkeNetworkDiedException.class));
+        ArgumentCaptor<IkeException> exceptionCaptor = ArgumentCaptor.forClass(IkeException.class);
+        verify(mMockIkeSessionCallback).onError(exceptionCaptor.capture());
+        IkeNetworkDiedException cause = (IkeNetworkDiedException) exceptionCaptor.getValue();
+        assertEquals(mMockDefaultNetwork, cause.getNetwork());
     }
 
     @Test
