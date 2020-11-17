@@ -13,12 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+package android.net.ipsec.ike.exceptions;
 
 import android.annotation.NonNull;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,7 +27,6 @@ import java.util.Objects;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // Include UNSUPPORTED_CRITICAL_PAYLOAD Notify payloads in a response message. Each payload
 // contains only one payload type.

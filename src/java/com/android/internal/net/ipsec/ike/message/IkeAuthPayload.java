@@ -17,8 +17,8 @@
 package com.android.internal.net.ipsec.ike.message;
 
 import android.annotation.IntDef;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
 
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
 

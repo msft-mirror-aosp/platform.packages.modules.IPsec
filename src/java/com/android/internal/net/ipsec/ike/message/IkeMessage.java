@@ -25,9 +25,9 @@ import android.annotation.Nullable;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidMessageIdException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
-import android.net.ipsec.ike.exceptions.protocol.UnsupportedCriticalPayloadException;
+import android.net.ipsec.ike.exceptions.InvalidMessageIdException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
 import android.util.Pair;
 
 import com.android.internal.annotations.VisibleForTesting;

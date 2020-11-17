@@ -22,7 +22,6 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
@@ -43,11 +42,8 @@ import java.util.Set;
 /**
  * IkeSessionConfiguration represents the negotiated configuration for a {@link IkeSession}.
  *
- * <p>Configurations include remote application version and enabled IKE extensions..
- *
- * @hide
+ * <p>Configurations include remote application version and enabled IKE extensions.
  */
-@SystemApi
 public final class IkeSessionConfiguration {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -64,6 +60,9 @@ public final class IkeSessionConfiguration {
     private final List<InetAddress> mPcscfServers = new ArrayList<>();
     private final List<byte[]> mRemoteVendorIds = new ArrayList<>();
     private final Set<Integer> mEnabledExtensions = new HashSet<>();
+
+    // TODO:b/172962260 Create and expose Builder of IkeSessionConfiguration for callers to do
+    // testing.
 
     /**
      * Construct an instance of {@link IkeSessionConfiguration}.
@@ -131,6 +130,10 @@ public final class IkeSessionConfiguration {
     /**
      * Returns remote vendor IDs received during IKE Session setup.
      *
+     * <p>According to the IKEv2 specification (RFC 7296), a vendor ID may indicate the sender is
+     * capable of accepting certain extensions to the protocol, or it may simply identify the
+     * implementation as an aid in debugging.
+     *
      * @return the vendor IDs of the remote server, or an empty list if no vendor ID is received
      *     during IKE Session setup.
      */
@@ -156,7 +159,7 @@ public final class IkeSessionConfiguration {
      * Returns the assigned P_CSCF servers.
      *
      * @return the assigned P_CSCF servers, or an empty list when no servers are assigned by the
-     *     remote IKE server
+     *     remote IKE server.
      */
     @NonNull
     public List<InetAddress> getPcscfServers() {
