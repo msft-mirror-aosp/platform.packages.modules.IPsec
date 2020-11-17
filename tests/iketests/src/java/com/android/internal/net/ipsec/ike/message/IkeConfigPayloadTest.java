@@ -45,7 +45,7 @@ import static org.mockito.Mockito.mock;
 
 import android.net.InetAddresses;
 import android.net.LinkAddress;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.os.PersistableBundle;
 
 import com.android.internal.net.TestUtils;

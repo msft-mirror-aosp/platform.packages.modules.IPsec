@@ -20,8 +20,8 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PayloadType;
 
 import android.annotation.IntDef;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidMajorVersionException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidMajorVersionException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;

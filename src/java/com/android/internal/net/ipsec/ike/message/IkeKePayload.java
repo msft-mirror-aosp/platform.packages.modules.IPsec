@@ -19,7 +19,7 @@ package com.android.internal.net.ipsec.ike.message;
 import android.annotation.Nullable;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import com.android.internal.net.ipsec.ike.IkeDhParams;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;

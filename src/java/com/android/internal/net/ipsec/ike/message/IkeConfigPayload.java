@@ -30,7 +30,7 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv4Netma
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6Address;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.ConfigRequestIpv6DnsServer;
 import android.net.ipsec.ike.TunnelModeChildSessionParams.TunnelModeChildConfigRequest;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.os.PersistableBundle;
 
 import com.android.internal.annotations.VisibleForTesting;

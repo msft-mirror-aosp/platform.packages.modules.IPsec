@@ -26,7 +26,6 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
 
@@ -50,10 +49,7 @@ import java.util.List;
  * ChildSessionConfiguration represents the negotiated configuration for a Child Session.
  *
  * <p>Configurations include traffic selectors and internal network information.
- *
- * @hide
  */
-@SystemApi
 public final class ChildSessionConfiguration {
     private static final int IPv4_DEFAULT_PREFIX_LEN = 32;
 
@@ -63,6 +59,9 @@ public final class ChildSessionConfiguration {
     private final List<InetAddress> mInternalDnsAddressList;
     private final List<IpPrefix> mSubnetAddressList;
     private final List<InetAddress> mInternalDhcpAddressList;
+
+    // TODO:b/172962260 Create and expose Builder of ChildSessionConfiguration for callers to do
+    // testing.
 
     /**
      * Construct an instance of {@link ChildSessionConfiguration}.

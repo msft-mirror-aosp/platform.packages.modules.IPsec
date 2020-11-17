@@ -13,19 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
+package android.net.ipsec.ike.exceptions;
 
 import android.annotation.SuppressLint;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
  * This exception is thrown when major version of an inbound message is higher than 2.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.5">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // Include INVALID_MAJOR_VERSION Notify payload in an unencrypted response message containing
 // version number 2.
