@@ -20,7 +20,7 @@ import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
 import android.net.InetAddresses;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.os.PersistableBundle;
 import android.util.ArraySet;
 

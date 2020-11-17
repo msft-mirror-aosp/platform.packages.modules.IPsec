@@ -13,10 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
+package android.net.ipsec.ike.exceptions;
 
 import android.annotation.NonNull;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
  * This exception is thrown if any IKE message has a syntax error.

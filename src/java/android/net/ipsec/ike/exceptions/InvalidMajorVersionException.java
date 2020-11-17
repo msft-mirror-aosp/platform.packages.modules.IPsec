@@ -13,12 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_MAJOR_VERSION;
+package android.net.ipsec.ike.exceptions;
 
 import android.annotation.SuppressLint;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
  * This exception is thrown when major version of an inbound message is higher than 2.

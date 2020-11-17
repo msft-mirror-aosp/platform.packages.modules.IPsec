@@ -19,9 +19,9 @@ package com.android.internal.net.ipsec.ike.message;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
 import android.annotation.StringDef;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.util.ArraySet;
 
 import com.android.internal.annotations.VisibleForTesting;

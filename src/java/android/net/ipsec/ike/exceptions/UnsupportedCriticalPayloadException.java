@@ -13,12 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+package android.net.ipsec.ike.exceptions;
 
 import android.annotation.NonNull;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 import java.util.ArrayList;
 import java.util.Collections;

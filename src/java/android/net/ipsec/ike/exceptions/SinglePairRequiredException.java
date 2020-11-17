@@ -13,43 +13,40 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
-
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+package android.net.ipsec.ike.exceptions;
 
 /**
- * This exception is thrown if the remote server hits an error in assigning an internal IP address.
+ * This exception is thrown if the remote server requires a single pair of addresses as selectors.
  *
- * <p>This exception indicates the remote server encounters an error while attempting to assign an
- * internal IP address during Child creation.
+ * <p>This exception indicates that the remote server is only willing to accept Traffic Selectors
+ * specifying a single pair of addresses. Callers may retry Child creation with only the specific
+ * traffic it is trying to forward.
  *
- * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.15.4">RFC 7296, Internet Key Exchange
+ * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.9">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  * @hide
  */
-public final class InternalAddressFailureException extends IkeProtocolException {
+public class SinglePairRequiredException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
 
     /**
-     * Construct an instance of InternalAddressFailureException.
+     * Construct an instance of SinglePairRequiredException.
      *
      * <p>Except for testing, IKE library users normally do not instantiate this object themselves
      * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
      */
-    public InternalAddressFailureException() {
-        super(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE);
+    public SinglePairRequiredException() {
+        super(ERROR_TYPE_SINGLE_PAIR_REQUIRED);
     }
 
     /**
-     * Construct a instance of InternalAddressFailureException from a notify payload.
+     * Construct a instance of SinglePairRequiredException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
      * @hide
      */
-    public InternalAddressFailureException(byte[] notifyData) {
-        super(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE, notifyData);
+    public SinglePairRequiredException(byte[] notifyData) {
+        super(ERROR_TYPE_SINGLE_PAIR_REQUIRED, notifyData);
     }
 
     /** @hide */

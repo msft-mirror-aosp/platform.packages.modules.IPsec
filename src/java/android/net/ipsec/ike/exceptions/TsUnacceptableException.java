@@ -13,11 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
-
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+package android.net.ipsec.ike.exceptions;
 
 /**
  * This exception is thrown if Traffic Selectors negotiation failed.

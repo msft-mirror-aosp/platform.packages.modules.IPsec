@@ -24,7 +24,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
 import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;

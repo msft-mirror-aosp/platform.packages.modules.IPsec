@@ -18,7 +18,7 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SystemApi;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.net.Inet4Address;
 import java.net.UnknownHostException;

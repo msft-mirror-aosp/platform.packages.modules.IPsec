@@ -13,12 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
+package android.net.ipsec.ike.exceptions;
 
 import android.annotation.NonNull;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
  * This exception is thrown if the remote server declined a request because of a temporary issue.
