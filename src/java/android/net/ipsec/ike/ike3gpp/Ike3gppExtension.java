@@ -71,6 +71,23 @@ public final class Ike3gppExtension {
         return mIke3gppParams;
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(mIke3gppParams, mIke3gppCallback);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Ike3gppExtension)) {
+            return false;
+        }
+
+        Ike3gppExtension other = (Ike3gppExtension) o;
+
+        return mIke3gppParams.equals(other.mIke3gppParams)
+                && mIke3gppCallback.equals(other.mIke3gppCallback);
+    }
+
     /**
      * Callback for receiving 3GPP-specific payloads.
      *
