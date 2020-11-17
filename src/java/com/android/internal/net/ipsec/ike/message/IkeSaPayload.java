@@ -33,6 +33,7 @@ import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
 import android.net.ipsec.ike.exceptions.protocol.NoValidProposalChosenException;
+import android.os.PersistableBundle;
 import android.util.ArraySet;
 import android.util.Pair;
 
@@ -1123,6 +1124,9 @@ public final class IkeSaPayload extends IkePayload {
     public static final class EncryptionTransform extends Transform {
         public static final int KEY_LEN_UNSPECIFIED = 0;
 
+        private static final String ID_KEY = "id";
+        private static final String SPECIFIED_KEY_LEN_KEY = "mSpecifiedKeyLength";
+
         // When using encryption algorithm with variable-length keys, mSpecifiedKeyLength MUST be
         // set and a KeyLengthAttribute MUST be attached. Otherwise, mSpecifiedKeyLength MUST NOT be
         // set and KeyLengthAttribute MUST NOT be attached.
@@ -1154,6 +1158,21 @@ public final class IkeSaPayload extends IkePayload {
             } catch (InvalidSyntaxException e) {
                 throw new IllegalArgumentException(e);
             }
+        }
+
+        /** Constructs this object by deserializing a PersistableBundle */
+        public static EncryptionTransform fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EncryptionTransform(in.getInt(ID_KEY), in.getInt(SPECIFIED_KEY_LEN_KEY));
+        }
+
+        /** Serializes this object to a PersistableBundle */
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = new PersistableBundle();
+            result.putInt(ID_KEY, id);
+            result.putInt(SPECIFIED_KEY_LEN_KEY, mSpecifiedKeyLength);
+
+            return result;
         }
 
         /**

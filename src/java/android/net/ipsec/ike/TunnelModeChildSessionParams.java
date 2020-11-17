@@ -24,7 +24,9 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
 import android.net.LinkAddress;
+import android.os.PersistableBundle;
 
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
@@ -32,6 +34,7 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.TunnelModeChildConfigAttribute;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
@@ -50,6 +53,9 @@ import java.util.Objects;
  */
 @SystemApi
 public final class TunnelModeChildSessionParams extends ChildSessionParams {
+    /** @hide */
+    private static final String CONFIG_ATTRIBUTES_KEY = "mConfigRequests";
+
     @NonNull private final TunnelModeChildConfigAttribute[] mConfigRequests;
 
     private TunnelModeChildSessionParams(
@@ -67,6 +73,67 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
                 softLifetimeSec,
                 false /*isTransport*/);
         mConfigRequests = configRequests;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * <p>Constructed TunnelModeChildSessionParams is guaranteed to be valid, as checked by the
+     * TunnelModeChildSessionParams.Builder
+     *
+     * @hide
+     */
+    @NonNull
+    public static TunnelModeChildSessionParams fromPersistableBundle(
+            @NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle not provided");
+
+        TunnelModeChildSessionParams.Builder builder = new TunnelModeChildSessionParams.Builder();
+
+        for (ChildSaProposal p : getProposalsFromPersistableBundle(in)) {
+            builder.addSaProposal(p);
+        }
+
+        for (IkeTrafficSelector ts : getTsFromPersistableBundle(in, INBOUND_TS_KEY)) {
+            builder.addInboundTrafficSelectors(ts);
+        }
+
+        for (IkeTrafficSelector ts : getTsFromPersistableBundle(in, OUTBOUND_TS_KEY)) {
+            builder.addOutboundTrafficSelectors(ts);
+        }
+
+        builder.setLifetimeSeconds(
+                in.getInt(HARD_LIFETIME_SEC_KEY), in.getInt(SOFT_LIFETIME_SEC_KEY));
+
+        PersistableBundle configAttributeBundle = in.getPersistableBundle(CONFIG_ATTRIBUTES_KEY);
+        List<ConfigAttribute> configReqList =
+                PersistableBundleUtils.toList(
+                        configAttributeBundle, ConfigAttribute::fromPersistableBundle);
+
+        for (ConfigAttribute a : configReqList) {
+            builder.addConfigRequest((TunnelModeChildConfigAttribute) a);
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @Override
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = super.toPersistableBundle();
+
+        PersistableBundle configAttributeBundle =
+                PersistableBundleUtils.fromList(
+                        Arrays.asList(mConfigRequests),
+                        TunnelModeChildConfigAttribute::toPersistableBundle);
+        result.putPersistableBundle(CONFIG_ATTRIBUTES_KEY, configAttributeBundle);
+
+        return result;
     }
 
     /** @hide */
@@ -124,17 +191,35 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
     /** Represents an IPv6 DNS Server request */
     public interface ConfigRequestIpv6DnsServer extends TunnelModeChildConfigRequest {}
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), Arrays.hashCode(mConfigRequests));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!super.equals(o) || !(o instanceof ChildSessionParams)) {
+            return false;
+        }
+
+        TunnelModeChildSessionParams other = (TunnelModeChildSessionParams) o;
+
+        return Arrays.equals(mConfigRequests, other.mConfigRequests);
+    }
+
     /** This class can be used to incrementally construct a {@link TunnelModeChildSessionParams}. */
     public static final class Builder extends ChildSessionParams.Builder {
         private static final int IPv4_DEFAULT_PREFIX_LEN = 32;
 
         private boolean mHasIp4AddressRequest;
+        private boolean mHasIp4NetmaskRequest;
         private List<TunnelModeChildConfigAttribute> mConfigRequestList;
 
         /** Create a Builder for negotiating a transport mode Child Session. */
         public Builder() {
             super();
             mHasIp4AddressRequest = false;
+            mHasIp4NetmaskRequest = false;
             mConfigRequestList = new LinkedList<>();
         }
 
@@ -374,6 +459,28 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
         }
 
         /**
+         * Adds Configuration requests. Internal use only.
+         *
+         * @hide
+         */
+        @NonNull
+        public Builder addConfigRequest(@NonNull TunnelModeChildConfigAttribute attribute) {
+            if (attribute instanceof ConfigAttributeIpv4Address) {
+                mHasIp4AddressRequest = true;
+            } else if (attribute instanceof ConfigAttributeIpv4Netmask) {
+                if (((ConfigAttributeIpv4Netmask) attribute).address != null) {
+                    throw new IllegalArgumentException(
+                            "Requesting specific a netmask is disallowed");
+                } else {
+                    mHasIp4NetmaskRequest = true;
+                }
+            }
+
+            mConfigRequestList.add(attribute);
+            return this;
+        }
+
+        /**
          * Validates and builds the {@link TunnelModeChildSessionParams}.
          *
          * @return the validated {@link TunnelModeChildSessionParams}.
@@ -383,7 +490,11 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
             addDefaultTsIfNotConfigured();
             validateOrThrow();
 
-            if (mHasIp4AddressRequest) {
+            if (!mHasIp4AddressRequest && mHasIp4NetmaskRequest) {
+                throw new IllegalArgumentException(
+                        "Requesting netmask without IPv4 address is disallowed");
+            }
+            if (mHasIp4AddressRequest && !mHasIp4NetmaskRequest) {
                 mConfigRequestList.add(new ConfigAttributeIpv4Netmask());
             }
 
