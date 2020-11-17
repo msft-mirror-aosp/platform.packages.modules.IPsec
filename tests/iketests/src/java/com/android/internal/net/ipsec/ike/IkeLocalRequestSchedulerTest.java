@@ -21,6 +21,7 @@ import static com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.REQUES
 import static com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_URGENT;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_MOBIKE;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
@@ -175,6 +176,9 @@ public final class IkeLocalRequestSchedulerTest {
         assertEquals(
                 REQUEST_PRIORITY_URGENT,
                 LocalRequestFactory.procedureTypeToPriority(CMD_LOCAL_REQUEST_DELETE_IKE));
+        assertEquals(
+                REQUEST_PRIORITY_HIGH,
+                LocalRequestFactory.procedureTypeToPriority(CMD_LOCAL_REQUEST_MOBIKE));
         assertEquals(
                 REQUEST_PRIORITY_NORMAL,
                 LocalRequestFactory.procedureTypeToPriority(CMD_LOCAL_REQUEST_CREATE_IKE));

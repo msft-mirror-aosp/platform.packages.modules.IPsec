@@ -329,6 +329,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     static final int CMD_LOCAL_REQUEST_REKEY_IKE = CMD_IKE_LOCAL_REQUEST_BASE + 3;
     static final int CMD_LOCAL_REQUEST_INFO = CMD_IKE_LOCAL_REQUEST_BASE + 4;
     static final int CMD_LOCAL_REQUEST_DPD = CMD_IKE_LOCAL_REQUEST_BASE + 5;
+    static final int CMD_LOCAL_REQUEST_MOBIKE = CMD_IKE_LOCAL_REQUEST_BASE + 6;
 
     private static final SparseArray<String> CMD_TO_STR;
 
@@ -354,6 +355,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_INFO, "Info");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DPD, "DPD");
+        CMD_TO_STR.put(CMD_LOCAL_REQUEST_MOBIKE, "MOBIKE migration event");
     }
 
     private static final NetworkRequest NETWORK_REQUEST =
@@ -519,6 +521,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
     @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
     @VisibleForTesting final State mDpdIkeLocalInfo = new DpdIkeLocalInfo();
+    @VisibleForTesting final State mMobikeLocalMigrate = new MobikeLocalMigrateState();
 
     /** Constructor for testing. */
     @VisibleForTesting
@@ -631,6 +634,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             addState(mRekeyIkeRemoteDelete, mKillIkeSessionParent);
             addState(mDeleteIkeLocalDelete, mKillIkeSessionParent);
             addState(mDpdIkeLocalInfo, mKillIkeSessionParent);
+            addState(mMobikeLocalMigrate, mKillIkeSessionParent);
         // CHECKSTYLE:ON IndentationCheck
 
         setInitialState(mInitial);
@@ -1328,6 +1332,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     deferMessage(message);
                     transitionTo(mChildProcedureOngoing);
                     break;
+                case CMD_LOCAL_REQUEST_MOBIKE:
+                    transitionTo(mMobikeLocalMigrate);
+                    break;
                 default:
                     cleanUpAndQuit(
                             new IllegalStateException(
@@ -1596,6 +1603,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         protected void handleLocalRequest(int requestVal, LocalRequest req) {
             switch (requestVal) {
                 case CMD_LOCAL_REQUEST_DELETE_IKE: // Fallthrough
+                case CMD_LOCAL_REQUEST_MOBIKE: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Fallthrough
                 case CMD_LOCAL_REQUEST_INFO: // Fallthrough
                 case CMD_LOCAL_REQUEST_DPD:
@@ -4962,6 +4970,27 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
     }
 
+    /** MobikeLocalMigrateState initiates an UPDATE_SA_ADDRESSES exchange for the IKE Session. */
+    class MobikeLocalMigrateState extends DeleteBase {
+        // TODO(b/172014224): handle retransmission for the UPDATE_SA_ADDRESSES request
+
+        @Override
+        public void enterState() {
+            // TODO(b/172014224): send UPDATE_SA_ADDRESSES req to peer
+        }
+
+        @Override
+        public void handleRequestIkeMessage(
+                IkeMessage msg, int ikeExchangeSubType, Message message) {
+            // TODO(b/172014224): handle competing IKE req (Delete or otherwise)
+        }
+
+        @Override
+        public void handleResponseIkeMessage(IkeMessage msg) {
+            // TODO(b/172014224): handle resp from peer
+        }
+    }
+
     /**
      * Helper class to generate IKE SA creation payloads, in both request and response directions.
      */
@@ -5128,7 +5157,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         // TODO(b/172013873): restart transmission timeouts on IKE SAs after changing networks
-        // TODO(b/172013873): update Child SAs, notify peer of Mobility Event
+        sendMessage(
+                CMD_LOCAL_REQUEST_MOBIKE,
+                mLocalRequestFactory.getIkeLocalRequest(CMD_LOCAL_REQUEST_MOBIKE));
     }
 
     @Override

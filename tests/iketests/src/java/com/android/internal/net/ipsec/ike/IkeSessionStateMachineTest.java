@@ -5460,7 +5460,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.setNetwork(newNetwork);
     }
 
-    private void verifySetNetwork(IkeNetworkCallbackBase callback, IkeSaRecord rekeySaRecord)
+    private void verifySetNetwork(
+            IkeNetworkCallbackBase callback, IkeSaRecord rekeySaRecord, State expectedState)
             throws Exception {
         Network newNetwork = mockNewNetworkAndAddress();
 
@@ -5487,6 +5488,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                     mIkeSessionStateMachine.mIkeSocket.mSpiToIkeSession.get(
                             rekeySaRecord.getLocalSpi()));
         }
+
+        assertEquals(expectedState, mIkeSessionStateMachine.getCurrentState());
     }
 
     @Test
@@ -5497,7 +5500,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
         mLooper.dispatchAll();
 
-        verifySetNetwork(callback, null /* rekeySaRecord */);
+        verifySetNetwork(
+                callback, null /* rekeySaRecord */, mIkeSessionStateMachine.mMobikeLocalMigrate);
     }
 
     @Test
@@ -5510,7 +5514,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verifyRekeyIkeLocalCreateHandlesResponse();
 
-        verifySetNetwork(callback, mIkeSessionStateMachine.mLocalInitNewIkeSaRecord);
+        verifySetNetwork(
+                callback,
+                mIkeSessionStateMachine.mLocalInitNewIkeSaRecord,
+                mIkeSessionStateMachine.mRekeyIkeLocalDelete);
     }
 
     @Test
@@ -5526,6 +5533,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
         mLooper.dispatchAll();
 
-        verifySetNetwork(callback, mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord);
+        verifySetNetwork(
+                callback,
+                mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
     }
 }

@@ -25,6 +25,7 @@ import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCA
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DPD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_INFO;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_MOBIKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE;
 
 import android.annotation.IntDef;
@@ -60,7 +61,7 @@ public final class IkeLocalRequestScheduler {
     @VisibleForTesting static final int REQUEST_PRIORITY_URGENT = 0;
 
     // Local request that must be handled soon, but not necessarily immediately.
-    // TODO(b/172015771): use this priority for MOBIKE
+    // Ex: CMD_LOCAL_REQUEST_MOBIKE
     @VisibleForTesting static final int REQUEST_PRIORITY_HIGH = 1;
 
     // Local request that should be handled once nothing more urgent requires handling. Most
@@ -226,7 +227,7 @@ public final class IkeLocalRequestScheduler {
 
         @Override
         protected void validateTypeOrThrow(int type) {
-            if (type >= CMD_LOCAL_REQUEST_CREATE_IKE && type <= CMD_LOCAL_REQUEST_DPD) return;
+            if (type >= CMD_LOCAL_REQUEST_CREATE_IKE && type <= CMD_LOCAL_REQUEST_MOBIKE) return;
             throw new IllegalArgumentException("Invalid IKE procedure type: " + type);
         }
 
@@ -322,6 +323,9 @@ public final class IkeLocalRequestScheduler {
             switch (procedureType) {
                 case CMD_LOCAL_REQUEST_DELETE_IKE:
                     return REQUEST_PRIORITY_URGENT;
+
+                case CMD_LOCAL_REQUEST_MOBIKE:
+                    return REQUEST_PRIORITY_HIGH;
 
                 case CMD_LOCAL_REQUEST_CREATE_IKE: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Fallthrough
