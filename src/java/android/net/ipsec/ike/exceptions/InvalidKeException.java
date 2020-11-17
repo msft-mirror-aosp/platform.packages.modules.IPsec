@@ -13,11 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
-
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+package android.net.ipsec.ike.exceptions;
 
 /**
  * This exception is thrown when the remote server expected a different Diffie-Hellman group.
@@ -28,7 +24,6 @@ import android.net.ipsec.ike.exceptions.IkeProtocolException;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-1.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
 // Responder should include an INVALID_KE_PAYLOAD Notify payload in a response message for both
 // IKE INIT exchange and other SA negotiation exchanges after IKE is setup, as per RFC 7296
