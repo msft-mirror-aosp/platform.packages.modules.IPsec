@@ -108,6 +108,7 @@ import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CreateChildSa
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IkeLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequestFactory;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
@@ -394,6 +395,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** Package private */
     @VisibleForTesting final RandomnessFactory mRandomFactory;
 
+    private final LocalRequestFactory mLocalRequestFactory;
+
     /**
      * mIkeSpiGenerator will be used by all IKE SA creations in this IKE Session to avoid SPI
      * collision in test mode.
@@ -530,7 +533,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback,
             IkeEapAuthenticatorFactory eapAuthenticatorFactory,
-            IkeLocalAddressGenerator ikeLocalAddressGenerator) {
+            IkeLocalAddressGenerator ikeLocalAddressGenerator,
+            LocalRequestFactory localRequestFactory) {
         super(TAG, looper, userCbExecutor);
 
         if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
@@ -576,6 +580,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         mEapAuthenticatorFactory = eapAuthenticatorFactory;
 
         mIkeLocalAddressGenerator = ikeLocalAddressGenerator;
+
+        mLocalRequestFactory = localRequestFactory;
 
         // SaProposals.Builder guarantees there is at least one SA proposal, and each SA proposal
         // has at least one DH group.
@@ -662,7 +668,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 ikeSessionCallback,
                 firstChildSessionCallback,
                 new IkeEapAuthenticatorFactory(),
-                new IkeLocalAddressGenerator());
+                new IkeLocalAddressGenerator(),
+                new LocalRequestFactory());
     }
 
     private boolean hasChildSessionCallback(ChildSessionCallback callback) {
@@ -711,7 +718,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** Initiates IKE setup procedure. */
     public void openSession() {
         sendMessage(
-                CMD_LOCAL_REQUEST_CREATE_IKE, new IkeLocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
+                CMD_LOCAL_REQUEST_CREATE_IKE,
+                mLocalRequestFactory.getIkeLocalRequest(CMD_LOCAL_REQUEST_CREATE_IKE));
     }
 
     /** Schedules a Create Child procedure. */
@@ -735,7 +743,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 childSessionParams, childSessionCallback, false /*isFirstChild*/);
         sendMessage(
                 CMD_LOCAL_REQUEST_CREATE_CHILD,
-                new ChildLocalRequest(
+                mLocalRequestFactory.getChildLocalRequest(
                         CMD_LOCAL_REQUEST_CREATE_CHILD, childSessionCallback, childSessionParams));
     }
 
@@ -751,13 +759,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         sendMessage(
                 CMD_LOCAL_REQUEST_DELETE_CHILD,
-                new ChildLocalRequest(CMD_LOCAL_REQUEST_DELETE_CHILD, childSessionCallback, null));
+                mLocalRequestFactory.getChildLocalRequest(
+                        CMD_LOCAL_REQUEST_DELETE_CHILD, childSessionCallback, null));
     }
 
     /** Initiates Delete IKE procedure. */
     public void closeSession() {
         sendMessage(
-                CMD_LOCAL_REQUEST_DELETE_IKE, new IkeLocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
+                CMD_LOCAL_REQUEST_DELETE_IKE,
+                mLocalRequestFactory.getIkeLocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
     }
 
     /** Forcibly close IKE Session. */
@@ -1585,10 +1595,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
          */
         protected void handleLocalRequest(int requestVal, LocalRequest req) {
             switch (requestVal) {
-                case CMD_LOCAL_REQUEST_DELETE_IKE:
-                    mScheduler.addRequestAtFront(req);
-                    return;
-
+                case CMD_LOCAL_REQUEST_DELETE_IKE: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Fallthrough
                 case CMD_LOCAL_REQUEST_INFO: // Fallthrough
                 case CMD_LOCAL_REQUEST_DPD:
@@ -1635,7 +1642,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // Hits soft lifetime
                     int remoteChildSpi = ((Bundle) message.obj).getInt(BUNDLE_KEY_CHILD_REMOTE_SPI);
                     enqueueLocalRequestSynchronously(
-                            new ChildLocalRequest(message.arg2, remoteChildSpi));
+                            mLocalRequestFactory.getChildLocalRequest(
+                                    message.arg2, remoteChildSpi));
                     return;
                 case CMD_LOCAL_REQUEST_DELETE_IKE: // Hits hard lifetime; fall through
                 case CMD_LOCAL_REQUEST_REKEY_IKE: // Hits soft lifetime; fall through
@@ -1643,7 +1651,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     // IKE Session has not received any protectd IKE packet for the whole DPD delay
                     long remoteIkeSpi = ((Bundle) message.obj).getLong(BUNDLE_KEY_IKE_REMOTE_SPI);
                     enqueueLocalRequestSynchronously(
-                            new IkeLocalRequest(message.arg2, remoteIkeSpi));
+                            mLocalRequestFactory.getIkeLocalRequest(message.arg2, remoteIkeSpi));
 
                     // TODO(b/152442041): Cancel the scheduled DPD request if IKE Session starts any
                     // procedure before DPD get executed.
