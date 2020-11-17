@@ -21,6 +21,7 @@ import android.annotation.SystemApi;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.IpSecManager;
+import android.net.Network;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.util.CloseGuard;
@@ -265,5 +266,41 @@ public final class IkeSession implements AutoCloseable {
     public void kill() {
         mCloseGuard.close();
         mIkeSessionStateMachine.killSession();
+    }
+
+    /**
+     * Update the IkeSession's Network to use the specified Network.
+     *
+     * <p>Updating the IkeSession's Network also updates the Network for any Child Sessions created
+     * with this IkeSession.
+     *
+     * <p>Once IkeSession has been updated to use the specified Network, the caller will be notified
+     * via {@link IkeSessionCallback#onIkeSessionConnectionInfoChanged}. The caller will also be
+     * notified for each migrated Child Session via {@link
+     * ChildSessionCallback#onIpsecTransformMigrated}.
+     *
+     * <p>In order for Network migration to be possible, the following must be true:
+     *
+     * <ul>
+     *   <li>the {@link IkeSessionParams} for this IkeSession must be configured with {@link
+     *       IkeSessionParams#IKE_OPTION_MOBIKE} (set via {@link
+     *       IkeSessionParams.Builder#addIkeOption(int)}), and
+     *   <li>the {@link IkeSessionConfiguration} provided in {@link
+     *       IkeSessionCallback#onOpened(IkeSessionConfiguration)} must indicate {@link
+     *       IkeSessionConfiguration#EXTENSION_TYPE_MOBIKE} (checked via {@link
+     *       IkeSessionConfiguration#isIkeExtensionEnabled(int)}), and
+     *   <li>the IkeSession must have been started with the Network specified via {@link
+     *       IkeSessionParams.Builder#setConfiguredNetwork(Network)}.
+     * </ul>
+     *
+     * @see <a href="https://tools.ietf.org/html/rfc4555">RFC 4555, IKEv2 Mobility and Multihoming
+     *     Protocol (MOBIKE)</a>
+     * @param network the Network to use for this IkeSession
+     * @throws IllegalStateException if MOBIKE is not configured in IkeSessionParams, MOBIKE is not
+     *     active for this IkeSession, or if the Network was not specified in IkeSessionParams.
+     * @hide
+     */
+    public void setNetwork(@NonNull Network network) {
+        mIkeSessionStateMachine.setNetwork(network);
     }
 }

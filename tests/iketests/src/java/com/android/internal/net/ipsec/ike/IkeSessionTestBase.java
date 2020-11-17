@@ -53,6 +53,8 @@ import java.util.concurrent.Executor;
 public abstract class IkeSessionTestBase {
     protected static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.200");
+    protected static final Inet4Address UPDATED_LOCAL_ADDRESS =
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.201");
     protected static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) InetAddresses.parseNumericAddress("127.0.0.1");
     protected static final String REMOTE_HOSTNAME = "ike.test.android.com";
