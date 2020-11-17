@@ -67,7 +67,7 @@ public class EapData {
         EAP_TYPE_MSCHAP_V2,
         EAP_TYPE_AKA_PRIME,
         EAP_TYPE_TTLS
-})
+    })
     public @interface EapMethod {}
 
     // EAP Type values defined by IANA
