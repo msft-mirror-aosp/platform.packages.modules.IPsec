@@ -33,9 +33,7 @@ import java.nio.ByteBuffer;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public abstract class IkeProtocolException extends IkeException {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)

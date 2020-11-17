@@ -17,8 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.security.cert.X509Certificate;
 import java.util.Objects;
@@ -28,10 +27,7 @@ import java.util.Objects;
  *
  * <p>Key ID is an octet stream that may be used to pass vendor-specific information necessary to do
  * certain proprietary types of identification.
- *
- * @hide
  */
-@SystemApi
 public final class IkeKeyIdIdentification extends IkeIdentification {
     /** The KEY ID in octet stream. */
     @NonNull public final byte[] keyId;

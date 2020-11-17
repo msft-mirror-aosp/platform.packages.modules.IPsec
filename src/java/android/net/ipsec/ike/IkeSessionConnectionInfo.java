@@ -17,25 +17,24 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 import android.net.Network;
 
 import java.net.InetAddress;
 import java.util.Objects;
 
 /**
- * IkeSessionConnectionInfo represents the connection information of a {@link IkeSession}.
+ * IkeSessionConnectionInfo represents the connection information of an {@link IkeSession}.
  *
  * <p>Connection information includes IP addresses of both the IKE client and server and the network
  * being used.
- *
- * @hide
  */
-@SystemApi
 public final class IkeSessionConnectionInfo {
     private final InetAddress mLocalAddress;
     private final InetAddress mRemoteAddress;
     private final Network mNetwork;
+
+    // TODO:b/172962260 Create and expose Builder of IkeSessionConnectionInfo for callers to do
+    // testing.
 
     /**
      * Construct an instance of {@link IkeSessionConnectionInfo}.

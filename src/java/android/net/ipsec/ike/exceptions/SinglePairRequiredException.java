@@ -13,43 +13,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
-
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+package android.net.ipsec.ike.exceptions;
 
 /**
- * This exception is thrown if the remote server is unwilling to accept any more Child SAs.
+ * This exception is thrown if the remote server requires a single pair of addresses as selectors.
  *
- * <p>Some minimal implementations may only accept a single Child SA setup in the context of an
- * initial IKE exchange and reject any subsequent attempts to add more.
+ * <p>This exception indicates that the remote server is only willing to accept Traffic Selectors
+ * specifying a single pair of addresses. Callers may retry Child creation with only the specific
+ * traffic it is trying to forward.
  *
- * @see <a href="https://tools.ietf.org/html/rfc7296#section-1.3">RFC 7296, Internet Key Exchange
+ * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.9">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-public final class NoAdditionalSasException extends IkeProtocolException {
+public class SinglePairRequiredException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
 
     /**
-     * Construct an instance of NoAdditionalSasException.
+     * Construct an instance of SinglePairRequiredException.
      *
      * <p>Except for testing, IKE library users normally do not instantiate this object themselves
      * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
      */
-    public NoAdditionalSasException() {
-        super(ERROR_TYPE_NO_ADDITIONAL_SAS);
+    public SinglePairRequiredException() {
+        super(ERROR_TYPE_SINGLE_PAIR_REQUIRED);
     }
 
     /**
-     * Construct a instance of NoAdditionalSasException from a notify payload.
+     * Construct a instance of SinglePairRequiredException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
      * @hide
      */
-    public NoAdditionalSasException(byte[] notifyData) {
-        super(ERROR_TYPE_NO_ADDITIONAL_SAS, notifyData);
+    public SinglePairRequiredException(byte[] notifyData) {
+        super(ERROR_TYPE_SINGLE_PAIR_REQUIRED, notifyData);
     }
 
     /** @hide */
