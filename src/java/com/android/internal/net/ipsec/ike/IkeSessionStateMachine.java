@@ -5085,8 +5085,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         try {
             mCurrentIkeSaRecord.migrate(mLocalAddress, mRemoteAddress);
-            // TODO(b/172013873): migrate local rekey IKE SA
-            // TODO(b/172013873): migrate remote rekey IKE SA
+            if (mLocalInitNewIkeSaRecord != null) {
+                mLocalInitNewIkeSaRecord.migrate(mLocalAddress, mRemoteAddress);
+            }
+            if (mRemoteInitNewIkeSaRecord != null) {
+                mRemoteInitNewIkeSaRecord.migrate(mLocalAddress, mRemoteAddress);
+            }
         } catch (IOException e) {
             // Failed to migrate IKE SAs due to IKE SPI collision
             handleIkeFatalError(e);
