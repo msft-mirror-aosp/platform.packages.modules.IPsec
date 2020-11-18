@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 The Android Open Source Project
+ * Copyright (C) 2019 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,43 +13,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_IKE_SPI;
-
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+package android.net.ipsec.ike.exceptions;
 
 /**
- * This exception is thrown if an IKE message was received with an unrecognized destination SPI.
+ * This exception is thrown if Traffic Selectors negotiation failed.
  *
- * <p>This usually indicates that the message recipient has rebooted and forgotten the existence of
- * an IKE SA.
- *
- * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.21">RFC 7296, Internet Key Exchange
- *     Protocol Version 2 (IKEv2)</a>
- * @hide
+ * <p>This exception indicates either proposed Traffic Selectors by callers is not acceptable or the
+ * negotiated Traffic Selectors from the remote server is invalid.
  */
-public final class InvalidIkeSpiException extends IkeProtocolException {
+// If remote server is the exchange initiator, IKE library should respond with a TS_UNACCEPTABLE
+// Notify message. If the remote server is the exchange responder, IKE library should initiate a
+// Delete IKE exchange and close the IKE Session.
+public final class TsUnacceptableException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
 
     /**
-     * Construct an instance of InvalidIkeSpiException.
+     * Construct an instance of TsUnacceptableException.
      *
      * <p>Except for testing, IKE library users normally do not instantiate this object themselves
      * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
      */
-    public InvalidIkeSpiException() {
-        super(ERROR_TYPE_INVALID_IKE_SPI);
+    public TsUnacceptableException() {
+        super(ERROR_TYPE_TS_UNACCEPTABLE);
     }
 
     /**
-     * Construct a instance of InvalidIkeSpiException from a notify payload.
+     * Construct a instance of TsUnacceptableException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
      * @hide
      */
-    public InvalidIkeSpiException(byte[] notifyData) {
-        super(ERROR_TYPE_INVALID_IKE_SPI, notifyData);
+    public TsUnacceptableException(byte[] notifyData) {
+        super(ERROR_TYPE_TS_UNACCEPTABLE, notifyData);
     }
 
     /** @hide */

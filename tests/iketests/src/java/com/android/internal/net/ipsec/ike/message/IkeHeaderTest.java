@@ -21,8 +21,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import android.net.ipsec.ike.exceptions.protocol.InvalidMajorVersionException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidMajorVersionException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import com.android.internal.net.TestUtils;
 

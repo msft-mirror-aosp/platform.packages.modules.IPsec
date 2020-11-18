@@ -13,30 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package android.net.ipsec.ike.exceptions.protocol;
-
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
+package android.net.ipsec.ike.exceptions;
 
 import android.annotation.NonNull;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
 
 /**
- * This exception is thrown if a SA proposal negotiation failed.
+ * This exception is thrown if any IKE message has a syntax error.
  *
- * <p>This exception indicates that either none of SA proposals from caller is acceptable or the
- * negotiated SA proposal from the remote server is invalid.
+ * <p>This exception indicates that the IKE message that was received was invalid because some type,
+ * length, or value was out of range or because the request was rejected for policy reasons.
  *
- * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.7">RFC 7296, Internet Key Exchange
+ * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-// Include the NO_PROPOSAL_CHOSEN Notify payload in an encrypted response message if received
-// message is an encrypted request from SA initiator.
-public final class NoValidProposalChosenException extends IkeProtocolException {
+// Include INVALID_SYNTAX Notify payload in an encrypted response message if current message is
+// an encrypted request and cryptographic checksum is valid. Fatal error.
+public final class InvalidSyntaxException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
 
     /**
-     * Construct an instance of NoValidProposalChosenException.
+     * Construct an instance of InvalidSyntaxException.
      *
      * <p>Except for testing, IKE library users normally do not instantiate this object themselves
      * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
@@ -44,12 +40,25 @@ public final class NoValidProposalChosenException extends IkeProtocolException {
      * @param message the descriptive message (which is saved for later retrieval by the {@link
      *     #getMessage()} method).
      */
-    public NoValidProposalChosenException(@NonNull String message) {
-        super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, message);
+    public InvalidSyntaxException(@NonNull String message) {
+        super(ERROR_TYPE_INVALID_SYNTAX, message);
     }
 
     /**
-     * Construct an instance of NoValidProposalChosenException.
+     * Construct a instance of InvalidSyntaxException.
+     *
+     * <p>Except for testing, IKE library users normally do not instantiate this object themselves
+     * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
+     *
+     * @param cause the cause (which is saved for later retrieval by the {@link #getCause()}
+     *     method).
+     */
+    public InvalidSyntaxException(@NonNull Throwable cause) {
+        super(ERROR_TYPE_INVALID_SYNTAX, cause);
+    }
+
+    /**
+     * Construct a instance of InvalidSyntaxException.
      *
      * <p>Except for testing, IKE library users normally do not instantiate this object themselves
      * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
@@ -59,18 +68,18 @@ public final class NoValidProposalChosenException extends IkeProtocolException {
      * @param cause the cause (which is saved for later retrieval by the {@link #getCause()}
      *     method).
      */
-    public NoValidProposalChosenException(@NonNull String message, @NonNull Throwable cause) {
-        super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, cause);
+    public InvalidSyntaxException(@NonNull String message, @NonNull Throwable cause) {
+        super(ERROR_TYPE_INVALID_SYNTAX, message, cause);
     }
 
     /**
-     * Construct a instance of NoValidProposalChosenException from a notify payload.
+     * Construct a instance of InvalidSyntaxException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
      * @hide
      */
-    public NoValidProposalChosenException(byte[] notifyData) {
-        super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, notifyData);
+    public InvalidSyntaxException(byte[] notifyData) {
+        super(ERROR_TYPE_INVALID_SYNTAX, notifyData);
     }
 
     /** @hide */

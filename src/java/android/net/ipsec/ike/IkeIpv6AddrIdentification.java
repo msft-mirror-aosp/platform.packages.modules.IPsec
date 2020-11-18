@@ -17,22 +17,16 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.net.Inet6Address;
 import java.net.UnknownHostException;
 import java.security.cert.X509Certificate;
 import java.util.Objects;
 
-/**
- * IkeIpv6AddrIdentification represents an IKE entity identification based on IPv6 address.
- *
- * @hide
- */
-@SystemApi
+/** IkeIpv6AddrIdentification represents an IKE entity identification based on IPv6 address. */
 public class IkeIpv6AddrIdentification extends IkeIdentification {
-    /** The IPv6 Address. */
+    /** The IPv6 address. */
     @NonNull public final Inet6Address ipv6Address;
 
     /**
@@ -52,7 +46,7 @@ public class IkeIpv6AddrIdentification extends IkeIdentification {
     }
 
     /**
-     * Construct an instance of {@link IkeIpv6AddrIdentification} with a IPv6 address.
+     * Construct an instance of {@link IkeIpv6AddrIdentification} with an IPv6 address.
      *
      * @param address the IPv6 address.
      */

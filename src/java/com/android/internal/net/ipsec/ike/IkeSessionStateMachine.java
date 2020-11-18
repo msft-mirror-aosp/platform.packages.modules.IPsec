@@ -81,14 +81,14 @@ import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import android.net.ipsec.ike.TransportModeChildSessionParams;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeNetworkDiedException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.AuthenticationFailedException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidKeException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
-import android.net.ipsec.ike.exceptions.protocol.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.InvalidKeException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -317,6 +317,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     static final int CMD_SEND_KEEPALIVE = CMD_GENERAL_BASE + 16;
     /** Force close the session. This is initiated locally, but will not go into the scheduler */
     static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 17;
+    /** Update the Session's underlying Network */
+    static final int CMD_SET_NETWORK = CMD_GENERAL_BASE + 18;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -345,6 +347,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         CMD_TO_STR.put(CMD_EAP_FAILED, "EAP failed");
         CMD_TO_STR.put(CMD_EAP_FINISH_EAP_AUTH, "Finish EAP");
         CMD_TO_STR.put(CMD_ALARM_FIRED, "Alarm Fired");
+        CMD_TO_STR.put(CMD_SET_NETWORK, "Update underlying Network");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_IKE, "Create IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
@@ -361,7 +364,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting final IkeSessionParams mIkeSessionParams;
 
     // Underlying Network for this IKE Session. May change if MOBIKE is enabled.
-    private Network mNetwork;
+    @VisibleForTesting Network mNetwork;
 
     // Network callback used to keep IkeSessionStateMachine aware of Network changes for
     // MOBIKE-enabled sessions. Initialized if MOBIKE support is determined for the IKE Session.
@@ -789,7 +792,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             + " network instead of default network");
         }
 
-        // TODO(b/172013817): define + handle CMD for updating Network
+        sendMessage(CMD_SET_NETWORK, network);
     }
 
     private void scheduleRetry(LocalRequest localRequest) {
@@ -1256,6 +1259,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     // Let KillIkeSessionParent handle the rest of the cleanup.
                     return NOT_HANDLED;
 
+                case CMD_SET_NETWORK:
+                    onUnderlyingNetworkUpdated((Network) message.obj);
+                    return HANDLED;
+
                 default:
                     // Queue local requests, and trigger next procedure
                     if (isLocalRequest(message.what)) {
@@ -1677,6 +1684,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 case CMD_RETRANSMIT:
                     triggerRetransmit();
+                    return HANDLED;
+
+                case CMD_SET_NETWORK:
+                    onUnderlyingNetworkUpdated((Network) message.obj);
                     return HANDLED;
 
                 default:
@@ -2808,6 +2819,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     handleReceivedIkePacket(message);
                     return HANDLED;
 
+                case CMD_SET_NETWORK:
+                    // Shouldn't be receiving this command before MOBIKE is active - determined with
+                    // last IKE_AUTH response
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    return NOT_HANDLED;
+
                 default:
                     return super.processStateMessage(message);
             }
@@ -3422,6 +3439,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
+        public boolean processStateMessage(Message message) {
+            switch (message.what) {
+                case CMD_SET_NETWORK:
+                    // Shouldn't be receiving this command before MOBIKE is active - determined with
+                    // last IKE_AUTH response
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    return NOT_HANDLED;
+
+                default:
+                    return super.processStateMessage(message);
+            }
+        }
+
+        @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             try {
                 int exchangeType = ikeMessage.ikeHeader.exchangeType;
@@ -3776,6 +3807,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     transitionTo(mCreateIkeLocalIkeAuthPostEap);
 
                     return HANDLED;
+                case CMD_SET_NETWORK:
+                    // Shouldn't be receiving this command before MOBIKE is active - determined with
+                    // last IKE_AUTH response
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    return NOT_HANDLED;
                 default:
                     return super.processStateMessage(msg);
             }
@@ -3894,6 +3930,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     mRetransmitter = new EncryptedRetransmitter(postEapAuthMsg);
 
                     return HANDLED;
+                case CMD_SET_NETWORK:
+                    // Shouldn't be receiving this command before MOBIKE is active - determined with
+                    // last IKE_AUTH response
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    return NOT_HANDLED;
                 default:
                     return super.processStateMessage(msg);
             }
@@ -5039,6 +5080,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             handleIkeFatalError(e);
             return;
         }
+        mNetworkCallback.setNetwork(mNetwork);
         mNetworkCallback.setAddress(mLocalAddress);
 
         // TODO(b/172013873): update IKE_SA, Child SAs, notify peer of Mobility Event
