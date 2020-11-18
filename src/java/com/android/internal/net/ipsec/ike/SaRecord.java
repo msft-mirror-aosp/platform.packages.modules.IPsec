@@ -765,9 +765,19 @@ public abstract class SaRecord implements AutoCloseable {
             return mInitiatorSpiResource.getSpi();
         }
 
+        @VisibleForTesting
+        IkeSecurityParameterIndex getInitiatorIkeSecurityParameterIndex() {
+            return mInitiatorSpiResource;
+        }
+
         /** Package private */
         long getResponderSpi() {
             return mResponderSpiResource.getSpi();
+        }
+
+        @VisibleForTesting
+        IkeSecurityParameterIndex getResponderIkeSecurityParameterIndex() {
+            return mResponderSpiResource;
         }
 
         /** Package private */
@@ -920,6 +930,13 @@ public abstract class SaRecord implements AutoCloseable {
             super.close();
             mInitiatorSpiResource.close();
             mResponderSpiResource.close();
+        }
+
+        /** Migrate this IKE SA to the specified address pair. */
+        public void migrate(InetAddress initiatorAddress, InetAddress responderAddress)
+                throws IOException {
+            mInitiatorSpiResource.migrate(initiatorAddress);
+            mResponderSpiResource.migrate(responderAddress);
         }
     }
 

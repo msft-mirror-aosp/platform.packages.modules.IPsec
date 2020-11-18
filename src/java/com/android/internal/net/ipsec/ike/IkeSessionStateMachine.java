@@ -5083,7 +5083,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         mNetworkCallback.setNetwork(mNetwork);
         mNetworkCallback.setAddress(mLocalAddress);
 
-        // TODO(b/172013873): update IKE_SA, Child SAs, notify peer of Mobility Event
+        try {
+            mCurrentIkeSaRecord.migrate(mLocalAddress, mRemoteAddress);
+            // TODO(b/172013873): migrate local rekey IKE SA
+            // TODO(b/172013873): migrate remote rekey IKE SA
+        } catch (IOException e) {
+            // Failed to migrate IKE SAs due to IKE SPI collision
+            handleIkeFatalError(e);
+            return;
+        }
+
+        // TODO(b/172013873): restart transmission timeouts on IKE SAs after changing networks
+        // TODO(b/172013873): update Child SAs, notify peer of Mobility Event
     }
 
     @Override
