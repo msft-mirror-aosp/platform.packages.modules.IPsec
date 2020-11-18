@@ -3231,6 +3231,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testRekeyIkeLocalCreateHandlesResponse() throws Exception {
         setupIdleStateMachine();
 
+        verifyRekeyIkeLocalCreateHandlesResponse();
+    }
+
+    private void verifyRekeyIkeLocalCreateHandlesResponse() throws Exception {
         // Send Rekey-Create request
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
@@ -5394,21 +5398,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(localAddress, mIkeSessionStateMachine.mLocalAddress);
         assertEquals(remoteAddress, mIkeSessionStateMachine.mRemoteAddress);
 
-        assertEquals(
-                localAddress,
-                mIkeSessionStateMachine
-                        .mCurrentIkeSaRecord
-                        .getInitiatorIkeSecurityParameterIndex()
-                        .getSourceAddress());
-        assertEquals(
-                remoteAddress,
-                mIkeSessionStateMachine
-                        .mCurrentIkeSaRecord
-                        .getResponderIkeSecurityParameterIndex()
-                        .getSourceAddress());
+        verifyIkeSaAddresses(
+                mIkeSessionStateMachine.mCurrentIkeSaRecord, localAddress, remoteAddress);
 
         assertEquals(underlyingNetwork, networkCallback.getNetwork());
         assertEquals(localAddress, networkCallback.getAddress());
+    }
+
+    private void verifyIkeSaAddresses(
+            IkeSaRecord saRecord, InetAddress localAddress, InetAddress remoteAddress) {
+        assertEquals(
+                localAddress, saRecord.getInitiatorIkeSecurityParameterIndex().getSourceAddress());
+        assertEquals(
+                remoteAddress, saRecord.getResponderIkeSecurityParameterIndex().getSourceAddress());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -5432,7 +5434,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.setNetwork(newNetwork);
     }
 
-    private void verifySetNetwork(IkeNetworkCallbackBase callback) throws Exception {
+    private void verifySetNetwork(IkeNetworkCallbackBase callback, IkeSaRecord rekeySaRecord)
+            throws Exception {
         Network newNetwork = mockNewNetworkAndAddress();
 
         mIkeSessionStateMachine.setNetwork(newNetwork);
@@ -5445,6 +5448,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(true /* isIpv4 */),
                         eq(REMOTE_ADDRESS),
                         eq(IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED));
+
+        if (rekeySaRecord != null) {
+            verifyIkeSaAddresses(rekeySaRecord, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
+        }
     }
 
     @Test
@@ -5455,7 +5462,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
         mLooper.dispatchAll();
 
-        verifySetNetwork(callback);
+        verifySetNetwork(callback, null /* rekeySaRecord */);
     }
 
     @Test
@@ -5466,16 +5473,24 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
 
-        // Send Rekey-Create request
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
-                new IkeLocalRequest(IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE));
-        mLooper.dispatchAll();
-        assertTrue(
-                mIkeSessionStateMachine.getCurrentState()
-                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
-        verifyRetransmissionStarted();
+        verifyRekeyIkeLocalCreateHandlesResponse();
 
-        verifySetNetwork(callback);
+        verifySetNetwork(callback, mIkeSessionStateMachine.mLocalInitNewIkeSaRecord);
+    }
+
+    @Test
+    public void testSetNetworkRemoteRekeyState() throws Exception {
+        // Start IKE Session + transition to remote rekey
+        IkeNetworkCallbackBase callback =
+                verifyMobikeEnabled(true /* doesPeerSupportMobike */, mMockDefaultNetwork);
+
+        mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord = mSpyRemoteInitIkeSaRecord;
+        mIkeSessionStateMachine.addIkeSaRecord(mSpyRemoteInitIkeSaRecord);
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION,
+                mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+        mLooper.dispatchAll();
+
+        verifySetNetwork(callback, mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord);
     }
 }
