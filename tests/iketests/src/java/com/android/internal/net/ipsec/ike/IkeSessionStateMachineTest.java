@@ -932,28 +932,42 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .build();
     }
 
+    // Common IKE INIT response
     private ReceivedIkePacket makeIkeInitResponse() throws Exception {
-        // TODO: Build real IKE INIT response when IKE INIT response validation is implemented.
         List<Integer> payloadTypeList = new ArrayList<>();
         List<String> payloadHexStringList = new ArrayList<>();
 
-        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
-        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
-        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NOTIFY);
         payloadTypeList.add(IkePayload.PAYLOAD_TYPE_VENDOR);
 
-        payloadHexStringList.add(IKE_SA_PAYLOAD_HEX_STRING);
-        payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
-        payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NAT_DETECTION_SOURCE_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(NAT_DETECTION_DESTINATION_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(FRAGMENTATION_SUPPORTED_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(SIGNATURE_HASH_SUPPORTED_PAYLOAD_HEX_STRING);
         payloadHexStringList.add(VENDOR_ID_PAYLOAD_HEX_STRING);
+
+        return makeIkeInitResponseWithRequiredPayloads(payloadTypeList, payloadHexStringList);
+    }
+
+    // Simplest IKE INIT response that does not include any optional payloads
+    private ReceivedIkePacket makeIkeInitResponseWithRequiredPayloads(
+            List<Integer> optionalPayloadTypes, List<String> optionalPayloadHexStrings)
+            throws Exception {
+        List<Integer> payloadTypeList = new ArrayList<>();
+        List<String> payloadHexStringList = new ArrayList<>();
+
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_SA);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_KE);
+        payloadTypeList.add(IkePayload.PAYLOAD_TYPE_NONCE);
+        payloadTypeList.addAll(optionalPayloadTypes);
+
+        payloadHexStringList.add(IKE_SA_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(KE_PAYLOAD_HEX_STRING);
+        payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
+        payloadHexStringList.addAll(optionalPayloadHexStrings);
 
         // In each test assign different IKE responder SPI in IKE INIT response to avoid remote SPI
         // collision during response validation.
@@ -1430,7 +1444,33 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Validate socket switched
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdpEncapSocket);
+        assertTrue(mIkeSessionStateMachine.mSupportNatTraversal);
+        assertTrue(
+                mIkeSessionStateMachine.mLocalNatDetected
+                        || mIkeSessionStateMachine.mRemoteNatDetected);
         verify(mSpyIkeUdp4Socket).unregisterIke(anyLong());
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeInitNatTraversalNotSupported() throws Exception {
+        setupFirstIkeSa();
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        // Receive IKE INIT response
+        ReceivedIkePacket dummyReceivedIkePacket =
+                makeIkeInitResponseWithRequiredPayloads(
+                        Collections.emptyList(), Collections.emptyList());
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyReceivedIkePacket);
+        mLooper.dispatchAll();
+
+        // Validate socket switched
+        assertEquals(mSpyIkeUdp4Socket, mIkeSessionStateMachine.mIkeSocket);
+        assertFalse(mIkeSessionStateMachine.mSupportNatTraversal);
+        assertFalse(mIkeSessionStateMachine.mLocalNatDetected);
+        assertFalse(mIkeSessionStateMachine.mRemoteNatDetected);
+        verify(mSpyIkeUdp4Socket, never()).unregisterIke(anyLong());
     }
 
     @Ignore
@@ -1503,8 +1543,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNotNull(ikeSaRecordConfig.saLifetimeAlarmScheduler);
 
         // Validate NAT detection
-        assertTrue(mIkeSessionStateMachine.mIsLocalBehindNat);
-        assertFalse(mIkeSessionStateMachine.mIsRemoteBehindNat);
+        assertTrue(mIkeSessionStateMachine.mLocalNatDetected);
+        assertFalse(mIkeSessionStateMachine.mRemoteNatDetected);
+        assertTrue(mIkeSessionStateMachine.mSupportNatTraversal);
 
         // Validate vendor IDs
         List<byte[]> vendorIds = new ArrayList<>();
@@ -1530,8 +1571,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.mSaProposal = buildNegotiatedSaProposal();
         mIkeSessionStateMachine.mCurrentIkeSaRecord = mSpyCurrentIkeSaRecord;
         mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
-        mIkeSessionStateMachine.mIsLocalBehindNat = true;
-        mIkeSessionStateMachine.mIsRemoteBehindNat = false;
+        mIkeSessionStateMachine.mSupportNatTraversal = true;
+        mIkeSessionStateMachine.mLocalNatDetected = true;
+        mIkeSessionStateMachine.mRemoteNatDetected = false;
         mIkeSessionStateMachine.mSupportFragment = true;
         mIkeSessionStateMachine.mRemoteVendorIds =
                 Arrays.asList(REMOTE_VENDOR_ID_ONE, REMOTE_VENDOR_ID_TWO);
