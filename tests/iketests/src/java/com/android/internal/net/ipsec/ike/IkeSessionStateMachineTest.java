@@ -5449,8 +5449,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(REMOTE_ADDRESS),
                         eq(IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED));
 
+        assertEquals(
+                mIkeSessionStateMachine,
+                mIkeSessionStateMachine.mIkeSocket.mSpiToIkeSession.get(
+                        mIkeSessionStateMachine.mCurrentIkeSaRecord.getLocalSpi()));
+
         if (rekeySaRecord != null) {
             verifyIkeSaAddresses(rekeySaRecord, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
+            assertEquals(
+                    mIkeSessionStateMachine,
+                    mIkeSessionStateMachine.mIkeSocket.mSpiToIkeSession.get(
+                            rekeySaRecord.getLocalSpi()));
         }
     }
 

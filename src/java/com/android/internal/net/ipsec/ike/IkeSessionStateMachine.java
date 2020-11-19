@@ -864,12 +864,27 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     // TODO: Add methods for building and validating general Informational packet.
 
-    /** Switch to a new IKE socket due to NAT detection, or an underlying network change. */
-    private void switchToIkeSocket(long localSpi, IkeSocket newSocket) {
-        newSocket.registerIke(localSpi, this);
-        mIkeSocket.unregisterIke(localSpi);
+    /** Switch all IKE SAs to the new IKE socket due to an underlying network change. */
+    private void switchToIkeSocket(IkeSocket newSocket) {
+        long currentLocalSpi = mCurrentIkeSaRecord.getLocalSpi();
+        migrateSpiToIkeSocket(currentLocalSpi, mIkeSocket, newSocket);
+
+        if (mLocalInitNewIkeSaRecord != null) {
+            long newLocalSpi = mLocalInitNewIkeSaRecord.getLocalSpi();
+            migrateSpiToIkeSocket(newLocalSpi, mIkeSocket, newSocket);
+        }
+        if (mRemoteInitNewIkeSaRecord != null) {
+            long newLocalSpi = mRemoteInitNewIkeSaRecord.getLocalSpi();
+            migrateSpiToIkeSocket(newLocalSpi, mIkeSocket, newSocket);
+        }
+
         mIkeSocket.releaseReference(this);
         mIkeSocket = newSocket;
+    }
+
+    private void migrateSpiToIkeSocket(long localSpi, IkeSocket oldSocket, IkeSocket newSocket) {
+        newSocket.registerIke(localSpi, IkeSessionStateMachine.this);
+        oldSocket.unregisterIke(localSpi);
     }
 
     @VisibleForTesting
@@ -3193,6 +3208,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
+        /** Switch to a new IKE socket due to NAT detection */
+        private void switchToIkeSocket(long localSpi, IkeSocket newSocket) {
+            migrateSpiToIkeSocket(localSpi, mIkeSocket, newSocket);
+            mIkeSocket.releaseReference(IkeSessionStateMachine.this);
+            mIkeSocket = newSocket;
+        }
+
         private PendingIntent buildKeepaliveIntent() {
             return buildIkeAlarmIntent(
                     mContext,
@@ -5069,7 +5091,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             IkeUdp6Socket.getInstance(
                                     mNetwork, IkeSessionStateMachine.this, getHandler());
                 }
-                switchToIkeSocket(mCurrentIkeSaRecord.getLocalSpi(), newSocket);
+                switchToIkeSocket(newSocket);
                 mLocalPort = mIkeSocket.getLocalPort();
             }
 
