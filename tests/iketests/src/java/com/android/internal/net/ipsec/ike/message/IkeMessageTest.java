@@ -46,9 +46,9 @@ import static org.mockito.Mockito.when;
 
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidMessageIdException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
-import android.net.ipsec.ike.exceptions.protocol.UnsupportedCriticalPayloadException;
+import android.net.ipsec.ike.exceptions.InvalidMessageIdException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
 
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;

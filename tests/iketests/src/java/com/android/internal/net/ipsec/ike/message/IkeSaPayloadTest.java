@@ -41,8 +41,8 @@ import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
-import android.net.ipsec.ike.exceptions.protocol.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
 import android.util.Pair;
 
 import com.android.internal.net.TestUtils;

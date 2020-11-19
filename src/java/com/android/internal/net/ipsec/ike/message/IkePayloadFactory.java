@@ -18,7 +18,7 @@ package com.android.internal.net.ipsec.ike.message;
 
 import android.annotation.Nullable;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.protocol.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.util.Pair;
 
 import com.android.internal.annotations.VisibleForTesting;

@@ -47,8 +47,6 @@ public class IkeDefaultNetworkCallback extends IkeNetworkCallbackBase {
             return;
         }
 
-        setNetwork(network);
-
         logd("Platform default Network changed to " + network);
         mIkeNetworkUpdater.onUnderlyingNetworkUpdated(network);
     }
