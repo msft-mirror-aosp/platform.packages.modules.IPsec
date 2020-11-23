@@ -23,7 +23,7 @@ import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.util.ArraySet;
 
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
@@ -39,9 +39,9 @@ import java.util.concurrent.Executor;
  * Ike3gppExtensionExchange contains the implementation for 3GPP-specific functionality in IKEv2.
  */
 public class Ike3gppExtensionExchange implements AutoCloseable {
-    private static final String TAG = Ike3gppExtension.class.getSimpleName();
+    private static final String TAG = Ike3gppExtensionExchange.class.getSimpleName();
 
-    private static final Set<Ike3gppCallback> REGISTERED_CALLBACKS =
+    private static final Set<Ike3gppDataListener> REGISTERED_LISTENERS =
             Collections.synchronizedSet(new ArraySet<>());
 
     /**
@@ -100,9 +100,9 @@ public class Ike3gppExtensionExchange implements AutoCloseable {
         if (mIke3gppExtension != null) {
             mIke3gppIkeAuth = new Ike3gppIkeAuth(mIke3gppExtension, mUserCbExecutor);
 
-            if (!REGISTERED_CALLBACKS.add(ike3gppExtension.getIke3gppCallback())) {
+            if (!REGISTERED_LISTENERS.add(ike3gppExtension.getIke3gppDataListener())) {
                 throw new IllegalArgumentException(
-                        "Ike3gppCallback must be unique for each IkeSession");
+                        "Ike3gppDataListener must be unique for each IkeSession");
             }
         } else {
             mIke3gppIkeAuth = null;
@@ -113,7 +113,7 @@ public class Ike3gppExtensionExchange implements AutoCloseable {
     public void close() {
         if (mIke3gppExtension == null) return;
 
-        REGISTERED_CALLBACKS.remove(mIke3gppExtension.getIke3gppCallback());
+        REGISTERED_LISTENERS.remove(mIke3gppExtension.getIke3gppDataListener());
     }
 
     /** Gets the 3GPP-specific Request IkePayloads for the specified exchangeSubtype. */
@@ -155,8 +155,8 @@ public class Ike3gppExtensionExchange implements AutoCloseable {
     /**
      * Handles the provided Response IkePayloads for the specified exchangeSubtype.
      *
-     * <p>If the caller needs to be notified of received Ike3gppInfos, the configured
-     * Ike3gppCallback will be invoked.
+     * <p>If the caller needs to be notified of received Ike3gppData, the configured
+     * Ike3gppDataListener will be invoked.
      */
     public void handle3gppResponsePayloads(int exchangeSubtype, List<IkePayload> ike3gppPayloads)
             throws InvalidSyntaxException {

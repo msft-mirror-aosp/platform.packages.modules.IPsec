@@ -32,7 +32,7 @@ public class Ike3gppBackoffTimerTest {
     public void testIke3gppBackoffTimer() {
         Ike3gppBackoffTimer backoffTimer = new Ike3gppBackoffTimer(BACKOFF_TIMER, BACKOFF_CAUSE);
 
-        assertEquals(Ike3gppInfo.INFO_TYPE_NOTIFY_BACKOFF_TIMER, backoffTimer.getInfoType());
+        assertEquals(Ike3gppData.DATA_TYPE_NOTIFY_BACKOFF_TIMER, backoffTimer.getDataType());
         assertEquals(BACKOFF_TIMER, backoffTimer.getBackoffTimer());
         assertEquals(BACKOFF_CAUSE, backoffTimer.getBackoffCause());
     }
