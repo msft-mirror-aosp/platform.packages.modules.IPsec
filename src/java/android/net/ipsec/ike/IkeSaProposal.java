@@ -17,7 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
+import android.annotation.SuppressLint;
 import android.os.PersistableBundle;
 import android.util.ArraySet;
 
@@ -45,9 +45,7 @@ import java.util.Set;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public final class IkeSaProposal extends SaProposal {
     private static final String PRF_KEY = "mPseudorandomFunctions";
     private final PrfTransform[] mPseudorandomFunctions;
@@ -206,6 +204,9 @@ public final class IkeSaProposal extends SaProposal {
          *     3DES) only {@link SaProposal.KEY_LEN_UNUSED} is allowed.
          * @return Builder of IkeSaProposal.
          */
+        // The matching getter is defined in the super class. Please see {@link
+        // SaProposal#getEncryptionAlgorithms}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
             validateAndAddEncryptAlgo(algorithm, keyLength);
@@ -218,6 +219,9 @@ public final class IkeSaProposal extends SaProposal {
          * @param algorithm integrity algorithm to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
          */
+        // The matching getter is defined in the super class. Please see
+        // {@link SaProposal#getIntegrityAlgorithms}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
             addIntegrityAlgo(algorithm);
@@ -230,6 +234,9 @@ public final class IkeSaProposal extends SaProposal {
          * @param dhGroup to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
          */
+        // The matching getter is defined in the super class. Please see
+        // {@link SaProposal#getDhGroups}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addDhGroup(@DhGroup int dhGroup) {
             addDh(dhGroup);

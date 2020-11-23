@@ -17,6 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -27,10 +28,10 @@ import android.net.ipsec.ike.exceptions.IkeProtocolException;
  * <p>{@link IkeSessionCallback} MUST be unique to each {@link IkeSession}. It is registered when
  * callers are requesting a new {@link IkeSession}. It is automatically unregistered when an {@link
  * IkeSession} is closed.
- *
- * @hide
  */
-@SystemApi
+// Using interface instead of abstract class to indicate this callback does not have any state or
+// implementation.
+@SuppressLint("CallbackInterface")
 public interface IkeSessionCallback {
     /**
      * Called when the {@link IkeSession} setup succeeds.
@@ -66,7 +67,11 @@ public interface IkeSessionCallback {
      * INVALID_MESSAGE_ID.
      *
      * @param exception the detailed error information.
+     * @hide
      */
+    // TODO: b/158033037 Deprecate this method and add a public API that takes an IkeException when
+    // exposing MOBIKE APIs
+    @SystemApi
     void onError(@NonNull IkeProtocolException exception);
 
     /**
