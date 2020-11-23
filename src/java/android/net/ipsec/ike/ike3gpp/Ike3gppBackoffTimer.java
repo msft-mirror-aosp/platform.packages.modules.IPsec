@@ -33,7 +33,7 @@ import java.util.Set;
  * @hide
  */
 @SystemApi
-public final class Ike3gppBackoffTimer extends Ike3gppInfo {
+public final class Ike3gppBackoffTimer extends Ike3gppData {
     /**
      * Error-Notify indicating that access is not authorized because no subscription was found for
      * the specified APN.
@@ -83,8 +83,8 @@ public final class Ike3gppBackoffTimer extends Ike3gppInfo {
     }
 
     @Override
-    public @InfoType int getInfoType() {
-        return INFO_TYPE_NOTIFY_BACKOFF_TIMER;
+    public @DataType int getDataType() {
+        return DATA_TYPE_NOTIFY_BACKOFF_TIMER;
     }
 
     /**

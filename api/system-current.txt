@@ -40,34 +40,32 @@ package android.net.ipsec.ike.exceptions {
 
 package android.net.ipsec.ike.ike3gpp {
 
-  public final class Ike3gppBackoffTimer extends android.net.ipsec.ike.ike3gpp.Ike3gppInfo {
+  public final class Ike3gppBackoffTimer extends android.net.ipsec.ike.ike3gpp.Ike3gppData {
     method public int getBackoffCause();
     method public byte getBackoffTimer();
-    method public int getInfoType();
+    method public int getDataType();
     field public static final int ERROR_TYPE_NETWORK_FAILURE = 10500; // 0x2904
     field public static final int ERROR_TYPE_NO_APN_SUBSCRIPTION = 9002; // 0x232a
   }
 
+  public abstract class Ike3gppData {
+    method public abstract int getDataType();
+    field public static final int DATA_TYPE_NOTIFY_BACKOFF_TIMER = 2; // 0x2
+    field public static final int DATA_TYPE_NOTIFY_N1_MODE_INFORMATION = 1; // 0x1
+  }
+
   public final class Ike3gppExtension {
-    ctor public Ike3gppExtension(@NonNull android.net.ipsec.ike.ike3gpp.Ike3gppParams, @NonNull android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback);
-    method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback getIke3gppCallback();
+    ctor public Ike3gppExtension(@NonNull android.net.ipsec.ike.ike3gpp.Ike3gppParams, @NonNull android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener);
+    method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener getIke3gppDataListener();
     method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppParams getIke3gppParams();
   }
 
-  public abstract static class Ike3gppExtension.Ike3gppCallback {
-    ctor public Ike3gppExtension.Ike3gppCallback();
-    method public abstract void onIke3gppPayloadsReceived(@NonNull java.util.List<android.net.ipsec.ike.ike3gpp.Ike3gppInfo>);
+  public static interface Ike3gppExtension.Ike3gppDataListener {
+    method public void onIke3gppDataReceived(@NonNull java.util.List<android.net.ipsec.ike.ike3gpp.Ike3gppData>);
   }
 
-  public abstract class Ike3gppInfo {
-    ctor public Ike3gppInfo();
-    method public abstract int getInfoType();
-    field public static final int INFO_TYPE_NOTIFY_BACKOFF_TIMER = 2; // 0x2
-    field public static final int INFO_TYPE_NOTIFY_N1_MODE_INFORMATION = 1; // 0x1
-  }
-
-  public final class Ike3gppN1ModeInformation extends android.net.ipsec.ike.ike3gpp.Ike3gppInfo {
-    method public int getInfoType();
+  public final class Ike3gppN1ModeInformation extends android.net.ipsec.ike.ike3gpp.Ike3gppData {
+    method public int getDataType();
     method @NonNull public byte[] getSnssai();
   }
 
