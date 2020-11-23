@@ -139,6 +139,12 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      * the request/response of IKE_AUTH exchange.
      */
     public static final int NOTIFY_TYPE_MOBIKE_SUPPORTED = 16396;
+    /**
+     * Used for notifying the Responder that an address change has occurred during a MOBIKE-enabled
+     * IKE Session. Only allowed in Informational exchanges sent after the IKE_AUTH exchange has
+     * finished.
+     */
+    public static final int NOTIFY_TYPE_UPDATE_SA_ADDRESSES = 16400;
 
     /**
      * Used in any INFORMATIONAL request for return routability check purposes when performing
@@ -228,6 +234,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED, "ESP TCP Padding not supported");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_MOBIKE_SUPPORTED, "MOBIKE supported");
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_UPDATE_SA_ADDRESSES, "UPDATE_SA_ADDRESSES");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_COOKIE2, "COOKIE2");
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED, "Fragmentation supported");

@@ -58,6 +58,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_UPDATE_SA_ADDRESSES;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_SA;
@@ -5553,16 +5554,58 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(expectedState, mIkeSessionStateMachine.getCurrentState());
     }
 
-    @Test
-    public void testSetNetworkIdleState() throws Exception {
+    private IkeNetworkCallbackBase setupIdleStateMachineWithMobike() throws Exception {
         IkeNetworkCallbackBase callback =
                 verifyMobikeEnabled(true /* doesPeerSupportMobike */, mMockDefaultNetwork);
+
+        // reset IkeMessageHelper to make verifying outbound req easier
+        resetMockIkeMessageHelper();
+
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
         mLooper.dispatchAll();
 
+        return callback;
+    }
+
+    @Test
+    public void testSetNetworkIdleState() throws Exception {
+        IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
+
         verifySetNetwork(
-                callback, null /* rekeySaRecord */, mIkeSessionStateMachine.mMobikeLocalMigrate);
+                callback, null /* rekeySaRecord */, mIkeSessionStateMachine.mMobikeLocalInfo);
+
+        // Verify outbound UPDATE_SA_ADDRESSES req is sent in MobikeLocalMigrate
+        verifyUpdateSaAddressesReq(true /* expectNatDetection */);
+    }
+
+    @Test
+    public void testSetNetworkIdleStateWithoutNatDetection() throws Exception {
+        IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
+
+        mIkeSessionStateMachine.mSupportNatTraversal = false;
+        mIkeSessionStateMachine.mLocalNatDetected = false;
+        mIkeSessionStateMachine.mRemoteNatDetected = false;
+
+        verifySetNetwork(
+                callback,
+                mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord,
+                mIkeSessionStateMachine.mMobikeLocalInfo);
+
+        // Verify outbound UPDATE_SA_ADDRESSES req is sent in MobikeLocalMigrate
+        verifyUpdateSaAddressesReq(false /* expectNatDetection */);
+    }
+
+    private void verifyUpdateSaAddressesReq(boolean expectNatDetection) {
+        List<IkePayload> payloadList = verifyOutInfoMsgHeaderAndGetPayloads(false /* isResp */);
+        int expectedPayloads = expectNatDetection ? 3 : 1;
+        assertEquals(expectedPayloads, payloadList.size());
+        assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_UPDATE_SA_ADDRESSES));
+
+        if (expectNatDetection) {
+            assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP));
+            assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
+        }
     }
 
     @Test
