@@ -18,7 +18,6 @@ package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 import android.os.PersistableBundle;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -50,9 +49,7 @@ import java.util.Objects;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public abstract class SaProposal {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
