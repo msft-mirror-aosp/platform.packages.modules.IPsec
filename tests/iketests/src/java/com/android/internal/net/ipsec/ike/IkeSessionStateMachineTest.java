@@ -51,6 +51,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_MOBIKE_SUPPORTED;
@@ -212,6 +213,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.Executor;
 
 public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
@@ -330,6 +332,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private static final int EAP_SIM_SUB_ID = 1;
 
     private static final int PAYLOAD_TYPE_UNSUPPORTED = 127;
+
+    private static final int COOKIE2_DATA_LEN = 64;
+
+    private static final byte[] COOKIE2_DATA = new byte[COOKIE2_DATA_LEN];
+
+    static {
+        new Random().nextBytes(COOKIE2_DATA);
+    }
 
     private static final long RETRANSMIT_BACKOFF_TIMEOUT_MS = 5000L;
 
@@ -1130,6 +1140,15 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 msgId,
                 new ArrayList<>(),
                 dummyIkePacketBytes);
+    }
+
+    private ReceivedIkePacket makeRoutabilityCheckIkeRequest() throws Exception {
+        IkeNotifyPayload cookie2Notify = new IkeNotifyPayload(NOTIFY_TYPE_COOKIE2, COOKIE2_DATA);
+        return makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                mSpyCurrentIkeSaRecord,
+                EXCHANGE_TYPE_INFORMATIONAL,
+                false /*isResp*/,
+                Arrays.asList(cookie2Notify));
     }
 
     private ReceivedIkePacket makeRekeyIkeRequest() throws Exception {
@@ -4471,6 +4490,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockBusyWakelock).release();
     }
 
+    private IkeMessage verifyAndGetOutboundInformationalResp() {
+        IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
+        IkeHeader ikeHeader = resp.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertTrue(ikeHeader.isResponseMsg);
+        assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
+        return resp;
+    }
+
     @Test
     public void testReceiveDpd() throws Exception {
         setupIdleStateMachine();
@@ -4486,12 +4515,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDpdRequest);
 
         // Verify outbound response
-        IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
-        IkeHeader ikeHeader = resp.ikeHeader;
-        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
-        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
-        assertTrue(ikeHeader.isResponseMsg);
-        assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
+        IkeMessage resp = verifyAndGetOutboundInformationalResp();
         assertTrue(resp.ikePayloadList.isEmpty());
     }
 
@@ -4517,12 +4541,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, dummyDpdRequest);
 
         // Verify outbound response
-        IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
-        IkeHeader ikeHeader = resp.ikeHeader;
-        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
-        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
-        assertTrue(ikeHeader.isResponseMsg);
-        assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
+        IkeMessage resp = verifyAndGetOutboundInformationalResp();
         assertTrue(resp.ikePayloadList.isEmpty());
     }
 
@@ -5579,5 +5598,83 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 callback,
                 mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord,
                 mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+    }
+
+    private void verifyRcvRoutabilityCheckReqAndReply() throws Exception {
+        // Receive a routability check request
+        ReceivedIkePacket dummyRequest = makeRoutabilityCheckIkeRequest();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyRequest);
+        mLooper.dispatchAll();
+
+        IkeMessage resp = verifyAndGetOutboundInformationalResp();
+
+        List<IkeNotifyPayload> notifyPayloads =
+                resp.getPayloadListForType(PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        assertEquals(1, notifyPayloads.size());
+        IkeNotifyPayload cookie2 = notifyPayloads.get(0);
+        assertEquals(NOTIFY_TYPE_COOKIE2, cookie2.notifyType);
+        assertArrayEquals(COOKIE2_DATA, cookie2.notifyData);
+    }
+
+    @Test
+    public void testRcvRoutabilityCheckReqInIdle() throws Exception {
+        setupIdleStateMachine();
+
+        verifyRcvRoutabilityCheckReqAndReply();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+    }
+
+    @Test
+    public void testRcvRoutabilityCheckReqInDpd() throws Exception {
+        executeAndVerifySendLocalDPD();
+        verifyRcvRoutabilityCheckReqAndReply();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.DpdIkeLocalInfo);
+    }
+
+    @Test
+    public void testRcvRoutabilityCheckReqInChildProcedureOngoing() throws Exception {
+        setupIdleStateMachine();
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                mLocalRequestFactory.getChildLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD,
+                        mMockChildSessionCallback,
+                        null /*childParams*/));
+        mLooper.dispatchAll();
+
+        // For conveniency to verify outbound routability check response, reset IkeMessageHelper to
+        // forget sending Delete Child request
+        resetMockIkeMessageHelper();
+
+        verifyRcvRoutabilityCheckReqAndReply();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+    }
+
+    @Test
+    public void testRcvRoutabilityCheckReqInLocalRekeyIkeCreate() throws Exception {
+        setupIdleStateMachine();
+
+        // Send Rekey-Create request
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_EXECUTE_LOCAL_REQ,
+                mLocalRequestFactory.getIkeLocalRequest(
+                        IkeSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_IKE));
+        mLooper.dispatchAll();
+
+        // For conveniency to verify outbound routability check response, reset IkeMessageHelper to
+        // forget sending Rekey Create request
+        resetMockIkeMessageHelper();
+
+        verifyRcvRoutabilityCheckReqAndReply();
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
     }
 }
