@@ -48,12 +48,14 @@ public final class IkeUdp4SocketTest extends IkeSocketTestBase {
 
     @Test
     public void testGetAndCloseIkeUdp6SocketSameNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketSameNetwork(mIkeSocketFactory);
+        verifyGetAndCloseIkeSocketSameNetwork(
+                mIkeSocketFactory, IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED);
     }
 
     @Test
     public void testGetAndCloseIkeUdp6SocketDifferentNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketDifferentNetwork(mIkeSocketFactory);
+        verifyGetAndCloseIkeSocketDifferentNetwork(
+                mIkeSocketFactory, IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED);
     }
 
     @Test

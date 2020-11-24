@@ -224,15 +224,17 @@ public abstract class IkeSocketTestBase {
                 throws ErrnoException, IOException;
     }
 
-    protected void verifyGetAndCloseIkeSocketSameNetwork(IkeSocketFactory ikeUdpSocketFactory)
-            throws Exception {
+    protected void verifyGetAndCloseIkeSocketSameNetwork(
+            IkeSocketFactory ikeUdpSocketFactory, int expectedServerPort) throws Exception {
         IkeSessionStateMachine mockIkeSessionOne = mock(IkeSessionStateMachine.class);
         IkeSessionStateMachine mockIkeSessionTwo = mock(IkeSessionStateMachine.class);
 
         IkeSocket ikeSocketOne = ikeUdpSocketFactory.getIkeSocket(mMockNetwork, mockIkeSessionOne);
+        assertEquals(expectedServerPort, ikeSocketOne.getIkeServerPort());
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
         IkeSocket ikeSocketTwo = ikeUdpSocketFactory.getIkeSocket(mMockNetwork, mockIkeSessionTwo);
+        assertEquals(expectedServerPort, ikeSocketTwo.getIkeServerPort());
         assertEquals(2, ikeSocketTwo.mAliveIkeSessions.size());
         assertEquals(ikeSocketOne, ikeSocketTwo);
 
@@ -247,8 +249,8 @@ public abstract class IkeSocketTestBase {
         verifyCloseFd(ikeSocketTwo.getFd());
     }
 
-    protected void verifyGetAndCloseIkeSocketDifferentNetwork(IkeSocketFactory ikeUdpSocketFactory)
-            throws Exception {
+    protected void verifyGetAndCloseIkeSocketDifferentNetwork(
+            IkeSocketFactory ikeUdpSocketFactory, int expectedServerPort) throws Exception {
         IkeSessionStateMachine mockIkeSessionOne = mock(IkeSessionStateMachine.class);
         IkeSessionStateMachine mockIkeSessionTwo = mock(IkeSessionStateMachine.class);
 
@@ -257,10 +259,12 @@ public abstract class IkeSocketTestBase {
 
         IkeSocket ikeSocketOne =
                 ikeUdpSocketFactory.getIkeSocket(mockNetworkOne, mockIkeSessionOne);
+        assertEquals(expectedServerPort, ikeSocketOne.getIkeServerPort());
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
         IkeSocket ikeSocketTwo =
                 ikeUdpSocketFactory.getIkeSocket(mockNetworkTwo, mockIkeSessionTwo);
+        assertEquals(expectedServerPort, ikeSocketTwo.getIkeServerPort());
         assertEquals(1, ikeSocketTwo.mAliveIkeSessions.size());
 
         assertNotEquals(ikeSocketOne, ikeSocketTwo);

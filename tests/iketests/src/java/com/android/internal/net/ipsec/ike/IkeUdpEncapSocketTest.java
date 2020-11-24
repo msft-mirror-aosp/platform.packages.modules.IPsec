@@ -121,14 +121,16 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
 
     @Test
     public void testGetAndCloseIkeUdpEncapSocketSameNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketSameNetwork(mIkeSocketFactory);
+        verifyGetAndCloseIkeSocketSameNetwork(
+                mIkeSocketFactory, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         verify(mSpyIpSecManager).openUdpEncapsulationSocket();
         verify(mSpyDummyUdpEncapSocketOne).close();
     }
 
     @Test
     public void testGetAndCloseIkeUdpEncapSocketDifferentNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketDifferentNetwork(mIkeSocketFactory);
+        verifyGetAndCloseIkeSocketDifferentNetwork(
+                mIkeSocketFactory, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         verify(mSpyIpSecManager, times(2)).openUdpEncapsulationSocket();
         verify(mSpyDummyUdpEncapSocketOne).close();
         verify(mSpyDummyUdpEncapSocketTwo).close();
