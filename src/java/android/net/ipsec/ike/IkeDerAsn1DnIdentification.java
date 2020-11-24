@@ -17,6 +17,9 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import android.os.PersistableBundle;
+
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.security.cert.X509Certificate;
 import java.util.Objects;
@@ -29,6 +32,7 @@ import javax.security.auth.x500.X500Principal;
  * <p>An example might be "CN=ike.test.android.net, O=Android, C=US".
  */
 public final class IkeDerAsn1DnIdentification extends IkeIdentification {
+    private static final String DER_ASN1_DN_KEY = "derAsn1Dn";
     /** The ASN.1 X.500 Distinguished Name */
     @NonNull public final X500Principal derAsn1Dn;
 
@@ -61,6 +65,35 @@ public final class IkeDerAsn1DnIdentification extends IkeIdentification {
 
         Objects.requireNonNull(derAsn1Dn, "derAsn1Dn not provided");
         this.derAsn1Dn = derAsn1Dn;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public static IkeDerAsn1DnIdentification fromPersistableBundle(@NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        PersistableBundle dnBundle = in.getPersistableBundle(DER_ASN1_DN_KEY);
+        Objects.requireNonNull(dnBundle, "ASN1 DN bundle is null");
+
+        return new IkeDerAsn1DnIdentification(
+                new X500Principal(PersistableBundleUtils.toByteArray(dnBundle)));
+    }
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @Override
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = super.toPersistableBundle();
+        result.putPersistableBundle(
+                DER_ASN1_DN_KEY, PersistableBundleUtils.fromByteArray(derAsn1Dn.getEncoded()));
+        return result;
     }
 
     /** @hide */
