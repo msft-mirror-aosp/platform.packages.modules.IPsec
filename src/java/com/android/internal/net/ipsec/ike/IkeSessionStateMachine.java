@@ -32,6 +32,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATU
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PARTIAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_MOBIKE_SUPPORTED;
@@ -1985,14 +1986,45 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         protected void handleGenericInfoRequest(IkeMessage ikeMessage) {
-            // TODO(b/150327849): Respond with vendor ID or config payload responses.
+            try {
+                List<IkeInformationalPayload> infoPayloadList = new ArrayList<>();
+                for (IkePayload payload : ikeMessage.ikePayloadList) {
+                    switch (payload.payloadType) {
+                        case PAYLOAD_TYPE_CP:
+                            // TODO(b/150327849): Respond with config payload responses.
+                            break;
+                        case PAYLOAD_TYPE_NOTIFY:
+                            IkeNotifyPayload notify = (IkeNotifyPayload) payload;
+                            if (notify.notifyType == NOTIFY_TYPE_COOKIE2) {
+                                infoPayloadList.add(
+                                        IkeNotifyPayload.handleCookie2AndGenerateResponse(notify));
+                            }
 
-            IkeMessage emptyInfoResp =
-                    buildEncryptedInformationalMessage(
-                            new IkeInformationalPayload[0],
-                            true /* isResponse */,
-                            ikeMessage.ikeHeader.messageId);
-            sendEncryptedIkeMessage(emptyInfoResp);
+                            // No action for other notifications
+                            break;
+                        default:
+                            logw(
+                                    "Received unexpected payload in an INFORMATIONAL request."
+                                            + " Payload type: "
+                                            + payload.payloadType);
+                    }
+                }
+
+                IkeMessage infoResp =
+                        buildEncryptedInformationalMessage(
+                                infoPayloadList.toArray(
+                                        new IkeInformationalPayload[infoPayloadList.size()]),
+                                true /* isResponse */,
+                                ikeMessage.ikeHeader.messageId);
+                sendEncryptedIkeMessage(infoResp);
+            } catch (InvalidSyntaxException e) {
+                buildAndSendErrorNotificationResponse(
+                        mCurrentIkeSaRecord,
+                        ikeMessage.ikeHeader.messageId,
+                        ERROR_TYPE_INVALID_SYNTAX);
+                handleIkeFatalError(e);
+                return;
+            }
         }
 
         protected void handleRequestIkeMessage(
@@ -4336,6 +4368,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             switch (ikeExchangeSubType) {
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     handleDeleteSessionRequest(ikeMessage);
+                    break;
+                case IKE_EXCHANGE_SUBTYPE_GENERIC_INFO:
+                    handleGenericInfoRequest(ikeMessage);
                     break;
                 default:
                     // TODO: Implement simultaneous rekey
