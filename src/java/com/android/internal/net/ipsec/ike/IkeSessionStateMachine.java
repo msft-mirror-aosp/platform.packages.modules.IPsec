@@ -434,10 +434,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** Local port assigned on device. Initialized in Initial State. */
     @VisibleForTesting int mLocalPort;
 
+    /** Indicates if both sides support NAT traversal. Set in IKE INIT. */
+    @VisibleForTesting boolean mSupportNatTraversal;
     /** Indicates if local node is behind a NAT. */
-    @VisibleForTesting boolean mIsLocalBehindNat;
+    @VisibleForTesting boolean mLocalNatDetected;
     /** Indicates if remote node is behind a NAT. */
-    @VisibleForTesting boolean mIsRemoteBehindNat;
+    @VisibleForTesting boolean mRemoteNatDetected;
     /** NATT keepalive scheduler. Initialized when a NAT is detected */
     @VisibleForTesting IkeNattKeepalive mIkeNattKeepalive;
 
@@ -2476,7 +2478,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         // a NAT is detected. It allows the ChildSessionStateMachine to build IPsec transforms that
         // can send and receive IPsec traffic through a NAT.
         private UdpEncapsulationSocket getEncapSocketIfNatDetected() {
-            boolean isNatDetected = mIsLocalBehindNat || mIsRemoteBehindNat;
+            boolean isNatDetected = mLocalNatDetected || mRemoteNatDetected;
 
             if (!isNatDetected) return null;
 
@@ -3151,11 +3153,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
             }
 
-            if (mRemoteAddress instanceof Inet4Address) {
-                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
-                // IPv6, the best we can currently do is try non-encap'd anyways
-                handleNatDetection(respMsg, natSourcePayloads, natDestPayload);
-            }
+            handleNatDetection(respMsg, natSourcePayloads, natDestPayload);
         }
 
         private void handleNatDetection(
@@ -3163,40 +3161,46 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 List<IkeNotifyPayload> natSourcePayloads,
                 IkeNotifyPayload natDestPayload)
                 throws InvalidSyntaxException, IOException {
-            if (natSourcePayloads.isEmpty() || natDestPayload == null) {
-                throw new InvalidSyntaxException("NAT detection notifications missing.");
+            if (!natSourcePayloads.isEmpty() && natDestPayload != null) {
+                mSupportNatTraversal = true;
+            } else if (natSourcePayloads.isEmpty() && natDestPayload == null) {
+                mSupportNatTraversal = false;
+                return;
+            } else {
+                throw new InvalidSyntaxException(
+                        "Missing source or destination NAT detection notification");
+            }
+
+            if (!(mRemoteAddress instanceof Inet4Address)) {
+                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
+                // IPv6, the best we can currently do is try non-encap'd anyways
+                return;
             }
 
             // NAT detection
             long initIkeSpi = respMsg.ikeHeader.ikeInitiatorSpi;
             long respIkeSpi = respMsg.ikeHeader.ikeResponderSpi;
-            mIsLocalBehindNat = true;
-            mIsRemoteBehindNat = true;
 
             // Check if local node is behind NAT
             byte[] expectedLocalNatData =
                     IkeNotifyPayload.generateNatDetectionData(
                             initIkeSpi, respIkeSpi, mLocalAddress, mLocalPort);
-            mIsLocalBehindNat = !Arrays.equals(expectedLocalNatData, natDestPayload.notifyData);
+            mLocalNatDetected = !Arrays.equals(expectedLocalNatData, natDestPayload.notifyData);
 
             // Check if the remote node is behind NAT
             byte[] expectedRemoteNatData =
                     IkeNotifyPayload.generateNatDetectionData(
                             initIkeSpi, respIkeSpi, mRemoteAddress, mIkeSocket.getIkeServerPort());
+            mRemoteNatDetected = true;
             for (IkeNotifyPayload natPayload : natSourcePayloads) {
                 // If none of the received hash matches the expected value, the remote node is
                 // behind NAT.
                 if (Arrays.equals(expectedRemoteNatData, natPayload.notifyData)) {
-                    mIsRemoteBehindNat = false;
+                    mRemoteNatDetected = false;
                 }
             }
 
-            if (mIsLocalBehindNat || mIsRemoteBehindNat) {
-                if (!(mRemoteAddress instanceof Inet4Address)) {
-                    handleIkeFatalError(
-                            new IllegalStateException("Remote IPv6 server was behind a NAT"));
-                }
-
+            if (mLocalNatDetected || mRemoteNatDetected) {
                 logd("Switching to UDP encap socket");
 
                 try {
