@@ -36,6 +36,7 @@ import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 import android.os.PersistableBundle;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
@@ -170,6 +171,20 @@ public final class IkeSessionParams {
     static final int[] IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT =
             new int[] {500, 1000, 2000, 4000, 8000};
 
+    private static final String SERVER_HOST_NAME_KEY = "mServerHostname";
+    private static final String SA_PROPOSALS_KEY = "mSaProposals";
+    private static final String LOCAL_ID_KEY = "mLocalIdentification";
+    private static final String REMOTE_ID_KEY = "mRemoteIdentification";
+    private static final String LOCAL_AUTH_KEY = "mLocalAuthConfig";
+    private static final String REMOTE_AUTH_KEY = "mRemoteAuthConfig";
+    private static final String CONFIG_ATTRIBUTES_KEY = "mConfigRequests";
+    private static final String RETRANS_TIMEOUTS_KEY = "mRetransTimeoutMsList";
+    private static final String IKE_OPTIONS_KEY = "mIkeOptions";
+    private static final String HARD_LIFETIME_SEC_KEY = "mHardLifetimeSec";
+    private static final String SOFT_LIFETIME_SEC_KEY = "mSoftLifetimeSec";
+    private static final String DPD_DELAY_SEC_KEY = "mDpdDelaySec";
+    private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
+
     @NonNull private final String mServerHostname;
     @NonNull private final Network mNetwork;
     @Nullable private final Network mCallerConfiguredNetwork;
@@ -250,6 +265,111 @@ public final class IkeSessionParams {
 
     private static long getOptionBitValue(int ikeOption) {
         return 1 << ikeOption;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * <p>Constructed IkeSessionParams is guaranteed to be valid, as checked by the
+     * IkeSessionParams.Builder
+     *
+     * @hide
+     */
+    @NonNull
+    public static IkeSessionParams fromPersistableBundle(
+            @NonNull PersistableBundle in, Context context) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        IkeSessionParams.Builder builder = new IkeSessionParams.Builder(context);
+
+        builder.setServerHostname(in.getString(SERVER_HOST_NAME_KEY));
+
+        PersistableBundle proposalBundle = in.getPersistableBundle(SA_PROPOSALS_KEY);
+        Objects.requireNonNull(in, "SA Proposals is null");
+        List<IkeSaProposal> saProposals =
+                PersistableBundleUtils.toList(proposalBundle, IkeSaProposal::fromPersistableBundle);
+        for (IkeSaProposal proposal : saProposals) {
+            builder.addSaProposal(proposal);
+        }
+
+        builder.setLocalIdentification(
+                IkeIdentification.fromPersistableBundle(in.getPersistableBundle(LOCAL_ID_KEY)));
+        builder.setRemoteIdentification(
+                IkeIdentification.fromPersistableBundle(in.getPersistableBundle(REMOTE_ID_KEY)));
+        builder.setAuth(
+                IkeAuthConfig.fromPersistableBundle(in.getPersistableBundle(LOCAL_AUTH_KEY)),
+                IkeAuthConfig.fromPersistableBundle(in.getPersistableBundle(REMOTE_AUTH_KEY)));
+
+        PersistableBundle configBundle = in.getPersistableBundle(CONFIG_ATTRIBUTES_KEY);
+        Objects.requireNonNull(configBundle, "configBundle is null");
+        List<ConfigAttribute> configList =
+                PersistableBundleUtils.toList(configBundle, ConfigAttribute::fromPersistableBundle);
+        for (ConfigAttribute configAttribute : configList) {
+            builder.addConfigRequest((IkeConfigAttribute) configAttribute);
+        }
+
+        builder.setRetransmissionTimeoutsMillis(in.getIntArray(RETRANS_TIMEOUTS_KEY));
+
+        long ikeOptions = in.getLong(IKE_OPTIONS_KEY);
+        for (int option = MIN_IKE_OPTION; option <= MAX_IKE_OPTION; option++) {
+            if (hasIkeOption(ikeOptions, option)) {
+                builder.addIkeOption(option);
+            } else {
+                builder.removeIkeOption(option);
+            }
+        }
+
+        builder.setLifetimeSeconds(
+                in.getInt(HARD_LIFETIME_SEC_KEY), in.getInt(SOFT_LIFETIME_SEC_KEY));
+        builder.setDpdDelaySeconds(in.getInt(DPD_DELAY_SEC_KEY));
+
+        // Fragmentation policy is not configurable. IkeSessionParams will always be constructed to
+        // support fragmentation.
+        if (!in.getBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY)) {
+            throw new IllegalArgumentException("Invalid fragmentation policy");
+        }
+
+        return builder.build();
+    }
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        if (mCallerConfiguredNetwork != null || mIke3gppExtension != null) {
+            throw new IllegalStateException(
+                    "Cannot convert a IkeSessionParams with a caller configured network or with"
+                            + " 3GPP extension enabled");
+        }
+        final PersistableBundle result = new PersistableBundle();
+
+        result.putString(SERVER_HOST_NAME_KEY, mServerHostname);
+
+        PersistableBundle saProposalBundle =
+                PersistableBundleUtils.fromList(
+                        Arrays.asList(mSaProposals), IkeSaProposal::toPersistableBundle);
+        result.putPersistableBundle(SA_PROPOSALS_KEY, saProposalBundle);
+
+        result.putPersistableBundle(LOCAL_ID_KEY, mLocalIdentification.toPersistableBundle());
+        result.putPersistableBundle(REMOTE_ID_KEY, mRemoteIdentification.toPersistableBundle());
+        result.putPersistableBundle(LOCAL_AUTH_KEY, mLocalAuthConfig.toPersistableBundle());
+        result.putPersistableBundle(REMOTE_AUTH_KEY, mRemoteAuthConfig.toPersistableBundle());
+
+        PersistableBundle configAttributeBundle =
+                PersistableBundleUtils.fromList(
+                        Arrays.asList(mConfigRequests), ConfigAttribute::toPersistableBundle);
+        result.putPersistableBundle(CONFIG_ATTRIBUTES_KEY, configAttributeBundle);
+
+        result.putIntArray(RETRANS_TIMEOUTS_KEY, mRetransTimeoutMsList);
+        result.putLong(IKE_OPTIONS_KEY, mIkeOptions);
+        result.putInt(HARD_LIFETIME_SEC_KEY, mHardLifetimeSec);
+        result.putInt(SOFT_LIFETIME_SEC_KEY, mSoftLifetimeSec);
+        result.putInt(DPD_DELAY_SEC_KEY, mDpdDelaySec);
+        result.putBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY, mIsIkeFragmentationSupported);
+
+        return result;
     }
 
     /**
@@ -364,10 +484,14 @@ public final class IkeSessionParams {
         return mIke3gppExtension;
     }
 
+    private static boolean hasIkeOption(long ikeOptionsRecord, @IkeOption int ikeOption) {
+        validateIkeOptionOrThrow(ikeOption);
+        return (ikeOptionsRecord & getOptionBitValue(ikeOption)) != 0;
+    }
+
     /** Checks if the given IKE Session negotiation option is set */
     public boolean hasIkeOption(@IkeOption int ikeOption) {
-        validateIkeOptionOrThrow(ikeOption);
-        return (mIkeOptions & getOptionBitValue(ikeOption)) != 0;
+        return hasIkeOption(mIkeOptions, ikeOption);
     }
 
     /** @hide */
@@ -394,6 +518,55 @@ public final class IkeSessionParams {
     @NonNull
     public List<IkeConfigRequest> getConfigurationRequests() {
         return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
+    }
+
+    /** @hide */
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                mServerHostname,
+                mCallerConfiguredNetwork,
+                mNetwork,
+                Arrays.hashCode(mSaProposals),
+                mLocalIdentification,
+                mRemoteIdentification,
+                mLocalAuthConfig,
+                mRemoteAuthConfig,
+                mIke3gppExtension,
+                Arrays.hashCode(mConfigRequests),
+                Arrays.hashCode(mRetransTimeoutMsList),
+                mIkeOptions,
+                mHardLifetimeSec,
+                mSoftLifetimeSec,
+                mDpdDelaySec,
+                mIsIkeFragmentationSupported);
+    }
+
+    /** @hide */
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof IkeSessionParams)) {
+            return false;
+        }
+
+        IkeSessionParams other = (IkeSessionParams) o;
+
+        return mServerHostname.equals(other.mServerHostname)
+                && Objects.equals(mCallerConfiguredNetwork, other.mCallerConfiguredNetwork)
+                && Objects.equals(mNetwork, other.mNetwork)
+                && Arrays.equals(mSaProposals, other.mSaProposals)
+                && mLocalIdentification.equals(other.mLocalIdentification)
+                && mRemoteIdentification.equals(other.mRemoteIdentification)
+                && mLocalAuthConfig.equals(other.mLocalAuthConfig)
+                && mRemoteAuthConfig.equals(other.mRemoteAuthConfig)
+                && Objects.equals(mIke3gppExtension, other.mIke3gppExtension)
+                && Arrays.equals(mConfigRequests, other.mConfigRequests)
+                && Arrays.equals(mRetransTimeoutMsList, other.mRetransTimeoutMsList)
+                && mIkeOptions == other.mIkeOptions
+                && mHardLifetimeSec == other.mHardLifetimeSec
+                && mSoftLifetimeSec == other.mSoftLifetimeSec
+                && mDpdDelaySec == other.mDpdDelaySec
+                && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
     }
 
     /** Represents an IKE session configuration request type */
@@ -898,6 +1071,7 @@ public final class IkeSessionParams {
 
         @NonNull private String mServerHostname;
         @Nullable private Network mCallerConfiguredNetwork;
+        @Nullable private Network mNetwork;
 
         @Nullable private IkeIdentification mLocalIdentification;
         @Nullable private IkeIdentification mRemoteIdentification;
@@ -914,7 +1088,7 @@ public final class IkeSessionParams {
 
         private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
 
-        private boolean mIsIkeFragmentationSupported = false;
+        private final boolean mIsIkeFragmentationSupported = true;
 
         /**
          * Construct Builder
@@ -980,6 +1154,7 @@ public final class IkeSessionParams {
             }
 
             mCallerConfiguredNetwork = network;
+            mNetwork = network;
             return this;
         }
 
@@ -1039,6 +1214,18 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Configures authentication for IKE Session. Internal use only.
+         *
+         * @hide
+         */
+        @NonNull
+        private Builder setAuth(IkeAuthConfig local, IkeAuthConfig remote) {
+            mLocalAuthConfig = local;
+            mRemoteAuthConfig = remote;
+            return this;
+        }
+
+        /**
          * Configures the {@link IkeSession} to use pre-shared-key-based authentication.
          *
          * <p>Both client and server MUST be authenticated using the provided shared key. IKE
@@ -1059,9 +1246,7 @@ public final class IkeSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            mLocalAuthConfig = new IkeAuthPskConfig(sharedKey);
-            mRemoteAuthConfig = new IkeAuthPskConfig(sharedKey);
-            return this;
+            return setAuth(new IkeAuthPskConfig(sharedKey), new IkeAuthPskConfig(sharedKey));
         }
 
         /**
@@ -1105,10 +1290,9 @@ public final class IkeSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            mLocalAuthConfig = new IkeAuthEapConfig(eapConfig);
-            mRemoteAuthConfig = new IkeAuthDigitalSignRemoteConfig(serverCaCert);
-
-            return this;
+            return setAuth(
+                    new IkeAuthEapConfig(eapConfig),
+                    new IkeAuthDigitalSignRemoteConfig(serverCaCert));
         }
 
         /**
@@ -1181,11 +1365,22 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("Unsupported private key type");
             }
 
-            mLocalAuthConfig =
+            IkeAuthConfig localConfig =
                     new IkeAuthDigitalSignLocalConfig(
                             clientEndCert, clientIntermediateCerts, clientPrivateKey);
-            mRemoteAuthConfig = new IkeAuthDigitalSignRemoteConfig(serverCaCert);
+            IkeAuthConfig remoteConfig = new IkeAuthDigitalSignRemoteConfig(serverCaCert);
 
+            return setAuth(localConfig, remoteConfig);
+        }
+
+        /**
+         * Adds a configuration request. Internal use only.
+         *
+         * @hide
+         */
+        @NonNull
+        private Builder addConfigRequest(IkeConfigAttribute configReq) {
+            mConfigRequestList.add(configReq);
             return this;
         }
 
@@ -1203,13 +1398,12 @@ public final class IkeSessionParams {
             }
 
             if (address instanceof Inet4Address) {
-                mConfigRequestList.add(new ConfigAttributeIpv4Pcscf((Inet4Address) address));
+                return addConfigRequest(new ConfigAttributeIpv4Pcscf((Inet4Address) address));
             } else if (address instanceof Inet6Address) {
-                mConfigRequestList.add(new ConfigAttributeIpv6Pcscf((Inet6Address) address));
+                return addConfigRequest(new ConfigAttributeIpv6Pcscf((Inet6Address) address));
             } else {
                 throw new IllegalArgumentException("Invalid address family");
             }
-            return this;
         }
 
         /**
@@ -1222,11 +1416,9 @@ public final class IkeSessionParams {
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
-                mConfigRequestList.add(new ConfigAttributeIpv4Pcscf());
-                return this;
+                return addConfigRequest(new ConfigAttributeIpv4Pcscf());
             } else if (addressFamily == AF_INET6) {
-                mConfigRequestList.add(new ConfigAttributeIpv6Pcscf());
-                return this;
+                return addConfigRequest(new ConfigAttributeIpv6Pcscf());
             } else {
                 throw new IllegalArgumentException("Invalid address family: " + addressFamily);
             }
