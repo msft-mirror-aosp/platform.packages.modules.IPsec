@@ -40,6 +40,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_UPDATE_SA_ADDRESSES;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_CP;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_DELETE;
@@ -524,7 +525,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
     @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
     @VisibleForTesting final State mDpdIkeLocalInfo = new DpdIkeLocalInfo();
-    @VisibleForTesting final State mMobikeLocalMigrate = new MobikeLocalMigrateState();
+    @VisibleForTesting final State mMobikeLocalInfo = new MobikeLocalInfo();
 
     /** Constructor for testing. */
     @VisibleForTesting
@@ -637,7 +638,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             addState(mRekeyIkeRemoteDelete, mKillIkeSessionParent);
             addState(mDeleteIkeLocalDelete, mKillIkeSessionParent);
             addState(mDpdIkeLocalInfo, mKillIkeSessionParent);
-            addState(mMobikeLocalMigrate, mKillIkeSessionParent);
+            addState(mMobikeLocalInfo, mKillIkeSessionParent);
         // CHECKSTYLE:ON IndentationCheck
 
         setInitialState(mInitial);
@@ -1336,7 +1337,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     transitionTo(mChildProcedureOngoing);
                     break;
                 case CMD_LOCAL_REQUEST_MOBIKE:
-                    transitionTo(mMobikeLocalMigrate);
+                    transitionTo(mMobikeLocalInfo);
                     break;
                 default:
                     cleanUpAndQuit(
@@ -5010,12 +5011,51 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     }
 
     /** MobikeLocalMigrateState initiates an UPDATE_SA_ADDRESSES exchange for the IKE Session. */
-    class MobikeLocalMigrateState extends DeleteBase {
-        // TODO(b/172014224): handle retransmission for the UPDATE_SA_ADDRESSES request
+    class MobikeLocalInfo extends DeleteBase {
+        private Retransmitter mRetransmitter;
 
         @Override
         public void enterState() {
-            // TODO(b/172014224): send UPDATE_SA_ADDRESSES req to peer
+            mRetransmitter = new EncryptedRetransmitter(buildUpdateSaAddressesReq());
+        }
+
+        private IkeMessage buildUpdateSaAddressesReq() {
+            // Generics required for addNatDetectionPayloadsToList that takes List<IkePayload> and
+            // buildEncryptedInformationalMessage that takes InformationalPayload[].
+            List<? super IkeInformationalPayload> payloadList = new ArrayList<>();
+            payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_UPDATE_SA_ADDRESSES));
+
+            // Only bother sending NAT detection payloads if NAT-T is supported in this IKE Session
+            if (mSupportNatTraversal) {
+                addNatDetectionPayloadsToList(
+                        (List<IkePayload>) payloadList,
+                        mLocalAddress,
+                        mRemoteAddress,
+                        mLocalPort,
+                        mIkeSocket.getIkeServerPort(),
+                        mCurrentIkeSaRecord.getInitiatorSpi(),
+                        mCurrentIkeSaRecord.getResponderSpi());
+            }
+
+            return buildEncryptedInformationalMessage(
+                    mCurrentIkeSaRecord,
+                    payloadList.toArray(new IkeInformationalPayload[payloadList.size()]),
+                    false /* isResp */,
+                    mCurrentIkeSaRecord.getLocalRequestMessageId());
+        }
+
+        @Override
+        protected void triggerRetransmit() {
+            mRetransmitter.retransmit();
+        }
+
+        @Override
+        public void exitState() {
+            super.exitState();
+
+            if (mRetransmitter != null) {
+                mRetransmitter.stopRetransmitting();
+            }
         }
 
         @Override
@@ -5027,6 +5067,32 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void handleResponseIkeMessage(IkeMessage msg) {
             // TODO(b/172014224): handle resp from peer
+        }
+    }
+
+    private static void addNatDetectionPayloadsToList(
+            List<IkePayload> payloadList,
+            InetAddress localAddr,
+            InetAddress remoteAddr,
+            int localPort,
+            int remotePort,
+            long initIkeSpi,
+            long respIkeSpi) {
+        if (localAddr instanceof Inet4Address) {
+            // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
+            // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
+            // in which the payloads were not in the "right" order" due to the lack of clarity
+            // of the payload order.
+            payloadList.add(
+                    new IkeNotifyPayload(
+                            NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
+                            IkeNotifyPayload.generateNatDetectionData(
+                                    initIkeSpi, respIkeSpi, localAddr, localPort)));
+            payloadList.add(
+                    new IkeNotifyPayload(
+                            NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
+                            IkeNotifyPayload.generateNatDetectionData(
+                                    initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
         }
     }
 
@@ -5050,22 +5116,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             selectedDhGroup,
                             IkeSaPayload.createInitialIkeSaPayload(saProposals),
                             randomFactory);
-            if (localAddr instanceof Inet4Address) {
-                // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
-                // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
-                // in which the payloads were not in the "right" order" due to the lack of clarity
-                // of the payload order.
-                payloadList.add(
-                        new IkeNotifyPayload(
-                                NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
-                                IkeNotifyPayload.generateNatDetectionData(
-                                        initIkeSpi, respIkeSpi, localAddr, localPort)));
-                payloadList.add(
-                        new IkeNotifyPayload(
-                                NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
-                                IkeNotifyPayload.generateNatDetectionData(
-                                        initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
-            }
+
+            addNatDetectionPayloadsToList(
+                    payloadList,
+                    localAddr,
+                    remoteAddr,
+                    localPort,
+                    remotePort,
+                    initIkeSpi,
+                    respIkeSpi);
 
             return payloadList;
         }
