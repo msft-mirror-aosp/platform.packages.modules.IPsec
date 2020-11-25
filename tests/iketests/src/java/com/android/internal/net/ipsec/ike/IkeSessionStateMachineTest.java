@@ -5729,7 +5729,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyUpdateSaAddressesResp(
                 true /* natTraversalSupported */,
                 true /* localNatDetected */,
-                true /* remoteNatDetected */);
+                true /* remoteNatDetected */,
+                mIkeSessionStateMachine.mNetwork,
+                mIkeSessionStateMachine.mLocalAddress,
+                mIkeSessionStateMachine.mRemoteAddress);
     }
 
     @Test
@@ -5746,7 +5749,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyUpdateSaAddressesResp(
                 false /* natTraversalSupported */,
                 false /* localNatDetected */,
-                false /* remoteNatDetected */);
+                false /* remoteNatDetected */,
+                mIkeSessionStateMachine.mNetwork,
+                mIkeSessionStateMachine.mLocalAddress,
+                mIkeSessionStateMachine.mRemoteAddress);
     }
 
     private void verifyUpdateSaAddressesReq(boolean expectNatDetection) throws Exception {
@@ -5762,7 +5768,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private void verifyUpdateSaAddressesResp(
-            boolean natTraversalSupported, boolean localNatDetected, boolean remoteNatDetected)
+            boolean natTraversalSupported,
+            boolean localNatDetected,
+            boolean remoteNatDetected,
+            Network expectedNetwork,
+            InetAddress expectedLocalAddr,
+            InetAddress expectedRemoteAddr)
             throws Exception {
         List<Integer> respPayloadTypeList = new ArrayList<>();
         List<String> respPayloadHexStringList = new ArrayList<>();
@@ -5788,6 +5799,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(natTraversalSupported, mIkeSessionStateMachine.mSupportNatTraversal);
         assertEquals(localNatDetected, mIkeSessionStateMachine.mLocalNatDetected);
         assertEquals(remoteNatDetected, mIkeSessionStateMachine.mRemoteNatDetected);
+
+        ArgumentCaptor<IkeSessionConnectionInfo> connectionInfoCaptor =
+                ArgumentCaptor.forClass(IkeSessionConnectionInfo.class);
+        verify(mMockIkeSessionCallback)
+                .onIkeSessionConnectionInfoChanged(connectionInfoCaptor.capture());
+
+        IkeSessionConnectionInfo newConnectionInfo = connectionInfoCaptor.getValue();
+        assertEquals(expectedNetwork, newConnectionInfo.getNetwork());
+        assertEquals(expectedLocalAddr, newConnectionInfo.getLocalAddress());
+        assertEquals(expectedRemoteAddr, newConnectionInfo.getRemoteAddress());
 
         // TODO(b/173237734): check IkeSocket - if includeNatDetection then expect UdpEncap
     }
