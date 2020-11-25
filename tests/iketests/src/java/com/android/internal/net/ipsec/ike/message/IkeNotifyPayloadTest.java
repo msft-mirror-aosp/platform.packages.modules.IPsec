@@ -31,6 +31,8 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
+
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -60,6 +62,7 @@ import org.junit.Test;
 
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
+import java.util.Random;
 
 public final class IkeNotifyPayloadTest {
     private static final String NOTIFY_NAT_DETECTION_PAYLOAD_HEX_STRING =
@@ -70,6 +73,15 @@ public final class IkeNotifyPayloadTest {
             "e54f73b7d83f6beb881eab2051d8663f421d10b0";
     private static final String PACKET_INFO_HEX_STRING =
             "4500009cafcd4000403208adc0a80064c0a800012ad4c0a200000001";
+
+    private static final int COOKIE_INVALID_DATA_LEN_SMALL = 7;
+    private static final int COOKIE_INVALID_DATA_LEN_LARGE = 65;
+    private static final int COOKIE_DATA_LEN = 64;
+    private static final byte[] COOKIE2_DATA_BYTES = new byte[COOKIE_DATA_LEN];
+
+    static {
+        new Random().nextBytes(COOKIE2_DATA_BYTES);
+    }
 
     private static final String NOTIFY_REKEY_PAYLOAD_BODY_HEX_STRING = "030440092ad4c0a2";
     private static final int CHILD_SPI = 0x2ad4c0a2;
@@ -119,6 +131,32 @@ public final class IkeNotifyPayloadTest {
 
         byte[] expectedBytes = TestUtils.hexStringToByteArray(NAT_DETECTION_DATA_HEX_STRING);
         assertArrayEquals(expectedBytes, netDetectionData);
+    }
+
+    @Test
+    public void testHandleAndReplyCookie2Request() throws Exception {
+        IkeNotifyPayload cookie2Req = new IkeNotifyPayload(NOTIFY_TYPE_COOKIE2, COOKIE2_DATA_BYTES);
+        IkeNotifyPayload cookie2Resp =
+                IkeNotifyPayload.handleCookie2AndGenerateResponse(cookie2Req);
+        assertArrayEquals(COOKIE2_DATA_BYTES, cookie2Resp.notifyData);
+        assertEquals(NOTIFY_TYPE_COOKIE2, cookie2Resp.notifyType);
+    }
+
+    private void checkHandleCookie2Request(int dataLen) throws Exception {
+        final byte[] invalidCookie2Data = new byte[dataLen];
+        new Random().nextBytes(invalidCookie2Data);
+        IkeNotifyPayload cookie2Req = new IkeNotifyPayload(NOTIFY_TYPE_COOKIE2, invalidCookie2Data);
+        IkeNotifyPayload.handleCookie2AndGenerateResponse(cookie2Req);
+    }
+
+    @Test(expected = InvalidSyntaxException.class)
+    public void testHandleCookie2RequestWithTooSmallLengthOfData() throws Exception {
+        checkHandleCookie2Request(COOKIE_INVALID_DATA_LEN_SMALL);
+    }
+
+    @Test(expected = InvalidSyntaxException.class)
+    public void testHandleCookie2RequestWithTooLargeLengthOfData() throws Exception {
+        checkHandleCookie2Request(COOKIE_INVALID_DATA_LEN_LARGE);
     }
 
     @Test

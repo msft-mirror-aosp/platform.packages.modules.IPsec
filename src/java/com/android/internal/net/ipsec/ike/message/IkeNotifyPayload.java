@@ -140,6 +140,12 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      */
     public static final int NOTIFY_TYPE_MOBIKE_SUPPORTED = 16396;
 
+    /**
+     * Used in any INFORMATIONAL request for return routability check purposes when performing
+     * MOBIKE.
+     */
+    public static final int NOTIFY_TYPE_COOKIE2 = 16401;
+
     /** Indicates that the sender prefers to use only eap based authentication */
     public static final int NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION = 16417;
 
@@ -158,6 +164,9 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
     private static final int ERROR_NOTIFY_TYPE_MAX = 16383;
 
     private static final String NAT_DETECTION_DIGEST_ALGORITHM = "SHA-1";
+
+    private static final int COOKIE2_DATA_LEN_MIN = 8;
+    private static final int COOKIE2_DATA_LEN_MAX = 64;
 
     private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_EXISTING_CHILD_SA;
     private static final Set<Integer> VALID_NOTIFY_TYPES_FOR_NEW_CHILD_SA;
@@ -219,6 +228,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED, "ESP TCP Padding not supported");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_MOBIKE_SUPPORTED, "MOBIKE supported");
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_COOKIE2, "COOKIE2");
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED, "Fragmentation supported");
         NOTIFY_TYPE_TO_STRING.put(
@@ -329,6 +339,18 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
             throw new ProviderException(
                     "Failed to obtain algorithm :" + NAT_DETECTION_DIGEST_ALGORITHM, e);
         }
+    }
+
+    /** Validate inbound Cookie2 request and build a response Cookie2 notify payload */
+    public static IkeNotifyPayload handleCookie2AndGenerateResponse(IkeNotifyPayload cookie2Notify)
+            throws InvalidSyntaxException {
+        byte[] notifyData = cookie2Notify.notifyData;
+        if (notifyData.length < COOKIE2_DATA_LEN_MIN || notifyData.length > COOKIE2_DATA_LEN_MAX) {
+            throw new InvalidSyntaxException(
+                    "Invalid COOKIE2 notification data with length " + notifyData.length);
+        }
+
+        return new IkeNotifyPayload(NOTIFY_TYPE_COOKIE2, notifyData);
     }
 
     /**

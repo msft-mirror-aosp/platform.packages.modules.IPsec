@@ -20,6 +20,8 @@ import android.annotation.NonNull;
 import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 
+import java.util.Objects;
+
 /**
  * Ike3gppParams is used to configure 3GPP-specific parameters to be used during an IKE Session.
  *
@@ -59,6 +61,20 @@ public final class Ike3gppParams {
      */
     public boolean hasPduSessionId() {
         return mPduSessionId != PDU_SESSION_ID_UNSET;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(mPduSessionId);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof Ike3gppParams)) {
+            return false;
+        }
+
+        return mPduSessionId == ((Ike3gppParams) o).mPduSessionId;
     }
 
     /** This class can be used to incrementally construct an {@link Ike3gppParams}. */
