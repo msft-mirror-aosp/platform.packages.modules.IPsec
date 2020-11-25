@@ -22,7 +22,7 @@ import static android.system.OsConstants.AF_INET6;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.annotation.SystemApi;
+import android.annotation.SuppressLint;
 import android.net.LinkAddress;
 import android.os.PersistableBundle;
 
@@ -48,10 +48,7 @@ import java.util.Objects;
 /**
  * TunnelModeChildSessionParams represents proposed configurations for negotiating a tunnel mode
  * Child Session.
- *
- * @hide
  */
-@SystemApi
 public final class TunnelModeChildSessionParams extends ChildSessionParams {
     /** @hide */
     private static final String CONFIG_ATTRIBUTES_KEY = "mConfigRequests";
@@ -229,6 +226,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * @param proposal Child SA proposal.
          * @return Builder this, to facilitate chaining.
          */
+        // The matching getter is defined in the super class. Please see
+        // {@link ChildSessionParams#getSaProposals}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
             if (proposal == null) {
@@ -253,6 +253,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * @param trafficSelector the inbound {@link IkeTrafficSelector}.
          * @return Builder this, to facilitate chaining.
          */
+        // The matching getter is defined in the super class. Please see {@link
+        // ChildSessionParams#getInboundTrafficSelectors}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addInboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             Objects.requireNonNull(trafficSelector, "Required argument not provided");
@@ -274,6 +277,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * @param trafficSelector the outbound {@link IkeTrafficSelector}.
          * @return Builder this, to facilitate chaining.
          */
+        // The matching getter is defined in the super class. Please see {@link
+        // ChildSessionParams#getOutboundTrafficSelectors}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addOutboundTrafficSelectors(@NonNull IkeTrafficSelector trafficSelector) {
             Objects.requireNonNull(trafficSelector, "Required argument not provided");
@@ -294,6 +300,10 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *     Defaults to 3600 seconds (1 hour). MUST be at least 120 seconds (2 minutes), and at
          *     least 60 seconds (1 minute) shorter than the hard lifetime.
          */
+        // The matching getters are defined in the super class. Please see {@link
+        // ChildSessionParams#getHardLifetimeSeconds and {@link
+        // ChildSessionParams#getSoftLifetimeSeconds}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setLifetimeSeconds(
                 @IntRange(
@@ -318,6 +328,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *     OsConstants.AF_INET6} are allowed.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests has been defined for callers to retrieve internal address
+        // requests
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addInternalAddressRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
@@ -339,6 +352,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * @param address the requested IPv4 address.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests has been defined for callers to retrieve internal address
+        // requests
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addInternalAddressRequest(@NonNull Inet4Address address) {
             if (address == null) {
@@ -358,6 +374,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * @param prefixLen length of the IPv6 address prefix length.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests has been defined for callers to retrieve internal address
+        // requests
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addInternalAddressRequest(@NonNull Inet6Address address, int prefixLen) {
             if (address == null) {
@@ -377,6 +396,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *     OsConstants.AF_INET6} are allowed.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests has been defined for callers to retrieve internal DNS server
+        // requests
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addInternalDnsServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
@@ -416,7 +438,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
         }
 
         /**
-         * Adds internal DHCP server requests to the {@link TunnelModeChildSessionParams} being
+         * Adds an internal DHCP server request to the {@link TunnelModeChildSessionParams} being
          * built.
          *
          * <p>Only DHCPv4 server requests are supported.
@@ -424,6 +446,9 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * @param addressFamily the address family. Only {@link OsConstants.AF_INET} is allowed.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests has been defined for callers to retrieve internal DHCP server
+        // requests.
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addInternalDhcpServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
