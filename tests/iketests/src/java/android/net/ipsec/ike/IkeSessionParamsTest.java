@@ -39,13 +39,16 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.Config
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.Network;
@@ -58,6 +61,7 @@ import android.telephony.TelephonyManager;
 import android.util.SparseArray;
 
 import com.android.internal.net.TestUtils;
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -68,6 +72,7 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.DSAPrivateKey;
 import java.security.interfaces.RSAKey;
+import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionParamsTest {
@@ -98,6 +103,7 @@ public final class IkeSessionParamsTest {
     private static final String EAP_MSCHAP_V2_USERNAME = "username";
     private static final String EAP_MSCHAP_V2_PASSWORD = "password";
 
+    private Context mMockContext;
     private ConnectivityManager mMockConnectManager;
     private Network mMockDefaultNetwork;
     private Network mMockUserConfigNetwork;
@@ -114,9 +120,17 @@ public final class IkeSessionParamsTest {
 
     @Before
     public void setUp() throws Exception {
+        mMockContext = mock(Context.class);
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
         mMockUserConfigNetwork = mock(Network.class);
+
+        doReturn(Context.CONNECTIVITY_SERVICE)
+                .when(mMockContext)
+                .getSystemServiceName(ConnectivityManager.class);
+        doReturn(mMockConnectManager)
+                .when(mMockContext)
+                .getSystemService(Context.CONNECTIVITY_SERVICE);
         when(mMockConnectManager.getActiveNetwork()).thenReturn(mMockDefaultNetwork);
 
         mIkeSaProposal =
@@ -153,7 +167,7 @@ public final class IkeSessionParamsTest {
         assertEquals(mLocalIdentification, sessionParams.getLocalIdentification());
         assertEquals(mRemoteIdentification, sessionParams.getRemoteIdentification());
 
-        assertFalse(sessionParams.isIkeFragmentationSupported());
+        assertTrue(sessionParams.isIkeFragmentationSupported());
     }
 
     private void verifyAuthPskConfig(IkeSessionParams sessionParams) {
@@ -243,6 +257,40 @@ public final class IkeSessionParamsTest {
         verifyAuthPskConfig(sessionParams);
 
         assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
+    }
+
+    @Test
+    public void testIkeSessionParamsEncodeDecodeIsLossLess() throws Exception {
+        IkeSessionParams sessionParams = buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS).build();
+
+        PersistableBundle bundle = sessionParams.toPersistableBundle();
+        IkeSessionParams result = IkeSessionParams.fromPersistableBundle(bundle, mMockContext);
+
+        assertEquals(sessionParams, result);
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testEncodeIkeSessionParamsWithConfiguredNetwork() throws Exception {
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setConfiguredNetwork(mMockUserConfigNetwork)
+                        .build();
+
+        PersistableBundle bundle = sessionParams.toPersistableBundle();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void testEncodeIkeSessionParamsWith3gppExtension() throws Exception {
+        Ike3gppExtension ike3gppExtension =
+                new Ike3gppExtension(
+                        new Ike3gppParams.Builder().build(), mock(Ike3gppCallback.class));
+
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setIke3gppExtension(ike3gppExtension)
+                        .build();
+
+        PersistableBundle bundle = sessionParams.toPersistableBundle();
     }
 
     @Test
@@ -661,6 +709,45 @@ public final class IkeSessionParamsTest {
     @Test
     public void testPersistableBundleEncodeDecodePskAuth() {
         verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthPskConfig(PSK));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeAuthDigitalSignRemote() throws Exception {
+        X509Certificate caCert = CertUtils.createCertFromPemFile("self-signed-ca-b.pem");
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthDigitalSignRemoteConfig(caCert));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeAuthDigitalSignRemoteWithoutCaCert()
+            throws Exception {
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthDigitalSignRemoteConfig(null));
+    }
+
+    @Test
+    public void testEqualsAuthConfigDigitalSignRemote() throws Exception {
+        X509Certificate caCert = CertUtils.createCertFromPemFile("self-signed-ca-b.pem");
+        assertEquals(
+                new IkeAuthDigitalSignRemoteConfig(caCert),
+                new IkeAuthDigitalSignRemoteConfig(caCert));
+        assertEquals(
+                new IkeAuthDigitalSignRemoteConfig(null), new IkeAuthDigitalSignRemoteConfig(null));
+        assertNotEquals(
+                new IkeAuthDigitalSignRemoteConfig(caCert),
+                new IkeAuthDigitalSignRemoteConfig(null));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeAuthDigitalSignLocal() throws Exception {
+        X509Certificate endCert = CertUtils.createCertFromPemFile("end-cert-b.pem");
+        X509Certificate intermediateCertOne =
+                CertUtils.createCertFromPemFile("intermediate-ca-b-one.pem");
+        X509Certificate intermediateCertTwo =
+                CertUtils.createCertFromPemFile("intermediate-ca-b-two.pem");
+        PrivateKey key = CertUtils.createRsaPrivateKeyFromKeyFile("end-cert-key-a.key");
+
+        verifyPersistableBundleEncodeDecodeIsLossless(
+                new IkeAuthDigitalSignLocalConfig(
+                        endCert, Arrays.asList(intermediateCertOne, intermediateCertTwo), key));
     }
 
     @Test
