@@ -24,12 +24,12 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
 import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeNormalModeCipher;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 

@@ -62,6 +62,11 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.ike.exceptions.InvalidKeException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.TemporaryFailureException;
+import android.net.ipsec.ike.exceptions.TsUnacceptableException;
 import android.os.Bundle;
 import android.os.Looper;
 import android.os.Message;
@@ -70,17 +75,13 @@ import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequestFactory;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeExchangeSubType;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.ipsec.ike.exceptions.TemporaryFailureException;
-import com.android.internal.net.ipsec.ike.exceptions.TsUnacceptableException;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
@@ -164,6 +165,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * collision in test mode.
      */
     private final IpSecSpiGenerator mIpSecSpiGenerator;
+
+    private final LocalRequestFactory mLocalRequestFactory = new LocalRequestFactory();
 
     /** User provided configurations. */
     @VisibleForTesting final ChildSessionParams mChildSessionParams;
@@ -989,7 +992,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         transitionTo(mInitial);
 
                         mChildSmCallback.scheduleRetryLocalRequest(
-                                new ChildLocalRequest(
+                                mLocalRequestFactory.getChildLocalRequest(
                                         CMD_LOCAL_REQUEST_CREATE_CHILD,
                                         mUserCallback,
                                         mChildSessionParams));

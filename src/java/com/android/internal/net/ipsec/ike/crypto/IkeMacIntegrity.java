@@ -16,11 +16,14 @@
 
 package com.android.internal.net.ipsec.ike.crypto;
 
+import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96;
+
 import android.net.IpSecAlgorithm;
 import android.net.ipsec.ike.SaProposal;
 
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 
+import java.security.GeneralSecurityException;
 import java.util.Arrays;
 
 import javax.crypto.Cipher;
@@ -43,9 +46,9 @@ public class IkeMacIntegrity extends IkeMac {
             @SaProposal.IntegrityAlgorithm int algorithmId,
             int keyLength,
             String algorithmName,
-            boolean isEncryptAlgo,
+            boolean isJceSupported,
             int checksumLength) {
-        super(algorithmId, keyLength, algorithmName, isEncryptAlgo);
+        super(algorithmId, keyLength, algorithmName, isJceSupported);
         mChecksumLength = checksumLength;
     }
 
@@ -60,7 +63,7 @@ public class IkeMacIntegrity extends IkeMac {
 
         int keyLength = 0;
         String algorithmName = "";
-        boolean isEncryptAlgo = false;
+        boolean isJceSupported = true;
         int checksumLength = 0;
 
         switch (algorithmId) {
@@ -73,8 +76,8 @@ public class IkeMacIntegrity extends IkeMac {
                 break;
             case SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96:
                 keyLength = 16;
-                isEncryptAlgo = true;
-                algorithmName = "AES/CBC/NoPadding";
+                isJceSupported = false;
+                algorithmName = ALGO_NAME_JCE_UNSUPPORTED;
                 checksumLength = 12;
                 break;
             case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128:
@@ -98,7 +101,20 @@ public class IkeMacIntegrity extends IkeMac {
         }
 
         return new IkeMacIntegrity(
-                algorithmId, keyLength, algorithmName, isEncryptAlgo, checksumLength);
+                algorithmId, keyLength, algorithmName, isJceSupported, checksumLength);
+    }
+
+    @Override
+    public byte[] signBytes(byte[] keyBytes, byte[] dataToSign) {
+        if (getAlgorithmId() == INTEGRITY_ALGORITHM_AES_XCBC_96) {
+            try {
+                return new AesXCbcImpl().mac(keyBytes, dataToSign, true /*needTruncation*/);
+            } catch (GeneralSecurityException | IllegalStateException e) {
+                throw new IllegalArgumentException("Failed to generate MAC: ", e);
+            }
+        } else {
+            return super.signBytes(keyBytes, dataToSign);
+        }
     }
 
     /**
@@ -154,9 +170,7 @@ public class IkeMacIntegrity extends IkeMac {
             case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96:
                 return new IpSecAlgorithm(IpSecAlgorithm.AUTH_HMAC_SHA1, key, mChecksumLength * 8);
             case SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96:
-                // TODO:Consider supporting AES128_XCBC in IpSecTransform.
-                throw new IllegalArgumentException(
-                        "Do not support IpSecAlgorithm with AES128_XCBC.");
+                return new IpSecAlgorithm(IpSecAlgorithm.AUTH_AES_XCBC, key, mChecksumLength * 8);
             case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128:
                 return new IpSecAlgorithm(
                         IpSecAlgorithm.AUTH_HMAC_SHA256, key, mChecksumLength * 8);

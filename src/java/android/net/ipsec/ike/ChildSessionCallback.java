@@ -17,7 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
+import android.annotation.SuppressLint;
 import android.net.IpSecTransform;
 import android.net.annotations.PolicyDirection;
 import android.net.ipsec.ike.exceptions.IkeException;
@@ -31,10 +31,10 @@ import android.net.ipsec.ike.exceptions.IkeException;
  *
  * <p>{@link ChildSessionCallback}s are also used for identifying Child Sessions. It is required
  * when a caller wants to delete a specific Child Session.
- *
- * @hide
  */
-@SystemApi
+// Using interface instead of abstract class to indicate this callback does not have any state or
+// implementation.
+@SuppressLint("CallbackInterface")
 public interface ChildSessionCallback {
     /**
      * Called when the Child Session setup succeeds.

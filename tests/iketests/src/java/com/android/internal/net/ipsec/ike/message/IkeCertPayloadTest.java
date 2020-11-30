@@ -18,7 +18,8 @@ package com.android.internal.net.ipsec.ike.message;
 
 import static org.junit.Assert.fail;
 
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
+
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
 import org.junit.Before;

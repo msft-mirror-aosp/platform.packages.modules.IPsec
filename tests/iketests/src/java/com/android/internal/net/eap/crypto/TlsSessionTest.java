@@ -22,12 +22,16 @@ import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.android.internal.net.eap.crypto.TlsSession.EapTtlsKeyingMaterial;
 import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
+import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -174,6 +178,14 @@ public class TlsSessionTest {
         assertEquals(TLS_STATUS_FAILURE, result.status);
         assertArrayEquals(EMPTY_BYTE_ARRAY, result.data);
         verify(mMockSslEngine).wrap(eq(EMPTY_APPLICATION_BUFFER), eq(EMPTY_PACKET_BUFFER));
+    }
+
+    @Test
+    public void testGenerateKeyingMaterial_handshakeNotComplete() throws Exception {
+        EapTtlsKeyingMaterial result = mTlsSession.generateKeyingMaterial();
+
+        assertFalse(result.isSuccessful());
+        assertTrue(result.eapError.cause instanceof EapInvalidRequestException);
     }
 
     /**

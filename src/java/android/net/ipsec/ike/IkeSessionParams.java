@@ -19,6 +19,9 @@ package android.net.ipsec.ike;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
+import static com.android.internal.net.ipsec.ike.utils.IkeCertUtils.certificateFromByteArray;
+import static com.android.internal.net.ipsec.ike.utils.IkeCertUtils.privateKeyFromByteArray;
+
 import android.annotation.IntDef;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
@@ -29,12 +32,16 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
+import android.os.PersistableBundle;
 
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -42,6 +49,7 @@ import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.security.PrivateKey;
+import java.security.cert.CertificateEncodingException;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAKey;
@@ -78,7 +86,21 @@ public final class IkeSessionParams {
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID, IKE_OPTION_EAP_ONLY_AUTH})
+    @IntDef({AUTH_DIRECTION_LOCAL, AUTH_DIRECTION_REMOTE, AUTH_DIRECTION_BOTH})
+    public @interface AuthDirection {}
+
+    // Constants to describe which side (local and/or remote) the authentication configuration will
+    // be used.
+    /** @hide */
+    public static final int AUTH_DIRECTION_LOCAL = 1;
+    /** @hide */
+    public static final int AUTH_DIRECTION_REMOTE = 2;
+    /** @hide */
+    public static final int AUTH_DIRECTION_BOTH = 3;
+
+    /** @hide */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID, IKE_OPTION_EAP_ONLY_AUTH, IKE_OPTION_MOBIKE})
     public @interface IkeOption {}
 
     /**
@@ -95,9 +117,24 @@ public final class IkeSessionParams {
      * <p>@see {@link Builder#setAuthEap(X509Certificate, EapSessionConfig)}
      */
     public static final int IKE_OPTION_EAP_ONLY_AUTH = 1;
+    /**
+     * If set, the IKE library will attempt to enable MOBIKE for the resulting IKE Session.
+     *
+     * <p>Use of MOBIKE in the IKE Session requires the peer to also support MOBIKE.
+     *
+     * <p>If this option is set for an IKE Session, Transport-mode SAs will not be allowed in that
+     * Session.
+     *
+     * <p>Checking for MOBIKE use in an IKE Session is done via {@link
+     * IkeSessionConfiguration#isIkeExtensionEnabled}.
+     *
+     * @hide
+     */
+    // TODO(b/170770939): update javadoc scoping to SDK S+
+    public static final int IKE_OPTION_MOBIKE = 2;
 
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_EAP_ONLY_AUTH;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_MOBIKE;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
@@ -134,8 +171,23 @@ public final class IkeSessionParams {
     static final int[] IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT =
             new int[] {500, 1000, 2000, 4000, 8000};
 
+    private static final String SERVER_HOST_NAME_KEY = "mServerHostname";
+    private static final String SA_PROPOSALS_KEY = "mSaProposals";
+    private static final String LOCAL_ID_KEY = "mLocalIdentification";
+    private static final String REMOTE_ID_KEY = "mRemoteIdentification";
+    private static final String LOCAL_AUTH_KEY = "mLocalAuthConfig";
+    private static final String REMOTE_AUTH_KEY = "mRemoteAuthConfig";
+    private static final String CONFIG_ATTRIBUTES_KEY = "mConfigRequests";
+    private static final String RETRANS_TIMEOUTS_KEY = "mRetransTimeoutMsList";
+    private static final String IKE_OPTIONS_KEY = "mIkeOptions";
+    private static final String HARD_LIFETIME_SEC_KEY = "mHardLifetimeSec";
+    private static final String SOFT_LIFETIME_SEC_KEY = "mSoftLifetimeSec";
+    private static final String DPD_DELAY_SEC_KEY = "mDpdDelaySec";
+    private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
+
     @NonNull private final String mServerHostname;
     @NonNull private final Network mNetwork;
+    @Nullable private final Network mCallerConfiguredNetwork;
 
     @NonNull private final IkeSaProposal[] mSaProposals;
 
@@ -149,6 +201,8 @@ public final class IkeSessionParams {
 
     @NonNull private final int[] mRetransTimeoutMsList;
 
+    @Nullable private final Ike3gppExtension mIke3gppExtension;
+
     private final long mIkeOptions;
 
     private final int mHardLifetimeSec;
@@ -161,6 +215,7 @@ public final class IkeSessionParams {
     private IkeSessionParams(
             @NonNull String serverHostname,
             @NonNull Network network,
+            @NonNull Network callerConfiguredNetwork,
             @NonNull IkeSaProposal[] proposals,
             @NonNull IkeIdentification localIdentification,
             @NonNull IkeIdentification remoteIdentification,
@@ -168,6 +223,7 @@ public final class IkeSessionParams {
             @NonNull IkeAuthConfig remoteAuthConfig,
             @NonNull IkeConfigAttribute[] configRequests,
             @NonNull int[] retransTimeoutMsList,
+            @Nullable Ike3gppExtension ike3gppExtension,
             long ikeOptions,
             int hardLifetimeSec,
             int softLifetimeSec,
@@ -175,6 +231,7 @@ public final class IkeSessionParams {
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
         mNetwork = network;
+        mCallerConfiguredNetwork = callerConfiguredNetwork;
 
         mSaProposals = proposals;
 
@@ -187,6 +244,8 @@ public final class IkeSessionParams {
         mConfigRequests = configRequests;
 
         mRetransTimeoutMsList = retransTimeoutMsList;
+
+        mIke3gppExtension = ike3gppExtension;
 
         mIkeOptions = ikeOptions;
 
@@ -209,6 +268,111 @@ public final class IkeSessionParams {
     }
 
     /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * <p>Constructed IkeSessionParams is guaranteed to be valid, as checked by the
+     * IkeSessionParams.Builder
+     *
+     * @hide
+     */
+    @NonNull
+    public static IkeSessionParams fromPersistableBundle(
+            @NonNull PersistableBundle in, Context context) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        IkeSessionParams.Builder builder = new IkeSessionParams.Builder(context);
+
+        builder.setServerHostname(in.getString(SERVER_HOST_NAME_KEY));
+
+        PersistableBundle proposalBundle = in.getPersistableBundle(SA_PROPOSALS_KEY);
+        Objects.requireNonNull(in, "SA Proposals is null");
+        List<IkeSaProposal> saProposals =
+                PersistableBundleUtils.toList(proposalBundle, IkeSaProposal::fromPersistableBundle);
+        for (IkeSaProposal proposal : saProposals) {
+            builder.addSaProposal(proposal);
+        }
+
+        builder.setLocalIdentification(
+                IkeIdentification.fromPersistableBundle(in.getPersistableBundle(LOCAL_ID_KEY)));
+        builder.setRemoteIdentification(
+                IkeIdentification.fromPersistableBundle(in.getPersistableBundle(REMOTE_ID_KEY)));
+        builder.setAuth(
+                IkeAuthConfig.fromPersistableBundle(in.getPersistableBundle(LOCAL_AUTH_KEY)),
+                IkeAuthConfig.fromPersistableBundle(in.getPersistableBundle(REMOTE_AUTH_KEY)));
+
+        PersistableBundle configBundle = in.getPersistableBundle(CONFIG_ATTRIBUTES_KEY);
+        Objects.requireNonNull(configBundle, "configBundle is null");
+        List<ConfigAttribute> configList =
+                PersistableBundleUtils.toList(configBundle, ConfigAttribute::fromPersistableBundle);
+        for (ConfigAttribute configAttribute : configList) {
+            builder.addConfigRequest((IkeConfigAttribute) configAttribute);
+        }
+
+        builder.setRetransmissionTimeoutsMillis(in.getIntArray(RETRANS_TIMEOUTS_KEY));
+
+        long ikeOptions = in.getLong(IKE_OPTIONS_KEY);
+        for (int option = MIN_IKE_OPTION; option <= MAX_IKE_OPTION; option++) {
+            if (hasIkeOption(ikeOptions, option)) {
+                builder.addIkeOption(option);
+            } else {
+                builder.removeIkeOption(option);
+            }
+        }
+
+        builder.setLifetimeSeconds(
+                in.getInt(HARD_LIFETIME_SEC_KEY), in.getInt(SOFT_LIFETIME_SEC_KEY));
+        builder.setDpdDelaySeconds(in.getInt(DPD_DELAY_SEC_KEY));
+
+        // Fragmentation policy is not configurable. IkeSessionParams will always be constructed to
+        // support fragmentation.
+        if (!in.getBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY)) {
+            throw new IllegalArgumentException("Invalid fragmentation policy");
+        }
+
+        return builder.build();
+    }
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        if (mCallerConfiguredNetwork != null || mIke3gppExtension != null) {
+            throw new IllegalStateException(
+                    "Cannot convert a IkeSessionParams with a caller configured network or with"
+                            + " 3GPP extension enabled");
+        }
+        final PersistableBundle result = new PersistableBundle();
+
+        result.putString(SERVER_HOST_NAME_KEY, mServerHostname);
+
+        PersistableBundle saProposalBundle =
+                PersistableBundleUtils.fromList(
+                        Arrays.asList(mSaProposals), IkeSaProposal::toPersistableBundle);
+        result.putPersistableBundle(SA_PROPOSALS_KEY, saProposalBundle);
+
+        result.putPersistableBundle(LOCAL_ID_KEY, mLocalIdentification.toPersistableBundle());
+        result.putPersistableBundle(REMOTE_ID_KEY, mRemoteIdentification.toPersistableBundle());
+        result.putPersistableBundle(LOCAL_AUTH_KEY, mLocalAuthConfig.toPersistableBundle());
+        result.putPersistableBundle(REMOTE_AUTH_KEY, mRemoteAuthConfig.toPersistableBundle());
+
+        PersistableBundle configAttributeBundle =
+                PersistableBundleUtils.fromList(
+                        Arrays.asList(mConfigRequests), ConfigAttribute::toPersistableBundle);
+        result.putPersistableBundle(CONFIG_ATTRIBUTES_KEY, configAttributeBundle);
+
+        result.putIntArray(RETRANS_TIMEOUTS_KEY, mRetransTimeoutMsList);
+        result.putLong(IKE_OPTIONS_KEY, mIkeOptions);
+        result.putInt(HARD_LIFETIME_SEC_KEY, mHardLifetimeSec);
+        result.putInt(SOFT_LIFETIME_SEC_KEY, mSoftLifetimeSec);
+        result.putInt(DPD_DELAY_SEC_KEY, mDpdDelaySec);
+        result.putBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY, mIsIkeFragmentationSupported);
+
+        return result;
+    }
+
+    /**
      * Retrieves the configured server hostname
      *
      * <p>The configured server hostname will be resolved during IKE Session creation.
@@ -218,7 +382,31 @@ public final class IkeSessionParams {
         return mServerHostname;
     }
 
-    /** Retrieves the configured {@link Network} */
+    // TODO: b/151984042 Keep #getNetwork @SystemApi and make #getConfiguredNetwork public
+
+    /**
+     * Retrieves the configured {@link Network}, or null if not configured
+     *
+     * <p>This is the initially-configured Network (with MOBIKE, the caller may later specify a new
+     * Network and that update will not persist to here).
+     *
+     * @hide
+     */
+    @Nullable
+    public Network getConfiguredNetwork() {
+        return mCallerConfiguredNetwork;
+    }
+
+    /**
+     * Retrieves the configured or default {@link Network}
+     *
+     * <p>If caller did not set any Network, this method will return the default Network resolved in
+     * {@link IkeSessionParams.Builder#build()}. The return value of this method is only
+     * informational because if MOBIKE is enabled, IKE Session may switch to a different default
+     * Network.
+     *
+     * <p>This is method will be deprecated. Callers should use {@link #getConfiguredNetwork}
+     */
     @NonNull
     public Network getNetwork() {
         return mNetwork;
@@ -290,10 +478,20 @@ public final class IkeSessionParams {
         return mRetransTimeoutMsList;
     }
 
+    /** Retrieves the configured Ike3gppExtension, or null if it was not set. */
+    @Nullable
+    public Ike3gppExtension getIke3gppExtension() {
+        return mIke3gppExtension;
+    }
+
+    private static boolean hasIkeOption(long ikeOptionsRecord, @IkeOption int ikeOption) {
+        validateIkeOptionOrThrow(ikeOption);
+        return (ikeOptionsRecord & getOptionBitValue(ikeOption)) != 0;
+    }
+
     /** Checks if the given IKE Session negotiation option is set */
     public boolean hasIkeOption(@IkeOption int ikeOption) {
-        validateIkeOptionOrThrow(ikeOption);
-        return (mIkeOptions & getOptionBitValue(ikeOption)) != 0;
+        return hasIkeOption(mIkeOptions, ikeOption);
     }
 
     /** @hide */
@@ -320,6 +518,55 @@ public final class IkeSessionParams {
     @NonNull
     public List<IkeConfigRequest> getConfigurationRequests() {
         return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
+    }
+
+    /** @hide */
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                mServerHostname,
+                mCallerConfiguredNetwork,
+                mNetwork,
+                Arrays.hashCode(mSaProposals),
+                mLocalIdentification,
+                mRemoteIdentification,
+                mLocalAuthConfig,
+                mRemoteAuthConfig,
+                mIke3gppExtension,
+                Arrays.hashCode(mConfigRequests),
+                Arrays.hashCode(mRetransTimeoutMsList),
+                mIkeOptions,
+                mHardLifetimeSec,
+                mSoftLifetimeSec,
+                mDpdDelaySec,
+                mIsIkeFragmentationSupported);
+    }
+
+    /** @hide */
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof IkeSessionParams)) {
+            return false;
+        }
+
+        IkeSessionParams other = (IkeSessionParams) o;
+
+        return mServerHostname.equals(other.mServerHostname)
+                && Objects.equals(mCallerConfiguredNetwork, other.mCallerConfiguredNetwork)
+                && Objects.equals(mNetwork, other.mNetwork)
+                && Arrays.equals(mSaProposals, other.mSaProposals)
+                && mLocalIdentification.equals(other.mLocalIdentification)
+                && mRemoteIdentification.equals(other.mRemoteIdentification)
+                && mLocalAuthConfig.equals(other.mLocalAuthConfig)
+                && mRemoteAuthConfig.equals(other.mRemoteAuthConfig)
+                && Objects.equals(mIke3gppExtension, other.mIke3gppExtension)
+                && Arrays.equals(mConfigRequests, other.mConfigRequests)
+                && Arrays.equals(mRetransTimeoutMsList, other.mRetransTimeoutMsList)
+                && mIkeOptions == other.mIkeOptions
+                && mHardLifetimeSec == other.mHardLifetimeSec
+                && mSoftLifetimeSec == other.mSoftLifetimeSec
+                && mDpdDelaySec == other.mDpdDelaySec
+                && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
     }
 
     /** Represents an IKE session configuration request type */
@@ -351,12 +598,79 @@ public final class IkeSessionParams {
 
     /** This class contains common information of an IKEv2 authentication configuration. */
     public abstract static class IkeAuthConfig {
+        private static final String AUTH_METHOD_KEY = "mAuthMethod";
+        private static final String AUTH_DIRECTION_KEY = "mAuthDirection";
         /** @hide */
         @IkeAuthMethod public final int mAuthMethod;
+        /** @hide */
+        @AuthDirection public final int mAuthDirection;
 
         /** @hide */
-        IkeAuthConfig(@IkeAuthMethod int authMethod) {
+        IkeAuthConfig(@IkeAuthMethod int authMethod, @AuthDirection int authDirection) {
             mAuthMethod = authMethod;
+            mAuthDirection = authDirection;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthConfig fromPersistableBundle(PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            int authMethod = in.getInt(AUTH_METHOD_KEY);
+            switch (authMethod) {
+                case IKE_AUTH_METHOD_PSK:
+                    return IkeAuthPskConfig.fromPersistableBundle(in);
+                case IKE_AUTH_METHOD_PUB_KEY_SIGNATURE:
+                    switch (in.getInt(AUTH_DIRECTION_KEY)) {
+                        case AUTH_DIRECTION_LOCAL:
+                            return IkeAuthDigitalSignLocalConfig.fromPersistableBundle(in);
+                        case AUTH_DIRECTION_REMOTE:
+                            return IkeAuthDigitalSignRemoteConfig.fromPersistableBundle(in);
+                        default:
+                            throw new IllegalArgumentException(
+                                    "Digital-signature-based auth configuration with invalid"
+                                            + " direction: "
+                                            + in.getInt(AUTH_DIRECTION_KEY));
+                    }
+                case IKE_AUTH_METHOD_EAP:
+                    return IkeAuthEapConfig.fromPersistableBundle(in);
+                default:
+                    throw new IllegalArgumentException("Invalid Auth Method: " + authMethod);
+            }
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        protected PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = new PersistableBundle();
+
+            result.putInt(AUTH_METHOD_KEY, mAuthMethod);
+            result.putInt(AUTH_DIRECTION_KEY, mAuthDirection);
+            return result;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(mAuthMethod, mAuthDirection);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof IkeAuthConfig)) {
+                return false;
+            }
+
+            IkeAuthConfig other = (IkeAuthConfig) o;
+
+            return mAuthMethod == other.mAuthMethod && mAuthDirection == other.mAuthDirection;
         }
     }
 
@@ -365,18 +679,64 @@ public final class IkeSessionParams {
      * of local or remote side.
      */
     public static class IkeAuthPskConfig extends IkeAuthConfig {
+        private static final String PSK_KEY = "mPsk";
         /** @hide */
         @NonNull public final byte[] mPsk;
 
-        private IkeAuthPskConfig(byte[] psk) {
-            super(IKE_AUTH_METHOD_PSK);
+        /** @hide */
+        @VisibleForTesting
+        IkeAuthPskConfig(byte[] psk) {
+            super(IKE_AUTH_METHOD_PSK, AUTH_DIRECTION_BOTH);
             mPsk = psk;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthPskConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            PersistableBundle pskBundle = in.getPersistableBundle(PSK_KEY);
+            Objects.requireNonNull(in, "PSK bundle is null");
+
+            return new IkeAuthPskConfig(PersistableBundleUtils.toByteArray(pskBundle));
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+
+            result.putPersistableBundle(PSK_KEY, PersistableBundleUtils.fromByteArray(mPsk));
+            return result;
         }
 
         /** Retrieves the pre-shared key */
         @NonNull
         public byte[] getPsk() {
             return Arrays.copyOf(mPsk, mPsk.length);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), Arrays.hashCode(mPsk));
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof IkeAuthPskConfig)) {
+                return false;
+            }
+
+            return Arrays.equals(mPsk, ((IkeAuthPskConfig) o).mPsk);
         }
     }
 
@@ -385,6 +745,7 @@ public final class IkeSessionParams {
      * authentication of the remote side.
      */
     public static class IkeAuthDigitalSignRemoteConfig extends IkeAuthConfig {
+        private static final String TRUST_CERT_KEY = "TRUST_CERT_KEY";
         /** @hide */
         @Nullable public final TrustAnchor mTrustAnchor;
 
@@ -392,9 +753,12 @@ public final class IkeSessionParams {
          * If a certificate is provided, it MUST be the root CA used by the remote (server), or
          * authentication will fail. If no certificate is provided, any root CA in the system's
          * truststore is considered acceptable.
+         *
+         * @hide
          */
-        private IkeAuthDigitalSignRemoteConfig(@Nullable X509Certificate caCert) {
-            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
+        @VisibleForTesting
+        IkeAuthDigitalSignRemoteConfig(@Nullable X509Certificate caCert) {
+            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, AUTH_DIRECTION_REMOTE);
             if (caCert == null) {
                 mTrustAnchor = null;
             } else {
@@ -407,11 +771,84 @@ public final class IkeSessionParams {
             }
         }
 
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthDigitalSignRemoteConfig fromPersistableBundle(
+                @NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            PersistableBundle trustCertBundle = in.getPersistableBundle(TRUST_CERT_KEY);
+
+            X509Certificate caCert = null;
+            if (trustCertBundle != null) {
+                byte[] encodedCert = PersistableBundleUtils.toByteArray(trustCertBundle);
+                caCert = certificateFromByteArray(encodedCert);
+            }
+
+            return new IkeAuthDigitalSignRemoteConfig(caCert);
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+
+            try {
+                if (mTrustAnchor != null) {
+                    result.putPersistableBundle(
+                            TRUST_CERT_KEY,
+                            PersistableBundleUtils.fromByteArray(
+                                    mTrustAnchor.getTrustedCert().getEncoded()));
+                }
+
+            } catch (CertificateEncodingException e) {
+                throw new IllegalArgumentException("Fail to encode the certificate");
+            }
+
+            return result;
+        }
+
         /** Retrieves the provided CA certificate for validating the remote certificate(s) */
         @Nullable
         public X509Certificate getRemoteCaCert() {
             if (mTrustAnchor == null) return null;
             return mTrustAnchor.getTrustedCert();
+        }
+
+        @Override
+        public int hashCode() {
+            // Use #getTrustedCert() because TrustAnchor does not override #hashCode()
+            return Objects.hash(
+                    super.hashCode(),
+                    (mTrustAnchor == null) ? null : mTrustAnchor.getTrustedCert());
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof IkeAuthDigitalSignRemoteConfig)) {
+                return false;
+            }
+
+            IkeAuthDigitalSignRemoteConfig other = (IkeAuthDigitalSignRemoteConfig) o;
+
+            if (mTrustAnchor == null && other.mTrustAnchor == null) {
+                return true;
+            }
+
+            // Compare #getTrustedCert() because TrustAnchor does not override #equals(Object)
+            return mTrustAnchor != null
+                    && other.mTrustAnchor != null
+                    && Objects.equals(
+                            mTrustAnchor.getTrustedCert(), other.mTrustAnchor.getTrustedCert());
         }
     }
 
@@ -420,6 +857,9 @@ public final class IkeSessionParams {
      * authentication of the local side.
      */
     public static class IkeAuthDigitalSignLocalConfig extends IkeAuthConfig {
+        private static final String END_CERT_KEY = "mEndCert";
+        private static final String INTERMEDIATE_CERTS_KEY = "mIntermediateCerts";
+        private static final String PRIVATE_KEY_KEY = "mPrivateKey";
         /** @hide */
         @NonNull public final X509Certificate mEndCert;
 
@@ -429,14 +869,83 @@ public final class IkeSessionParams {
         /** @hide */
         @NonNull public final PrivateKey mPrivateKey;
 
-        private IkeAuthDigitalSignLocalConfig(
+        /** @hide */
+        @VisibleForTesting
+        IkeAuthDigitalSignLocalConfig(
                 @NonNull X509Certificate clientEndCert,
                 @NonNull List<X509Certificate> clientIntermediateCerts,
                 @NonNull PrivateKey privateKey) {
-            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE);
+            super(IKE_AUTH_METHOD_PUB_KEY_SIGNATURE, AUTH_DIRECTION_LOCAL);
             mEndCert = clientEndCert;
             mIntermediateCerts = clientIntermediateCerts;
             mPrivateKey = privateKey;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthDigitalSignLocalConfig fromPersistableBundle(
+                @NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+
+            PersistableBundle endCertBundle = in.getPersistableBundle(END_CERT_KEY);
+            Objects.requireNonNull(endCertBundle, "End cert not provided");
+            byte[] encodedCert = PersistableBundleUtils.toByteArray(endCertBundle);
+            X509Certificate endCert = certificateFromByteArray(encodedCert);
+
+            PersistableBundle certsBundle = in.getPersistableBundle(INTERMEDIATE_CERTS_KEY);
+            Objects.requireNonNull(certsBundle, "Intermediate certs not provided");
+            List<byte[]> encodedCertList =
+                    PersistableBundleUtils.toList(certsBundle, PersistableBundleUtils::toByteArray);
+            List<X509Certificate> certList = new ArrayList<>(encodedCertList.size());
+            for (byte[] encoded : encodedCertList) {
+                certList.add(certificateFromByteArray(encoded));
+            }
+
+            PersistableBundle privateKeyBundle = in.getPersistableBundle(PRIVATE_KEY_KEY);
+            Objects.requireNonNull(privateKeyBundle, "PrivateKey bundle is null");
+            PrivateKey privateKey =
+                    privateKeyFromByteArray(PersistableBundleUtils.toByteArray(privateKeyBundle));
+            Objects.requireNonNull(privateKeyBundle, "PrivateKey is null");
+
+            return new IkeAuthDigitalSignLocalConfig(endCert, certList, privateKey);
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+
+            try {
+                result.putPersistableBundle(
+                        END_CERT_KEY, PersistableBundleUtils.fromByteArray(mEndCert.getEncoded()));
+
+                List<byte[]> encodedCertList = new ArrayList<>(mIntermediateCerts.size());
+                for (X509Certificate cert : mIntermediateCerts) {
+                    encodedCertList.add(cert.getEncoded());
+                }
+                PersistableBundle certsBundle =
+                        PersistableBundleUtils.fromList(
+                                encodedCertList, PersistableBundleUtils::fromByteArray);
+                result.putPersistableBundle(INTERMEDIATE_CERTS_KEY, certsBundle);
+            } catch (CertificateEncodingException e) {
+                throw new IllegalArgumentException("Fail to encode certificate");
+            }
+
+            // TODO: b/170670506 Consider putting PrivateKey in Android KeyStore
+            result.putPersistableBundle(
+                    PRIVATE_KEY_KEY,
+                    PersistableBundleUtils.fromByteArray(mPrivateKey.getEncoded()));
+
+            return result;
         }
 
         /** Retrieves the client end certificate */
@@ -456,6 +965,24 @@ public final class IkeSessionParams {
         public PrivateKey getPrivateKey() {
             return mPrivateKey;
         }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mEndCert, mIntermediateCerts, mPrivateKey);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof IkeAuthDigitalSignLocalConfig)) {
+                return false;
+            }
+
+            IkeAuthDigitalSignLocalConfig other = (IkeAuthDigitalSignLocalConfig) o;
+
+            return mEndCert.equals(other.mEndCert)
+                    && mIntermediateCerts.equals(other.mIntermediateCerts)
+                    && mPrivateKey.equals(other.mPrivateKey);
+        }
     }
 
     /**
@@ -464,19 +991,68 @@ public final class IkeSessionParams {
      * <p>@see {@link IkeSessionParams.Builder#setAuthEap(X509Certificate, EapSessionConfig)}
      */
     public static class IkeAuthEapConfig extends IkeAuthConfig {
+        private static final String EAP_CONFIG_KEY = "mEapConfig";
+
         /** @hide */
         @NonNull public final EapSessionConfig mEapConfig;
 
-        private IkeAuthEapConfig(EapSessionConfig eapConfig) {
-            super(IKE_AUTH_METHOD_EAP);
+        /** @hide */
+        @VisibleForTesting
+        IkeAuthEapConfig(EapSessionConfig eapConfig) {
+            super(IKE_AUTH_METHOD_EAP, AUTH_DIRECTION_LOCAL);
 
             mEapConfig = eapConfig;
+        }
+
+        /**
+         * Constructs this object by deserializing a PersistableBundle
+         *
+         * @hide
+         */
+        @NonNull
+        public static IkeAuthEapConfig fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle null");
+
+            PersistableBundle eapBundle = in.getPersistableBundle(EAP_CONFIG_KEY);
+            Objects.requireNonNull(in, "EAP Config bundle is null");
+
+            EapSessionConfig eapConfig = EapSessionConfig.fromPersistableBundle(eapBundle);
+            Objects.requireNonNull(eapConfig, "EAP Config is null");
+
+            return new IkeAuthEapConfig(eapConfig);
+        }
+
+        /**
+         * Serializes this object to a PersistableBundle
+         *
+         * @hide
+         */
+        @Override
+        @NonNull
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = super.toPersistableBundle();
+            result.putPersistableBundle(EAP_CONFIG_KEY, mEapConfig.toPersistableBundle());
+            return result;
         }
 
         /** Retrieves EAP configuration */
         @NonNull
         public EapSessionConfig getEapConfig() {
             return mEapConfig;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(super.hashCode(), mEapConfig);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!super.equals(o) || !(o instanceof IkeAuthEapConfig)) {
+                return false;
+            }
+
+            return mEapConfig.equals(((IkeAuthEapConfig) o).mEapConfig);
         }
     }
 
@@ -494,6 +1070,7 @@ public final class IkeSessionParams {
                         IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT.length);
 
         @NonNull private String mServerHostname;
+        @Nullable private Network mCallerConfiguredNetwork;
         @Nullable private Network mNetwork;
 
         @Nullable private IkeIdentification mLocalIdentification;
@@ -502,6 +1079,8 @@ public final class IkeSessionParams {
         @Nullable private IkeAuthConfig mLocalAuthConfig;
         @Nullable private IkeAuthConfig mRemoteAuthConfig;
 
+        @Nullable private Ike3gppExtension mIke3gppExtension;
+
         private long mIkeOptions = 0;
 
         private int mHardLifetimeSec = IKE_HARD_LIFETIME_SEC_DEFAULT;
@@ -509,7 +1088,7 @@ public final class IkeSessionParams {
 
         private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
 
-        private boolean mIsIkeFragmentationSupported = false;
+        private final boolean mIsIkeFragmentationSupported = true;
 
         /**
          * Construct Builder
@@ -548,6 +1127,25 @@ public final class IkeSessionParams {
          *
          * @param network the {@link Network} that IKE Session will use.
          * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @NonNull
+        public Builder setConfiguredNetwork(@NonNull Network network) {
+            return setNetwork(network);
+        }
+
+        // TODO: b/151984042 Keep #setNetwork @SystemApi and make #setConfiguredNetwork public
+
+        /**
+         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
+         *
+         * <p>If no {@link Network} is provided, the default Network (as per {@link
+         * ConnectivityManager#getActiveNetwork()}) will be used.
+         *
+         * <p>This is method will be deprecated. Callers should use {@link #setConfiguredNetwork}
+         *
+         * @param network the {@link Network} that IKE Session will use.
+         * @return Builder this, to facilitate chaining.
          */
         @NonNull
         public Builder setNetwork(@NonNull Network network) {
@@ -555,6 +1153,7 @@ public final class IkeSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
+            mCallerConfiguredNetwork = network;
             mNetwork = network;
             return this;
         }
@@ -615,6 +1214,18 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Configures authentication for IKE Session. Internal use only.
+         *
+         * @hide
+         */
+        @NonNull
+        private Builder setAuth(IkeAuthConfig local, IkeAuthConfig remote) {
+            mLocalAuthConfig = local;
+            mRemoteAuthConfig = remote;
+            return this;
+        }
+
+        /**
          * Configures the {@link IkeSession} to use pre-shared-key-based authentication.
          *
          * <p>Both client and server MUST be authenticated using the provided shared key. IKE
@@ -635,9 +1246,7 @@ public final class IkeSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            mLocalAuthConfig = new IkeAuthPskConfig(sharedKey);
-            mRemoteAuthConfig = new IkeAuthPskConfig(sharedKey);
-            return this;
+            return setAuth(new IkeAuthPskConfig(sharedKey), new IkeAuthPskConfig(sharedKey));
         }
 
         /**
@@ -681,10 +1290,9 @@ public final class IkeSessionParams {
                 throw new NullPointerException("Required argument not provided");
             }
 
-            mLocalAuthConfig = new IkeAuthEapConfig(eapConfig);
-            mRemoteAuthConfig = new IkeAuthDigitalSignRemoteConfig(serverCaCert);
-
-            return this;
+            return setAuth(
+                    new IkeAuthEapConfig(eapConfig),
+                    new IkeAuthDigitalSignRemoteConfig(serverCaCert));
         }
 
         /**
@@ -757,11 +1365,22 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("Unsupported private key type");
             }
 
-            mLocalAuthConfig =
+            IkeAuthConfig localConfig =
                     new IkeAuthDigitalSignLocalConfig(
                             clientEndCert, clientIntermediateCerts, clientPrivateKey);
-            mRemoteAuthConfig = new IkeAuthDigitalSignRemoteConfig(serverCaCert);
+            IkeAuthConfig remoteConfig = new IkeAuthDigitalSignRemoteConfig(serverCaCert);
 
+            return setAuth(localConfig, remoteConfig);
+        }
+
+        /**
+         * Adds a configuration request. Internal use only.
+         *
+         * @hide
+         */
+        @NonNull
+        private Builder addConfigRequest(IkeConfigAttribute configReq) {
+            mConfigRequestList.add(configReq);
             return this;
         }
 
@@ -779,13 +1398,12 @@ public final class IkeSessionParams {
             }
 
             if (address instanceof Inet4Address) {
-                mConfigRequestList.add(new ConfigAttributeIpv4Pcscf((Inet4Address) address));
+                return addConfigRequest(new ConfigAttributeIpv4Pcscf((Inet4Address) address));
             } else if (address instanceof Inet6Address) {
-                mConfigRequestList.add(new ConfigAttributeIpv6Pcscf((Inet6Address) address));
+                return addConfigRequest(new ConfigAttributeIpv6Pcscf((Inet6Address) address));
             } else {
                 throw new IllegalArgumentException("Invalid address family");
             }
-            return this;
         }
 
         /**
@@ -798,11 +1416,9 @@ public final class IkeSessionParams {
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
-                mConfigRequestList.add(new ConfigAttributeIpv4Pcscf());
-                return this;
+                return addConfigRequest(new ConfigAttributeIpv4Pcscf());
             } else if (addressFamily == AF_INET6) {
-                mConfigRequestList.add(new ConfigAttributeIpv6Pcscf());
-                return this;
+                return addConfigRequest(new ConfigAttributeIpv6Pcscf());
             } else {
                 throw new IllegalArgumentException("Invalid address family: " + addressFamily);
             }
@@ -894,6 +1510,25 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Sets the parameters to be used for 3GPP-specific behavior during the IKE Session.
+         *
+         * <p>Setting the Ike3gppExtension also enables support for non-configurable payloads, such
+         * as the Notify - BACKOFF_TIMER payload.
+         *
+         * @see 3GPP ETSI TS 24.302: Access to the 3GPP Evolved Packet Core (EPC) via non-3GPP
+         *     access networks
+         * @param ike3gppExtension the Ike3gppExtension to use for this IKE Session.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder setIke3gppExtension(@NonNull Ike3gppExtension ike3gppExtension) {
+            Objects.requireNonNull(ike3gppExtension, "ike3gppExtension must not be null");
+
+            mIke3gppExtension = ike3gppExtension;
+            return this;
+        }
+
+        /**
          * Sets the specified IKE Option as enabled.
          *
          * @param ikeOption the option to be enabled.
@@ -930,7 +1565,10 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
 
-            Network network = mNetwork != null ? mNetwork : mConnectivityManager.getActiveNetwork();
+            Network network =
+                    mCallerConfiguredNetwork != null
+                            ? mCallerConfiguredNetwork
+                            : mConnectivityManager.getActiveNetwork();
             if (network == null) {
                 throw new IllegalArgumentException("Network not found");
             }
@@ -967,6 +1605,7 @@ public final class IkeSessionParams {
             return new IkeSessionParams(
                     mServerHostname,
                     network,
+                    mCallerConfiguredNetwork,
                     mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,
                     mRemoteIdentification,
@@ -974,6 +1613,7 @@ public final class IkeSessionParams {
                     mRemoteAuthConfig,
                     mConfigRequestList.toArray(new IkeConfigAttribute[0]),
                     mRetransTimeoutMsList,
+                    mIke3gppExtension,
                     mIkeOptions,
                     mHardLifetimeSec,
                     mSoftLifetimeSec,

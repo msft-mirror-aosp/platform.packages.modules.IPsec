@@ -16,7 +16,10 @@
 
 package com.android.internal.net.ipsec.ike.crypto;
 
+import static android.net.IpSecAlgorithm.AUTH_AES_XCBC;
+
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -164,5 +167,22 @@ public final class IkeMacIntegrityTest {
         byte[] expectedBytes =
                 TestUtils.hexStringToByteArray(AUTH_AES128XCBC_CALCULATED_MAC_HEX_STRING1);
         assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testBuildIpSecAlgorithmFromAuthAes128XCbcMac() throws Exception {
+        byte[] keyBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_KEY_HEX_STRING);
+
+        if (IpSecAlgorithm.getSupportedAlgorithms().contains(AUTH_AES_XCBC)) {
+            IpSecAlgorithm algo = mAes128XCbcIntgerityMac.buildIpSecAlgorithmWithKey(keyBytes);
+            assertEquals(AUTH_AES_XCBC, algo.getName());
+            assertArrayEquals(keyBytes, algo.getKey());
+        } else {
+            try {
+                mAes128XCbcIntgerityMac.buildIpSecAlgorithmWithKey(keyBytes);
+                fail("Expect to fail because this device does not support AES-XCBC for IPsec");
+            } catch (IllegalArgumentException expected) {
+            }
+        }
     }
 }

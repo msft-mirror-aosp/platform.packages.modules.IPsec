@@ -33,12 +33,15 @@ java_sdk_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
+        "conscrypt.module.public.api",
     ],
 
     api_packages: [
         "android.net.eap",
         "android.net.ipsec.ike",
         "android.net.ipsec.ike.exceptions",
+        "android.net.ipsec.ike.exceptions.protocol",
+        "android.net.ipsec.ike.ike3gpp",
     ],
 
     hidden_api_packages: [
@@ -96,4 +99,12 @@ java_library {
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",
+}
+
+filegroup {
+    name: "ike-test-utils",
+    srcs: [
+        "src/java/**/IkeCertUtils.java",
+        "tests/iketests/src/java/**/CertUtils.java",
+    ],
 }

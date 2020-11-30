@@ -17,7 +17,8 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
+import android.annotation.SuppressLint;
+import android.os.PersistableBundle;
 import android.util.ArraySet;
 
 import com.android.internal.net.ipsec.ike.message.IkePayload;
@@ -26,10 +27,12 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransfo
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -42,10 +45,9 @@ import java.util.Set;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public final class IkeSaProposal extends SaProposal {
+    private static final String PRF_KEY = "mPseudorandomFunctions";
     private final PrfTransform[] mPseudorandomFunctions;
 
     /**
@@ -68,6 +70,65 @@ public final class IkeSaProposal extends SaProposal {
             DhGroupTransform[] dhGroups) {
         super(IkePayload.PROTOCOL_ID_IKE, encryptionAlgos, integrityAlgos, dhGroups);
         mPseudorandomFunctions = prfs;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * <p>Constructed proposals are guaranteed to be valid, as checked by the IkeSaProposal.Builder.
+     *
+     * @hide
+     */
+    @NonNull
+    public static IkeSaProposal fromPersistableBundle(@NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        IkeSaProposal.Builder builder = new IkeSaProposal.Builder();
+
+        PersistableBundle encryptionBundle = in.getPersistableBundle(ENCRYPT_ALGO_KEY);
+        Objects.requireNonNull(encryptionBundle, "Encryption algo bundle is null");
+        List<EncryptionTransform> encryptList =
+                PersistableBundleUtils.toList(
+                        encryptionBundle, EncryptionTransform::fromPersistableBundle);
+        for (EncryptionTransform t : encryptList) {
+            builder.addEncryptionAlgorithm(t.id, t.getSpecifiedKeyLength());
+        }
+
+        int[] integrityAlgoIdArray = in.getIntArray(INTEGRITY_ALGO_KEY);
+        Objects.requireNonNull(integrityAlgoIdArray, "Integrity algo array is null");
+        for (int algo : integrityAlgoIdArray) {
+            builder.addIntegrityAlgorithm(algo);
+        }
+
+        int[] dhGroupArray = in.getIntArray(DH_GROUP_KEY);
+        Objects.requireNonNull(dhGroupArray, "DH Group array is null");
+        for (int dh : dhGroupArray) {
+            builder.addDhGroup(dh);
+        }
+
+        int[] prfArray = in.getIntArray(PRF_KEY);
+        Objects.requireNonNull(prfArray, "PRF array is null");
+        for (int prf : prfArray) {
+            builder.addPseudorandomFunction(prf);
+        }
+
+        return builder.build();
+    }
+
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @Override
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = super.toPersistableBundle();
+
+        int[] prfArray = getPseudorandomFunctions().stream().mapToInt(i -> i).toArray();
+        result.putIntArray(PRF_KEY, prfArray);
+
+        return result;
     }
 
     /**
@@ -111,6 +172,20 @@ public final class IkeSaProposal extends SaProposal {
                         ((IkeSaProposal) reqProposal).mPseudorandomFunctions);
     }
 
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), Arrays.hashCode(mPseudorandomFunctions));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!super.equals(o) || !(o instanceof IkeSaProposal)) {
+            return false;
+        }
+
+        return Arrays.equals(mPseudorandomFunctions, ((IkeSaProposal) o).mPseudorandomFunctions);
+    }
+
     /**
      * This class is used to incrementally construct a IkeSaProposal. IkeSaProposal instances are
      * immutable once built.
@@ -129,6 +204,9 @@ public final class IkeSaProposal extends SaProposal {
          *     3DES) only {@link SaProposal.KEY_LEN_UNUSED} is allowed.
          * @return Builder of IkeSaProposal.
          */
+        // The matching getter is defined in the super class. Please see {@link
+        // SaProposal#getEncryptionAlgorithms}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
             validateAndAddEncryptAlgo(algorithm, keyLength);
@@ -141,6 +219,9 @@ public final class IkeSaProposal extends SaProposal {
          * @param algorithm integrity algorithm to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
          */
+        // The matching getter is defined in the super class. Please see
+        // {@link SaProposal#getIntegrityAlgorithms}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
             addIntegrityAlgo(algorithm);
@@ -153,6 +234,9 @@ public final class IkeSaProposal extends SaProposal {
          * @param dhGroup to add to IkeSaProposal.
          * @return Builder of IkeSaProposal.
          */
+        // The matching getter is defined in the super class. Please see
+        // {@link SaProposal#getDhGroups}
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addDhGroup(@DhGroup int dhGroup) {
             addDh(dhGroup);

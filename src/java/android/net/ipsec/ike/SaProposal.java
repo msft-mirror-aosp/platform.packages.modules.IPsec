@@ -18,7 +18,7 @@ package android.net.ipsec.ike;
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
+import android.os.PersistableBundle;
 import android.util.Pair;
 import android.util.SparseArray;
 
@@ -28,6 +28,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransfo
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -36,6 +37,7 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * SaProposal represents a proposed configuration to negotiate an IKE or Child SA.
@@ -47,18 +49,18 @@ import java.util.List;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public abstract class SaProposal {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
         ENCRYPTION_ALGORITHM_3DES,
         ENCRYPTION_ALGORITHM_AES_CBC,
+        ENCRYPTION_ALGORITHM_AES_CTR,
         ENCRYPTION_ALGORITHM_AES_GCM_8,
         ENCRYPTION_ALGORITHM_AES_GCM_12,
-        ENCRYPTION_ALGORITHM_AES_GCM_16
+        ENCRYPTION_ALGORITHM_AES_GCM_16,
+        ENCRYPTION_ALGORITHM_CHACHA20_POLY1305
     })
     public @interface EncryptionAlgorithm {}
 
@@ -66,6 +68,8 @@ public abstract class SaProposal {
     public static final int ENCRYPTION_ALGORITHM_3DES = 3;
     /** AES-CBC Encryption/Ciphering Algorithm. */
     public static final int ENCRYPTION_ALGORITHM_AES_CBC = 12;
+    /** AES-CTR Encryption/Ciphering Algorithm. */
+    public static final int ENCRYPTION_ALGORITHM_AES_CTR = 13;
     /**
      * AES-GCM Authentication/Integrity + Encryption/Ciphering Algorithm with 8-octet ICV
      * (truncation).
@@ -81,6 +85,11 @@ public abstract class SaProposal {
      * (truncation).
      */
     public static final int ENCRYPTION_ALGORITHM_AES_GCM_16 = 20;
+    /**
+     * ChaCha20-Poly1305 Authentication/Integrity + Encryption/Ciphering Algorithm with 16-octet ICV
+     * (truncation).
+     */
+    public static final int ENCRYPTION_ALGORITHM_CHACHA20_POLY1305 = 28;
 
     private static final SparseArray<String> SUPPORTED_ENCRYPTION_ALGO_TO_STR;
 
@@ -88,9 +97,12 @@ public abstract class SaProposal {
         SUPPORTED_ENCRYPTION_ALGO_TO_STR = new SparseArray<>();
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_3DES, "ENCR_3DES");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_CBC, "ENCR_AES_CBC");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_CTR, "ENCR_AES_CTR");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_8, "ENCR_AES_GCM_8");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_12, "ENCR_AES_GCM_12");
         SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(ENCRYPTION_ALGORITHM_AES_GCM_16, "ENCR_AES_GCM_16");
+        SUPPORTED_ENCRYPTION_ALGO_TO_STR.put(
+                ENCRYPTION_ALGORITHM_CHACHA20_POLY1305, "ENCR_CHACHA20_POLY1305");
     }
 
     /**
@@ -182,20 +194,27 @@ public abstract class SaProposal {
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({DH_GROUP_NONE, DH_GROUP_1024_BIT_MODP, DH_GROUP_2048_BIT_MODP})
+    @IntDef({
+        DH_GROUP_NONE,
+        DH_GROUP_1024_BIT_MODP,
+        DH_GROUP_1536_BIT_MODP,
+        DH_GROUP_2048_BIT_MODP,
+        DH_GROUP_3072_BIT_MODP,
+        DH_GROUP_4096_BIT_MODP
+    })
     public @interface DhGroup {}
 
     /** None Diffie-Hellman Group. */
     public static final int DH_GROUP_NONE = 0;
     /** 1024-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_1024_BIT_MODP = 2;
-    /** 1536-bit MODP Diffie-Hellman Group. @hide */
+    /** 1536-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_1536_BIT_MODP = 5;
     /** 2048-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_2048_BIT_MODP = 14;
-    /** 3072-bit MODP Diffie-Hellman Group. @hide */
+    /** 3072-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_3072_BIT_MODP = 15;
-    /** 4096-bit MODP Diffie-Hellman Group. @hide */
+    /** 4096-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_4096_BIT_MODP = 16;
 
     private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
@@ -209,6 +228,14 @@ public abstract class SaProposal {
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_3072_BIT_MODP, "DH_3072_BIT_MODP");
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_4096_BIT_MODP, "DH_4096_BIT_MODP");
     }
+
+    private static final String PROTOCOL_ID_KEY = "mProtocolId";
+    /** @hide */
+    protected static final String ENCRYPT_ALGO_KEY = "mEncryptionAlgorithms";
+    /** @hide */
+    protected static final String INTEGRITY_ALGO_KEY = "mIntegrityAlgorithms";
+    /** @hide */
+    protected static final String DH_GROUP_KEY = "mDhGroups";
 
     @IkePayload.ProtocolId private final int mProtocolId;
     private final EncryptionTransform[] mEncryptionAlgorithms;
@@ -225,6 +252,52 @@ public abstract class SaProposal {
         mEncryptionAlgorithms = encryptionAlgos;
         mIntegrityAlgorithms = integrityAlgos;
         mDhGroups = dhGroups;
+    }
+
+    /**
+     * Constructs this object by deserializing a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public static SaProposal fromPersistableBundle(@NonNull PersistableBundle in) {
+        Objects.requireNonNull(in, "PersistableBundle is null");
+
+        int protocolId = in.getInt(PROTOCOL_ID_KEY);
+        switch (protocolId) {
+            case IkePayload.PROTOCOL_ID_IKE:
+                return IkeSaProposal.fromPersistableBundle(in);
+            case IkePayload.PROTOCOL_ID_ESP:
+                return ChildSaProposal.fromPersistableBundle(in);
+            default:
+                throw new IllegalArgumentException("Invalid protocol ID " + protocolId);
+        }
+    }
+
+    /**
+     * Serializes this object to a PersistableBundle
+     *
+     * @hide
+     */
+    @NonNull
+    public PersistableBundle toPersistableBundle() {
+        final PersistableBundle result = new PersistableBundle();
+
+        result.putInt(PROTOCOL_ID_KEY, mProtocolId);
+
+        PersistableBundle encryptionBundle =
+                PersistableBundleUtils.fromList(
+                        Arrays.asList(mEncryptionAlgorithms),
+                        EncryptionTransform::toPersistableBundle);
+        result.putPersistableBundle(ENCRYPT_ALGO_KEY, encryptionBundle);
+
+        int[] integrityAlgoIdArray = getIntegrityAlgorithms().stream().mapToInt(i -> i).toArray();
+        result.putIntArray(INTEGRITY_ALGO_KEY, integrityAlgoIdArray);
+
+        int[] dhGroupArray = getDhGroups().stream().mapToInt(i -> i).toArray();
+        result.putIntArray(DH_GROUP_KEY, dhGroupArray);
+
+        return result;
     }
 
     /**
@@ -414,12 +487,16 @@ public abstract class SaProposal {
                 case ENCRYPTION_ALGORITHM_3DES:
                     // Fall through
                 case ENCRYPTION_ALGORITHM_AES_CBC:
+                    // Fall through
+                case ENCRYPTION_ALGORITHM_AES_CTR:
                     return false;
                 case ENCRYPTION_ALGORITHM_AES_GCM_8:
                     // Fall through
                 case ENCRYPTION_ALGORITHM_AES_GCM_12:
                     // Fall through
                 case ENCRYPTION_ALGORITHM_AES_GCM_16:
+                    // Fall through
+                case ENCRYPTION_ALGORITHM_CHACHA20_POLY1305:
                     return true;
                 default:
                     // Won't hit here.
@@ -484,6 +561,29 @@ public abstract class SaProposal {
         }
 
         return sb.toString();
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(
+                mProtocolId,
+                Arrays.hashCode(mEncryptionAlgorithms),
+                Arrays.hashCode(mIntegrityAlgorithms),
+                Arrays.hashCode(mDhGroups));
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (!(o instanceof SaProposal)) {
+            return false;
+        }
+
+        SaProposal other = (SaProposal) o;
+
+        return mProtocolId == other.mProtocolId
+                && Arrays.equals(mEncryptionAlgorithms, other.mEncryptionAlgorithms)
+                && Arrays.equals(mIntegrityAlgorithms, other.mIntegrityAlgorithms)
+                && Arrays.equals(mDhGroups, other.mDhGroups);
     }
 
     /**
