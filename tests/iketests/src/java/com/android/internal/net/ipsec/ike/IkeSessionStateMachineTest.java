@@ -5576,6 +5576,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // reset IkeMessageHelper to make verifying outbound req easier
         resetMockIkeMessageHelper();
 
+        mDummyChildSmCallback =
+                createChildAndGetChildSessionSmCallback(
+                        mMockChildSessionStateMachine, CHILD_SPI_REMOTE, mMockChildSessionCallback);
+
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
         mLooper.dispatchAll();
@@ -5804,7 +5808,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, respIkePacket);
         mLooper.dispatchAll();
 
-        assertEquals(mIkeSessionStateMachine.mIdle, mIkeSessionStateMachine.getCurrentState());
         assertEquals(natTraversalSupported, mIkeSessionStateMachine.mSupportNatTraversal);
         assertEquals(localNatDetected, mIkeSessionStateMachine.mLocalNatDetected);
         assertEquals(remoteNatDetected, mIkeSessionStateMachine.mRemoteNatDetected);
@@ -5818,6 +5821,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(expectedNetwork, newConnectionInfo.getNetwork());
         assertEquals(expectedLocalAddr, newConnectionInfo.getLocalAddress());
         assertEquals(expectedRemoteAddr, newConnectionInfo.getRemoteAddress());
+
+        // TODO(b/172015298): verify IPsec SAs migrated instead of rekey when kernel supports it
+
+        // Verify that Child Rekey (MOBIKE) initiated after successful UPDATE_SA_ADDRESSES resp
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+        verify(mMockChildSessionStateMachine).rekeyChildSessionForMobike();
 
         // TODO(b/173237734): check IkeSocket - if includeNatDetection then expect UdpEncap
     }
