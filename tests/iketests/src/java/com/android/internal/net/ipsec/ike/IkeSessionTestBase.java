@@ -49,6 +49,7 @@ import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import org.junit.Before;
 
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.util.concurrent.Executor;
 
 public abstract class IkeSessionTestBase {
@@ -58,6 +59,12 @@ public abstract class IkeSessionTestBase {
             (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.201");
     protected static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) InetAddresses.parseNumericAddress("127.0.0.1");
+    protected static final Inet6Address LOCAL_ADDRESS_V6 =
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::200");
+    protected static final Inet6Address UPDATED_LOCAL_ADDRESS_V6 =
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::201");
+    protected static final Inet6Address REMOTE_ADDRESS_V6 =
+            (Inet6Address) InetAddresses.parseNumericAddress("::1");
     protected static final String REMOTE_HOSTNAME = "ike.test.android.com";
 
     protected PowerManager.WakeLock mMockBusyWakelock;
