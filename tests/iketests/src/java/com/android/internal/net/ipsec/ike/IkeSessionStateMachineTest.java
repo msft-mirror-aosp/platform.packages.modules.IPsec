@@ -150,6 +150,7 @@ import com.android.internal.net.ipsec.ike.SaRecord.SaRecordHelper;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
+import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPskPayload;
@@ -354,6 +355,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private IkeUdp4Socket mSpyIkeUdp4Socket;
     private IkeUdp6Socket mSpyIkeUdp6Socket;
     private IkeSocket mSpyCurrentIkeSocket;
+
+    private IkeNattKeepalive mMockIkeNattKeepalive;
 
     private TestLooper mLooper;
     private IkeSessionStateMachine mIkeSessionStateMachine;
@@ -811,6 +814,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mExpectedCurrentSaRemoteReqMsgId = 0;
 
         mMockIke3gppCallback = mock(Ike3gppCallback.class);
+
+        mMockIkeNattKeepalive = mock(IkeNattKeepalive.class);
     }
 
     @After
@@ -1601,6 +1606,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.mSupportNatTraversal = true;
         mIkeSessionStateMachine.mLocalNatDetected = true;
         mIkeSessionStateMachine.mRemoteNatDetected = false;
+        mIkeSessionStateMachine.mIkeNattKeepalive = mMockIkeNattKeepalive;
         mIkeSessionStateMachine.mSupportFragment = true;
         mIkeSessionStateMachine.mRemoteVendorIds =
                 Arrays.asList(REMOTE_VENDOR_ID_ONE, REMOTE_VENDOR_ID_TWO);
@@ -5784,5 +5790,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(remoteNatDetected, mIkeSessionStateMachine.mRemoteNatDetected);
 
         // TODO(b/173237734): check IkeSocket - if includeNatDetection then expect UdpEncap
+    }
+
+    @Test
+    public void testNattKeepaliveStoppedDuringMobilityEvent() throws Exception {
+        IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
+
+        verifySetNetwork(
+                callback, null /* rekeySaRecord */, mIkeSessionStateMachine.mMobikeLocalInfo);
+
+        verify(mMockIkeNattKeepalive).stop();
+        assertNull(mIkeSessionStateMachine.mIkeNattKeepalive);
     }
 }

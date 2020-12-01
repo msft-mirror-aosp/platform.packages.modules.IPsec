@@ -5337,6 +5337,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
             if (!mNetwork.equals(oldNetwork)) {
+                // Changing IkeSockets - make sure to quit NAT-T keepalive if it's going
+                if (mIkeNattKeepalive != null) {
+                    mIkeNattKeepalive.stop();
+                    mIkeNattKeepalive = null;
+                }
+
                 IkeSocket newSocket;
                 // TODO(b/173237734): use port 4500 if NAT-T is enabled
                 if (isIpv4) {
