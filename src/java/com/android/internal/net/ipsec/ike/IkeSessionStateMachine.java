@@ -5090,7 +5090,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void handleRequestIkeMessage(
                 IkeMessage msg, int ikeExchangeSubType, Message message) {
-            // TODO(b/172014224): handle competing IKE req (Delete or otherwise)
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
+                    handleDeleteSessionRequest(msg);
+                    break;
+
+                default:
+                    // Send a temporary failure for all non-DELETE_IKE requests
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            msg.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
+            }
         }
 
         @Override
