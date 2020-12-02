@@ -150,6 +150,7 @@ import com.android.internal.net.ipsec.ike.SaRecord.SaRecordHelper;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
+import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPskPayload;
@@ -354,6 +355,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private IkeUdp4Socket mSpyIkeUdp4Socket;
     private IkeUdp6Socket mSpyIkeUdp6Socket;
     private IkeSocket mSpyCurrentIkeSocket;
+
+    private IkeNattKeepalive mMockIkeNattKeepalive;
 
     private TestLooper mLooper;
     private IkeSessionStateMachine mIkeSessionStateMachine;
@@ -811,6 +814,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mExpectedCurrentSaRemoteReqMsgId = 0;
 
         mMockIke3gppCallback = mock(Ike3gppCallback.class);
+
+        mMockIkeNattKeepalive = mock(IkeNattKeepalive.class);
     }
 
     @After
@@ -1601,6 +1606,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.mSupportNatTraversal = true;
         mIkeSessionStateMachine.mLocalNatDetected = true;
         mIkeSessionStateMachine.mRemoteNatDetected = false;
+        mIkeSessionStateMachine.mIkeNattKeepalive = mMockIkeNattKeepalive;
         mIkeSessionStateMachine.mSupportFragment = true;
         mIkeSessionStateMachine.mRemoteVendorIds =
                 Arrays.asList(REMOTE_VENDOR_ID_ONE, REMOTE_VENDOR_ID_TWO);
@@ -5574,38 +5580,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verifySetNetwork(
                 callback, null /* rekeySaRecord */, mIkeSessionStateMachine.mMobikeLocalInfo);
-
-        // Verify outbound UPDATE_SA_ADDRESSES req is sent in MobikeLocalMigrate
-        verifyUpdateSaAddressesReq(true /* expectNatDetection */);
-    }
-
-    @Test
-    public void testSetNetworkIdleStateWithoutNatDetection() throws Exception {
-        IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
-
-        mIkeSessionStateMachine.mSupportNatTraversal = false;
-        mIkeSessionStateMachine.mLocalNatDetected = false;
-        mIkeSessionStateMachine.mRemoteNatDetected = false;
-
-        verifySetNetwork(
-                callback,
-                mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord,
-                mIkeSessionStateMachine.mMobikeLocalInfo);
-
-        // Verify outbound UPDATE_SA_ADDRESSES req is sent in MobikeLocalMigrate
-        verifyUpdateSaAddressesReq(false /* expectNatDetection */);
-    }
-
-    private void verifyUpdateSaAddressesReq(boolean expectNatDetection) {
-        List<IkePayload> payloadList = verifyOutInfoMsgHeaderAndGetPayloads(false /* isResp */);
-        int expectedPayloads = expectNatDetection ? 3 : 1;
-        assertEquals(expectedPayloads, payloadList.size());
-        assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_UPDATE_SA_ADDRESSES));
-
-        if (expectNatDetection) {
-            assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP));
-            assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
-        }
     }
 
     @Test
@@ -5719,5 +5693,113 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.RekeyIkeLocalCreate);
+    }
+
+    @Test
+    public void testMobikeLocalInfoSendsRequest() throws Exception {
+        setupIdleStateMachineWithMobike();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mMobikeLocalInfo);
+        mLooper.dispatchAll();
+
+        verifyUpdateSaAddressesReq(true /* expectNatDetection */);
+    }
+
+    @Test
+    public void testMobikeLocalInfoSendsRequestWithoutNatDetection() throws Exception {
+        setupIdleStateMachineWithMobike();
+        mIkeSessionStateMachine.mSupportNatTraversal = false;
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mMobikeLocalInfo);
+        mLooper.dispatchAll();
+
+        verifyUpdateSaAddressesReq(false /* expectNatDetection */);
+    }
+
+    @Test
+    public void testMobikeLocalInfoHandlesResponse() throws Exception {
+        setupIdleStateMachineWithMobike();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mMobikeLocalInfo);
+        mLooper.dispatchAll();
+
+        verifyUpdateSaAddressesResp(
+                true /* natTraversalSupported */,
+                true /* localNatDetected */,
+                true /* remoteNatDetected */);
+    }
+
+    @Test
+    public void testMobikeLocalInfoHandlesResponseWithoutNatDetection() throws Exception {
+        setupIdleStateMachineWithMobike();
+        mIkeSessionStateMachine.mSupportNatTraversal = false;
+        mIkeSessionStateMachine.mLocalNatDetected = false;
+        mIkeSessionStateMachine.mRemoteNatDetected = false;
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mMobikeLocalInfo);
+        mLooper.dispatchAll();
+
+        verifyUpdateSaAddressesResp(
+                false /* natTraversalSupported */,
+                false /* localNatDetected */,
+                false /* remoteNatDetected */);
+    }
+
+    private void verifyUpdateSaAddressesReq(boolean expectNatDetection) throws Exception {
+        List<IkePayload> reqPayloadList = verifyOutInfoMsgHeaderAndGetPayloads(false /* isResp */);
+        int expectedPayloads = expectNatDetection ? 3 : 1;
+        assertEquals(expectedPayloads, reqPayloadList.size());
+        assertTrue(isNotifyExist(reqPayloadList, NOTIFY_TYPE_UPDATE_SA_ADDRESSES));
+
+        if (expectNatDetection) {
+            assertTrue(isNotifyExist(reqPayloadList, NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP));
+            assertTrue(isNotifyExist(reqPayloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
+        }
+    }
+
+    private void verifyUpdateSaAddressesResp(
+            boolean natTraversalSupported, boolean localNatDetected, boolean remoteNatDetected)
+            throws Exception {
+        List<Integer> respPayloadTypeList = new ArrayList<>();
+        List<String> respPayloadHexStringList = new ArrayList<>();
+        if (natTraversalSupported) {
+            respPayloadTypeList.add(PAYLOAD_TYPE_NOTIFY);
+            respPayloadHexStringList.add(NAT_DETECTION_SOURCE_PAYLOAD_HEX_STRING);
+
+            respPayloadTypeList.add(PAYLOAD_TYPE_NOTIFY);
+            respPayloadHexStringList.add(NAT_DETECTION_DESTINATION_PAYLOAD_HEX_STRING);
+        }
+
+        ReceivedIkePacket respIkePacket =
+                makeDummyEncryptedReceivedIkePacket(
+                        mSpyCurrentIkeSaRecord,
+                        EXCHANGE_TYPE_INFORMATIONAL,
+                        true /* isResp */,
+                        respPayloadTypeList,
+                        respPayloadHexStringList);
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, respIkePacket);
+        mLooper.dispatchAll();
+
+        assertEquals(mIkeSessionStateMachine.mIdle, mIkeSessionStateMachine.getCurrentState());
+        assertEquals(natTraversalSupported, mIkeSessionStateMachine.mSupportNatTraversal);
+        assertEquals(localNatDetected, mIkeSessionStateMachine.mLocalNatDetected);
+        assertEquals(remoteNatDetected, mIkeSessionStateMachine.mRemoteNatDetected);
+
+        // TODO(b/173237734): check IkeSocket - if includeNatDetection then expect UdpEncap
+    }
+
+    @Test
+    public void testNattKeepaliveStoppedDuringMobilityEvent() throws Exception {
+        IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
+
+        verifySetNetwork(
+                callback, null /* rekeySaRecord */, mIkeSessionStateMachine.mMobikeLocalInfo);
+
+        verify(mMockIkeNattKeepalive).stop();
+        assertNull(mIkeSessionStateMachine.mIkeNattKeepalive);
     }
 }
