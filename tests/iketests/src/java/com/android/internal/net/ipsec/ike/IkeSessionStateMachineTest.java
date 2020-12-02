@@ -5414,7 +5414,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // makeAndStartIkeSession() expects no use of ConnectivityManager#getActiveNetwork when
         // there is a configured Network. Use reset() to forget usage in setUp()
         if (configuredNetwork != null) {
-            reset(mMockConnectManager);
+            resetMockConnectManager();
         }
 
         setupChildStateMachineFactory(mMockChildSessionStateMachine);

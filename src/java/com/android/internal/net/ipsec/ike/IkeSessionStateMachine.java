@@ -3237,6 +3237,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mIkeNattKeepalive =
                         new IkeNattKeepalive(
                                 mContext,
+                                mConnectivityManager,
                                 NATT_KEEPALIVE_DELAY_SECONDS,
                                 (Inet4Address) mLocalAddress,
                                 (Inet4Address) mRemoteAddress,

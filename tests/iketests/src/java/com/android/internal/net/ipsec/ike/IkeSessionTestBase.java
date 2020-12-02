@@ -27,6 +27,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.spy;
 
 import android.content.Context;
@@ -100,15 +101,29 @@ public abstract class IkeSessionTestBase {
                 .when(mPowerManager)
                 .newWakeLock(anyInt(), argThat(tag -> tag.contains(LOCAL_REQUEST_WAKE_LOCK_TAG)));
 
-        mMockConnectManager = mock(ConnectivityManager.class);
         mMockDefaultNetwork = mock(Network.class);
-        doReturn(mMockDefaultNetwork).when(mMockConnectManager).getActiveNetwork();
         doReturn(REMOTE_ADDRESS).when(mMockDefaultNetwork).getByName(REMOTE_HOSTNAME);
         doReturn(REMOTE_ADDRESS)
                 .when(mMockDefaultNetwork)
                 .getByName(REMOTE_ADDRESS.getHostAddress());
 
         mMockSocketKeepalive = mock(SocketKeepalive.class);
+
+        mMockNetworkCapabilities = mock(NetworkCapabilities.class);
+        doReturn(false)
+                .when(mMockNetworkCapabilities)
+                .hasTransport(RandomnessFactory.TRANSPORT_TEST);
+
+        mMockConnectManager = mock(ConnectivityManager.class);
+        doReturn(mMockConnectManager)
+                .when(mSpyContext)
+                .getSystemService(Context.CONNECTIVITY_SERVICE);
+        resetMockConnectManager();
+    }
+
+    protected void resetMockConnectManager() {
+        reset(mMockConnectManager);
+        doReturn(mMockDefaultNetwork).when(mMockConnectManager).getActiveNetwork();
         doReturn(mMockSocketKeepalive)
                 .when(mMockConnectManager)
                 .createSocketKeepalive(
@@ -118,16 +133,8 @@ public abstract class IkeSessionTestBase {
                         any(Inet4Address.class),
                         any(Executor.class),
                         any(SocketKeepalive.Callback.class));
-        doReturn(mMockConnectManager)
-                .when(mSpyContext)
-                .getSystemService(Context.CONNECTIVITY_SERVICE);
-
-        mMockNetworkCapabilities = mock(NetworkCapabilities.class);
         doReturn(mMockNetworkCapabilities)
                 .when(mMockConnectManager)
                 .getNetworkCapabilities(any(Network.class));
-        doReturn(false)
-                .when(mMockNetworkCapabilities)
-                .hasTransport(RandomnessFactory.TRANSPORT_TEST);
     }
 }
