@@ -3194,15 +3194,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 List<IkeNotifyPayload> natSourcePayloads,
                 IkeNotifyPayload natDestPayload)
                 throws InvalidSyntaxException, IOException {
-            if (!natSourcePayloads.isEmpty() && natDestPayload != null) {
-                mSupportNatTraversal = true;
-            } else if (natSourcePayloads.isEmpty() && natDestPayload == null) {
+            if (!didPeerIncludeNattDetectionPayloads(natSourcePayloads, natDestPayload)) {
                 mSupportNatTraversal = false;
                 return;
-            } else {
-                throw new InvalidSyntaxException(
-                        "Missing source or destination NAT detection notification");
             }
+
+            mSupportNatTraversal = true;
 
             if (!(mRemoteAddress instanceof Inet4Address)) {
                 // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
@@ -3214,24 +3211,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             long initIkeSpi = respMsg.ikeHeader.ikeInitiatorSpi;
             long respIkeSpi = respMsg.ikeHeader.ikeResponderSpi;
 
-            // Check if local node is behind NAT
-            byte[] expectedLocalNatData =
-                    IkeNotifyPayload.generateNatDetectionData(
-                            initIkeSpi, respIkeSpi, mLocalAddress, mLocalPort);
-            mLocalNatDetected = !Arrays.equals(expectedLocalNatData, natDestPayload.notifyData);
-
-            // Check if the remote node is behind NAT
-            byte[] expectedRemoteNatData =
-                    IkeNotifyPayload.generateNatDetectionData(
-                            initIkeSpi, respIkeSpi, mRemoteAddress, mIkeSocket.getIkeServerPort());
-            mRemoteNatDetected = true;
-            for (IkeNotifyPayload natPayload : natSourcePayloads) {
-                // If none of the received hash matches the expected value, the remote node is
-                // behind NAT.
-                if (Arrays.equals(expectedRemoteNatData, natPayload.notifyData)) {
-                    mRemoteNatDetected = false;
-                }
-            }
+            updateLocalAndRemoteNatDetected(
+                    initIkeSpi, respIkeSpi, natSourcePayloads, natDestPayload);
 
             if (mLocalNatDetected || mRemoteNatDetected) {
                 logd("Switching to UDP encap socket");
@@ -3301,6 +3282,54 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             @Override
             public void handleRetransmissionFailure() {
                 handleIkeFatalError(new IOException("Retransmitting IKE INIT request failure"));
+            }
+        }
+    }
+
+    /**
+     * Returns if the peer included NAT-T detection payloads
+     *
+     * @throws InvalidSyntaxException if an invalid combination of NAT-T detection payloads are
+     *     received.
+     */
+    private boolean didPeerIncludeNattDetectionPayloads(
+            List<IkeNotifyPayload> natSourcePayloads, IkeNotifyPayload natDestPayload)
+            throws InvalidSyntaxException {
+        if (!natSourcePayloads.isEmpty() && natDestPayload != null) {
+            return true;
+        } else if (natSourcePayloads.isEmpty() && natDestPayload == null) {
+            return false;
+        } else {
+            throw new InvalidSyntaxException(
+                    "Missing source or destination NAT detection notification");
+        }
+    }
+
+    /**
+     * Updates whether the local or remote peer are behind NATs. Assumes that mRemoteAddress is an
+     * IPv4 address.
+     */
+    private void updateLocalAndRemoteNatDetected(
+            long initIkeSpi,
+            long respIkeSpi,
+            List<IkeNotifyPayload> natSourcePayloads,
+            IkeNotifyPayload natDestPayload) {
+        // Check if local node is behind NAT
+        byte[] expectedLocalNatData =
+                IkeNotifyPayload.generateNatDetectionData(
+                        initIkeSpi, respIkeSpi, mLocalAddress, mLocalPort);
+        mLocalNatDetected = !Arrays.equals(expectedLocalNatData, natDestPayload.notifyData);
+
+        // Check if the remote node is behind NAT
+        byte[] expectedRemoteNatData =
+                IkeNotifyPayload.generateNatDetectionData(
+                        initIkeSpi, respIkeSpi, mRemoteAddress, mIkeSocket.getIkeServerPort());
+        mRemoteNatDetected = true;
+        for (IkeNotifyPayload natPayload : natSourcePayloads) {
+            // If none of the received hash matches the expected value, the remote node is
+            // behind NAT.
+            if (Arrays.equals(expectedRemoteNatData, natPayload.notifyData)) {
+                mRemoteNatDetected = false;
             }
         }
     }
@@ -5065,8 +5094,101 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        public void handleResponseIkeMessage(IkeMessage msg) {
-            // TODO(b/172014224): handle resp from peer
+        public void handleResponseIkeMessage(IkeMessage resp) {
+            mRetransmitter.stopRetransmitting();
+
+            try {
+                validateResp(resp);
+
+                // TODO(b/172015298): migrate Child SAs or schedule rekey
+                // TODO(b/172013873): notify caller of Network Change, IPsec SA changes
+
+                transitionTo(mIdle);
+            } catch (IkeProtocolException | IOException e) {
+                handleIkeFatalError(e);
+            }
+        }
+
+        private void validateResp(IkeMessage resp) throws IkeProtocolException, IOException {
+            if (resp.ikeHeader.exchangeType != IkeHeader.EXCHANGE_TYPE_INFORMATIONAL) {
+                throw new InvalidSyntaxException(
+                        "Invalid exchange type; expected INFORMATIONAL, but got: "
+                                + resp.ikeHeader.exchangeType);
+            }
+
+            List<IkeNotifyPayload> natSourcePayloads = new ArrayList<>();
+            IkeNotifyPayload natDestPayload = null;
+
+            for (IkePayload payload : resp.ikePayloadList) {
+                switch (payload.payloadType) {
+                    case PAYLOAD_TYPE_NOTIFY:
+                        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) payload;
+                        if (notifyPayload.isErrorNotify()) {
+                            // TODO(b/): handle UNACCEPTABLE_ADDRESSES payload
+                            throw notifyPayload.validateAndBuildIkeException();
+                        }
+
+                        switch (notifyPayload.notifyType) {
+                            case NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP:
+                                natSourcePayloads.add(notifyPayload);
+                                break;
+                            case NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP:
+                                if (natDestPayload != null) {
+                                    throw new InvalidSyntaxException(
+                                            "More than one"
+                                                    + " NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP"
+                                                    + " found");
+                                }
+                                natDestPayload = notifyPayload;
+                                break;
+                            default:
+                                // Unknown and unexpected status notifications are ignored as per
+                                // RFC7296.
+                                logw(
+                                        "Received unknown or unexpected status notifications with"
+                                                + " notify type: "
+                                                + notifyPayload.notifyType);
+                        }
+
+                        break;
+                    default:
+                        logw("Unexpected payload types found: " + payload.payloadType);
+                }
+            }
+
+            // Only handle NAT detection payloads if the peer indicates NAT-T support in IKE_INIT
+            if (mSupportNatTraversal) {
+                handleNatDetection(resp, natSourcePayloads, natDestPayload);
+            }
+        }
+
+        /**
+         * If MOBIKE and NAT-T are supported, we will already be using an IkeUdpEncapSocket for IPv4
+         * addresses. The only thing to do here is update our state for if the local and remote are
+         * behind NATs.
+         */
+        private void handleNatDetection(
+                IkeMessage resp,
+                List<IkeNotifyPayload> natSourcePayloads,
+                IkeNotifyPayload natDestPayload)
+                throws InvalidSyntaxException {
+            if (!didPeerIncludeNattDetectionPayloads(natSourcePayloads, natDestPayload)) {
+                // peer didn't include NAT-T detection payloads. NATT still supported for this
+                // session though
+                return;
+            }
+
+            if (!(mRemoteAddress instanceof Inet4Address)) {
+                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
+                // IPv6, the best we can currently do is try non-encap'd anyways
+                return;
+            }
+
+            updateLocalAndRemoteNatDetected(
+                    resp.ikeHeader.ikeInitiatorSpi,
+                    resp.ikeHeader.ikeResponderSpi,
+                    natSourcePayloads,
+                    natDestPayload);
         }
     }
 
@@ -5215,6 +5337,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
             if (!mNetwork.equals(oldNetwork)) {
+                // Changing IkeSockets - make sure to quit NAT-T keepalive if it's going
+                if (mIkeNattKeepalive != null) {
+                    mIkeNattKeepalive.stop();
+                    mIkeNattKeepalive = null;
+                }
+
                 IkeSocket newSocket;
                 // TODO(b/173237734): use port 4500 if NAT-T is enabled
                 if (isIpv4) {
