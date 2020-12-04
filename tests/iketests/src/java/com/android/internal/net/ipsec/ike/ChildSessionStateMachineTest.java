@@ -1036,15 +1036,21 @@ public final class ChildSessionStateMachineTest {
         // Send Rekey-Create request
         mChildSessionStateMachine.rekeyChildSession();
         mLooper.dispatchAll();
-        assertTrue(
-                mChildSessionStateMachine.getCurrentState()
-                        instanceof ChildSessionStateMachine.RekeyChildLocalCreate);
 
-        List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
-        verifyLocalRekeyCreateIsDone(rekeyRespPayloads);
+        verifyRekeyChildLocalCreateHandlesResponse(
+                ChildSessionStateMachine.RekeyChildLocalCreate.class, false /* isMobikeRekey */);
     }
 
-    private void verifyLocalRekeyCreateIsDone(List<IkePayload> rekeyRespPayloads) throws Exception {
+    private void verifyRekeyChildLocalCreateHandlesResponse(
+            Class<?> expectedState, boolean isMobikeRekey) throws Exception {
+        assertTrue(expectedState.isInstance(mChildSessionStateMachine.getCurrentState()));
+
+        List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
+        verifyLocalRekeyCreateIsDone(rekeyRespPayloads, isMobikeRekey);
+    }
+
+    private void verifyLocalRekeyCreateIsDone(
+            List<IkePayload> rekeyRespPayloads, boolean isMobikeRekey) throws Exception {
         // Verify state transition
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
@@ -1073,8 +1079,16 @@ public final class ChildSessionStateMachineTest {
 
         // Verify users have been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verifyNotifyUsersCreateIpSecSa(mSpyLocalInitNewChildSaRecord, true /*expectInbound*/);
-        verifyNotifyUsersCreateIpSecSa(mSpyLocalInitNewChildSaRecord, false /*expectInbound*/);
+
+        if (isMobikeRekey) {
+            verify(mMockChildSessionCallback)
+                    .onIpSecTransformsMigrated(
+                            mSpyLocalInitNewChildSaRecord.getInboundIpSecTransform(),
+                            mSpyLocalInitNewChildSaRecord.getOutboundIpSecTransform());
+        } else {
+            verifyNotifyUsersCreateIpSecSa(mSpyLocalInitNewChildSaRecord, true /*expectInbound*/);
+            verifyNotifyUsersCreateIpSecSa(mSpyLocalInitNewChildSaRecord, false /*expectInbound*/);
+        }
     }
 
     @Test
@@ -1122,7 +1136,7 @@ public final class ChildSessionStateMachineTest {
 
         // Receive Rekey Create response and verify creation is done
         List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
-        verifyLocalRekeyCreateIsDone(rekeyRespPayloads);
+        verifyLocalRekeyCreateIsDone(rekeyRespPayloads, false /* isMobikeRekey */);
     }
 
     @Test
@@ -1936,5 +1950,18 @@ public final class ChildSessionStateMachineTest {
         verifyOutboundRekeyKePayload(true /*isResp*/);
 
         assertEquals(1, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
+    }
+
+    @Test
+    public void testMobikeRekeyChildLocalCreateHandlesResp() throws Exception {
+        setupStateMachineAndSpiForLocalRekey();
+
+        // Send MOBIKE Rekey-Create request
+        mChildSessionStateMachine.rekeyChildSessionForMobike();
+        mLooper.dispatchAll();
+
+        verifyRekeyChildLocalCreateHandlesResponse(
+                ChildSessionStateMachine.MobikeRekeyChildLocalCreate.class,
+                true /* isMobikeRekey */);
     }
 }
