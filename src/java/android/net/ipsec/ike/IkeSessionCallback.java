@@ -75,15 +75,22 @@ public interface IkeSessionCallback {
     void onError(@NonNull IkeProtocolException exception);
 
     /**
-     * Called if a non-protocol, recoverable error is encountered in an established {@link
-     * IkeSession}.
+     * Called if a recoverable error is encountered in an established {@link IkeSession}.
      *
-     * <p>This method can be triggered by non-protocol errors, such as the underlying Network for
-     * this IkeSession dying.
+     * <p>This method may be triggered by protocol errors such as an INVALID_IKE_SPI, or by
+     * non-protocol errors such as the underlying {@link android.net.Network} dying.
      *
+     * @param exception the detailed error information.
      * @hide
      */
-    void onError(@NonNull IkeException exception);
+    default void onError(@NonNull IkeException exception) {
+        if (exception instanceof IkeProtocolException) {
+            onError((IkeProtocolException) exception);
+            return;
+        }
+
+        // do nothing for non-protocol errors by default
+    }
 
     /**
      * Called if the IkeSessionConnectionInfo for an established {@link IkeSession} changes.
