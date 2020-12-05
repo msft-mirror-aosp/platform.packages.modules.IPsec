@@ -31,23 +31,24 @@ import java.util.Objects;
  * <ul>
  *   <li>set a new underlying Network for the corresponding IkeSession (MOBIKE must be enabled and
  *       the IKE Session must have started with a caller-configured Network), or
+ *   <li>wait for a new underlying Network to become available (MOBIKE must be enabled and the IKE
+ *       Session must be tracking the System default Network), or
+ *       <ul>
+ *         <li>Note: if the maximum retransmission time is encountered while waiting, the IKE
+ *             Session will close. If this occurs, the caller will be notified via {@link
+ *             IkeSessionCallback#onClosedExceptionally(IkeException)}.
+ *       </ul>
  *   <li>close the corresponding IkeSession.
  * </ul>
  *
  * @hide
  */
-public final class IkeNetworkDiedException extends IkeException {
+public final class IkeNetworkDiedException extends IkeNonProtocolException {
     private final Network mNetwork;
 
+    /** Constructs an IkeNetworkDiedException to indicate the specified Network died. */
     public IkeNetworkDiedException(Network network) {
         super();
-        Objects.requireNonNull(network, "network is null");
-
-        mNetwork = network;
-    }
-
-    public IkeNetworkDiedException(Network network, String message) {
-        super(message);
         Objects.requireNonNull(network, "network is null");
 
         mNetwork = network;
