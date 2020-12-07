@@ -425,6 +425,16 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     /**
+     * Initiate Rekey Child procedure for MOBIKE (instead of migrating IPsec SAs).
+     *
+     * <p>This method should only be used as a fallback mode for devices that do not have
+     * XFRM_MIGRATE kernel support.
+     */
+    public void rekeyChildSessionForMobike() {
+        // TODO(b/172015298): implement MOBIKE rekey
+    }
+
+    /**
      * Kill Child Session and all alive Child SAs without doing IKE exchange.
      *
      * <p>It is usually called when IKE Session is being closed.
