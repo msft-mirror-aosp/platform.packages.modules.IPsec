@@ -243,7 +243,7 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
 
         // cache original Mac so it can be restored after calculating the Mac
         AtMac originalMac = (AtMac) typeData.attributeMap.get(EAP_AT_MAC);
-        typeData.attributeMap.put(EAP_AT_MAC, new AtMac());
+        typeData.attributeMap.put(EAP_AT_MAC, originalMac.getAtMacWithMacCleared());
 
         byte[] typeDataWithEmptyMac = typeData.encode();
         EapData eapData = new EapData(getEapMethod(), typeDataWithEmptyMac);
