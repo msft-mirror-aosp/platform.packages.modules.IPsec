@@ -84,4 +84,24 @@ public interface IkeSessionCallback {
      * @hide
      */
     void onError(@NonNull IkeException exception);
+
+    /**
+     * Called if the IkeSessionConnectionInfo for an established {@link IkeSession} changes.
+     *
+     * <p>This method will only be called for MOBIKE-enabled Sessions, and only after a Mobility
+     * Event occurs.
+     *
+     * <p>A Mobility Event is an event that causes the established, MOBIKE-enabled IKE Session to
+     * undergo an address update. Specifically, these events are:
+     *
+     * <ul>
+     *   <li>The underlying Network changing, or
+     *   <li>The local address disappearing from the current underlying (and unchanged) Network, or
+     *   <li>The remote address changing.
+     * </ul>
+     *
+     * @param connectionInfo the updated IkeSessionConnectionInfo for the Session.
+     * @hide
+     */
+    void onIkeSessionConnectionInfoChanged(@NonNull IkeSessionConnectionInfo connectionInfo);
 }

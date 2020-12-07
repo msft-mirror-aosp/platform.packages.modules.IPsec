@@ -5101,7 +5101,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 validateResp(resp);
 
                 // TODO(b/172015298): migrate Child SAs or schedule rekey
-                // TODO(b/172013873): notify caller of Network Change, IPsec SA changes
+
+                IkeSessionConnectionInfo connectionInfo =
+                        new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
+                executeUserCallback(
+                        () ->
+                                mIkeSessionCallback.onIkeSessionConnectionInfoChanged(
+                                        connectionInfo));
 
                 transitionTo(mIdle);
             } catch (IkeProtocolException | IOException e) {
