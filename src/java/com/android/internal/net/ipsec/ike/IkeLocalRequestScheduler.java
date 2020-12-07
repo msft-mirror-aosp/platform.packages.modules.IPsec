@@ -21,6 +21,7 @@ import static android.os.PowerManager.PARTIAL_WAKE_LOCK;
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD;
+import static com.android.internal.net.ipsec.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DPD;
@@ -260,7 +261,8 @@ public final class IkeLocalRequestScheduler {
 
         @Override
         protected void validateTypeOrThrow(int type) {
-            if (type >= CMD_LOCAL_REQUEST_CREATE_CHILD && type <= CMD_LOCAL_REQUEST_REKEY_CHILD) {
+            if (type >= CMD_LOCAL_REQUEST_CREATE_CHILD
+                    && type <= CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE) {
                 return;
             }
 
@@ -325,6 +327,7 @@ public final class IkeLocalRequestScheduler {
                     return REQUEST_PRIORITY_URGENT;
 
                 case CMD_LOCAL_REQUEST_MOBIKE:
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE:
                     return REQUEST_PRIORITY_HIGH;
 
                 case CMD_LOCAL_REQUEST_CREATE_IKE: // Fallthrough

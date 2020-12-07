@@ -1332,6 +1332,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     break;
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // fallthrough
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE: // fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     deferMessage(message);
                     transitionTo(mChildProcedureOngoing);
@@ -1616,6 +1617,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // Fallthrough
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE: // Fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     ChildLocalRequest childReq = (ChildLocalRequest) req;
                     if (childReq.procedureType != requestVal) {
@@ -2550,6 +2552,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     break;
                 case CMD_LOCAL_REQUEST_REKEY_CHILD:
                     mChildInLocalProcedure.rekeyChildSession();
+                    break;
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE:
+                    mChildInLocalProcedure.rekeyChildSessionForMobike();
                     break;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     mChildInLocalProcedure.deleteChildSession();
@@ -5111,7 +5116,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             try {
                 validateResp(resp);
 
-                // TODO(b/172015298): migrate Child SAs or schedule rekey
+                migrateAllChildSAs();
 
                 IkeSessionConnectionInfo connectionInfo =
                         new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
@@ -5206,6 +5211,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     resp.ikeHeader.ikeResponderSpi,
                     natSourcePayloads,
                     natDestPayload);
+        }
+
+        private void migrateAllChildSAs() {
+            // TODO(b/172015298): migrate Child SAs directly if Kernel support
+
+            // Schedule MOBIKE Rekeys for all Child Sessions
+            for (int i = 0; i < mRemoteSpiToChildSessionMap.size(); i++) {
+                int remoteChildSpi = mRemoteSpiToChildSessionMap.keyAt(i);
+                sendMessage(
+                        CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE,
+                        mLocalRequestFactory.getChildLocalRequest(
+                                CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE, remoteChildSpi));
+            }
         }
     }
 
