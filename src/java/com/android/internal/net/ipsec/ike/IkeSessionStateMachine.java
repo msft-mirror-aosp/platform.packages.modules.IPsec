@@ -884,6 +884,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** Switch all IKE SAs to the new IKE socket due to an underlying network change. */
     private void switchToIkeSocket(IkeSocket newSocket) {
+        // Changing IkeSockets - make sure to quit NAT-T keepalive if it's going
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.stop();
+            mIkeNattKeepalive = null;
+        }
+
         long currentLocalSpi = mCurrentIkeSaRecord.getLocalSpi();
         migrateSpiToIkeSocket(currentLocalSpi, mIkeSocket, newSocket);
 
@@ -898,6 +904,28 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         mIkeSocket.releaseReference(this);
         mIkeSocket = newSocket;
+    }
+
+    private void buildAndSwitchToIkeSocketWithPort4500(boolean isIpv4) {
+        try {
+            if (isIpv4) {
+                IkeSocket newSocket =
+                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                mNetwork,
+                                mIpSecManager,
+                                IkeSessionStateMachine.this,
+                                getHandler().getLooper());
+                switchToIkeSocket(newSocket);
+                mIkeNattKeepalive = buildAndStartNattKeepalive();
+            } else {
+                IkeSocket newSocket =
+                        IkeUdp6WithEncapPortSocket.getInstance(
+                                mNetwork, IkeSessionStateMachine.this, getHandler());
+                switchToIkeSocket(newSocket);
+            }
+        } catch (ErrnoException | IOException | ResourceUnavailableException e) {
+            handleIkeFatalError(e);
+        }
     }
 
     private void migrateSpiToIkeSocket(long localSpi, IkeSocket oldSocket, IkeSocket newSocket) {
@@ -3230,20 +3258,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                     IkeSessionStateMachine.this,
                                     getHandler().getLooper());
                     switchToIkeSocket(initIkeSpi, newSocket);
+                    mIkeNattKeepalive = buildAndStartNattKeepalive();
+                    mLocalPort = mIkeSocket.getLocalPort();
                 } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                     handleIkeFatalError(e);
                 }
-
-                mIkeNattKeepalive =
-                        new IkeNattKeepalive(
-                                mContext,
-                                NATT_KEEPALIVE_DELAY_SECONDS,
-                                (Inet4Address) mLocalAddress,
-                                (Inet4Address) mRemoteAddress,
-                                ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
-                                mIkeSocket.getNetwork(),
-                                buildKeepaliveIntent());
-                mIkeNattKeepalive.start();
             }
         }
 
@@ -3252,14 +3271,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             migrateSpiToIkeSocket(localSpi, mIkeSocket, newSocket);
             mIkeSocket.releaseReference(IkeSessionStateMachine.this);
             mIkeSocket = newSocket;
-        }
-
-        private PendingIntent buildKeepaliveIntent() {
-            return buildIkeAlarmIntent(
-                    mContext,
-                    ACTION_KEEPALIVE,
-                    getIntentIdentifier(),
-                    obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE));
         }
 
         @Override
@@ -3337,6 +3348,34 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mRemoteNatDetected = false;
             }
         }
+    }
+
+    /** Starts NAT-T keepalive for current IkeUdpEncapSocket */
+    private IkeNattKeepalive buildAndStartNattKeepalive() throws IOException {
+        if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
+            throw new IllegalStateException(
+                    "Cannot start NAT-T keepalive when IKE Session is not using UDP Encap socket");
+        }
+
+        PendingIntent keepaliveIntent =
+                buildIkeAlarmIntent(
+                        mContext,
+                        ACTION_KEEPALIVE,
+                        getIntentIdentifier(),
+                        obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE));
+
+        IkeNattKeepalive keepalive =
+                new IkeNattKeepalive(
+                        mContext,
+                        mConnectivityManager,
+                        NATT_KEEPALIVE_DELAY_SECONDS,
+                        (Inet4Address) mLocalAddress,
+                        (Inet4Address) mRemoteAddress,
+                        ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
+                        mIkeSocket.getNetwork(),
+                        keepaliveIntent);
+        keepalive.start();
+        return keepalive;
     }
 
     /**
@@ -3490,8 +3529,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mSupportMobike = true;
                 mEnabledExtensions.add(EXTENSION_TYPE_MOBIKE);
 
-                // TODO(b/173237734): use port 4500 if NAT-T is enabled
-
                 try {
                     if (mIkeSessionParams.getConfiguredNetwork() != null) {
                         // Caller configured a specific Network - track it
@@ -3512,6 +3549,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     // Error occurred while registering the NetworkCallback
                     throw new IkeInternalException("Error while registering NetworkCallback", e);
                 }
+
+                // Use port 4500 if NAT-T is enabled
+                if (mSupportNatTraversal && !(mIkeSocket instanceof IkeUdpEncapSocket)) {
+                    buildAndSwitchToIkeSocketWithPort4500(mIkeSocket instanceof IkeUdp4Socket);
+                    try {
+                        mLocalPort = mIkeSocket.getLocalPort();
+                    } catch (ErrnoException e) {
+                        throw new IkeInternalException(e);
+                    }
+                }
+
                 return;
             } else {
                 // Unknown and unexpected status notifications are ignored as per
@@ -5372,27 +5420,24 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
             if (!mNetwork.equals(oldNetwork)) {
-                // Changing IkeSockets - make sure to quit NAT-T keepalive if it's going
-                if (mIkeNattKeepalive != null) {
-                    mIkeNattKeepalive.stop();
-                    mIkeNattKeepalive = null;
-                }
-
-                IkeSocket newSocket;
-                // TODO(b/173237734): use port 4500 if NAT-T is enabled
-                if (isIpv4) {
-                    newSocket =
-                            IkeUdp4Socket.getInstance(
-                                    mNetwork, IkeSessionStateMachine.this, getHandler());
+                // Use port 4500 if NAT-T is supported by both sides
+                if (mSupportNatTraversal) {
+                    buildAndSwitchToIkeSocketWithPort4500(isIpv4);
                 } else {
-                    newSocket =
-                            IkeUdp6Socket.getInstance(
-                                    mNetwork, IkeSessionStateMachine.this, getHandler());
+                    IkeSocket newSocket;
+                    if (isIpv4) {
+                        newSocket =
+                                IkeUdp4Socket.getInstance(
+                                        mNetwork, IkeSessionStateMachine.this, getHandler());
+                    } else {
+                        newSocket =
+                                IkeUdp6Socket.getInstance(
+                                        mNetwork, IkeSessionStateMachine.this, getHandler());
+                    }
+                    switchToIkeSocket(newSocket);
                 }
-                switchToIkeSocket(newSocket);
-                mLocalPort = mIkeSocket.getLocalPort();
             }
-
+            mLocalPort = mIkeSocket.getLocalPort();
             mLocalAddress =
                     mIkeLocalAddressGenerator.generateLocalAddress(
                             mNetwork, isIpv4, mRemoteAddress, mIkeSocket.getIkeServerPort());
