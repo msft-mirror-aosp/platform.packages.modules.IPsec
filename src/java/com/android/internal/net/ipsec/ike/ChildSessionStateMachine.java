@@ -225,6 +225,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
     @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
     @VisibleForTesting final State mRekeyChildLocalCreate = new RekeyChildLocalCreate();
+    @VisibleForTesting final State mMobikeRekeyChildLocalCreate = new MobikeRekeyChildLocalCreate();
     @VisibleForTesting final State mRekeyChildRemoteCreate = new RekeyChildRemoteCreate();
     @VisibleForTesting final State mRekeyChildLocalDelete = new RekeyChildLocalDelete();
     @VisibleForTesting final State mRekeyChildRemoteDelete = new RekeyChildRemoteDelete();
@@ -277,6 +278,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         addState(mDeleteChildLocalDelete, mKillChildSessionParent);
         addState(mDeleteChildRemoteDelete, mKillChildSessionParent);
         addState(mRekeyChildLocalCreate, mKillChildSessionParent);
+        addState(mMobikeRekeyChildLocalCreate, mKillChildSessionParent);
         addState(mRekeyChildRemoteCreate, mKillChildSessionParent);
         addState(mRekeyChildLocalDelete, mKillChildSessionParent);
         addState(mRekeyChildRemoteDelete, mKillChildSessionParent);
@@ -429,9 +431,17 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      *
      * <p>This method should only be used as a fallback mode for devices that do not have
      * XFRM_MIGRATE kernel support.
+     *
+     * <p>This method is called synchronously from IkeStateMachine. It proxies the synchronous call
+     * as an asynchronous job to the ChildStateMachine handler.
+     *
+     * <p>This method works similarly to {@link #rekeyChildSession()} in that it rekeys the Child
+     * SAs associated with this state machine. However, the caller is notified of Child SA creation
+     * via {@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
+     * android.net.IpSecTransform)};
      */
     public void rekeyChildSessionForMobike() {
-        // TODO(b/172015298): implement MOBIKE rekey
+        sendMessage(CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE);
     }
 
     /**
@@ -489,6 +499,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private boolean isAwaitingCreateResp() {
         return (getCurrentState() == mCreateChildLocalCreate
+                || getCurrentState() == mMobikeRekeyChildLocalCreate
                 || getCurrentState() == mRekeyChildLocalCreate);
     }
 
@@ -1055,6 +1066,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 case CMD_LOCAL_REQUEST_REKEY_CHILD:
                     transitionTo(mRekeyChildLocalCreate);
                     return HANDLED;
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE:
+                    transitionTo(mMobikeRekeyChildLocalCreate);
+                    return HANDLED;
                 case CMD_HANDLE_RECEIVED_REQUEST:
                     ReceivedRequest req = (ReceivedRequest) message.obj;
                     switch (req.exchangeSubtype) {
@@ -1455,17 +1469,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                                 buildSaLifetimeAlarmSched(
                                                         createChildResult.respSpi.getSpi()));
 
-                                executeUserCallback(
-                                        () -> {
-                                            mUserCallback.onIpSecTransformCreated(
-                                                    mLocalInitNewChildSaRecord
-                                                            .getInboundIpSecTransform(),
-                                                    IpSecManager.DIRECTION_IN);
-                                            mUserCallback.onIpSecTransformCreated(
-                                                    mLocalInitNewChildSaRecord
-                                                            .getOutboundIpSecTransform(),
-                                                    IpSecManager.DIRECTION_OUT);
-                                        });
+                                notifyCallerForLocalChildSaRekey();
 
                                 transitionTo(mRekeyChildLocalDelete);
                             } catch (GeneralSecurityException
@@ -1504,6 +1508,18 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
+        protected void notifyCallerForLocalChildSaRekey() {
+            executeUserCallback(
+                    () -> {
+                        mUserCallback.onIpSecTransformCreated(
+                                mLocalInitNewChildSaRecord.getInboundIpSecTransform(),
+                                IpSecManager.DIRECTION_IN);
+                        mUserCallback.onIpSecTransformCreated(
+                                mLocalInitNewChildSaRecord.getOutboundIpSecTransform(),
+                                IpSecManager.DIRECTION_OUT);
+                    });
+        }
+
         private void handleProcessRespOrSaCreationFailAndQuit(
                 int registeredSpi, Exception exception) {
             // We don't retry rekey if failure was caused by invalid response or SA creation error.
@@ -1521,6 +1537,29 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void exitState() {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
+        }
+    }
+
+    /**
+     * MobikeRekeyChildLocalCreate represents the state where Child Session initiates the Rekey
+     * Child exchange for MOBIKE-enabled IKE Sessions.
+     *
+     * <p>MobikeRekeyChildLocalCreate behaves similarly to RekeyChildLocalCreate except that it
+     * notifies the caller of Child SA creation via {@link
+     * ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
+     * android.net.IpSecTransform)}.
+     *
+     * <p>As indicated in RFC 7296 section 2.8, "when rekeying, the new Child SA SHOULD NOT have
+     * different Traffic Selectors and algorithms than the old one."
+     */
+    class MobikeRekeyChildLocalCreate extends RekeyChildLocalCreate {
+        @Override
+        protected void notifyCallerForLocalChildSaRekey() {
+            executeUserCallback(
+                    () ->
+                            mUserCallback.onIpSecTransformsMigrated(
+                                    mLocalInitNewChildSaRecord.getInboundIpSecTransform(),
+                                    mLocalInitNewChildSaRecord.getOutboundIpSecTransform()));
         }
     }
 
