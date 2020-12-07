@@ -1316,6 +1316,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .encryptAndEncode(any(), any(), any(), any(), anyBoolean(), anyInt());
     }
 
+    private void resetSpyUserCbExecutor() {
+        reset(mSpyUserCbExecutor);
+    }
+
     @Test
     public void testQuit() {
         mIkeSessionStateMachine.quit();
@@ -4424,6 +4428,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     @Test
     public void testDeleteIkeRemoteDelete() throws Exception {
         setupIdleStateMachine();
+
+        verifyIkeDeleteRequestHandled();
+    }
+
+    private void verifyIkeDeleteRequestHandled() throws Exception {
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
                 makeDeleteIkeRequest(mSpyCurrentIkeSaRecord));
@@ -5822,5 +5831,49 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verify(mMockIkeNattKeepalive).stop();
         assertNull(mIkeSessionStateMachine.mIkeNattKeepalive);
+    }
+
+    @Test
+    public void testMobikeLocalInfoHandlesDeleteRequest() throws Exception {
+        setupIdleStateMachineWithMobike();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mMobikeLocalInfo);
+        mLooper.dispatchAll();
+
+        // Reset to ignore UPDATE_SA_ADDRESSES req sent when entering MobikeLocalInfo
+        resetMockIkeMessageHelper();
+
+        // Reset to ignore IkeSessionCallback#onOpened from setting up the state machine
+        resetSpyUserCbExecutor();
+
+        verifyIkeDeleteRequestHandled();
+    }
+
+    @Test
+    public void testMobikeLocalInfoHandlesNonDeleteRequest() throws Exception {
+        setupIdleStateMachineWithMobike();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mMobikeLocalInfo);
+        mLooper.dispatchAll();
+
+        // Reset to ignore UPDATE_SA_ADDRESSES req sent when entering MobikeLocalInfo
+        resetMockIkeMessageHelper();
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_RECEIVE_IKE_PACKET, makeRoutabilityCheckIkeRequest());
+        mLooper.dispatchAll();
+
+        verifyIncrementRemoteReqMsgId();
+
+        List<IkePayload> respPayloads = verifyOutInfoMsgHeaderAndGetPayloads(true /* isResp */);
+        assertEquals(1, respPayloads.size());
+        IkeNotifyPayload notifyPayload = (IkeNotifyPayload) respPayloads.get(0);
+        assertEquals(ERROR_TYPE_TEMPORARY_FAILURE, notifyPayload.notifyType);
+
+        assertEquals(
+                mIkeSessionStateMachine.mMobikeLocalInfo,
+                mIkeSessionStateMachine.getCurrentState());
     }
 }
