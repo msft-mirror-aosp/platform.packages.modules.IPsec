@@ -85,8 +85,10 @@ java_library {
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
-    static_libs: ["bouncycastle_ike_digests"],
-    sdk_version: "core_current",
+    static_libs: [
+        "bouncycastle_ike_digests",
+        "modules-utils-build",],
+    sdk_version: "module_current",
 }
 
 java_library {

@@ -132,6 +132,36 @@ public final class IkeSaProposal extends SaProposal {
     }
 
     /**
+     * Returns supported encryption algorithms for IKE SA proposal negotiation.
+     *
+     * @hide
+     */
+    @NonNull
+    public static Set<Integer> getSupportedEncryptionAlgorithms() {
+        return getKeySet(SUPPORTED_ENCRYPTION_ALGO_TO_STR);
+    }
+
+    /**
+     * Returns supported integrity algorithms for IKE SA proposal negotiation.
+     *
+     * @hide
+     */
+    @NonNull
+    public static Set<Integer> getSupportedIntegrityAlgorithms() {
+        return getKeySet(SUPPORTED_INTEGRITY_ALGO_TO_STR);
+    }
+
+    /**
+     * Returns supported pseudorandom functions for IKE SA proposal negotiation.
+     *
+     * @hide
+     */
+    @NonNull
+    public static Set<Integer> getSupportedPseudorandomFunctions() {
+        return getKeySet(SUPPORTED_PRF_TO_STR);
+    }
+
+    /**
      * Gets all proposed Pseudorandom Functions
      *
      * @return A list of the IANA-defined IDs for the proposed Pseudorandom Functions
