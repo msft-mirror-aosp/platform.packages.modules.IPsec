@@ -116,7 +116,7 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
-import android.net.ipsec.ike.exceptions.IkeNetworkDiedException;
+import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
@@ -5574,7 +5574,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         ArgumentCaptor<IkeException> exceptionCaptor = ArgumentCaptor.forClass(IkeException.class);
         verify(mMockIkeSessionCallback).onError(exceptionCaptor.capture());
-        IkeNetworkDiedException cause = (IkeNetworkDiedException) exceptionCaptor.getValue();
+        IkeNetworkLostException cause = (IkeNetworkLostException) exceptionCaptor.getValue();
         assertEquals(mMockDefaultNetwork, cause.getNetwork());
     }
 

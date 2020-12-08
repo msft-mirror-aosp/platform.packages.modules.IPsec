@@ -86,7 +86,7 @@ import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
-import android.net.ipsec.ike.exceptions.IkeNetworkDiedException;
+import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidKeException;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -5468,6 +5468,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onUnderlyingNetworkDied() {
         executeUserCallback(
-                () -> mIkeSessionCallback.onError(new IkeNetworkDiedException(mNetwork)));
+                () -> mIkeSessionCallback.onError(new IkeNetworkLostException(mNetwork)));
     }
 }
