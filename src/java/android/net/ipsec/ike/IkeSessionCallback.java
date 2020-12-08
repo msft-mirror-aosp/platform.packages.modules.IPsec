@@ -103,7 +103,7 @@ public interface IkeSessionCallback {
      *
      * <ul>
      *   <li>The underlying Network changing, or
-     *   <li>The local address disappearing from the current underlying (and unchanged) Network, or
+     *   <li>The local address disappearing from the current (and unchanged) underlying Network, or
      *   <li>The remote address changing.
      * </ul>
      *
