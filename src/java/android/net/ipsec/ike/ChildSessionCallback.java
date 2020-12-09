@@ -110,8 +110,8 @@ public interface ChildSessionCallback {
      *     {@link IpSecManager#DIRECTION_OUT}
      * @hide
      */
-    void onIpSecTransformsMigrated(
-            @NonNull IpSecTransform inIpSecTransform, @NonNull IpSecTransform outIpSecTransform);
+    default void onIpSecTransformsMigrated(
+            @NonNull IpSecTransform inIpSecTransform, @NonNull IpSecTransform outIpSecTransform) {}
 
     /**
      * Called when an {@link IpSecTransform} is deleted by this Child Session.
