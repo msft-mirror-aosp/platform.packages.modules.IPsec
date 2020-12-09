@@ -110,5 +110,6 @@ public interface IkeSessionCallback {
      * @param connectionInfo the updated IkeSessionConnectionInfo for the Session.
      * @hide
      */
-    void onIkeSessionConnectionInfoChanged(@NonNull IkeSessionConnectionInfo connectionInfo);
+    default void onIkeSessionConnectionInfoChanged(
+            @NonNull IkeSessionConnectionInfo connectionInfo) {}
 }
