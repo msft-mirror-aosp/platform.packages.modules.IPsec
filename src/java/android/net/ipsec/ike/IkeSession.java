@@ -17,7 +17,6 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
-import android.annotation.SystemApi;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.IpSecManager;
@@ -48,9 +47,7 @@ import java.util.concurrent.Executor;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
  *     Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public final class IkeSession implements AutoCloseable {
     private final CloseGuard mCloseGuard = new CloseGuard();
     private final Context mContext;
