@@ -450,7 +450,13 @@ public final class EapSessionConfig {
     /**
      * EapUiccConfig represents the configs needed for EAP methods that rely on UICC cards for
      * authentication.
+     *
+     * @hide
+     * @deprecated This class is not useful. Callers should only use its two subclasses {@link
+     *     EapSimConfig} and {@link EapAkaConfig}
      */
+    @Deprecated
+    @SystemApi
     public abstract static class EapUiccConfig extends EapMethodConfig {
         /** @hide */
         protected static final String SUB_ID_KEY = "subId";

@@ -5,6 +5,11 @@ package android.net.eap {
     method @Deprecated @Nullable public android.net.eap.EapSessionConfig.EapMsChapV2Config getEapMsChapV2onfig();
   }
 
+  @Deprecated public abstract static class EapSessionConfig.EapUiccConfig extends android.net.eap.EapSessionConfig.EapMethodConfig {
+    method @Deprecated public int getAppType();
+    method @Deprecated public int getSubId();
+  }
+
 }
 
 package android.net.ipsec.ike {
