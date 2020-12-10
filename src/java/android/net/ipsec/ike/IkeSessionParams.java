@@ -66,10 +66,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Note that all negotiated configurations will be reused during rekey including SA Proposal and
  * lifetime.
- *
- * @hide
  */
-@SystemApi
 public final class IkeSessionParams {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -382,16 +379,7 @@ public final class IkeSessionParams {
         return mServerHostname;
     }
 
-    // TODO: b/151984042 Keep #getNetwork @SystemApi and make #getConfiguredNetwork public
-
-    /**
-     * Retrieves the configured {@link Network}, or null if not configured
-     *
-     * <p>This is the initially-configured Network (with MOBIKE, the caller may later specify a new
-     * Network and that update will not persist to here).
-     *
-     * @hide
-     */
+    /** Retrieves the configured {@link Network}, or null if was not set */
     @Nullable
     public Network getConfiguredNetwork() {
         return mCallerConfiguredNetwork;
@@ -405,14 +393,17 @@ public final class IkeSessionParams {
      * informational because if MOBIKE is enabled, IKE Session may switch to a different default
      * Network.
      *
-     * <p>This is method will be deprecated. Callers should use {@link #getConfiguredNetwork}
+     * @hide
+     * @deprecated Callers should use {@link #getConfiguredNetwork}
      */
+    @Deprecated
+    @SystemApi
     @NonNull
     public Network getNetwork() {
         return mNetwork;
     }
 
-    /** Retrieves all ChildSaProposals configured */
+    /** Retrieves all IkeSaProposals configured */
     @NonNull
     public List<IkeSaProposal> getSaProposals() {
         return Arrays.asList(mSaProposals);
@@ -464,6 +455,8 @@ public final class IkeSessionParams {
     }
 
     /** Retrieves the Dead Peer Detection(DPD) delay in seconds */
+    // Use "second" because smaller unit does not make sense to a DPD delay.
+    @SuppressLint("MethodNameUnits")
     @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
     public int getDpdDelaySeconds() {
         return mDpdDelaySec;
@@ -474,11 +467,17 @@ public final class IkeSessionParams {
      *
      * <p>@see {@link Builder#setRetransmissionTimeoutsMillis(int[])}
      */
+    @NonNull
     public int[] getRetransmissionTimeoutsMillis() {
         return mRetransTimeoutMsList;
     }
 
-    /** Retrieves the configured Ike3gppExtension, or null if it was not set. */
+    /**
+     * Retrieves the configured Ike3gppExtension, or null if it was not set.
+     *
+     * @hide
+     */
+    @SystemApi
     @Nullable
     public Ike3gppExtension getIke3gppExtension() {
         return mIke3gppExtension;
@@ -1127,28 +1126,9 @@ public final class IkeSessionParams {
          *
          * @param network the {@link Network} that IKE Session will use.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
         public Builder setConfiguredNetwork(@NonNull Network network) {
-            return setNetwork(network);
-        }
-
-        // TODO: b/151984042 Keep #setNetwork @SystemApi and make #setConfiguredNetwork public
-
-        /**
-         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
-         *
-         * <p>If no {@link Network} is provided, the default Network (as per {@link
-         * ConnectivityManager#getActiveNetwork()}) will be used.
-         *
-         * <p>This is method will be deprecated. Callers should use {@link #setConfiguredNetwork}
-         *
-         * @param network the {@link Network} that IKE Session will use.
-         * @return Builder this, to facilitate chaining.
-         */
-        @NonNull
-        public Builder setNetwork(@NonNull Network network) {
             if (network == null) {
                 throw new NullPointerException("Required argument not provided");
             }
@@ -1156,6 +1136,24 @@ public final class IkeSessionParams {
             mCallerConfiguredNetwork = network;
             mNetwork = network;
             return this;
+        }
+
+        /**
+         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
+         *
+         * <p>If no {@link Network} is provided, the default Network (as per {@link
+         * ConnectivityManager#getActiveNetwork()}) will be used.
+         *
+         * @param network the {@link Network} that IKE Session will use.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         * @deprecated Callers should use {@link #setConfiguredNetwork}
+         */
+        @Deprecated
+        @SystemApi
+        @NonNull
+        public Builder setNetwork(@NonNull Network network) {
+            return setConfiguredNetwork(network);
         }
 
         /**
@@ -1240,6 +1238,9 @@ public final class IkeSessionParams {
          * @param sharedKey the shared key.
          * @return Builder this, to facilitate chaining.
          */
+        // #getLocalAuthConfig and #getRemoveAuthConfig are defined to retrieve
+        // authentication configurations
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setAuthPsk(@NonNull byte[] sharedKey) {
             if (sharedKey == null) {
@@ -1283,6 +1284,9 @@ public final class IkeSessionParams {
          */
         // TODO(b/151667921): Consider also supporting configuring EAP method that is not accepted
         // by EAP-Only when {@link IKE_OPTION_EAP_ONLY_AUTH} is set
+        // MissingGetterMatchingBuilder: #getLocalAuthConfig and #getRemoveAuthConfig are defined to
+        // retrieve authentication configurations
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setAuthEap(
                 @Nullable X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
@@ -1315,6 +1319,9 @@ public final class IkeSessionParams {
          *     PrivateKey} MUST be an instance of {@link RSAKey}.
          * @return Builder this, to facilitate chaining.
          */
+        // #getLocalAuthConfig and #getRemoveAuthConfig are defined to retrieve
+        // authentication configurations
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setAuthDigitalSignature(
                 @Nullable X509Certificate serverCaCert,
@@ -1349,6 +1356,9 @@ public final class IkeSessionParams {
          *     PrivateKey} MUST be an instance of {@link RSAKey}.
          * @return Builder this, to facilitate chaining.
          */
+        // #getLocalAuthConfig and #getRemoveAuthConfig are defined to retrieve
+        // authentication configurations
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setAuthDigitalSignature(
                 @Nullable X509Certificate serverCaCert,
@@ -1391,6 +1401,8 @@ public final class IkeSessionParams {
          * @param address the requested P_CSCF address.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests is defined to retrieve PCSCF server requests
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addPcscfServerRequest(@NonNull InetAddress address) {
             if (address == null) {
@@ -1413,6 +1425,8 @@ public final class IkeSessionParams {
          *     OsConstants.AF_INET6} are allowed.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests is defined to retrieve PCSCF server requests
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
@@ -1437,6 +1451,9 @@ public final class IkeSessionParams {
          *     least 60 seconds (1 minute) shorter than the hard lifetime.
          * @return Builder this, to facilitate chaining.
          */
+        // #getHardLifetimeSeconds and #getSoftLifetimeSeconds are defined for callers to retrieve
+        // the lifetimes
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setLifetimeSeconds(
                 @IntRange(from = IKE_HARD_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
@@ -1519,7 +1536,9 @@ public final class IkeSessionParams {
          *     access networks
          * @param ike3gppExtension the Ike3gppExtension to use for this IKE Session.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder setIke3gppExtension(@NonNull Ike3gppExtension ike3gppExtension) {
             Objects.requireNonNull(ike3gppExtension, "ike3gppExtension must not be null");
@@ -1534,6 +1553,9 @@ public final class IkeSessionParams {
          * @param ikeOption the option to be enabled.
          * @return Builder this, to facilitate chaining.
          */
+        // Use #hasIkeOption instead of @getIkeOptions because #hasIkeOption allows callers to check
+        // the presence of one IKE option more easily
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
             validateIkeOptionOrThrow(ikeOption);
@@ -1547,6 +1569,9 @@ public final class IkeSessionParams {
          * @param ikeOption the option to be disabled.
          * @return Builder this, to facilitate chaining.
          */
+        // Use #removeIkeOption instead of #clearIkeOption because "clear" sounds indicating
+        // clearing all enabled IKE options
+        @SuppressLint("BuilderSetStyle")
         @NonNull
         public Builder removeIkeOption(@IkeOption int ikeOption) {
             validateIkeOptionOrThrow(ikeOption);

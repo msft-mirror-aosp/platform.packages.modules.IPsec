@@ -47,10 +47,7 @@ import java.util.Objects;
  *
  * <p>The EAP authentication server decides which EAP method is used, so clients are encouraged to
  * provide configs for several EAP methods.
- *
- * @hide
  */
-@SystemApi
 public final class EapSessionConfig {
     private static final String EAP_ID_KEY = "eapIdentity";
     private static final String EAP_METHOD_CONFIGS_KEY = "eapConfigs";
@@ -175,8 +172,22 @@ public final class EapSessionConfig {
      * @return the configuration for EAP MSCHAPV2, or null if it was not set
      */
     @Nullable
-    public EapMsChapV2Config getEapMsChapV2onfig() {
+    public EapMsChapV2Config getEapMsChapV2Config() {
         return (EapMsChapV2Config) mEapConfigs.get(EAP_TYPE_MSCHAP_V2);
+    }
+
+    /**
+     * Retrieves configuration for EAP MSCHAPV2
+     *
+     * @return the configuration for EAP MSCHAPV2, or null if it was not set
+     * @hide
+     * @deprecated Callers should use {@link #getEapMsChapV2Config}
+     */
+    @Deprecated
+    @SystemApi
+    @Nullable
+    public EapMsChapV2Config getEapMsChapV2onfig() {
+        return getEapMsChapV2Config();
     }
 
     /**
