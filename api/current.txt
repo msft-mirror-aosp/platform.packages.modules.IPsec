@@ -48,6 +48,8 @@ package android.net.eap {
 package android.net.ipsec.ike {
 
   public final class ChildSaProposal extends android.net.ipsec.ike.SaProposal {
+    method @NonNull public static java.util.Set<java.lang.Integer> getSupportedEncryptionAlgorithms();
+    method @NonNull public static java.util.Set<java.lang.Integer> getSupportedIntegrityAlgorithms();
   }
 
   public static final class ChildSaProposal.Builder {
@@ -118,6 +120,9 @@ package android.net.ipsec.ike {
 
   public final class IkeSaProposal extends android.net.ipsec.ike.SaProposal {
     method @NonNull public java.util.List<java.lang.Integer> getPseudorandomFunctions();
+    method @NonNull public static java.util.Set<java.lang.Integer> getSupportedEncryptionAlgorithms();
+    method @NonNull public static java.util.Set<java.lang.Integer> getSupportedIntegrityAlgorithms();
+    method @NonNull public static java.util.Set<java.lang.Integer> getSupportedPseudorandomFunctions();
   }
 
   public static final class IkeSaProposal.Builder {
@@ -243,6 +248,7 @@ package android.net.ipsec.ike {
     method @NonNull public java.util.List<java.lang.Integer> getDhGroups();
     method @NonNull public java.util.List<android.util.Pair<java.lang.Integer,java.lang.Integer>> getEncryptionAlgorithms();
     method @NonNull public java.util.List<java.lang.Integer> getIntegrityAlgorithms();
+    method @NonNull public static java.util.Set<java.lang.Integer> getSupportedDhGroups();
     field public static final int DH_GROUP_1024_BIT_MODP = 2; // 0x2
     field public static final int DH_GROUP_1536_BIT_MODP = 5; // 0x5
     field public static final int DH_GROUP_2048_BIT_MODP = 14; // 0xe
