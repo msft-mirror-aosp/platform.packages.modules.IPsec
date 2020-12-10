@@ -96,6 +96,8 @@ import static org.mockito.Mockito.when;
 import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.content.Context;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSaProposal;
@@ -203,6 +205,7 @@ import org.mockito.invocation.InvocationOnMock;
 
 import java.io.IOException;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -355,6 +358,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private IkeUdp4Socket mSpyIkeUdp4Socket;
     private IkeUdp6Socket mSpyIkeUdp6Socket;
     private IkeSocket mSpyCurrentIkeSocket;
+
+    private LinkAddress mMockLinkAddressGlobalV6;
 
     private IkeNattKeepalive mMockIkeNattKeepalive;
 
@@ -751,6 +756,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
                         eq(mMockDefaultNetwork), eq(false /* isIpv4 */), any(), anyInt()))
                 .thenReturn(LOCAL_ADDRESS_V6);
+
+        mMockLinkAddressGlobalV6 = mock(LinkAddress.class);
+        when(mMockLinkAddressGlobalV6.getAddress()).thenReturn(UPDATED_LOCAL_ADDRESS_V6);
+        when(mMockLinkAddressGlobalV6.isGlobalPreferred()).thenReturn(true);
 
         mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
         mMockEapAuthenticator = mock(EapAuthenticator.class);
@@ -1414,7 +1423,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .build();
         mIkeSessionStateMachine = makeAndStartIkeSession(ikeParams);
 
-        verify(mMockDefaultNetwork).getByName(REMOTE_HOSTNAME);
+        verify(mMockDefaultNetwork).getAllByName(REMOTE_HOSTNAME);
     }
 
     @Test
@@ -4800,7 +4809,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         IkeSessionParams mockSessionParams = mock(IkeSessionParams.class);
         when(mockSessionParams.getServerHostname()).thenReturn(REMOTE_HOSTNAME);
-        when(mMockDefaultNetwork.getByName(REMOTE_HOSTNAME)).thenReturn(REMOTE_ADDRESS);
 
         RuntimeException cause = new RuntimeException();
         when(mockSessionParams.getSaProposalsInternal()).thenThrow(cause);
@@ -5423,8 +5431,15 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // IKE client always supports NAT-T. So the peer decides if both sides support NAT-T.
         mIkeSessionStateMachine.mSupportNatTraversal = doesPeerSupportNatt;
-        mIkeSessionStateMachine.mLocalAddress = isIpv4 ? LOCAL_ADDRESS : LOCAL_ADDRESS_V6;
-        mIkeSessionStateMachine.mRemoteAddress = isIpv4 ? REMOTE_ADDRESS : REMOTE_ADDRESS_V6;
+        if (isIpv4) {
+            mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS;
+            mIkeSessionStateMachine.mRemoteAddress = REMOTE_ADDRESS;
+            mIkeSessionStateMachine.mRemoteAddressesV4.add(REMOTE_ADDRESS);
+        } else {
+            mIkeSessionStateMachine.mLocalAddress = LOCAL_ADDRESS_V6;
+            mIkeSessionStateMachine.mRemoteAddress = REMOTE_ADDRESS_V6;
+            mIkeSessionStateMachine.mRemoteAddressesV6.add(REMOTE_ADDRESS_V6);
+        }
 
         if (doesPeerSupportNatt && isIpv4) {
             // Assume NATs are detected on both sides
@@ -5596,9 +5611,23 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private Network mockNewNetworkAndAddress(boolean isIpv4) throws Exception {
         Network newNetwork = mock(Network.class);
 
-        InetAddress expectedRemoteAddress = isIpv4 ? REMOTE_ADDRESS : REMOTE_ADDRESS_V6;
-        InetAddress injectedLocalAddress =
-                isIpv4 ? UPDATED_LOCAL_ADDRESS : UPDATED_LOCAL_ADDRESS_V6;
+        InetAddress expectedRemoteAddress;
+        InetAddress injectedLocalAddress;
+        if (isIpv4) {
+            expectedRemoteAddress = REMOTE_ADDRESS;
+            injectedLocalAddress = UPDATED_LOCAL_ADDRESS;
+
+            mIkeSessionStateMachine.mRemoteAddressesV4.add((Inet4Address) expectedRemoteAddress);
+        } else {
+            expectedRemoteAddress = REMOTE_ADDRESS_V6;
+            injectedLocalAddress = UPDATED_LOCAL_ADDRESS_V6;
+            mIkeSessionStateMachine.mRemoteAddressesV6.add((Inet6Address) expectedRemoteAddress);
+
+            LinkProperties linkProperties = new LinkProperties();
+            linkProperties.addLinkAddress(mMockLinkAddressGlobalV6);
+            when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
+        }
+
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
                         eq(newNetwork), eq(isIpv4), eq(expectedRemoteAddress), anyInt()))
                 .thenReturn(injectedLocalAddress);
