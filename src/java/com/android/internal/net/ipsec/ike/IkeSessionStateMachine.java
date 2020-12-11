@@ -242,8 +242,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting
     static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
 
-    @VisibleForTesting static final int NATT_KEEPALIVE_DELAY_SECONDS = 10;
-
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
     // to the subtype specific rules.
@@ -3365,7 +3363,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 new IkeNattKeepalive(
                         mContext,
                         mConnectivityManager,
-                        NATT_KEEPALIVE_DELAY_SECONDS,
+                        mIkeSessionParams.getNattKeepAliveDelaySeconds(),
                         (Inet4Address) mLocalAddress,
                         (Inet4Address) mRemoteAddress,
                         ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
