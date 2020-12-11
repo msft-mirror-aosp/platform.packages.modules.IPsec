@@ -117,17 +117,39 @@ public final class IkeSessionParams {
     /**
      * If set, the IKE library will attempt to enable MOBIKE for the resulting IKE Session.
      *
+     * <p>MOBIKE support is compatible with two Network modes:
+     *
+     * <ul>
+     *   <li><b>Caller managed:</b> The caller controls the underlying Network for the IKE Session
+     *       at all times. The IKE Session will only change underlying Networks if the caller
+     *       initiates it through {@link IkeSession#setNetwork(Network)}. If the caller-specified
+     *       Network dies, they will be notified via {@link
+     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
+     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkDiedException} specifying the Network
+     *       that died.
+     *   <li><b>Platform Default:</b> The IKE Session will always track the Platform default
+     *       Network. The IKE Session will start on the Platform default Network, and any subsequent
+     *       changes to the default Network (after the IKE_AUTH exchange completes) will cause the
+     *       IKE Session's underlying Network to change. If the default Network dies with no
+     *       replacements, the caller will be notified via {@link
+     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
+     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkDiedException}. The caller can either
+     *       wait until for a new default Network to become available or they may close the Session
+     *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
+     *       retransmissions may expire while waiting for a new default Network, in which case the
+     *       Session will automatically close
+     * </ul>
+     *
      * <p>Use of MOBIKE in the IKE Session requires the peer to also support MOBIKE.
      *
      * <p>If this option is set for an IKE Session, Transport-mode SAs will not be allowed in that
      * Session.
      *
      * <p>Checking for MOBIKE use in an IKE Session is done via {@link
-     * IkeSessionConfiguration#isIkeExtensionEnabled}.
+     * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      *
      * @hide
      */
-    // TODO(b/170770939): update javadoc scoping to SDK S+
     public static final int IKE_OPTION_MOBIKE = 2;
 
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
