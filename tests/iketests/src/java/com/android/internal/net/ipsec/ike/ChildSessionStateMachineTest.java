@@ -143,6 +143,8 @@ public final class ChildSessionStateMachineTest {
 
     private static final Inet4Address LOCAL_ADDRESS =
             (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.200");
+    private static final Inet4Address UPDATED_LOCAL_ADDRESS =
+            (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.201");
     private static final Inet4Address REMOTE_ADDRESS =
             (Inet4Address) InetAddresses.parseNumericAddress("192.0.2.100");
     private static final Inet4Address INTERNAL_ADDRESS =
@@ -400,16 +402,27 @@ public final class ChildSessionStateMachineTest {
             int initSpi,
             int respSpi,
             boolean isLocalInit) {
+        verifyChildSaRecordConfig(
+                childSaRecordConfig, initSpi, respSpi, isLocalInit, LOCAL_ADDRESS, REMOTE_ADDRESS);
+    }
+
+    private void verifyChildSaRecordConfig(
+            ChildSaRecordConfig childSaRecordConfig,
+            int initSpi,
+            int respSpi,
+            boolean isLocalInit,
+            InetAddress localAddress,
+            InetAddress remoteAddress) {
         assertEquals(mContext, childSaRecordConfig.context);
         assertEquals(initSpi, childSaRecordConfig.initSpi.getSpi());
         assertEquals(respSpi, childSaRecordConfig.respSpi.getSpi());
 
         if (isLocalInit) {
-            assertEquals(LOCAL_ADDRESS, childSaRecordConfig.initAddress);
-            assertEquals(REMOTE_ADDRESS, childSaRecordConfig.respAddress);
+            assertEquals(localAddress, childSaRecordConfig.initAddress);
+            assertEquals(remoteAddress, childSaRecordConfig.respAddress);
         } else {
-            assertEquals(REMOTE_ADDRESS, childSaRecordConfig.initAddress);
-            assertEquals(LOCAL_ADDRESS, childSaRecordConfig.respAddress);
+            assertEquals(remoteAddress, childSaRecordConfig.initAddress);
+            assertEquals(localAddress, childSaRecordConfig.respAddress);
         }
 
         assertEquals(mMockUdpEncapSocket, childSaRecordConfig.udpEncapSocket);
@@ -1024,9 +1037,14 @@ public final class ChildSessionStateMachineTest {
     }
 
     private void setupStateMachineAndSpiForLocalRekey() throws Exception {
+        setupStateMachineAndSpiForLocalRekey(LOCAL_ADDRESS, REMOTE_ADDRESS);
+    }
+
+    private void setupStateMachineAndSpiForLocalRekey(
+            InetAddress updatedLocalAddress, InetAddress updatedRemoteAddress) throws Exception {
         setupIdleStateMachine();
-        setUpSpiResource(LOCAL_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_IN);
-        setUpSpiResource(REMOTE_ADDRESS, LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
+        setUpSpiResource(updatedLocalAddress, LOCAL_INIT_NEW_CHILD_SA_SPI_IN);
+        setUpSpiResource(updatedRemoteAddress, LOCAL_INIT_NEW_CHILD_SA_SPI_OUT);
     }
 
     @Test
@@ -1038,19 +1056,30 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         verifyRekeyChildLocalCreateHandlesResponse(
-                ChildSessionStateMachine.RekeyChildLocalCreate.class, false /* isMobikeRekey */);
+                ChildSessionStateMachine.RekeyChildLocalCreate.class,
+                false /* isMobikeRekey */,
+                LOCAL_ADDRESS,
+                REMOTE_ADDRESS);
     }
 
     private void verifyRekeyChildLocalCreateHandlesResponse(
-            Class<?> expectedState, boolean isMobikeRekey) throws Exception {
+            Class<?> expectedState,
+            boolean isMobikeRekey,
+            InetAddress localAddress,
+            InetAddress remoteAddress)
+            throws Exception {
         assertTrue(expectedState.isInstance(mChildSessionStateMachine.getCurrentState()));
 
         List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
-        verifyLocalRekeyCreateIsDone(rekeyRespPayloads, isMobikeRekey);
+        verifyLocalRekeyCreateIsDone(rekeyRespPayloads, isMobikeRekey, localAddress, remoteAddress);
     }
 
     private void verifyLocalRekeyCreateIsDone(
-            List<IkePayload> rekeyRespPayloads, boolean isMobikeRekey) throws Exception {
+            List<IkePayload> rekeyRespPayloads,
+            boolean isMobikeRekey,
+            InetAddress localAddress,
+            InetAddress remoteAddress)
+            throws Exception {
         // Verify state transition
         assertTrue(
                 mChildSessionStateMachine.getCurrentState()
@@ -1075,7 +1104,9 @@ public final class ChildSessionStateMachineTest {
                 childSaRecordConfig,
                 LOCAL_INIT_NEW_CHILD_SA_SPI_IN,
                 LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
-                true /*isLocalInit*/);
+                true /*isLocalInit*/,
+                localAddress,
+                remoteAddress);
 
         // Verify users have been notified
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
@@ -1136,7 +1167,8 @@ public final class ChildSessionStateMachineTest {
 
         // Receive Rekey Create response and verify creation is done
         List<IkePayload> rekeyRespPayloads = receiveRekeyChildResponse();
-        verifyLocalRekeyCreateIsDone(rekeyRespPayloads, false /* isMobikeRekey */);
+        verifyLocalRekeyCreateIsDone(
+                rekeyRespPayloads, false /* isMobikeRekey */, LOCAL_ADDRESS, REMOTE_ADDRESS);
     }
 
     @Test
@@ -1954,14 +1986,21 @@ public final class ChildSessionStateMachineTest {
 
     @Test
     public void testMobikeRekeyChildLocalCreateHandlesResp() throws Exception {
-        setupStateMachineAndSpiForLocalRekey();
+        setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
 
         // Send MOBIKE Rekey-Create request
-        mChildSessionStateMachine.rekeyChildSessionForMobike();
+        mChildSessionStateMachine.rekeyChildSessionForMobike(
+                UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket);
         mLooper.dispatchAll();
 
         verifyRekeyChildLocalCreateHandlesResponse(
                 ChildSessionStateMachine.MobikeRekeyChildLocalCreate.class,
-                true /* isMobikeRekey */);
+                true /* isMobikeRekey */,
+                UPDATED_LOCAL_ADDRESS,
+                REMOTE_ADDRESS);
+
+        assertEquals(UPDATED_LOCAL_ADDRESS, mChildSessionStateMachine.mLocalAddress);
+        assertEquals(REMOTE_ADDRESS, mChildSessionStateMachine.mRemoteAddress);
+        assertEquals(mMockUdpEncapSocket, mChildSessionStateMachine.mUdpEncapSocket);
     }
 }
