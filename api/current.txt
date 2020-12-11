@@ -19,7 +19,9 @@ package android.net.eap {
     method @NonNull public android.net.eap.EapSessionConfig.Builder setEapSimConfig(int, int);
   }
 
-  public static class EapSessionConfig.EapAkaConfig extends android.net.eap.EapSessionConfig.EapUiccConfig {
+  public static class EapSessionConfig.EapAkaConfig extends android.net.eap.EapSessionConfig.EapMethodConfig {
+    method public int getAppType();
+    method public int getSubId();
   }
 
   public static class EapSessionConfig.EapAkaPrimeConfig extends android.net.eap.EapSessionConfig.EapAkaConfig {
@@ -36,10 +38,7 @@ package android.net.eap {
     method @NonNull public String getUsername();
   }
 
-  public static class EapSessionConfig.EapSimConfig extends android.net.eap.EapSessionConfig.EapUiccConfig {
-  }
-
-  public abstract static class EapSessionConfig.EapUiccConfig extends android.net.eap.EapSessionConfig.EapMethodConfig {
+  public static class EapSessionConfig.EapSimConfig extends android.net.eap.EapSessionConfig.EapMethodConfig {
     method public int getAppType();
     method public int getSubId();
   }

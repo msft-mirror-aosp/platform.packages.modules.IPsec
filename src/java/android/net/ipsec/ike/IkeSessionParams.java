@@ -394,7 +394,10 @@ public final class IkeSessionParams {
      * Network.
      *
      * @hide
-     * @deprecated Callers should use {@link #getConfiguredNetwork}
+     * @deprecated Callers should use {@link #getConfiguredNetwork}. This method is deprecated
+     *     because its name makes it sound like it will return the actual network the session is
+     *     running on, when it will only return the network that was configured or resolved in the
+     *     builder.
      */
     @Deprecated
     @SystemApi
@@ -1139,15 +1142,13 @@ public final class IkeSessionParams {
         }
 
         /**
-         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
-         *
-         * <p>If no {@link Network} is provided, the default Network (as per {@link
-         * ConnectivityManager#getActiveNetwork()}) will be used.
+         * Behaves identically to setConfiguredNetwork.
          *
          * @param network the {@link Network} that IKE Session will use.
          * @return Builder this, to facilitate chaining.
          * @hide
-         * @deprecated Callers should use {@link #setConfiguredNetwork}
+         * @deprecated Callers should use {@link #setConfiguredNetwork}. This method is deprecated
+         *     because its name fail to match the corresponding getter name {@link #getNetwork()}
          */
         @Deprecated
         @SystemApi
