@@ -266,15 +266,16 @@ public final class IkeSession implements AutoCloseable {
     }
 
     /**
-     * Update the IkeSession's Network to use the specified Network.
+     * Update the IkeSession's underlying Network to use the specified Network.
      *
      * <p>Updating the IkeSession's Network also updates the Network for any Child Sessions created
      * with this IkeSession.
      *
      * <p>Once IkeSession has been updated to use the specified Network, the caller will be notified
-     * via {@link IkeSessionCallback#onIkeSessionConnectionInfoChanged}. The caller will also be
-     * notified for each migrated Child Session via {@link
-     * ChildSessionCallback#onIpsecTransformMigrated}.
+     * via {@link IkeSessionCallback#onIkeSessionConnectionInfoChanged(IkeSessionConnectionInfo)}.
+     * The caller will also be notified for each migrated Child Session via {@link
+     * ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
+     * android.net.IpSecTransform)}.
      *
      * <p>In order for Network migration to be possible, the following must be true:
      *
