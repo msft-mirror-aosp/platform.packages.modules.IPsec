@@ -2487,7 +2487,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             childData.respPayloads,
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNatDetected(),
+                            getEncapSocketOrNull(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     return HANDLED;
@@ -2538,16 +2538,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         // Returns the UDP-Encapsulation socket to the newly created ChildSessionStateMachine if
-        // a NAT is detected. It allows the ChildSessionStateMachine to build IPsec transforms that
-        // can send and receive IPsec traffic through a NAT.
-        private UdpEncapsulationSocket getEncapSocketIfNatDetected() {
-            boolean isNatDetected = mLocalNatDetected || mRemoteNatDetected;
-
-            if (!isNatDetected) return null;
-
+        // a NAT is detected or if NAT-T AND MOBIKE are enabled by both parties. It allows the
+        // ChildSessionStateMachine to build IPsec transforms that can send and receive IPsec
+        // traffic through a NAT.
+        private UdpEncapsulationSocket getEncapSocketOrNull() {
             if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
-                throw new IllegalStateException(
-                        "NAT is detected but IKE packet is not UDP-Encapsulated.");
+                return null;
             }
             return ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket();
         }
@@ -2574,7 +2570,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     mChildInLocalProcedure.createChildSession(
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNatDetected(),
+                            getEncapSocketOrNull(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     break;
@@ -2582,7 +2578,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     mChildInLocalProcedure.rekeyChildSession();
                     break;
                 case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE:
-                    mChildInLocalProcedure.rekeyChildSessionForMobike();
+                    mChildInLocalProcedure.rekeyChildSessionForMobike(
+                            mLocalAddress, mRemoteAddress, getEncapSocketOrNull());
                     break;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     mChildInLocalProcedure.deleteChildSession();

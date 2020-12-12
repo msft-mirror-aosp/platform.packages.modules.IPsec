@@ -5990,7 +5990,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
-        verify(mMockChildSessionStateMachine).rekeyChildSessionForMobike();
+        verify(mMockChildSessionStateMachine)
+                .rekeyChildSessionForMobike(eq(expectedLocalAddr), eq(expectedRemoteAddr), any());
     }
 
     @Test

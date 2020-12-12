@@ -439,8 +439,19 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * SAs associated with this state machine. However, the caller is notified of Child SA creation
      * via {@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
      * android.net.IpSecTransform)};
+     *
+     * @param localAddress The local (outer) address from which traffic will originate.
+     * @param remoteAddress The remote (outer) address to which traffic will be sent.
+     * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
      */
-    public void rekeyChildSessionForMobike() {
+    public void rekeyChildSessionForMobike(
+            InetAddress localAddress,
+            InetAddress remoteAddress,
+            UdpEncapsulationSocket udpEncapSocket) {
+        this.mLocalAddress = localAddress;
+        this.mRemoteAddress = remoteAddress;
+        this.mUdpEncapSocket = udpEncapSocket;
+
         sendMessage(CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE);
     }
 
