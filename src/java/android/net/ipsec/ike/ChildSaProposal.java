@@ -20,19 +20,25 @@ import static com.android.internal.net.ipsec.ike.message.IkeSaPayload.EsnTransfo
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
+import android.net.IpSecAlgorithm;
 import android.os.PersistableBundle;
+import android.util.ArraySet;
 
+import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
+import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EsnTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * ChildSaProposal represents a proposed configuration to negotiate a Child SA.
@@ -46,6 +52,25 @@ import java.util.Objects;
  *     Protocol Version 2 (IKEv2)</a>
  */
 public final class ChildSaProposal extends SaProposal {
+    // Before SDK S, there is no API in IpSecAlgorithm to retrieve supported algorithms. Thus hard
+    // coded these algorithms here.
+    private static final Set<Integer> SUPPORTED_IPSEC_ENCRYPTION_BEFORE_SDK_S;
+    private static final Set<Integer> SUPPORTED_IPSEC_INTEGRITY_BEFORE_SDK_S;
+
+    static {
+        SUPPORTED_IPSEC_ENCRYPTION_BEFORE_SDK_S = new ArraySet<>();
+        SUPPORTED_IPSEC_ENCRYPTION_BEFORE_SDK_S.add(ENCRYPTION_ALGORITHM_AES_CBC);
+        SUPPORTED_IPSEC_ENCRYPTION_BEFORE_SDK_S.add(ENCRYPTION_ALGORITHM_AES_GCM_8);
+        SUPPORTED_IPSEC_ENCRYPTION_BEFORE_SDK_S.add(ENCRYPTION_ALGORITHM_AES_GCM_12);
+        SUPPORTED_IPSEC_ENCRYPTION_BEFORE_SDK_S.add(ENCRYPTION_ALGORITHM_AES_GCM_16);
+
+        SUPPORTED_IPSEC_INTEGRITY_BEFORE_SDK_S = new ArraySet<>();
+        SUPPORTED_IPSEC_INTEGRITY_BEFORE_SDK_S.add(INTEGRITY_ALGORITHM_HMAC_SHA1_96);
+        SUPPORTED_IPSEC_INTEGRITY_BEFORE_SDK_S.add(INTEGRITY_ALGORITHM_HMAC_SHA2_256_128);
+        SUPPORTED_IPSEC_INTEGRITY_BEFORE_SDK_S.add(INTEGRITY_ALGORITHM_HMAC_SHA2_384_192);
+        SUPPORTED_IPSEC_INTEGRITY_BEFORE_SDK_S.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
+    }
+
     private static final String ESN_KEY = "mEsns";
     private final EsnTransform[] mEsns;
 
@@ -136,6 +161,61 @@ public final class ChildSaProposal extends SaProposal {
         result.putIntArray(ESN_KEY, esnPolicies);
 
         return result;
+    }
+
+    /**
+     * Returns supported encryption algorithms for Child SA proposal negotiation.
+     *
+     * <p>Some algorithms may not be supported on old devices. Callers MUST check if an algorithm is
+     * supported before using it.
+     *
+     * @hide
+     */
+    @NonNull
+    public static Set<Integer> getSupportedEncryptionAlgorithms() {
+        if (SdkLevel.isAtLeastS()) {
+            Set<Integer> algoIds = new ArraySet<>();
+            for (int i = 0; i < SUPPORTED_ENCRYPTION_ALGO_TO_STR.size(); i++) {
+                int ikeAlgoId = SUPPORTED_ENCRYPTION_ALGO_TO_STR.keyAt(i);
+                String ipSecAlgoName = IkeCipher.getIpSecAlgorithmName(ikeAlgoId);
+                if (IpSecAlgorithm.getSupportedAlgorithms().contains(ipSecAlgoName)) {
+                    algoIds.add(ikeAlgoId);
+                }
+            }
+            return algoIds;
+        } else {
+            return SUPPORTED_IPSEC_ENCRYPTION_BEFORE_SDK_S;
+        }
+    }
+
+    /**
+     * Returns supported integrity algorithms for Child SA proposal negotiation.
+     *
+     * <p>Some algorithms may not be supported on old devices. Callers MUST check if an algorithm is
+     * supported before using it.
+     *
+     * @hide
+     */
+    @NonNull
+    public static Set<Integer> getSupportedIntegrityAlgorithms() {
+        Set<Integer> algoIds = new ArraySet<>();
+
+        // Although IpSecAlgorithm does not support INTEGRITY_ALGORITHM_NONE, IKE supports
+        // negotiating it and won't build IpSecAlgorithm with it.
+        algoIds.add(INTEGRITY_ALGORITHM_NONE);
+
+        if (SdkLevel.isAtLeastS()) {
+            for (int i = 0; i < SUPPORTED_INTEGRITY_ALGO_TO_STR.size(); i++) {
+                int ikeAlgoId = SUPPORTED_INTEGRITY_ALGO_TO_STR.keyAt(i);
+                String ipSecAlgoName = IkeMacIntegrity.getIpSecAlgorithmName(ikeAlgoId);
+                if (IpSecAlgorithm.getSupportedAlgorithms().contains(ipSecAlgoName)) {
+                    algoIds.add(ikeAlgoId);
+                }
+            }
+        } else {
+            algoIds.addAll(SUPPORTED_IPSEC_INTEGRITY_BEFORE_SDK_S);
+        }
+        return algoIds;
     }
 
     /**
