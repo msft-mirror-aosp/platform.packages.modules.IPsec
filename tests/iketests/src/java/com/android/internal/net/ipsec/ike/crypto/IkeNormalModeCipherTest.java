@@ -19,6 +19,7 @@ package com.android.internal.net.ipsec.ike.crypto;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -184,7 +185,7 @@ public final class IkeNormalModeCipherTest {
     }
 
     @Test
-    public void buildIpSecAlgorithmWithInvalidKey() throws Exception {
+    public void testBuildIpSecAlgorithmWithInvalidKey() throws Exception {
         byte[] encryptionKey = TestUtils.hexStringToByteArray(ENCR_KEY_FROM_INIT_TO_RESP + "00");
 
         try {
@@ -194,5 +195,28 @@ public final class IkeNormalModeCipherTest {
         } catch (IllegalArgumentException expected) {
 
         }
+    }
+
+    @Test
+    public void testGetIpSecAlgorithmName() throws Exception {
+        assertEquals(
+                IpSecAlgorithm.CRYPT_AES_CBC,
+                IkeCipher.getIpSecAlgorithmName(SaProposal.ENCRYPTION_ALGORITHM_AES_CBC));
+        assertEquals(
+                IpSecAlgorithm.CRYPT_AES_CTR,
+                IkeCipher.getIpSecAlgorithmName(SaProposal.ENCRYPTION_ALGORITHM_AES_CTR));
+        assertEquals(
+                IpSecAlgorithm.AUTH_CRYPT_AES_GCM,
+                IkeCipher.getIpSecAlgorithmName(SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8));
+        assertEquals(
+                IpSecAlgorithm.AUTH_CRYPT_AES_GCM,
+                IkeCipher.getIpSecAlgorithmName(SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12));
+        assertEquals(
+                IpSecAlgorithm.AUTH_CRYPT_AES_GCM,
+                IkeCipher.getIpSecAlgorithmName(SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16));
+        assertEquals(
+                IpSecAlgorithm.AUTH_CRYPT_CHACHA20_POLY1305,
+                IkeCipher.getIpSecAlgorithmName(SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305));
+        assertNull(IkeCipher.getIpSecAlgorithmName(SaProposal.ENCRYPTION_ALGORITHM_3DES));
     }
 }

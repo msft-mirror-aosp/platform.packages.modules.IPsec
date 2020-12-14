@@ -16,8 +16,10 @@
 
 package com.android.internal.net.ipsec.ike.crypto;
 
+import android.annotation.Nullable;
 import android.net.IpSecAlgorithm;
 import android.net.ipsec.ike.SaProposal;
+import android.util.SparseArray;
 
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
 
@@ -51,6 +53,26 @@ public abstract class IkeCipher extends IkeCrypto {
 
     protected static final int SALT_LEN_NOT_INCLUDED = 0;
     protected static final int BLOCK_SIZE_NOT_SPECIFIED = 0;
+
+    // Map IKE algorithm numbers to IPsec algorithm names
+    private static final SparseArray<String> IKE_ALGO_TO_IPSEC_ALGO;
+
+    static {
+        IKE_ALGO_TO_IPSEC_ALGO = new SparseArray<>();
+        IKE_ALGO_TO_IPSEC_ALGO.put(
+                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, IpSecAlgorithm.CRYPT_AES_CBC);
+        IKE_ALGO_TO_IPSEC_ALGO.put(
+                SaProposal.ENCRYPTION_ALGORITHM_AES_CTR, IpSecAlgorithm.CRYPT_AES_CTR);
+        IKE_ALGO_TO_IPSEC_ALGO.put(
+                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, IpSecAlgorithm.AUTH_CRYPT_AES_GCM);
+        IKE_ALGO_TO_IPSEC_ALGO.put(
+                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12, IpSecAlgorithm.AUTH_CRYPT_AES_GCM);
+        IKE_ALGO_TO_IPSEC_ALGO.put(
+                SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16, IpSecAlgorithm.AUTH_CRYPT_AES_GCM);
+        IKE_ALGO_TO_IPSEC_ALGO.put(
+                SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305,
+                IpSecAlgorithm.AUTH_CRYPT_CHACHA20_POLY1305);
+    }
 
     private final boolean mIsAead;
     private final int mIvLen;
@@ -188,6 +210,19 @@ public abstract class IkeCipher extends IkeCrypto {
     }
 
     /**
+     * Returns the IPsec algorithm name defined in {@link IpSecAlgorithm} given the IKE algorithm
+     * ID.
+     *
+     * <p>Returns null if there is no corresponding IPsec algorithm given the IKE algorithm ID.
+     */
+    @Nullable
+    public static String getIpSecAlgorithmName(int ikeAlgoId) {
+        return IKE_ALGO_TO_IPSEC_ALGO.get(ikeAlgoId);
+    }
+
+    protected abstract IpSecAlgorithm buildIpSecAlgorithmWithKeyImpl(byte[] key);
+
+    /**
      * Build IpSecAlgorithm from this IkeCipher.
      *
      * <p>Build IpSecAlgorithm that represents the same encryption algorithm with this IkeCipher
@@ -196,7 +231,14 @@ public abstract class IkeCipher extends IkeCrypto {
      * @param key the encryption key in byte array.
      * @return the IpSecAlgorithm.
      */
-    public abstract IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key);
+    public IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key) {
+        validateKeyLenOrThrow(key);
+        if (getIpSecAlgorithmName(getAlgorithmId()) == null) {
+            throw new IllegalStateException(
+                    "Unsupported algorithm " + getAlgorithmId() + " in IPsec");
+        }
+        return buildIpSecAlgorithmWithKeyImpl(key);
+    }
 
     /**
      * Returns algorithm type as a String.
