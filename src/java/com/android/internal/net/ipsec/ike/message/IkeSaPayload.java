@@ -1224,7 +1224,8 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedEncryptionAlgorithm(id);
+            return IkeSaProposal.getSupportedEncryptionAlgorithms().contains(id)
+                    || ChildSaProposal.getSupportedEncryptionAlgorithms().contains(id);
         }
 
         @Override
@@ -1374,7 +1375,7 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedPseudorandomFunction(id);
+            return IkeSaProposal.getSupportedPseudorandomFunctions().contains(id);
         }
 
         @Override
@@ -1455,7 +1456,8 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedIntegrityAlgorithm(id);
+            return IkeSaProposal.getSupportedIntegrityAlgorithms().contains(id)
+                    || ChildSaProposal.getSupportedIntegrityAlgorithms().contains(id);
         }
 
         @Override
@@ -1536,7 +1538,7 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedDhGroup(id);
+            return SaProposal.getSupportedDhGroups().contains(id);
         }
 
         @Override
