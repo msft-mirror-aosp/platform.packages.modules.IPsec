@@ -71,6 +71,7 @@ import java.util.Set;
 
 public final class SaProposalTest {
     private final EncryptionTransform mEncryption3DesTransform;
+    private final EncryptionTransform mEncryptionAesCbcTransform;
     private final EncryptionTransform mEncryptionAesGcm8Transform;
     private final EncryptionTransform mEncryptionAesGcm12Transform;
     private final IntegrityTransform mIntegrityHmacSha1Transform;
@@ -95,9 +96,15 @@ public final class SaProposalTest {
         SUPPORTED_IPSEC_INTEGRITY_BEFORE_SDK_S.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
     }
 
+    // For all crypto algorithms, private use range starts from 1024
+    private static final int ALGORITHM_ID_INVALID = 1024;
+
     public SaProposalTest() {
         mEncryption3DesTransform =
                 new EncryptionTransform(SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED);
+        mEncryptionAesCbcTransform =
+                new EncryptionTransform(
+                        SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, SaProposal.KEY_LEN_AES_128);
         mEncryptionAesGcm8Transform =
                 new EncryptionTransform(
                         SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8, SaProposal.KEY_LEN_AES_128);
@@ -162,14 +169,14 @@ public final class SaProposalTest {
         ChildSaProposal proposal =
                 new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
-                                SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED)
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
 
         assertEquals(IkePayload.PROTOCOL_ID_ESP, proposal.getProtocolId());
         assertArrayEquals(
-                new EncryptionTransform[] {mEncryption3DesTransform},
+                new EncryptionTransform[] {mEncryptionAesCbcTransform},
                 proposal.getEncryptionTransforms());
         assertArrayEquals(
                 new IntegrityTransform[] {mIntegrityNoneTransform},
@@ -190,7 +197,7 @@ public final class SaProposalTest {
         ChildSaProposal proposal =
                 new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
-                                SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED)
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
@@ -217,7 +224,7 @@ public final class SaProposalTest {
         ChildSaProposal proposal =
                 new ChildSaProposal.Builder()
                         .addEncryptionAlgorithm(
-                                SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED)
+                                SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128)
                         .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
                         .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
                         .build();
@@ -537,5 +544,16 @@ public final class SaProposalTest {
         expectedSet.add(DH_GROUP_4096_BIT_MODP);
 
         assertEquals(expectedSet, IkeSaProposal.getSupportedDhGroups());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBuildChildProposalWithUnsupportedEncryptionAlgo() throws Exception {
+        new ChildSaProposal.Builder()
+                .addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBuildChildProposalWithUnsupportedIntegrityAlgo() throws Exception {
+        new ChildSaProposal.Builder().addIntegrityAlgorithm(ALGORITHM_ID_INVALID);
     }
 }
