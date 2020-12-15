@@ -339,6 +339,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private static final byte[] COOKIE2_DATA = new byte[COOKIE2_DATA_LEN];
 
+    private static final int NATT_KEEPALIVE_DELAY = 20;
+
     static {
         new Random().nextBytes(COOKIE2_DATA);
     }
@@ -6050,5 +6052,27 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(
                 mIkeSessionStateMachine.mMobikeLocalInfo,
                 mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
+    public void testNattKeepaliveDelayForHardwareKeepaliveImpl() throws Exception {
+        IkeSessionParams sessionParams =
+                buildIkeSessionParamsCommon()
+                        .setAuthPsk(mPsk)
+                        .setNattKeepAliveDelaySeconds(NATT_KEEPALIVE_DELAY)
+                        .build();
+
+        // Restart IkeSessionStateMachine with NATT Keepalive delay configured
+        setupFirstIkeSa();
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine = makeAndStartIkeSession(sessionParams);
+
+        mIkeSessionStateMachine.openSession();
+        mLooper.dispatchAll();
+
+        mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, makeIkeInitResponse());
+        mLooper.dispatchAll();
+
+        verify(mMockSocketKeepalive).start(eq(NATT_KEEPALIVE_DELAY));
     }
 }
