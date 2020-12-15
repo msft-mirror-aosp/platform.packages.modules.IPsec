@@ -520,10 +520,16 @@ public abstract class SaProposal {
         }
 
         protected void validateAndAddEncryptAlgo(
-                @EncryptionAlgorithm int algorithm, int keyLength) {
+                @EncryptionAlgorithm int algorithm, int keyLength, boolean isChild) {
             // Construct EncryptionTransform and validate proposed algorithm during
             // construction.
             EncryptionTransform encryptionTransform = new EncryptionTransform(algorithm, keyLength);
+
+            // For Child SA algorithm, check if that is supported by IPsec
+            if (isChild
+                    && !ChildSaProposal.getSupportedEncryptionAlgorithms().contains(algorithm)) {
+                throw new IllegalArgumentException("Unsupported encryption algorithm " + algorithm);
+            }
 
             // Validate that only one mode encryption algorithm has been proposed.
             boolean isCurrentAead = isAead(algorithm);
@@ -538,7 +544,13 @@ public abstract class SaProposal {
             mProposedEncryptAlgos.add(encryptionTransform);
         }
 
-        protected void addIntegrityAlgo(@IntegrityAlgorithm int algorithm) {
+        protected void validateAndAddIntegrityAlgo(
+                @IntegrityAlgorithm int algorithm, boolean isChild) {
+            // For Child SA algorithm, check if that is supported by IPsec
+            if (isChild && !ChildSaProposal.getSupportedIntegrityAlgorithms().contains(algorithm)) {
+                throw new IllegalArgumentException("Unsupported integrity algorithm " + algorithm);
+            }
+
             // Construct IntegrityTransform and validate proposed algorithm during
             // construction.
             mProposedIntegrityAlgos.add(new IntegrityTransform(algorithm));

@@ -239,7 +239,7 @@ public final class IkeSaProposal extends SaProposal {
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
-            validateAndAddEncryptAlgo(algorithm, keyLength);
+            validateAndAddEncryptAlgo(algorithm, keyLength, false /* isChild */);
             return this;
         }
 
@@ -254,7 +254,7 @@ public final class IkeSaProposal extends SaProposal {
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
-            addIntegrityAlgo(algorithm);
+            validateAndAddIntegrityAlgo(algorithm, false /* isChild */);
             return this;
         }
 

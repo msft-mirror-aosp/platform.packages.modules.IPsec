@@ -309,7 +309,7 @@ public final class ChildSaProposal extends SaProposal {
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
-            validateAndAddEncryptAlgo(algorithm, keyLength);
+            validateAndAddEncryptAlgo(algorithm, keyLength, true /* isChild */);
             return this;
         }
 
@@ -324,7 +324,7 @@ public final class ChildSaProposal extends SaProposal {
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
-            addIntegrityAlgo(algorithm);
+            validateAndAddIntegrityAlgo(algorithm, true /* isChild */);
             return this;
         }
 
