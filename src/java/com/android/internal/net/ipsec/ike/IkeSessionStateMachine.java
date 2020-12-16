@@ -2026,7 +2026,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             IkeNotifyPayload notify = (IkeNotifyPayload) payload;
                             if (notify.notifyType == NOTIFY_TYPE_COOKIE2) {
                                 infoPayloadList.add(
-                                        IkeNotifyPayload.handleCookie2AndGenerateResponse(notify));
+                                        IkeNotifyPayload.handleCookie2AndGenerateCopy(notify));
                             }
 
                             // No action for other notifications
