@@ -34,10 +34,12 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * SaProposal represents a proposed configuration to negotiate an IKE or Child SA.
@@ -91,7 +93,8 @@ public abstract class SaProposal {
      */
     public static final int ENCRYPTION_ALGORITHM_CHACHA20_POLY1305 = 28;
 
-    private static final SparseArray<String> SUPPORTED_ENCRYPTION_ALGO_TO_STR;
+    /** @hide */
+    protected static final SparseArray<String> SUPPORTED_ENCRYPTION_ALGO_TO_STR;
 
     static {
         SUPPORTED_ENCRYPTION_ALGO_TO_STR = new SparseArray<>();
@@ -141,7 +144,8 @@ public abstract class SaProposal {
     /** HMAC-SHA2-384 Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_SHA2_512 = 7;
 
-    private static final SparseArray<String> SUPPORTED_PRF_TO_STR;
+    /** @hide */
+    protected static final SparseArray<String> SUPPORTED_PRF_TO_STR;
 
     static {
         SUPPORTED_PRF_TO_STR = new SparseArray<>();
@@ -177,7 +181,8 @@ public abstract class SaProposal {
     /** HMAC-SHA512 Authentication/Integrity Algorithm with 256-bit truncation. */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_512_256 = 14;
 
-    private static final SparseArray<String> SUPPORTED_INTEGRITY_ALGO_TO_STR;
+    /** @hide */
+    protected static final SparseArray<String> SUPPORTED_INTEGRITY_ALGO_TO_STR;
 
     static {
         SUPPORTED_INTEGRITY_ALGO_TO_STR = new SparseArray<>();
@@ -515,10 +520,16 @@ public abstract class SaProposal {
         }
 
         protected void validateAndAddEncryptAlgo(
-                @EncryptionAlgorithm int algorithm, int keyLength) {
+                @EncryptionAlgorithm int algorithm, int keyLength, boolean isChild) {
             // Construct EncryptionTransform and validate proposed algorithm during
             // construction.
             EncryptionTransform encryptionTransform = new EncryptionTransform(algorithm, keyLength);
+
+            // For Child SA algorithm, check if that is supported by IPsec
+            if (isChild
+                    && !ChildSaProposal.getSupportedEncryptionAlgorithms().contains(algorithm)) {
+                throw new IllegalArgumentException("Unsupported encryption algorithm " + algorithm);
+            }
 
             // Validate that only one mode encryption algorithm has been proposed.
             boolean isCurrentAead = isAead(algorithm);
@@ -533,7 +544,13 @@ public abstract class SaProposal {
             mProposedEncryptAlgos.add(encryptionTransform);
         }
 
-        protected void addIntegrityAlgo(@IntegrityAlgorithm int algorithm) {
+        protected void validateAndAddIntegrityAlgo(
+                @IntegrityAlgorithm int algorithm, boolean isChild) {
+            // For Child SA algorithm, check if that is supported by IPsec
+            if (isChild && !ChildSaProposal.getSupportedIntegrityAlgorithms().contains(algorithm)) {
+                throw new IllegalArgumentException("Unsupported integrity algorithm " + algorithm);
+            }
+
             // Construct IntegrityTransform and validate proposed algorithm during
             // construction.
             mProposedIntegrityAlgos.add(new IntegrityTransform(algorithm));
@@ -586,48 +603,24 @@ public abstract class SaProposal {
                 && Arrays.equals(mDhGroups, other.mDhGroups);
     }
 
-    /**
-     * Check if the provided algorithm is a supported encryption algorithm.
-     *
-     * @param algorithm IKE standard encryption algorithm id.
-     * @return true if the provided algorithm is a supported encryption algorithm.
-     * @hide
-     */
-    public static boolean isSupportedEncryptionAlgorithm(@EncryptionAlgorithm int algorithm) {
-        return SUPPORTED_ENCRYPTION_ALGO_TO_STR.get(algorithm) != null;
+    /** @hide */
+    protected static Set<Integer> getKeySet(SparseArray array) {
+        Set<Integer> result = new HashSet<>();
+        for (int i = 0; i < array.size(); i++) {
+            result.add(array.keyAt(i));
+        }
+
+        return result;
     }
 
     /**
-     * Check if the provided algorithm is a supported pseudorandom function.
+     * Returns supported DH groups for IKE and Child SA proposal negotiation.
      *
-     * @param algorithm IKE standard pseudorandom function id.
-     * @return true if the provided algorithm is a supported pseudorandom function.
      * @hide
      */
-    public static boolean isSupportedPseudorandomFunction(@PseudorandomFunction int algorithm) {
-        return SUPPORTED_PRF_TO_STR.get(algorithm) != null;
-    }
-
-    /**
-     * Check if the provided algorithm is a supported integrity algorithm.
-     *
-     * @param algorithm IKE standard integrity algorithm id.
-     * @return true if the provided algorithm is a supported integrity algorithm.
-     * @hide
-     */
-    public static boolean isSupportedIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
-        return SUPPORTED_INTEGRITY_ALGO_TO_STR.get(algorithm) != null;
-    }
-
-    /**
-     * Check if the provided group number is for a supported Diffie-Hellman Group.
-     *
-     * @param dhGroup IKE standard DH Group id.
-     * @return true if the provided number is for a supported Diffie-Hellman Group.
-     * @hide
-     */
-    public static boolean isSupportedDhGroup(@DhGroup int dhGroup) {
-        return SUPPORTED_DH_GROUP_TO_STR.get(dhGroup) != null;
+    @NonNull
+    public static Set<Integer> getSupportedDhGroups() {
+        return getKeySet(SUPPORTED_DH_GROUP_TO_STR);
     }
 
     /**
@@ -636,7 +629,7 @@ public abstract class SaProposal {
      * @hide
      */
     public static String getEncryptionAlgorithmString(int algorithm) {
-        if (isSupportedEncryptionAlgorithm(algorithm)) {
+        if (SUPPORTED_ENCRYPTION_ALGO_TO_STR.contains(algorithm)) {
             return SUPPORTED_ENCRYPTION_ALGO_TO_STR.get(algorithm);
         }
         return "ENC_Unknown_" + algorithm;
@@ -648,7 +641,7 @@ public abstract class SaProposal {
      * @hide
      */
     public static String getPseudorandomFunctionString(int algorithm) {
-        if (isSupportedPseudorandomFunction(algorithm)) {
+        if (SUPPORTED_PRF_TO_STR.contains(algorithm)) {
             return SUPPORTED_PRF_TO_STR.get(algorithm);
         }
         return "PRF_Unknown_" + algorithm;
@@ -660,7 +653,7 @@ public abstract class SaProposal {
      * @hide
      */
     public static String getIntegrityAlgorithmString(int algorithm) {
-        if (isSupportedIntegrityAlgorithm(algorithm)) {
+        if (SUPPORTED_PRF_TO_STR.contains(algorithm)) {
             return SUPPORTED_INTEGRITY_ALGO_TO_STR.get(algorithm);
         }
         return "AUTH_Unknown_" + algorithm;
@@ -672,7 +665,7 @@ public abstract class SaProposal {
      * @hide
      */
     public static String getDhGroupString(int dhGroup) {
-        if (isSupportedDhGroup(dhGroup)) {
+        if (SUPPORTED_DH_GROUP_TO_STR.contains(dhGroup)) {
             return SUPPORTED_DH_GROUP_TO_STR.get(dhGroup);
         }
         return "DH_Unknown_" + dhGroup;

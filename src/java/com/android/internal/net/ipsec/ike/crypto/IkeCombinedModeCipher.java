@@ -202,21 +202,7 @@ public final class IkeCombinedModeCipher extends IkeCipher {
     }
 
     @Override
-    public IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key) {
-        validateKeyLenOrThrow(key);
-        switch (getAlgorithmId()) {
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
-                // Fall through
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
-                // Fall through
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
-                return new IpSecAlgorithm(IpSecAlgorithm.AUTH_CRYPT_AES_GCM, key, mChecksumLen * 8);
-            case SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305:
-                return new IpSecAlgorithm(
-                        IpSecAlgorithm.AUTH_CRYPT_CHACHA20_POLY1305, key, mChecksumLen * 8);
-            default:
-                throw new IllegalArgumentException(
-                        "Unrecognized Encryption Algorithm ID: " + getAlgorithmId());
-        }
+    protected IpSecAlgorithm buildIpSecAlgorithmWithKeyImpl(byte[] key) {
+        return new IpSecAlgorithm(getIpSecAlgorithmName(getAlgorithmId()), key, mChecksumLen * 8);
     }
 }
