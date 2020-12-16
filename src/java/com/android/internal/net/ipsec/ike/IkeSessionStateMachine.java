@@ -32,6 +32,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATU
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PARTIAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
@@ -2884,21 +2885,25 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void enterState() {
             try {
-                IkeMessage request = buildIkeInitReq();
-
-                // Register local SPI to receive the IKE INIT response.
-                mIkeSocket.registerIke(
-                        request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
-
-                mIkeInitRequestBytes = request.encode();
-                mIkeInitNoncePayload =
-                        request.getPayloadForType(
-                                IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
-                mRetransmitter = new UnencryptedRetransmitter(request);
+                sendRequest(buildIkeInitReq());
             } catch (IOException e) {
                 // Fail to assign IKE SPI
                 handleIkeFatalError(e);
             }
+        }
+
+        private void sendRequest(IkeMessage request) {
+            // Register local SPI to receive the IKE INIT response.
+            mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
+
+            mIkeInitRequestBytes = request.encode();
+            mIkeInitNoncePayload =
+                    request.getPayloadForType(IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
+
+            if (mRetransmitter != null) {
+                mRetransmitter.stopRetransmitting();
+            }
+            mRetransmitter = new UnencryptedRetransmitter(request);
         }
 
         @Override
@@ -2977,10 +2982,41 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
+        /** Returns the Notify-Cookie payload, or null if it does not exist */
+        private IkeNotifyPayload getNotifyCookie(IkeMessage ikeMessage) {
+            List<IkeNotifyPayload> notifyPayloads =
+                    ikeMessage.getPayloadListForType(PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+            for (IkeNotifyPayload notify : notifyPayloads) {
+                if (notify.notifyType == NOTIFY_TYPE_COOKIE) {
+                    return notify;
+                }
+            }
+            return null;
+        }
+
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             boolean ikeInitSuccess = false;
             try {
+                int exchangeType = ikeMessage.ikeHeader.exchangeType;
+                if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
+                    throw new InvalidSyntaxException(
+                            "Expected EXCHANGE_TYPE_IKE_SA_INIT but received: " + exchangeType);
+                }
+
+                // Retry IKE INIT if there is Notify-Cookie
+                IkeNotifyPayload inCookiePayload = getNotifyCookie(ikeMessage);
+                if (inCookiePayload != null) {
+                    IkeNotifyPayload outCookiePayload =
+                            IkeNotifyPayload.handleCookieAndGenerateCopy(inCookiePayload);
+                    IkeMessage initReq =
+                            buildReqWithCookie(mRetransmitter.getMessage(), outCookiePayload);
+
+                    sendRequest(initReq);
+                    return;
+                }
+
+                // Negotiate IKE SA
                 validateIkeInitResp(mRetransmitter.getMessage(), ikeMessage);
 
                 mCurrentIkeSaRecord =
@@ -3094,17 +3130,44 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             return new IkeMessage(ikeHeader, payloadList);
         }
 
+        /**
+         * Builds an IKE INIT request that has the same payloads and SPI with the original request,
+         * and with the new Notify-Cookie Payload as the first payload.
+         */
+        private IkeMessage buildReqWithCookie(
+                IkeMessage originalReq, IkeNotifyPayload cookieNotify) {
+            List<IkePayload> payloads = new ArrayList<>();
+
+            // Notify-Cookie MUST be the first payload.
+            payloads.add(cookieNotify);
+
+            for (IkePayload payload : originalReq.ikePayloadList) {
+                // Keep all previous payloads except COOKIEs
+                if (payload instanceof IkeNotifyPayload
+                        && ((IkeNotifyPayload) payload).notifyType == NOTIFY_TYPE_COOKIE) {
+                    continue;
+                }
+                payloads.add(payload);
+            }
+
+            IkeHeader originalHeader = originalReq.ikeHeader;
+            IkeHeader header =
+                    new IkeHeader(
+                            originalHeader.ikeInitiatorSpi,
+                            originalHeader.ikeResponderSpi,
+                            PAYLOAD_TYPE_NOTIFY,
+                            IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                            false /* isResponseMsg */,
+                            true /* fromIkeInitiator */,
+                            0 /* messageId */);
+            return new IkeMessage(header, payloads);
+        }
+
         private void validateIkeInitResp(IkeMessage reqMsg, IkeMessage respMsg)
                 throws IkeProtocolException, IOException {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
                     mIkeSpiGenerator.allocateSpi(mRemoteAddress, respIkeHeader.ikeResponderSpi);
-
-            int exchangeType = respIkeHeader.exchangeType;
-            if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
-                throw new InvalidSyntaxException(
-                        "Expected EXCHANGE_TYPE_IKE_SA_INIT but received: " + exchangeType);
-            }
 
             IkeSaPayload respSaPayload = null;
             IkeKePayload respKePayload = null;
