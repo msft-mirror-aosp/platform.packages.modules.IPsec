@@ -179,6 +179,13 @@ public final class IkeSessionParams {
     @VisibleForTesting static final int IKE_DPD_DELAY_SEC_DEFAULT = 120; // 2 minutes
 
     /** @hide */
+    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MIN = 10;
+    /** @hide */
+    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MAX = 3600;
+    /** @hide */
+    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT = 10;
+
+    /** @hide */
     @VisibleForTesting static final int IKE_RETRANS_TIMEOUT_MS_MIN = 500;
     /** @hide */
     @VisibleForTesting
@@ -202,6 +209,7 @@ public final class IkeSessionParams {
     private static final String HARD_LIFETIME_SEC_KEY = "mHardLifetimeSec";
     private static final String SOFT_LIFETIME_SEC_KEY = "mSoftLifetimeSec";
     private static final String DPD_DELAY_SEC_KEY = "mDpdDelaySec";
+    private static final String NATT_KEEPALIVE_DELAY_SEC_KEY = "mNattKeepaliveDelaySec";
     private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
 
     @NonNull private final String mServerHostname;
@@ -229,6 +237,8 @@ public final class IkeSessionParams {
 
     private final int mDpdDelaySec;
 
+    private final int mNattKeepaliveDelaySec;
+
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
@@ -247,6 +257,7 @@ public final class IkeSessionParams {
             int hardLifetimeSec,
             int softLifetimeSec,
             int dpdDelaySec,
+            int nattKeepaliveDelaySec,
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
         mNetwork = network;
@@ -272,6 +283,8 @@ public final class IkeSessionParams {
         mSoftLifetimeSec = softLifetimeSec;
 
         mDpdDelaySec = dpdDelaySec;
+
+        mNattKeepaliveDelaySec = nattKeepaliveDelaySec;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
@@ -341,6 +354,7 @@ public final class IkeSessionParams {
         builder.setLifetimeSeconds(
                 in.getInt(HARD_LIFETIME_SEC_KEY), in.getInt(SOFT_LIFETIME_SEC_KEY));
         builder.setDpdDelaySeconds(in.getInt(DPD_DELAY_SEC_KEY));
+        builder.setNattKeepAliveDelaySeconds(in.getInt(NATT_KEEPALIVE_DELAY_SEC_KEY));
 
         // Fragmentation policy is not configurable. IkeSessionParams will always be constructed to
         // support fragmentation.
@@ -386,6 +400,7 @@ public final class IkeSessionParams {
         result.putInt(HARD_LIFETIME_SEC_KEY, mHardLifetimeSec);
         result.putInt(SOFT_LIFETIME_SEC_KEY, mSoftLifetimeSec);
         result.putInt(DPD_DELAY_SEC_KEY, mDpdDelaySec);
+        result.putInt(NATT_KEEPALIVE_DELAY_SEC_KEY, mNattKeepaliveDelaySec);
         result.putBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY, mIsIkeFragmentationSupported);
 
         return result;
@@ -485,6 +500,18 @@ public final class IkeSessionParams {
     @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
     public int getDpdDelaySeconds() {
         return mDpdDelaySec;
+    }
+
+    /**
+     * Retrieves the Network Address Translation Traversal (NATT) keepalive delay in seconds
+     *
+     * @hide
+     */
+    // Use "second" because smaller unit does not make sense for a NATT Keepalive delay.
+    @SuppressLint("MethodNameUnits")
+    @IntRange(from = IKE_NATT_KEEPALIVE_DELAY_SEC_MIN, to = IKE_NATT_KEEPALIVE_DELAY_SEC_MAX)
+    public int getNattKeepAliveDelaySeconds() {
+        return mNattKeepaliveDelaySec;
     }
 
     /**
@@ -1112,6 +1139,8 @@ public final class IkeSessionParams {
 
         private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
 
+        private int mNattKeepaliveDelaySec = IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT;
+
         private final boolean mIsIkeFragmentationSupported = true;
 
         /**
@@ -1517,6 +1546,29 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Sets the Network Address Translation Traversal (NATT) keepalive delay in seconds.
+         *
+         * @param nattKeepaliveDelaySeconds number of seconds between keepalive packet
+         *     transmissions. Defaults to 10 seconds. MUST be a value from 10 seconds to 3600
+         *     seconds, inclusive.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @NonNull
+        public Builder setNattKeepAliveDelaySeconds(
+                @IntRange(
+                                from = IKE_NATT_KEEPALIVE_DELAY_SEC_MIN,
+                                to = IKE_NATT_KEEPALIVE_DELAY_SEC_MAX)
+                        int nattKeepaliveDelaySeconds) {
+            if (nattKeepaliveDelaySeconds < IKE_NATT_KEEPALIVE_DELAY_SEC_MIN
+                    || nattKeepaliveDelaySeconds > IKE_NATT_KEEPALIVE_DELAY_SEC_MAX) {
+                throw new IllegalArgumentException("Invalid NATT keepalive delay value");
+            }
+            mNattKeepaliveDelaySec = nattKeepaliveDelaySeconds;
+            return this;
+        }
+
+        /**
          * Sets the retransmission timeout list in milliseconds.
          *
          * <p>Configures the retransmission by providing an array of relative retransmission
@@ -1666,6 +1718,7 @@ public final class IkeSessionParams {
                     mHardLifetimeSec,
                     mSoftLifetimeSec,
                     mDpdDelaySec,
+                    mNattKeepaliveDelaySec,
                     mIsIkeFragmentationSupported);
         }
 
