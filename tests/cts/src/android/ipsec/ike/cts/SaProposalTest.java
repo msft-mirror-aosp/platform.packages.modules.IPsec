@@ -59,28 +59,54 @@ import java.util.List;
 
 @RunWith(AndroidJUnit4.class)
 public class SaProposalTest {
-    private static final List<Pair<Integer, Integer>> NORMAL_MODE_CIPHERS = new ArrayList<>();
-    private static final List<Pair<Integer, Integer>> COMBINED_MODE_CIPHERS = new ArrayList<>();
-    private static final List<Integer> INTEGRITY_ALGOS = new ArrayList<>();
+    private static final List<Pair<Integer, Integer>> IKE_NORMAL_MODE_CIPHERS = new ArrayList<>();
+    private static final List<Pair<Integer, Integer>> IKE_COMBINED_MODE_CIPHERS = new ArrayList<>();
+    private static final List<Integer> IKE_INTEGRITY_ALGOS = new ArrayList<>();
+    private static final List<Pair<Integer, Integer>> CHILD_NORMAL_MODE_CIPHERS = new ArrayList<>();
+    private static final List<Pair<Integer, Integer>> CHILD_COMBINED_MODE_CIPHERS =
+            new ArrayList<>();
+    private static final List<Integer> CHILD_INTEGRITY_ALGOS = new ArrayList<>();
     private static final List<Integer> DH_GROUPS = new ArrayList<>();
     private static final List<Integer> DH_GROUPS_WITH_NONE = new ArrayList<>();
     private static final List<Integer> PRFS = new ArrayList<>();
 
     static {
-        NORMAL_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED));
-        NORMAL_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128));
-        NORMAL_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_192));
-        NORMAL_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_256));
+        IKE_NORMAL_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED));
+        IKE_NORMAL_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128));
+        IKE_NORMAL_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_192));
+        IKE_NORMAL_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_256));
 
-        COMBINED_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_GCM_8, KEY_LEN_AES_128));
-        COMBINED_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_GCM_12, KEY_LEN_AES_192));
-        COMBINED_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_GCM_16, KEY_LEN_AES_256));
+        for (Pair<Integer, Integer> pair : IKE_NORMAL_MODE_CIPHERS) {
+            // TODO: b/1522448 Check against ChildSaProposal#getSupportedEncryptionAlgorithms
+            // when it is exposed
+            if (pair.first != ENCRYPTION_ALGORITHM_3DES) {
+                CHILD_NORMAL_MODE_CIPHERS.add(pair);
+            }
+        }
 
-        INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA1_96);
-        INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_AES_XCBC_96);
-        INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_256_128);
-        INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_384_192);
-        INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
+        IKE_COMBINED_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_GCM_8, KEY_LEN_AES_128));
+        IKE_COMBINED_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_GCM_12, KEY_LEN_AES_192));
+        IKE_COMBINED_MODE_CIPHERS.add(new Pair<>(ENCRYPTION_ALGORITHM_AES_GCM_16, KEY_LEN_AES_256));
+
+        for (Pair<Integer, Integer> pair : IKE_COMBINED_MODE_CIPHERS) {
+            // TODO: b/1522448 Add ChaChaPoly in IKE_COMBINED_MODE_CIPHERS and check against
+            // ChildSaProposal#getSupportedEncryptionAlgorithms when it is exposed
+            CHILD_COMBINED_MODE_CIPHERS.add(pair);
+        }
+
+        IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA1_96);
+        IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_AES_XCBC_96);
+        IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_256_128);
+        IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_384_192);
+        IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
+
+        for (Integer algo : IKE_INTEGRITY_ALGOS) {
+            // TODO: b/1522448 Check against ChildSaProposal#getSupportedIntegrityAlgorithms
+            // when it is exposed
+            if (algo != INTEGRITY_ALGORITHM_AES_XCBC_96) {
+                CHILD_INTEGRITY_ALGOS.add(algo);
+            }
+        }
 
         DH_GROUPS.add(DH_GROUP_1024_BIT_MODP);
         DH_GROUPS.add(DH_GROUP_2048_BIT_MODP);
@@ -97,7 +123,7 @@ public class SaProposalTest {
 
     // Package private
     static IkeSaProposal buildIkeSaProposalWithNormalModeCipher() {
-        return buildIkeSaProposal(NORMAL_MODE_CIPHERS, INTEGRITY_ALGOS, PRFS, DH_GROUPS);
+        return buildIkeSaProposal(IKE_NORMAL_MODE_CIPHERS, IKE_INTEGRITY_ALGOS, PRFS, DH_GROUPS);
     }
 
     // Package private
@@ -111,7 +137,7 @@ public class SaProposalTest {
         if (hasIntegrityNone) {
             integerAlgos.add(INTEGRITY_ALGORITHM_NONE);
         }
-        return buildIkeSaProposal(COMBINED_MODE_CIPHERS, integerAlgos, PRFS, DH_GROUPS);
+        return buildIkeSaProposal(IKE_COMBINED_MODE_CIPHERS, integerAlgos, PRFS, DH_GROUPS);
     }
 
     private static IkeSaProposal buildIkeSaProposal(
@@ -139,7 +165,8 @@ public class SaProposalTest {
 
     // Package private
     static ChildSaProposal buildChildSaProposalWithNormalModeCipher() {
-        return buildChildSaProposal(NORMAL_MODE_CIPHERS, INTEGRITY_ALGOS, DH_GROUPS_WITH_NONE);
+        return buildChildSaProposal(
+                CHILD_NORMAL_MODE_CIPHERS, CHILD_INTEGRITY_ALGOS, DH_GROUPS_WITH_NONE);
     }
 
     // Package private
@@ -154,7 +181,7 @@ public class SaProposalTest {
             integerAlgos.add(INTEGRITY_ALGORITHM_NONE);
         }
 
-        return buildChildSaProposal(COMBINED_MODE_CIPHERS, integerAlgos, DH_GROUPS_WITH_NONE);
+        return buildChildSaProposal(CHILD_COMBINED_MODE_CIPHERS, integerAlgos, DH_GROUPS_WITH_NONE);
     }
 
     private static ChildSaProposal buildChildSaProposal(
@@ -179,15 +206,15 @@ public class SaProposalTest {
     // Package private
     static ChildSaProposal buildChildSaProposalWithOnlyCiphers() {
         return buildChildSaProposal(
-                COMBINED_MODE_CIPHERS, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
+                CHILD_COMBINED_MODE_CIPHERS, Collections.EMPTY_LIST, Collections.EMPTY_LIST);
     }
 
     @Test
     public void testBuildIkeSaProposalWithNormalModeCipher() {
         IkeSaProposal saProposal = buildIkeSaProposalWithNormalModeCipher();
 
-        assertEquals(NORMAL_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
-        assertEquals(INTEGRITY_ALGOS, saProposal.getIntegrityAlgorithms());
+        assertEquals(IKE_NORMAL_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
+        assertEquals(IKE_INTEGRITY_ALGOS, saProposal.getIntegrityAlgorithms());
         assertEquals(PRFS, saProposal.getPseudorandomFunctions());
         assertEquals(DH_GROUPS, saProposal.getDhGroups());
     }
@@ -197,7 +224,7 @@ public class SaProposalTest {
         IkeSaProposal saProposal =
                 buildIkeSaProposalWithCombinedModeCipher(false /* hasIntegrityNone */);
 
-        assertEquals(COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
+        assertEquals(IKE_COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
         assertEquals(PRFS, saProposal.getPseudorandomFunctions());
         assertEquals(DH_GROUPS, saProposal.getDhGroups());
         assertTrue(saProposal.getIntegrityAlgorithms().isEmpty());
@@ -208,7 +235,7 @@ public class SaProposalTest {
         IkeSaProposal saProposal =
                 buildIkeSaProposalWithCombinedModeCipher(true /* hasIntegrityNone */);
 
-        assertEquals(COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
+        assertEquals(IKE_COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
         assertEquals(PRFS, saProposal.getPseudorandomFunctions());
         assertEquals(DH_GROUPS, saProposal.getDhGroups());
         assertEquals(Arrays.asList(INTEGRITY_ALGORITHM_NONE), saProposal.getIntegrityAlgorithms());
@@ -218,8 +245,8 @@ public class SaProposalTest {
     public void testBuildChildSaProposalWithNormalModeCipher() {
         ChildSaProposal saProposal = buildChildSaProposalWithNormalModeCipher();
 
-        assertEquals(NORMAL_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
-        assertEquals(INTEGRITY_ALGOS, saProposal.getIntegrityAlgorithms());
+        assertEquals(CHILD_NORMAL_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
+        assertEquals(CHILD_INTEGRITY_ALGOS, saProposal.getIntegrityAlgorithms());
         assertEquals(DH_GROUPS_WITH_NONE, saProposal.getDhGroups());
     }
 
@@ -228,7 +255,7 @@ public class SaProposalTest {
         ChildSaProposal saProposal =
                 buildChildSaProposalWithCombinedModeCipher(false /* hasIntegrityNone */);
 
-        assertEquals(COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
+        assertEquals(CHILD_COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
         assertTrue(saProposal.getIntegrityAlgorithms().isEmpty());
         assertEquals(DH_GROUPS_WITH_NONE, saProposal.getDhGroups());
     }
@@ -238,7 +265,7 @@ public class SaProposalTest {
         ChildSaProposal saProposal =
                 buildChildSaProposalWithCombinedModeCipher(true /* hasIntegrityNone */);
 
-        assertEquals(COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
+        assertEquals(CHILD_COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
         assertEquals(Arrays.asList(INTEGRITY_ALGORITHM_NONE), saProposal.getIntegrityAlgorithms());
         assertEquals(DH_GROUPS_WITH_NONE, saProposal.getDhGroups());
     }
@@ -247,7 +274,7 @@ public class SaProposalTest {
     public void testBuildChildSaProposalWithOnlyCiphers() {
         ChildSaProposal saProposal = buildChildSaProposalWithOnlyCiphers();
 
-        assertEquals(COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
+        assertEquals(CHILD_COMBINED_MODE_CIPHERS, saProposal.getEncryptionAlgorithms());
         assertTrue(saProposal.getIntegrityAlgorithms().isEmpty());
         assertTrue(saProposal.getDhGroups().isEmpty());
     }
