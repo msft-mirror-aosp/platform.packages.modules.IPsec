@@ -2,11 +2,17 @@
   "presubmit": [
     {
       "name": "FrameworksIkeTests"
+    },
+    {
+      "name": "CtsIkeTestCases"
     }
   ],
   "postsubmit": [
     {
       "name": "FrameworksIkeTests"
+    },
+    {
+      "name": "CtsIkeTestCases"
     }
   ]
 }
