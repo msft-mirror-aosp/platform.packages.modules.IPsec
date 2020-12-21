@@ -50,6 +50,7 @@ import org.junit.Before;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.util.concurrent.Executor;
 
 public abstract class IkeSessionTestBase {
@@ -109,10 +110,12 @@ public abstract class IkeSessionTestBase {
                 .newWakeLock(anyInt(), argThat(tag -> tag.contains(LOCAL_REQUEST_WAKE_LOCK_TAG)));
 
         mMockDefaultNetwork = mock(Network.class);
-        doReturn(REMOTE_ADDRESS).when(mMockDefaultNetwork).getByName(REMOTE_HOSTNAME);
-        doReturn(REMOTE_ADDRESS)
+        doReturn(new InetAddress[] {REMOTE_ADDRESS})
                 .when(mMockDefaultNetwork)
-                .getByName(REMOTE_ADDRESS.getHostAddress());
+                .getAllByName(REMOTE_HOSTNAME);
+        doReturn(new InetAddress[] {REMOTE_ADDRESS})
+                .when(mMockDefaultNetwork)
+                .getAllByName(REMOTE_ADDRESS.getHostAddress());
 
         mMockSocketKeepalive = mock(SocketKeepalive.class);
 

@@ -296,7 +296,6 @@ public final class IkeSession implements AutoCloseable {
      * @param network the Network to use for this IkeSession
      * @throws IllegalStateException if MOBIKE is not configured in IkeSessionParams, MOBIKE is not
      *     active for this IkeSession, or if the Network was not specified in IkeSessionParams.
-     * @hide
      */
     public void setNetwork(@NonNull Network network) {
         mIkeSessionStateMachine.setNetwork(network);

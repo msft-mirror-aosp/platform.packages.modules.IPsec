@@ -63,6 +63,7 @@ package android.net.ipsec.ike {
     method public void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public void onIpSecTransformCreated(@NonNull android.net.IpSecTransform, int);
     method public void onIpSecTransformDeleted(@NonNull android.net.IpSecTransform, int);
+    method public default void onIpSecTransformsMigrated(@NonNull android.net.IpSecTransform, @NonNull android.net.IpSecTransform);
     method public void onOpened(@NonNull android.net.ipsec.ike.ChildSessionConfiguration);
   }
 
@@ -136,11 +137,14 @@ package android.net.ipsec.ike {
     method public void finalize();
     method public void kill();
     method public void openChildSession(@NonNull android.net.ipsec.ike.ChildSessionParams, @NonNull android.net.ipsec.ike.ChildSessionCallback);
+    method public void setNetwork(@NonNull android.net.Network);
   }
 
   public interface IkeSessionCallback {
     method public void onClosed();
     method public void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
+    method public default void onError(@NonNull android.net.ipsec.ike.exceptions.IkeException);
+    method public default void onIkeSessionConnectionInfoChanged(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
     method public void onOpened(@NonNull android.net.ipsec.ike.IkeSessionConfiguration);
   }
 
@@ -176,6 +180,7 @@ package android.net.ipsec.ike {
     method public boolean hasIkeOption(int);
     field public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0; // 0x0
     field public static final int IKE_OPTION_EAP_ONLY_AUTH = 1; // 0x1
+    field public static final int IKE_OPTION_MOBIKE = 2; // 0x2
   }
 
   public static final class IkeSessionParams.Builder {
@@ -348,9 +353,17 @@ package android.net.ipsec.ike.exceptions {
   public abstract class IkeException extends java.lang.Exception {
   }
 
-  public final class IkeInternalException extends android.net.ipsec.ike.exceptions.IkeException {
+  public final class IkeInternalException extends android.net.ipsec.ike.exceptions.IkeNonProtocolException {
     ctor public IkeInternalException(@NonNull Throwable);
     ctor public IkeInternalException(@NonNull String, @NonNull Throwable);
+  }
+
+  public final class IkeNetworkLostException extends android.net.ipsec.ike.exceptions.IkeNonProtocolException {
+    ctor public IkeNetworkLostException(@NonNull android.net.Network);
+    method @NonNull public android.net.Network getNetwork();
+  }
+
+  public abstract class IkeNonProtocolException extends android.net.ipsec.ike.exceptions.IkeException {
   }
 
   public abstract class IkeProtocolException extends android.net.ipsec.ike.exceptions.IkeException {

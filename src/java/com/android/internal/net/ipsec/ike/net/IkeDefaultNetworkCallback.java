@@ -21,7 +21,7 @@ import android.net.Network;
 import java.net.InetAddress;
 
 /**
- * IkeDefaultNetworkCallback is a network callback used to track the platform's default network.
+ * IkeDefaultNetworkCallback is a network callback used to track the application default Network.
  *
  * <p>This NetworkCallback will notify IkeSessionStateMachine if:
  *
@@ -47,7 +47,7 @@ public class IkeDefaultNetworkCallback extends IkeNetworkCallbackBase {
             return;
         }
 
-        logd("Platform default Network changed to " + network);
+        logd("Application default Network changed to " + network);
         mIkeNetworkUpdater.onUnderlyingNetworkUpdated(network);
     }
 }
