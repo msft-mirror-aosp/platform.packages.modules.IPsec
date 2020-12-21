@@ -15,7 +15,7 @@ package android.net.eap {
 package android.net.ipsec.ike {
 
   public interface IkeSessionCallback {
-    method public void onError(@NonNull android.net.ipsec.ike.exceptions.IkeProtocolException);
+    method @Deprecated public default void onError(@NonNull android.net.ipsec.ike.exceptions.IkeProtocolException);
   }
 
   public final class IkeSessionParams {
