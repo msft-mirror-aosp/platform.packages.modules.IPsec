@@ -67,12 +67,13 @@ public interface IkeSessionCallback {
      * INVALID_MESSAGE_ID.
      *
      * @param exception the detailed error information.
+     * @deprecated Implementers should override {@link #onError(IkeException)} to handle {@link
+     *     IkeProtocolException}s instead of using this method.
      * @hide
      */
-    // TODO: b/158033037 Deprecate this method and add a public API that takes an IkeException when
-    // exposing MOBIKE APIs
     @SystemApi
-    void onError(@NonNull IkeProtocolException exception);
+    @Deprecated
+    default void onError(@NonNull IkeProtocolException exception) {}
 
     /**
      * Called if a recoverable error is encountered in an established {@link IkeSession}.
@@ -81,7 +82,6 @@ public interface IkeSessionCallback {
      * non-protocol errors such as the underlying {@link android.net.Network} dying.
      *
      * @param exception the detailed error information.
-     * @hide
      */
     default void onError(@NonNull IkeException exception) {
         if (exception instanceof IkeProtocolException) {
@@ -108,7 +108,6 @@ public interface IkeSessionCallback {
      * </ul>
      *
      * @param connectionInfo the updated IkeSessionConnectionInfo for the Session.
-     * @hide
      */
     default void onIkeSessionConnectionInfoChanged(
             @NonNull IkeSessionConnectionInfo connectionInfo) {}

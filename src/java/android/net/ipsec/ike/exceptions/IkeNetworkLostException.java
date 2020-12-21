@@ -16,15 +16,20 @@
 
 package android.net.ipsec.ike.exceptions;
 
+import android.annotation.NonNull;
 import android.net.Network;
 import android.net.ipsec.ike.IkeSessionCallback;
 
 import java.util.Objects;
 
 /**
- * IkeNetworkDiedException is returned to the caller via {@link
+ * IkeNetworkLostException is returned to the caller via {@link
  * IkeSessionCallback#onError(IkeException)} if the underlying Network for the {@link IkeSession}
- * dies with no alternatives.
+ * was lost with no alternatives.
+ *
+ * <p>This Exception corresponds to {@link
+ * android.net.ConnectivityManager.NetworkCallback#onLost(android.net.Network)} being invoked for
+ * the specified underlying Network.
  *
  * <p>When the caller receives this Exception, they must either:
  *
@@ -40,21 +45,20 @@ import java.util.Objects;
  *       </ul>
  *   <li>close the corresponding IkeSession.
  * </ul>
- *
- * @hide
  */
-public final class IkeNetworkDiedException extends IkeNonProtocolException {
+public final class IkeNetworkLostException extends IkeNonProtocolException {
     private final Network mNetwork;
 
-    /** Constructs an IkeNetworkDiedException to indicate the specified Network died. */
-    public IkeNetworkDiedException(Network network) {
+    /** Constructs an IkeNetworkLostException to indicate the specified Network was lost. */
+    public IkeNetworkLostException(@NonNull Network network) {
         super();
         Objects.requireNonNull(network, "network is null");
 
         mNetwork = network;
     }
 
-    /** Returns the IkeSession's underlying Network that died. */
+    /** Returns the IkeSession's underlying Network that was lost. */
+    @NonNull
     public Network getNetwork() {
         return mNetwork;
     }
