@@ -120,6 +120,11 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
      */
     public static final int NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP = 16389;
     /**
+     * Might be sent by the IKE responder in an IKE_SA_INIT response, to prevent DoS Attacks. If
+     * receiving it, IKE client MUST retry IKE_SA_INIT request with the same associated data.
+     */
+    public static final int NOTIFY_TYPE_COOKIE = 16390;
+    /**
      * Indicates a willingness by its sender to use transport mode rather than tunnel mode on this
      * Child SA. Only allowed in the request/response for negotiating a Child SA.
      */
@@ -170,6 +175,9 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
     private static final int ERROR_NOTIFY_TYPE_MAX = 16383;
 
     private static final String NAT_DETECTION_DIGEST_ALGORITHM = "SHA-1";
+
+    private static final int COOKIE_DATA_LEN_MIN = 1;
+    private static final int COOKIE_DATA_LEN_MAX = 64;
 
     private static final int COOKIE2_DATA_LEN_MIN = 8;
     private static final int COOKIE2_DATA_LEN_MAX = 64;
@@ -229,6 +237,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP, "NAT detection source IP");
         NOTIFY_TYPE_TO_STRING.put(
                 NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP, "NAT detection destination IP");
+        NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_COOKIE, "COOKIE");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_USE_TRANSPORT_MODE, "Use transport mode");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_REKEY_SA, "Rekey SA");
         NOTIFY_TYPE_TO_STRING.put(
@@ -348,16 +357,33 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         }
     }
 
-    /** Validate inbound Cookie2 request and build a response Cookie2 notify payload */
-    public static IkeNotifyPayload handleCookie2AndGenerateResponse(IkeNotifyPayload cookie2Notify)
-            throws InvalidSyntaxException {
+    private static IkeNotifyPayload handleCookieAndGenerateCopy(
+            IkeNotifyPayload cookie2Notify, int minLen, int maxLen) throws InvalidSyntaxException {
         byte[] notifyData = cookie2Notify.notifyData;
-        if (notifyData.length < COOKIE2_DATA_LEN_MIN || notifyData.length > COOKIE2_DATA_LEN_MAX) {
+        if (notifyData.length < minLen || notifyData.length > maxLen) {
+            String cookieType =
+                    cookie2Notify.notifyType == NOTIFY_TYPE_COOKIE2 ? "COOKIE2" : "COOKIE";
             throw new InvalidSyntaxException(
-                    "Invalid COOKIE2 notification data with length " + notifyData.length);
+                    "Invalid "
+                            + cookieType
+                            + " notification data with length "
+                            + notifyData.length);
         }
 
-        return new IkeNotifyPayload(NOTIFY_TYPE_COOKIE2, notifyData);
+        return new IkeNotifyPayload(cookie2Notify.notifyType, notifyData);
+    }
+
+    /** Validate inbound Cookie in IKE_INIT response and build a Cookie notify payload in request */
+    public static IkeNotifyPayload handleCookieAndGenerateCopy(IkeNotifyPayload cookieNotify)
+            throws InvalidSyntaxException {
+        return handleCookieAndGenerateCopy(cookieNotify, COOKIE_DATA_LEN_MIN, COOKIE_DATA_LEN_MAX);
+    }
+
+    /** Validate inbound Cookie2 request and build a response Cookie2 notify payload */
+    public static IkeNotifyPayload handleCookie2AndGenerateCopy(IkeNotifyPayload cookie2Notify)
+            throws InvalidSyntaxException {
+        return handleCookieAndGenerateCopy(
+                cookie2Notify, COOKIE2_DATA_LEN_MIN, COOKIE2_DATA_LEN_MAX);
     }
 
     /**
