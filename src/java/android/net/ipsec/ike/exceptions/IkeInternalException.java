@@ -23,7 +23,7 @@ import android.annotation.NonNull;
  * <p>Causes may include exceptions such as {@link IpSecManager.SpiUnavailableException} when the
  * requested SPI resources failed to be allocated.
  */
-public final class IkeInternalException extends IkeException {
+public final class IkeInternalException extends IkeNonProtocolException {
     /**
      * Constructs a new exception with the specified cause.
      *

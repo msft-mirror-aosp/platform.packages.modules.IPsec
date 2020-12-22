@@ -68,6 +68,7 @@ import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
@@ -86,7 +87,7 @@ import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
-import android.net.ipsec.ike.exceptions.IkeNetworkDiedException;
+import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidKeException;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -161,6 +162,7 @@ import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -433,6 +435,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting InetAddress mRemoteAddress;
     /** Local port assigned on device. Initialized in Initial State. */
     @VisibleForTesting int mLocalPort;
+
+    /** Available remote addresses that are v4. Resolved in Initial State. */
+    @VisibleForTesting final List<Inet4Address> mRemoteAddressesV4 = new ArrayList<>();
+    /** Available remote addresses that are v6. Resolved in Initial State. */
+    @VisibleForTesting final List<Inet6Address> mRemoteAddressesV6 = new ArrayList<>();
 
     /** Indicates if both sides support NAT traversal. Set in IKE INIT. */
     @VisibleForTesting boolean mSupportNatTraversal;
@@ -1203,9 +1210,21 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void enterState() {
             try {
-                // TODO(b/149954916): Do DNS resolution asynchronously and support resolving
-                // multiple addresses.
-                mRemoteAddress = mNetwork.getByName(mIkeSessionParams.getServerHostname());
+                // TODO(b/149954916): Do DNS resolution asynchronously
+                InetAddress[] allRemoteAddresses =
+                        mNetwork.getAllByName(mIkeSessionParams.getServerHostname());
+
+                logd("Resolved addresses for peer: " + Arrays.toString(allRemoteAddresses));
+
+                for (InetAddress remoteAddress : allRemoteAddresses) {
+                    if (remoteAddress instanceof Inet4Address) {
+                        mRemoteAddressesV4.add((Inet4Address) remoteAddress);
+                    } else {
+                        mRemoteAddressesV6.add((Inet6Address) remoteAddress);
+                    }
+                }
+
+                setRemoteAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
@@ -1239,6 +1258,33 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 default:
                     return NOT_HANDLED;
             }
+        }
+    }
+
+    /**
+     * Set the remote address for the peer.
+     *
+     * <p>Prefers IPv6 addresses if:
+     *
+     * <ul>
+     *   <li>an IPv6 address is known for the peer, and
+     *   <li>the current underlying Network has a global (non-link local) IPv6 address available
+     * </ul>
+     *
+     * Otherwise, an IPv4 address will be used.
+     */
+    private void setRemoteAddress() {
+        LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
+        if (!mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address()) {
+            // TODO(b/175348096): randomly choose from available addresses
+            mRemoteAddress = mRemoteAddressesV6.get(0);
+        } else {
+            if (mRemoteAddressesV4.isEmpty()) {
+                throw new IllegalArgumentException("No valid IPv4 or IPv6 addresses for peer");
+            }
+
+            // TODO(b/175348096): randomly choose from available addresses
+            mRemoteAddress = mRemoteAddressesV4.get(0);
         }
     }
 
@@ -5406,10 +5452,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             throw new IllegalStateException("MOBIKE must be enabled to update the Network");
         }
 
-        // TODO(b/172060298): prefer IPv6 once Responder addresses are cached
-        boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
         Network oldNetwork = mNetwork;
         mNetwork = network;
+
+        setRemoteAddress();
+
+        boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
         try {
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
@@ -5466,6 +5514,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onUnderlyingNetworkDied() {
         executeUserCallback(
-                () -> mIkeSessionCallback.onError(new IkeNetworkDiedException(mNetwork)));
+                () -> mIkeSessionCallback.onError(new IkeNetworkLostException(mNetwork)));
     }
 }
