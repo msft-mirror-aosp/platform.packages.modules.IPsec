@@ -31,6 +31,7 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -74,14 +75,13 @@ public final class IkeNotifyPayloadTest {
     private static final String PACKET_INFO_HEX_STRING =
             "4500009cafcd4000403208adc0a80064c0a800012ad4c0a200000001";
 
-    private static final int COOKIE_INVALID_DATA_LEN_SMALL = 7;
+    private static final int COOKIE_INVALID_DATA_LEN_SMALL = 0;
     private static final int COOKIE_INVALID_DATA_LEN_LARGE = 65;
     private static final int COOKIE_DATA_LEN = 64;
-    private static final byte[] COOKIE2_DATA_BYTES = new byte[COOKIE_DATA_LEN];
 
-    static {
-        new Random().nextBytes(COOKIE2_DATA_BYTES);
-    }
+    private static final int COOKIE2_INVALID_DATA_LEN_SMALL = 7;
+    private static final int COOKIE2_INVALID_DATA_LEN_LARGE = 65;
+    private static final int COOKIE2_DATA_LEN = 64;
 
     private static final String NOTIFY_REKEY_PAYLOAD_BODY_HEX_STRING = "030440092ad4c0a2";
     private static final int CHILD_SPI = 0x2ad4c0a2;
@@ -133,30 +133,50 @@ public final class IkeNotifyPayloadTest {
         assertArrayEquals(expectedBytes, netDetectionData);
     }
 
+    private void verifyHandleCookieAndGenerateCopy(boolean isCookie2, int dataLen)
+            throws Exception {
+        final byte[] cookieData = new byte[dataLen];
+        new Random().nextBytes(cookieData);
+        int cookieType = isCookie2 ? NOTIFY_TYPE_COOKIE2 : NOTIFY_TYPE_COOKIE;
+        IkeNotifyPayload inboundCookieNotify = new IkeNotifyPayload(cookieType, cookieData);
+
+        IkeNotifyPayload outboundCookieNotify =
+                isCookie2
+                        ? IkeNotifyPayload.handleCookie2AndGenerateCopy(inboundCookieNotify)
+                        : IkeNotifyPayload.handleCookieAndGenerateCopy(inboundCookieNotify);
+
+        assertArrayEquals(cookieData, outboundCookieNotify.notifyData);
+        assertEquals(cookieType, outboundCookieNotify.notifyType);
+    }
+
     @Test
-    public void testHandleAndReplyCookie2Request() throws Exception {
-        IkeNotifyPayload cookie2Req = new IkeNotifyPayload(NOTIFY_TYPE_COOKIE2, COOKIE2_DATA_BYTES);
-        IkeNotifyPayload cookie2Resp =
-                IkeNotifyPayload.handleCookie2AndGenerateResponse(cookie2Req);
-        assertArrayEquals(COOKIE2_DATA_BYTES, cookie2Resp.notifyData);
-        assertEquals(NOTIFY_TYPE_COOKIE2, cookie2Resp.notifyType);
-    }
-
-    private void checkHandleCookie2Request(int dataLen) throws Exception {
-        final byte[] invalidCookie2Data = new byte[dataLen];
-        new Random().nextBytes(invalidCookie2Data);
-        IkeNotifyPayload cookie2Req = new IkeNotifyPayload(NOTIFY_TYPE_COOKIE2, invalidCookie2Data);
-        IkeNotifyPayload.handleCookie2AndGenerateResponse(cookie2Req);
+    public void testHandleCookieAndGenerateCopy() throws Exception {
+        verifyHandleCookieAndGenerateCopy(false /* isCookie2 */, COOKIE_DATA_LEN);
     }
 
     @Test(expected = InvalidSyntaxException.class)
-    public void testHandleCookie2RequestWithTooSmallLengthOfData() throws Exception {
-        checkHandleCookie2Request(COOKIE_INVALID_DATA_LEN_SMALL);
+    public void testHandleCookieWithTooSmallLengthOfData() throws Exception {
+        verifyHandleCookieAndGenerateCopy(false /* isCookie2 */, COOKIE_INVALID_DATA_LEN_SMALL);
     }
 
     @Test(expected = InvalidSyntaxException.class)
-    public void testHandleCookie2RequestWithTooLargeLengthOfData() throws Exception {
-        checkHandleCookie2Request(COOKIE_INVALID_DATA_LEN_LARGE);
+    public void testHandleCookieWithTooLargeLengthOfData() throws Exception {
+        verifyHandleCookieAndGenerateCopy(false /* isCookie2 */, COOKIE_INVALID_DATA_LEN_SMALL);
+    }
+
+    @Test
+    public void testHandleCookie2AndGenerateCopy() throws Exception {
+        verifyHandleCookieAndGenerateCopy(true /* isCookie2 */, COOKIE2_DATA_LEN);
+    }
+
+    @Test(expected = InvalidSyntaxException.class)
+    public void testHandleCookie2WithTooSmallLengthOfData() throws Exception {
+        verifyHandleCookieAndGenerateCopy(true /* isCookie2 */, COOKIE2_INVALID_DATA_LEN_SMALL);
+    }
+
+    @Test(expected = InvalidSyntaxException.class)
+    public void testHandleCookie2WithTooLargeLengthOfData() throws Exception {
+        verifyHandleCookieAndGenerateCopy(true /* isCookie2 */, COOKIE2_INVALID_DATA_LEN_SMALL);
     }
 
     @Test

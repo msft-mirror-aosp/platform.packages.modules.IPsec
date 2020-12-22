@@ -51,6 +51,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
@@ -338,13 +339,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private static final int PAYLOAD_TYPE_UNSUPPORTED = 127;
 
+    private static final int COOKIE_DATA_LEN = 64;
     private static final int COOKIE2_DATA_LEN = 64;
 
+    private static final byte[] COOKIE_DATA = new byte[COOKIE_DATA_LEN];
     private static final byte[] COOKIE2_DATA = new byte[COOKIE2_DATA_LEN];
 
     private static final int NATT_KEEPALIVE_DELAY = 20;
 
     static {
+        new Random().nextBytes(COOKIE_DATA);
         new Random().nextBytes(COOKIE2_DATA);
     }
 
@@ -422,31 +426,39 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private ArgumentCaptor<List<IkePayload>> mPayloadListCaptor =
             ArgumentCaptor.forClass(List.class);
 
-    private ReceivedIkePacket makeDummyReceivedIkeInitRespPacket(
-            long initiatorSpi,
-            long responderSpi,
-            @IkeHeader.ExchangeType int eType,
-            boolean isResp,
-            boolean fromIkeInit,
-            List<Integer> payloadTypeList,
-            List<String> payloadHexStringList)
+    private ReceivedIkePacket makeDummyReceivedIkeInitRespPacket(List<IkePayload> payloadList)
             throws Exception {
+        long dummyInitSpi = 1L;
+        long dummyRespSpi = 2L;
 
-        List<IkePayload> payloadList =
-                hexStrListToIkePayloadList(payloadTypeList, payloadHexStringList, isResp);
         // Build a remotely generated NAT_DETECTION_SOURCE_IP payload to mock a remote node's
         // network that is not behind NAT.
         IkePayload sourceNatPayload =
                 new IkeNotifyPayload(
                         NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
                         IkeNotifyPayload.generateNatDetectionData(
-                                initiatorSpi,
-                                responderSpi,
+                                dummyInitSpi,
+                                dummyRespSpi,
                                 REMOTE_ADDRESS,
                                 IkeSocket.SERVER_PORT_UDP_ENCAPSULATED));
         payloadList.add(sourceNatPayload);
+
         return makeDummyUnencryptedReceivedIkePacket(
-                initiatorSpi, responderSpi, eType, isResp, fromIkeInit, payloadList);
+                dummyInitSpi,
+                dummyRespSpi,
+                IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                true /*isResp*/,
+                false /*fromIkeInit*/,
+                payloadList);
+    }
+
+    private ReceivedIkePacket makeDummyReceivedIkeInitRespPacket(
+            List<Integer> payloadTypeList, List<String> payloadHexStringList) throws Exception {
+
+        List<IkePayload> payloadList =
+                hexStrListToIkePayloadList(
+                        payloadTypeList, payloadHexStringList, true /* isResp */);
+        return makeDummyReceivedIkeInitRespPacket(payloadList);
     }
 
     private ReceivedIkePacket makeDummyUnencryptedReceivedIkePacket(
@@ -1006,16 +1018,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         payloadHexStringList.add(NONCE_RESP_PAYLOAD_HEX_STRING);
         payloadHexStringList.addAll(optionalPayloadHexStrings);
 
-        // In each test assign different IKE responder SPI in IKE INIT response to avoid remote SPI
-        // collision during response validation.
-        // STOPSHIP: b/131617794 allow #mockIkeSetup to be independent in each test after we can
-        // support IkeSession cleanup.
         return makeDummyReceivedIkeInitRespPacket(
-                1L /*initiator SPI*/,
-                2L /*responder SPI*/,
-                IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
-                true /*isResp*/,
-                false /*fromIkeInit*/,
                 payloadTypeList,
                 payloadHexStringList);
     }
@@ -1466,11 +1469,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Send back a INVALID_KE_PAYLOAD, and verify that the selected DH group changes
         ReceivedIkePacket resp =
                 makeDummyReceivedIkeInitRespPacket(
-                        1L /*initiator SPI*/,
-                        2L /*responder SPI*/,
-                        IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
-                        true /*isResp*/,
-                        false /*fromIkeInit*/,
                         Arrays.asList(IkePayload.PAYLOAD_TYPE_NOTIFY),
                         Arrays.asList(INVALID_KE_PAYLOAD_HEX_STRING));
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
@@ -1478,6 +1476,45 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertEquals(
                 SaProposal.DH_GROUP_2048_BIT_MODP, mIkeSessionStateMachine.mPeerSelectedDhGroup);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeInitReceivesCookie() throws Exception {
+        setupFirstIkeSa();
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        // Encode 2 times: one for mIkeInitRequestBytes and one for sending packets
+        verify(mMockIkeMessageHelper, times(2)).encode(mIkeMessageCaptor.capture());
+        IkeMessage originalReqMsg = mIkeMessageCaptor.getValue();
+        List<IkePayload> originalPayloadList = originalReqMsg.ikePayloadList;
+
+        // Reset to forget sending original IKE INIT request
+        resetMockIkeMessageHelper();
+
+        // Send back a Notify-Cookie
+        IkeNotifyPayload inCookieNotify = new IkeNotifyPayload(NOTIFY_TYPE_COOKIE, COOKIE_DATA);
+        List<IkePayload> payloads = new ArrayList<>();
+        payloads.add(inCookieNotify);
+        ReceivedIkePacket resp = makeDummyReceivedIkeInitRespPacket(payloads);
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
+        mLooper.dispatchAll();
+
+        // Verify retry IKE INIT request
+        verify(mMockIkeMessageHelper, times(2)).encode(mIkeMessageCaptor.capture());
+        IkeMessage ikeInitReqMessage = mIkeMessageCaptor.getValue();
+        List<IkePayload> payloadList = ikeInitReqMessage.ikePayloadList;
+
+        IkeNotifyPayload outCookieNotify = (IkeNotifyPayload) payloadList.get(0);
+        assertEquals(NOTIFY_TYPE_COOKIE, outCookieNotify.notifyType);
+        assertArrayEquals(COOKIE_DATA, outCookieNotify.notifyData);
+
+        assertEquals(originalPayloadList, payloadList.subList(1, payloadList.size()));
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeInit);
     }
 
     @Test
