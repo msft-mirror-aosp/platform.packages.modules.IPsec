@@ -341,20 +341,6 @@ package android.net.ipsec.ike {
 
 package android.net.ipsec.ike.exceptions {
 
-  public final class AuthenticationFailedException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public AuthenticationFailedException(@NonNull String);
-    ctor public AuthenticationFailedException(@NonNull Throwable);
-  }
-
-  public final class ChildSaNotFoundException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public ChildSaNotFoundException(int);
-    method public int getIpSecSpi();
-  }
-
-  public final class FailedCpRequiredException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public FailedCpRequiredException();
-  }
-
   public abstract class IkeException extends java.lang.Exception {
   }
 
@@ -391,14 +377,6 @@ package android.net.ipsec.ike.exceptions {
     field public static final int ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1; // 0x1
   }
 
-  public final class InternalAddressFailureException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public InternalAddressFailureException();
-  }
-
-  public final class InvalidIkeSpiException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public InvalidIkeSpiException();
-  }
-
   public final class InvalidKeException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
     ctor public InvalidKeException(int);
     method public int getDhGroup();
@@ -409,52 +387,10 @@ package android.net.ipsec.ike.exceptions {
     method public byte getMajorVersion();
   }
 
-  public final class InvalidMessageIdException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public InvalidMessageIdException(int);
-    method public int getMessageId();
-  }
-
   public final class InvalidSelectorsException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
     ctor public InvalidSelectorsException(int, @NonNull byte[]);
     method @NonNull public byte[] getIpSecPacketInfo();
     method public int getIpSecSpi();
-  }
-
-  public final class InvalidSyntaxException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public InvalidSyntaxException(@NonNull String);
-    ctor public InvalidSyntaxException(@NonNull Throwable);
-    ctor public InvalidSyntaxException(@NonNull String, @NonNull Throwable);
-  }
-
-  public final class NoAdditionalSasException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public NoAdditionalSasException();
-  }
-
-  public final class NoValidProposalChosenException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public NoValidProposalChosenException(@NonNull String);
-    ctor public NoValidProposalChosenException(@NonNull String, @NonNull Throwable);
-  }
-
-  public class SinglePairRequiredException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public SinglePairRequiredException();
-  }
-
-  public final class TemporaryFailureException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public TemporaryFailureException(@NonNull String);
-  }
-
-  public final class TsUnacceptableException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public TsUnacceptableException();
-  }
-
-  public final class UnrecognizedIkeProtocolException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public UnrecognizedIkeProtocolException(int, @NonNull byte[]);
-    method @NonNull public byte[] getUnrecognizedErrorData();
-  }
-
-  public final class UnsupportedCriticalPayloadException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public UnsupportedCriticalPayloadException(@NonNull java.util.List<java.lang.Integer>);
-    method @NonNull public java.util.List<java.lang.Integer> getUnsupportedCriticalPayloadList();
   }
 
 }
