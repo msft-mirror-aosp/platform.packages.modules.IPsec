@@ -18,8 +18,6 @@ package android.net.ipsec.ike.exceptions;
 
 /**
  * IkeNonProtocolException encapsulates all implementation-specific non-protocol IKE errors.
- *
- * @hide
  */
 public abstract class IkeNonProtocolException extends IkeException {
     /** @hide */

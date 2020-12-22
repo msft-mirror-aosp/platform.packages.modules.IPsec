@@ -108,7 +108,6 @@ public interface ChildSessionCallback {
      *     {@link IpSecManager#DIRECTION_IN}
      * @param outIpSecTransform IpSecTransform to be used for traffic with {@link PolicyDirection}
      *     {@link IpSecManager#DIRECTION_OUT}
-     * @hide
      */
     default void onIpSecTransformsMigrated(
             @NonNull IpSecTransform inIpSecTransform, @NonNull IpSecTransform outIpSecTransform) {}
