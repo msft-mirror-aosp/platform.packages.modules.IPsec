@@ -309,7 +309,9 @@ public final class EapSessionConfig {
         /**
          * Sets the configuration for EAP-TTLS.
          *
-         * <p>Tunneled EAP-TTLS authentications are disallowed.
+         * <p>Tunneled EAP-TTLS authentications are disallowed, as running multiple layers of
+         * EAP-TTLS increases the data footprint but has no discernible benefits over a single
+         * EAP-TTLS session with a non EAP-TTLS method nested inside it.
          *
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
          *     If a certificate is provided, it MUST be the root CA used by the server, or
