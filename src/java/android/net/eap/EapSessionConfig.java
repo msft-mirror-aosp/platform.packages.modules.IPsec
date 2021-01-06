@@ -194,7 +194,6 @@ public final class EapSessionConfig {
      * Retrieves configuration for EAP-TTLS
      *
      * @return the configuration for EAP-TTLS, or null if it was not set
-     * @hide
      */
     @Nullable
     public EapTtlsConfig getEapTtlsConfig() {
@@ -308,9 +307,9 @@ public final class EapSessionConfig {
         }
 
         /**
-         * Sets the configuration for EAP-TTLS
+         * Sets the configuration for EAP-TTLS.
          *
-         * <p>Nested tunnel authentications are disallowed.
+         * <p>Tunneled EAP-TTLS authentications are disallowed.
          *
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
          *     If a certificate is provided, it MUST be the root CA used by the server, or
@@ -318,7 +317,6 @@ public final class EapSessionConfig {
          *     truststore is considered acceptable.
          * @param innerEapSessionConfig represents the configuration for the inner EAP instance
          * @return Builder this, to facilitate chaining
-         * @hide
          */
         @NonNull
         public Builder setEapTtlsConfig(
@@ -762,8 +760,6 @@ public final class EapSessionConfig {
 
     /**
      * EapTtlsConfig represents the configs needed for an EAP-TTLS session.
-     *
-     * @hide
      */
     public static class EapTtlsConfig extends EapMethodConfig {
         private static final String TRUST_CERT_KEY = "TRUST_CERT_KEY";
@@ -854,7 +850,6 @@ public final class EapSessionConfig {
          *
          * @return the CA certificate for validating the received server certificate or null if the
          *     system default is preferred
-         * @hide
          */
         @Nullable
         public X509Certificate getServerCaCert() {
@@ -865,7 +860,6 @@ public final class EapSessionConfig {
          * Retrieves the inner EAP session config
          *
          * @return an EapSessionConfig representing the config for tunneled EAP authentication
-         * @hide
          */
         @NonNull
         public EapSessionConfig getInnerEapSessionConfig() {
