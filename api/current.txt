@@ -7,6 +7,7 @@ package android.net.eap {
     method @NonNull public byte[] getEapIdentity();
     method @Nullable public android.net.eap.EapSessionConfig.EapMsChapV2Config getEapMsChapV2Config();
     method @Nullable public android.net.eap.EapSessionConfig.EapSimConfig getEapSimConfig();
+    method @Nullable public android.net.eap.EapSessionConfig.EapTtlsConfig getEapTtlsConfig();
   }
 
   public static final class EapSessionConfig.Builder {
@@ -17,6 +18,7 @@ package android.net.eap {
     method @NonNull public android.net.eap.EapSessionConfig.Builder setEapIdentity(@NonNull byte[]);
     method @NonNull public android.net.eap.EapSessionConfig.Builder setEapMsChapV2Config(@NonNull String, @NonNull String);
     method @NonNull public android.net.eap.EapSessionConfig.Builder setEapSimConfig(int, int);
+    method @NonNull public android.net.eap.EapSessionConfig.Builder setEapTtlsConfig(@Nullable java.security.cert.X509Certificate, @NonNull android.net.eap.EapSessionConfig);
   }
 
   public static class EapSessionConfig.EapAkaConfig extends android.net.eap.EapSessionConfig.EapMethodConfig {
@@ -41,6 +43,11 @@ package android.net.eap {
   public static class EapSessionConfig.EapSimConfig extends android.net.eap.EapSessionConfig.EapMethodConfig {
     method public int getAppType();
     method public int getSubId();
+  }
+
+  public static class EapSessionConfig.EapTtlsConfig extends android.net.eap.EapSessionConfig.EapMethodConfig {
+    method @NonNull public android.net.eap.EapSessionConfig getInnerEapSessionConfig();
+    method @Nullable public java.security.cert.X509Certificate getServerCaCert();
   }
 
 }
