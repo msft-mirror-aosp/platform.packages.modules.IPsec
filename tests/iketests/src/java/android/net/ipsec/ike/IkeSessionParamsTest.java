@@ -55,7 +55,7 @@ import android.net.Network;
 import android.net.SocketKeepalive;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
 import android.os.PersistableBundle;
 import android.telephony.TelephonyManager;
@@ -284,7 +284,7 @@ public final class IkeSessionParamsTest {
     public void testEncodeIkeSessionParamsWith3gppExtension() throws Exception {
         Ike3gppExtension ike3gppExtension =
                 new Ike3gppExtension(
-                        new Ike3gppParams.Builder().build(), mock(Ike3gppCallback.class));
+                        new Ike3gppParams.Builder().build(), mock(Ike3gppDataListener.class));
 
         IkeSessionParams sessionParams =
                 buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
@@ -728,7 +728,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithIke3gppExtension() throws Exception {
         Ike3gppExtension ike3gppExtension =
                 new Ike3gppExtension(
-                        new Ike3gppParams.Builder().build(), mock(Ike3gppCallback.class));
+                        new Ike3gppParams.Builder().build(), mock(Ike3gppDataListener.class));
 
         IkeSessionParams sessionParams =
                 buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
