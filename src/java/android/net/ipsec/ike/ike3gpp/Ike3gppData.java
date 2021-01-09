@@ -23,31 +23,34 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 
 /**
- * Ike3gppInfo represents a 3GPP-specific payload sent by the peer/remote endpoint.
+ * Ike3gppData represents 3GPP-specific data sent by the peer/remote endpoint.
  *
  * @see 3GPP ETSI TS 24.302: Access to the 3GPP Evolved Packet Core (EPC) via non-3GPP access
  *     networks
  * @hide
  */
 @SystemApi
-public abstract class Ike3gppInfo {
-    private static final int INFO_TYPE_SHARED_BASE = 0;
-    private static final int INFO_TYPE_CATEGORY_SIZE = 100;
+public abstract class Ike3gppData {
+    private static final int DATA_TYPE_SHARED_BASE = 0;
+    private static final int DATA_TYPE_CATEGORY_SIZE = 100;
 
-    private static final int INFO_TYPE_PAYLOAD_NOTIFY_BASE = INFO_TYPE_SHARED_BASE;
+    private static final int DATA_TYPE_PAYLOAD_NOTIFY_BASE = DATA_TYPE_SHARED_BASE;
 
-    /** Info Type representing an {@link Ike3gppN1ModeInformation}. */
-    public static final int INFO_TYPE_NOTIFY_N1_MODE_INFORMATION =
-            INFO_TYPE_PAYLOAD_NOTIFY_BASE + 1;
+    /** Data Type representing an {@link Ike3gppN1ModeInformation}. */
+    public static final int DATA_TYPE_NOTIFY_N1_MODE_INFORMATION =
+            DATA_TYPE_PAYLOAD_NOTIFY_BASE + 1;
 
-    /** Info Type representing an {@link Ike3gppBackoffTimer}. */
-    public static final int INFO_TYPE_NOTIFY_BACKOFF_TIMER = INFO_TYPE_PAYLOAD_NOTIFY_BASE + 2;
+    /** Data Type representing an {@link Ike3gppBackoffTimer}. */
+    public static final int DATA_TYPE_NOTIFY_BACKOFF_TIMER = DATA_TYPE_PAYLOAD_NOTIFY_BASE + 2;
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({INFO_TYPE_NOTIFY_N1_MODE_INFORMATION, INFO_TYPE_NOTIFY_BACKOFF_TIMER})
-    public @interface InfoType {}
+    @IntDef({DATA_TYPE_NOTIFY_N1_MODE_INFORMATION, DATA_TYPE_NOTIFY_BACKOFF_TIMER})
+    public @interface DataType {}
 
-    /** Returns the InfoType that this Ike3gppInfo represents. */
-    public abstract @InfoType int getInfoType();
+    /** @hide */
+    protected Ike3gppData() {}
+
+    /** Returns the DataType that this Ike3gppData represents. */
+    public abstract @DataType int getDataType();
 }
