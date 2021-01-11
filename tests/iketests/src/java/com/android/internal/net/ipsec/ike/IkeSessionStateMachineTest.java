@@ -126,9 +126,9 @@ import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
 import android.net.ipsec.ike.exceptions.UnrecognizedIkeProtocolException;
 import android.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
 import android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer;
+import android.net.ipsec.ike.ike3gpp.Ike3gppData;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
-import android.net.ipsec.ike.ike3gpp.Ike3gppInfo;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.net.ipsec.ike.ike3gpp.Ike3gppN1ModeInformation;
 import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
 import android.os.Looper;
@@ -407,7 +407,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private IkeLocalAddressGenerator mMockIkeLocalAddressGenerator;
 
-    private Ike3gppCallback mMockIke3gppCallback;
+    private Ike3gppDataListener mMockIke3gppDataListener;
     private Ike3gppExtension mIke3gppExtension;
 
     private X509Certificate mRootCertificate;
@@ -839,7 +839,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mExpectedCurrentSaLocalReqMsgId = 0;
         mExpectedCurrentSaRemoteReqMsgId = 0;
 
-        mMockIke3gppCallback = mock(Ike3gppCallback.class);
+        mMockIke3gppDataListener = mock(Ike3gppDataListener.class);
 
         mMockIkeNattKeepalive = mock(IkeNattKeepalive.class);
     }
@@ -959,7 +959,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         Ike3gppExtension ike3gppExtension =
                 new Ike3gppExtension(
                         new Ike3gppParams.Builder().setPduSessionId(pduSessionId).build(),
-                        mMockIke3gppCallback);
+                        mMockIke3gppDataListener);
         return buildIkeSessionParamsCommon()
                 .setAuthPsk(mPsk)
                 .setIke3gppExtension(ike3gppExtension)
@@ -2400,27 +2400,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 hasChildPayloads,
                 hasConfigPayloadInResp,
                 false /* isMobikeEnabled */,
-                0 /* ike3gppCallbackInvocations */);
-    }
-
-    private IkeMessage verifySharedKeyAuthentication(
-            IkeAuthPskPayload spyAuthPayload,
-            IkeIdPayload respIdPayload,
-            List<IkePayload> authRelatedPayloads,
-            boolean hasChildPayloads,
-            boolean hasConfigPayloadInResp,
-            boolean isMobikeEnabled,
-            int ike3gppCallbackInvocations)
-            throws Exception {
-        return verifySharedKeyAuthentication(
-                spyAuthPayload,
-                respIdPayload,
-                authRelatedPayloads,
-                hasChildPayloads,
-                hasConfigPayloadInResp,
-                isMobikeEnabled,
                 true /* isIpv4 */,
-                ike3gppCallbackInvocations);
+                0 /* ike3gppDataListenerInvocations */);
     }
 
     private IkeMessage verifySharedKeyAuthentication(
@@ -2431,7 +2412,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             boolean hasConfigPayloadInResp,
             boolean isMobikeEnabled,
             boolean isIpv4,
-            int ike3gppCallbackInvocations)
+            int ike3gppDataListenerInvocations)
             throws Exception {
         IkeMessage ikeAuthReqMessage =
                 verifyAuthenticationCommonAndGetIkeMessage(
@@ -2441,7 +2422,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         hasConfigPayloadInResp,
                         isMobikeEnabled,
                         isIpv4,
-                        ike3gppCallbackInvocations);
+                        ike3gppDataListenerInvocations);
 
         // Validate authentication is done. Cannot use matchers because IkeAuthPskPayload is final.
         verify(spyAuthPayload)
@@ -2467,7 +2448,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             boolean hasConfigPayloadInResp,
             boolean isMobikeEnabled,
             boolean isIpv4,
-            int ike3gppCallbackInvocations)
+            int ike3gppDataListenerInvocations)
             throws Exception {
         // Send IKE AUTH response to IKE state machine
         ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
@@ -2497,9 +2478,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyDecodeEncryptedMessage(mSpyCurrentIkeSaRecord, authResp);
 
         // Validate that user has been notified. Expect one invocation for
-        // IkeSessionCallback#onOpened and 'ike3gppCallbackInvocations' invocations for
-        // Ike3gppCallback#onIke3gppPayloadsReceived
-        verify(mSpyUserCbExecutor, times(1 + ike3gppCallbackInvocations))
+        // IkeSessionCallback#onOpened and 'ike3gppDataListenerInvocations' invocations for
+        // Ike3gppDataListener#onIke3gppDataReceived
+        verify(mSpyUserCbExecutor, times(1 + ike3gppDataListenerInvocations))
                 .execute(any(Runnable.class));
 
         // Verify IkeSessionConfiguration
@@ -2616,8 +2597,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             }
         }
 
-        // Only expect a N1_MODE_CAPABILITY payload if an Ike3gppExention and PDU Session ID are
-        // specified.
+        // Only expect a N1_MODE_CAPABILITY payload if an Ike3gppExtension and PDU Session ID
+        // are specified.
         Ike3gppExtension ike3gppExtension =
                 mIkeSessionStateMachine.mIkeSessionParams.getIke3gppExtension();
         if (ike3gppExtension == null || !ike3gppExtension.getIke3gppParams().hasPduSessionId()) {
@@ -3205,7 +3186,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 false /*hasChildPayloads*/,
                 false /*hasConfigPayloadInResp*/,
                 isMobikeEnabled,
-                0 /* ike3gppCallbackInvocations */);
+                true /* isIpv4 */,
+                0 /* ike3gppDataListenerInvocations */);
         verifyRetransmissionStopped();
     }
 
@@ -5217,13 +5199,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     @Test
     public void testIkeAuthWithN1Mode() throws Exception {
         verifyIkeAuthWith3gppEnabled(
-                makeN1ModeInformationPayload(), 1 /* ike3gppCallbackInvocations */);
+                makeN1ModeInformationPayload(), 1 /* ike3gppDataListenerInvocations */);
 
         verifyN1ModeReceived();
     }
 
     private void verifyIkeAuthWith3gppEnabled(
-            IkePayload ike3gppPayload, int ike3gppCallbackInvocations) throws Exception {
+            IkePayload ike3gppPayload, int ike3gppDataListenerInvocations) throws Exception {
         // Quit and restart IKE Session with N1 Mode Capability params
         mIkeSessionStateMachine.quitNow();
         reset(mMockChildSessionFactoryHelper);
@@ -5249,7 +5231,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 true /*hasChildPayloads*/,
                 true /*hasConfigPayloadInResp*/,
                 false /* isMobikeEnabled */,
-                ike3gppCallbackInvocations);
+                true /* isIpv4 */,
+                ike3gppDataListenerInvocations);
         verifyRetransmissionStopped();
     }
 
@@ -5262,12 +5245,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private void verifyN1ModeReceived() {
-        ArgumentCaptor<List<Ike3gppInfo>> ike3gppInfoCaptor = ArgumentCaptor.forClass(List.class);
-        verify(mMockIke3gppCallback).onIke3gppPayloadsReceived(ike3gppInfoCaptor.capture());
+        ArgumentCaptor<List<Ike3gppData>> ike3gppDataCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mMockIke3gppDataListener).onIke3gppDataReceived(ike3gppDataCaptor.capture());
 
         Ike3gppN1ModeInformation n1ModeInformation = null;
-        for (Ike3gppInfo payload : ike3gppInfoCaptor.getValue()) {
-            if (payload.getInfoType() == Ike3gppInfo.INFO_TYPE_NOTIFY_N1_MODE_INFORMATION) {
+        for (Ike3gppData payload : ike3gppDataCaptor.getValue()) {
+            if (payload.getDataType() == Ike3gppData.DATA_TYPE_NOTIFY_N1_MODE_INFORMATION) {
                 n1ModeInformation = (Ike3gppN1ModeInformation) payload;
             }
         }
@@ -5315,12 +5298,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private void verifyBackoffTimer(int expectedNotifyErrorCause) {
-        ArgumentCaptor<List<Ike3gppInfo>> ike3gppInfoCaptor = ArgumentCaptor.forClass(List.class);
-        verify(mMockIke3gppCallback).onIke3gppPayloadsReceived(ike3gppInfoCaptor.capture());
+        ArgumentCaptor<List<Ike3gppData>> ike3gppDataCaptor = ArgumentCaptor.forClass(List.class);
+        verify(mMockIke3gppDataListener).onIke3gppDataReceived(ike3gppDataCaptor.capture());
 
         Ike3gppBackoffTimer backoffTimer = null;
-        for (Ike3gppInfo payload : ike3gppInfoCaptor.getValue()) {
-            if (payload.getInfoType() == Ike3gppInfo.INFO_TYPE_NOTIFY_BACKOFF_TIMER) {
+        for (Ike3gppData payload : ike3gppDataCaptor.getValue()) {
+            if (payload.getDataType() == Ike3gppData.DATA_TYPE_NOTIFY_BACKOFF_TIMER) {
                 backoffTimer = (Ike3gppBackoffTimer) payload;
             }
         }
@@ -5334,10 +5317,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testIkeAuthWithBackoffTimerWithoutError() throws Exception {
         verifyIkeAuthWith3gppEnabled(
                 new IkeNotifyPayload(NOTIFY_TYPE_BACKOFF_TIMER, BACKOFF_TIMER_DATA),
-                0 /* ike3gppCallbackInvocations */);
+                0 /* ike3gppDataListenerInvocations */);
 
         // BackoffTimer should be ignored
-        verify(mMockIke3gppCallback, never()).onIke3gppPayloadsReceived(any());
+        verify(mMockIke3gppDataListener, never()).onIke3gppDataReceived(any());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -5519,7 +5502,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         true /* hasConfigPayloadInResp */,
                         doesPeerSupportMobike,
                         isIpv4,
-                        0 /* ike3gppCallbackInvocations */);
+                        0 /* ike3gppDataListenerInvocations */);
         verifyRetransmissionStopped();
 
         boolean isMobikeSupportIndicated = false;

@@ -18,8 +18,8 @@ package com.android.internal.net.ipsec.ike.ike3gpp;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
 import android.annotation.NonNull;
+import android.net.ipsec.ike.ike3gpp.Ike3gppData;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppInfo;
 
 import java.util.List;
 import java.util.Objects;
@@ -44,17 +44,17 @@ abstract class Ike3gppExchangeBase {
         mUserCbExecutor = Objects.requireNonNull(userCbExecutor, "userCbExecutor must not be null");
     }
 
-    void maybeInvokeUserCallback(List<Ike3gppInfo> ike3gppInfos) {
-        if (ike3gppInfos.isEmpty()) return;
+    void maybeInvokeUserCallback(List<Ike3gppData> ike3gppDataList) {
+        if (ike3gppDataList.isEmpty()) return;
 
         try {
             mUserCbExecutor.execute(
                     () ->
                             mIke3gppExtension
-                                    .getIke3gppCallback()
-                                    .onIke3gppPayloadsReceived(ike3gppInfos));
+                                    .getIke3gppDataListener()
+                                    .onIke3gppDataReceived(ike3gppDataList));
         } catch (Exception e) {
-            getIkeLog().d(TAG, "Ike3gppCallback#onIke3gppPayloadsReceived execution failed", e);
+            getIkeLog().d(TAG, "Ike3gppDataListener#onIke3gppDataReceived execution failed", e);
         }
     }
 }

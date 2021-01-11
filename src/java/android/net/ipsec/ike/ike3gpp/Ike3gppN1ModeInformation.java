@@ -29,7 +29,7 @@ import java.util.Objects;
  * @hide
  */
 @SystemApi
-public final class Ike3gppN1ModeInformation extends Ike3gppInfo {
+public final class Ike3gppN1ModeInformation extends Ike3gppData {
     private final byte[] mSnssai;
 
     /** @hide */
@@ -39,8 +39,8 @@ public final class Ike3gppN1ModeInformation extends Ike3gppInfo {
     }
 
     @Override
-    public @InfoType int getInfoType() {
-        return INFO_TYPE_NOTIFY_N1_MODE_INFORMATION;
+    public @DataType int getDataType() {
+        return DATA_TYPE_NOTIFY_N1_MODE_INFORMATION;
     }
 
     /**

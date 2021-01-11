@@ -28,7 +28,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
 
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
@@ -59,19 +59,19 @@ public class Ike3gppExtensionExchangeTest {
 
     private static final Executor INLINE_EXECUTOR = Runnable::run;
 
-    private Ike3gppCallback mMockIke3gppCallback;
+    private Ike3gppDataListener mMockIke3gppDataListener;
 
     private Ike3gppParams mIke3gppParams;
     private Ike3gppExtensionExchange mIke3gppExtensionExchange;
 
     @Before
     public void setUp() {
-        mMockIke3gppCallback = mock(Ike3gppCallback.class);
+        mMockIke3gppDataListener = mock(Ike3gppDataListener.class);
 
         mIke3gppParams = new Ike3gppParams.Builder().setPduSessionId(PDU_SESSION_ID).build();
         mIke3gppExtensionExchange =
                 new Ike3gppExtensionExchange(
-                        new Ike3gppExtension(mIke3gppParams, mMockIke3gppCallback),
+                        new Ike3gppExtension(mIke3gppParams, mMockIke3gppDataListener),
                         INLINE_EXECUTOR);
     }
 
