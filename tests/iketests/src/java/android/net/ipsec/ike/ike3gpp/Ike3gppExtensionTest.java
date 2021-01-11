@@ -20,7 +20,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.mockito.Mockito.mock;
 
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -28,21 +28,21 @@ import org.junit.Test;
 public class Ike3gppExtensionTest {
     private static final byte PDU_SESSION_ID = (byte) 0x01;
 
-    private Ike3gppCallback mMockIke3gppCallback;
+    private Ike3gppDataListener mMockIke3gppDataListener;
     private Ike3gppParams mIke3gppParams;
 
     @Before
     public void setUp() {
-        mMockIke3gppCallback = mock(Ike3gppCallback.class);
+        mMockIke3gppDataListener = mock(Ike3gppDataListener.class);
         mIke3gppParams = new Ike3gppParams.Builder().build();
     }
 
     @Test
     public void testIke3gppExtensionConstructor() {
         Ike3gppExtension ike3gppExtension =
-                new Ike3gppExtension(mIke3gppParams, mMockIke3gppCallback);
+                new Ike3gppExtension(mIke3gppParams, mMockIke3gppDataListener);
 
-        assertEquals(mMockIke3gppCallback, ike3gppExtension.getIke3gppCallback());
+        assertEquals(mMockIke3gppDataListener, ike3gppExtension.getIke3gppDataListener());
         assertEquals(mIke3gppParams, ike3gppExtension.getIke3gppParams());
     }
 
@@ -53,7 +53,7 @@ public class Ike3gppExtensionTest {
 
     @Test(expected = NullPointerException.class)
     public void testIke3gppExtensionConstructorInvalidParams() {
-        Ike3gppExtension ike3gppExtension = new Ike3gppExtension(null, mMockIke3gppCallback);
+        Ike3gppExtension ike3gppExtension = new Ike3gppExtension(null, mMockIke3gppDataListener);
     }
 
     @Test
@@ -61,12 +61,12 @@ public class Ike3gppExtensionTest {
         Ike3gppExtension extensionA =
                 new Ike3gppExtension(
                         new Ike3gppParams.Builder().setPduSessionId(PDU_SESSION_ID).build(),
-                        mMockIke3gppCallback);
+                        mMockIke3gppDataListener);
 
         Ike3gppExtension extensionB =
                 new Ike3gppExtension(
                         new Ike3gppParams.Builder().setPduSessionId(PDU_SESSION_ID).build(),
-                        mMockIke3gppCallback);
+                        mMockIke3gppDataListener);
 
         assertEquals(extensionA, extensionB);
     }
@@ -74,12 +74,12 @@ public class Ike3gppExtensionTest {
     @Test
     public void testNotEquals() {
         Ike3gppExtension extensionA =
-                new Ike3gppExtension(new Ike3gppParams.Builder().build(), mMockIke3gppCallback);
+                new Ike3gppExtension(new Ike3gppParams.Builder().build(), mMockIke3gppDataListener);
 
         Ike3gppExtension extensionB =
                 new Ike3gppExtension(
                         new Ike3gppParams.Builder().setPduSessionId(PDU_SESSION_ID).build(),
-                        mMockIke3gppCallback);
+                        mMockIke3gppDataListener);
 
         assertNotEquals(extensionA, extensionB);
     }

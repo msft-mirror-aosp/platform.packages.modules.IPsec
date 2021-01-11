@@ -31,7 +31,7 @@ public class Ike3gppN1ModeInformationTest {
         Ike3gppN1ModeInformation n1ModeInformation = new Ike3gppN1ModeInformation(SNSSAI);
 
         assertEquals(
-                Ike3gppInfo.INFO_TYPE_NOTIFY_N1_MODE_INFORMATION, n1ModeInformation.getInfoType());
+                Ike3gppData.DATA_TYPE_NOTIFY_N1_MODE_INFORMATION, n1ModeInformation.getDataType());
         assertArrayEquals(SNSSAI, n1ModeInformation.getSnssai());
     }
 
