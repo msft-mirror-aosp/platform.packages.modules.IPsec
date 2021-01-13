@@ -43,6 +43,7 @@ public class AtMacTest {
     private static final int MAC_LENGTH = 16;
     private static final byte[] MAC_BYTES = hexStringToByteArray(MAC);
     private static final byte[] INVALID_MAC = {(byte) 1, (byte) 2, (byte) 3};
+    private static final byte[] RESERVED_BYTES = {(byte) 0x0A, (byte) 0x0B};
 
     private EapSimAkaAttributeFactory mAttributeFactory;
 
@@ -106,5 +107,14 @@ public class AtMacTest {
         ByteBuffer result = ByteBuffer.allocate(EXPECTED_LENGTH);
         atMac.encode(result);
         assertArrayEquals(AT_MAC, result.array());
+    }
+
+    @Test
+    public void testGetAtMacWithMacCleared() throws Exception {
+        AtMac original = new AtMac(RESERVED_BYTES, MAC_BYTES);
+
+        AtMac clearedMac = original.getAtMacWithMacCleared();
+        assertArrayEquals(RESERVED_BYTES, clearedMac.reservedBytes);
+        assertArrayEquals(new byte[MAC_LENGTH], clearedMac.mac);
     }
 }
