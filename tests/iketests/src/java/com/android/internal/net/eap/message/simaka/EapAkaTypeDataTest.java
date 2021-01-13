@@ -68,12 +68,12 @@ public class EapAkaTypeDataTest {
     private static final byte[] MAC_BYTES = hexStringToByteArray(MAC);
     private static final byte[] EAP_AKA_REQUEST =
             hexStringToByteArray(
-                    "010000" // Challenge | 2B padding
-                            + "01050000" + RAND // AT_RAND attribute
-                            + "02050000" + AUTN // AT_AUTN attribute
+                    "010A0B" // Challenge | 2B reserved
+                            + "01051A1B" + RAND // AT_RAND attribute
+                            + "02052A2B" + AUTN // AT_AUTN attribute
                             + "8B010002" // AT_RESULT_IND attribute (TS 124 302#8.2.3.1)
-                            + "0B050000" + MAC // AT_MAC attribute
-                            + "86010000"); // AT_CHECKCODE attribute
+                            + "0B053A3B" + MAC // AT_MAC attribute
+                            + "86014A4B"); // AT_CHECKCODE attribute
 
     private EapAkaTypeDataDecoder mEapAkaTypeDataDecoder;
 
@@ -103,6 +103,14 @@ public class EapAkaTypeDataTest {
         assertArrayEquals(EAP_AKA_CHALLENGE_RESPONSE_MAC_BYTES, ((AtMac) entry.getValue()).mac);
 
         assertFalse(itr.hasNext());
+    }
+
+    @Test
+    public void testDecodeEncode() {
+        DecodeResult<EapAkaTypeData> result = mEapAkaTypeDataDecoder.decode(EAP_AKA_REQUEST);
+        assertTrue(result.isSuccessfulDecode());
+
+        assertArrayEquals(EAP_AKA_REQUEST, result.eapTypeData.encode());
     }
 
     @Test
