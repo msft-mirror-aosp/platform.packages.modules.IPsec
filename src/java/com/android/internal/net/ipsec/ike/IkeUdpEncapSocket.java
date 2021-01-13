@@ -17,9 +17,6 @@
 package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
-import static android.system.OsConstants.F_SETFL;
-import static android.system.OsConstants.SOCK_DGRAM;
-import static android.system.OsConstants.SOCK_NONBLOCK;
 
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -91,9 +88,6 @@ public final class IkeUdpEncapSocket extends IkeSocket {
         if (ikeSocket == null) {
             UdpEncapsulationSocket udpEncapSocket = ipsecManager.openUdpEncapsulationSocket();
             FileDescriptor fd = udpEncapSocket.getFileDescriptor();
-
-            // {@link PacketReader} requires non-blocking I/O access. Set SOCK_NONBLOCK here.
-            Os.fcntlInt(fd, F_SETFL, SOCK_DGRAM | SOCK_NONBLOCK);
             network.bindSocket(fd);
 
             ikeSocket = new IkeUdpEncapSocket(udpEncapSocket, network, new Handler(looper));
