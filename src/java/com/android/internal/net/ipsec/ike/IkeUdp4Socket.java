@@ -17,10 +17,8 @@
 package com.android.internal.net.ipsec.ike;
 
 import static android.system.OsConstants.AF_INET;
-import static android.system.OsConstants.F_SETFL;
 import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_DGRAM;
-import static android.system.OsConstants.SOCK_NONBLOCK;
 
 import android.net.InetAddresses;
 import android.net.Network;
@@ -79,9 +77,6 @@ public final class IkeUdp4Socket extends IkeUdpSocket {
         if (ikeSocket == null) {
             FileDescriptor sock = Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             Os.bind(sock, INADDR_ANY, 0);
-
-            // {@link PacketReader} requires non-blocking I/O access. Set SOCK_NONBLOCK here.
-            Os.fcntlInt(sock, F_SETFL, SOCK_DGRAM | SOCK_NONBLOCK);
             network.bindSocket(sock);
 
             ikeSocket = new IkeUdp4Socket(sock, network, handler);

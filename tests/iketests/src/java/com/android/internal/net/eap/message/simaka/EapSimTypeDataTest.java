@@ -16,6 +16,7 @@
 
 package com.android.internal.net.eap.message.simaka;
 
+import static com.android.internal.net.TestUtils.hexStringToByteArray;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SIM_START_DUPLICATE_ATTRIBUTES;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SIM_START_SUBTYPE;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.INVALID_SUBTYPE;
@@ -24,6 +25,8 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.TYP
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_AT_RAND;
 import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
 import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
+import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
 
 import static junit.framework.TestCase.fail;
 
@@ -51,6 +54,12 @@ public class EapSimTypeDataTest {
     private static final int INSUFFICIENT_CHALLENGES_CODE = 2;
     private static final int EAP_SIM_START = 10;
     private static final int INVALID_SUBTYPE_INT = -1;
+
+    private static final byte[] EAP_SIM_CHALLENGE_REQUEST =
+            hexStringToByteArray(
+                    "0b0A0B" // Challenge | 2B padding
+                            + "01091A1B" + RAND_1 + RAND_2 // EAP-SIM AT_RAND attribute
+                            + "0B052A2BFFEEDDCCBBAA998877665544332211FF"); // AT_MAC attribute
 
     private EapSimTypeDataDecoder mEapSimTypeDataDecoder;
 
@@ -97,6 +106,15 @@ public class EapSimTypeDataTest {
         assertEquals(EAP_AT_VERSION_LIST, (int) itr.next());
         assertEquals(EAP_AT_PERMANENT_ID_REQ, (int) itr.next());
         assertFalse(itr.hasNext());
+    }
+
+    @Test
+    public void testDecodeEncode() {
+        DecodeResult<EapSimTypeData> result =
+                mEapSimTypeDataDecoder.decode(EAP_SIM_CHALLENGE_REQUEST);
+        assertTrue(result.isSuccessfulDecode());
+
+        assertArrayEquals(EAP_SIM_CHALLENGE_REQUEST, result.eapTypeData.encode());
     }
 
     @Test
