@@ -613,11 +613,7 @@ public abstract class SaProposal {
         return result;
     }
 
-    /**
-     * Returns supported DH groups for IKE and Child SA proposal negotiation.
-     *
-     * @hide
-     */
+    /** Returns supported DH groups for IKE and Child SA proposal negotiation. */
     @NonNull
     public static Set<Integer> getSupportedDhGroups() {
         return getKeySet(SUPPORTED_DH_GROUP_TO_STR);
