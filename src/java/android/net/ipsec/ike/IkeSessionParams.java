@@ -513,11 +513,7 @@ public final class IkeSessionParams {
         return mDpdDelaySec;
     }
 
-    /**
-     * Retrieves the Network Address Translation Traversal (NATT) keepalive delay in seconds
-     *
-     * @hide
-     */
+    /** Retrieves the Network Address Translation Traversal (NATT) keepalive delay in seconds */
     // Use "second" because smaller unit does not make sense for a NATT Keepalive delay.
     @SuppressLint("MethodNameUnits")
     @IntRange(from = IKE_NATT_KEEPALIVE_DELAY_SEC_MIN, to = IKE_NATT_KEEPALIVE_DELAY_SEC_MAX)
@@ -1563,7 +1559,6 @@ public final class IkeSessionParams {
          *     transmissions. Defaults to 10 seconds. MUST be a value from 10 seconds to 3600
          *     seconds, inclusive.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
         public Builder setNattKeepAliveDelaySeconds(
