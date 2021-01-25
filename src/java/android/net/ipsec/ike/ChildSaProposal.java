@@ -166,10 +166,7 @@ public final class ChildSaProposal extends SaProposal {
     /**
      * Returns supported encryption algorithms for Child SA proposal negotiation.
      *
-     * <p>Some algorithms may not be supported on old devices. Callers MUST check if an algorithm is
-     * supported before using it.
-     *
-     * @hide
+     * <p>Some algorithms may not be supported on old devices.
      */
     @NonNull
     public static Set<Integer> getSupportedEncryptionAlgorithms() {
@@ -191,10 +188,7 @@ public final class ChildSaProposal extends SaProposal {
     /**
      * Returns supported integrity algorithms for Child SA proposal negotiation.
      *
-     * <p>Some algorithms may not be supported on old devices. Callers MUST check if an algorithm is
-     * supported before using it.
-     *
-     * @hide
+     * <p>Some algorithms may not be supported on old devices.
      */
     @NonNull
     public static Set<Integer> getSupportedIntegrityAlgorithms() {

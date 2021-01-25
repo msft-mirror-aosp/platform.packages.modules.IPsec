@@ -68,6 +68,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     private static final int HARD_LIFETIME_SECONDS = (int) TimeUnit.HOURS.toSeconds(20L);
     private static final int SOFT_LIFETIME_SECONDS = (int) TimeUnit.HOURS.toSeconds(10L);
     private static final int DPD_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(10L);
+    private static final int NATT_KEEPALIVE_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(5L);
     private static final int[] RETRANS_TIMEOUT_MS_LIST = new int[] {500, 500, 500, 500, 500, 500};
 
     private static final Map<Class<? extends IkeConfigRequest>, Integer> EXPECTED_REQ_COUNT =
@@ -206,6 +207,17 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
         verifyIkeParamsMinimum(sessionParams);
         assertEquals(DPD_DELAY_SECONDS, sessionParams.getDpdDelaySeconds());
+    }
+
+    @Test
+    public void testSetNattKeepaliveDelay() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum()
+                        .setNattKeepAliveDelaySeconds(NATT_KEEPALIVE_DELAY_SECONDS)
+                        .build();
+
+        verifyIkeParamsMinimum(sessionParams);
+        assertEquals(NATT_KEEPALIVE_DELAY_SECONDS, sessionParams.getNattKeepAliveDelaySeconds());
     }
 
     @Test
