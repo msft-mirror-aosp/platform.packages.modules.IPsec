@@ -16,12 +16,13 @@
 
 package com.android.internal.net.eap.statemachine;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_TTLS;
+
 import static androidx.test.InstrumentationRegistry.getInstrumentation;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
 import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
