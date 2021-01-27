@@ -16,9 +16,10 @@
 
 package com.android.internal.net.eap.statemachine;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_SIM;
+
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.COMPUTED_MAC;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT;
