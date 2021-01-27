@@ -377,7 +377,6 @@ public final class EapSessionConfig {
          * @see <a href="https://tools.ietf.org/html/rfc4186">RFC 4186, Extensible Authentication
          *     Protocol Method for Global System for Mobile Communications (GSM) Subscriber Identity
          *     Modules (EAP-SIM)</a>
-         * @hide
          */
         public static final int EAP_TYPE_SIM = 18;
 
@@ -390,7 +389,6 @@ public final class EapSessionConfig {
          * @see <a href="https://tools.ietf.org/html/rfc5281">RFC 5281, Extensible Authentication
          *     Protocol Tunneled Transport Layer Security Authenticated Protocol Version 0
          *     (EAP-TTLSv0)</a>
-         * @hide
          */
         public static final int EAP_TYPE_TTLS = 21;
 
@@ -402,7 +400,6 @@ public final class EapSessionConfig {
          *
          * @see <a href="https://tools.ietf.org/html/rfc4187">RFC 4187, Extensible Authentication
          *     Protocol Method for 3rd Generation Authentication and Key Agreement (EAP-AKA)</a>
-         * @hide
          */
         public static final int EAP_TYPE_AKA = 23;
 
@@ -414,7 +411,6 @@ public final class EapSessionConfig {
          *
          * @see <a href="https://tools.ietf.org/html/draft-kamath-pppext-eap-mschapv2-02">Microsoft
          *     EAP CHAP Extensions Draft (EAP MSCHAPv2)</a>
-         * @hide
          */
         public static final int EAP_TYPE_MSCHAP_V2 = 26;
 
@@ -427,7 +423,6 @@ public final class EapSessionConfig {
          * @see <a href="https://tools.ietf.org/html/rfc5448">RFC 5448, Improved Extensible
          *     Authentication Protocol Method for 3rd Generation Authentication and Key Agreement
          *     (EAP-AKA')</a>
-         * @hide
          */
         public static final int EAP_TYPE_AKA_PRIME = 50;
 

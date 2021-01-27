@@ -33,6 +33,11 @@ package android.net.eap {
 
   public abstract static class EapSessionConfig.EapMethodConfig {
     method public int getMethodType();
+    field public static final int EAP_TYPE_AKA = 23; // 0x17
+    field public static final int EAP_TYPE_AKA_PRIME = 50; // 0x32
+    field public static final int EAP_TYPE_MSCHAP_V2 = 26; // 0x1a
+    field public static final int EAP_TYPE_SIM = 18; // 0x12
+    field public static final int EAP_TYPE_TTLS = 21; // 0x15
   }
 
   public static class EapSessionConfig.EapMsChapV2Config extends android.net.eap.EapSessionConfig.EapMethodConfig {
