@@ -16,10 +16,11 @@
 
 package com.android.internal.net.eap.message;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_SIM;
+
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
 import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_NAK;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
