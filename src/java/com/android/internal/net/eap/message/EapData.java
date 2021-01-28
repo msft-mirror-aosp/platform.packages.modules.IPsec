@@ -16,6 +16,12 @@
 
 package com.android.internal.net.eap.message;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA_PRIME;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_MSCHAP_V2;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_SIM;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_TTLS;
+
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 
@@ -60,27 +66,12 @@ public class EapData {
     })
     public @interface EapType {}
 
-    @Retention(RetentionPolicy.SOURCE)
-    @IntDef({
-        EAP_TYPE_SIM,
-        EAP_TYPE_AKA,
-        EAP_TYPE_MSCHAP_V2,
-        EAP_TYPE_AKA_PRIME,
-        EAP_TYPE_TTLS
-    })
-    public @interface EapMethod {}
-
     // EAP Type values defined by IANA
     // https://www.iana.org/assignments/eap-numbers/eap-numbers.xhtml
     public static final int EAP_IDENTITY = 1;
     public static final int EAP_NOTIFICATION = 2;
     public static final int EAP_NAK = 3;
     // EAP_MD5_CHALLENGE unsupported, allowable based on RFC 3748, Section 5.4
-    public static final int EAP_TYPE_SIM = 18;
-    public static final int EAP_TYPE_TTLS = 21;
-    public static final int EAP_TYPE_AKA = 23;
-    public static final int EAP_TYPE_MSCHAP_V2 = 26;
-    public static final int EAP_TYPE_AKA_PRIME = 50;
 
     public static final Map<Integer, String> EAP_TYPE_STRING = new HashMap<>();
     static {
