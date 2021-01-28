@@ -16,6 +16,8 @@
 
 package com.android.internal.net.eap.statemachine;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_TTLS;
+
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
@@ -23,7 +25,6 @@ import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_SUCCESS;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_TUNNEL_ESTABLISHED;
 import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
@@ -33,6 +34,7 @@ import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentat
 
 import android.annotation.Nullable;
 import android.content.Context;
+import android.net.eap.EapSessionConfig.EapMethodConfig.EapMethod;
 import android.net.eap.EapSessionConfig.EapTtlsConfig;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -50,7 +52,6 @@ import com.android.internal.net.eap.exceptions.EapSilentException;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsHandshakeException;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsParsingException;
 import com.android.internal.net.eap.message.EapData;
-import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp.EapTtlsAvpDecoder;
