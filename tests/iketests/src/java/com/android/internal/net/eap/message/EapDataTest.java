@@ -16,7 +16,7 @@
 
 package com.android.internal.net.eap.message;
 
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_SIM;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
