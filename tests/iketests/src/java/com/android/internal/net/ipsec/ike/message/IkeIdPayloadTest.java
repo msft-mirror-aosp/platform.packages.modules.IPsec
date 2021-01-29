@@ -28,9 +28,10 @@ import android.net.ipsec.ike.IkeIpv4AddrIdentification;
 import android.net.ipsec.ike.IkeIpv6AddrIdentification;
 import android.net.ipsec.ike.IkeKeyIdIdentification;
 import android.net.ipsec.ike.IkeRfc822AddrIdentification;
+import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import android.os.PersistableBundle;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
 import org.junit.BeforeClass;
@@ -38,6 +39,7 @@ import org.junit.Test;
 
 import java.net.Inet4Address;
 import java.net.Inet6Address;
+import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.cert.X509Certificate;
 
@@ -277,6 +279,46 @@ public final class IkeIdPayloadTest {
 
         byte[] expectedBytes = TestUtils.hexStringToByteArray(ASN1_DN_PAYLOAD_HEX_STRING);
         assertArrayEquals(expectedBytes, inputBuffer.array());
+    }
+
+    private static void verifyPersistableBundleEncodeDecodeIsLossless(IkeIdentification id) {
+        PersistableBundle bundle = id.toPersistableBundle();
+        IkeIdentification result = IkeIdentification.fromPersistableBundle(bundle);
+
+        assertEquals(result, id);
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeIpv4AddressId() throws Exception {
+        Inet4Address ipv4Address = (Inet4Address) InetAddress.getByName(IPV4_ADDR_STRING);
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeIpv4AddrIdentification(ipv4Address));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeIpv6AddressId() throws Exception {
+        Inet6Address ipv6Address = (Inet6Address) InetAddress.getByName(IPV6_ADDR_STRING);
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeIpv6AddrIdentification(ipv6Address));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeRfc822AddrId() throws Exception {
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeFqdnIdentification(FQDN));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeFqdnId() throws Exception {
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeRfc822AddrIdentification(RFC822_NAME));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeKeyId() throws Exception {
+        verifyPersistableBundleEncodeDecodeIsLossless(new IkeKeyIdIdentification(KEY_ID));
+    }
+
+    @Test
+    public void testPersistableBundleEncodeDecodeDerAsn1DnId() throws Exception {
+        verifyPersistableBundleEncodeDecodeIsLossless(
+                new IkeDerAsn1DnIdentification(new X500Principal(ASN1_DN_STRING)));
     }
 
     @Test

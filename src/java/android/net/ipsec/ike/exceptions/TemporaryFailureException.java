@@ -13,15 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.internal.net.ipsec.ike.exceptions;
+package android.net.ipsec.ike.exceptions;
 
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
-
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.annotation.NonNull;
 
 /**
- * This exception is thrown when local node or remote peer receives a request that cannot be
- * completed due to a temporary condition such as a rekeying operation.
+ * This exception is thrown if the remote server declined a request because of a temporary issue.
+ *
+ * <p>This exception indicates that the remote server receives a request that cannot be completed
+ * due to a temporary condition such as a rekeying operation.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.7">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
@@ -32,9 +32,13 @@ public final class TemporaryFailureException extends IkeProtocolException {
     /**
      * Construct an instance of TemporaryFailureException.
      *
-     * @param message the descriptive message.
+     * <p>Except for testing, IKE library users normally do not instantiate this object themselves
+     * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
+     *
+     * @param message the descriptive message (which is saved for later retrieval by the {@link
+     *     #getMessage()} method).
      */
-    public TemporaryFailureException(String message) {
+    public TemporaryFailureException(@NonNull String message) {
         super(ERROR_TYPE_TEMPORARY_FAILURE, message);
     }
 
@@ -42,11 +46,13 @@ public final class TemporaryFailureException extends IkeProtocolException {
      * Construct a instance of TemporaryFailureException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
+     * @hide
      */
     public TemporaryFailureException(byte[] notifyData) {
         super(ERROR_TYPE_TEMPORARY_FAILURE, notifyData);
     }
 
+    /** @hide */
     @Override
     protected boolean isValidDataLength(int dataLen) {
         return EXPECTED_ERROR_DATA_LEN == dataLen;

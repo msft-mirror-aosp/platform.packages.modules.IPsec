@@ -46,14 +46,14 @@ import static org.mockito.Mockito.when;
 
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
+import android.net.ipsec.ike.exceptions.InvalidMessageIdException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
 
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeNormalModeCipher;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidMessageIdException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
 import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResult;
 import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultError;
 import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultOk;
@@ -348,7 +348,7 @@ public final class IkeMessageTest {
                 IkeTestUtils.decodeAndVerifyUnprotectedErrorMsg(
                         inputPacket, UnsupportedCriticalPayloadException.class);
 
-        assertEquals(1, exception.payloadTypeList.size());
+        assertEquals(1, exception.getUnsupportedCriticalPayloadList().size());
     }
 
     @Test

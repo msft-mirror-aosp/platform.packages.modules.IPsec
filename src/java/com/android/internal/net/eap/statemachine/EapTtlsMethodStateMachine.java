@@ -16,6 +16,8 @@
 
 package com.android.internal.net.eap.statemachine;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_TTLS;
+
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
@@ -23,7 +25,6 @@ import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_SUCCESS;
 import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_TUNNEL_ESTABLISHED;
 import static com.android.internal.net.eap.message.EapData.EAP_IDENTITY;
 import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
@@ -33,6 +34,7 @@ import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentat
 
 import android.annotation.Nullable;
 import android.content.Context;
+import android.net.eap.EapSessionConfig.EapMethodConfig.EapMethod;
 import android.net.eap.EapSessionConfig.EapTtlsConfig;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -42,6 +44,7 @@ import com.android.internal.net.eap.EapResult.EapFailure;
 import com.android.internal.net.eap.EapResult.EapResponse;
 import com.android.internal.net.eap.EapResult.EapSuccess;
 import com.android.internal.net.eap.crypto.TlsSession;
+import com.android.internal.net.eap.crypto.TlsSession.EapTtlsKeyingMaterial;
 import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
 import com.android.internal.net.eap.crypto.TlsSessionFactory;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
@@ -49,7 +52,6 @@ import com.android.internal.net.eap.exceptions.EapSilentException;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsHandshakeException;
 import com.android.internal.net.eap.exceptions.ttls.EapTtlsParsingException;
 import com.android.internal.net.eap.message.EapData;
-import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp;
 import com.android.internal.net.eap.message.ttls.EapTtlsAvp.EapTtlsAvpDecoder;
@@ -546,11 +548,10 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
          * Handles EAP-Success and EAP-Failure messages in the tunnel state
          *
          * <p>Both success/failure messages are passed into the inner state machine for processing.
-         * If the inner state machine returns an EapSuccess, the same EapSuccess is returned as a
-         * temporary measure until keying material generation is implemented (b/161233250). The same
-         * is done for an EapFailure. In both cases, the state transitions to the FinalState.
          *
-         * <p>As for EapErrors, this will simply be returned.
+         * <p>If an EAP-Success is returned by the inner state machine, it is discarded and a new
+         * EAP-Success that contains the keying material generated during the TLS negotiation is
+         * sent instead.
          *
          * @param message the EapMessage to be checked for Success/Failure
          * @return the EapResult generated from handling the give EapMessage, or null if the message
@@ -560,21 +561,21 @@ public class EapTtlsMethodStateMachine extends EapMethodStateMachine {
         @Override
         EapResult handleEapSuccessFailure(EapMessage message) {
             if (message.eapCode == EAP_CODE_SUCCESS || message.eapCode == EAP_CODE_FAILURE) {
-                mTlsSession.closeConnection();
                 EapResult innerResult = mInnerEapStateMachine.process(message.encode());
                 if (innerResult instanceof EapSuccess) {
-                    // TODO(b/161233250): Implement keying material generation in EAP-TTLS
-                    // Once implemented, EapSuccess should be handled separately and a new
-                    // EapSuccess with TLS keying material should be returned
-                    LOG.d(mTAG, "Tunneled Authentication Successful");
+                    EapTtlsKeyingMaterial keyingMaterial = mTlsSession.generateKeyingMaterial();
+                    mTlsSession.closeConnection();
                     transitionTo(new FinalState());
-                    return innerResult;
-                } else if (innerResult instanceof EapFailure) {
-                    LOG.d(mTAG, "Tunneled Authentication failed");
-                    transitionTo(new FinalState());
-                    return innerResult;
+
+                    if (!keyingMaterial.isSuccessful()) {
+                        return keyingMaterial.eapError;
+                    }
+
+                    return new EapSuccess(keyingMaterial.msk, keyingMaterial.emsk);
                 }
 
+                transitionTo(new FinalState());
+                mTlsSession.closeConnection();
                 return innerResult;
             }
 

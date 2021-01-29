@@ -643,6 +643,7 @@ public abstract class SaRecord implements AutoCloseable {
 
         private int mLocalRequestMessageId;
         private int mRemoteRequestMessageId;
+        private int mLastSentRespMsgId;
 
         private DecodeResultPartial mCollectedReqFragments;
         private DecodeResultPartial mCollectedRespFragments;
@@ -684,6 +685,7 @@ public abstract class SaRecord implements AutoCloseable {
 
             mLocalRequestMessageId = 0;
             mRemoteRequestMessageId = 0;
+            mLastSentRespMsgId = -1;
 
             mCollectedReqFragments = null;
             mCollectedRespFragments = null;
@@ -763,9 +765,19 @@ public abstract class SaRecord implements AutoCloseable {
             return mInitiatorSpiResource.getSpi();
         }
 
+        @VisibleForTesting
+        IkeSecurityParameterIndex getInitiatorIkeSecurityParameterIndex() {
+            return mInitiatorSpiResource;
+        }
+
         /** Package private */
         long getResponderSpi() {
             return mResponderSpiResource.getSpi();
+        }
+
+        @VisibleForTesting
+        IkeSecurityParameterIndex getResponderIkeSecurityParameterIndex() {
+            return mResponderSpiResource;
         }
 
         /** Package private */
@@ -892,8 +904,14 @@ public abstract class SaRecord implements AutoCloseable {
         }
 
         /** Update all packets of last sent response. */
-        public void updateLastSentRespAllPackets(List<byte[]> respPacketList) {
+        public void updateLastSentRespAllPackets(List<byte[]> respPacketList, int msgId) {
             mLastSentRespAllPackets = respPacketList;
+            mLastSentRespMsgId = msgId;
+        }
+
+        /** Return the message ID of the last sent out response. */
+        public int getLastSentRespMsgId() {
+            return mLastSentRespMsgId;
         }
 
         /** Returns if received IKE packet is the first packet of a re-transmistted request. */
@@ -912,6 +930,13 @@ public abstract class SaRecord implements AutoCloseable {
             super.close();
             mInitiatorSpiResource.close();
             mResponderSpiResource.close();
+        }
+
+        /** Migrate this IKE SA to the specified address pair. */
+        public void migrate(InetAddress initiatorAddress, InetAddress responderAddress)
+                throws IOException {
+            mInitiatorSpiResource.migrate(initiatorAddress);
+            mResponderSpiResource.migrate(responderAddress);
         }
     }
 

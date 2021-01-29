@@ -13,41 +13,49 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package com.android.internal.net.ipsec.ike.exceptions;
+package android.net.ipsec.ike.exceptions;
 
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
-
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.annotation.NonNull;
 
 /**
- * This exception is thrown if either none of SA proposals from SA initiator is acceptable or the
- * negotiated SA proposal from SA responder is invalid.
+ * This exception is thrown if a SA proposal negotiation failed.
  *
- * <p>Include the NO_PROPOSAL_CHOSEN Notify payload in an encrypted response message if received
- * message is an encrypted request from SA initiator.
+ * <p>This exception indicates that either none of SA proposals from caller is acceptable or the
+ * negotiated SA proposal from the remote server is invalid.
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.7">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
  */
+// Include the NO_PROPOSAL_CHOSEN Notify payload in an encrypted response message if received
+// message is an encrypted request from SA initiator.
 public final class NoValidProposalChosenException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
 
     /**
      * Construct an instance of NoValidProposalChosenException.
      *
-     * @param message the descriptive message.
+     * <p>Except for testing, IKE library users normally do not instantiate this object themselves
+     * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
+     *
+     * @param message the descriptive message (which is saved for later retrieval by the {@link
+     *     #getMessage()} method).
      */
-    public NoValidProposalChosenException(String message) {
+    public NoValidProposalChosenException(@NonNull String message) {
         super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, message);
     }
 
     /**
      * Construct an instance of NoValidProposalChosenException.
      *
-     * @param message the descriptive message.
-     * @param cause the reason of exception.
+     * <p>Except for testing, IKE library users normally do not instantiate this object themselves
+     * but instead get a reference via {@link IkeSessionCallback} or {@link ChildSessionCallback}.
+     *
+     * @param message the descriptive message (which is saved for later retrieval by the {@link
+     *     #getMessage()} method).
+     * @param cause the cause (which is saved for later retrieval by the {@link #getCause()}
+     *     method).
      */
-    public NoValidProposalChosenException(String message, Throwable cause) {
+    public NoValidProposalChosenException(@NonNull String message, @NonNull Throwable cause) {
         super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, cause);
     }
 
@@ -55,11 +63,13 @@ public final class NoValidProposalChosenException extends IkeProtocolException {
      * Construct a instance of NoValidProposalChosenException from a notify payload.
      *
      * @param notifyData the notify data included in the payload.
+     * @hide
      */
     public NoValidProposalChosenException(byte[] notifyData) {
         super(ERROR_TYPE_NO_PROPOSAL_CHOSEN, notifyData);
     }
 
+    /** @hide */
     @Override
     protected boolean isValidDataLength(int dataLen) {
         return EXPECTED_ERROR_DATA_LEN == dataLen;

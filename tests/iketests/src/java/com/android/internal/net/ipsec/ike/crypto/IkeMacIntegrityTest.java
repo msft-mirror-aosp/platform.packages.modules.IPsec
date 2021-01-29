@@ -16,8 +16,12 @@
 
 package com.android.internal.net.ipsec.ike.crypto;
 
+import static android.net.IpSecAlgorithm.AUTH_AES_XCBC;
+
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -164,5 +168,45 @@ public final class IkeMacIntegrityTest {
         byte[] expectedBytes =
                 TestUtils.hexStringToByteArray(AUTH_AES128XCBC_CALCULATED_MAC_HEX_STRING1);
         assertArrayEquals(expectedBytes, calculatedBytes);
+    }
+
+    @Test
+    public void testBuildIpSecAlgorithmFromAuthAes128XCbcMac() throws Exception {
+        byte[] keyBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_KEY_HEX_STRING);
+
+        if (IpSecAlgorithm.getSupportedAlgorithms().contains(AUTH_AES_XCBC)) {
+            IpSecAlgorithm algo = mAes128XCbcIntgerityMac.buildIpSecAlgorithmWithKey(keyBytes);
+            assertEquals(AUTH_AES_XCBC, algo.getName());
+            assertArrayEquals(keyBytes, algo.getKey());
+        } else {
+            try {
+                mAes128XCbcIntgerityMac.buildIpSecAlgorithmWithKey(keyBytes);
+                fail("Expect to fail because this device does not support AES-XCBC for IPsec");
+            } catch (IllegalArgumentException expected) {
+            }
+        }
+    }
+
+    @Test
+    public void testGetIpSecAlgorithmName() throws Exception {
+        assertEquals(
+                IpSecAlgorithm.AUTH_HMAC_SHA1,
+                IkeMacIntegrity.getIpSecAlgorithmName(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96));
+        assertEquals(
+                IpSecAlgorithm.AUTH_AES_XCBC,
+                IkeMacIntegrity.getIpSecAlgorithmName(SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96));
+        assertEquals(
+                IpSecAlgorithm.AUTH_HMAC_SHA256,
+                IkeMacIntegrity.getIpSecAlgorithmName(
+                        SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128));
+        assertEquals(
+                IpSecAlgorithm.AUTH_HMAC_SHA384,
+                IkeMacIntegrity.getIpSecAlgorithmName(
+                        SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_384_192));
+        assertEquals(
+                IpSecAlgorithm.AUTH_HMAC_SHA512,
+                IkeMacIntegrity.getIpSecAlgorithmName(
+                        SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_512_256));
+        assertNull(IkeMacIntegrity.getIpSecAlgorithmName(SaProposal.INTEGRITY_ALGORITHM_NONE));
     }
 }

@@ -17,7 +17,9 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
+import android.annotation.SuppressLint;
+import android.net.IpSecManager;
+import android.net.IpSecManager.IpSecTunnelInterface;
 import android.net.IpSecTransform;
 import android.net.annotations.PolicyDirection;
 import android.net.ipsec.ike.exceptions.IkeException;
@@ -31,10 +33,10 @@ import android.net.ipsec.ike.exceptions.IkeException;
  *
  * <p>{@link ChildSessionCallback}s are also used for identifying Child Sessions. It is required
  * when a caller wants to delete a specific Child Session.
- *
- * @hide
  */
-@SystemApi
+// Using interface instead of abstract class to indicate this callback does not have any state or
+// implementation.
+@SuppressLint("CallbackInterface")
 public interface ChildSessionCallback {
     /**
      * Called when the Child Session setup succeeds.
@@ -90,6 +92,25 @@ public interface ChildSessionCallback {
      */
     void onIpSecTransformCreated(
             @NonNull IpSecTransform ipSecTransform, @PolicyDirection int direction);
+
+    /**
+     * Called when a pair of {@link IpSecTransform}s are migrated by this IKE Session.
+     *
+     * <p>This method is only called when a Child SA is migrated during a MOBIKE-enabled IKE
+     * Session.
+     *
+     * <p>When this method is invoked, the caller MUST re-apply the transforms to their {@link
+     * IpSecTunnelInterface} via {@link
+     * IpSecManager#applyTunnelModeTransform(android.net.IpSecManager.IpSecTunnelInterface, int,
+     * IpSecTransform)}.
+     *
+     * @param inIpSecTransform IpSecTransform to be used for traffic with {@link PolicyDirection}
+     *     {@link IpSecManager#DIRECTION_IN}
+     * @param outIpSecTransform IpSecTransform to be used for traffic with {@link PolicyDirection}
+     *     {@link IpSecManager#DIRECTION_OUT}
+     */
+    default void onIpSecTransformsMigrated(
+            @NonNull IpSecTransform inIpSecTransform, @NonNull IpSecTransform outIpSecTransform) {}
 
     /**
      * Called when an {@link IpSecTransform} is deleted by this Child Session.

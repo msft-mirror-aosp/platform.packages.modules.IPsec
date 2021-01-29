@@ -41,11 +41,11 @@ import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
 import android.util.Pair;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Attribute;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.AttributeDecoder;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;

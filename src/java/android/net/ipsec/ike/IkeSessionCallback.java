@@ -17,6 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -27,10 +28,10 @@ import android.net.ipsec.ike.exceptions.IkeProtocolException;
  * <p>{@link IkeSessionCallback} MUST be unique to each {@link IkeSession}. It is registered when
  * callers are requesting a new {@link IkeSession}. It is automatically unregistered when an {@link
  * IkeSession} is closed.
- *
- * @hide
  */
-@SystemApi
+// Using interface instead of abstract class to indicate this callback does not have any state or
+// implementation.
+@SuppressLint("CallbackInterface")
 public interface IkeSessionCallback {
     /**
      * Called when the {@link IkeSession} setup succeeds.
@@ -66,6 +67,48 @@ public interface IkeSessionCallback {
      * INVALID_MESSAGE_ID.
      *
      * @param exception the detailed error information.
+     * @deprecated Implementers should override {@link #onError(IkeException)} to handle {@link
+     *     IkeProtocolException}s instead of using this method.
+     * @hide
      */
-    void onError(@NonNull IkeProtocolException exception);
+    @SystemApi
+    @Deprecated
+    default void onError(@NonNull IkeProtocolException exception) {}
+
+    /**
+     * Called if a recoverable error is encountered in an established {@link IkeSession}.
+     *
+     * <p>This method may be triggered by protocol errors such as an INVALID_IKE_SPI, or by
+     * non-protocol errors such as the underlying {@link android.net.Network} dying.
+     *
+     * @param exception the detailed error information.
+     */
+    default void onError(@NonNull IkeException exception) {
+        if (exception instanceof IkeProtocolException) {
+            onError((IkeProtocolException) exception);
+            return;
+        }
+
+        // do nothing for non-protocol errors by default
+    }
+
+    /**
+     * Called if the IkeSessionConnectionInfo for an established {@link IkeSession} changes.
+     *
+     * <p>This method will only be called for MOBIKE-enabled Sessions, and only after a Mobility
+     * Event occurs.
+     *
+     * <p>A Mobility Event is an event that causes the established, MOBIKE-enabled IKE Session to
+     * undergo an address update. Specifically, these events are:
+     *
+     * <ul>
+     *   <li>The underlying Network changing, or
+     *   <li>The local address disappearing from the current (and unchanged) underlying Network, or
+     *   <li>The remote address changing.
+     * </ul>
+     *
+     * @param connectionInfo the updated IkeSessionConnectionInfo for the Session.
+     */
+    default void onIkeSessionConnectionInfoChanged(
+            @NonNull IkeSessionConnectionInfo connectionInfo) {}
 }
