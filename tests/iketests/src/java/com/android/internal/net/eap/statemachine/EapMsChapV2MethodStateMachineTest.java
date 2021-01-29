@@ -16,7 +16,8 @@
 
 package com.android.internal.net.eap.statemachine;
 
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_MSCHAP_V2;
+
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_AUTHENTICATOR_CHALLENGE;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_AUTHENTICATOR_RESPONSE;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_CHALLENGE;
