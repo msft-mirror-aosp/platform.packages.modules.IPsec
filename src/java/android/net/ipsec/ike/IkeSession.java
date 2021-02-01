@@ -17,7 +17,6 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
-import android.annotation.SystemApi;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.net.IpSecManager;
@@ -48,9 +47,7 @@ import java.util.concurrent.Executor;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
  *     Version 2 (IKEv2)</a>
- * @hide
  */
-@SystemApi
 public final class IkeSession implements AutoCloseable {
     private final CloseGuard mCloseGuard = new CloseGuard();
     private final Context mContext;
@@ -269,15 +266,16 @@ public final class IkeSession implements AutoCloseable {
     }
 
     /**
-     * Update the IkeSession's Network to use the specified Network.
+     * Update the IkeSession's underlying Network to use the specified Network.
      *
      * <p>Updating the IkeSession's Network also updates the Network for any Child Sessions created
      * with this IkeSession.
      *
      * <p>Once IkeSession has been updated to use the specified Network, the caller will be notified
-     * via {@link IkeSessionCallback#onIkeSessionConnectionInfoChanged}. The caller will also be
-     * notified for each migrated Child Session via {@link
-     * ChildSessionCallback#onIpsecTransformMigrated}.
+     * via {@link IkeSessionCallback#onIkeSessionConnectionInfoChanged(IkeSessionConnectionInfo)}.
+     * The caller will also be notified for each migrated Child Session via {@link
+     * ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
+     * android.net.IpSecTransform)}.
      *
      * <p>In order for Network migration to be possible, the following must be true:
      *
@@ -298,7 +296,6 @@ public final class IkeSession implements AutoCloseable {
      * @param network the Network to use for this IkeSession
      * @throws IllegalStateException if MOBIKE is not configured in IkeSessionParams, MOBIKE is not
      *     active for this IkeSession, or if the Network was not specified in IkeSessionParams.
-     * @hide
      */
     public void setNetwork(@NonNull Network network) {
         mIkeSessionStateMachine.setNetwork(network);

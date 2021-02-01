@@ -130,21 +130,8 @@ public final class IkeNormalModeCipher extends IkeCipher {
     }
 
     @Override
-    public IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key) {
-        validateKeyLenOrThrow(key);
-
-        switch (getAlgorithmId()) {
-            case SaProposal.ENCRYPTION_ALGORITHM_3DES:
-                // TODO: Consider supporting 3DES in IpSecTransform.
-                throw new UnsupportedOperationException("Do not support 3Des encryption.");
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_CBC:
-                return new IpSecAlgorithm(IpSecAlgorithm.CRYPT_AES_CBC, key);
-            case SaProposal.ENCRYPTION_ALGORITHM_AES_CTR:
-                return new IpSecAlgorithm(IpSecAlgorithm.CRYPT_AES_CTR, key);
-            default:
-                throw new IllegalArgumentException(
-                        "Unrecognized Encryption Algorithm ID: " + getAlgorithmId());
-        }
+    protected IpSecAlgorithm buildIpSecAlgorithmWithKeyImpl(byte[] key) {
+        return new IpSecAlgorithm(getIpSecAlgorithmName(getAlgorithmId()), key);
     }
 
     private static byte[] concatenateByteArray(byte[] left, byte[] right) {

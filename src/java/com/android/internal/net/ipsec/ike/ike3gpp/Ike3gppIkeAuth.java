@@ -25,8 +25,8 @@ import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchang
 import android.annotation.NonNull;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.ike.ike3gpp.Ike3gppBackoffTimer;
+import android.net.ipsec.ike.ike3gpp.Ike3gppData;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppInfo;
 import android.net.ipsec.ike.ike3gpp.Ike3gppN1ModeInformation;
 import android.util.ArraySet;
 
@@ -91,7 +91,7 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
     }
 
     void handleAuthResp(List<IkePayload> ike3gppPayloads) throws InvalidSyntaxException {
-        List<Ike3gppInfo> ike3gppInfos = new ArrayList<>();
+        List<Ike3gppData> ike3gppDataList = new ArrayList<>();
         List<IkeNotifyPayload> notifyPayloads =
                 IkePayload.getPayloadListForTypeInProvidedList(
                         IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class, ike3gppPayloads);
@@ -109,7 +109,7 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
 
                     byte[] snssai =
                             Ike3gppN1ModeUtils.getSnssaiFromNotifyData(notifyPayload.notifyData);
-                    ike3gppInfos.add(new Ike3gppN1ModeInformation(snssai));
+                    ike3gppDataList.add(new Ike3gppN1ModeInformation(snssai));
                     break;
                 case NOTIFY_TYPE_BACKOFF_TIMER:
                     backoffTimerPayload = notifyPayload;
@@ -135,12 +135,13 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
             byte backoffTimer =
                     Ike3gppBackoffTimerUtils.getBackoffTimerfromNotifyData(
                             backoffTimerPayload.notifyData);
-            ike3gppInfos.add(new Ike3gppBackoffTimer(backoffTimer, backoffTimerCause.notifyType));
+            ike3gppDataList.add(
+                    new Ike3gppBackoffTimer(backoffTimer, backoffTimerCause.notifyType));
         } else if (backoffTimerPayload != null) {
             logw("Received BACKOFF_TIMER payload without an Error-Notify");
         }
 
-        maybeInvokeUserCallback(ike3gppInfos);
+        maybeInvokeUserCallback(ike3gppDataList);
     }
 
     private void logd(String msg) {

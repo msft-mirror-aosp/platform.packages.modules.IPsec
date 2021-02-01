@@ -32,6 +32,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATU
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PARTIAL;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
 import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
@@ -68,6 +69,7 @@ import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
@@ -86,7 +88,7 @@ import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
-import android.net.ipsec.ike.exceptions.IkeNetworkDiedException;
+import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidKeException;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -161,6 +163,7 @@ import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -241,8 +244,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     // indicates that something has gone wrong, and we are out of sync.
     @VisibleForTesting
     static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
-
-    @VisibleForTesting static final int NATT_KEEPALIVE_DELAY_SECONDS = 10;
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -435,6 +436,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting InetAddress mRemoteAddress;
     /** Local port assigned on device. Initialized in Initial State. */
     @VisibleForTesting int mLocalPort;
+
+    /** Available remote addresses that are v4. Resolved in Initial State. */
+    @VisibleForTesting final List<Inet4Address> mRemoteAddressesV4 = new ArrayList<>();
+    /** Available remote addresses that are v6. Resolved in Initial State. */
+    @VisibleForTesting final List<Inet6Address> mRemoteAddressesV6 = new ArrayList<>();
 
     /** Indicates if both sides support NAT traversal. Set in IKE INIT. */
     @VisibleForTesting boolean mSupportNatTraversal;
@@ -884,6 +890,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** Switch all IKE SAs to the new IKE socket due to an underlying network change. */
     private void switchToIkeSocket(IkeSocket newSocket) {
+        // Changing IkeSockets - make sure to quit NAT-T keepalive if it's going
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.stop();
+            mIkeNattKeepalive = null;
+        }
+
         long currentLocalSpi = mCurrentIkeSaRecord.getLocalSpi();
         migrateSpiToIkeSocket(currentLocalSpi, mIkeSocket, newSocket);
 
@@ -898,6 +910,28 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         mIkeSocket.releaseReference(this);
         mIkeSocket = newSocket;
+    }
+
+    private void buildAndSwitchToIkeSocketWithPort4500(boolean isIpv4) {
+        try {
+            if (isIpv4) {
+                IkeSocket newSocket =
+                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                                mNetwork,
+                                mIpSecManager,
+                                IkeSessionStateMachine.this,
+                                getHandler().getLooper());
+                switchToIkeSocket(newSocket);
+                mIkeNattKeepalive = buildAndStartNattKeepalive();
+            } else {
+                IkeSocket newSocket =
+                        IkeUdp6WithEncapPortSocket.getInstance(
+                                mNetwork, IkeSessionStateMachine.this, getHandler());
+                switchToIkeSocket(newSocket);
+            }
+        } catch (ErrnoException | IOException | ResourceUnavailableException e) {
+            handleIkeFatalError(e);
+        }
     }
 
     private void migrateSpiToIkeSocket(long localSpi, IkeSocket oldSocket, IkeSocket newSocket) {
@@ -1177,9 +1211,21 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void enterState() {
             try {
-                // TODO(b/149954916): Do DNS resolution asynchronously and support resolving
-                // multiple addresses.
-                mRemoteAddress = mNetwork.getByName(mIkeSessionParams.getServerHostname());
+                // TODO(b/149954916): Do DNS resolution asynchronously
+                InetAddress[] allRemoteAddresses =
+                        mNetwork.getAllByName(mIkeSessionParams.getServerHostname());
+
+                logd("Resolved addresses for peer: " + Arrays.toString(allRemoteAddresses));
+
+                for (InetAddress remoteAddress : allRemoteAddresses) {
+                    if (remoteAddress instanceof Inet4Address) {
+                        mRemoteAddressesV4.add((Inet4Address) remoteAddress);
+                    } else {
+                        mRemoteAddressesV6.add((Inet6Address) remoteAddress);
+                    }
+                }
+
+                setRemoteAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 if (isIpv4) {
@@ -1213,6 +1259,33 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 default:
                     return NOT_HANDLED;
             }
+        }
+    }
+
+    /**
+     * Set the remote address for the peer.
+     *
+     * <p>Prefers IPv6 addresses if:
+     *
+     * <ul>
+     *   <li>an IPv6 address is known for the peer, and
+     *   <li>the current underlying Network has a global (non-link local) IPv6 address available
+     * </ul>
+     *
+     * Otherwise, an IPv4 address will be used.
+     */
+    private void setRemoteAddress() {
+        LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
+        if (!mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address()) {
+            // TODO(b/175348096): randomly choose from available addresses
+            mRemoteAddress = mRemoteAddressesV6.get(0);
+        } else {
+            if (mRemoteAddressesV4.isEmpty()) {
+                throw new IllegalArgumentException("No valid IPv4 or IPv6 addresses for peer");
+            }
+
+            // TODO(b/175348096): randomly choose from available addresses
+            mRemoteAddress = mRemoteAddressesV4.get(0);
         }
     }
 
@@ -1332,6 +1405,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     break;
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // fallthrough
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE: // fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     deferMessage(message);
                     transitionTo(mChildProcedureOngoing);
@@ -1417,7 +1491,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         intent.putExtras(bundle);
 
         return PendingIntent.getBroadcast(
-                context, 0 /*requestCode unused*/, intent, 0 /*default flags*/);
+                context, 0 /* requestCode; unused */, intent, PendingIntent.FLAG_IMMUTABLE);
     }
 
     /**
@@ -1616,6 +1690,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 case CMD_LOCAL_REQUEST_CREATE_CHILD: // Fallthrough
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // Fallthrough
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE: // Fallthrough
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     ChildLocalRequest childReq = (ChildLocalRequest) req;
                     if (childReq.procedureType != requestVal) {
@@ -1998,7 +2073,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             IkeNotifyPayload notify = (IkeNotifyPayload) payload;
                             if (notify.notifyType == NOTIFY_TYPE_COOKIE2) {
                                 infoPayloadList.add(
-                                        IkeNotifyPayload.handleCookie2AndGenerateResponse(notify));
+                                        IkeNotifyPayload.handleCookie2AndGenerateCopy(notify));
                             }
 
                             // No action for other notifications
@@ -2457,7 +2532,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             childData.respPayloads,
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNatDetected(),
+                            getEncapSocketOrNull(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     return HANDLED;
@@ -2508,16 +2583,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         // Returns the UDP-Encapsulation socket to the newly created ChildSessionStateMachine if
-        // a NAT is detected. It allows the ChildSessionStateMachine to build IPsec transforms that
-        // can send and receive IPsec traffic through a NAT.
-        private UdpEncapsulationSocket getEncapSocketIfNatDetected() {
-            boolean isNatDetected = mLocalNatDetected || mRemoteNatDetected;
-
-            if (!isNatDetected) return null;
-
+        // a NAT is detected or if NAT-T AND MOBIKE are enabled by both parties. It allows the
+        // ChildSessionStateMachine to build IPsec transforms that can send and receive IPsec
+        // traffic through a NAT.
+        private UdpEncapsulationSocket getEncapSocketOrNull() {
             if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
-                throw new IllegalStateException(
-                        "NAT is detected but IKE packet is not UDP-Encapsulated.");
+                return null;
             }
             return ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket();
         }
@@ -2544,12 +2615,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     mChildInLocalProcedure.createChildSession(
                             mLocalAddress,
                             mRemoteAddress,
-                            getEncapSocketIfNatDetected(),
+                            getEncapSocketOrNull(),
                             mIkePrf,
                             mCurrentIkeSaRecord.getSkD());
                     break;
                 case CMD_LOCAL_REQUEST_REKEY_CHILD:
                     mChildInLocalProcedure.rekeyChildSession();
+                    break;
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE:
+                    mChildInLocalProcedure.rekeyChildSessionForMobike(
+                            mLocalAddress, mRemoteAddress, getEncapSocketOrNull());
                     break;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD:
                     mChildInLocalProcedure.deleteChildSession();
@@ -2856,21 +2931,25 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void enterState() {
             try {
-                IkeMessage request = buildIkeInitReq();
-
-                // Register local SPI to receive the IKE INIT response.
-                mIkeSocket.registerIke(
-                        request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
-
-                mIkeInitRequestBytes = request.encode();
-                mIkeInitNoncePayload =
-                        request.getPayloadForType(
-                                IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
-                mRetransmitter = new UnencryptedRetransmitter(request);
+                sendRequest(buildIkeInitReq());
             } catch (IOException e) {
                 // Fail to assign IKE SPI
                 handleIkeFatalError(e);
             }
+        }
+
+        private void sendRequest(IkeMessage request) {
+            // Register local SPI to receive the IKE INIT response.
+            mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
+
+            mIkeInitRequestBytes = request.encode();
+            mIkeInitNoncePayload =
+                    request.getPayloadForType(IkePayload.PAYLOAD_TYPE_NONCE, IkeNoncePayload.class);
+
+            if (mRetransmitter != null) {
+                mRetransmitter.stopRetransmitting();
+            }
+            mRetransmitter = new UnencryptedRetransmitter(request);
         }
 
         @Override
@@ -2949,10 +3028,41 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
+        /** Returns the Notify-Cookie payload, or null if it does not exist */
+        private IkeNotifyPayload getNotifyCookie(IkeMessage ikeMessage) {
+            List<IkeNotifyPayload> notifyPayloads =
+                    ikeMessage.getPayloadListForType(PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+            for (IkeNotifyPayload notify : notifyPayloads) {
+                if (notify.notifyType == NOTIFY_TYPE_COOKIE) {
+                    return notify;
+                }
+            }
+            return null;
+        }
+
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
             boolean ikeInitSuccess = false;
             try {
+                int exchangeType = ikeMessage.ikeHeader.exchangeType;
+                if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
+                    throw new InvalidSyntaxException(
+                            "Expected EXCHANGE_TYPE_IKE_SA_INIT but received: " + exchangeType);
+                }
+
+                // Retry IKE INIT if there is Notify-Cookie
+                IkeNotifyPayload inCookiePayload = getNotifyCookie(ikeMessage);
+                if (inCookiePayload != null) {
+                    IkeNotifyPayload outCookiePayload =
+                            IkeNotifyPayload.handleCookieAndGenerateCopy(inCookiePayload);
+                    IkeMessage initReq =
+                            buildReqWithCookie(mRetransmitter.getMessage(), outCookiePayload);
+
+                    sendRequest(initReq);
+                    return;
+                }
+
+                // Negotiate IKE SA
                 validateIkeInitResp(mRetransmitter.getMessage(), ikeMessage);
 
                 mCurrentIkeSaRecord =
@@ -3066,17 +3176,44 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             return new IkeMessage(ikeHeader, payloadList);
         }
 
+        /**
+         * Builds an IKE INIT request that has the same payloads and SPI with the original request,
+         * and with the new Notify-Cookie Payload as the first payload.
+         */
+        private IkeMessage buildReqWithCookie(
+                IkeMessage originalReq, IkeNotifyPayload cookieNotify) {
+            List<IkePayload> payloads = new ArrayList<>();
+
+            // Notify-Cookie MUST be the first payload.
+            payloads.add(cookieNotify);
+
+            for (IkePayload payload : originalReq.ikePayloadList) {
+                // Keep all previous payloads except COOKIEs
+                if (payload instanceof IkeNotifyPayload
+                        && ((IkeNotifyPayload) payload).notifyType == NOTIFY_TYPE_COOKIE) {
+                    continue;
+                }
+                payloads.add(payload);
+            }
+
+            IkeHeader originalHeader = originalReq.ikeHeader;
+            IkeHeader header =
+                    new IkeHeader(
+                            originalHeader.ikeInitiatorSpi,
+                            originalHeader.ikeResponderSpi,
+                            PAYLOAD_TYPE_NOTIFY,
+                            IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT,
+                            false /* isResponseMsg */,
+                            true /* fromIkeInitiator */,
+                            0 /* messageId */);
+            return new IkeMessage(header, payloads);
+        }
+
         private void validateIkeInitResp(IkeMessage reqMsg, IkeMessage respMsg)
                 throws IkeProtocolException, IOException {
             IkeHeader respIkeHeader = respMsg.ikeHeader;
             mRemoteIkeSpiResource =
                     mIkeSpiGenerator.allocateSpi(mRemoteAddress, respIkeHeader.ikeResponderSpi);
-
-            int exchangeType = respIkeHeader.exchangeType;
-            if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
-                throw new InvalidSyntaxException(
-                        "Expected EXCHANGE_TYPE_IKE_SA_INIT but received: " + exchangeType);
-            }
 
             IkeSaPayload respSaPayload = null;
             IkeKePayload respKePayload = null;
@@ -3225,20 +3362,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                     IkeSessionStateMachine.this,
                                     getHandler().getLooper());
                     switchToIkeSocket(initIkeSpi, newSocket);
+                    mIkeNattKeepalive = buildAndStartNattKeepalive();
+                    mLocalPort = mIkeSocket.getLocalPort();
                 } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                     handleIkeFatalError(e);
                 }
-
-                mIkeNattKeepalive =
-                        new IkeNattKeepalive(
-                                mContext,
-                                NATT_KEEPALIVE_DELAY_SECONDS,
-                                (Inet4Address) mLocalAddress,
-                                (Inet4Address) mRemoteAddress,
-                                ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
-                                mIkeSocket.getNetwork(),
-                                buildKeepaliveIntent());
-                mIkeNattKeepalive.start();
             }
         }
 
@@ -3247,14 +3375,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             migrateSpiToIkeSocket(localSpi, mIkeSocket, newSocket);
             mIkeSocket.releaseReference(IkeSessionStateMachine.this);
             mIkeSocket = newSocket;
-        }
-
-        private PendingIntent buildKeepaliveIntent() {
-            return buildIkeAlarmIntent(
-                    mContext,
-                    ACTION_KEEPALIVE,
-                    getIntentIdentifier(),
-                    obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE));
         }
 
         @Override
@@ -3332,6 +3452,34 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mRemoteNatDetected = false;
             }
         }
+    }
+
+    /** Starts NAT-T keepalive for current IkeUdpEncapSocket */
+    private IkeNattKeepalive buildAndStartNattKeepalive() throws IOException {
+        if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
+            throw new IllegalStateException(
+                    "Cannot start NAT-T keepalive when IKE Session is not using UDP Encap socket");
+        }
+
+        PendingIntent keepaliveIntent =
+                buildIkeAlarmIntent(
+                        mContext,
+                        ACTION_KEEPALIVE,
+                        getIntentIdentifier(),
+                        obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE));
+
+        IkeNattKeepalive keepalive =
+                new IkeNattKeepalive(
+                        mContext,
+                        mConnectivityManager,
+                        mIkeSessionParams.getNattKeepAliveDelaySeconds(),
+                        (Inet4Address) mLocalAddress,
+                        (Inet4Address) mRemoteAddress,
+                        ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
+                        mIkeSocket.getNetwork(),
+                        keepaliveIntent);
+        keepalive.start();
+        return keepalive;
     }
 
     /**
@@ -3485,8 +3633,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mSupportMobike = true;
                 mEnabledExtensions.add(EXTENSION_TYPE_MOBIKE);
 
-                // TODO(b/173237734): use port 4500 if NAT-T is enabled
-
                 try {
                     if (mIkeSessionParams.getConfiguredNetwork() != null) {
                         // Caller configured a specific Network - track it
@@ -3507,6 +3653,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     // Error occurred while registering the NetworkCallback
                     throw new IkeInternalException("Error while registering NetworkCallback", e);
                 }
+
+                // Use port 4500 if NAT-T is enabled
+                if (mSupportNatTraversal && !(mIkeSocket instanceof IkeUdpEncapSocket)) {
+                    buildAndSwitchToIkeSocketWithPort4500(mIkeSocket instanceof IkeUdp4Socket);
+                    try {
+                        mLocalPort = mIkeSocket.getLocalPort();
+                    } catch (ErrnoException e) {
+                        throw new IkeInternalException(e);
+                    }
+                }
+
                 return;
             } else {
                 // Unknown and unexpected status notifications are ignored as per
@@ -5090,7 +5247,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void handleRequestIkeMessage(
                 IkeMessage msg, int ikeExchangeSubType, Message message) {
-            // TODO(b/172014224): handle competing IKE req (Delete or otherwise)
+            switch (ikeExchangeSubType) {
+                case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
+                    handleDeleteSessionRequest(msg);
+                    break;
+
+                default:
+                    // Send a temporary failure for all non-DELETE_IKE requests
+                    buildAndSendErrorNotificationResponse(
+                            mCurrentIkeSaRecord,
+                            msg.ikeHeader.messageId,
+                            ERROR_TYPE_TEMPORARY_FAILURE);
+            }
         }
 
         @Override
@@ -5100,8 +5268,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             try {
                 validateResp(resp);
 
-                // TODO(b/172015298): migrate Child SAs or schedule rekey
-                // TODO(b/172013873): notify caller of Network Change, IPsec SA changes
+                migrateAllChildSAs();
+
+                IkeSessionConnectionInfo connectionInfo =
+                        new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
+                executeUserCallback(
+                        () ->
+                                mIkeSessionCallback.onIkeSessionConnectionInfoChanged(
+                                        connectionInfo));
 
                 transitionTo(mIdle);
             } catch (IkeProtocolException | IOException e) {
@@ -5189,6 +5363,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     resp.ikeHeader.ikeResponderSpi,
                     natSourcePayloads,
                     natDestPayload);
+        }
+
+        private void migrateAllChildSAs() {
+            // TODO(b/172015298): migrate Child SAs directly if Kernel support
+
+            // Schedule MOBIKE Rekeys for all Child Sessions
+            for (int i = 0; i < mRemoteSpiToChildSessionMap.size(); i++) {
+                int remoteChildSpi = mRemoteSpiToChildSessionMap.keyAt(i);
+                sendMessage(
+                        CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE,
+                        mLocalRequestFactory.getChildLocalRequest(
+                                CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE, remoteChildSpi));
+            }
         }
     }
 
@@ -5328,36 +5515,35 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             throw new IllegalStateException("MOBIKE must be enabled to update the Network");
         }
 
-        // TODO(b/172060298): prefer IPv6 once Responder addresses are cached
-        boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
         Network oldNetwork = mNetwork;
         mNetwork = network;
+
+        setRemoteAddress();
+
+        boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
         try {
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
             if (!mNetwork.equals(oldNetwork)) {
-                // Changing IkeSockets - make sure to quit NAT-T keepalive if it's going
-                if (mIkeNattKeepalive != null) {
-                    mIkeNattKeepalive.stop();
-                    mIkeNattKeepalive = null;
-                }
-
-                IkeSocket newSocket;
-                // TODO(b/173237734): use port 4500 if NAT-T is enabled
-                if (isIpv4) {
-                    newSocket =
-                            IkeUdp4Socket.getInstance(
-                                    mNetwork, IkeSessionStateMachine.this, getHandler());
+                // Use port 4500 if NAT-T is supported by both sides
+                if (mSupportNatTraversal) {
+                    buildAndSwitchToIkeSocketWithPort4500(isIpv4);
                 } else {
-                    newSocket =
-                            IkeUdp6Socket.getInstance(
-                                    mNetwork, IkeSessionStateMachine.this, getHandler());
+                    IkeSocket newSocket;
+                    if (isIpv4) {
+                        newSocket =
+                                IkeUdp4Socket.getInstance(
+                                        mNetwork, IkeSessionStateMachine.this, getHandler());
+                    } else {
+                        newSocket =
+                                IkeUdp6Socket.getInstance(
+                                        mNetwork, IkeSessionStateMachine.this, getHandler());
+                    }
+                    switchToIkeSocket(newSocket);
                 }
-                switchToIkeSocket(newSocket);
-                mLocalPort = mIkeSocket.getLocalPort();
             }
-
+            mLocalPort = mIkeSocket.getLocalPort();
             mLocalAddress =
                     mIkeLocalAddressGenerator.generateLocalAddress(
                             mNetwork, isIpv4, mRemoteAddress, mIkeSocket.getIkeServerPort());
@@ -5391,6 +5577,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onUnderlyingNetworkDied() {
         executeUserCallback(
-                () -> mIkeSessionCallback.onError(new IkeNetworkDiedException(mNetwork)));
+                () -> mIkeSessionCallback.onError(new IkeNetworkLostException(mNetwork)));
     }
 }

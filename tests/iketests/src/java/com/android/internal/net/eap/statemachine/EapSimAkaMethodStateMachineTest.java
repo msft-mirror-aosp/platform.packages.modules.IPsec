@@ -16,8 +16,10 @@
 
 package com.android.internal.net.eap.statemachine;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_SIM;
+
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.COMPUTED_MAC;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SIM_CHALLENGE_RESPONSE_MAC_INPUT;
@@ -46,8 +48,13 @@ import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSK
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ORIGINAL_MAC;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.SRES_1;
 import static com.android.internal.net.eap.message.EapTestMessageDefinitions.SRES_BYTES;
+import static com.android.internal.net.eap.message.simaka.EapAkaTypeData.EAP_AKA_CHALLENGE;
+import static com.android.internal.net.eap.message.simaka.EapAkaTypeData.EAP_AKA_CLIENT_ERROR;
 import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtNotification.GENERAL_FAILURE_POST_CHALLENGE;
 import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtNotification.GENERAL_FAILURE_PRE_CHALLENGE;
+import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_CHECKCODE;
+import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_ENCR_DATA;
+import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_IV;
 import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_MAC;
 import static com.android.internal.net.eap.message.simaka.EapSimTypeData.EAP_SIM_CHALLENGE;
 import static com.android.internal.net.eap.message.simaka.EapSimTypeData.EAP_SIM_CLIENT_ERROR;
@@ -80,6 +87,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import android.net.eap.EapSessionConfig.EapAkaConfig;
 import android.net.eap.EapSessionConfig.EapSimConfig;
 import android.telephony.TelephonyManager;
 
@@ -91,13 +99,17 @@ import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.exceptions.simaka.EapSimAkaAuthenticationFailureException;
 import com.android.internal.net.eap.message.EapData;
 import com.android.internal.net.eap.message.EapMessage;
+import com.android.internal.net.eap.message.simaka.EapAkaTypeData;
 import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute;
+import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtAutn;
 import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtClientErrorCode;
 import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtIdentity;
 import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtMac;
 import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtNotification;
+import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtRandAka;
 import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtRandSim;
 import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtSelectedVersion;
+import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EapSimAkaUnsupportedAttribute;
 import com.android.internal.net.eap.message.simaka.EapSimAkaTypeData;
 import com.android.internal.net.eap.message.simaka.EapSimTypeData;
 import com.android.internal.net.eap.statemachine.EapMethodStateMachine.EapMethodState;
@@ -134,18 +146,40 @@ public class EapSimAkaMethodStateMachineTest {
     // K_encr + K_aut + MSK + EMSK
     private static final int PRF_OUTPUT_BYTES = (2 * KEY_LEN) + (2 * SESSION_KEY_LENGTH);
 
+    private static final String AKA_RAND = "648EAAB01CA1BFEB9E9708852D445DA5";
+    private static final String AUTN = "80CEABF08239000093281F9A178246B8";
+    private static final String IV_DATA = "3232C4A5A2D97B39BCF55FA7BEFCCBF52D26";
+    private static final String ENCR_DATA =
+            "3566EA8CF174FB4A94488E56B6E8DFC25F05B100BEABDA5DDBAC18968D8158FEDF1F";
+    private static final String AKA_MAC_RESERVED_BYTES = "7469";
+    private static final String AKA_MAC = "5198169B1AC51CA0A193FDEEE7981E16";
+    private static final int AT_CHECKCODE_LENGTH = 4;
+    private static final int AT_IV_LENGTH = 20;
+    private static final int AT_ENCR_DATA_LENGTH = 36; // variable length, not IANA specified
+
+    private static final byte[] EAP_AKA_REQUEST_FOR_MAC =
+            hexStringToByteArray(
+                    "01020080" // EAP-Request | ID | length in bytes
+                            + "17010000" // EAP-AKA | Challenge | 2B padding
+                            + "01050000" + AKA_RAND // EAP-AKA AT_RAND attr
+                            + "02050000" + AUTN // AT_AUTN attr
+                            + "86010000" // AT_CHECKCODE attr
+                            + "8105" + IV_DATA // AT_IV attr
+                            + "8209" + ENCR_DATA // AT_ENCR_DATA attr
+                            + "0B05" + AKA_MAC_RESERVED_BYTES + AKA_MAC); // AT_MAC attr
+
     private TelephonyManager mMockTelephonyManager;
-    private EapSimConfig mEapSimConfig;
     private EapSimAkaMethodStateMachine mStateMachine;
 
     @Before
     public void setUp() {
         mMockTelephonyManager = mock(TelephonyManager.class);
-        mEapSimConfig = new EapSimConfig(SUB_ID, TelephonyManager.APPTYPE_USIM);
 
         mStateMachine =
                 new EapSimAkaMethodStateMachine(
-                        mMockTelephonyManager, EAP_IDENTITY_BYTES, mEapSimConfig) {
+                        mMockTelephonyManager,
+                        EAP_IDENTITY_BYTES,
+                        new EapSimConfig(SUB_ID, TelephonyManager.APPTYPE_USIM)) {
                     @Override
                     EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
                         return new EapSimTypeData(
@@ -473,5 +507,70 @@ public class EapSimAkaMethodStateMachineTest {
         assertEquals(KEY_LEN, mStateMachine.getKAutLength());
         assertEquals(SESSION_KEY_LENGTH, mStateMachine.getMskLength());
         assertEquals(SESSION_KEY_LENGTH, mStateMachine.getEmskLength());
+    }
+
+    @Test
+    public void testIsValidMac() throws Exception {
+        // Data expects an EAP-AKA state machine
+        mStateMachine = buildEapAkaStateMachineWithKAut(K_AUT);
+
+        EapMessage message = EapMessage.decode(EAP_AKA_REQUEST_FOR_MAC);
+
+        AtRandAka atRand = new AtRandAka(hexStringToByteArray(AKA_RAND));
+        AtAutn atAutn = new AtAutn(hexStringToByteArray(AUTN));
+
+        // AT_CHECKCODE is formatted: ATTR_TYPE (1B) + Length (1B) + reserved bytes (2B)
+        EapSimAkaUnsupportedAttribute atCheckcode =
+                new EapSimAkaUnsupportedAttribute(
+                        EAP_AT_CHECKCODE, AT_CHECKCODE_LENGTH, new byte[2]);
+        EapSimAkaUnsupportedAttribute atIv =
+                new EapSimAkaUnsupportedAttribute(
+                        EAP_AT_IV, AT_IV_LENGTH, hexStringToByteArray(IV_DATA));
+        EapSimAkaUnsupportedAttribute atEncrData =
+                new EapSimAkaUnsupportedAttribute(
+                        EAP_AT_ENCR_DATA, AT_ENCR_DATA_LENGTH, hexStringToByteArray(ENCR_DATA));
+        AtMac atMac =
+                new AtMac(
+                        hexStringToByteArray(AKA_MAC_RESERVED_BYTES),
+                        hexStringToByteArray(AKA_MAC));
+        EapSimAkaTypeData typeData =
+                new EapAkaTypeData(
+                        EAP_AKA_CHALLENGE,
+                        Arrays.asList(atRand, atAutn, atCheckcode, atIv, atEncrData, atMac));
+
+        // No extra data for EAP-AKA
+        byte[] extraData = new byte[0];
+
+        assertTrue(mStateMachine.isValidMac("testIsValidMac", message, typeData, extraData));
+    }
+
+    private EapSimAkaMethodStateMachine buildEapAkaStateMachineWithKAut(byte[] kAut) {
+        EapSimAkaMethodStateMachine stateMachine =
+                new EapSimAkaMethodStateMachine(
+                        mMockTelephonyManager,
+                        EAP_IDENTITY_BYTES,
+                        new EapAkaConfig(SUB_ID, TelephonyManager.APPTYPE_USIM)) {
+                    @Override
+                    EapSimAkaTypeData getEapSimAkaTypeData(AtClientErrorCode clientErrorCode) {
+                        return new EapAkaTypeData(
+                                EAP_AKA_CLIENT_ERROR, Arrays.asList(clientErrorCode));
+                    }
+
+                    @Override
+                    EapSimAkaTypeData getEapSimAkaTypeData(
+                            int eapSubtype, List<EapSimAkaAttribute> attributes) {
+                        return new EapAkaTypeData(eapSubtype, attributes);
+                    }
+
+                    @Override
+                    int getEapMethod() {
+                        return EAP_TYPE_AKA;
+                    }
+                };
+
+        // set K_AUT for the state machine
+        System.arraycopy(kAut, 0, stateMachine.mKAut, 0, stateMachine.getKAutLength());
+
+        return stateMachine;
     }
 }

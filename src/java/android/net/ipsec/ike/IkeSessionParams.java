@@ -66,10 +66,7 @@ import java.util.concurrent.TimeUnit;
  *
  * <p>Note that all negotiated configurations will be reused during rekey including SA Proposal and
  * lifetime.
- *
- * @hide
  */
-@SystemApi
 public final class IkeSessionParams {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -120,17 +117,50 @@ public final class IkeSessionParams {
     /**
      * If set, the IKE library will attempt to enable MOBIKE for the resulting IKE Session.
      *
+     * <p>To support MOBIKE, callers must implement:
+     *
+     * <ul>
+     *   <li>{@link IkeSessionCallback#onIkeSessionConnectionInfoChanged(IkeSessionConnectionInfo)}:
+     *       this MUST migrate all IpSecTunnelInterface instances associated with this IkeSession.
+     *   <li>{@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
+     *       android.net.IpSecTransform)}: this MUST re-apply the migrated transforms to the
+     *       IpSecTunnelInterface associated with this ChildSessionCallback, via {@link
+     *       android.net.IpSecManager#applyTunnelModeTransform(
+     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform)}.
+     * </ul>
+     *
+     * <p>MOBIKE support is compatible with two Network modes:
+     *
+     * <ul>
+     *   <li><b>Caller managed:</b> The caller controls the underlying Network for the IKE Session
+     *       at all times. The IKE Session will only change underlying Networks if the caller
+     *       initiates it through {@link IkeSession#setNetwork(Network)}. If the caller-specified
+     *       Network is lost, they will be notified via {@link
+     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
+     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException} specifying the Network
+     *       that was lost.
+     *   <li><b>Platform Default:</b> The IKE Session will always track the application default
+     *       Network. The IKE Session will start on the application default Network, and any
+     *       subsequent changes to the default Network (after the IKE_AUTH exchange completes) will
+     *       cause the IKE Session's underlying Network to change. If the default Network is lost
+     *       with no replacements, the caller will be notified via {@link
+     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
+     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException}. The caller can either
+     *       wait until for a new default Network to become available or they may close the Session
+     *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
+     *       retransmissions may expire while waiting for a new default Network, in which case the
+     *       Session will automatically close.
+     * </ul>
+     *
      * <p>Use of MOBIKE in the IKE Session requires the peer to also support MOBIKE.
      *
      * <p>If this option is set for an IKE Session, Transport-mode SAs will not be allowed in that
      * Session.
      *
      * <p>Checking for MOBIKE use in an IKE Session is done via {@link
-     * IkeSessionConfiguration#isIkeExtensionEnabled}.
-     *
-     * @hide
+     * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      */
-    // TODO(b/170770939): update javadoc scoping to SDK S+
+    // TODO(b/175416035): update docs to @link to API for migrating IpSecTunnelInterfaces
     public static final int IKE_OPTION_MOBIKE = 2;
 
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
@@ -160,6 +190,13 @@ public final class IkeSessionParams {
     @VisibleForTesting static final int IKE_DPD_DELAY_SEC_DEFAULT = 120; // 2 minutes
 
     /** @hide */
+    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MIN = 10;
+    /** @hide */
+    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MAX = 3600;
+    /** @hide */
+    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT = 10;
+
+    /** @hide */
     @VisibleForTesting static final int IKE_RETRANS_TIMEOUT_MS_MIN = 500;
     /** @hide */
     @VisibleForTesting
@@ -183,6 +220,7 @@ public final class IkeSessionParams {
     private static final String HARD_LIFETIME_SEC_KEY = "mHardLifetimeSec";
     private static final String SOFT_LIFETIME_SEC_KEY = "mSoftLifetimeSec";
     private static final String DPD_DELAY_SEC_KEY = "mDpdDelaySec";
+    private static final String NATT_KEEPALIVE_DELAY_SEC_KEY = "mNattKeepaliveDelaySec";
     private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
 
     @NonNull private final String mServerHostname;
@@ -210,6 +248,8 @@ public final class IkeSessionParams {
 
     private final int mDpdDelaySec;
 
+    private final int mNattKeepaliveDelaySec;
+
     private final boolean mIsIkeFragmentationSupported;
 
     private IkeSessionParams(
@@ -228,6 +268,7 @@ public final class IkeSessionParams {
             int hardLifetimeSec,
             int softLifetimeSec,
             int dpdDelaySec,
+            int nattKeepaliveDelaySec,
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
         mNetwork = network;
@@ -253,6 +294,8 @@ public final class IkeSessionParams {
         mSoftLifetimeSec = softLifetimeSec;
 
         mDpdDelaySec = dpdDelaySec;
+
+        mNattKeepaliveDelaySec = nattKeepaliveDelaySec;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
@@ -322,6 +365,7 @@ public final class IkeSessionParams {
         builder.setLifetimeSeconds(
                 in.getInt(HARD_LIFETIME_SEC_KEY), in.getInt(SOFT_LIFETIME_SEC_KEY));
         builder.setDpdDelaySeconds(in.getInt(DPD_DELAY_SEC_KEY));
+        builder.setNattKeepAliveDelaySeconds(in.getInt(NATT_KEEPALIVE_DELAY_SEC_KEY));
 
         // Fragmentation policy is not configurable. IkeSessionParams will always be constructed to
         // support fragmentation.
@@ -367,6 +411,7 @@ public final class IkeSessionParams {
         result.putInt(HARD_LIFETIME_SEC_KEY, mHardLifetimeSec);
         result.putInt(SOFT_LIFETIME_SEC_KEY, mSoftLifetimeSec);
         result.putInt(DPD_DELAY_SEC_KEY, mDpdDelaySec);
+        result.putInt(NATT_KEEPALIVE_DELAY_SEC_KEY, mNattKeepaliveDelaySec);
         result.putBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY, mIsIkeFragmentationSupported);
 
         return result;
@@ -382,16 +427,7 @@ public final class IkeSessionParams {
         return mServerHostname;
     }
 
-    // TODO: b/151984042 Keep #getNetwork @SystemApi and make #getConfiguredNetwork public
-
-    /**
-     * Retrieves the configured {@link Network}, or null if not configured
-     *
-     * <p>This is the initially-configured Network (with MOBIKE, the caller may later specify a new
-     * Network and that update will not persist to here).
-     *
-     * @hide
-     */
+    /** Retrieves the configured {@link Network}, or null if was not set */
     @Nullable
     public Network getConfiguredNetwork() {
         return mCallerConfiguredNetwork;
@@ -405,14 +441,20 @@ public final class IkeSessionParams {
      * informational because if MOBIKE is enabled, IKE Session may switch to a different default
      * Network.
      *
-     * <p>This is method will be deprecated. Callers should use {@link #getConfiguredNetwork}
+     * @hide
+     * @deprecated Callers should use {@link #getConfiguredNetwork}. This method is deprecated
+     *     because its name makes it sound like it will return the actual network the session is
+     *     running on, when it will only return the network that was configured or resolved in the
+     *     builder.
      */
+    @Deprecated
+    @SystemApi
     @NonNull
     public Network getNetwork() {
         return mNetwork;
     }
 
-    /** Retrieves all ChildSaProposals configured */
+    /** Retrieves all IkeSaProposals configured */
     @NonNull
     public List<IkeSaProposal> getSaProposals() {
         return Arrays.asList(mSaProposals);
@@ -464,9 +506,19 @@ public final class IkeSessionParams {
     }
 
     /** Retrieves the Dead Peer Detection(DPD) delay in seconds */
+    // Use "second" because smaller unit does not make sense to a DPD delay.
+    @SuppressLint("MethodNameUnits")
     @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
     public int getDpdDelaySeconds() {
         return mDpdDelaySec;
+    }
+
+    /** Retrieves the Network Address Translation Traversal (NATT) keepalive delay in seconds */
+    // Use "second" because smaller unit does not make sense for a NATT Keepalive delay.
+    @SuppressLint("MethodNameUnits")
+    @IntRange(from = IKE_NATT_KEEPALIVE_DELAY_SEC_MIN, to = IKE_NATT_KEEPALIVE_DELAY_SEC_MAX)
+    public int getNattKeepAliveDelaySeconds() {
+        return mNattKeepaliveDelaySec;
     }
 
     /**
@@ -474,11 +526,17 @@ public final class IkeSessionParams {
      *
      * <p>@see {@link Builder#setRetransmissionTimeoutsMillis(int[])}
      */
+    @NonNull
     public int[] getRetransmissionTimeoutsMillis() {
         return mRetransTimeoutMsList;
     }
 
-    /** Retrieves the configured Ike3gppExtension, or null if it was not set. */
+    /**
+     * Retrieves the configured Ike3gppExtension, or null if it was not set.
+     *
+     * @hide
+     */
+    @SystemApi
     @Nullable
     public Ike3gppExtension getIke3gppExtension() {
         return mIke3gppExtension;
@@ -1088,6 +1146,8 @@ public final class IkeSessionParams {
 
         private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
 
+        private int mNattKeepaliveDelaySec = IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT;
+
         private final boolean mIsIkeFragmentationSupported = true;
 
         /**
@@ -1127,28 +1187,9 @@ public final class IkeSessionParams {
          *
          * @param network the {@link Network} that IKE Session will use.
          * @return Builder this, to facilitate chaining.
-         * @hide
          */
         @NonNull
         public Builder setConfiguredNetwork(@NonNull Network network) {
-            return setNetwork(network);
-        }
-
-        // TODO: b/151984042 Keep #setNetwork @SystemApi and make #setConfiguredNetwork public
-
-        /**
-         * Sets the {@link Network} for the {@link IkeSessionParams} being built.
-         *
-         * <p>If no {@link Network} is provided, the default Network (as per {@link
-         * ConnectivityManager#getActiveNetwork()}) will be used.
-         *
-         * <p>This is method will be deprecated. Callers should use {@link #setConfiguredNetwork}
-         *
-         * @param network the {@link Network} that IKE Session will use.
-         * @return Builder this, to facilitate chaining.
-         */
-        @NonNull
-        public Builder setNetwork(@NonNull Network network) {
             if (network == null) {
                 throw new NullPointerException("Required argument not provided");
             }
@@ -1156,6 +1197,22 @@ public final class IkeSessionParams {
             mCallerConfiguredNetwork = network;
             mNetwork = network;
             return this;
+        }
+
+        /**
+         * Behaves identically to setConfiguredNetwork.
+         *
+         * @param network the {@link Network} that IKE Session will use.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         * @deprecated Callers should use {@link #setConfiguredNetwork}. This method is deprecated
+         *     because its name fail to match the corresponding getter name {@link #getNetwork()}
+         */
+        @Deprecated
+        @SystemApi
+        @NonNull
+        public Builder setNetwork(@NonNull Network network) {
+            return setConfiguredNetwork(network);
         }
 
         /**
@@ -1240,6 +1297,9 @@ public final class IkeSessionParams {
          * @param sharedKey the shared key.
          * @return Builder this, to facilitate chaining.
          */
+        // #getLocalAuthConfig and #getRemoveAuthConfig are defined to retrieve
+        // authentication configurations
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setAuthPsk(@NonNull byte[] sharedKey) {
             if (sharedKey == null) {
@@ -1283,6 +1343,9 @@ public final class IkeSessionParams {
          */
         // TODO(b/151667921): Consider also supporting configuring EAP method that is not accepted
         // by EAP-Only when {@link IKE_OPTION_EAP_ONLY_AUTH} is set
+        // MissingGetterMatchingBuilder: #getLocalAuthConfig and #getRemoveAuthConfig are defined to
+        // retrieve authentication configurations
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setAuthEap(
                 @Nullable X509Certificate serverCaCert, @NonNull EapSessionConfig eapConfig) {
@@ -1315,6 +1378,9 @@ public final class IkeSessionParams {
          *     PrivateKey} MUST be an instance of {@link RSAKey}.
          * @return Builder this, to facilitate chaining.
          */
+        // #getLocalAuthConfig and #getRemoveAuthConfig are defined to retrieve
+        // authentication configurations
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setAuthDigitalSignature(
                 @Nullable X509Certificate serverCaCert,
@@ -1349,6 +1415,9 @@ public final class IkeSessionParams {
          *     PrivateKey} MUST be an instance of {@link RSAKey}.
          * @return Builder this, to facilitate chaining.
          */
+        // #getLocalAuthConfig and #getRemoveAuthConfig are defined to retrieve
+        // authentication configurations
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setAuthDigitalSignature(
                 @Nullable X509Certificate serverCaCert,
@@ -1391,6 +1460,8 @@ public final class IkeSessionParams {
          * @param address the requested P_CSCF address.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests is defined to retrieve PCSCF server requests
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addPcscfServerRequest(@NonNull InetAddress address) {
             if (address == null) {
@@ -1413,6 +1484,8 @@ public final class IkeSessionParams {
          *     OsConstants.AF_INET6} are allowed.
          * @return Builder this, to facilitate chaining.
          */
+        // #getConfigurationRequests is defined to retrieve PCSCF server requests
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
@@ -1437,6 +1510,9 @@ public final class IkeSessionParams {
          *     least 60 seconds (1 minute) shorter than the hard lifetime.
          * @return Builder this, to facilitate chaining.
          */
+        // #getHardLifetimeSeconds and #getSoftLifetimeSeconds are defined for callers to retrieve
+        // the lifetimes
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder setLifetimeSeconds(
                 @IntRange(from = IKE_HARD_LIFETIME_SEC_MINIMUM, to = IKE_HARD_LIFETIME_SEC_MAXIMUM)
@@ -1473,6 +1549,28 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("Invalid DPD delay value");
             }
             mDpdDelaySec = dpdDelaySeconds;
+            return this;
+        }
+
+        /**
+         * Sets the Network Address Translation Traversal (NATT) keepalive delay in seconds.
+         *
+         * @param nattKeepaliveDelaySeconds number of seconds between keepalive packet
+         *     transmissions. Defaults to 10 seconds. MUST be a value from 10 seconds to 3600
+         *     seconds, inclusive.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder setNattKeepAliveDelaySeconds(
+                @IntRange(
+                                from = IKE_NATT_KEEPALIVE_DELAY_SEC_MIN,
+                                to = IKE_NATT_KEEPALIVE_DELAY_SEC_MAX)
+                        int nattKeepaliveDelaySeconds) {
+            if (nattKeepaliveDelaySeconds < IKE_NATT_KEEPALIVE_DELAY_SEC_MIN
+                    || nattKeepaliveDelaySeconds > IKE_NATT_KEEPALIVE_DELAY_SEC_MAX) {
+                throw new IllegalArgumentException("Invalid NATT keepalive delay value");
+            }
+            mNattKeepaliveDelaySec = nattKeepaliveDelaySeconds;
             return this;
         }
 
@@ -1519,7 +1617,9 @@ public final class IkeSessionParams {
          *     access networks
          * @param ike3gppExtension the Ike3gppExtension to use for this IKE Session.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder setIke3gppExtension(@NonNull Ike3gppExtension ike3gppExtension) {
             Objects.requireNonNull(ike3gppExtension, "ike3gppExtension must not be null");
@@ -1534,6 +1634,9 @@ public final class IkeSessionParams {
          * @param ikeOption the option to be enabled.
          * @return Builder this, to facilitate chaining.
          */
+        // Use #hasIkeOption instead of @getIkeOptions because #hasIkeOption allows callers to check
+        // the presence of one IKE option more easily
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
             validateIkeOptionOrThrow(ikeOption);
@@ -1547,6 +1650,9 @@ public final class IkeSessionParams {
          * @param ikeOption the option to be disabled.
          * @return Builder this, to facilitate chaining.
          */
+        // Use #removeIkeOption instead of #clearIkeOption because "clear" sounds indicating
+        // clearing all enabled IKE options
+        @SuppressLint("BuilderSetStyle")
         @NonNull
         public Builder removeIkeOption(@IkeOption int ikeOption) {
             validateIkeOptionOrThrow(ikeOption);
@@ -1618,6 +1724,7 @@ public final class IkeSessionParams {
                     mHardLifetimeSec,
                     mSoftLifetimeSec,
                     mDpdDelaySec,
+                    mNattKeepaliveDelaySec,
                     mIsIkeFragmentationSupported);
         }
 

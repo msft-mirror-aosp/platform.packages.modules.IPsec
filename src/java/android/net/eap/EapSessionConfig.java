@@ -16,12 +16,7 @@
 
 package android.net.eap;
 
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_AKA_PRIME;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_TTLS;
-
+import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SystemApi;
@@ -29,10 +24,11 @@ import android.os.PersistableBundle;
 import android.telephony.Annotation.UiccAppType;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.ipsec.ike.utils.IkeCertUtils;
 import com.android.server.vcn.util.PersistableBundleUtils;
 
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.TrustAnchor;
 import java.security.cert.X509Certificate;
@@ -47,10 +43,7 @@ import java.util.Objects;
  *
  * <p>The EAP authentication server decides which EAP method is used, so clients are encouraged to
  * provide configs for several EAP methods.
- *
- * @hide
  */
-@SystemApi
 public final class EapSessionConfig {
     private static final String EAP_ID_KEY = "eapIdentity";
     private static final String EAP_METHOD_CONFIGS_KEY = "eapConfigs";
@@ -146,7 +139,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapSimConfig getEapSimConfig() {
-        return (EapSimConfig) mEapConfigs.get(EAP_TYPE_SIM);
+        return (EapSimConfig) mEapConfigs.get(EapMethodConfig.EAP_TYPE_SIM);
     }
 
     /**
@@ -156,7 +149,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapAkaConfig getEapAkaConfig() {
-        return (EapAkaConfig) mEapConfigs.get(EAP_TYPE_AKA);
+        return (EapAkaConfig) mEapConfigs.get(EapMethodConfig.EAP_TYPE_AKA);
     }
 
     /**
@@ -166,7 +159,7 @@ public final class EapSessionConfig {
      */
     @Nullable
     public EapAkaPrimeConfig getEapAkaPrimeConfig() {
-        return (EapAkaPrimeConfig) mEapConfigs.get(EAP_TYPE_AKA_PRIME);
+        return (EapAkaPrimeConfig) mEapConfigs.get(EapMethodConfig.EAP_TYPE_AKA_PRIME);
     }
 
     /**
@@ -175,19 +168,32 @@ public final class EapSessionConfig {
      * @return the configuration for EAP MSCHAPV2, or null if it was not set
      */
     @Nullable
+    public EapMsChapV2Config getEapMsChapV2Config() {
+        return (EapMsChapV2Config) mEapConfigs.get(EapMethodConfig.EAP_TYPE_MSCHAP_V2);
+    }
+
+    /**
+     * Retrieves configuration for EAP MSCHAPV2
+     *
+     * @return the configuration for EAP MSCHAPV2, or null if it was not set
+     * @hide
+     * @deprecated Callers should use {@link #getEapMsChapV2Config}
+     */
+    @Deprecated
+    @SystemApi
+    @Nullable
     public EapMsChapV2Config getEapMsChapV2onfig() {
-        return (EapMsChapV2Config) mEapConfigs.get(EAP_TYPE_MSCHAP_V2);
+        return getEapMsChapV2Config();
     }
 
     /**
      * Retrieves configuration for EAP-TTLS
      *
      * @return the configuration for EAP-TTLS, or null if it was not set
-     * @hide
      */
     @Nullable
     public EapTtlsConfig getEapTtlsConfig() {
-        return (EapTtlsConfig) mEapConfigs.get(EAP_TYPE_TTLS);
+        return (EapTtlsConfig) mEapConfigs.get(EapMethodConfig.EAP_TYPE_TTLS);
     }
 
     /** @hide */
@@ -241,7 +247,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public Builder setEapSimConfig(int subId, @UiccAppType int apptype) {
-            mEapConfigs.put(EAP_TYPE_SIM, new EapSimConfig(subId, apptype));
+            mEapConfigs.put(EapMethodConfig.EAP_TYPE_SIM, new EapSimConfig(subId, apptype));
             return this;
         }
 
@@ -254,7 +260,7 @@ public final class EapSessionConfig {
          */
         @NonNull
         public Builder setEapAkaConfig(int subId, @UiccAppType int apptype) {
-            mEapConfigs.put(EAP_TYPE_AKA, new EapAkaConfig(subId, apptype));
+            mEapConfigs.put(EapMethodConfig.EAP_TYPE_AKA, new EapAkaConfig(subId, apptype));
             return this;
         }
 
@@ -277,7 +283,7 @@ public final class EapSessionConfig {
                 @NonNull String networkName,
                 boolean allowMismatchedNetworkNames) {
             mEapConfigs.put(
-                    EAP_TYPE_AKA_PRIME,
+                    EapMethodConfig.EAP_TYPE_AKA_PRIME,
                     new EapAkaPrimeConfig(
                             subId, apptype, networkName, allowMismatchedNetworkNames));
             return this;
@@ -292,14 +298,17 @@ public final class EapSessionConfig {
          */
         @NonNull
         public Builder setEapMsChapV2Config(@NonNull String username, @NonNull String password) {
-            mEapConfigs.put(EAP_TYPE_MSCHAP_V2, new EapMsChapV2Config(username, password));
+            mEapConfigs.put(
+                    EapMethodConfig.EAP_TYPE_MSCHAP_V2, new EapMsChapV2Config(username, password));
             return this;
         }
 
         /**
-         * Sets the configuration for EAP-TTLS
+         * Sets the configuration for EAP-TTLS.
          *
-         * <p>Nested tunnel authentications are disallowed.
+         * <p>Tunneled EAP-TTLS authentications are disallowed, as running multiple layers of
+         * EAP-TTLS increases the data footprint but has no discernible benefits over a single
+         * EAP-TTLS session with a non EAP-TTLS method nested inside it.
          *
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
          *     If a certificate is provided, it MUST be the root CA used by the server, or
@@ -307,13 +316,14 @@ public final class EapSessionConfig {
          *     truststore is considered acceptable.
          * @param innerEapSessionConfig represents the configuration for the inner EAP instance
          * @return Builder this, to facilitate chaining
-         * @hide
          */
         @NonNull
         public Builder setEapTtlsConfig(
                 @Nullable X509Certificate serverCaCert,
                 @NonNull EapSessionConfig innerEapSessionConfig) {
-            mEapConfigs.put(EAP_TYPE_TTLS, new EapTtlsConfig(serverCaCert, innerEapSessionConfig));
+            mEapConfigs.put(
+                    EapMethodConfig.EAP_TYPE_TTLS,
+                    new EapTtlsConfig(serverCaCert, innerEapSessionConfig));
             return this;
         }
 
@@ -350,6 +360,76 @@ public final class EapSessionConfig {
     /** EapMethodConfig represents a generic EAP method configuration. */
     public abstract static class EapMethodConfig {
         private static final String METHOD_TYPE = "methodType";
+
+        /** @hide */
+        @Retention(RetentionPolicy.SOURCE)
+        @IntDef({EAP_TYPE_SIM, EAP_TYPE_TTLS, EAP_TYPE_AKA, EAP_TYPE_MSCHAP_V2, EAP_TYPE_AKA_PRIME})
+        public @interface EapMethod {}
+
+        // EAP Type values defined by IANA
+        // @see https://www.iana.org/assignments/eap-numbers/eap-numbers.xhtml
+        /**
+         * EAP-Type value for the EAP-SIM method.
+         *
+         * <p>To include EAP-SIM as an authentication method, see {@link
+         * EapSessionConfig.Builder#setEapSimConfig(int, int)}.
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc4186">RFC 4186, Extensible Authentication
+         *     Protocol Method for Global System for Mobile Communications (GSM) Subscriber Identity
+         *     Modules (EAP-SIM)</a>
+         * @hide
+         */
+        public static final int EAP_TYPE_SIM = 18;
+
+        /**
+         * EAP-Type value for the EAP-TTLS method.
+         *
+         * <p>To include EAP-TTLS as an authentication method, see {@link
+         * EapSessionConfig.Builder#setEapTtlsConfig(X509Certificate, EapSessionConfig)}.
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc5281">RFC 5281, Extensible Authentication
+         *     Protocol Tunneled Transport Layer Security Authenticated Protocol Version 0
+         *     (EAP-TTLSv0)</a>
+         * @hide
+         */
+        public static final int EAP_TYPE_TTLS = 21;
+
+        /**
+         * EAP-Type value for the EAP-AKA method.
+         *
+         * <p>To include EAP-AKA as an authentication method, see {@link
+         * EapSessionConfig.Builder#setEapAkaConfig(int, int)}.
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc4187">RFC 4187, Extensible Authentication
+         *     Protocol Method for 3rd Generation Authentication and Key Agreement (EAP-AKA)</a>
+         * @hide
+         */
+        public static final int EAP_TYPE_AKA = 23;
+
+        /**
+         * EAP-Type value for the EAP-MS-CHAPv2 method.
+         *
+         * <p>To include EAP-MS-CHAPv2 as an authentication method, see {@link
+         * EapSessionConfig.Builder#setEapMsChapV2Config(String, String)}.
+         *
+         * @see <a href="https://tools.ietf.org/html/draft-kamath-pppext-eap-mschapv2-02">Microsoft
+         *     EAP CHAP Extensions Draft (EAP MSCHAPv2)</a>
+         * @hide
+         */
+        public static final int EAP_TYPE_MSCHAP_V2 = 26;
+
+        /**
+         * EAP-Type value for the EAP-AKA' method.
+         *
+         * <p>To include EAP-AKA' as an authentication method, see {@link
+         * EapSessionConfig.Builder#setEapAkaPrimeConfig(int, int, String, boolean)}.
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc5448">RFC 5448, Improved Extensible
+         *     Authentication Protocol Method for 3rd Generation Authentication and Key Agreement
+         *     (EAP-AKA')</a>
+         * @hide
+         */
+        public static final int EAP_TYPE_AKA_PRIME = 50;
 
         @EapMethod private final int mMethodType;
 
@@ -439,7 +519,13 @@ public final class EapSessionConfig {
     /**
      * EapUiccConfig represents the configs needed for EAP methods that rely on UICC cards for
      * authentication.
+     *
+     * @hide
+     * @deprecated This class is not useful. Callers should only use its two subclasses {@link
+     *     EapSimConfig} and {@link EapAkaConfig}
      */
+    @Deprecated
+    @SystemApi
     public abstract static class EapUiccConfig extends EapMethodConfig {
         /** @hide */
         protected static final String SUB_ID_KEY = "subId";
@@ -745,8 +831,6 @@ public final class EapSessionConfig {
 
     /**
      * EapTtlsConfig represents the configs needed for an EAP-TTLS session.
-     *
-     * @hide
      */
     public static class EapTtlsConfig extends EapMethodConfig {
         private static final String TRUST_CERT_KEY = "TRUST_CERT_KEY";
@@ -837,7 +921,6 @@ public final class EapSessionConfig {
          *
          * @return the CA certificate for validating the received server certificate or null if the
          *     system default is preferred
-         * @hide
          */
         @Nullable
         public X509Certificate getServerCaCert() {
@@ -848,7 +931,6 @@ public final class EapSessionConfig {
          * Retrieves the inner EAP session config
          *
          * @return an EapSessionConfig representing the config for tunneled EAP authentication
-         * @hide
          */
         @NonNull
         public EapSessionConfig getInnerEapSessionConfig() {

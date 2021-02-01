@@ -52,9 +52,10 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.Network;
+import android.net.SocketKeepalive;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppCallback;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
 import android.os.PersistableBundle;
 import android.telephony.TelephonyManager;
@@ -283,7 +284,7 @@ public final class IkeSessionParamsTest {
     public void testEncodeIkeSessionParamsWith3gppExtension() throws Exception {
         Ike3gppExtension ike3gppExtension =
                 new Ike3gppExtension(
-                        new Ike3gppParams.Builder().build(), mock(Ike3gppCallback.class));
+                        new Ike3gppParams.Builder().build(), mock(Ike3gppDataListener.class));
 
         IkeSessionParams sessionParams =
                 buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
@@ -356,6 +357,43 @@ public final class IkeSessionParamsTest {
             fail("Expected to fail due to invalid DPD delay");
         } catch (IllegalArgumentException expected) {
         }
+    }
+
+    @Test
+    public void testBuildWithPskAndNattKeepaliveDelay() throws Exception {
+        final int nattKeepaliveDelay = 100;
+
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setNattKeepAliveDelaySeconds(nattKeepaliveDelay)
+                        .build();
+
+        // Verify NATT keepalive delay
+        assertEquals(nattKeepaliveDelay, sessionParams.getNattKeepAliveDelaySeconds());
+    }
+
+    @Test
+    public void testNattKeepaliveRange() {
+        assertTrue(
+                SocketKeepalive.MIN_INTERVAL_SEC
+                        <= IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN);
+        assertTrue(
+                SocketKeepalive.MAX_INTERVAL_SEC
+                        >= IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBuildWithNattKeepaliveDelayTooShort() throws Exception {
+        final int lowNattKeepaliveDelay = 1;
+        new IkeSessionParams.Builder(mMockConnectManager)
+                .setNattKeepAliveDelaySeconds(lowNattKeepaliveDelay);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testBuildWithNattKeepaliveDelayTooLong() throws Exception {
+        final int highNattKeepaliveDelay = 9999;
+        new IkeSessionParams.Builder(mMockConnectManager)
+                .setNattKeepAliveDelaySeconds(highNattKeepaliveDelay);
     }
 
     @Test
@@ -690,7 +728,7 @@ public final class IkeSessionParamsTest {
     public void testBuildWithIke3gppExtension() throws Exception {
         Ike3gppExtension ike3gppExtension =
                 new Ike3gppExtension(
-                        new Ike3gppParams.Builder().build(), mock(Ike3gppCallback.class));
+                        new Ike3gppParams.Builder().build(), mock(Ike3gppDataListener.class));
 
         IkeSessionParams sessionParams =
                 buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)

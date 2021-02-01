@@ -131,6 +131,24 @@ public final class IkeSaProposal extends SaProposal {
         return result;
     }
 
+    /** Returns supported encryption algorithms for IKE SA proposal negotiation. */
+    @NonNull
+    public static Set<Integer> getSupportedEncryptionAlgorithms() {
+        return getKeySet(SUPPORTED_ENCRYPTION_ALGO_TO_STR);
+    }
+
+    /** Returns supported integrity algorithms for IKE SA proposal negotiation. */
+    @NonNull
+    public static Set<Integer> getSupportedIntegrityAlgorithms() {
+        return getKeySet(SUPPORTED_INTEGRITY_ALGO_TO_STR);
+    }
+
+    /** Returns supported pseudorandom functions for IKE SA proposal negotiation. */
+    @NonNull
+    public static Set<Integer> getSupportedPseudorandomFunctions() {
+        return getKeySet(SUPPORTED_PRF_TO_STR);
+    }
+
     /**
      * Gets all proposed Pseudorandom Functions
      *
@@ -209,7 +227,7 @@ public final class IkeSaProposal extends SaProposal {
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addEncryptionAlgorithm(@EncryptionAlgorithm int algorithm, int keyLength) {
-            validateAndAddEncryptAlgo(algorithm, keyLength);
+            validateAndAddEncryptAlgo(algorithm, keyLength, false /* isChild */);
             return this;
         }
 
@@ -224,7 +242,7 @@ public final class IkeSaProposal extends SaProposal {
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIntegrityAlgorithm(@IntegrityAlgorithm int algorithm) {
-            addIntegrityAlgo(algorithm);
+            validateAndAddIntegrityAlgo(algorithm, false /* isChild */);
             return this;
         }
 

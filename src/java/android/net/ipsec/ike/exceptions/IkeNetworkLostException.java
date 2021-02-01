@@ -16,44 +16,49 @@
 
 package android.net.ipsec.ike.exceptions;
 
+import android.annotation.NonNull;
 import android.net.Network;
 import android.net.ipsec.ike.IkeSessionCallback;
 
 import java.util.Objects;
 
 /**
- * IkeNetworkDiedException is returned to the caller via {@link
+ * IkeNetworkLostException is returned to the caller via {@link
  * IkeSessionCallback#onError(IkeException)} if the underlying Network for the {@link IkeSession}
- * dies with no alternatives.
+ * was lost with no alternatives.
+ *
+ * <p>This Exception corresponds to {@link
+ * android.net.ConnectivityManager.NetworkCallback#onLost(android.net.Network)} being invoked for
+ * the specified underlying Network.
  *
  * <p>When the caller receives this Exception, they must either:
  *
  * <ul>
  *   <li>set a new underlying Network for the corresponding IkeSession (MOBIKE must be enabled and
  *       the IKE Session must have started with a caller-configured Network), or
+ *   <li>wait for a new underlying Network to become available (MOBIKE must be enabled and the IKE
+ *       Session must be tracking the System default Network), or
+ *       <ul>
+ *         <li>Note: if the maximum retransmission time is encountered while waiting, the IKE
+ *             Session will close. If this occurs, the caller will be notified via {@link
+ *             IkeSessionCallback#onClosedExceptionally(IkeException)}.
+ *       </ul>
  *   <li>close the corresponding IkeSession.
  * </ul>
- *
- * @hide
  */
-public final class IkeNetworkDiedException extends IkeException {
+public final class IkeNetworkLostException extends IkeNonProtocolException {
     private final Network mNetwork;
 
-    public IkeNetworkDiedException(Network network) {
+    /** Constructs an IkeNetworkLostException to indicate the specified Network was lost. */
+    public IkeNetworkLostException(@NonNull Network network) {
         super();
         Objects.requireNonNull(network, "network is null");
 
         mNetwork = network;
     }
 
-    public IkeNetworkDiedException(Network network, String message) {
-        super(message);
-        Objects.requireNonNull(network, "network is null");
-
-        mNetwork = network;
-    }
-
-    /** Returns the IkeSession's underlying Network that died. */
+    /** Returns the IkeSession's underlying Network that was lost. */
+    @NonNull
     public Network getNetwork() {
         return mNetwork;
     }
