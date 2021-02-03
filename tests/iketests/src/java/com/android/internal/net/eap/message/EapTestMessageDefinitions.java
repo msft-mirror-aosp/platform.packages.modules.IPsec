@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.message;
+package com.android.internal.net.eap.test.message;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.AT_VERSION_LIST_DATA;
-import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.IDENTITY_STRING;
-import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
-import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
-import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
-import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.RES;
+import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.AT_VERSION_LIST_DATA;
+import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.IDENTITY_STRING;
+import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.NONCE_MT_STRING;
+import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
+import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.RES;
 
 /**
  * EapTestMessageDefinitions provides byte[] encodings of commonly used EAP Messages.

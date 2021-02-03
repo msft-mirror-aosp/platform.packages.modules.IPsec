@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.statemachine;
+package com.android.internal.net.eap.test.statemachine;
 
-import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_TTLS;
+import static android.net.eap.test.EapSessionConfig.EapMethodConfig.EAP_TYPE_TTLS;
 
-import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_SUCCESS;
-import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_REQUEST;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.internal.net.eap.test.crypto.TlsSession.TLS_STATUS_SUCCESS;
+import static com.android.internal.net.eap.test.message.EapMessage.EAP_CODE_REQUEST;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,12 +30,12 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
-import com.android.internal.net.eap.message.EapData;
-import com.android.internal.net.eap.message.EapMessage;
-import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.CreatedState;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.HandshakeState;
+import com.android.internal.net.eap.test.exceptions.EapInvalidRequestException;
+import com.android.internal.net.eap.test.message.EapData;
+import com.android.internal.net.eap.test.message.EapMessage;
+import com.android.internal.net.eap.test.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
+import com.android.internal.net.eap.test.statemachine.EapTtlsMethodStateMachine.CreatedState;
+import com.android.internal.net.eap.test.statemachine.EapTtlsMethodStateMachine.HandshakeState;
 
 import org.junit.Test;
 
