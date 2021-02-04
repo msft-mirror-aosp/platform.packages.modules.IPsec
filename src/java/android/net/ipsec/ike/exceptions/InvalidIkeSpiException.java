@@ -15,6 +15,9 @@
  */
 package android.net.ipsec.ike.exceptions;
 
+import android.net.ipsec.ike.ChildSessionCallback;
+import android.net.ipsec.ike.IkeSessionCallback;
+
 /**
  * This exception is thrown if an IKE message was received with an unrecognized destination SPI.
  *

@@ -24,8 +24,8 @@ import java.util.Objects;
 
 /**
  * IkeNetworkLostException is returned to the caller via {@link
- * IkeSessionCallback#onError(IkeException)} if the underlying Network for the {@link IkeSession}
- * was lost with no alternatives.
+ * IkeSessionCallback#onError(IkeException)} if the underlying Network for the {@link
+ * android.net.ipsec.ike.IkeSession} was lost with no alternatives.
  *
  * <p>This Exception corresponds to {@link
  * android.net.ConnectivityManager.NetworkCallback#onLost(android.net.Network)} being invoked for

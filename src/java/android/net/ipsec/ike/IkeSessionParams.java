@@ -124,9 +124,9 @@ public final class IkeSessionParams {
      *       this MUST migrate all IpSecTunnelInterface instances associated with this IkeSession.
      *   <li>{@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
      *       android.net.IpSecTransform)}: this MUST re-apply the migrated transforms to the
-     *       IpSecTunnelInterface associated with this ChildSessionCallback, via {@link
+     *       IpSecTunnelInterface associated with this ChildSessionCallback, via
      *       android.net.IpSecManager#applyTunnelModeTransform(
-     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform)}.
+     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform).
      * </ul>
      *
      * <p>MOBIKE support is compatible with two Network modes:
@@ -160,7 +160,8 @@ public final class IkeSessionParams {
      * <p>Checking for MOBIKE use in an IKE Session is done via {@link
      * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      */
-    // TODO(b/175416035): update docs to @link to API for migrating IpSecTunnelInterfaces
+    // TODO(b/175416035): Update docs to @link to API for migrating IpSecTunnelInterfaces
+    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public
     public static final int IKE_OPTION_MOBIKE = 2;
 
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
@@ -1172,7 +1173,7 @@ public final class IkeSessionParams {
          *
          * <p>This constructor is deprecated since Android S. Apps that use this constructor can
          * still expect {@link #build()} to throw if no configured or default network was found. But
-         * apps that use {@link #Builder()} MUST NOT expect that behavior anymore.
+         * apps that use #Builder() MUST NOT expect that behavior anymore.
          *
          * <p>This method is deprecated because it is unnecessary to try resolving a default network
          * or to validate network state before IkeSession starts the packet exchanges. It will also
@@ -1181,7 +1182,8 @@ public final class IkeSessionParams {
          *
          * @param context a valid {@link Context} instance.
          */
-        // TODO: b/163604823 Deprecate this method
+        // TODO: b/163604823 Deprecate this method and use @link tag to reference #Builder when
+        // #Builder() is exposed.
         public Builder(@NonNull Context context) {
             this((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
         }
@@ -1352,13 +1354,13 @@ public final class IkeSessionParams {
          * EAP-Only authentication is enabled.
          *
          * <p>Callers may enable EAP-Only authentication by setting {@link
-         * IKE_OPTION_EAP_ONLY_AUTH}, which will make IKE library request the remote to use EAP-Only
-         * authentication. The remote may opt to reject the request, at which point the received
-         * certificates and authentication payload WILL be validated with the provided root CA or
-         * system's truststore as usual. Only safe EAP methods as listed in RFC 5998 will be
+         * #IKE_OPTION_EAP_ONLY_AUTH}, which will make IKE library request the remote to use
+         * EAP-Only authentication. The remote may opt to reject the request, at which point the
+         * received certificates and authentication payload WILL be validated with the provided root
+         * CA or system's truststore as usual. Only safe EAP methods as listed in RFC 5998 will be
          * accepted for EAP-Only authentication.
          *
-         * <p>If {@link IKE_OPTION_EAP_ONLY_AUTH} is set, callers MUST configure EAP as the
+         * <p>If {@link #IKE_OPTION_EAP_ONLY_AUTH} is set, callers MUST configure EAP as the
          * authentication method and all EAP methods set in EAP Session configuration MUST be safe
          * methods that are accepted for EAP-Only authentication. Otherwise callers will get an
          * exception when building the {@link IkeSessionParams}
@@ -1369,7 +1371,7 @@ public final class IkeSessionParams {
          * @see <a href="https://tools.ietf.org/html/rfc5280">RFC 5280, Internet X.509 Public Key
          *     Infrastructure Certificate and Certificate Revocation List (CRL) Profile</a>
          * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
-         *     Authentication in IKEv2
+         *     Authentication in IKEv2</a>
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
          *     If a certificate is provided, it MUST be the root CA used by the server, or
          *     authentication will fail. If no certificate is provided, any root CA in the system's
@@ -1377,7 +1379,7 @@ public final class IkeSessionParams {
          * @return Builder this, to facilitate chaining.
          */
         // TODO(b/151667921): Consider also supporting configuring EAP method that is not accepted
-        // by EAP-Only when {@link IKE_OPTION_EAP_ONLY_AUTH} is set
+        // by EAP-Only when {@link #IKE_OPTION_EAP_ONLY_AUTH} is set
         // MissingGetterMatchingBuilder: #getLocalAuthConfig and #getRemoveAuthConfig are defined to
         // retrieve authentication configurations
         @SuppressLint("MissingGetterMatchingBuilder")
@@ -1515,8 +1517,8 @@ public final class IkeSessionParams {
         /**
          * Adds a internal P_CSCF server request to the {@link IkeSessionParams} being built.
          *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
-         *     OsConstants.AF_INET6} are allowed.
+         * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
+         *     allowed.
          * @return Builder this, to facilitate chaining.
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
