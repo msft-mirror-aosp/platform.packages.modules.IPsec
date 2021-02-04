@@ -226,8 +226,7 @@ public final class IkeSessionParams {
 
     @NonNull private final String mServerHostname;
 
-    // @see #getNetwork for reasons of changing the annotation from @NonNull to @Nullable in Android
-    // S and why it is safe.
+    // @see #getNetwork for reasons of changing the annotation from @NonNull to @Nullable in SDK S.
     // Do not include mDefaultOrConfiguredNetwork in #hashCode or #equal because when it represents
     // configured network, it always has the same value as mCallerConfiguredNetwork. When it
     // represents a default network it can only reflects the device status at the IkeSessionParams
@@ -449,10 +448,13 @@ public final class IkeSessionParams {
      * <p>This method is deprecated and its annotation has been changed from @NonNull to @Nullable
      * since Android S. This method needs to be @Nullable because a new Builder constructor {@link
      * Builder#Builder() was added in Android S, and by using the new constructor the return value
-     * of this method will be null. Also making this method @Nullable will not break the backwards
-     * compatibility because for any app that uses the deprecated constructor
-     * {@link Builder#Builder(Context)}, the return value of this method is still guaranteed to
-     * be non-null.
+     * of this method will be null.
+     *
+     * <p>For apps that are using a null-safe language, making this method @Nullable will break
+     * compilation, and apps need to update their code. For apps that are not using null-safe
+     * language, making this change will not break the backwards compatibility because for any app
+     * that uses the deprecated constructor {@link Builder#Builder(Context)}, the return value of
+     * this method is still guaranteed to be non-null.
      *
      * <p>For a caller that used {@link Builder#Builder(Context)} and did not set any Network,
      * this method will return the default Network resolved in
@@ -469,7 +471,8 @@ public final class IkeSessionParams {
     @Deprecated
     @SystemApi
     @NonNull
-    // TODO: b/163604823 Make it @Nullable
+    // STOPSHIP: b/180521384 Make it @Nullable when java_sdk_library can support
+    // incompabilities baseline file
     public Network getNetwork() {
         return mDefaultOrConfiguredNetwork;
     }
@@ -1179,25 +1182,22 @@ public final class IkeSessionParams {
          *
          * <p>This constructor is deprecated since Android S. Apps that use this constructor can
          * still expect {@link #build()} to throw if no configured or default network was found. But
-         * apps that use #Builder() MUST NOT expect that behavior anymore.
-         *
-         * <p>This method is deprecated because it is unnecessary to try resolving a default network
-         * or to validate network state before IkeSession starts the packet exchanges. It will also
-         * makes it hard to store IkeSessionParams in a {@link android.os.Parcelable} object such as
-         * VcnConfig.
+         * apps that use {@link #Builder()} MUST NOT expect that behavior anymore.
          *
          * @param context a valid {@link Context} instance.
+         * @deprecated Callers should use {@link #Builder()}.This method is deprecated because it is
+         *     unnecessary to try resolving a default network or to validate network is connected
+         *     before {@link IkeSession} starts the setup process.
+         * @hide
          */
-        // TODO: b/163604823 Deprecate this method and use @link tag to reference #Builder when
-        // #Builder() is exposed.
+        @Deprecated
+        @SystemApi
         public Builder(@NonNull Context context) {
             this((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
         }
 
         /**
          * Construct Builder
-         *
-         * @hide
          */
         public Builder() {}
 

@@ -851,9 +851,9 @@ public final class IkeSessionParamsTest {
     @Test
     public void testNotEqualsWhenNattKeepaliveDelaysAreDifferent() throws Exception {
         IkeSessionParams sessionParamsA =
-                createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(100);
+                createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(100).build();
         IkeSessionParams sessionParamsB =
-                createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(200);
+                createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(200).build();
 
         assertNotEquals(sessionParamsA, sessionParamsB);
     }
