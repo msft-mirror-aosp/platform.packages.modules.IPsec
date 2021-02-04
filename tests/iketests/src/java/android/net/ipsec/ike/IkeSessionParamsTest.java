@@ -262,10 +262,17 @@ public final class IkeSessionParamsTest {
 
     @Test
     public void testIkeSessionParamsEncodeDecodeIsLossLess() throws Exception {
-        IkeSessionParams sessionParams = buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS).build();
+        IkeSessionParams sessionParams =
+                new IkeSessionParams.Builder()
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .build();
 
         PersistableBundle bundle = sessionParams.toPersistableBundle();
-        IkeSessionParams result = IkeSessionParams.fromPersistableBundle(bundle, mMockContext);
+        IkeSessionParams result = IkeSessionParams.fromPersistableBundle(bundle);
 
         assertEquals(sessionParams, result);
     }
