@@ -83,7 +83,7 @@ public interface ChildSessionCallback {
      * the new set of transforms.
      *
      * <p>To avoid the initial startup race condition where the transforms have not yet been
-     * applied, the {@link onOpened(ChildSessionConfiguration)} callback should be used as the
+     * applied, the {@link #onOpened(ChildSessionConfiguration)} callback should be used as the
      * authoritative signal that the socket or tunnel is ready, as it is fired after both transforms
      * have had a chance to be applied.
      *
@@ -100,15 +100,15 @@ public interface ChildSessionCallback {
      * Session.
      *
      * <p>When this method is invoked, the caller MUST re-apply the transforms to their {@link
-     * IpSecTunnelInterface} via {@link
-     * IpSecManager#applyTunnelModeTransform(android.net.IpSecManager.IpSecTunnelInterface, int,
-     * IpSecTransform)}.
+     * IpSecTunnelInterface} via IpSecManager#applyTunnelModeTransform(IpSecTunnelInterface, int,
+     * IpSecTransform)
      *
-     * @param inIpSecTransform IpSecTransform to be used for traffic with {@link PolicyDirection}
-     *     {@link IpSecManager#DIRECTION_IN}
-     * @param outIpSecTransform IpSecTransform to be used for traffic with {@link PolicyDirection}
-     *     {@link IpSecManager#DIRECTION_OUT}
+     * @param inIpSecTransform IpSecTransform to be used for traffic with {@link
+     *     IpSecManager#DIRECTION_IN}
+     * @param outIpSecTransform IpSecTransform to be used for traffic with {@link
+     *     IpSecManager#DIRECTION_OUT}
      */
+    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public.
     default void onIpSecTransformsMigrated(
             @NonNull IpSecTransform inIpSecTransform, @NonNull IpSecTransform outIpSecTransform) {}
 

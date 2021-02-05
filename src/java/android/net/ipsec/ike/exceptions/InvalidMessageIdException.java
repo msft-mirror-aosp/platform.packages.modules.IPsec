@@ -15,6 +15,9 @@
  */
 package android.net.ipsec.ike.exceptions;
 
+import android.net.ipsec.ike.ChildSessionCallback;
+import android.net.ipsec.ike.IkeSessionCallback;
+
 /**
  * This exception is thrown when the remote server received a message with out-of-window-size ID.
  *

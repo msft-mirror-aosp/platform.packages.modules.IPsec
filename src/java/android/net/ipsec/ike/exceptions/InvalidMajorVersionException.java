@@ -16,6 +16,8 @@
 package android.net.ipsec.ike.exceptions;
 
 import android.annotation.SuppressLint;
+import android.net.ipsec.ike.ChildSessionCallback;
+import android.net.ipsec.ike.IkeSessionCallback;
 
 /**
  * This exception is thrown when major version of an inbound message is higher than 2.
