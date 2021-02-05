@@ -28,12 +28,11 @@ import static com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribut
 import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
 import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
 
-import static junit.framework.TestCase.fail;
-
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
 import com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribute.AtVersionList;
