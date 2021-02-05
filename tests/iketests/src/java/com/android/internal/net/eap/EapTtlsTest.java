@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap;
+package com.android.internal.net.eap.test;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_FINISHED_OK;
-import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NEED_UNWRAP_OK;
-import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NEED_WRAP_OK;
-import static com.android.internal.net.eap.crypto.TlsSessionTest.RESULT_NOT_HANDSHAKING_OK;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SUCCESS;
+import static com.android.internal.net.eap.test.crypto.TlsSessionTest.RESULT_FINISHED_OK;
+import static com.android.internal.net.eap.test.crypto.TlsSessionTest.RESULT_NEED_UNWRAP_OK;
+import static com.android.internal.net.eap.test.crypto.TlsSessionTest.RESULT_NEED_WRAP_OK;
+import static com.android.internal.net.eap.test.crypto.TlsSessionTest.RESULT_NOT_HANDSHAKING_OK;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_REQUEST_AKA_IDENTITY_PACKET;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_SUCCESS;
 
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
@@ -36,12 +36,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
-import android.net.eap.EapSessionConfig;
+import android.net.eap.test.EapSessionConfig;
 
-import com.android.internal.net.eap.crypto.TlsSession;
-import com.android.internal.net.eap.crypto.TlsSessionFactory;
-import com.android.internal.net.eap.statemachine.EapStateMachine;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine;
+import com.android.internal.net.eap.test.crypto.TlsSession;
+import com.android.internal.net.eap.test.crypto.TlsSessionFactory;
+import com.android.internal.net.eap.test.statemachine.EapStateMachine;
+import com.android.internal.net.eap.test.statemachine.EapTtlsMethodStateMachine;
 
 import org.junit.AfterClass;
 import org.junit.Before;

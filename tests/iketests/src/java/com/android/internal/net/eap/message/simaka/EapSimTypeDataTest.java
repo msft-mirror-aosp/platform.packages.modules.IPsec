@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.message.simaka;
+package com.android.internal.net.eap.test.message.simaka;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SIM_START_DUPLICATE_ATTRIBUTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_SIM_START_SUBTYPE;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.INVALID_SUBTYPE;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.SHORT_TYPE_DATA;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_ATTRIBUTE;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_AT_RAND;
-import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
-import static com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
-import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
-import static com.android.internal.net.eap.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_SIM_START_DUPLICATE_ATTRIBUTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_SIM_START_SUBTYPE;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.INVALID_SUBTYPE;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.SHORT_TYPE_DATA;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_ATTRIBUTE;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.TYPE_DATA_INVALID_AT_RAND;
+import static com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribute.EAP_AT_PERMANENT_ID_REQ;
+import static com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribute.EAP_AT_VERSION_LIST;
+import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.RAND_1;
+import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.RAND_2;
 
 import static junit.framework.TestCase.fail;
 
@@ -35,10 +35,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
-import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute.AtVersionList;
-import com.android.internal.net.eap.message.simaka.EapSimAkaTypeData.DecodeResult;
-import com.android.internal.net.eap.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
+import com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribute.AtPermanentIdReq;
+import com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribute.AtVersionList;
+import com.android.internal.net.eap.test.message.simaka.EapSimAkaTypeData.DecodeResult;
+import com.android.internal.net.eap.test.message.simaka.EapSimTypeData.EapSimTypeDataDecoder;
 
 import org.junit.Before;
 import org.junit.Test;
