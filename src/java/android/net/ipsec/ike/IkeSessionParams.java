@@ -1204,6 +1204,42 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Construct Builder from the {@link IkeSessionParams} object.
+         *
+         * @param ikeSessionParams the object this Builder will be constructed with.
+         * @hide
+         */
+        public Builder(@NonNull IkeSessionParams ikeSessionParams) {
+            mSaProposalList.addAll(ikeSessionParams.getSaProposals());
+            mConfigRequestList.addAll(Arrays.asList(ikeSessionParams.mConfigRequests));
+
+            int[] retransmissionTimeouts = ikeSessionParams.getRetransmissionTimeoutsMillis();
+            mRetransTimeoutMsList =
+                    Arrays.copyOf(retransmissionTimeouts, retransmissionTimeouts.length);
+
+            mServerHostname = ikeSessionParams.getServerHostname();
+            mCallerConfiguredNetwork = ikeSessionParams.getConfiguredNetwork();
+            mLocalIdentification = ikeSessionParams.getLocalIdentification();
+            mRemoteIdentification = ikeSessionParams.getRemoteIdentification();
+            mLocalAuthConfig = ikeSessionParams.getLocalAuthConfig();
+            mRemoteAuthConfig = ikeSessionParams.getRemoteAuthConfig();
+
+            mIke3gppExtension = ikeSessionParams.getIke3gppExtension();
+
+            mHardLifetimeSec = ikeSessionParams.getHardLifetimeSeconds();
+            mSoftLifetimeSec = ikeSessionParams.getSoftLifetimeSeconds();
+            mDpdDelaySec = ikeSessionParams.getDpdDelaySeconds();
+            mNattKeepaliveDelaySec = ikeSessionParams.getNattKeepAliveDelaySeconds();
+
+            mIkeOptions = ikeSessionParams.mIkeOptions;
+
+            if (!ikeSessionParams.mIsIkeFragmentationSupported) {
+                throw new IllegalStateException(
+                        "mIsIkeFragmentationSupported should never be false");
+            }
+        }
+
+        /**
          * Sets the server hostname for the {@link IkeSessionParams} being built.
          *
          * @param serverHostname the hostname of the IKE server, such as "ike.android.com".
@@ -1223,15 +1259,13 @@ public final class IkeSessionParams {
          * <p>If no {@link Network} is provided, the default Network (as per {@link
          * ConnectivityManager#getActiveNetwork()}) will be used.
          *
-         * @param network the {@link Network} that IKE Session will use.
+         * @param network the {@link Network} that IKE Session will use, or {@code null} to clear
+         *     the previously set {@link Network}
          * @return Builder this, to facilitate chaining.
          */
+        // TODO(b/163604823): Making @NonNull to @Nullable
         @NonNull
         public Builder setConfiguredNetwork(@NonNull Network network) {
-            if (network == null) {
-                throw new NullPointerException("Required argument not provided");
-            }
-
             mCallerConfiguredNetwork = network;
             return this;
         }
