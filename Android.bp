@@ -106,10 +106,17 @@ java_library {
     jarjar_rules: "jarjar-rules-test.txt",
 }
 
-filegroup {
+java_library {
+    name: "ike-test-utils-dependency",
+    installable: false, // Used only for building the "ike-test-utils"
+    srcs: ["src/java/**/IkeCertUtils.java"],
+    jarjar_rules: "jarjar-rules-test.txt",
+}
+
+java_library {
     name: "ike-test-utils",
-    srcs: [
-        "src/java/**/IkeCertUtils.java",
-        "tests/iketests/src/java/**/CertUtils.java",
-    ],
+    srcs: ["tests/iketests/src/java/**/CertUtils.java"],
+    static_libs: ["ike-test-utils-dependency"],
+    libs: ["androidx.test.rules"],
+    visibility: ["//packages/modules/IPsec/tests/cts"]
 }
