@@ -124,9 +124,9 @@ public final class IkeSessionParams {
      *       this MUST migrate all IpSecTunnelInterface instances associated with this IkeSession.
      *   <li>{@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
      *       android.net.IpSecTransform)}: this MUST re-apply the migrated transforms to the
-     *       IpSecTunnelInterface associated with this ChildSessionCallback, via {@link
+     *       IpSecTunnelInterface associated with this ChildSessionCallback, via
      *       android.net.IpSecManager#applyTunnelModeTransform(
-     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform)}.
+     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform).
      * </ul>
      *
      * <p>MOBIKE support is compatible with two Network modes:
@@ -160,7 +160,8 @@ public final class IkeSessionParams {
      * <p>Checking for MOBIKE use in an IKE Session is done via {@link
      * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      */
-    // TODO(b/175416035): update docs to @link to API for migrating IpSecTunnelInterfaces
+    // TODO(b/175416035): Update docs to @link to API for migrating IpSecTunnelInterfaces
+    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public
     public static final int IKE_OPTION_MOBIKE = 2;
 
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
@@ -224,7 +225,11 @@ public final class IkeSessionParams {
     private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
 
     @NonNull private final String mServerHostname;
-    @NonNull private final Network mNetwork;
+
+    // @see #getNetwork for reasons of changing the annotation from @NonNull to @Nullable in Android
+    // S and why it is safe.
+    @Nullable private final Network mNetwork;
+
     @Nullable private final Network mCallerConfiguredNetwork;
 
     @NonNull private final IkeSaProposal[] mSaProposals;
@@ -319,11 +324,10 @@ public final class IkeSessionParams {
      * @hide
      */
     @NonNull
-    public static IkeSessionParams fromPersistableBundle(
-            @NonNull PersistableBundle in, Context context) {
+    public static IkeSessionParams fromPersistableBundle(@NonNull PersistableBundle in) {
         Objects.requireNonNull(in, "PersistableBundle is null");
 
-        IkeSessionParams.Builder builder = new IkeSessionParams.Builder(context);
+        IkeSessionParams.Builder builder = new IkeSessionParams.Builder();
 
         builder.setServerHostname(in.getString(SERVER_HOST_NAME_KEY));
 
@@ -436,7 +440,16 @@ public final class IkeSessionParams {
     /**
      * Retrieves the configured or default {@link Network}
      *
-     * <p>If caller did not set any Network, this method will return the default Network resolved in
+     * <p>This method is deprecated and its annotation has been changed from @NonNull to @Nullable
+     * since Android S. This method needs to be @Nullable because a new Builder constructor {@link
+     * Builder#Builder() was added in Android S, and by using the new constructor the return value
+     * of this method will be null. Also making this method @Nullable will not break the backwards
+     * compatibility because for any app that uses the deprecated constructor
+     * {@link Builder#Builder(Context)}, the return value of this method is still guaranteed to
+     * be non-null.
+     *
+     * <p>For a caller that used {@link Builder#Builder(Context)} and did not set any Network,
+     * this method will return the default Network resolved in
      * {@link IkeSessionParams.Builder#build()}. The return value of this method is only
      * informational because if MOBIKE is enabled, IKE Session may switch to a different default
      * Network.
@@ -450,6 +463,7 @@ public final class IkeSessionParams {
     @Deprecated
     @SystemApi
     @NonNull
+    // TODO: b/163604823 Make it @Nullable
     public Network getNetwork() {
         return mNetwork;
     }
@@ -1116,7 +1130,12 @@ public final class IkeSessionParams {
 
     /** This class can be used to incrementally construct a {@link IkeSessionParams}. */
     public static final class Builder {
-        @NonNull private final ConnectivityManager mConnectivityManager;
+        // This field has changed from @NonNull to @Nullable since Android S. It has to be @Nullable
+        // because the new constructor #Builder() will not need and will not able to get a
+        // ConnectivityManager instance anymore. Making it @Nullable does not break the backwards
+        // compatibility because if apps use the old constructor #Builder(Context), the Builder and
+        // the IkeSessionParams built from it will still work in the old way. @see #Builder(Context)
+        @Nullable private ConnectivityManager mConnectivityManager;
 
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
         @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
@@ -1129,7 +1148,6 @@ public final class IkeSessionParams {
 
         @NonNull private String mServerHostname;
         @Nullable private Network mCallerConfiguredNetwork;
-        @Nullable private Network mNetwork;
 
         @Nullable private IkeIdentification mLocalIdentification;
         @Nullable private IkeIdentification mRemoteIdentification;
@@ -1153,13 +1171,33 @@ public final class IkeSessionParams {
         /**
          * Construct Builder
          *
+         * <p>This constructor is deprecated since Android S. Apps that use this constructor can
+         * still expect {@link #build()} to throw if no configured or default network was found. But
+         * apps that use #Builder() MUST NOT expect that behavior anymore.
+         *
+         * <p>This method is deprecated because it is unnecessary to try resolving a default network
+         * or to validate network state before IkeSession starts the packet exchanges. It will also
+         * makes it hard to store IkeSessionParams in a {@link android.os.Parcelable} object such as
+         * VcnConfig.
+         *
          * @param context a valid {@link Context} instance.
          */
+        // TODO: b/163604823 Deprecate this method and use @link tag to reference #Builder when
+        // #Builder() is exposed.
         public Builder(@NonNull Context context) {
             this((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
         }
 
+        /**
+         * Construct Builder
+         *
+         * @hide
+         */
+        public Builder() {}
+
         /** @hide */
+        // TODO: b/178389011 This constructor should be removed when #Builder(Context) can be safely
+        // removed. See #Builder(Context) for reasons.
         @VisibleForTesting
         public Builder(ConnectivityManager connectManager) {
             mConnectivityManager = connectManager;
@@ -1195,7 +1233,6 @@ public final class IkeSessionParams {
             }
 
             mCallerConfiguredNetwork = network;
-            mNetwork = network;
             return this;
         }
 
@@ -1317,13 +1354,13 @@ public final class IkeSessionParams {
          * EAP-Only authentication is enabled.
          *
          * <p>Callers may enable EAP-Only authentication by setting {@link
-         * IKE_OPTION_EAP_ONLY_AUTH}, which will make IKE library request the remote to use EAP-Only
-         * authentication. The remote may opt to reject the request, at which point the received
-         * certificates and authentication payload WILL be validated with the provided root CA or
-         * system's truststore as usual. Only safe EAP methods as listed in RFC 5998 will be
+         * #IKE_OPTION_EAP_ONLY_AUTH}, which will make IKE library request the remote to use
+         * EAP-Only authentication. The remote may opt to reject the request, at which point the
+         * received certificates and authentication payload WILL be validated with the provided root
+         * CA or system's truststore as usual. Only safe EAP methods as listed in RFC 5998 will be
          * accepted for EAP-Only authentication.
          *
-         * <p>If {@link IKE_OPTION_EAP_ONLY_AUTH} is set, callers MUST configure EAP as the
+         * <p>If {@link #IKE_OPTION_EAP_ONLY_AUTH} is set, callers MUST configure EAP as the
          * authentication method and all EAP methods set in EAP Session configuration MUST be safe
          * methods that are accepted for EAP-Only authentication. Otherwise callers will get an
          * exception when building the {@link IkeSessionParams}
@@ -1334,7 +1371,7 @@ public final class IkeSessionParams {
          * @see <a href="https://tools.ietf.org/html/rfc5280">RFC 5280, Internet X.509 Public Key
          *     Infrastructure Certificate and Certificate Revocation List (CRL) Profile</a>
          * @see <a href="https://tools.ietf.org/html/rfc5998">RFC 5998, An Extension for EAP-Only
-         *     Authentication in IKEv2
+         *     Authentication in IKEv2</a>
          * @param serverCaCert the CA certificate for validating the received server certificate(s).
          *     If a certificate is provided, it MUST be the root CA used by the server, or
          *     authentication will fail. If no certificate is provided, any root CA in the system's
@@ -1342,7 +1379,7 @@ public final class IkeSessionParams {
          * @return Builder this, to facilitate chaining.
          */
         // TODO(b/151667921): Consider also supporting configuring EAP method that is not accepted
-        // by EAP-Only when {@link IKE_OPTION_EAP_ONLY_AUTH} is set
+        // by EAP-Only when {@link #IKE_OPTION_EAP_ONLY_AUTH} is set
         // MissingGetterMatchingBuilder: #getLocalAuthConfig and #getRemoveAuthConfig are defined to
         // retrieve authentication configurations
         @SuppressLint("MissingGetterMatchingBuilder")
@@ -1480,8 +1517,8 @@ public final class IkeSessionParams {
         /**
          * Adds a internal P_CSCF server request to the {@link IkeSessionParams} being built.
          *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
-         *     OsConstants.AF_INET6} are allowed.
+         * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
+         *     allowed.
          * @return Builder this, to facilitate chaining.
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
@@ -1671,12 +1708,20 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
 
-            Network network =
-                    mCallerConfiguredNetwork != null
-                            ? mCallerConfiguredNetwork
-                            : mConnectivityManager.getActiveNetwork();
-            if (network == null) {
-                throw new IllegalArgumentException("Network not found");
+            // TODO: b/178389011 This code block should be removed when
+            // IkeSessionParams#getNetwork() and #Builder(Context) can be safely removed. This block
+            // makes sure if the Builder is constructed with the deprecated constructor
+            // #Builder(Context), #build() still works in the same way and will throw exception when
+            // there is no configured or default network.
+            Network defaultOrConfiguredNetwork = null;
+            if (mConnectivityManager != null) {
+                defaultOrConfiguredNetwork =
+                        mCallerConfiguredNetwork != null
+                                ? mCallerConfiguredNetwork
+                                : mConnectivityManager.getActiveNetwork();
+                if (defaultOrConfiguredNetwork == null) {
+                    throw new IllegalArgumentException("Network not found");
+                }
             }
 
             if (mServerHostname == null
@@ -1710,7 +1755,7 @@ public final class IkeSessionParams {
 
             return new IkeSessionParams(
                     mServerHostname,
-                    network,
+                    defaultOrConfiguredNetwork,
                     mCallerConfiguredNetwork,
                     mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,

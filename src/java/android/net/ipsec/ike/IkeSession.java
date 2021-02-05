@@ -32,7 +32,7 @@ import java.util.concurrent.Executor;
 
 /**
  * This class represents an IKE Session management object that allows for keying and management of
- * {@link IpSecTransform}s.
+ * {@link android.net.IpSecTransform}s.
  *
  * <p>An IKE/Child Session represents an IKE/Child SA as well as its rekeyed successors. A Child
  * Session is bounded by the lifecycle of the IKE Session under which it is set up. Closing an IKE
@@ -71,7 +71,7 @@ public final class IkeSession implements AutoCloseable {
      * @param userCbExecutor the {@link Executor} upon which all callbacks will be posted. For
      *     security and consistency, the callbacks posted to this executor MUST be executed serially
      *     and in the order they were posted, as guaranteed by executors such as {@link
-     *     ExecutorService.newSingleThreadExecutor()}
+     *     java.util.concurrent.Executors#newSingleThreadExecutor()}
      * @param ikeSessionCallback the {@link IkeSessionCallback} interface to notify callers of state
      *     changes within the {@link IkeSession}.
      * @param firstChildSessionCallback the {@link ChildSessionCallback} interface to notify callers
@@ -229,12 +229,12 @@ public final class IkeSession implements AutoCloseable {
      * <p>Implements {@link AutoCloseable#close()}
      *
      * <p>Upon closure, {@link IkeSessionCallback#onClosed()} or {@link
-     * IkeSessionCallback#onClosedExceptionally()} will be fired.
+     * IkeSessionCallback#onClosedExceptionally(IkeException)} will be fired.
      *
      * <p>Closing an IKE Session implicitly closes any remaining Child Sessions negotiated under it.
-     * Users SHOULD stop all outbound traffic that uses these Child Sessions({@link IpSecTransform}
-     * pairs) before calling this method. Otherwise IPsec packets will be dropped due to the lack of
-     * a valid {@link IpSecTransform}.
+     * Users SHOULD stop all outbound traffic that uses these Child Sessions ({@link
+     * android.net.IpSecTransform} pairs) before calling this method. Otherwise IPsec packets will
+     * be dropped due to the lack of a valid {@link android.net.IpSecTransform}.
      *
      * <p>Closure of an IKE session will take priority over, and cancel other procedures waiting in
      * the queue (but will wait for ongoing locally initiated procedures to complete). After sending
@@ -253,9 +253,9 @@ public final class IkeSession implements AutoCloseable {
      * <p>Upon closing, {@link IkeSessionCallback#onClosed()} will be fired.
      *
      * <p>Closing an IKE Session implicitly closes any remaining Child Sessions negotiated under it.
-     * Users SHOULD stop all outbound traffic that uses these Child Sessions({@link IpSecTransform}
-     * pairs) before calling this method. Otherwise IPsec packets will be dropped due to the lack of
-     * a valid {@link IpSecTransform}.
+     * Users SHOULD stop all outbound traffic that uses these Child Sessions ({@link
+     * android.net.IpSecTransform} pairs) before calling this method. Otherwise IPsec packets will
+     * be dropped due to the lack of a valid {@link android.net.IpSecTransform}.
      *
      * <p>Forcible closure of an IKE session will take priority over, and cancel other procedures
      * waiting in the queue. It will also interrupt any ongoing locally initiated procedure.
