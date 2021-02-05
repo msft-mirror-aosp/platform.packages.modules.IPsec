@@ -15,6 +15,9 @@
  */
 package android.net.ipsec.ike.exceptions;
 
+import android.net.ipsec.ike.ChildSessionCallback;
+import android.net.ipsec.ike.IkeSessionCallback;
+
 /**
  * This exception is thrown if the remote server received a request for a nonexistent Child SA.
  *

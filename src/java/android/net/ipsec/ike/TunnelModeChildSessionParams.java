@@ -324,8 +324,8 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Adds an internal IP address request to the {@link TunnelModeChildSessionParams} being
          * built.
          *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
-         *     OsConstants.AF_INET6} are allowed.
+         * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
+         *     allowed
          * @return Builder this, to facilitate chaining.
          */
         // #getConfigurationRequests has been defined for callers to retrieve internal address
@@ -392,8 +392,8 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Adds an internal DNS server request to the {@link TunnelModeChildSessionParams} being
          * built.
          *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
-         *     OsConstants.AF_INET6} are allowed.
+         * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
+         *     allowed
          * @return Builder this, to facilitate chaining.
          */
         // #getConfigurationRequests has been defined for callers to retrieve internal DNS server
@@ -443,7 +443,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * <p>Only DHCPv4 server requests are supported.
          *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} is allowed.
+         * @param addressFamily the address family. Only {@code AF_INET} is allowed
          * @return Builder this, to facilitate chaining.
          */
         // #getConfigurationRequests has been defined for callers to retrieve internal DHCP server
