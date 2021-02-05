@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.crypto;
+package com.android.internal.net.ipsec.test.ike.crypto;
 
 import static android.net.IpSecAlgorithm.AUTH_AES_XCBC;
 
@@ -26,10 +26,10 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import android.net.IpSecAlgorithm;
-import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.test.ike.SaProposal;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IntegrityTransform;
 
 import org.junit.Before;
 import org.junit.Test;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.message.ttls;
+package com.android.internal.net.eap.test.message.ttls;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
 
@@ -23,11 +23,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.android.internal.net.eap.EapResult.EapError;
-import com.android.internal.net.eap.exceptions.ttls.EapTtlsParsingException;
-import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
-import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
-import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
+import com.android.internal.net.eap.test.EapResult.EapError;
+import com.android.internal.net.eap.test.exceptions.ttls.EapTtlsParsingException;
+import com.android.internal.net.eap.test.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
+import com.android.internal.net.eap.test.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder;
+import com.android.internal.net.eap.test.message.ttls.EapTtlsTypeData.EapTtlsTypeDataDecoder.DecodeResult;
 
 import org.junit.Test;
 

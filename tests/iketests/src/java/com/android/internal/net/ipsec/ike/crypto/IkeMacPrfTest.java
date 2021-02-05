@@ -14,17 +14,17 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.crypto;
+package com.android.internal.net.ipsec.test.ike.crypto;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
 
-import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.test.ike.SaProposal;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
 
 import org.junit.Before;
 import org.junit.Test;

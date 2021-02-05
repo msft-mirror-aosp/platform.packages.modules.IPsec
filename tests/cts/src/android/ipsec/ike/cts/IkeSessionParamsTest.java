@@ -44,7 +44,7 @@ import android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
 import org.junit.After;
 import org.junit.Before;
