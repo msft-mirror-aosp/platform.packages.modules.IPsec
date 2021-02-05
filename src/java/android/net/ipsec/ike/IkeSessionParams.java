@@ -224,7 +224,11 @@ public final class IkeSessionParams {
     private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
 
     @NonNull private final String mServerHostname;
-    @NonNull private final Network mNetwork;
+
+    // @see #getNetwork for reasons of changing the annotation from @NonNull to @Nullable in Android
+    // S and why it is safe.
+    @Nullable private final Network mNetwork;
+
     @Nullable private final Network mCallerConfiguredNetwork;
 
     @NonNull private final IkeSaProposal[] mSaProposals;
@@ -319,11 +323,10 @@ public final class IkeSessionParams {
      * @hide
      */
     @NonNull
-    public static IkeSessionParams fromPersistableBundle(
-            @NonNull PersistableBundle in, Context context) {
+    public static IkeSessionParams fromPersistableBundle(@NonNull PersistableBundle in) {
         Objects.requireNonNull(in, "PersistableBundle is null");
 
-        IkeSessionParams.Builder builder = new IkeSessionParams.Builder(context);
+        IkeSessionParams.Builder builder = new IkeSessionParams.Builder();
 
         builder.setServerHostname(in.getString(SERVER_HOST_NAME_KEY));
 
@@ -436,7 +439,16 @@ public final class IkeSessionParams {
     /**
      * Retrieves the configured or default {@link Network}
      *
-     * <p>If caller did not set any Network, this method will return the default Network resolved in
+     * <p>This method is deprecated and its annotation has been changed from @NonNull to @Nullable
+     * since Android S. This method needs to be @Nullable because a new Builder constructor {@link
+     * Builder#Builder() was added in Android S, and by using the new constructor the return value
+     * of this method will be null. Also making this method @Nullable will not break the backwards
+     * compatibility because for any app that uses the deprecated constructor
+     * {@link Builder#Builder(Context)}, the return value of this method is still guaranteed to
+     * be non-null.
+     *
+     * <p>For a caller that used {@link Builder#Builder(Context)} and did not set any Network,
+     * this method will return the default Network resolved in
      * {@link IkeSessionParams.Builder#build()}. The return value of this method is only
      * informational because if MOBIKE is enabled, IKE Session may switch to a different default
      * Network.
@@ -450,6 +462,7 @@ public final class IkeSessionParams {
     @Deprecated
     @SystemApi
     @NonNull
+    // TODO: b/163604823 Make it @Nullable
     public Network getNetwork() {
         return mNetwork;
     }
@@ -1116,7 +1129,12 @@ public final class IkeSessionParams {
 
     /** This class can be used to incrementally construct a {@link IkeSessionParams}. */
     public static final class Builder {
-        @NonNull private final ConnectivityManager mConnectivityManager;
+        // This field has changed from @NonNull to @Nullable since Android S. It has to be @Nullable
+        // because the new constructor #Builder() will not need and will not able to get a
+        // ConnectivityManager instance anymore. Making it @Nullable does not break the backwards
+        // compatibility because if apps use the old constructor #Builder(Context), the Builder and
+        // the IkeSessionParams built from it will still work in the old way. @see #Builder(Context)
+        @Nullable private ConnectivityManager mConnectivityManager;
 
         @NonNull private final List<IkeSaProposal> mSaProposalList = new LinkedList<>();
         @NonNull private final List<IkeConfigAttribute> mConfigRequestList = new ArrayList<>();
@@ -1129,7 +1147,6 @@ public final class IkeSessionParams {
 
         @NonNull private String mServerHostname;
         @Nullable private Network mCallerConfiguredNetwork;
-        @Nullable private Network mNetwork;
 
         @Nullable private IkeIdentification mLocalIdentification;
         @Nullable private IkeIdentification mRemoteIdentification;
@@ -1153,13 +1170,32 @@ public final class IkeSessionParams {
         /**
          * Construct Builder
          *
+         * <p>This constructor is deprecated since Android S. Apps that use this constructor can
+         * still expect {@link #build()} to throw if no configured or default network was found. But
+         * apps that use {@link #Builder()} MUST NOT expect that behavior anymore.
+         *
+         * <p>This method is deprecated because it is unnecessary to try resolving a default network
+         * or to validate network state before IkeSession starts the packet exchanges. It will also
+         * makes it hard to store IkeSessionParams in a {@link android.os.Parcelable} object such as
+         * VcnConfig.
+         *
          * @param context a valid {@link Context} instance.
          */
+        // TODO: b/163604823 Deprecate this method
         public Builder(@NonNull Context context) {
             this((ConnectivityManager) context.getSystemService(Context.CONNECTIVITY_SERVICE));
         }
 
+        /**
+         * Construct Builder
+         *
+         * @hide
+         */
+        public Builder() {}
+
         /** @hide */
+        // TODO: b/178389011 This constructor should be removed when #Builder(Context) can be safely
+        // removed. See #Builder(Context) for reasons.
         @VisibleForTesting
         public Builder(ConnectivityManager connectManager) {
             mConnectivityManager = connectManager;
@@ -1195,7 +1231,6 @@ public final class IkeSessionParams {
             }
 
             mCallerConfiguredNetwork = network;
-            mNetwork = network;
             return this;
         }
 
@@ -1671,12 +1706,20 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("IKE SA proposal not found");
             }
 
-            Network network =
-                    mCallerConfiguredNetwork != null
-                            ? mCallerConfiguredNetwork
-                            : mConnectivityManager.getActiveNetwork();
-            if (network == null) {
-                throw new IllegalArgumentException("Network not found");
+            // TODO: b/178389011 This code block should be removed when
+            // IkeSessionParams#getNetwork() and #Builder(Context) can be safely removed. This block
+            // makes sure if the Builder is constructed with the deprecated constructor
+            // #Builder(Context), #build() still works in the same way and will throw exception when
+            // there is no configured or default network.
+            Network defaultOrConfiguredNetwork = null;
+            if (mConnectivityManager != null) {
+                defaultOrConfiguredNetwork =
+                        mCallerConfiguredNetwork != null
+                                ? mCallerConfiguredNetwork
+                                : mConnectivityManager.getActiveNetwork();
+                if (defaultOrConfiguredNetwork == null) {
+                    throw new IllegalArgumentException("Network not found");
+                }
             }
 
             if (mServerHostname == null
@@ -1710,7 +1753,7 @@ public final class IkeSessionParams {
 
             return new IkeSessionParams(
                     mServerHostname,
-                    network,
+                    defaultOrConfiguredNetwork,
                     mCallerConfiguredNetwork,
                     mSaProposalList.toArray(new IkeSaProposal[0]),
                     mLocalIdentification,
