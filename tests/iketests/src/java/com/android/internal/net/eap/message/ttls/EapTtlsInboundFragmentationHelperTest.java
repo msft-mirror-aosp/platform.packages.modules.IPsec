@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.message.ttls;
+package com.android.internal.net.eap.test.message.ttls;
 
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES;
-import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_ACK;
-import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_ASSEMBLED;
-import static com.android.internal.net.eap.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_INVALID;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.test.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_ACK;
+import static com.android.internal.net.eap.test.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_ASSEMBLED;
+import static com.android.internal.net.eap.test.message.ttls.EapTtlsInboundFragmentationHelper.FRAGMENTATION_STATUS_INVALID;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import com.android.internal.net.eap.crypto.TlsSession;
+import com.android.internal.net.eap.test.crypto.TlsSession;
 
 import org.junit.Before;
 import org.junit.Test;

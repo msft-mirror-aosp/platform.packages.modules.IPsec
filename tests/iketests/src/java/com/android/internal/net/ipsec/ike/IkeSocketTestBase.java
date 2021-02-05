@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike;
+package com.android.internal.net.ipsec.test.ike;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
@@ -36,7 +36,7 @@ import android.util.Log;
 import android.util.LongSparseArray;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.message.IkeHeader;
+import com.android.internal.net.ipsec.test.ike.message.IkeHeader;
 import com.android.internal.util.HexDump;
 
 import org.junit.After;

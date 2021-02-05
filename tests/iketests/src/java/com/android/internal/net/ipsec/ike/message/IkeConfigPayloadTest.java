@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.ipsec.test.ike.message;
 
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
-import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_CP;
-import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
+import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_CP;
+import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -45,27 +45,27 @@ import static org.mockito.Mockito.mock;
 
 import android.net.InetAddresses;
 import android.net.LinkAddress;
-import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 import android.os.PersistableBundle;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeAppVersion;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttrIpv4AddressBase;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttrIpv6AddressBase;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv4AddressBase;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv6AddrRangeBase;
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv6AddressBase;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeAppVersion;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.IkeConfigAttrIpv4AddressBase;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.IkeConfigAttrIpv6AddressBase;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv4AddressBase;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv6AddrRangeBase;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv6AddressBase;
 
 import org.junit.Before;
 import org.junit.Test;

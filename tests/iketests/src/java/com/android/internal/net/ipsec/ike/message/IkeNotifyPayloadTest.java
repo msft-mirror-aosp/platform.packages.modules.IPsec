@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.ipsec.test.ike.message;
 
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_FAILED_CP_REQUIRED;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_IKE_SPI;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SELECTORS;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_SINGLE_PAIR_REQUIRED;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
-import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_FAILED_CP_REQUIRED;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_IKE_SPI;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SELECTORS;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_SINGLE_PAIR_REQUIRED;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD;
 
-import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE;
-import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
+import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE;
+import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -40,22 +40,22 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
-import android.net.ipsec.ike.exceptions.ChildSaNotFoundException;
-import android.net.ipsec.ike.exceptions.FailedCpRequiredException;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.InternalAddressFailureException;
-import android.net.ipsec.ike.exceptions.InvalidIkeSpiException;
-import android.net.ipsec.ike.exceptions.InvalidKeException;
-import android.net.ipsec.ike.exceptions.InvalidSelectorsException;
-import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import android.net.ipsec.ike.exceptions.NoAdditionalSasException;
-import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import android.net.ipsec.ike.exceptions.SinglePairRequiredException;
-import android.net.ipsec.ike.exceptions.TemporaryFailureException;
-import android.net.ipsec.ike.exceptions.TsUnacceptableException;
-import android.net.ipsec.ike.exceptions.UnrecognizedIkeProtocolException;
+import android.net.ipsec.test.ike.SaProposal;
+import android.net.ipsec.test.ike.exceptions.AuthenticationFailedException;
+import android.net.ipsec.test.ike.exceptions.ChildSaNotFoundException;
+import android.net.ipsec.test.ike.exceptions.FailedCpRequiredException;
+import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.exceptions.InternalAddressFailureException;
+import android.net.ipsec.test.ike.exceptions.InvalidIkeSpiException;
+import android.net.ipsec.test.ike.exceptions.InvalidKeException;
+import android.net.ipsec.test.ike.exceptions.InvalidSelectorsException;
+import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.test.ike.exceptions.NoAdditionalSasException;
+import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
+import android.net.ipsec.test.ike.exceptions.SinglePairRequiredException;
+import android.net.ipsec.test.ike.exceptions.TemporaryFailureException;
+import android.net.ipsec.test.ike.exceptions.TsUnacceptableException;
+import android.net.ipsec.test.ike.exceptions.UnrecognizedIkeProtocolException;
 
 import com.android.internal.net.TestUtils;
 
