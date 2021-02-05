@@ -31,12 +31,12 @@ import static com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribut
 import static com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribute.EAP_AT_RES;
 import static com.android.internal.net.eap.test.message.simaka.attributes.EapTestAttributeDefinitions.RES_BYTES;
 
-import static junit.framework.TestCase.fail;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import com.android.internal.net.eap.test.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.internal.net.eap.test.message.simaka.EapSimAkaAttribute.AtAnyIdReq;
