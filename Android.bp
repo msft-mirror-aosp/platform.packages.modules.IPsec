@@ -16,7 +16,6 @@ java_sdk_library {
     name: "android.net.ipsec.ike",
     installable: true,
     defaults: ["framework-module-defaults"],
-    sdk_version: "module_current",
 
     // ike is used as a shared library.
     shared_library: true,
@@ -57,6 +56,13 @@ java_sdk_library {
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
+
+    permitted_packages: [
+       "com.android.internal.net",
+       "android.net.ipsec.ike",
+       "android.net.eap",
+    ],
+    min_sdk_version: "30",
 }
 
 filegroup {
