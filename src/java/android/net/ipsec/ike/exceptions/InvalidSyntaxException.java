@@ -16,6 +16,8 @@
 package android.net.ipsec.ike.exceptions;
 
 import android.annotation.NonNull;
+import android.net.ipsec.ike.ChildSessionCallback;
+import android.net.ipsec.ike.IkeSessionCallback;
 
 /**
  * This exception is thrown if any IKE message has a syntax error.
