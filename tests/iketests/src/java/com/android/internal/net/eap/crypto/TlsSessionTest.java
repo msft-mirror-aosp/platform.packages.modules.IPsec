@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.crypto;
+package com.android.internal.net.eap.test.crypto;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
-import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
+import static com.android.internal.net.eap.test.crypto.TlsSession.TLS_STATUS_CLOSED;
+import static com.android.internal.net.eap.test.crypto.TlsSession.TLS_STATUS_FAILURE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -29,9 +29,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.internal.net.eap.crypto.TlsSession.EapTtlsKeyingMaterial;
-import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
-import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
+import com.android.internal.net.eap.test.crypto.TlsSession.EapTtlsKeyingMaterial;
+import com.android.internal.net.eap.test.crypto.TlsSession.TlsResult;
+import com.android.internal.net.eap.test.exceptions.EapInvalidRequestException;
 
 import org.junit.Before;
 import org.junit.Test;

@@ -14,27 +14,27 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike;
+package android.net.ipsec.test.ike;
 
-import static android.net.ipsec.ike.IkeSessionParams.IKE_DPD_DELAY_SEC_DEFAULT;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthEapConfig;
-import static android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_DPD_DELAY_SEC_DEFAULT;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignLocalConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthEapConfig;
+import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthPskConfig;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttribute;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -53,16 +53,16 @@ import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.Network;
 import android.net.SocketKeepalive;
-import android.net.eap.EapSessionConfig;
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
-import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
+import android.net.eap.test.EapSessionConfig;
+import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension;
+import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
+import android.net.ipsec.test.ike.ike3gpp.Ike3gppParams;
 import android.os.PersistableBundle;
 import android.telephony.TelephonyManager;
 import android.util.SparseArray;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
 import org.junit.Before;
 import org.junit.Test;
