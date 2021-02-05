@@ -219,7 +219,7 @@ public final class IkeSaProposal extends SaProposal {
          *
          * @param algorithm encryption algorithm to add to IkeSaProposal.
          * @param keyLength key length of algorithm. For algorithms that have fixed key length (e.g.
-         *     3DES) only {@link SaProposal.KEY_LEN_UNUSED} is allowed.
+         *     3DES) only {@link SaProposal#KEY_LEN_UNUSED} is allowed.
          * @return Builder of IkeSaProposal.
          */
         // The matching getter is defined in the super class. Please see {@link

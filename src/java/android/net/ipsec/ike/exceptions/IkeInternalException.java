@@ -16,12 +16,14 @@
 package android.net.ipsec.ike.exceptions;
 
 import android.annotation.NonNull;
+import android.net.ipsec.ike.ChildSessionCallback;
+import android.net.ipsec.ike.IkeSessionCallback;
 
 /**
  * IkeInternalException encapsulates all local implementation or resource related exceptions.
  *
- * <p>Causes may include exceptions such as {@link IpSecManager.SpiUnavailableException} when the
- * requested SPI resources failed to be allocated.
+ * <p>Causes may include exceptions such as {@link android.net.IpSecManager.SpiUnavailableException}
+ * when the requested SPI resources failed to be allocated.
  */
 public final class IkeInternalException extends IkeNonProtocolException {
     /**
