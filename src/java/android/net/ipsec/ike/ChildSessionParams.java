@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
  * to have the same DH group as that of the IKE Session, then they need to explicitly set the same
  * DH Group in ChildSessionParams.
  *
- * @see {@link TunnelModeChildSessionParams} and {@link TransportModeChildSessionParams}
+ * <p>@see {@link TunnelModeChildSessionParams} and {@link TransportModeChildSessionParams}
  */
 public abstract class ChildSessionParams {
     /** @hide */
