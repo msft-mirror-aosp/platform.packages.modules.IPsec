@@ -99,8 +99,11 @@ java_library {
     static_libs: ["ike-internals"],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
-    // being overwritten by the frameworks class copies.
-    jarjar_rules: "jarjar-rules-shared.txt",
+    // being overwritten by the frameworks class copies and break code coverage
+    // reports. IKE source files are jarjared to avoid this test jar being
+    // overshadowed by the IKE jar in framework and bootclasspath which will
+    // cause compiling and runtime errors respectively.
+    jarjar_rules: "jarjar-rules-test.txt",
 }
 
 filegroup {

@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike;
+package android.net.ipsec.test.ike;
 
 import static org.junit.Assert.assertEquals;
 
-import android.net.ipsec.ike.exceptions.IkeException;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.InvalidIkeSpiException;
+import android.net.ipsec.test.ike.exceptions.IkeException;
+import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.exceptions.InvalidIkeSpiException;
 
 import org.junit.Before;
 import org.junit.Test;

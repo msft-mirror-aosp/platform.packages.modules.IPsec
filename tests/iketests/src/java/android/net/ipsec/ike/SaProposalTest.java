@@ -14,34 +14,34 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike;
+package android.net.ipsec.test.ike;
 
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_1024_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_1536_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_3072_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_4096_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_NONE;
-import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_3DES;
-import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
-import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CTR;
-import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12;
-import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16;
-import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8;
-import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305;
-import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96;
-import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96;
-import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128;
-import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_384_192;
-import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_512_256;
-import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_NONE;
-import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_128;
-import static android.net.ipsec.ike.SaProposal.KEY_LEN_UNUSED;
-import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC;
-import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1;
-import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256;
-import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_384;
-import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_512;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_1024_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_1536_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_3072_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_4096_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_NONE;
+import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_3DES;
+import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
+import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CTR;
+import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12;
+import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16;
+import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8;
+import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305;
+import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96;
+import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96;
+import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128;
+import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_384_192;
+import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_512_256;
+import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_NONE;
+import static android.net.ipsec.test.ike.SaProposal.KEY_LEN_AES_128;
+import static android.net.ipsec.test.ike.SaProposal.KEY_LEN_UNUSED;
+import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC;
+import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1;
+import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256;
+import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_384;
+import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_512;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -54,15 +54,15 @@ import static org.junit.Assume.assumeTrue;
 import android.net.IpSecAlgorithm;
 import android.os.PersistableBundle;
 
-import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
-import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
-import com.android.internal.net.ipsec.ike.message.IkePayload;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
-import com.android.internal.net.utils.build.SdkLevel;
+import com.android.internal.net.ipsec.test.ike.crypto.IkeCipher;
+import com.android.internal.net.ipsec.test.ike.crypto.IkeMacIntegrity;
+import com.android.internal.net.ipsec.test.ike.message.IkePayload;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.DhGroupTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.EncryptionTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.Transform;
+import com.android.internal.net.utils.test.build.SdkLevel;
 
 import org.junit.Test;
 
