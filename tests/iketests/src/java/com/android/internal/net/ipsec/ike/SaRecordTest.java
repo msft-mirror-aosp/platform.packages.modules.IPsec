@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike;
+package com.android.internal.net.ipsec.test.ike;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 
@@ -36,26 +36,26 @@ import android.net.IpSecManager;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
-import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.test.ike.SaProposal;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
-import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecordConfig;
-import com.android.internal.net.ipsec.ike.SaRecord.IIpSecTransformHelper;
-import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
-import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecordConfig;
-import com.android.internal.net.ipsec.ike.SaRecord.IpSecTransformHelper;
-import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
-import com.android.internal.net.ipsec.ike.SaRecord.SaRecordHelper;
-import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
-import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
-import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
-import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
-import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
+import com.android.internal.net.ipsec.test.ike.SaRecord.ChildSaRecord;
+import com.android.internal.net.ipsec.test.ike.SaRecord.ChildSaRecordConfig;
+import com.android.internal.net.ipsec.test.ike.SaRecord.IIpSecTransformHelper;
+import com.android.internal.net.ipsec.test.ike.SaRecord.IkeSaRecord;
+import com.android.internal.net.ipsec.test.ike.SaRecord.IkeSaRecordConfig;
+import com.android.internal.net.ipsec.test.ike.SaRecord.IpSecTransformHelper;
+import com.android.internal.net.ipsec.test.ike.SaRecord.SaLifetimeAlarmScheduler;
+import com.android.internal.net.ipsec.test.ike.SaRecord.SaRecordHelper;
+import com.android.internal.net.ipsec.test.ike.crypto.IkeCipher;
+import com.android.internal.net.ipsec.test.ike.crypto.IkeMacIntegrity;
+import com.android.internal.net.ipsec.test.ike.crypto.IkeMacPrf;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.EncryptionTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IkeSecurityParameterIndex;
+import com.android.internal.net.ipsec.test.ike.utils.IkeSpiGenerator;
 import com.android.server.IpSecService;
 
 import org.junit.Before;

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike.ike3gpp;
+package android.net.ipsec.test.ike.ike3gpp;
 
-import static android.net.ipsec.ike.ike3gpp.Ike3gppParams.PDU_SESSION_ID_UNSET;
+import static android.net.ipsec.test.ike.ike3gpp.Ike3gppParams.PDU_SESSION_ID_UNSET;
 
 import static org.junit.Assert.assertEquals;
 

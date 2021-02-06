@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.net;
+package com.android.internal.net.ipsec.test.ike.net;
 
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;

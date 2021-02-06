@@ -14,11 +14,11 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.ike3gpp;
+package com.android.internal.net.ipsec.test.ike.ike3gpp;
 
 import static org.junit.Assert.assertEquals;
 
-import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 
 import com.android.internal.util.HexDump;
 
