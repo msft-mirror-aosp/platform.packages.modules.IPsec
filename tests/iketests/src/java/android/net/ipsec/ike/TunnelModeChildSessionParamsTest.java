@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike;
+package android.net.ipsec.test.ike;
 
-import static android.net.ipsec.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_DEFAULT;
-import static android.net.ipsec.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_MAXIMUM;
-import static android.net.ipsec.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_MINIMUM;
-import static android.net.ipsec.ike.ChildSessionParams.CHILD_SOFT_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.test.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_DEFAULT;
+import static android.net.ipsec.test.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_MAXIMUM;
+import static android.net.ipsec.test.ike.ChildSessionParams.CHILD_HARD_LIFETIME_SEC_MINIMUM;
+import static android.net.ipsec.test.ike.ChildSessionParams.CHILD_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
-import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
+import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -39,7 +39,7 @@ import static org.junit.Assert.fail;
 import android.net.InetAddresses;
 import android.util.SparseArray;
 
-import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttribute;
 
 import org.junit.Before;
 import org.junit.Test;

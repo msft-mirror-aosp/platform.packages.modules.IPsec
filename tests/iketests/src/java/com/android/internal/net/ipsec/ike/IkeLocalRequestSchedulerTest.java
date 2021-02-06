@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike;
+package com.android.internal.net.ipsec.test.ike;
 
-import static com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_HIGH;
-import static com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_NORMAL;
-import static com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_URGENT;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_MOBIKE;
+import static com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_HIGH;
+import static com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_NORMAL;
+import static com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_URGENT;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_MOBIKE;
 
 import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
@@ -44,9 +44,9 @@ import android.os.PowerManager.WakeLock;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IProcedureConsumer;
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
-import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequestFactory;
+import com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.IProcedureConsumer;
+import com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.LocalRequest;
+import com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.LocalRequestFactory;
 
 import org.junit.Before;
 import org.junit.Test;

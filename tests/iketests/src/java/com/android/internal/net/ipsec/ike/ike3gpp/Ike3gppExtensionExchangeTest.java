@@ -14,25 +14,25 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.ike3gpp;
+package com.android.internal.net.ipsec.test.ike.ike3gpp;
 
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_IKE_AUTH;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_IKE_INIT;
-import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_BACKOFF_TIMER;
-import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_CAPABILITY;
-import static com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_INFORMATION;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_IKE_AUTH;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_IKE_INIT;
+import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_BACKOFF_TIMER;
+import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_CAPABILITY;
+import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_INFORMATION;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
-import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
-import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
+import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension;
+import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
+import android.net.ipsec.test.ike.ike3gpp.Ike3gppParams;
 
-import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
-import com.android.internal.net.ipsec.ike.message.IkePayload;
+import com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload;
+import com.android.internal.net.ipsec.test.ike.message.IkePayload;
 import com.android.internal.util.HexDump;
 
 import org.junit.Before;
