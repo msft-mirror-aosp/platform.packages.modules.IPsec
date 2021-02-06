@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.ipsec.test.ike.message;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 
@@ -24,12 +24,12 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.test.ike.SaProposal;
+import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.IkeDhParams;
-import com.android.internal.net.utils.BigIntegerUtils;
+import com.android.internal.net.ipsec.test.ike.IkeDhParams;
+import com.android.internal.net.utils.test.BigIntegerUtils;
 
 import org.junit.Before;
 import org.junit.Test;

@@ -33,7 +33,7 @@ import android.net.eap.EapSessionConfig.EapUiccConfig;
 
 import androidx.test.runner.AndroidJUnit4;
 
-import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
 import org.junit.Before;
 import org.junit.Test;
