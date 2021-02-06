@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike.ike3gpp;
+package android.net.ipsec.test.ike.ike3gpp;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
 
 import org.junit.Test;
 
