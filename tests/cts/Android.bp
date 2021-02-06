@@ -26,7 +26,6 @@ android_test {
 
     srcs: [
         "src/**/*.java",
-        ":ike-test-utils",
     ],
 
     static_libs: [
@@ -34,6 +33,7 @@ android_test {
         "compatibility-device-util-axt",
         "ctstestrunner-axt",
         "net-tests-utils",
+        "ike-test-utils",
     ],
 
     platform_apis: true,

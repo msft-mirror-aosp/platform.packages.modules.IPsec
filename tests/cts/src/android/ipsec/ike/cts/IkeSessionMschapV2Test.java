@@ -26,7 +26,7 @@ import android.net.ipsec.ike.IkeTrafficSelector;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
 import org.junit.BeforeClass;
 import org.junit.Test;

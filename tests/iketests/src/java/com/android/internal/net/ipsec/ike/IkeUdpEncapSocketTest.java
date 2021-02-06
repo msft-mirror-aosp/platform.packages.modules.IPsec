@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike;
+package com.android.internal.net.ipsec.test.ike;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertNotNull;
@@ -42,7 +42,7 @@ import android.util.Log;
 import androidx.test.InstrumentationRegistry;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
 import com.android.server.IpSecService;
 
 import org.junit.After;
