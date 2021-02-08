@@ -76,8 +76,17 @@ public final class Ike3gppBackoffTimer extends Ike3gppData {
     private final byte mBackoffTimer;
     private final int mBackoffCause;
 
-    /** @hide */
-    public Ike3gppBackoffTimer(@SuppressLint("NoByteOrShort") byte backoffTimer, int backoffCause) {
+    /**
+     * Constructs an Ike3gppBackoffTimer with the specified parameters.
+     *
+     * @param backoffTimer the backoff timer indicated by the peer
+     * @param backoffCause the cause for this backoff timer, indicated by the peer
+     * @hide
+     */
+    // NoByteOrShort: using byte to be consistent with the Backoff Timer specification
+    @SystemApi
+    public Ike3gppBackoffTimer(
+            @SuppressLint("NoByteOrShort") byte backoffTimer, @ErrorType int backoffCause) {
         mBackoffTimer = backoffTimer;
         mBackoffCause = backoffCause;
     }
