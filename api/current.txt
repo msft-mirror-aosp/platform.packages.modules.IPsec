@@ -203,6 +203,7 @@ package android.net.ipsec.ike {
 
   public static final class IkeSessionParams.Builder {
     ctor public IkeSessionParams.Builder(@NonNull android.content.Context);
+    ctor public IkeSessionParams.Builder(@NonNull android.net.ipsec.ike.IkeSessionParams);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addIkeOption(int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(@NonNull java.net.InetAddress);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(int);
@@ -303,6 +304,7 @@ package android.net.ipsec.ike {
 
   public static final class TransportModeChildSessionParams.Builder {
     ctor public TransportModeChildSessionParams.Builder();
+    ctor public TransportModeChildSessionParams.Builder(@NonNull android.net.ipsec.ike.TransportModeChildSessionParams);
     method @NonNull public android.net.ipsec.ike.TransportModeChildSessionParams.Builder addInboundTrafficSelectors(@NonNull android.net.ipsec.ike.IkeTrafficSelector);
     method @NonNull public android.net.ipsec.ike.TransportModeChildSessionParams.Builder addOutboundTrafficSelectors(@NonNull android.net.ipsec.ike.IkeTrafficSelector);
     method @NonNull public android.net.ipsec.ike.TransportModeChildSessionParams.Builder addSaProposal(@NonNull android.net.ipsec.ike.ChildSaProposal);
@@ -316,6 +318,7 @@ package android.net.ipsec.ike {
 
   public static final class TunnelModeChildSessionParams.Builder {
     ctor public TunnelModeChildSessionParams.Builder();
+    ctor public TunnelModeChildSessionParams.Builder(@NonNull android.net.ipsec.ike.TunnelModeChildSessionParams);
     method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams.Builder addInboundTrafficSelectors(@NonNull android.net.ipsec.ike.IkeTrafficSelector);
     method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams.Builder addInternalAddressRequest(int);
     method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams.Builder addInternalAddressRequest(@NonNull java.net.Inet4Address);
