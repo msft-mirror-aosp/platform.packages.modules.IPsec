@@ -260,16 +260,18 @@ public final class IkeSessionParamsTest {
         assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
     }
 
+    private IkeSessionParams.Builder createIkeParamsBuilderMinimum() {
+        return new IkeSessionParams.Builder()
+                .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
+                .addSaProposal(mIkeSaProposal)
+                .setLocalIdentification(mLocalIdentification)
+                .setRemoteIdentification(mRemoteIdentification)
+                .setAuthPsk(PSK);
+    }
+
     @Test
     public void testIkeSessionParamsEncodeDecodeIsLossLess() throws Exception {
-        IkeSessionParams sessionParams =
-                new IkeSessionParams.Builder()
-                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
-                        .addSaProposal(mIkeSaProposal)
-                        .setLocalIdentification(mLocalIdentification)
-                        .setRemoteIdentification(mRemoteIdentification)
-                        .setAuthPsk(PSK)
-                        .build();
+        IkeSessionParams sessionParams = createIkeParamsBuilderMinimum().build();
 
         PersistableBundle bundle = sessionParams.toPersistableBundle();
         IkeSessionParams result = IkeSessionParams.fromPersistableBundle(bundle);
@@ -802,5 +804,25 @@ public final class IkeSessionParamsTest {
                         .setEapAkaConfig(SUB_ID, TelephonyManager.APPTYPE_ISIM)
                         .build();
         verifyPersistableBundleEncodeDecodeIsLossless(new IkeAuthEapConfig(eapSessionConfig));
+    }
+
+    @Test
+    public void testConstructBuilderWithIkeSessionParams() throws Exception {
+        IkeSessionParams sessionParams = createIkeParamsBuilderMinimum().build();
+
+        IkeSessionParams result = new IkeSessionParams.Builder(sessionParams).build();
+        assertEquals(sessionParams, result);
+    }
+
+    @Test
+    public void testCreateCopyWithNetworkCleared() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum()
+                        .setConfiguredNetwork(mMockUserConfigNetwork)
+                        .build();
+
+        IkeSessionParams result =
+                new IkeSessionParams.Builder(sessionParams).setConfiguredNetwork(null).build();
+        assertNull(result.getConfiguredNetwork());
     }
 }
