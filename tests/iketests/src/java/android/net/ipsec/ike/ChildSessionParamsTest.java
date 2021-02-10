@@ -35,6 +35,8 @@ public final class ChildSessionParamsTest {
     private static final int NUM_TS = 2;
 
     private final ChildSaProposal mSaProposal;
+    private final IkeTrafficSelector mTsInbound;
+    private final IkeTrafficSelector mTsOutbound;
 
     public ChildSessionParamsTest() {
         mSaProposal =
@@ -43,6 +45,18 @@ public final class ChildSessionParamsTest {
                                 SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12,
                                 SaProposal.KEY_LEN_AES_128)
                         .build();
+        mTsInbound =
+                new IkeTrafficSelector(
+                        16,
+                        65520,
+                        InetAddress.parseNumericAddress("192.0.2.100"),
+                        InetAddress.parseNumericAddress("192.0.2.101"));
+        mTsOutbound =
+                new IkeTrafficSelector(
+                        32,
+                        256,
+                        InetAddress.parseNumericAddress("192.0.2.200"),
+                        InetAddress.parseNumericAddress("192.0.2.255"));
     }
 
     @Test
@@ -86,29 +100,16 @@ public final class ChildSessionParamsTest {
 
     @Test
     public void testBuildTrafficSelectors() {
-        IkeTrafficSelector tsInbound =
-                new IkeTrafficSelector(
-                        16,
-                        65520,
-                        InetAddress.parseNumericAddress("192.0.2.100"),
-                        InetAddress.parseNumericAddress("192.0.2.101"));
-        IkeTrafficSelector tsOutbound =
-                new IkeTrafficSelector(
-                        32,
-                        256,
-                        InetAddress.parseNumericAddress("192.0.2.200"),
-                        InetAddress.parseNumericAddress("192.0.2.255"));
-
         ChildSessionParams sessionParams =
                 new TunnelModeChildSessionParams.Builder()
                         .addSaProposal(mSaProposal)
-                        .addInboundTrafficSelectors(tsInbound)
-                        .addOutboundTrafficSelectors(tsOutbound)
+                        .addInboundTrafficSelectors(mTsInbound)
+                        .addOutboundTrafficSelectors(mTsOutbound)
                         .build();
 
         assertEquals(Arrays.asList(mSaProposal), sessionParams.getSaProposals());
-        assertEquals(Arrays.asList(tsInbound), sessionParams.getInboundTrafficSelectors());
-        assertEquals(Arrays.asList(tsOutbound), sessionParams.getOutboundTrafficSelectors());
+        assertEquals(Arrays.asList(mTsInbound), sessionParams.getInboundTrafficSelectors());
+        assertEquals(Arrays.asList(mTsOutbound), sessionParams.getOutboundTrafficSelectors());
     }
 
     @Test
@@ -133,5 +134,19 @@ public final class ChildSessionParamsTest {
                 "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff");
 
         return new IkeTrafficSelector(0, 65535, tsStartAddress, tsEndAddress);
+    }
+
+    @Test
+    public void testConstructTransportModeChildParamsCopy() throws Exception {
+        TransportModeChildSessionParams childParams =
+                new TransportModeChildSessionParams.Builder()
+                        .addInboundTrafficSelectors(mTsInbound)
+                        .addOutboundTrafficSelectors(mTsOutbound)
+                        .addSaProposal(mSaProposal)
+                        .build();
+
+        TransportModeChildSessionParams result =
+                new TransportModeChildSessionParams.Builder(childParams).build();
+        assertEquals(childParams, result);
     }
 }
