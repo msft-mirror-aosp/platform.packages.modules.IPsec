@@ -825,4 +825,26 @@ public final class IkeSessionParamsTest {
                 new IkeSessionParams.Builder(sessionParams).setConfiguredNetwork(null).build();
         assertNull(result.getConfiguredNetwork());
     }
+
+    @Test
+    public void testCreateWithAndWithoutConnectivityMgr() throws Exception {
+        IkeSessionParams withConnectivityMgr =
+                new IkeSessionParams.Builder(mMockConnectManager)
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .build();
+
+        IkeSessionParams withoutConnectivityMgr =
+                new IkeSessionParams.Builder()
+                        .setServerHostname(REMOTE_IPV4_HOST_ADDRESS)
+                        .addSaProposal(mIkeSaProposal)
+                        .setLocalIdentification(mLocalIdentification)
+                        .setRemoteIdentification(mRemoteIdentification)
+                        .setAuthPsk(PSK)
+                        .build();
+        assertEquals(withConnectivityMgr, withoutConnectivityMgr);
+    }
 }
