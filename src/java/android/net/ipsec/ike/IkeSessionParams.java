@@ -228,7 +228,13 @@ public final class IkeSessionParams {
 
     // @see #getNetwork for reasons of changing the annotation from @NonNull to @Nullable in Android
     // S and why it is safe.
-    @Nullable private final Network mNetwork;
+    // Do not include mDefaultOrConfiguredNetwork in #hashCode or #equal because when it represents
+    // configured network, it always has the same value as mCallerConfiguredNetwork. When it
+    // represents a default network it can only reflects the device status at the IkeSessionParams
+    // creation time. Since the actually default network may change after IkeSessionParams is
+    // constructed, depending on mDefaultOrConfiguredNetwork in #hashCode and #equal to decide
+    // if this object equals to another object does not make sense.
+    @Nullable private final Network mDefaultOrConfiguredNetwork;
 
     @Nullable private final Network mCallerConfiguredNetwork;
 
@@ -259,7 +265,7 @@ public final class IkeSessionParams {
 
     private IkeSessionParams(
             @NonNull String serverHostname,
-            @NonNull Network network,
+            @NonNull Network defaultOrConfiguredNetwork,
             @NonNull Network callerConfiguredNetwork,
             @NonNull IkeSaProposal[] proposals,
             @NonNull IkeIdentification localIdentification,
@@ -276,7 +282,7 @@ public final class IkeSessionParams {
             int nattKeepaliveDelaySec,
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
-        mNetwork = network;
+        mDefaultOrConfiguredNetwork = defaultOrConfiguredNetwork;
         mCallerConfiguredNetwork = callerConfiguredNetwork;
 
         mSaProposals = proposals;
@@ -465,7 +471,7 @@ public final class IkeSessionParams {
     @NonNull
     // TODO: b/163604823 Make it @Nullable
     public Network getNetwork() {
-        return mNetwork;
+        return mDefaultOrConfiguredNetwork;
     }
 
     /** Retrieves all IkeSaProposals configured */
@@ -598,7 +604,6 @@ public final class IkeSessionParams {
         return Objects.hash(
                 mServerHostname,
                 mCallerConfiguredNetwork,
-                mNetwork,
                 Arrays.hashCode(mSaProposals),
                 mLocalIdentification,
                 mRemoteIdentification,
@@ -625,7 +630,6 @@ public final class IkeSessionParams {
 
         return mServerHostname.equals(other.mServerHostname)
                 && Objects.equals(mCallerConfiguredNetwork, other.mCallerConfiguredNetwork)
-                && Objects.equals(mNetwork, other.mNetwork)
                 && Arrays.equals(mSaProposals, other.mSaProposals)
                 && mLocalIdentification.equals(other.mLocalIdentification)
                 && mRemoteIdentification.equals(other.mRemoteIdentification)
