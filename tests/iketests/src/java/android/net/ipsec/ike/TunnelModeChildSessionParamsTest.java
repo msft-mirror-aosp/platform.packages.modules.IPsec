@@ -264,5 +264,27 @@ public final class TunnelModeChildSessionParamsTest {
         } catch (IllegalArgumentException expected) {
         }
     }
+
+    @Test
+    public void testConstructTunnelModeChildParamsCopy() throws Exception {
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder()
+                        .addSaProposal(mSaProposal)
+                        .setLifetimeSeconds(
+                                (int) TimeUnit.HOURS.toSeconds(3L),
+                                (int) TimeUnit.HOURS.toSeconds(1L))
+                        .addInternalAddressRequest(AF_INET)
+                        .addInternalAddressRequest(AF_INET6)
+                        .addInternalAddressRequest(IPV4_ADDRESS)
+                        .addInternalAddressRequest(IPV6_ADDRESS, IP6_PREFIX_LEN)
+                        .addInternalDnsServerRequest(AF_INET)
+                        .addInternalDnsServerRequest(AF_INET6)
+                        .addInternalDhcpServerRequest(AF_INET)
+                        .build();
+
+        TunnelModeChildSessionParams result =
+                new TunnelModeChildSessionParams.Builder(childParams).build();
+        assertEquals(childParams, result);
+    }
 }
 
