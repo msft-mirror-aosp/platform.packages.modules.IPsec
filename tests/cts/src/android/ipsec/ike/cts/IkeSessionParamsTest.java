@@ -23,6 +23,7 @@ import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConf
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthEapConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppDataListenerTest.TestIke3gppDataListener;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
@@ -41,6 +42,8 @@ import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.ConfigRequestIpv4PcscfServer;
 import android.net.ipsec.ike.IkeSessionParams.ConfigRequestIpv6PcscfServer;
 import android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
+import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
@@ -422,5 +425,17 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
         assertTrue(remoteConfig instanceof IkeAuthDigitalSignRemoteConfig);
         assertEquals(
                 mServerCaCert, ((IkeAuthDigitalSignRemoteConfig) remoteConfig).getRemoteCaCert());
+    }
+
+    @Test
+    public void testBuildWithIke3gppExtension() throws Exception {
+        Ike3gppExtension ike3gppExtension =
+                new Ike3gppExtension(
+                        new Ike3gppParams.Builder().build(), new TestIke3gppDataListener());
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum().setIke3gppExtension(ike3gppExtension).build();
+
+        verifyIkeParamsMinimumWithoutAuth(sessionParams);
+        assertEquals(ike3gppExtension, sessionParams.getIke3gppExtension());
     }
 }
