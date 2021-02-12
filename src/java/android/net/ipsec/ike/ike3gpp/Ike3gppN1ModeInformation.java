@@ -32,7 +32,13 @@ import java.util.Objects;
 public final class Ike3gppN1ModeInformation extends Ike3gppData {
     private final byte[] mSnssai;
 
-    /** @hide */
+    /**
+     * Constructs an Ike3gppN1ModeInformation with the specified parameters.
+     *
+     * @param snssai the SNSSAI value indicated by the peer
+     * @hide
+     */
+    @SystemApi
     public Ike3gppN1ModeInformation(@NonNull byte[] snssai) {
         Objects.requireNonNull(snssai, "snssai must not be null");
         mSnssai = snssai.clone();
