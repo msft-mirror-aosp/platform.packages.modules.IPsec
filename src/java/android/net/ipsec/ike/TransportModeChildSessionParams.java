@@ -90,7 +90,6 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          * Construct Builder from the {@link TransportModeChildSessionParams} object.
          *
          * @param childParams the object this Builder will be constructed with.
-         * @hide
          */
         public Builder(@NonNull TransportModeChildSessionParams childParams) {
             super(childParams);
