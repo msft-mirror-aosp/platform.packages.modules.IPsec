@@ -49,7 +49,6 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -110,8 +109,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
     @Before
     public void setUp() throws Exception {
-        // This address is never used except for setting up the test network
-        setUpTestNetwork(IPV4_ADDRESS_LOCAL);
+        super.setUp();
 
         mServerCaCert = CertUtils.createCertFromPemFile("server-a-self-signed-ca.pem");
         mClientEndCert = CertUtils.createCertFromPemFile("client-a-end-cert.pem");
@@ -120,11 +118,6 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
         mClientIntermediateCaCertTwo =
                 CertUtils.createCertFromPemFile("client-a-intermediate-ca-two.pem");
         mClientPrivateKey = CertUtils.createRsaPrivateKeyFromKeyFile("client-a-private-key.key");
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        tearDownTestNetwork();
     }
 
     private static EapSessionConfig.Builder createEapOnlySafeMethodsBuilder() {
@@ -144,7 +137,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      */
     private IkeSessionParams.Builder createIkeParamsBuilderMinimum() {
         return new IkeSessionParams.Builder(sContext)
-                .setNetwork(mTunNetwork)
+                .setNetwork(mTunNetworkContext.tunNetwork)
                 .setServerHostname(IPV4_ADDRESS_REMOTE.getHostAddress())
                 .addSaProposal(SA_PROPOSAL)
                 .setLocalIdentification(LOCAL_ID)
@@ -158,7 +151,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      * @see #createIkeParamsBuilderMinimum
      */
     private void verifyIkeParamsMinimum(IkeSessionParams sessionParams) {
-        assertEquals(mTunNetwork, sessionParams.getNetwork());
+        assertEquals(mTunNetworkContext.tunNetwork, sessionParams.getNetwork());
         assertEquals(IPV4_ADDRESS_REMOTE.getHostAddress(), sessionParams.getServerHostname());
         assertEquals(Arrays.asList(SA_PROPOSAL), sessionParams.getSaProposals());
         assertEquals(LOCAL_ID, sessionParams.getLocalIdentification());
@@ -292,7 +285,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      */
     private IkeSessionParams.Builder createIkeParamsBuilderMinimumWithoutAuth() {
         return new IkeSessionParams.Builder(sContext)
-                .setNetwork(mTunNetwork)
+                .setNetwork(mTunNetworkContext.tunNetwork)
                 .setServerHostname(IPV4_ADDRESS_REMOTE.getHostAddress())
                 .addSaProposal(SA_PROPOSAL)
                 .setLocalIdentification(LOCAL_ID)
@@ -306,11 +299,20 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      * @see #createIkeParamsBuilderMinimumWithoutAuth
      */
     private void verifyIkeParamsMinimumWithoutAuth(IkeSessionParams sessionParams) {
-        assertEquals(mTunNetwork, sessionParams.getNetwork());
+        assertEquals(mTunNetworkContext.tunNetwork, sessionParams.getNetwork());
         assertEquals(IPV4_ADDRESS_REMOTE.getHostAddress(), sessionParams.getServerHostname());
         assertEquals(Arrays.asList(SA_PROPOSAL), sessionParams.getSaProposals());
         assertEquals(LOCAL_ID, sessionParams.getLocalIdentification());
         assertEquals(REMOTE_ID, sessionParams.getRemoteIdentification());
+    }
+
+    private void verifyIkeParamsWithPsk(IkeSessionParams sessionParams) {
+        IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
+        assertTrue(localConfig instanceof IkeAuthPskConfig);
+        assertArrayEquals(IKE_PSK, ((IkeAuthPskConfig) localConfig).getPsk());
+        IkeAuthConfig remoteConfig = sessionParams.getRemoteAuthConfig();
+        assertTrue(remoteConfig instanceof IkeAuthPskConfig);
+        assertArrayEquals(IKE_PSK, ((IkeAuthPskConfig) remoteConfig).getPsk());
     }
 
     @Test
@@ -320,12 +322,21 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
         verifyIkeParamsMinimumWithoutAuth(sessionParams);
 
-        IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
-        assertTrue(localConfig instanceof IkeAuthPskConfig);
-        assertArrayEquals(IKE_PSK, ((IkeAuthPskConfig) localConfig).getPsk());
-        IkeAuthConfig remoteConfig = sessionParams.getRemoteAuthConfig();
-        assertTrue(remoteConfig instanceof IkeAuthPskConfig);
-        assertArrayEquals(IKE_PSK, ((IkeAuthPskConfig) remoteConfig).getPsk());
+        verifyIkeParamsWithPsk(sessionParams);
+    }
+
+    @Test
+    public void testBuildWithPskMobikeEnabled() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimumWithoutAuth()
+                        .setAuthPsk(IKE_PSK)
+                        .addIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
+                        .build();
+
+        verifyIkeParamsMinimumWithoutAuth(sessionParams);
+
+        verifyIkeParamsWithPsk(sessionParams);
+        assertTrue(sessionParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE));
     }
 
     @Test
