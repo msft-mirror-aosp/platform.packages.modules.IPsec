@@ -47,7 +47,6 @@ import android.net.ipsec.ike.IkeTrafficSelector;
 import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.os.Binder;
 import android.os.ParcelFileDescriptor;
 import android.platform.test.annotations.AppModeFull;
@@ -146,10 +145,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
     private static final byte[] NEXT_AVAILABLE_IP4_ADDR_LOCAL = INITIAL_AVAILABLE_IP4_ADDR_LOCAL;
     private static final byte[] NEXT_AVAILABLE_IP4_ADDR_REMOTE = INITIAL_AVAILABLE_IP4_ADDR_REMOTE;
 
-    ParcelFileDescriptor mTunFd;
-    TestNetworkCallback mTunNetworkCallback;
-    Network mTunNetwork;
-    IkeTunUtils mTunUtils;
+    TunNetworkContext mTunNetworkContext;
 
     InetAddress mLocalAddress;
     InetAddress mRemoteAddress;
@@ -181,7 +177,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
     public void setUp() throws Exception {
         mLocalAddress = getNextAvailableIpv4AddressLocal();
         mRemoteAddress = getNextAvailableIpv4AddressRemote();
-        setUpTestNetwork(mLocalAddress);
+        mTunNetworkContext = new TunNetworkContext(mLocalAddress);
 
         mUserCbExecutor = Executors.newSingleThreadExecutor();
         mIkeSessionCallback = new TestIkeSessionCallback();
@@ -190,28 +186,41 @@ abstract class IkeSessionTestBase extends IkeTestBase {
 
     @After
     public void tearDown() throws Exception {
-        tearDownTestNetwork();
+        mTunNetworkContext.tearDown();
     }
 
-    void setUpTestNetwork(InetAddress localAddr) throws Exception {
-        int prefixLen = localAddr instanceof Inet4Address ? IP4_PREFIX_LEN : IP6_PREFIX_LEN;
+    protected static class TunNetworkContext {
+        public final ParcelFileDescriptor tunFd;
+        public final TestNetworkCallback tunNetworkCallback;
+        public final Network tunNetwork;
+        public final IkeTunUtils tunUtils;
 
-        TestNetworkInterface testIface =
-                sTNM.createTunInterface(new LinkAddress[] {new LinkAddress(localAddr, prefixLen)});
+        public TunNetworkContext(InetAddress... addresses) throws Exception {
+            final LinkAddress[] linkAddresses = new LinkAddress[addresses.length];
+            for (int i = 0; i < linkAddresses.length; i++) {
+                InetAddress addr = addresses[i];
+                if (addr instanceof Inet4Address) {
+                    linkAddresses[i] = new LinkAddress(addr, IP4_PREFIX_LEN);
+                } else {
+                    linkAddresses[i] = new LinkAddress(addr, IP6_PREFIX_LEN);
+                }
+            }
+            final TestNetworkInterface testIface = sTNM.createTunInterface(linkAddresses);
 
-        mTunFd = testIface.getFileDescriptor();
-        mTunNetworkCallback =
-                TestNetworkUtils.setupAndGetTestNetwork(
-                        sCM, sTNM, testIface.getInterfaceName(), new Binder());
-        mTunNetwork = mTunNetworkCallback.getNetworkBlocking();
-        mTunUtils = new IkeTunUtils(mTunFd);
-    }
+            tunFd = testIface.getFileDescriptor();
+            tunNetworkCallback =
+                    TestNetworkUtils.setupAndGetTestNetwork(
+                            sCM, sTNM, testIface.getInterfaceName(), new Binder());
+            tunNetwork = tunNetworkCallback.getNetworkBlocking();
+            tunUtils = new IkeTunUtils(tunFd);
+        }
 
-    void tearDownTestNetwork() throws Exception {
-        sCM.unregisterNetworkCallback(mTunNetworkCallback);
+        public void tearDown() throws Exception {
+            sCM.unregisterNetworkCallback(tunNetworkCallback);
 
-        sTNM.teardownTestNetwork(mTunNetwork);
-        mTunFd.close();
+            sTNM.teardownTestNetwork(tunNetwork);
+            tunFd.close();
+        }
     }
 
     static void setAppOp(int appop, boolean allow) {
@@ -317,14 +326,15 @@ abstract class IkeSessionTestBase extends IkeTestBase {
             boolean expectedAuthUseEncap,
             String... ikeAuthRespHexes)
             throws Exception {
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 0 /* expectedMsgId */,
                 false /* expectedUseEncap */,
                 ikeInitRespHex);
 
         byte[] ikeAuthReqPkt =
-                mTunUtils
+                mTunNetworkContext
+                        .tunUtils
                         .awaitReqAndInjectResp(
                                 IKE_DETERMINISTIC_INITIATOR_SPI,
                                 1 /* expectedMsgId */,
@@ -341,7 +351,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
 
     void performCloseIkeBlocking(
             int expectedMsgId, boolean expectedUseEncap, String deleteIkeRespHex) throws Exception {
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI, expectedMsgId, expectedUseEncap, deleteIkeRespHex);
     }
 
@@ -352,9 +362,11 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         private CompletableFuture<Boolean> mFutureOnClosedCall = new CompletableFuture<>();
         private CompletableFuture<IkeException> mFutureOnClosedException =
                 new CompletableFuture<>();
+        private CompletableFuture<IkeSessionConnectionInfo> mFutureConnectionConfig =
+                new CompletableFuture<>();
 
         private int mOnErrorExceptionsCount = 0;
-        private ArrayTrackRecord<IkeProtocolException> mOnErrorExceptionsTrackRecord =
+        private ArrayTrackRecord<IkeException> mOnErrorExceptionsTrackRecord =
                 new ArrayTrackRecord<>();
 
         @Override
@@ -373,8 +385,14 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         }
 
         @Override
-        public void onError(@NonNull IkeProtocolException exception) {
+        public void onError(@NonNull IkeException exception) {
             mOnErrorExceptionsTrackRecord.add(exception);
+        }
+
+        @Override
+        public void onIkeSessionConnectionInfoChanged(
+                @NonNull IkeSessionConnectionInfo connectionInfo) {
+            mFutureConnectionConfig.complete(connectionInfo);
         }
 
         public IkeSessionConfiguration awaitIkeConfig() throws Exception {
@@ -385,7 +403,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
             return mFutureOnClosedException.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
 
-        public IkeProtocolException awaitNextOnErrorException() {
+        public IkeException awaitNextOnErrorException() {
             return mOnErrorExceptionsTrackRecord.poll(
                     (long) TIMEOUT_MS,
                     mOnErrorExceptionsCount++,
@@ -396,6 +414,10 @@ abstract class IkeSessionTestBase extends IkeTestBase {
 
         public void awaitOnClosed() throws Exception {
             mFutureOnClosedCall.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        }
+
+        public IkeSessionConnectionInfo awaitOnIkeSessionConnectionInfoChanged() throws Exception {
+            return mFutureConnectionConfig.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
     }
 
@@ -408,8 +430,11 @@ abstract class IkeSessionTestBase extends IkeTestBase {
                 new CompletableFuture<>();
 
         private int mCreatedIpSecTransformCount = 0;
+        private int mMigratedIpSecTransformCount = 0;
         private int mDeletedIpSecTransformCount = 0;
         private ArrayTrackRecord<IpSecTransformCallRecord> mCreatedIpSecTransformsTrackRecord =
+                new ArrayTrackRecord<>();
+        private ArrayTrackRecord<IpSecTransformCallRecord[]> mMigratedIpSecTransformsTrackRecord =
                 new ArrayTrackRecord<>();
         private ArrayTrackRecord<IpSecTransformCallRecord> mDeletedIpSecTransformsTrackRecord =
                 new ArrayTrackRecord<>();
@@ -436,6 +461,17 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         }
 
         @Override
+        public void onIpSecTransformsMigrated(
+                IpSecTransform inIpSecTransform, IpSecTransform outIpSecTransform) {
+            IpSecTransformCallRecord inRecord =
+                    new IpSecTransformCallRecord(inIpSecTransform, IpSecManager.DIRECTION_IN);
+            IpSecTransformCallRecord outRecord =
+                    new IpSecTransformCallRecord(outIpSecTransform, IpSecManager.DIRECTION_OUT);
+            mMigratedIpSecTransformsTrackRecord.add(
+                    new IpSecTransformCallRecord[] {inRecord, outRecord});
+        }
+
+        @Override
         public void onIpSecTransformDeleted(@NonNull IpSecTransform ipSecTransform, int direction) {
             mDeletedIpSecTransformsTrackRecord.add(
                     new IpSecTransformCallRecord(ipSecTransform, direction));
@@ -453,6 +489,15 @@ abstract class IkeSessionTestBase extends IkeTestBase {
             return mCreatedIpSecTransformsTrackRecord.poll(
                     (long) TIMEOUT_MS,
                     mCreatedIpSecTransformCount++,
+                    (transform) -> {
+                        return true;
+                    });
+        }
+
+        public IpSecTransformCallRecord[] awaitNextMigratedIpSecTransform() {
+            return mMigratedIpSecTransformsTrackRecord.poll(
+                    (long) TIMEOUT_MS,
+                    mMigratedIpSecTransformCount++,
                     (transform) -> {
                         return true;
                     });
@@ -511,7 +556,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         assertNotNull(ikeConnectInfo);
         assertEquals(mLocalAddress, ikeConnectInfo.getLocalAddress());
         assertEquals(mRemoteAddress, ikeConnectInfo.getRemoteAddress());
-        assertEquals(mTunNetwork, ikeConnectInfo.getNetwork());
+        assertEquals(mTunNetworkContext.tunNetwork, ikeConnectInfo.getNetwork());
     }
 
     void verifyChildSessionSetupBlocking(

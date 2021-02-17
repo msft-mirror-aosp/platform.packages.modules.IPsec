@@ -16,7 +16,6 @@
 
 package android.ipsec.ike.cts;
 
-import static android.app.AppOpsManager.OP_MANAGE_IPSEC_TUNNELS;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
@@ -25,8 +24,6 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 import android.net.LinkAddress;
-import android.net.ipsec.ike.ChildSessionParams;
-import android.net.ipsec.ike.IkeFqdnIdentification;
 import android.net.ipsec.ike.IkeSession;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -34,8 +31,6 @@ import android.platform.test.annotations.AppModeFull;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -45,7 +40,7 @@ import java.util.Arrays;
 
 @RunWith(AndroidJUnit4.class)
 @AppModeFull(reason = "MANAGE_IPSEC_TUNNELS permission can't be granted to instant apps")
-public class IkeSessionPskTest extends IkeSessionTestBase {
+public class IkeSessionPskTest extends IkeSessionPskTestBase {
     // Test vectors for success workflow
     private static final String SUCCESS_IKE_INIT_RESP =
             "46B8ECA1E0D72A18B45427679F9245D421202220000000000000015022000030"
@@ -85,47 +80,9 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
                     + "9352D71100777B00ABCC6BD7DBEA697827FFAAA48DF9A54D1D68161939F5DC8"
                     + "6743A7CEB2BE34AC00095A5B8";
 
-    private IkeSession openIkeSessionWithTunnelModeChild(InetAddress remoteAddress) {
-        return openIkeSession(remoteAddress, buildTunnelModeChildSessionParams());
-    }
-
-    private IkeSession openIkeSessionWithTransportModeChild(InetAddress remoteAddress) {
-        return openIkeSession(remoteAddress, buildTransportModeChildParamsWithDefaultTs());
-    }
-
-    private IkeSession openIkeSession(InetAddress remoteAddress, ChildSessionParams childParams) {
-        IkeSessionParams ikeParams =
-                new IkeSessionParams.Builder(sContext)
-                        .setNetwork(mTunNetwork)
-                        .setServerHostname(remoteAddress.getHostAddress())
-                        .addSaProposal(SaProposalTest.buildIkeSaProposalWithNormalModeCipher())
-                        .addSaProposal(SaProposalTest.buildIkeSaProposalWithCombinedModeCipher())
-                        .setLocalIdentification(new IkeFqdnIdentification(LOCAL_HOSTNAME))
-                        .setRemoteIdentification(new IkeFqdnIdentification(REMOTE_HOSTNAME))
-                        .setAuthPsk(IKE_PSK)
-                        .build();
-        return new IkeSession(
-                sContext,
-                ikeParams,
-                childParams,
-                mUserCbExecutor,
-                mIkeSessionCallback,
-                mFirstChildSessionCallback);
-    }
-
-    @BeforeClass
-    public static void setUpTunnelPermissionBeforeClass() throws Exception {
-        // Under normal circumstances, the MANAGE_IPSEC_TUNNELS appop would be auto-granted, and
-        // a standard permission is insufficient. So we shell out the appop, to give us the
-        // right appop permissions.
-        setAppOp(OP_MANAGE_IPSEC_TUNNELS, true);
-    }
-
-    // This method is guaranteed to run in subclasses and will run after subclasses' @AfterClass
-    // methods.
-    @AfterClass
-    public static void tearDownTunnelPermissionAfterClass() throws Exception {
-        setAppOp(OP_MANAGE_IPSEC_TUNNELS, false);
+    @Override
+    protected IkeSessionParams getIkeSessionParams(InetAddress remoteAddress) {
+        return createIkeParamsBuilderBase(remoteAddress).build();
     }
 
     @Test
@@ -155,7 +112,7 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
         // Open additional Child Session
         TestChildSessionCallback additionalChildCb = new TestChildSessionCallback();
         ikeSession.openChildSession(buildTunnelModeChildSessionParams(), additionalChildCb);
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 true /* expectedUseEncap */,
@@ -175,7 +132,7 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
 
         // Close additional Child Session
         ikeSession.closeChildSession(additionalChildCb);
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 true /* expectedUseEncap */,
@@ -227,8 +184,8 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
 
         // Teardown current test network that uses IPv4 address and set up new network with IPv6
         // address.
-        tearDownTestNetwork();
-        setUpTestNetwork(mLocalAddress);
+        mTunNetworkContext.tearDown();
+        mTunNetworkContext = new TunNetworkContext(mLocalAddress);
 
         // Open IKE Session
         IkeSession ikeSession = openIkeSessionWithTunnelModeChild(mRemoteAddress);
@@ -283,7 +240,7 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
         // Open IKE Session
         IkeSession ikeSession = openIkeSessionWithTransportModeChild(mRemoteAddress);
         int expectedMsgId = 0;
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 false /* expectedUseEncap */,
