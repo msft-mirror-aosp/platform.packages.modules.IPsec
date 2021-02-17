@@ -126,3 +126,10 @@ java_library {
     libs: ["androidx.test.rules"],
     visibility: ["//packages/modules/IPsec/tests/cts"]
 }
+
+sdk {
+    name: "ipsec-module-sdk",
+    java_sdk_libs: [
+        "android.net.ipsec.ike",
+    ],
+}

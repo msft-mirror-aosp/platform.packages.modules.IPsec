@@ -1211,7 +1211,6 @@ public final class IkeSessionParams {
          * Construct Builder from the {@link IkeSessionParams} object.
          *
          * @param ikeSessionParams the object this Builder will be constructed with.
-         * @hide
          */
         public Builder(@NonNull IkeSessionParams ikeSessionParams) {
             mSaProposalList.addAll(ikeSessionParams.getSaProposals());
