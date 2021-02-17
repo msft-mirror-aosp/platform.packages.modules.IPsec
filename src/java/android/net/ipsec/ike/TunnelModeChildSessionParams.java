@@ -223,7 +223,6 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Construct Builder from the {@link TunnelModeChildSessionParams} object.
          *
          * @param childParams the object this Builder will be constructed with.
-         * @hide
          */
         public Builder(@NonNull TunnelModeChildSessionParams childParams) {
             super(childParams);
