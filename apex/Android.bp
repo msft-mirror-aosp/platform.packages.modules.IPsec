@@ -13,6 +13,10 @@
 // limitations under the License.
 
 // Defaults shared between production and test versions of the APEX.
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 apex_defaults {
     name: "com.android.ipsec-defaults",
     updatable: true,
