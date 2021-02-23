@@ -3042,7 +3042,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         @Override
         protected void handleResponseIkeMessage(IkeMessage ikeMessage) {
+            // IKE_SA_INIT exchange and IKE SA setup succeed
             boolean ikeInitSuccess = false;
+
+            // IKE INIT is not finished. IKE_SA_INIT request was re-sent with Notify-Cookie,
+            // and the same INIT SPI and other payloads.
+            boolean ikeInitRetriedWithCookie = false;
+
             try {
                 int exchangeType = ikeMessage.ikeHeader.exchangeType;
                 if (exchangeType != IkeHeader.EXCHANGE_TYPE_IKE_SA_INIT) {
@@ -3059,6 +3065,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             buildReqWithCookie(mRetransmitter.getMessage(), outCookiePayload);
 
                     sendRequest(initReq);
+                    ikeInitRetriedWithCookie = true;
                     return;
                 }
 
@@ -3111,7 +3118,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 handleIkeFatalError(e);
             } finally {
-                if (!ikeInitSuccess) {
+                if (!ikeInitSuccess && !ikeInitRetriedWithCookie) {
                     if (mLocalIkeSpiResource != null) {
                         mLocalIkeSpiResource.close();
                         mLocalIkeSpiResource = null;
