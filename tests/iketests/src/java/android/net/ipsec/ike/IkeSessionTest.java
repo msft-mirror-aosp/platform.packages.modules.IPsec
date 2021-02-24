@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.ike;
+package android.net.ipsec.test.ike;
 
-import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -30,9 +30,9 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
 
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachineTest;
-import com.android.internal.net.ipsec.ike.IkeSessionTestBase;
+import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine;
+import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachineTest;
+import com.android.internal.net.ipsec.test.ike.IkeSessionTestBase;
 
 import org.junit.Before;
 import org.junit.Test;

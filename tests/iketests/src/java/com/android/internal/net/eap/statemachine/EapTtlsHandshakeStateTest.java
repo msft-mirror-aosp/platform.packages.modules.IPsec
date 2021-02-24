@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.statemachine;
+package com.android.internal.net.eap.test.statemachine;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
-import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_CLOSED;
-import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_FAILURE;
-import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_SUCCESS;
-import static com.android.internal.net.eap.crypto.TlsSession.TLS_STATUS_TUNNEL_ESTABLISHED;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_ACK;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_FINAL_FRAGMENT;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_INITIAL_FRAGMENT;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_WITH_LENGTH;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.internal.net.eap.test.crypto.TlsSession.TLS_STATUS_CLOSED;
+import static com.android.internal.net.eap.test.crypto.TlsSession.TLS_STATUS_FAILURE;
+import static com.android.internal.net.eap.test.crypto.TlsSession.TLS_STATUS_SUCCESS;
+import static com.android.internal.net.eap.test.crypto.TlsSession.TLS_STATUS_TUNNEL_ESTABLISHED;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_ACK;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_FINAL_FRAGMENT;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_INITIAL_FRAGMENT;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_RESPONSE_TTLS_WITH_LENGTH;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_ASSEMBLED_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_BYTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_FINAL_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_TTLS_DUMMY_DATA_INITIAL_FRAGMENT_BYTES;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.ID_INT;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
@@ -38,15 +38,15 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.android.internal.net.eap.crypto.TlsSession.TlsResult;
-import com.android.internal.net.eap.exceptions.ttls.EapTtlsHandshakeException;
-import com.android.internal.net.eap.message.ttls.EapTtlsTypeData;
-import com.android.internal.net.eap.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
-import com.android.internal.net.eap.statemachine.EapMethodStateMachine.EapMethodState;
-import com.android.internal.net.eap.statemachine.EapMethodStateMachine.FinalState;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.ErroredAndAwaitingClosureState;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.HandshakeState;
-import com.android.internal.net.eap.statemachine.EapTtlsMethodStateMachine.TunnelState;
+import com.android.internal.net.eap.test.crypto.TlsSession.TlsResult;
+import com.android.internal.net.eap.test.exceptions.ttls.EapTtlsHandshakeException;
+import com.android.internal.net.eap.test.message.ttls.EapTtlsTypeData;
+import com.android.internal.net.eap.test.message.ttls.EapTtlsTypeData.EapTtlsAcknowledgement;
+import com.android.internal.net.eap.test.statemachine.EapMethodStateMachine.EapMethodState;
+import com.android.internal.net.eap.test.statemachine.EapMethodStateMachine.FinalState;
+import com.android.internal.net.eap.test.statemachine.EapTtlsMethodStateMachine.ErroredAndAwaitingClosureState;
+import com.android.internal.net.eap.test.statemachine.EapTtlsMethodStateMachine.HandshakeState;
+import com.android.internal.net.eap.test.statemachine.EapTtlsMethodStateMachine.TunnelState;
 
 import org.junit.Before;
 import org.junit.Test;

@@ -49,7 +49,7 @@ import java.util.concurrent.TimeUnit;
  * to have the same DH group as that of the IKE Session, then they need to explicitly set the same
  * DH Group in ChildSessionParams.
  *
- * @see {@link TunnelModeChildSessionParams} and {@link TransportModeChildSessionParams}
+ * <p>@see {@link TunnelModeChildSessionParams} and {@link TransportModeChildSessionParams}
  */
 public abstract class ChildSessionParams {
     /** @hide */
@@ -299,6 +299,20 @@ public abstract class ChildSessionParams {
 
         protected int mHardLifetimeSec = CHILD_HARD_LIFETIME_SEC_DEFAULT;
         protected int mSoftLifetimeSec = CHILD_SOFT_LIFETIME_SEC_DEFAULT;
+
+        /** Package private constructor */
+        Builder() {}
+
+        /** Package private constructor */
+        Builder(@NonNull ChildSessionParams childParams) {
+            Objects.requireNonNull(childParams, "childParams was null");
+
+            mInboundTsList.addAll(childParams.getInboundTrafficSelectors());
+            mOutboundTsList.addAll(childParams.getOutboundTrafficSelectors());
+            mSaProposalList.addAll(childParams.getSaProposals());
+            mHardLifetimeSec = childParams.getHardLifetimeSeconds();
+            mSoftLifetimeSec = childParams.getSoftLifetimeSeconds();
+        }
 
         protected void addProposal(@NonNull ChildSaProposal proposal) {
             mSaProposalList.add(proposal);

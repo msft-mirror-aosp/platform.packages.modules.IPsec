@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.testutils;
+package com.android.internal.net.ipsec.test.ike.testutils;
 
 import android.content.Context;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.internal.net.ipsec.ike.utils.IkeCertUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IkeCertUtils;
 
 import java.io.BufferedReader;
 import java.io.InputStream;

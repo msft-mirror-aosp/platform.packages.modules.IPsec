@@ -112,7 +112,7 @@ public abstract class SaProposal {
      * Key length unused.
      *
      * <p>This value should only be used with the Encryption/Ciphering Algorithm that accepts a
-     * fixed key size such as {@link ENCRYPTION_ALGORITHM_3DES}.
+     * fixed key size such as {@link #ENCRYPTION_ALGORITHM_3DES}.
      */
     public static final int KEY_LEN_UNUSED = 0;
     /** AES Encryption/Ciphering Algorithm key length 128 bits. */

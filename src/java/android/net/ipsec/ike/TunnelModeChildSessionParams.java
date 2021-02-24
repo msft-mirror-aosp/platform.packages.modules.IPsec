@@ -39,9 +39,9 @@ import com.android.server.vcn.util.PersistableBundleUtils;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
 
@@ -210,14 +210,30 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
 
         private boolean mHasIp4AddressRequest;
         private boolean mHasIp4NetmaskRequest;
-        private List<TunnelModeChildConfigAttribute> mConfigRequestList;
+        private List<TunnelModeChildConfigAttribute> mConfigRequestList = new ArrayList<>();
 
-        /** Create a Builder for negotiating a transport mode Child Session. */
+        /** Create a Builder for negotiating a tunnel mode Child Session. */
         public Builder() {
             super();
             mHasIp4AddressRequest = false;
             mHasIp4NetmaskRequest = false;
-            mConfigRequestList = new LinkedList<>();
+        }
+
+        /**
+         * Construct Builder from the {@link TunnelModeChildSessionParams} object.
+         *
+         * @param childParams the object this Builder will be constructed with.
+         */
+        public Builder(@NonNull TunnelModeChildSessionParams childParams) {
+            super(childParams);
+            mConfigRequestList.addAll(Arrays.asList(childParams.mConfigRequests));
+            for (TunnelModeChildConfigAttribute config : mConfigRequestList) {
+                if (config instanceof ConfigAttributeIpv4Address) {
+                    mHasIp4AddressRequest = true;
+                } else if (config instanceof ConfigAttributeIpv4Netmask) {
+                    mHasIp4NetmaskRequest = true;
+                }
+            }
         }
 
         /**
@@ -324,8 +340,8 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Adds an internal IP address request to the {@link TunnelModeChildSessionParams} being
          * built.
          *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
-         *     OsConstants.AF_INET6} are allowed.
+         * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
+         *     allowed
          * @return Builder this, to facilitate chaining.
          */
         // #getConfigurationRequests has been defined for callers to retrieve internal address
@@ -392,8 +408,8 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          * Adds an internal DNS server request to the {@link TunnelModeChildSessionParams} being
          * built.
          *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} and {@link
-         *     OsConstants.AF_INET6} are allowed.
+         * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
+         *     allowed
          * @return Builder this, to facilitate chaining.
          */
         // #getConfigurationRequests has been defined for callers to retrieve internal DNS server
@@ -443,7 +459,7 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * <p>Only DHCPv4 server requests are supported.
          *
-         * @param addressFamily the address family. Only {@link OsConstants.AF_INET} is allowed.
+         * @param addressFamily the address family. Only {@code AF_INET} is allowed
          * @return Builder this, to facilitate chaining.
          */
         // #getConfigurationRequests has been defined for callers to retrieve internal DHCP server
