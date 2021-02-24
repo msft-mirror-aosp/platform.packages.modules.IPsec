@@ -164,8 +164,11 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
         ikeSocket.releaseReference(mMockIkeSessionStateMachine);
     }
 
-    @Test
-    public void testReceiveIkePacket() throws Exception {
+    private interface ReceiveTestRunnable {
+        void run(DummyPacketReceiver spyPacketReceiver) throws Exception;
+    }
+
+    private void checkReceiveIkePacket(ReceiveTestRunnable rcvTestRunnable) throws Exception {
         doReturn(mSpyUdpEncapSocket).when(mSpyIpSecManager).openUdpEncapsulationSocket();
 
         // Create working thread.
@@ -204,20 +207,10 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
 
         // Configure IkeUdpEncapSocket
         TestCountDownLatch receiveLatch = new TestCountDownLatch();
-        DummyPacketReceiver packetReceiver = new DummyPacketReceiver(receiveLatch);
-        IkeUdpEncapSocket.setPacketReceiver(packetReceiver);
+        DummyPacketReceiver spyPacketReceiver = spy(new DummyPacketReceiver(receiveLatch));
+        IkeUdpEncapSocket.setPacketReceiver(spyPacketReceiver);
         try {
-            // Send first packet.
-            sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataOne, IPV4_LOOPBACK);
-            receiveLatch.await();
-
-            assertArrayEquals(mDataOne, packetReceiver.mReceivedData);
-
-            // Send second packet.
-            sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataTwo, IPV4_LOOPBACK);
-            receiveLatch.await();
-
-            assertArrayEquals(mDataTwo, packetReceiver.mReceivedData);
+            rcvTestRunnable.run(spyPacketReceiver);
 
             // Close IkeUdpEncapSocket.
             TestCountDownLatch closeLatch = new TestCountDownLatch();
@@ -237,6 +230,44 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
         } finally {
             IkeUdpEncapSocket.setPacketReceiver(getPacketReceiver());
         }
+    }
+
+    @Test
+    public void testReceiveIkePacket() throws Exception {
+        checkReceiveIkePacket(
+                (spyPacketReceiver) -> {
+                    // Send first packet.
+                    sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataOne, IPV4_LOOPBACK);
+                    spyPacketReceiver.mLatch.await();
+
+                    assertArrayEquals(mDataOne, spyPacketReceiver.mReceivedData);
+
+                    // Send second packet.
+                    sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataTwo, IPV4_LOOPBACK);
+                    spyPacketReceiver.mLatch.await();
+
+                    assertArrayEquals(mDataTwo, spyPacketReceiver.mReceivedData);
+                });
+    }
+
+    @Test
+    public void testReceiveTooLargePacket() throws Exception {
+        final int largePacketSize = 4096;
+
+        checkReceiveIkePacket(
+                (spyPacketReceiver) -> {
+                    // Send large packet.
+                    sendToIkeUdpEncapSocket(
+                            mDummyRemoteServerFd, new byte[largePacketSize], IPV4_LOOPBACK);
+
+                    // Send normal size packet.
+                    sendToIkeUdpEncapSocket(mDummyRemoteServerFd, mDataOne, IPV4_LOOPBACK);
+
+                    // Verify that IkeSocket is still able to normal size packets
+                    spyPacketReceiver.mLatch.await();
+                    assertArrayEquals(mDataOne, spyPacketReceiver.mReceivedData);
+                    verify(spyPacketReceiver).handlePacket(any(), any());
+                });
     }
 
     @Test
