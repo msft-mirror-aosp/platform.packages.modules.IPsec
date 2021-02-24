@@ -217,9 +217,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.Executor;
 
 public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
@@ -1478,6 +1480,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 SaProposal.DH_GROUP_2048_BIT_MODP, mIkeSessionStateMachine.mPeerSelectedDhGroup);
     }
 
+    private ReceivedIkePacket getIkeInitRespWithCookie() throws Exception {
+        IkeNotifyPayload inCookieNotify = new IkeNotifyPayload(NOTIFY_TYPE_COOKIE, COOKIE_DATA);
+        List<IkePayload> payloads = new ArrayList<>();
+        payloads.add(inCookieNotify);
+        return makeDummyReceivedIkeInitRespPacket(payloads);
+    }
+
     @Test
     public void testCreateIkeLocalIkeInitReceivesCookie() throws Exception {
         setupFirstIkeSa();
@@ -1494,10 +1503,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         resetMockIkeMessageHelper();
 
         // Send back a Notify-Cookie
-        IkeNotifyPayload inCookieNotify = new IkeNotifyPayload(NOTIFY_TYPE_COOKIE, COOKIE_DATA);
-        List<IkePayload> payloads = new ArrayList<>();
-        payloads.add(inCookieNotify);
-        ReceivedIkePacket resp = makeDummyReceivedIkeInitRespPacket(payloads);
+        ReceivedIkePacket resp = getIkeInitRespWithCookie();
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, resp);
         mLooper.dispatchAll();
 
@@ -1515,6 +1521,28 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeInit);
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeInitRcvRespAfterRcvCookie() throws Exception {
+        setupFirstIkeSa();
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        // Receive IKE INIT response with Cookie
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, getIkeInitRespWithCookie());
+
+        // Receive IKE INIT response
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, makeIkeInitResponse());
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
+        verifyIkeSaNegotiationResult();
     }
 
     @Test
@@ -1603,7 +1631,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuth);
         verifyRetransmissionStarted();
+        verifyIkeSaNegotiationResult();
+    }
 
+    private void verifyIkeSaNegotiationResult() throws Exception {
         // Validate negotiated SA proposal.
         IkeSaProposal negotiatedProposal = mIkeSessionStateMachine.mSaProposal;
         assertNotNull(negotiatedProposal);
@@ -1631,7 +1662,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Validate NAT detection
         assertTrue(mIkeSessionStateMachine.mLocalNatDetected);
-        assertFalse(mIkeSessionStateMachine.mRemoteNatDetected);
+        assertTrue(mIkeSessionStateMachine.mRemoteNatDetected);
         assertTrue(mIkeSessionStateMachine.mSupportNatTraversal);
 
         // Validate vendor IDs
@@ -1646,9 +1677,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.mEnabledExtensions);
 
         // Validate Signature Hash Algorithms received in IKE INIT response
-        assertEquals(
-                Arrays.asList(IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES),
-                mIkeSessionStateMachine.mPeerSignatureHashAlgorithms);
+        Set<Short> expectedHashAlgos = new HashSet<Short>();
+        for (short algo : IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES) {
+            expectedHashAlgos.add(algo);
+        }
+        assertEquals(expectedHashAlgos, mIkeSessionStateMachine.mPeerSignatureHashAlgorithms);
     }
 
     private void setIkeInitResults() throws Exception {
