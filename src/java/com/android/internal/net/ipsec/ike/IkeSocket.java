@@ -63,6 +63,8 @@ public abstract class IkeSocket implements AutoCloseable {
     /** UDP-encapsulated IKE packets MUST be sent to 4500. */
     public static final int SERVER_PORT_UDP_ENCAPSULATED = 4500;
 
+    private static final int RCV_BUFFER_SIZE = 4096;
+
     // Network this socket bound to.
     private final Network mNetwork;
     private final Handler mHandler;
@@ -146,13 +148,19 @@ public abstract class IkeSocket implements AutoCloseable {
 
     private byte[] receiveFromFd() throws IOException {
         FileInputStream in = new FileInputStream(getFd());
-        byte[] inBytes = new byte[4096];
+        byte[] inBytes = new byte[RCV_BUFFER_SIZE];
         int bytesRead = in.read(inBytes);
 
         if (bytesRead < 0) {
             return null; // return null for EOF
-        } else if (bytesRead >= 4096) {
-            throw new IllegalStateException("Too big packet. Fragmentation unsupported");
+        } else if (bytesRead >= RCV_BUFFER_SIZE) {
+            // This packet should not affect any IKE Session because it is not an authenticated IKE
+            // packet.
+            getIkeLog()
+                    .e(
+                            this.getClass().getSimpleName(),
+                            "Too big packet. Fragmentation unsupported.");
+            return new byte[0];
         }
         return Arrays.copyOf(inBytes, bytesRead);
     }
