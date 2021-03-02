@@ -41,9 +41,10 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
 
 import java.net.InetAddress;
+import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * ChildSessionConfiguration represents the negotiated configuration for a Child Session.
@@ -53,21 +54,19 @@ import java.util.List;
 public final class ChildSessionConfiguration {
     private static final int IPv4_DEFAULT_PREFIX_LEN = 32;
 
-    private final List<IkeTrafficSelector> mInboundTs;
-    private final List<IkeTrafficSelector> mOutboundTs;
-    private final List<LinkAddress> mInternalAddressList;
-    private final List<InetAddress> mInternalDnsAddressList;
-    private final List<IpPrefix> mSubnetAddressList;
-    private final List<InetAddress> mInternalDhcpAddressList;
-
-    // TODO:b/172962260 Create and expose Builder of ChildSessionConfiguration for callers to do
-    // testing.
+    private final List<IkeTrafficSelector> mInboundTs = new ArrayList<>();
+    private final List<IkeTrafficSelector> mOutboundTs = new ArrayList<>();
+    private final List<LinkAddress> mInternalAddressList = new ArrayList<>();
+    private final List<InetAddress> mInternalDnsAddressList = new ArrayList<>();
+    private final List<IpPrefix> mSubnetAddressList = new ArrayList<>();
+    private final List<InetAddress> mInternalDhcpAddressList = new ArrayList<>();
 
     /**
      * Construct an instance of {@link ChildSessionConfiguration}.
      *
-     * <p>It is only supported to build a {@link ChildSessionConfiguration} with a Configure(Reply)
-     * Payload.
+     * <p>ChildSessionConfiguration may contain negotiated configuration information that is
+     * included in a Configure(Reply) Payload. Thus the input configPayload should always be a
+     * Configure(Reply), and never be a Configure(Request).
      *
      * @hide
      */
@@ -147,13 +146,29 @@ public final class ChildSessionConfiguration {
      */
     public ChildSessionConfiguration(
             List<IkeTrafficSelector> inTs, List<IkeTrafficSelector> outTs) {
-        mInboundTs = Collections.unmodifiableList(inTs);
-        mOutboundTs = Collections.unmodifiableList(outTs);
-        mInternalAddressList = new LinkedList<>();
-        mInternalDnsAddressList = new LinkedList<>();
-        mSubnetAddressList = new LinkedList<>();
-        mInternalDhcpAddressList = new LinkedList<>();
+        mInboundTs.addAll(inTs);
+        mOutboundTs.addAll(outTs);
     }
+
+    /**
+     * Construct an instance of {@link ChildSessionConfiguration}.
+     *
+     * @hide
+     */
+    private ChildSessionConfiguration(
+            List<IkeTrafficSelector> inTs,
+            List<IkeTrafficSelector> outTs,
+            List<LinkAddress> internalAddresses,
+            List<IpPrefix> internalSubnets,
+            List<InetAddress> internalDnsServers,
+            List<InetAddress> internalDhcpServers) {
+        this(inTs, outTs);
+        mInternalAddressList.addAll(internalAddresses);
+        mSubnetAddressList.addAll(internalSubnets);
+        mInternalDnsAddressList.addAll(internalDnsServers);
+        mInternalDhcpAddressList.addAll(internalDhcpServers);
+    }
+
 
     /**
      * Returns the negotiated inbound traffic selectors.
@@ -227,5 +242,106 @@ public final class ChildSessionConfiguration {
     @NonNull
     public List<InetAddress> getInternalDhcpServers() {
         return Collections.unmodifiableList(mInternalDhcpAddressList);
+    }
+
+    /**
+     * This class can be used to incrementally construct a {@link ChildSessionConfiguration}.
+     *
+     * <p>Except for testing, IKE library users normally do not instantiate {@link
+     * ChildSessionConfiguration} themselves but instead get a reference via {@link
+     * ChildSessionCallback}
+     *
+     * @hide
+     */
+    public static final class Builder {
+        private final List<IkeTrafficSelector> mInboundTs = new ArrayList<>();
+        private final List<IkeTrafficSelector> mOutboundTs = new ArrayList<>();
+        private final List<LinkAddress> mInternalAddressList = new ArrayList<>();
+        private final List<IpPrefix> mSubnetAddressList = new ArrayList<>();
+        private final List<InetAddress> mInternalDnsAddressList = new ArrayList<>();
+        private final List<InetAddress> mInternalDhcpAddressList = new ArrayList<>();
+
+        /**
+         * Constructs a Builder.
+         *
+         * @param inTs the negotiated inbound traffic selectors
+         * @param outTs the negotiated outbound traffic selectors
+         */
+        public Builder(
+                @NonNull List<IkeTrafficSelector> inTs, @NonNull List<IkeTrafficSelector> outTs) {
+            Objects.requireNonNull(inTs, "inTs was null");
+            Objects.requireNonNull(outTs, "outTs was null");
+            if (inTs.isEmpty() || outTs.isEmpty()) {
+                throw new IllegalArgumentException("inTs or outTs is empty.");
+            }
+            mInboundTs.addAll(inTs);
+            mOutboundTs.addAll(outTs);
+        }
+
+        /**
+         * Adds an assigned internal address for the {@link ChildSessionConfiguration} being built.
+         *
+         * @param address an assigned internal addresses
+         * @return Builder this, to facilitate chaining
+         */
+        @NonNull
+        public Builder addInternalAddress(@NonNull LinkAddress address) {
+            Objects.requireNonNull(address, "address was null");
+            mInternalAddressList.add(address);
+            return this;
+        }
+
+        /**
+         * Adds an assigned internal subnet for the {@link ChildSessionConfiguration} being built.
+         *
+         * @param subnet an assigned internal subnet
+         * @return Builder this, to facilitate chaining
+         */
+        @NonNull
+        public Builder addInternalSubnet(@NonNull IpPrefix subnet) {
+            Objects.requireNonNull(subnet, "subnet was null");
+            mSubnetAddressList.add(subnet);
+            return this;
+        }
+
+        /**
+         * Adds an assigned internal DNS server for the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @param dnsServer an assigned internal DNS server
+         * @return Builder this, to facilitate chaining
+         */
+        @NonNull
+        public Builder addInternalDnsServer(@NonNull InetAddress dnsServer) {
+            Objects.requireNonNull(dnsServer, "dnsServer was null");
+            mInternalDnsAddressList.add(dnsServer);
+            return this;
+        }
+
+        /**
+         * Adds an assigned internal DHCP server for the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @param dhcpServer an assigned internal DHCP server
+         * @return Builder this, to facilitate chaining
+         */
+        @NonNull
+        public Builder addInternalDhcpServer(@NonNull InetAddress dhcpServer) {
+            Objects.requireNonNull(dhcpServer, "dhcpServer was null");
+            mInternalDhcpAddressList.add(dhcpServer);
+            return this;
+        }
+
+        /** Constructs an {@link ChildSessionConfiguration} instance. */
+        @NonNull
+        public ChildSessionConfiguration build() {
+            return new ChildSessionConfiguration(
+                    mInboundTs,
+                    mOutboundTs,
+                    mInternalAddressList,
+                    mSubnetAddressList,
+                    mInternalDnsAddressList,
+                    mInternalDhcpAddressList);
+        }
     }
 }
