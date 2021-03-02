@@ -33,16 +33,19 @@ public final class IkeSessionConnectionInfo {
     private final InetAddress mRemoteAddress;
     private final Network mNetwork;
 
-    // TODO:b/172962260 Create and expose Builder of IkeSessionConnectionInfo for callers to do
-    // testing.
-
     /**
      * Construct an instance of {@link IkeSessionConnectionInfo}.
+     *
+     * <p>Except for testing, IKE library users normally do not instantiate {@link
+     * IkeSessionConnectionInfo} themselves but instead get a reference via {@link
+     * IkeSessionConfiguration} or {@link IkeSessionCallback}
      *
      * @hide
      */
     public IkeSessionConnectionInfo(
-            InetAddress localAddress, InetAddress remoteAddress, Network network) {
+            @NonNull InetAddress localAddress,
+            @NonNull InetAddress remoteAddress,
+            @NonNull Network network) {
         Objects.requireNonNull(localAddress, "localAddress not provided");
         Objects.requireNonNull(remoteAddress, "remoteAddress not provided");
         Objects.requireNonNull(network, "network not provided");
