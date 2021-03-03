@@ -26,6 +26,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
 
@@ -253,6 +254,7 @@ public final class ChildSessionConfiguration {
      *
      * @hide
      */
+    @SystemApi
     public static final class Builder {
         private final List<IkeTrafficSelector> mInboundTs = new ArrayList<>();
         private final List<IkeTrafficSelector> mOutboundTs = new ArrayList<>();

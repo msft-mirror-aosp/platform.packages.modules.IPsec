@@ -22,6 +22,8 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
@@ -202,6 +204,7 @@ public final class IkeSessionConfiguration {
     public IkeSessionConnectionInfo getIkeSessionConnectionInfo() {
         return mIkeConnInfo;
     }
+
     /**
      * This class can be used to incrementally construct a {@link IkeSessionConfiguration}.
      *
@@ -211,6 +214,7 @@ public final class IkeSessionConfiguration {
      *
      * @hide
      */
+    @SystemApi
     public static final class Builder {
         private final IkeSessionConnectionInfo mIkeConnInfo;
         private final List<InetAddress> mPcscfServers = new ArrayList<>();
@@ -281,6 +285,10 @@ public final class IkeSessionConfiguration {
          * @param extensionType the enabled extension
          * @return Builder this, to facilitate chaining
          */
+        // MissingGetterMatchingBuilder: Use #isIkeExtensionEnabled instead of #getIkeExtension
+        // because #isIkeExtensionEnabled allows callers to check the presence of an IKE extension
+        // more easily
+        @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIkeExtension(@ExtensionType int extensionType) {
             validateExtensionOrThrow(extensionType);
@@ -294,6 +302,9 @@ public final class IkeSessionConfiguration {
          * @param extensionType the disabled extension
          * @return Builder this, to facilitate chaining
          */
+        // BuilderSetStyle: "removeIkeExtension" makes more sense than "clearIkeExtension". "clear"
+        // sounds like this method is removing all extensions
+        @SuppressLint("BuilderSetStyle")
         @NonNull
         public Builder removeIkeExtension(@ExtensionType int extensionType) {
             validateExtensionOrThrow(extensionType);

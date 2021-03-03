@@ -17,6 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SystemApi;
 import android.net.Network;
 
 import java.net.InetAddress;
@@ -42,6 +43,7 @@ public final class IkeSessionConnectionInfo {
      *
      * @hide
      */
+    @SystemApi
     public IkeSessionConnectionInfo(
             @NonNull InetAddress localAddress,
             @NonNull InetAddress remoteAddress,
