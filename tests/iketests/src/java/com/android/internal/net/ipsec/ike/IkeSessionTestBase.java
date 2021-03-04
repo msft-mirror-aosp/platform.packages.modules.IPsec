@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike;
+package com.android.internal.net.ipsec.test.ike;
 
-import static com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LOCAL_REQUEST_WAKE_LOCK_TAG;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.BUSY_WAKE_LOCK_TAG;
+import static com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.LOCAL_REQUEST_WAKE_LOCK_TAG;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.BUSY_WAKE_LOCK_TAG;
 
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Matchers.any;
@@ -42,9 +42,9 @@ import android.net.SocketKeepalive;
 import android.os.Handler;
 import android.os.PowerManager;
 
-import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
-import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
-import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
+import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IkeAlarmReceiver;
+import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 
 import org.junit.Before;
 

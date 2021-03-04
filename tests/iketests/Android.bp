@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 android_test {
     name: "FrameworksIkeTests",
 
@@ -19,7 +23,7 @@ android_test {
 
     platform_apis: true,
     certificate: "platform",
-    test_suites: ["device-tests", "mts"],
+    test_suites: ["device-tests", "mts-ipsec"],
 
     compile_multilib: "both",
 

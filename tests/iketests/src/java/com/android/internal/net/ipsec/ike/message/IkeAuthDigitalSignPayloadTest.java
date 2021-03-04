@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.ipsec.test.ike.message;
 
-import static com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_256;
+import static com.android.internal.net.ipsec.test.ike.message.IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_256;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -25,15 +25,15 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
-import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
-import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.test.ike.SaProposal;
+import android.net.ipsec.test.ike.exceptions.AuthenticationFailedException;
+import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 import android.util.ArraySet;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.test.ike.crypto.IkeMacPrf;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
 import org.junit.Before;
 import org.junit.Test;

@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 java_sdk_library {
     name: "android.net.ipsec.ike",
     installable: true,
     defaults: ["framework-module-defaults"],
-    sdk_version: "module_current",
 
     // ike is used as a shared library.
     shared_library: true,
@@ -34,7 +37,9 @@ java_sdk_library {
         "unsupportedappusage",
         "framework-annotations-lib",
         "conscrypt.module.public.api",
+        "framework-connectivity",
     ],
+    stub_only_libs: ["framework-connectivity"],
 
     api_packages: [
         "android.net.eap",
@@ -57,6 +62,13 @@ java_sdk_library {
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
+
+    permitted_packages: [
+       "com.android.internal.net",
+       "android.net.ipsec.ike",
+       "android.net.eap",
+    ],
+    min_sdk_version: "30",
 }
 
 filegroup {
@@ -99,14 +111,31 @@ java_library {
     static_libs: ["ike-internals"],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
-    // being overwritten by the frameworks class copies.
-    jarjar_rules: "jarjar-rules-shared.txt",
+    // being overwritten by the frameworks class copies and break code coverage
+    // reports. IKE source files are jarjared to avoid this test jar being
+    // overshadowed by the IKE jar in framework and bootclasspath which will
+    // cause compiling and runtime errors respectively.
+    jarjar_rules: "jarjar-rules-test.txt",
 }
 
-filegroup {
+java_library {
+    name: "ike-test-utils-dependency",
+    installable: false, // Used only for building the "ike-test-utils"
+    srcs: ["src/java/**/IkeCertUtils.java"],
+    jarjar_rules: "jarjar-rules-test.txt",
+}
+
+java_library {
     name: "ike-test-utils",
-    srcs: [
-        "src/java/**/IkeCertUtils.java",
-        "tests/iketests/src/java/**/CertUtils.java",
+    srcs: ["tests/iketests/src/java/**/CertUtils.java"],
+    static_libs: ["ike-test-utils-dependency"],
+    libs: ["androidx.test.rules"],
+    visibility: ["//packages/modules/IPsec/tests/cts"]
+}
+
+sdk {
+    name: "ipsec-module-sdk",
+    java_sdk_libs: [
+        "android.net.ipsec.ike",
     ],
 }
