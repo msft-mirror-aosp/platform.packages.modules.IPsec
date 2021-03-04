@@ -616,6 +616,7 @@ public final class IkeSessionParams {
                 mHardLifetimeSec,
                 mSoftLifetimeSec,
                 mDpdDelaySec,
+                mNattKeepaliveDelaySec,
                 mIsIkeFragmentationSupported);
     }
 
@@ -642,6 +643,7 @@ public final class IkeSessionParams {
                 && mHardLifetimeSec == other.mHardLifetimeSec
                 && mSoftLifetimeSec == other.mSoftLifetimeSec
                 && mDpdDelaySec == other.mDpdDelaySec
+                && mNattKeepaliveDelaySec == other.mNattKeepaliveDelaySec
                 && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
     }
 
