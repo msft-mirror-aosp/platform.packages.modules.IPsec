@@ -24,6 +24,7 @@ package android.net.ipsec.ike {
   }
 
   public static final class IkeSessionParams.Builder {
+    ctor @Deprecated public IkeSessionParams.Builder(@NonNull android.content.Context);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setIke3gppExtension(@NonNull android.net.ipsec.ike.ike3gpp.Ike3gppExtension);
     method @Deprecated @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@NonNull android.net.Network);
   }
