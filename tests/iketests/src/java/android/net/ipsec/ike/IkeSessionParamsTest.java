@@ -847,4 +847,14 @@ public final class IkeSessionParamsTest {
                         .build();
         assertEquals(withConnectivityMgr, withoutConnectivityMgr);
     }
+
+    @Test
+    public void testNotEqualsWhenNattKeepaliveDelaysAreDifferent() throws Exception {
+        IkeSessionParams sessionParamsA =
+                createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(100).build();
+        IkeSessionParams sessionParamsB =
+                createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(200).build();
+
+        assertNotEquals(sessionParamsA, sessionParamsB);
+    }
 }
