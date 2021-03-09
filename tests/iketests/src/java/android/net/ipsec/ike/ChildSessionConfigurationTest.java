@@ -134,7 +134,10 @@ public final class ChildSessionConfigurationTest {
                 new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
 
         verifySessionConfigCommon(sessionConfig);
+        validateInternalAddrList(sessionConfig);
+    }
 
+    private void validateInternalAddrList(ChildSessionConfiguration sessionConfig) {
         List<LinkAddress> expectedInternalAddrList = new ArrayList<>();
         expectedInternalAddrList.add(IPV4_LINK_ADDRESS);
         expectedInternalAddrList.add(IPV6_LINK_ADDRESS);
@@ -199,7 +202,10 @@ public final class ChildSessionConfigurationTest {
                 new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
 
         verifySessionConfigCommon(sessionConfig);
+        validateDnsAddrList(sessionConfig);
+    }
 
+    private void validateDnsAddrList(ChildSessionConfiguration sessionConfig) {
         List<InetAddress> expectedDnsAddrList = new ArrayList<>();
         expectedDnsAddrList.add(IPV4_ADDRESS);
         expectedDnsAddrList.add(IPV6_ADDRESS);
@@ -222,7 +228,10 @@ public final class ChildSessionConfigurationTest {
                 new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
 
         verifySessionConfigCommon(sessionConfig);
+        validateSubnetAddrList(sessionConfig);
+    }
 
+    private void validateSubnetAddrList(ChildSessionConfiguration sessionConfig) {
         List<IpPrefix> expectedSubnetAddrList = new ArrayList<>();
         expectedSubnetAddrList.add(IPV4_SUBNET_IP_PREFIX_ADDRESS);
         expectedSubnetAddrList.add(IPV6_SUBNET_IP_PREFIX_ADDRESS);
@@ -244,8 +253,31 @@ public final class ChildSessionConfigurationTest {
                 new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
 
         verifySessionConfigCommon(sessionConfig);
+        validateDhcpServers(sessionConfig);
+    }
 
+    private void validateDhcpServers(ChildSessionConfiguration sessionConfig) {
         assertEquals(1, sessionConfig.getInternalDhcpServers().size());
         assertEquals(sessionConfig.getInternalDhcpServers().get(0), IPV4_ADDRESS);
+    }
+
+    @Test
+    public void testBuildChildSessionConfigurationWithBuilder() {
+        ChildSessionConfiguration sessionConfig =
+                new ChildSessionConfiguration.Builder(mMockInTsList, mMockOutTsList)
+                        .addInternalAddress(IPV4_LINK_ADDRESS)
+                        .addInternalAddress(IPV6_LINK_ADDRESS)
+                        .addInternalSubnet(IPV4_SUBNET_IP_PREFIX_ADDRESS)
+                        .addInternalSubnet(IPV6_SUBNET_IP_PREFIX_ADDRESS)
+                        .addInternalDnsServer(IPV4_ADDRESS)
+                        .addInternalDnsServer(IPV6_ADDRESS)
+                        .addInternalDhcpServer(IPV4_ADDRESS)
+                        .build();
+
+        verifySessionConfigCommon(sessionConfig);
+        validateInternalAddrList(sessionConfig);
+        validateSubnetAddrList(sessionConfig);
+        validateDnsAddrList(sessionConfig);
+        validateDhcpServers(sessionConfig);
     }
 }
