@@ -110,6 +110,29 @@ public final class IkeSessionConfigurationTest {
     }
 
     @Test
+    public void testBuildWithBuilder() {
+        IkeSessionConfiguration.Builder builder =
+                new IkeSessionConfiguration.Builder(IKE_CONNECT_INFO)
+                        .addPcscfServer(PCSCF_IPV4_ADDRESS)
+                        .addPcscfServer(PCSCF_IPV6_ADDRESS)
+                        .setRemoteApplicationVersion(REMOTE_APP_VERSION);
+
+        for (byte[] vendorId : REMOTE_VENDOR_IDS) {
+            builder.addRemoteVendorId(vendorId);
+        }
+
+        for (int extension : ENABLED_EXTENSIONS) {
+            builder.addIkeExtension(extension);
+        }
+
+        IkeSessionConfiguration config = builder.build();
+        verifyBuildCommon(config);
+        assertEquals(
+                Arrays.asList(PCSCF_IPV4_ADDRESS, PCSCF_IPV6_ADDRESS), config.getPcscfServers());
+        assertEquals(REMOTE_APP_VERSION, config.getRemoteApplicationVersion());
+    }
+
+    @Test
     public void testBuildWithNullValueConnectionInfo() {
         try {
             new IkeSessionConfiguration(
