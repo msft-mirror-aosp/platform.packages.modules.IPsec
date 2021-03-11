@@ -1274,7 +1274,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine {
         intent.putExtras(bundle);
 
         return PendingIntent.getBroadcast(
-                context, 0 /*requestCode unused*/, intent, 0 /*default flags*/);
+                context, 0 /* requestCode; unused */, intent, PendingIntent.FLAG_IMMUTABLE);
     }
 
     /**
