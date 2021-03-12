@@ -45,4 +45,6 @@ android_test {
         "libstaticjvmtiagent",
         "libmultiplejvmtiagentsinterferenceagent",
     ],
+
+    min_sdk_version: "30",
 }
