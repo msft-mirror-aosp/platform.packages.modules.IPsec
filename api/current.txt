@@ -202,7 +202,7 @@ package android.net.ipsec.ike {
   }
 
   public static final class IkeSessionParams.Builder {
-    ctor public IkeSessionParams.Builder(@NonNull android.content.Context);
+    ctor public IkeSessionParams.Builder();
     ctor public IkeSessionParams.Builder(@NonNull android.net.ipsec.ike.IkeSessionParams);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addIkeOption(int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(@NonNull java.net.InetAddress);
