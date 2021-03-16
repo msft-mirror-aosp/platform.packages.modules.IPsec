@@ -16,20 +16,20 @@
 
 package com.android.internal.net.ipsec.test.ike;
 
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 
 import android.net.Network;
 
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.FileDescriptor;
-
 public final class IkeSocketConfigTest {
+    private static final int DUMMY_DSCP = 8;
+
     private Network mMockNetwork;
 
     @Before
@@ -38,7 +38,7 @@ public final class IkeSocketConfigTest {
     }
 
     private IkeSocketConfig buildTestConfig() {
-        return new IkeSocketConfig(mMockNetwork);
+        return new IkeSocketConfig(mMockNetwork, DUMMY_DSCP);
     }
 
     @Test
@@ -46,6 +46,7 @@ public final class IkeSocketConfigTest {
         final IkeSocketConfig config = buildTestConfig();
 
         assertEquals(mMockNetwork, config.getNetwork());
+        assertEquals(DUMMY_DSCP, config.getDscp());
     }
 
     @Test
@@ -59,15 +60,12 @@ public final class IkeSocketConfigTest {
 
     @Test
     public void testNotEqualsIfNetworkIsDifferent() {
-        assertNotEquals(buildTestConfig(), new IkeSocketConfig(mock(Network.class)));
+        assertNotEquals(buildTestConfig(), new IkeSocketConfig(mock(Network.class), DUMMY_DSCP));
     }
 
     @Test
-    public void testApplyTo() throws Exception {
-        final IkeSocketConfig config = buildTestConfig();
-        final FileDescriptor mMockFd = mock(FileDescriptor.class);
-
-        config.applyTo(mMockFd);
-        verify(mMockNetwork).bindSocket(mMockFd);
+    public void testNotEqualsIfDscpIsDifferent() {
+        final int dscp = 48;
+        assertNotEquals(buildTestConfig(), new IkeSocketConfig(mMockNetwork, dscp));
     }
 }

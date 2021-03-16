@@ -366,6 +366,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                     .build();
 
+    // TODO: b/178420172 Use mIkeSessionParams.getDscp() when it is defined
+    private static final int DSCP = 0;
+
     /** Package */
     @VisibleForTesting final IkeSessionParams mIkeSessionParams;
 
@@ -914,7 +917,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void buildAndSwitchToIkeSocketWithPort4500(boolean isIpv4) {
         try {
-            IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
+            IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork, DSCP);
             if (isIpv4) {
                 IkeSocket newSocket =
                         IkeUdpEncapSocket.getIkeUdpEncapSocket(
@@ -1229,7 +1232,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 setRemoteAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
-                IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
+                IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork, DSCP);
                 if (isIpv4) {
                     mIkeSocket =
                             IkeUdp4Socket.getInstance(
@@ -3366,7 +3369,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 try {
                     IkeSocket newSocket =
                             IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                    new IkeSocketConfig(mNetwork),
+                                    new IkeSocketConfig(mNetwork, DSCP),
                                     mIpSecManager,
                                     IkeSessionStateMachine.this,
                                     getHandler().getLooper());
@@ -5548,7 +5551,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     buildAndSwitchToIkeSocketWithPort4500(isIpv4);
                 } else {
                     IkeSocket newSocket;
-                    IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
+                    IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork, DSCP);
                     if (isIpv4) {
                         newSocket =
                                 IkeUdp4Socket.getInstance(
