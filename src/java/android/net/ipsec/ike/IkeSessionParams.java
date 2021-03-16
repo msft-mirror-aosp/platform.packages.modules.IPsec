@@ -559,6 +559,7 @@ public final class IkeSessionParams {
      *
      * @hide
      */
+    @SystemApi
     @IntRange(from = DSCP_MIN, to = DSCP_MAX)
     public int getDscp() {
         return mDscp;
@@ -1677,16 +1678,22 @@ public final class IkeSessionParams {
          * Sets the DSCP field of the IKE packets.
          *
          * <p>Differentiated services code point (DSCP) is a 6-bit field in the IP header that is
-         * used for packet classification and prioritization. The DSCP field takes the leftmost 6
-         * bits of the type of service (ToS) field in IPv4 header, or the traffic class field in
-         * IPv6 header.
+         * used for packet classification and prioritization. The DSCP field is encoded in the 6
+         * higher order bits of the Type of Service (ToS) in IPv4 header, or the traffic class (TC)
+         * field in IPv6 header.
+         *
+         * <p>Any 6-bit values (0 to 63) are acceptable, whether IANA-defined, or
+         * implementation-specific values.
          *
          * @see <a href="https://tools.ietf.org/html/rfc2474">RFC 2474, Definition of the
          *     Differentiated Services Field (DS Field) in the IPv4 and IPv6 Headers</a>
+         * @see <a href="https://www.iana.org/assignments/dscp-registry/dscp-registry.xhtml">
+         *     Differentiated Services Field Codepoints (DSCP)</a>
          * @param dscp the dscp value. Defaults to 0.
          * @return Builder this, to facilitate chaining.
          * @hide
          */
+        @SystemApi
         @NonNull
         public Builder setDscp(@IntRange(from = DSCP_MIN, to = DSCP_MAX) int dscp) {
             if (dscp < DSCP_MIN || dscp > DSCP_MAX) {
