@@ -66,6 +66,7 @@ import org.junit.runner.RunWith;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -205,7 +206,8 @@ abstract class IkeSessionTestBase extends IkeTestBase {
                     linkAddresses[i] = new LinkAddress(addr, IP6_PREFIX_LEN);
                 }
             }
-            final TestNetworkInterface testIface = sTNM.createTunInterface(linkAddresses);
+            final TestNetworkInterface testIface = sTNM.createTunInterface(
+                    Arrays.asList(linkAddresses));
 
             tunFd = testIface.getFileDescriptor();
             tunNetworkCallback =
