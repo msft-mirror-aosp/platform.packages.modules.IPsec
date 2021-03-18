@@ -40,6 +40,8 @@ import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IKE
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
+import static com.android.internal.net.ipsec.test.ike.IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED;
+import static com.android.internal.net.ipsec.test.ike.IkeSocket.SERVER_PORT_UDP_ENCAPSULATED;
 import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_BACKOFF_TIMER;
 import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_CAPABILITY;
 import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_INFORMATION;
@@ -902,6 +904,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         doNothing().when(mSpyIkeUdp4Socket).sendIkePacket(any(), any());
         doNothing().when(mSpyIkeUdp6Socket).sendIkePacket(any(), any());
         doNothing().when(mSpyIkeUdpEncapSocket).sendIkePacket(any(), any());
+
+        doReturn(SERVER_PORT_NON_UDP_ENCAPSULATED).when(mSpyIkeUdp4Socket).getIkeServerPort();
+        doReturn(SERVER_PORT_NON_UDP_ENCAPSULATED).when(mSpyIkeUdp6Socket).getIkeServerPort();
+        doReturn(SERVER_PORT_UDP_ENCAPSULATED).when(mSpyIkeUdpEncapSocket).getIkeServerPort();
 
         // Always start with unencap'd socket.
         mSpyCurrentIkeSocket = mSpyIkeUdp4Socket;
