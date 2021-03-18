@@ -18,6 +18,7 @@ package com.android.internal.net.ipsec.ike;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
@@ -1243,12 +1244,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 setRemoteAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
-                mIkeSocket = getIkeSocket(isIpv4, false /* useEncapPort */);
+                mIkeSocket =
+                        getIkeSocket(
+                                isIpv4, mIkeSessionParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500));
                 mLocalPort = mIkeSocket.getLocalPort();
 
                 mLocalAddress =
                         mIkeLocalAddressGenerator.generateLocalAddress(
                                 mNetwork, isIpv4, mRemoteAddress, mIkeSocket.getIkeServerPort());
+
+                if (mIkeSocket instanceof IkeUdpEncapSocket) {
+                    mIkeNattKeepalive = buildAndStartNattKeepalive();
+                }
             } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                 handleIkeFatalError(e);
             }
@@ -5554,8 +5561,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
             if (!mNetwork.equals(oldNetwork)) {
-                // Use port 4500 if NAT-T is supported by both sides
-                getAndSwitchToIkeSocket(isIpv4, mSupportNatTraversal);
+                getAndSwitchToIkeSocket(
+                        isIpv4,
+                        mIkeSessionParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500)
+                                || mSupportNatTraversal);
             }
 
             mLocalPort = mIkeSocket.getLocalPort();
