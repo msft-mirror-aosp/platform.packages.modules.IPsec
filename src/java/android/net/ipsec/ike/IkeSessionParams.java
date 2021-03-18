@@ -169,8 +169,6 @@ public final class IkeSessionParams {
      *
      * <p>If this option is set for an IKE Session, IKE Session will always send IKE packets to port
      * 4500 regardless of whether there is a NAT.
-     *
-     * @hide
      */
     public static final int IKE_OPTION_FORCE_PORT_4500 = 3;
 
