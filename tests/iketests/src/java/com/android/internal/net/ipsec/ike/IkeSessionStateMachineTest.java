@@ -5709,7 +5709,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             InetAddress remoteAddress,
             IkeNetworkCallbackBase networkCallback) {
         assertEquals(underlyingNetwork, mIkeSessionStateMachine.mNetwork);
-        assertEquals(underlyingNetwork, mIkeSessionStateMachine.mIkeSocket.getNetwork());
+        assertEquals(
+                underlyingNetwork,
+                mIkeSessionStateMachine.mIkeSocket.getIkeSocketConfig().getNetwork());
         assertEquals(localAddress, mIkeSessionStateMachine.mLocalAddress);
         assertEquals(remoteAddress, mIkeSessionStateMachine.mRemoteAddress);
 

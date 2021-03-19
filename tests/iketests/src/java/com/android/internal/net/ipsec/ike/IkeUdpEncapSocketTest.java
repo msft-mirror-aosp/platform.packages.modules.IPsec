@@ -32,7 +32,6 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.Network;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.test.TestLooper;
@@ -67,11 +66,12 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
     private final IkeSocketFactory mIkeSocketFactory =
             new IkeSocketFactory() {
                 @Override
-                public IkeSocket getIkeSocket(Network network, IkeSessionStateMachine ikeSession)
+                public IkeSocket getIkeSocket(
+                        IkeSocketConfig ikeSockConfig, IkeSessionStateMachine ikeSession)
                         throws ErrnoException, IOException {
                     try {
                         return IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                network, mSpyIpSecManager, ikeSession, mLooper.getLooper());
+                                ikeSockConfig, mSpyIpSecManager, ikeSession, mLooper.getLooper());
                     } catch (ResourceUnavailableException e) {
                         throw new IllegalStateException(e);
                     }
@@ -121,7 +121,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
 
     @Test
     public void testGetAndCloseIkeUdpEncapSocketSameNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketSameNetwork(
+        verifyGetAndCloseIkeSocketSameConfig(
                 mIkeSocketFactory, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         verify(mSpyIpSecManager).openUdpEncapsulationSocket();
         verify(mSpyDummyUdpEncapSocketOne).close();
@@ -129,7 +129,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
 
     @Test
     public void testGetAndCloseIkeUdpEncapSocketDifferentNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketDifferentNetwork(
+        verifyGetAndCloseIkeSocketDifferentConfig(
                 mIkeSocketFactory, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         verify(mSpyIpSecManager, times(2)).openUdpEncapsulationSocket();
         verify(mSpyDummyUdpEncapSocketOne).close();
@@ -146,7 +146,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
         // Send IKE packet
         IkeUdpEncapSocket ikeSocket =
                 IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                        mMockNetwork,
+                        mMockIkeSocketConfig,
                         mSpyIpSecManager,
                         mMockIkeSessionStateMachine,
                         Looper.myLooper());
@@ -185,7 +185,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
                             try {
                                 socketReceiver.setIkeUdpEncapSocket(
                                         IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                                mMockNetwork,
+                                                mMockIkeSocketConfig,
                                                 mSpyIpSecManager,
                                                 mMockIkeSessionStateMachine,
                                                 mIkeThread.getLooper()));
