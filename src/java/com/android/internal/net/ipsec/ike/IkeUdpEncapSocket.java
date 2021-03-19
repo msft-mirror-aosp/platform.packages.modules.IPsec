@@ -21,7 +21,6 @@ import static android.net.ipsec.ike.IkeManager.getIkeLog;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.Network;
 import android.os.Handler;
 import android.os.Looper;
 import android.system.ErrnoException;
@@ -41,9 +40,9 @@ import java.util.Map;
 /**
  * IkeUdpEncapSocket uses an {@link UdpEncapsulationSocket} to send and receive IKE packets.
  *
- * <p>Caller MUST provide one {@link Network} when trying to get an instance of IkeUdpEncapSocket.
- * Each {@link Network} can only be bound with one IkeUdpEncapSocket instance. When caller requests
- * for IkeUdpEncapSocket with an already bound {@link Network}, an existing instance will be
+ * <p>Caller MUST provide one IkeSocketConfig when trying to get an instance of IkeUdpEncapSocket.
+ * Each IkeSocketConfig can only be bound with one IkeUdpEncapSocket instance. When caller requests
+ * for IkeUdpEncapSocket with an already bound IkeSocketConfig, an existing instance will be
  * returned.
  */
 public final class IkeUdpEncapSocket extends IkeSocket {
@@ -53,8 +52,8 @@ public final class IkeUdpEncapSocket extends IkeSocket {
     @VisibleForTesting static final int NON_ESP_MARKER_LEN = 4;
     @VisibleForTesting static final byte[] NON_ESP_MARKER = new byte[NON_ESP_MARKER_LEN];
 
-    // Map from Network to IkeSocket instances.
-    private static Map<Network, IkeUdpEncapSocket> sNetworkToIkeSocketMap = new HashMap<>();
+    // Map from IkeSocketConfig to IkeSocket instances.
+    private static Map<IkeSocketConfig, IkeUdpEncapSocket> sConfigToSocketMap = new HashMap<>();
 
     private static IPacketReceiver sPacketReceiver = new PacketReceiver();
 
@@ -62,8 +61,8 @@ public final class IkeUdpEncapSocket extends IkeSocket {
     private final UdpEncapsulationSocket mUdpEncapSocket;
 
     private IkeUdpEncapSocket(
-            UdpEncapsulationSocket udpEncapSocket, Network network, Handler handler) {
-        super(network, handler);
+            UdpEncapsulationSocket udpEncapSocket, IkeSocketConfig sockConfig, Handler handler) {
+        super(sockConfig, handler);
         mUdpEncapSocket = udpEncapSocket;
     }
 
@@ -71,31 +70,31 @@ public final class IkeUdpEncapSocket extends IkeSocket {
      * Get an IkeUdpEncapSocket instance.
      *
      * <p>Return the existing IkeUdpEncapSocket instance if it has been created for the input
-     * Network. Otherwise, create and return a new IkeUdpEncapSocket instance.
+     * IkeSocketConfig. Otherwise, create and return a new IkeUdpEncapSocket instance.
      *
-     * @param network the Network this socket will be bound to
+     * @param sockConfig the socket configuration
      * @param ipsecManager for creating {@link UdpEncapsulationSocket}
      * @param ikeSession the IkeSessionStateMachine that is requesting an IkeUdpEncapSocket.
      * @return an IkeUdpEncapSocket instance
      */
     public static IkeUdpEncapSocket getIkeUdpEncapSocket(
-            Network network,
+            IkeSocketConfig sockConfig,
             IpSecManager ipsecManager,
             IkeSessionStateMachine ikeSession,
             Looper looper)
             throws ErrnoException, IOException, ResourceUnavailableException {
-        IkeUdpEncapSocket ikeSocket = sNetworkToIkeSocketMap.get(network);
+        IkeUdpEncapSocket ikeSocket = sConfigToSocketMap.get(sockConfig);
         if (ikeSocket == null) {
             UdpEncapsulationSocket udpEncapSocket = ipsecManager.openUdpEncapsulationSocket();
             FileDescriptor fd = udpEncapSocket.getFileDescriptor();
-            network.bindSocket(fd);
+            sockConfig.applyTo(fd);
 
-            ikeSocket = new IkeUdpEncapSocket(udpEncapSocket, network, new Handler(looper));
+            ikeSocket = new IkeUdpEncapSocket(udpEncapSocket, sockConfig, new Handler(looper));
 
             // Create and register FileDescriptor for receiving IKE packet on current thread.
             ikeSocket.start();
 
-            sNetworkToIkeSocketMap.put(network, ikeSocket);
+            sConfigToSocketMap.put(sockConfig, ikeSocket);
         }
         ikeSocket.mAliveIkeSessions.add(ikeSession);
         return ikeSocket;
@@ -201,7 +200,7 @@ public final class IkeUdpEncapSocket extends IkeSocket {
     /** Implement {@link AutoCloseable#close()} */
     @Override
     public void close() {
-        sNetworkToIkeSocketMap.remove(getNetwork());
+        sConfigToSocketMap.remove(getIkeSocketConfig());
 
         try {
             mUdpEncapSocket.close();
