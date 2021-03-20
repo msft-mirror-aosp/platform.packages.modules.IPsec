@@ -18,7 +18,6 @@ package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
-import android.net.Network;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.os.Handler;
 import android.system.ErrnoException;
@@ -65,8 +64,7 @@ public abstract class IkeSocket implements AutoCloseable {
 
     private static final int RCV_BUFFER_SIZE = 4096;
 
-    // Network this socket bound to.
-    private final Network mNetwork;
+    private final IkeSocketConfig mIkeSocketConfig;
     private final Handler mHandler;
 
     // Map from locally generated IKE SPI to IkeSessionStateMachine instances.
@@ -78,9 +76,9 @@ public abstract class IkeSocket implements AutoCloseable {
     @VisibleForTesting
     protected final Set<IkeSessionStateMachine> mAliveIkeSessions = new HashSet<>();
 
-    protected IkeSocket(Network network, Handler handler) {
+    protected IkeSocket(IkeSocketConfig sockConfig, Handler handler) {
         mHandler = handler;
-        mNetwork = network;
+        mIkeSocketConfig = sockConfig;
     }
 
     protected static void parseAndDemuxIkePacket(
@@ -181,13 +179,9 @@ public abstract class IkeSocket implements AutoCloseable {
 
     protected abstract void handlePacket(byte[] recvbuf, int length);
 
-    /**
-     * Return Network this socket bound to
-     *
-     * @return the bound Network
-     */
-    public final Network getNetwork() {
-        return mNetwork;
+    /** Return the IkeSocketConfig */
+    public final IkeSocketConfig getIkeSocketConfig() {
+        return mIkeSocketConfig;
     }
 
     /**
