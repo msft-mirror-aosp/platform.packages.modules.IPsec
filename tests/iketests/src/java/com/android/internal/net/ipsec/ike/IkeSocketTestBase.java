@@ -86,7 +86,7 @@ public abstract class IkeSocketTestBase {
     protected final LongSparseArray mSpiToIkeStateMachineMap =
             new LongSparseArray<IkeSessionStateMachine>();
 
-    protected final Network mMockNetwork = mock(Network.class);
+    protected final IkeSocketConfig mMockIkeSocketConfig = mock(IkeSocketConfig.class);
     protected final IkeSessionStateMachine mMockIkeSessionStateMachine =
             mock(IkeSessionStateMachine.class);
 
@@ -220,25 +220,27 @@ public abstract class IkeSocketTestBase {
     }
 
     protected interface IkeSocketFactory {
-        IkeSocket getIkeSocket(Network network, IkeSessionStateMachine ikeSession)
+        IkeSocket getIkeSocket(IkeSocketConfig sockConfig, IkeSessionStateMachine ikeSession)
                 throws ErrnoException, IOException;
     }
 
-    protected void verifyGetAndCloseIkeSocketSameNetwork(
+    protected void verifyGetAndCloseIkeSocketSameConfig(
             IkeSocketFactory ikeUdpSocketFactory, int expectedServerPort) throws Exception {
         IkeSessionStateMachine mockIkeSessionOne = mock(IkeSessionStateMachine.class);
         IkeSessionStateMachine mockIkeSessionTwo = mock(IkeSessionStateMachine.class);
 
-        IkeSocket ikeSocketOne = ikeUdpSocketFactory.getIkeSocket(mMockNetwork, mockIkeSessionOne);
+        IkeSocket ikeSocketOne =
+                ikeUdpSocketFactory.getIkeSocket(mMockIkeSocketConfig, mockIkeSessionOne);
         assertEquals(expectedServerPort, ikeSocketOne.getIkeServerPort());
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
-        IkeSocket ikeSocketTwo = ikeUdpSocketFactory.getIkeSocket(mMockNetwork, mockIkeSessionTwo);
+        IkeSocket ikeSocketTwo =
+                ikeUdpSocketFactory.getIkeSocket(mMockIkeSocketConfig, mockIkeSessionTwo);
         assertEquals(expectedServerPort, ikeSocketTwo.getIkeServerPort());
         assertEquals(2, ikeSocketTwo.mAliveIkeSessions.size());
         assertEquals(ikeSocketOne, ikeSocketTwo);
 
-        verify(mMockNetwork).bindSocket(eq(ikeSocketOne.getFd()));
+        verify(mMockIkeSocketConfig).applyTo(eq(ikeSocketOne.getFd()));
 
         ikeSocketOne.releaseReference(mockIkeSessionOne);
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
@@ -249,7 +251,7 @@ public abstract class IkeSocketTestBase {
         verifyCloseFd(ikeSocketTwo.getFd());
     }
 
-    protected void verifyGetAndCloseIkeSocketDifferentNetwork(
+    protected void verifyGetAndCloseIkeSocketDifferentConfig(
             IkeSocketFactory ikeUdpSocketFactory, int expectedServerPort) throws Exception {
         IkeSessionStateMachine mockIkeSessionOne = mock(IkeSessionStateMachine.class);
         IkeSessionStateMachine mockIkeSessionTwo = mock(IkeSessionStateMachine.class);
@@ -258,12 +260,14 @@ public abstract class IkeSocketTestBase {
         Network mockNetworkTwo = mock(Network.class);
 
         IkeSocket ikeSocketOne =
-                ikeUdpSocketFactory.getIkeSocket(mockNetworkOne, mockIkeSessionOne);
+                ikeUdpSocketFactory.getIkeSocket(
+                        new IkeSocketConfig(mockNetworkOne), mockIkeSessionOne);
         assertEquals(expectedServerPort, ikeSocketOne.getIkeServerPort());
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
         IkeSocket ikeSocketTwo =
-                ikeUdpSocketFactory.getIkeSocket(mockNetworkTwo, mockIkeSessionTwo);
+                ikeUdpSocketFactory.getIkeSocket(
+                        new IkeSocketConfig(mockNetworkTwo), mockIkeSessionTwo);
         assertEquals(expectedServerPort, ikeSocketTwo.getIkeServerPort());
         assertEquals(1, ikeSocketTwo.mAliveIkeSessions.size());
 
@@ -308,7 +312,8 @@ public abstract class IkeSocketTestBase {
             throws Exception {
         IkeSessionStateMachine mockIkeSession = mock(IkeSessionStateMachine.class);
         IkeUdpSocket ikeSocket =
-                (IkeUdpSocket) ikeUdpSocketFactory.getIkeSocket(mMockNetwork, mockIkeSession);
+                (IkeUdpSocket)
+                        ikeUdpSocketFactory.getIkeSocket(mMockIkeSocketConfig, mockIkeSession);
         assertNotNull(ikeSocket);
 
         // Set up state
