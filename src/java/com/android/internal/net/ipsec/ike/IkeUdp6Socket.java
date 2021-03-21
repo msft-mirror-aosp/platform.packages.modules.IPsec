@@ -21,7 +21,6 @@ import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_DGRAM;
 
 import android.net.InetAddresses;
-import android.net.Network;
 import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -35,54 +34,54 @@ import java.util.Map;
 /**
  * IkeUdp6Socket uses an IPv6-bound {@link FileDescriptor} to send and receive IKE packets.
  *
- * <p>Caller MUST provide one {@link Network} when trying to get an instance of IkeUdp6Socket. Each
- * {@link Network} will only be bound to by one IkeUdp6Socket instance. When caller requests an
- * IkeUdp6Socket with an already bound {@link Network}, the existing instance will be returned.
+ * <p>Caller MUST provide one IkeSocketConfig when trying to get an instance of IkeUdp6Socket. Each
+ * IkeSocketConfig will only be bound to one IkeUdp6Socket instance. When caller requests an
+ * IkeUdp6Socket with an already bound IkeSocketConfig, the existing instance will be returned.
  */
 public class IkeUdp6Socket extends IkeUdpSocket {
     private static final String TAG = IkeUdp6Socket.class.getSimpleName();
 
     private static final InetAddress INADDR_ANY = InetAddresses.parseNumericAddress("::");
 
-    // Map from Network to IkeUdp6Socket instances.
-    private static Map<Network, IkeUdp6Socket> sNetworkToUdp6SocketMap = new HashMap<>();
+    // Map from IkeSocketConfig to IkeUdp6Socket instances.
+    private static Map<IkeSocketConfig, IkeUdp6Socket> sConfigToSocketMap = new HashMap<>();
 
-    protected IkeUdp6Socket(FileDescriptor socket, Network network, Handler handler) {
-        super(socket, network, handler == null ? new Handler() : handler);
+    protected IkeUdp6Socket(FileDescriptor socket, IkeSocketConfig sockConfig, Handler handler) {
+        super(socket, sockConfig, handler == null ? new Handler() : handler);
     }
 
     /**
      * Get an IkeUdp6Socket instance.
      *
-     * <p>Return the existing IkeUdp6Socket instance if it has been created for the input Network.
-     * Otherwise, create and return a new IkeUdp6Socket instance.
+     * <p>Return the existing IkeUdp6Socket instance if it has been created for the input
+     * IkeSocketConfig. Otherwise, create and return a new IkeUdp6Socket instance.
      *
-     * @param network the Network this socket will be bound to
+     * @param sockConfig the socket configuration
      * @param ikeSession the IkeSessionStateMachine that is requesting an IkeUdp6Socket.
      * @param handler the Handler used to process received packets
      * @return an IkeUdp6Socket instance
      */
     public static IkeUdp6Socket getInstance(
-            Network network, IkeSessionStateMachine ikeSession, Handler handler)
+            IkeSocketConfig sockConfig, IkeSessionStateMachine ikeSession, Handler handler)
             throws ErrnoException, IOException {
-        IkeUdp6Socket ikeSocket = sNetworkToUdp6SocketMap.get(network);
+        IkeUdp6Socket ikeSocket = sConfigToSocketMap.get(sockConfig);
         if (ikeSocket == null) {
-            ikeSocket = new IkeUdp6Socket(openUdp6SockNonBlock(network), network, handler);
+            ikeSocket = new IkeUdp6Socket(openUdp6Sock(sockConfig), sockConfig, handler);
 
             // Create and register FileDescriptor for receiving IKE packet on current thread.
             ikeSocket.start();
 
-            sNetworkToUdp6SocketMap.put(network, ikeSocket);
+            sConfigToSocketMap.put(sockConfig, ikeSocket);
         }
         ikeSocket.mAliveIkeSessions.add(ikeSession);
         return ikeSocket;
     }
 
-    protected static FileDescriptor openUdp6SockNonBlock(Network network)
+    protected static FileDescriptor openUdp6Sock(IkeSocketConfig sockConfig)
             throws ErrnoException, IOException {
         FileDescriptor sock = Os.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
         Os.bind(sock, INADDR_ANY, 0);
-        network.bindSocket(sock);
+        sockConfig.applyTo(sock);
 
         return sock;
     }
@@ -90,7 +89,7 @@ public class IkeUdp6Socket extends IkeUdpSocket {
     /** Implement {@link AutoCloseable#close()} */
     @Override
     public void close() {
-        sNetworkToUdp6SocketMap.remove(getNetwork());
+        sConfigToSocketMap.remove(getIkeSocketConfig());
 
         super.close();
     }

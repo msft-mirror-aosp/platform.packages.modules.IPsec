@@ -61,6 +61,8 @@ import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.N
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS;
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_UPDATE_SA_ADDRESSES;
 import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
+import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_KE;
+import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_NONCE;
 import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_SA;
 
@@ -1515,6 +1517,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeNotifyPayload outCookieNotify = (IkeNotifyPayload) payloadList.get(0);
         assertEquals(NOTIFY_TYPE_COOKIE, outCookieNotify.notifyType);
         assertArrayEquals(COOKIE_DATA, outCookieNotify.notifyData);
+
+        // First 4 payloads MUST follow RFC 4306 so that IKE library can be compatible with old
+        // implementations.
+        int[] expectedPayloadType =
+                new int[] {
+                    PAYLOAD_TYPE_NOTIFY, PAYLOAD_TYPE_SA, PAYLOAD_TYPE_KE, PAYLOAD_TYPE_NONCE
+                };
+        int len = expectedPayloadType.length;
+        for (int i = 0; i < len; i++) {
+            assertEquals(expectedPayloadType[i], payloadList.get(i).payloadType);
+        }
 
         assertEquals(originalPayloadList, payloadList.subList(1, payloadList.size()));
 
@@ -5696,7 +5709,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             InetAddress remoteAddress,
             IkeNetworkCallbackBase networkCallback) {
         assertEquals(underlyingNetwork, mIkeSessionStateMachine.mNetwork);
-        assertEquals(underlyingNetwork, mIkeSessionStateMachine.mIkeSocket.getNetwork());
+        assertEquals(
+                underlyingNetwork,
+                mIkeSessionStateMachine.mIkeSocket.getIkeSocketConfig().getNetwork());
         assertEquals(localAddress, mIkeSessionStateMachine.mLocalAddress);
         assertEquals(remoteAddress, mIkeSessionStateMachine.mRemoteAddress);
 

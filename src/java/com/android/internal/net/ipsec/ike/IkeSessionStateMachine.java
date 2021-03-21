@@ -914,10 +914,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void buildAndSwitchToIkeSocketWithPort4500(boolean isIpv4) {
         try {
+            IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
             if (isIpv4) {
                 IkeSocket newSocket =
                         IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                mNetwork,
+                                sockConfig,
                                 mIpSecManager,
                                 IkeSessionStateMachine.this,
                                 getHandler().getLooper());
@@ -926,7 +927,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             } else {
                 IkeSocket newSocket =
                         IkeUdp6WithEncapPortSocket.getInstance(
-                                mNetwork, IkeSessionStateMachine.this, getHandler());
+                                sockConfig, IkeSessionStateMachine.this, getHandler());
                 switchToIkeSocket(newSocket);
             }
         } catch (ErrnoException | IOException | ResourceUnavailableException e) {
@@ -1228,14 +1229,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 setRemoteAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
+                IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
                 if (isIpv4) {
                     mIkeSocket =
                             IkeUdp4Socket.getInstance(
-                                    mNetwork, IkeSessionStateMachine.this, getHandler());
+                                    sockConfig, IkeSessionStateMachine.this, getHandler());
                 } else {
                     mIkeSocket =
                             IkeUdp6Socket.getInstance(
-                                    mNetwork, IkeSessionStateMachine.this, getHandler());
+                                    sockConfig, IkeSessionStateMachine.this, getHandler());
                 }
                 mLocalPort = mIkeSocket.getLocalPort();
 
@@ -3364,7 +3366,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 try {
                     IkeSocket newSocket =
                             IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                    mNetwork,
+                                    new IkeSocketConfig(mNetwork),
                                     mIpSecManager,
                                     IkeSessionStateMachine.this,
                                     getHandler().getLooper());
@@ -3483,7 +3485,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         (Inet4Address) mLocalAddress,
                         (Inet4Address) mRemoteAddress,
                         ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
-                        mIkeSocket.getNetwork(),
+                        mIkeSocket.getIkeSocketConfig().getNetwork(),
                         keepaliveIntent);
         keepalive.start();
         return keepalive;
@@ -5500,11 +5502,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             List<IkePayload> payloadList = new ArrayList<>(3);
 
+            // The old IKE spec RFC 4306 (section 2.5 and 2.6) requires the payload order in IKE
+            // INIT to be SAi, KEi, Ni and allow responders to reject requests with wrong order.
+            // Although starting from RFC 5996, the protocol removed the allowance for rejecting
+            // messages in which the payloads were not in the "right" order, there are few responder
+            // implementations are still following the old spec when handling IKE INIT request with
+            // COOKIE payload. Thus IKE library should follow the payload order to be compatible
+            // with older implementations.
             payloadList.add(saPayload);
-            payloadList.add(new IkeNoncePayload(randomFactory));
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
             payloadList.add(new IkeKePayload(selectedDhGroup, randomFactory));
+
+            payloadList.add(new IkeNoncePayload(randomFactory));
 
             return payloadList;
         }
@@ -5538,14 +5548,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     buildAndSwitchToIkeSocketWithPort4500(isIpv4);
                 } else {
                     IkeSocket newSocket;
+                    IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
                     if (isIpv4) {
                         newSocket =
                                 IkeUdp4Socket.getInstance(
-                                        mNetwork, IkeSessionStateMachine.this, getHandler());
+                                        sockConfig, IkeSessionStateMachine.this, getHandler());
                     } else {
                         newSocket =
                                 IkeUdp6Socket.getInstance(
-                                        mNetwork, IkeSessionStateMachine.this, getHandler());
+                                        sockConfig, IkeSessionStateMachine.this, getHandler());
                     }
                     switchToIkeSocket(newSocket);
                 }
