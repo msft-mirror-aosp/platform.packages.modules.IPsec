@@ -222,7 +222,7 @@ public abstract class SaProposal {
     public static final int DH_GROUP_3072_BIT_MODP = 15;
     /** 4096-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_4096_BIT_MODP = 16;
-    /** Elliptic Curve Diffie-Hellman 25519. @hide */
+    /** Elliptic Curve Diffie-Hellman 25519. */
     public static final int DH_GROUP_CURVE_25519 = 31;
 
     private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
