@@ -41,7 +41,7 @@ import java.util.Map;
  * IkeUdpEncapSocket uses an {@link UdpEncapsulationSocket} to send and receive IKE packets.
  *
  * <p>Caller MUST provide one IkeSocketConfig when trying to get an instance of IkeUdpEncapSocket.
- * Each IkeSocketConfig can only be bound with one IkeUdpEncapSocket instance. When caller requests
+ * Each IkeSocketConfig can only be bound by one IkeUdpEncapSocket instance. When caller requests
  * for IkeUdpEncapSocket with an already bound IkeSocketConfig, an existing instance will be
  * returned.
  */
@@ -87,7 +87,7 @@ public final class IkeUdpEncapSocket extends IkeSocket {
         if (ikeSocket == null) {
             UdpEncapsulationSocket udpEncapSocket = ipsecManager.openUdpEncapsulationSocket();
             FileDescriptor fd = udpEncapSocket.getFileDescriptor();
-            sockConfig.applyTo(fd);
+            applySocketConfig(sockConfig, fd, false /* isIpv6 */);
 
             ikeSocket = new IkeUdpEncapSocket(udpEncapSocket, sockConfig, new Handler(looper));
 
