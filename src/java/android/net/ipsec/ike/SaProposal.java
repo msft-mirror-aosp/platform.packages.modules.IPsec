@@ -205,7 +205,8 @@ public abstract class SaProposal {
         DH_GROUP_1536_BIT_MODP,
         DH_GROUP_2048_BIT_MODP,
         DH_GROUP_3072_BIT_MODP,
-        DH_GROUP_4096_BIT_MODP
+        DH_GROUP_4096_BIT_MODP,
+        DH_GROUP_CURVE_25519
     })
     public @interface DhGroup {}
 
@@ -221,6 +222,8 @@ public abstract class SaProposal {
     public static final int DH_GROUP_3072_BIT_MODP = 15;
     /** 4096-bit MODP Diffie-Hellman Group. */
     public static final int DH_GROUP_4096_BIT_MODP = 16;
+    /** Elliptic Curve Diffie-Hellman 25519. @hide */
+    public static final int DH_GROUP_CURVE_25519 = 31;
 
     private static final SparseArray<String> SUPPORTED_DH_GROUP_TO_STR;
 
@@ -232,6 +235,7 @@ public abstract class SaProposal {
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_2048_BIT_MODP, "DH_2048_BIT_MODP");
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_3072_BIT_MODP, "DH_3072_BIT_MODP");
         SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_4096_BIT_MODP, "DH_4096_BIT_MODP");
+        SUPPORTED_DH_GROUP_TO_STR.put(DH_GROUP_CURVE_25519, "DH_GROUP_CURVE_25519");
     }
 
     private static final String PROTOCOL_ID_KEY = "mProtocolId";

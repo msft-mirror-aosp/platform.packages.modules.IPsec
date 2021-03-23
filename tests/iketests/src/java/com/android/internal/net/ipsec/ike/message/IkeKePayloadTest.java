@@ -38,6 +38,7 @@ import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 
 import javax.crypto.interfaces.DHPrivateKey;
@@ -92,7 +93,9 @@ public final class IkeKePayloadTest {
                     + "2D2BFB286D1D6D5D11F7D24250EEB26B38435C25EA81FC2C"
                     + "9C17B94F389B94B9";
 
-    private static final String KEY_EXCHANGE_ALGORITHM = "DH";
+    private static final String KEY_EXCHANGE_ALGORITHM_MODP = "DH";
+    private static final String KEY_EXCHANGE_ALGORITHM_CURVE = "XDH";
+    private static final String KEY_EXCHANGE_CURVE_PROVIDER = "AndroidOpenSSL";
 
     @Test
     public void testDecodeIkeKePayload() throws Exception {
@@ -156,7 +159,7 @@ public final class IkeKePayloadTest {
                 BigIntegerUtils.unsignedHexStringToBigInteger(privateKeyXValueHex);
         DHPrivateKeySpec privateKeySpec =
                 new DHPrivateKeySpec(privateKeyValue, primeValue, baseGenValue);
-        KeyFactory dhKeyFactory = KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM);
+        KeyFactory dhKeyFactory = KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM_MODP);
         return dhKeyFactory.generatePrivate(privateKeySpec);
     }
 
@@ -229,5 +232,42 @@ public final class IkeKePayloadTest {
             fail("Expected to fail because of invalid remote public key.");
         } catch (GeneralSecurityException expected) {
         }
+    }
+
+    @Test
+    public void testGetIkeCurveKePayload() throws Exception {
+        IkeKePayload payload =
+                IkeKePayload.createOutboundKePayload(
+                        SaProposal.DH_GROUP_CURVE_25519, createMockRandomFactory());
+
+        final int expectedKeDataLen = 32;
+
+        assertEquals(SaProposal.DH_GROUP_CURVE_25519, payload.dhGroup);
+        assertEquals(expectedKeDataLen, payload.keyExchangeData.length);
+    }
+
+    @Test
+    public void testGetSharedKeyWithCurve25519() throws Exception {
+        final String privateKeyHex =
+                "302e020100300506032b656e0422042077076d0a7318a57d3c16c17251b26645"
+                        + "df4c2f87ebc0992ab177fba51db92c2a";
+        final String publicKeyHex =
+                "de9edb7d7b7dc1b4d35b61c2ece435373f8343c85b78674dadfc7e146f882b4f";
+        final String sharedKeyHex =
+                "4a5d9d5ba4ce2de1728e3bf480350f25e07e21c947d19e3376f09b3c1e161742";
+
+        KeyFactory kf =
+                KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM_CURVE, KEY_EXCHANGE_CURVE_PROVIDER);
+        PrivateKey privateKey =
+                kf.generatePrivate(
+                        new PKCS8EncodedKeySpec(TestUtils.hexStringToByteArray(privateKeyHex)));
+
+        final byte[] sharedSecret =
+                IkeKePayload.getSharedKey(
+                        privateKey,
+                        TestUtils.hexStringToByteArray(publicKeyHex),
+                        SaProposal.DH_GROUP_CURVE_25519);
+
+        assertArrayEquals(TestUtils.hexStringToByteArray(sharedKeyHex), sharedSecret);
     }
 }
