@@ -5512,7 +5512,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             payloadList.add(saPayload);
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
-            payloadList.add(new IkeKePayload(selectedDhGroup, randomFactory));
+            payloadList.add(IkeKePayload.createOutboundKePayload(selectedDhGroup, randomFactory));
 
             payloadList.add(new IkeNoncePayload(randomFactory));
 

@@ -2129,7 +2129,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     ((ChildProposal) saPayload.proposalList.get(0))
                             .saProposal.getDhGroupTransforms();
             if (dhGroups.length != 0 && dhGroups[0].id != DH_GROUP_NONE) {
-                payloadList.add(new IkeKePayload(dhGroups[0].id, randomFactory));
+                payloadList.add(
+                        IkeKePayload.createOutboundKePayload(dhGroups[0].id, randomFactory));
             }
 
             if (isTransport) payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_USE_TRANSPORT_MODE));
