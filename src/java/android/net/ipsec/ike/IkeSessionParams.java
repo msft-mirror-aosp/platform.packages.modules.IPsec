@@ -167,8 +167,10 @@ public final class IkeSessionParams {
     /**
      * Configures the IKE session to always send to port 4500.
      *
-     * <p>If this option is set for an IKE Session, IKE Session will always send IKE packets to port
-     * 4500 regardless of whether there is a NAT.
+     * <p>If set, the IKE Session will be initiated and maintained exclusively using
+     * destination port 4500, regardless of the presence of NAT. Otherwise, the IKE Session will
+     * be initiated on destination port 500; then, if either a NAT is detected or both MOBIKE
+     * and NAT-T are supported by the peer, it will proceed on port 4500.
      */
     public static final int IKE_OPTION_FORCE_PORT_4500 = 3;
 
