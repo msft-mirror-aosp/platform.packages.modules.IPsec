@@ -144,11 +144,7 @@ public abstract class SaProposal {
     public static final int PSEUDORANDOM_FUNCTION_SHA2_384 = 6;
     /** HMAC-SHA2-384 Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_SHA2_512 = 7;
-    /**
-     * AES128-CMAC Pseudorandom Function.
-     *
-     * @hide
-     */
+    /** AES128-CMAC Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_AES128_CMAC = 8;
 
     /** @hide */
@@ -183,11 +179,7 @@ public abstract class SaProposal {
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA1_96 = 2;
     /** AES-XCBC-96 Authentication/Integrity Algorithm. */
     public static final int INTEGRITY_ALGORITHM_AES_XCBC_96 = 5;
-    /**
-     * AES-CMAC-96 Authentication/Integrity Algorithm.
-     *
-     * @hide
-     */
+    /** AES-CMAC-96 Authentication/Integrity Algorithm. */
     public static final int INTEGRITY_ALGORITHM_AES_CMAC_96 = 8;
     /** HMAC-SHA256 Authentication/Integrity Algorithm with 128-bit truncation. */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_256_128 = 12;

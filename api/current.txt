@@ -282,6 +282,7 @@ package android.net.ipsec.ike {
     field public static final int ENCRYPTION_ALGORITHM_AES_GCM_16 = 20; // 0x14
     field public static final int ENCRYPTION_ALGORITHM_AES_GCM_8 = 18; // 0x12
     field public static final int ENCRYPTION_ALGORITHM_CHACHA20_POLY1305 = 28; // 0x1c
+    field public static final int INTEGRITY_ALGORITHM_AES_CMAC_96 = 8; // 0x8
     field public static final int INTEGRITY_ALGORITHM_AES_XCBC_96 = 5; // 0x5
     field public static final int INTEGRITY_ALGORITHM_HMAC_SHA1_96 = 2; // 0x2
     field public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_256_128 = 12; // 0xc
@@ -292,6 +293,7 @@ package android.net.ipsec.ike {
     field public static final int KEY_LEN_AES_192 = 192; // 0xc0
     field public static final int KEY_LEN_AES_256 = 256; // 0x100
     field public static final int KEY_LEN_UNUSED = 0; // 0x0
+    field public static final int PSEUDORANDOM_FUNCTION_AES128_CMAC = 8; // 0x8
     field public static final int PSEUDORANDOM_FUNCTION_AES128_XCBC = 4; // 0x4
     field public static final int PSEUDORANDOM_FUNCTION_HMAC_SHA1 = 2; // 0x2
     field public static final int PSEUDORANDOM_FUNCTION_SHA2_256 = 5; // 0x5
