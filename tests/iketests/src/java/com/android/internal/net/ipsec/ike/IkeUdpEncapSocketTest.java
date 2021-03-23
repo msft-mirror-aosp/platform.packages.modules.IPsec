@@ -146,7 +146,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
         // Send IKE packet
         IkeUdpEncapSocket ikeSocket =
                 IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                        mMockIkeSocketConfig,
+                        mSpyIkeSocketConfig,
                         mSpyIpSecManager,
                         mMockIkeSessionStateMachine,
                         Looper.myLooper());
@@ -185,7 +185,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
                             try {
                                 socketReceiver.setIkeUdpEncapSocket(
                                         IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                                mMockIkeSocketConfig,
+                                                mSpyIkeSocketConfig,
                                                 mSpyIpSecManager,
                                                 mMockIkeSessionStateMachine,
                                                 mIkeThread.getLooper()));
