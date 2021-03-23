@@ -51,6 +51,8 @@ public class IkeMacIntegrity extends IkeMac {
         IKE_ALGO_TO_IPSEC_ALGO.put(
                 SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96, IpSecAlgorithm.AUTH_AES_XCBC);
         IKE_ALGO_TO_IPSEC_ALGO.put(
+                SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96, IpSecAlgorithm.AUTH_AES_CMAC);
+        IKE_ALGO_TO_IPSEC_ALGO.put(
                 SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128, IpSecAlgorithm.AUTH_HMAC_SHA256);
         IKE_ALGO_TO_IPSEC_ALGO.put(
                 SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_384_192, IpSecAlgorithm.AUTH_HMAC_SHA384);
@@ -96,6 +98,11 @@ public class IkeMacIntegrity extends IkeMac {
                 keyLength = 16;
                 isJceSupported = false;
                 algorithmName = ALGO_NAME_JCE_UNSUPPORTED;
+                checksumLength = 12;
+                break;
+            case SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96:
+                keyLength = 16;
+                algorithmName = "AESCMAC";
                 checksumLength = 12;
                 break;
             case SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128:

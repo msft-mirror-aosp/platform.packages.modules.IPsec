@@ -129,7 +129,8 @@ public abstract class SaProposal {
         PSEUDORANDOM_FUNCTION_AES128_XCBC,
         PSEUDORANDOM_FUNCTION_SHA2_256,
         PSEUDORANDOM_FUNCTION_SHA2_384,
-        PSEUDORANDOM_FUNCTION_SHA2_512
+        PSEUDORANDOM_FUNCTION_SHA2_512,
+        PSEUDORANDOM_FUNCTION_AES128_CMAC
     })
     public @interface PseudorandomFunction {}
 
@@ -143,6 +144,12 @@ public abstract class SaProposal {
     public static final int PSEUDORANDOM_FUNCTION_SHA2_384 = 6;
     /** HMAC-SHA2-384 Pseudorandom Function. */
     public static final int PSEUDORANDOM_FUNCTION_SHA2_512 = 7;
+    /**
+     * AES128-CMAC Pseudorandom Function.
+     *
+     * @hide
+     */
+    public static final int PSEUDORANDOM_FUNCTION_AES128_CMAC = 8;
 
     /** @hide */
     protected static final SparseArray<String> SUPPORTED_PRF_TO_STR;
@@ -154,6 +161,7 @@ public abstract class SaProposal {
         SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_SHA2_256, "PRF_HMAC2_256");
         SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_SHA2_384, "PRF_HMAC2_384");
         SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_SHA2_512, "PRF_HMAC2_512");
+        SUPPORTED_PRF_TO_STR.put(PSEUDORANDOM_FUNCTION_AES128_CMAC, "PRF_AES128_CMAC");
     }
 
     /** @hide */
@@ -162,6 +170,7 @@ public abstract class SaProposal {
         INTEGRITY_ALGORITHM_NONE,
         INTEGRITY_ALGORITHM_HMAC_SHA1_96,
         INTEGRITY_ALGORITHM_AES_XCBC_96,
+        INTEGRITY_ALGORITHM_AES_CMAC_96,
         INTEGRITY_ALGORITHM_HMAC_SHA2_256_128,
         INTEGRITY_ALGORITHM_HMAC_SHA2_384_192,
         INTEGRITY_ALGORITHM_HMAC_SHA2_512_256
@@ -174,6 +183,12 @@ public abstract class SaProposal {
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA1_96 = 2;
     /** AES-XCBC-96 Authentication/Integrity Algorithm. */
     public static final int INTEGRITY_ALGORITHM_AES_XCBC_96 = 5;
+    /**
+     * AES-CMAC-96 Authentication/Integrity Algorithm.
+     *
+     * @hide
+     */
+    public static final int INTEGRITY_ALGORITHM_AES_CMAC_96 = 8;
     /** HMAC-SHA256 Authentication/Integrity Algorithm with 128-bit truncation. */
     public static final int INTEGRITY_ALGORITHM_HMAC_SHA2_256_128 = 12;
     /** HMAC-SHA384 Authentication/Integrity Algorithm with 192-bit truncation. */
@@ -189,6 +204,7 @@ public abstract class SaProposal {
         SUPPORTED_INTEGRITY_ALGO_TO_STR.put(INTEGRITY_ALGORITHM_NONE, "AUTH_NONE");
         SUPPORTED_INTEGRITY_ALGO_TO_STR.put(INTEGRITY_ALGORITHM_HMAC_SHA1_96, "AUTH_HMAC_SHA1_96");
         SUPPORTED_INTEGRITY_ALGO_TO_STR.put(INTEGRITY_ALGORITHM_AES_XCBC_96, "AUTH_AES_XCBC_96");
+        SUPPORTED_INTEGRITY_ALGO_TO_STR.put(INTEGRITY_ALGORITHM_AES_CMAC_96, "AUTH_AES_CMAC_96");
         SUPPORTED_INTEGRITY_ALGO_TO_STR.put(
                 INTEGRITY_ALGORITHM_HMAC_SHA2_256_128, "AUTH_HMAC_SHA2_256_128");
         SUPPORTED_INTEGRITY_ALGO_TO_STR.put(
