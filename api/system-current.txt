@@ -42,12 +42,14 @@ package android.net.ipsec.ike {
   }
 
   public final class IkeSessionParams {
+    method @IntRange(from=0x0, to=0x3f) public int getDscp();
     method @Nullable public android.net.ipsec.ike.ike3gpp.Ike3gppExtension getIke3gppExtension();
     method @Deprecated @NonNull public android.net.Network getNetwork();
   }
 
   public static final class IkeSessionParams.Builder {
     ctor @Deprecated public IkeSessionParams.Builder(@NonNull android.content.Context);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setDscp(@IntRange(from=0x0, to=0x3f) int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setIke3gppExtension(@NonNull android.net.ipsec.ike.ike3gpp.Ike3gppExtension);
     method @Deprecated @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@NonNull android.net.Network);
   }
