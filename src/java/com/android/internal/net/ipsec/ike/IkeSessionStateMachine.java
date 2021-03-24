@@ -914,7 +914,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void buildAndSwitchToIkeSocketWithPort4500(boolean isIpv4) {
         try {
-            IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
+            IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork, mIkeSessionParams.getDscp());
             if (isIpv4) {
                 IkeSocket newSocket =
                         IkeUdpEncapSocket.getIkeUdpEncapSocket(
@@ -1229,7 +1229,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 setRemoteAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
-                IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
+                IkeSocketConfig sockConfig =
+                        new IkeSocketConfig(mNetwork, mIkeSessionParams.getDscp());
                 if (isIpv4) {
                     mIkeSocket =
                             IkeUdp4Socket.getInstance(
@@ -3366,7 +3367,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 try {
                     IkeSocket newSocket =
                             IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                    new IkeSocketConfig(mNetwork),
+                                    new IkeSocketConfig(mNetwork, mIkeSessionParams.getDscp()),
                                     mIpSecManager,
                                     IkeSessionStateMachine.this,
                                     getHandler().getLooper());
@@ -5548,7 +5549,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     buildAndSwitchToIkeSocketWithPort4500(isIpv4);
                 } else {
                     IkeSocket newSocket;
-                    IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork);
+                    IkeSocketConfig sockConfig =
+                            new IkeSocketConfig(mNetwork, mIkeSessionParams.getDscp());
                     if (isIpv4) {
                         newSocket =
                                 IkeUdp4Socket.getInstance(

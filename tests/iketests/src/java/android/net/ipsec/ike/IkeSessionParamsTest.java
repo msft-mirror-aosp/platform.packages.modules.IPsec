@@ -391,6 +391,23 @@ public final class IkeSessionParamsTest {
                         >= IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX);
     }
 
+    @Test
+    public void testBuildWithPskAndDscp() throws Exception {
+        final int dscp = 38;
+
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS).setDscp(dscp).build();
+
+        // Verify DSCP value
+        assertEquals(dscp, sessionParams.getDscp());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSetInvalidDscp() throws Exception {
+        final int invalidDscp = 100;
+        buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS).setDscp(invalidDscp).build();
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void testBuildWithNattKeepaliveDelayTooShort() throws Exception {
         final int lowNattKeepaliveDelay = 1;
@@ -854,6 +871,14 @@ public final class IkeSessionParamsTest {
                 createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(100).build();
         IkeSessionParams sessionParamsB =
                 createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(200).build();
+
+        assertNotEquals(sessionParamsA, sessionParamsB);
+    }
+
+    @Test
+    public void testNotEqualsWhenDscpsAreDifferent() throws Exception {
+        IkeSessionParams sessionParamsA = createIkeParamsBuilderMinimum().setDscp(8).build();
+        IkeSessionParams sessionParamsB = createIkeParamsBuilderMinimum().setDscp(48).build();
 
         assertNotEquals(sessionParamsA, sessionParamsB);
     }
