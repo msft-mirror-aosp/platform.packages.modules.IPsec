@@ -31,7 +31,7 @@ import org.junit.Test;
 
 import java.util.Arrays;
 
-import javax.crypto.spec.DHPrivateKeySpec;
+import javax.crypto.interfaces.DHPrivateKey;
 
 public final class DeterministicSecureRandomTest {
     private static final int BYTE_ARRAY_LEN = 20;
@@ -78,14 +78,14 @@ public final class DeterministicSecureRandomTest {
             .when(rFactory)
             .getRandom();
 
-        IkeKePayload kePayloadOne = new IkeKePayload(DH_GROUP_2048_BIT_MODP, rFactory);
-        IkeKePayload kePayloadTwo = new IkeKePayload(DH_GROUP_2048_BIT_MODP, rFactory);
+        IkeKePayload kePayloadOne =
+                IkeKePayload.createOutboundKePayload(DH_GROUP_2048_BIT_MODP, rFactory);
+        IkeKePayload kePayloadTwo =
+                IkeKePayload.createOutboundKePayload(DH_GROUP_2048_BIT_MODP, rFactory);
         assertArrayEquals(kePayloadOne.keyExchangeData, kePayloadTwo.keyExchangeData);
 
-        DHPrivateKeySpec localPrivateKeyOne = kePayloadOne.localPrivateKey;
-        DHPrivateKeySpec localPrivateKeyTwo = kePayloadTwo.localPrivateKey;
-        assertEquals(localPrivateKeyOne.getG(), localPrivateKeyTwo.getG());
-        assertEquals(localPrivateKeyOne.getP(), localPrivateKeyTwo.getP());
+        DHPrivateKey localPrivateKeyOne = (DHPrivateKey) kePayloadOne.localPrivateKey;
+        DHPrivateKey localPrivateKeyTwo = (DHPrivateKey) kePayloadTwo.localPrivateKey;
         assertEquals(localPrivateKeyOne.getX(), localPrivateKeyTwo.getX());
     }
 }

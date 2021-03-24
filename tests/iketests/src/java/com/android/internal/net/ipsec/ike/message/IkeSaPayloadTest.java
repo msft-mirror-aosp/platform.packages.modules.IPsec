@@ -947,7 +947,7 @@ public final class IkeSaPayloadTest {
 
         final String saPayloadBodyHex =
                 "0000002c010100040300000c0100000c800e0080030000080300000c"
-                        + "0300000802000005000000080400001f";
+                        + "0300000802000005000000080400005f";
         IkeSaPayload saPayload =
                 new IkeSaPayload(
                         false /* isCritical*/,
