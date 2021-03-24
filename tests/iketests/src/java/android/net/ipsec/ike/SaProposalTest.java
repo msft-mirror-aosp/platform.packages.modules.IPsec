@@ -21,6 +21,7 @@ import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_1536_BIT_MODP;
 import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
 import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_3072_BIT_MODP;
 import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_4096_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_CURVE_25519;
 import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_NONE;
 import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_3DES;
 import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
@@ -546,6 +547,7 @@ public final class SaProposalTest {
         expectedSet.add(DH_GROUP_2048_BIT_MODP);
         expectedSet.add(DH_GROUP_3072_BIT_MODP);
         expectedSet.add(DH_GROUP_4096_BIT_MODP);
+        expectedSet.add(DH_GROUP_CURVE_25519);
 
         assertEquals(expectedSet, IkeSaProposal.getSupportedDhGroups());
     }

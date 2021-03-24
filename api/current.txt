@@ -275,6 +275,7 @@ package android.net.ipsec.ike {
     field public static final int DH_GROUP_2048_BIT_MODP = 14; // 0xe
     field public static final int DH_GROUP_3072_BIT_MODP = 15; // 0xf
     field public static final int DH_GROUP_4096_BIT_MODP = 16; // 0x10
+    field public static final int DH_GROUP_CURVE_25519 = 31; // 0x1f
     field public static final int DH_GROUP_NONE = 0; // 0x0
     field public static final int ENCRYPTION_ALGORITHM_3DES = 3; // 0x3
     field public static final int ENCRYPTION_ALGORITHM_AES_CBC = 12; // 0xc
