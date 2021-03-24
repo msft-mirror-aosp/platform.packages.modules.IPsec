@@ -164,8 +164,16 @@ public final class IkeSessionParams {
     // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public
     public static final int IKE_OPTION_MOBIKE = 2;
 
+    /**
+     * Configures the IKE session to always send to port 4500.
+     *
+     * <p>If this option is set for an IKE Session, IKE Session will always send IKE packets to port
+     * 4500 regardless of whether there is a NAT.
+     */
+    public static final int IKE_OPTION_FORCE_PORT_4500 = 3;
+
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_MOBIKE;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_FORCE_PORT_4500;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
