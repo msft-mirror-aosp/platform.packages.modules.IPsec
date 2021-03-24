@@ -1766,7 +1766,8 @@ public final class ChildSessionStateMachineTest {
                 .getDhGroupTransforms();
         List<IkePayload> payloadList = new ArrayList<>();
         payloadList.add(
-                new IkeKePayload(SaProposal.DH_GROUP_1024_BIT_MODP, createMockRandomFactory()));
+                IkeKePayload.createOutboundKePayload(
+                        SaProposal.DH_GROUP_1024_BIT_MODP, createMockRandomFactory()));
 
         CreateChildSaHelper.validateKePayloads(
                 payloadList, true /*isResp*/, mMockNegotiatedProposal);
@@ -1814,7 +1815,8 @@ public final class ChildSessionStateMachineTest {
                 .getDhGroupTransforms();
         List<IkePayload> payloadList = new ArrayList<>();
         payloadList.add(
-                new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
+                IkeKePayload.createOutboundKePayload(
+                        SaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
 
         try {
             CreateChildSaHelper.validateKePayloads(
@@ -1839,7 +1841,8 @@ public final class ChildSessionStateMachineTest {
                 .getDhGroupTransforms();
         List<IkePayload> payloadList = new ArrayList<>();
         payloadList.add(
-                new IkeKePayload(SaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
+                IkeKePayload.createOutboundKePayload(
+                        SaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
 
         try {
             CreateChildSaHelper.validateKePayloads(
@@ -1962,7 +1965,8 @@ public final class ChildSessionStateMachineTest {
                         REMOTE_INIT_NEW_CHILD_SA_SPI_OUT, saPayload, false /*isLocalInitRekey*/);
 
         rekeyReqPayloads.add(
-                new IkeKePayload(IkeSaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
+                IkeKePayload.createOutboundKePayload(
+                        IkeSaProposal.DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
 
         when(mMockSaRecordHelper.makeChildSaRecord(
                         eq(rekeyReqPayloads), any(List.class), any(ChildSaRecordConfig.class)))
