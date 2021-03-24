@@ -16,10 +16,9 @@
 
 package com.android.internal.net.ipsec.ike;
 
+
 import android.net.Network;
 
-import java.io.FileDescriptor;
-import java.io.IOException;
 import java.util.Objects;
 
 /**
@@ -28,15 +27,15 @@ import java.util.Objects;
  * <p>IkeSessionStateMachines that share the same socket configuration and request the same IKE
  * socket type (v4, v6, v4-encap, v6-encap-port) will be sharing the same IkeSocket instance.
  */
-
-// TODO: b/178420172. Adding DSCP value in this class
 public final class IkeSocketConfig {
     // Network that the IKE socket will be bound to.
     private final Network mNetwork;
+    private final int mDscp;
 
     /** Construct an IkeSocketConfig. */
-    public IkeSocketConfig(Network network) {
+    public IkeSocketConfig(Network network, int dscp) {
         mNetwork = network;
+        mDscp = dscp;
     }
 
     /** Returns the underlying network. */
@@ -44,15 +43,15 @@ public final class IkeSocketConfig {
         return mNetwork;
     }
 
-    /** Applies the socket configuration to the input socket. */
-    public void applyTo(FileDescriptor sock) throws IOException {
-        mNetwork.bindSocket(sock);
+    /** Returns the DSCP value. */
+    public int getDscp() {
+        return mDscp;
     }
 
     /** @hide */
     @Override
     public int hashCode() {
-        return Objects.hash(mNetwork);
+        return Objects.hash(mNetwork, mDscp);
     }
 
     /** @hide */
@@ -64,6 +63,6 @@ public final class IkeSocketConfig {
 
         IkeSocketConfig other = (IkeSocketConfig) o;
 
-        return mNetwork.equals(other.mNetwork);
+        return mNetwork.equals(other.mNetwork) && mDscp == other.mDscp;
     }
 }
