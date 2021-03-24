@@ -61,7 +61,7 @@ public final class IkeUdp6WithEncapPortSocket extends IkeUdp6Socket {
      * @param handler the Handler used to process received packets
      * @return an IkeUdp6WithEncapPortSocket instance
      */
-    public static IkeUdp6WithEncapPortSocket getInstance(
+    public static IkeUdp6WithEncapPortSocket getIkeUdpEncapSocket(
             IkeSocketConfig sockConfig, IkeSessionStateMachine ikeSession, Handler handler)
             throws ErrnoException, IOException {
         IkeUdp6WithEncapPortSocket ikeSocket = sConfigToSocketMap.get(sockConfig);
