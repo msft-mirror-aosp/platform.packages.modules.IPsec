@@ -35,7 +35,7 @@ import java.util.Map;
  * IkeUdp6Socket uses an IPv6-bound {@link FileDescriptor} to send and receive IKE packets.
  *
  * <p>Caller MUST provide one IkeSocketConfig when trying to get an instance of IkeUdp6Socket. Each
- * IkeSocketConfig will only be bound to one IkeUdp6Socket instance. When caller requests an
+ * IkeSocketConfig will only be bound to by one IkeUdp6Socket instance. When caller requests an
  * IkeUdp6Socket with an already bound IkeSocketConfig, the existing instance will be returned.
  */
 public class IkeUdp6Socket extends IkeUdpSocket {
@@ -81,7 +81,7 @@ public class IkeUdp6Socket extends IkeUdpSocket {
             throws ErrnoException, IOException {
         FileDescriptor sock = Os.socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
         Os.bind(sock, INADDR_ANY, 0);
-        sockConfig.applyTo(sock);
+        applySocketConfig(sockConfig, sock, true /* isIpv6 */);
 
         return sock;
     }
