@@ -24,6 +24,7 @@ import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
 import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12;
 import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16;
 import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8;
+import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96;
 import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96;
 import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96;
 import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128;
@@ -34,6 +35,7 @@ import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_128;
 import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_192;
 import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_256;
 import static android.net.ipsec.ike.SaProposal.KEY_LEN_UNUSED;
+import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC;
 import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC;
 import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1;
 import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256;
@@ -96,14 +98,13 @@ public class SaProposalTest {
 
         IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA1_96);
         IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_AES_XCBC_96);
+        IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_AES_CMAC_96);
         IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_256_128);
         IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_384_192);
         IKE_INTEGRITY_ALGOS.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
 
         for (Integer algo : IKE_INTEGRITY_ALGOS) {
-            // TODO: b/1522448 Check against ChildSaProposal#getSupportedIntegrityAlgorithms
-            // when it is exposed
-            if (algo != INTEGRITY_ALGORITHM_AES_XCBC_96) {
+            if (ChildSaProposal.getSupportedIntegrityAlgorithms().contains(algo)) {
                 CHILD_INTEGRITY_ALGOS.add(algo);
             }
         }
@@ -119,6 +120,7 @@ public class SaProposalTest {
         PRFS.add(PSEUDORANDOM_FUNCTION_SHA2_256);
         PRFS.add(PSEUDORANDOM_FUNCTION_SHA2_384);
         PRFS.add(PSEUDORANDOM_FUNCTION_SHA2_512);
+        PRFS.add(PSEUDORANDOM_FUNCTION_AES128_CMAC);
     }
 
     // Package private
