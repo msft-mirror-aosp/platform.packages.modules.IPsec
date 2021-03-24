@@ -74,6 +74,15 @@ public final class IkeMacIntegrityTest {
     private static final String AUTH_AES128XCBC_CALCULATED_MAC_HEX_STRING1 =
             "d2a246fa349b68a79998a439";
 
+    // Test vectors from RFC 4494 Section 5
+    private IkeMacIntegrity mAesCmac96IntgerityMac;
+    private static final String AUTH_AES_CMAC_96_KEY_HEX_STRING =
+            "2b7e151628aed2a6abf7158809cf4f3c";
+    private static final String AUTH_AES_CMAC_96_DATA_TO_SIGN_HEX_STRING =
+            "6bc1bee22e409f96e93d7e117393172a";
+    private static final String AUTH_AES_CMAC_96_CALCULATED_MAC_HEX_STRING =
+            "070a16b46b4d4144f79bdd9d";
+
     @Before
     public void setUp() throws Exception {
         mHmacSha1IntegrityMac =
@@ -85,6 +94,10 @@ public final class IkeMacIntegrityTest {
         mAes128XCbcIntgerityMac =
                 IkeMacIntegrity.create(
                         new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96));
+
+        mAesCmac96IntgerityMac =
+                IkeMacIntegrity.create(
+                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96));
     }
 
     @Test
@@ -93,6 +106,20 @@ public final class IkeMacIntegrityTest {
                 mHmacSha1IntegrityMac.generateChecksum(mHmacSha1IntegrityKey, mDataToAuthenticate);
 
         byte[] expectedChecksum = TestUtils.hexStringToByteArray(CHECKSUM_HEX_STRING);
+        assertArrayEquals(expectedChecksum, calculatedChecksum);
+    }
+
+    @Test
+    public void testGenerateChecksumAuthAesCmac96() throws Exception {
+        byte[] integrityKey = TestUtils.hexStringToByteArray(AUTH_AES_CMAC_96_KEY_HEX_STRING);
+
+        byte[] calculatedChecksum =
+                mAesCmac96IntgerityMac.generateChecksum(
+                        integrityKey,
+                        TestUtils.hexStringToByteArray(AUTH_AES_CMAC_96_DATA_TO_SIGN_HEX_STRING));
+
+        byte[] expectedChecksum =
+                TestUtils.hexStringToByteArray(AUTH_AES_CMAC_96_CALCULATED_MAC_HEX_STRING);
         assertArrayEquals(expectedChecksum, calculatedChecksum);
     }
 
@@ -195,6 +222,9 @@ public final class IkeMacIntegrityTest {
         assertEquals(
                 IpSecAlgorithm.AUTH_AES_XCBC,
                 IkeMacIntegrity.getIpSecAlgorithmName(SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96));
+        assertEquals(
+                IpSecAlgorithm.AUTH_AES_CMAC,
+                IkeMacIntegrity.getIpSecAlgorithmName(SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96));
         assertEquals(
                 IpSecAlgorithm.AUTH_HMAC_SHA256,
                 IkeMacIntegrity.getIpSecAlgorithmName(
