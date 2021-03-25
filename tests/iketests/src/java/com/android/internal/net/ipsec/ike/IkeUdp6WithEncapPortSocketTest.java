@@ -36,7 +36,7 @@ public final class IkeUdp6WithEncapPortSocketTest extends IkeSocketTestBase {
                 public IkeSocket getIkeSocket(
                         IkeSocketConfig ikeSockConfig, IkeSessionStateMachine ikeSession)
                         throws ErrnoException, IOException {
-                    return IkeUdp6WithEncapPortSocket.getInstance(
+                    return IkeUdp6WithEncapPortSocket.getIkeUdpEncapSocket(
                             ikeSockConfig, ikeSession, mHandler);
                 }
             };
