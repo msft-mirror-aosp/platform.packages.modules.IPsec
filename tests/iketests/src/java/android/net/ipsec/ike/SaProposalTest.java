@@ -21,6 +21,7 @@ import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_1536_BIT_MODP;
 import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
 import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_3072_BIT_MODP;
 import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_4096_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_CURVE_25519;
 import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_NONE;
 import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_3DES;
 import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
@@ -29,6 +30,7 @@ import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM
 import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16;
 import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8;
 import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305;
+import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96;
 import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96;
 import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96;
 import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_256_128;
@@ -37,6 +39,7 @@ import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA
 import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_NONE;
 import static android.net.ipsec.test.ike.SaProposal.KEY_LEN_AES_128;
 import static android.net.ipsec.test.ike.SaProposal.KEY_LEN_UNUSED;
+import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC;
 import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC;
 import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1;
 import static android.net.ipsec.test.ike.SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256;
@@ -512,6 +515,7 @@ public final class SaProposalTest {
         expectedSet.add(INTEGRITY_ALGORITHM_NONE);
         expectedSet.add(INTEGRITY_ALGORITHM_HMAC_SHA1_96);
         expectedSet.add(INTEGRITY_ALGORITHM_AES_XCBC_96);
+        expectedSet.add(INTEGRITY_ALGORITHM_AES_CMAC_96);
         expectedSet.add(INTEGRITY_ALGORITHM_HMAC_SHA2_256_128);
         expectedSet.add(INTEGRITY_ALGORITHM_HMAC_SHA2_384_192);
         expectedSet.add(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256);
@@ -528,6 +532,7 @@ public final class SaProposalTest {
         expectedSet.add(PSEUDORANDOM_FUNCTION_SHA2_256);
         expectedSet.add(PSEUDORANDOM_FUNCTION_SHA2_384);
         expectedSet.add(PSEUDORANDOM_FUNCTION_SHA2_512);
+        expectedSet.add(PSEUDORANDOM_FUNCTION_AES128_CMAC);
 
         assertEquals(expectedSet, IkeSaProposal.getSupportedPseudorandomFunctions());
     }
@@ -542,6 +547,7 @@ public final class SaProposalTest {
         expectedSet.add(DH_GROUP_2048_BIT_MODP);
         expectedSet.add(DH_GROUP_3072_BIT_MODP);
         expectedSet.add(DH_GROUP_4096_BIT_MODP);
+        expectedSet.add(DH_GROUP_CURVE_25519);
 
         assertEquals(expectedSet, IkeSaProposal.getSupportedDhGroups());
     }
