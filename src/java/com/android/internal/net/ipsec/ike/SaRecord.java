@@ -259,7 +259,9 @@ public abstract class SaRecord implements AutoCloseable {
                             IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
 
             return IkeKePayload.getSharedKey(
-                    keLocalPayload.localPrivateKey, keRemotePayload.keyExchangeData);
+                    keLocalPayload.localPrivateKey,
+                    keRemotePayload.keyExchangeData,
+                    keRemotePayload.dhGroup);
         }
 
         /**
@@ -363,7 +365,9 @@ public abstract class SaRecord implements AutoCloseable {
                                 IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, respPayloads);
                 sharedDhKey =
                         IkeKePayload.getSharedKey(
-                                keInitPayload.localPrivateKey, keRespPayload.keyExchangeData);
+                                keInitPayload.localPrivateKey,
+                                keRespPayload.keyExchangeData,
+                                keRespPayload.dhGroup);
             }
 
             return makeChildSaRecord(sharedDhKey, nonceInit, nonceResp, childSaRecordConfig);
