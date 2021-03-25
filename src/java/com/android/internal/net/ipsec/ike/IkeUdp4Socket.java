@@ -35,7 +35,7 @@ import java.util.Map;
  * IkeUdp4Socket uses an IPv4-bound {@link FileDescriptor} to send and receive IKE packets.
  *
  * <p>Caller MUST provide one IkeSocketConfig when trying to get an instance of IkeUdp4Socket. Each
- * IkeSocketConfig will only be bound to one IkeUdp4Socket instance. When caller requests an
+ * IkeSocketConfig will only be bound to by one IkeUdp4Socket instance. When caller requests an
  * IkeUdp4Socket with an already bound IkeSocketConfig, the existing instance will be returned.
  */
 public final class IkeUdp4Socket extends IkeUdpSocket {
@@ -68,7 +68,7 @@ public final class IkeUdp4Socket extends IkeUdpSocket {
         if (ikeSocket == null) {
             FileDescriptor sock = Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             Os.bind(sock, INADDR_ANY, 0);
-            sockConfig.applyTo(sock);
+            applySocketConfig(sockConfig, sock, false /* isIpv6 */);
 
             ikeSocket = new IkeUdp4Socket(sock, sockConfig, handler);
 
