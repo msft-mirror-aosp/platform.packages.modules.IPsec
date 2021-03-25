@@ -107,7 +107,10 @@ java_library {
     name: "ike_test",
     installable: false, // Used only for testing; never installed alone.
     srcs: [":ike-srcs"],
-    libs: ["unsupportedappusage"],
+    libs: [
+        "unsupportedappusage",
+        "conscrypt.module.public.api"
+    ],
     static_libs: ["ike-internals"],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
