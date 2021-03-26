@@ -21,6 +21,7 @@ import static com.android.internal.net.eap.statemachine.EapMethodStateMachine.MI
 import static com.android.internal.net.eap.statemachine.EapMethodStateMachine.MIN_MSK_LEN_BYTES;
 
 import android.annotation.IntDef;
+import android.net.ssl.SSLEngines;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapResult.EapError;
@@ -29,8 +30,6 @@ import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
-import java.lang.reflect.InvocationTargetException;
-import java.lang.reflect.Method;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -425,26 +424,15 @@ public class TlsSession {
         }
 
         try {
-            // TODO(b/165823103): Use CorePlatformApi for Conscrypt#exportKeyingMaterial
-            Class conscryptClass = Class.forName("com.android.org.conscrypt.Conscrypt");
-            Method getKeyingMaterial =
-                    conscryptClass.getMethod(
-                            "exportKeyingMaterial",
-                            SSLEngine.class,
-                            String.class,
-                            byte[].class,
-                            int.class);
             // As per RFC5281#8 (and RFC5705#4), generation of keying material in EAP-TTLS does not
             // require a context.
             ByteBuffer keyingMaterial =
                     ByteBuffer.wrap(
-                            (byte[])
-                                    getKeyingMaterial.invoke(
-                                            null /* static, no instance */,
-                                            mSslEngine,
-                                            TTLS_EXPORTER_LABEL,
-                                            null /* context */,
-                                            TTLS_KEYING_MATERIAL_LEN));
+                            SSLEngines.exportKeyingMaterial(
+                                    mSslEngine,
+                                    TTLS_EXPORTER_LABEL,
+                                    null /* context */,
+                                    TTLS_KEYING_MATERIAL_LEN));
 
             byte[] msk = new byte[MIN_MSK_LEN_BYTES];
             byte[] emsk = new byte[MIN_EMSK_LEN_BYTES];
@@ -452,16 +440,9 @@ public class TlsSession {
             keyingMaterial.get(emsk);
 
             return new EapTtlsKeyingMaterial(msk, emsk);
-        } catch (LinkageError
-                | ClassNotFoundException
-                | IllegalAccessException
-                | NoSuchMethodException
-                | InvocationTargetException e) {
-            // Catch LinkageError to prevent crashing the process and allow the caller to attempt
-            // another authentication method.
-            Exception cause = (e instanceof LinkageError) ? new RuntimeException(e) : (Exception) e;
-            LOG.e(TAG, "Failed to generate EAP-TTLS keying material", cause);
-            return new EapTtlsKeyingMaterial(new EapError(cause));
+        } catch (SSLException e) {
+            LOG.e(TAG, "Failed to generate EAP-TTLS keying material", e);
+            return new EapTtlsKeyingMaterial(new EapError(e));
         }
     }
 
