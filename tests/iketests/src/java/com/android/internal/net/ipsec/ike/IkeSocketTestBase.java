@@ -112,7 +112,7 @@ public abstract class IkeSocketTestBase {
         Os.close(mDummyRemoteServerFd);
     }
 
-    protected abstract IkeSocket.IPacketReceiver getPacketReceiver();
+    protected abstract void setPacketReceiver(IkeSocket.IPacketReceiver packetReceiver);
 
     protected static FileDescriptor getBoundUdpSocket(InetAddress address) throws Exception {
         FileDescriptor sock =
@@ -321,6 +321,15 @@ public abstract class IkeSocketTestBase {
     protected void verifyIkeUdpSocketReceivePacket(
             IkeSocketFactory ikeUdpSocketFactory, IkeSocket.IPacketReceiver packetReceiver)
             throws Exception {
+        verifyIkeUdpSocketReceivePacket(
+                ikeUdpSocketFactory, packetReceiver, IKE_REQ_MESSAGE_HEX_STRING);
+    }
+
+    protected void verifyIkeUdpSocketReceivePacket(
+            IkeSocketFactory ikeUdpSocketFactory,
+            IkeSocket.IPacketReceiver packetReceiver,
+            String messageToProcessHexString)
+            throws Exception {
         IkeSessionStateMachine mockIkeSession = mock(IkeSessionStateMachine.class);
         IkeUdpSocket ikeSocket =
                 (IkeUdpSocket)
@@ -330,17 +339,17 @@ public abstract class IkeSocketTestBase {
         // Set up state
         ikeSocket.registerIke(LOCAL_SPI, mockIkeSession);
         IkeSocket.IPacketReceiver mockPacketReceiver = mock(IkeSocket.IPacketReceiver.class);
-        IkeUdpSocket.setPacketReceiver(mockPacketReceiver);
+        setPacketReceiver(mockPacketReceiver);
         try {
             // Send a packet
-            byte[] pktBytes = HexDump.hexStringToByteArray(IKE_REQ_MESSAGE_HEX_STRING);
+            byte[] pktBytes = HexDump.hexStringToByteArray(messageToProcessHexString);
             ikeSocket.handlePacket(pktBytes, pktBytes.length);
 
             verify(mockPacketReceiver).handlePacket(eq(pktBytes), any());
 
         } finally {
             ikeSocket.releaseReference(mockIkeSession);
-            IkeUdpSocket.setPacketReceiver(getPacketReceiver());
+            setPacketReceiver(packetReceiver);
         }
     }
 }
