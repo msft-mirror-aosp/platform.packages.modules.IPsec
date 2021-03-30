@@ -164,8 +164,18 @@ public final class IkeSessionParams {
     // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public
     public static final int IKE_OPTION_MOBIKE = 2;
 
+    /**
+     * Configures the IKE session to always send to port 4500.
+     *
+     * <p>If set, the IKE Session will be initiated and maintained exclusively using
+     * destination port 4500, regardless of the presence of NAT. Otherwise, the IKE Session will
+     * be initiated on destination port 500; then, if either a NAT is detected or both MOBIKE
+     * and NAT-T are supported by the peer, it will proceed on port 4500.
+     */
+    public static final int IKE_OPTION_FORCE_PORT_4500 = 3;
+
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_MOBIKE;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_FORCE_PORT_4500;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
@@ -198,6 +208,13 @@ public final class IkeSessionParams {
     @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT = 10;
 
     /** @hide */
+    @VisibleForTesting static final int DSCP_MIN = 0;
+    /** @hide */
+    @VisibleForTesting static final int DSCP_MAX = 63;
+    /** @hide */
+    @VisibleForTesting static final int DSCP_DEFAULT = 0;
+
+    /** @hide */
     @VisibleForTesting static final int IKE_RETRANS_TIMEOUT_MS_MIN = 500;
     /** @hide */
     @VisibleForTesting
@@ -222,6 +239,7 @@ public final class IkeSessionParams {
     private static final String SOFT_LIFETIME_SEC_KEY = "mSoftLifetimeSec";
     private static final String DPD_DELAY_SEC_KEY = "mDpdDelaySec";
     private static final String NATT_KEEPALIVE_DELAY_SEC_KEY = "mNattKeepaliveDelaySec";
+    private static final String DSCP_KEY = "mDscp";
     private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
 
     @NonNull private final String mServerHostname;
@@ -257,8 +275,8 @@ public final class IkeSessionParams {
     private final int mSoftLifetimeSec;
 
     private final int mDpdDelaySec;
-
     private final int mNattKeepaliveDelaySec;
+    private final int mDscp;
 
     private final boolean mIsIkeFragmentationSupported;
 
@@ -279,6 +297,7 @@ public final class IkeSessionParams {
             int softLifetimeSec,
             int dpdDelaySec,
             int nattKeepaliveDelaySec,
+            int dscp,
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
         mDefaultOrConfiguredNetwork = defaultOrConfiguredNetwork;
@@ -304,8 +323,8 @@ public final class IkeSessionParams {
         mSoftLifetimeSec = softLifetimeSec;
 
         mDpdDelaySec = dpdDelaySec;
-
         mNattKeepaliveDelaySec = nattKeepaliveDelaySec;
+        mDscp = dscp;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
@@ -421,6 +440,7 @@ public final class IkeSessionParams {
         result.putInt(SOFT_LIFETIME_SEC_KEY, mSoftLifetimeSec);
         result.putInt(DPD_DELAY_SEC_KEY, mDpdDelaySec);
         result.putInt(NATT_KEEPALIVE_DELAY_SEC_KEY, mNattKeepaliveDelaySec);
+        result.putInt(DSCP_KEY, mDscp);
         result.putBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY, mIsIkeFragmentationSupported);
 
         return result;
@@ -545,6 +565,17 @@ public final class IkeSessionParams {
     }
 
     /**
+     * Retrieves the DSCP field of IKE packets.
+     *
+     * @hide
+     */
+    @SystemApi
+    @IntRange(from = DSCP_MIN, to = DSCP_MAX)
+    public int getDscp() {
+        return mDscp;
+    }
+
+    /**
      * Retrieves the relative retransmission timeout list in milliseconds
      *
      * <p>@see {@link Builder#setRetransmissionTimeoutsMillis(int[])}
@@ -620,6 +651,7 @@ public final class IkeSessionParams {
                 mSoftLifetimeSec,
                 mDpdDelaySec,
                 mNattKeepaliveDelaySec,
+                mDscp,
                 mIsIkeFragmentationSupported);
     }
 
@@ -647,6 +679,7 @@ public final class IkeSessionParams {
                 && mSoftLifetimeSec == other.mSoftLifetimeSec
                 && mDpdDelaySec == other.mDpdDelaySec
                 && mNattKeepaliveDelaySec == other.mNattKeepaliveDelaySec
+                && mDscp == other.mDscp
                 && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
     }
 
@@ -1172,8 +1205,8 @@ public final class IkeSessionParams {
         private int mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
 
         private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
-
         private int mNattKeepaliveDelaySec = IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT;
+        private int mDscp = DSCP_DEFAULT;
 
         private final boolean mIsIkeFragmentationSupported = true;
 
@@ -1235,6 +1268,7 @@ public final class IkeSessionParams {
             mSoftLifetimeSec = ikeSessionParams.getSoftLifetimeSeconds();
             mDpdDelaySec = ikeSessionParams.getDpdDelaySeconds();
             mNattKeepaliveDelaySec = ikeSessionParams.getNattKeepAliveDelaySeconds();
+            mDscp = ikeSessionParams.getDscp();
 
             mIkeOptions = ikeSessionParams.mIkeOptions;
 
@@ -1651,6 +1685,35 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Sets the DSCP field of the IKE packets.
+         *
+         * <p>Differentiated services code point (DSCP) is a 6-bit field in the IP header that is
+         * used for packet classification and prioritization. The DSCP field is encoded in the 6
+         * higher order bits of the Type of Service (ToS) in IPv4 header, or the traffic class (TC)
+         * field in IPv6 header.
+         *
+         * <p>Any 6-bit values (0 to 63) are acceptable, whether IANA-defined, or
+         * implementation-specific values.
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc2474">RFC 2474, Definition of the
+         *     Differentiated Services Field (DS Field) in the IPv4 and IPv6 Headers</a>
+         * @see <a href="https://www.iana.org/assignments/dscp-registry/dscp-registry.xhtml">
+         *     Differentiated Services Field Codepoints (DSCP)</a>
+         * @param dscp the dscp value. Defaults to 0.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder setDscp(@IntRange(from = DSCP_MIN, to = DSCP_MAX) int dscp) {
+            if (dscp < DSCP_MIN || dscp > DSCP_MAX) {
+                throw new IllegalArgumentException("Invalid DSCP value");
+            }
+            mDscp = dscp;
+            return this;
+        }
+
+        /**
          * Sets the retransmission timeout list in milliseconds.
          *
          * <p>Configures the retransmission by providing an array of relative retransmission
@@ -1809,6 +1872,7 @@ public final class IkeSessionParams {
                     mSoftLifetimeSec,
                     mDpdDelaySec,
                     mNattKeepaliveDelaySec,
+                    mDscp,
                     mIsIkeFragmentationSupported);
         }
 

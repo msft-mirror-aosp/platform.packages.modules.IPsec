@@ -37,9 +37,9 @@ java_sdk_library {
         "unsupportedappusage",
         "framework-annotations-lib",
         "conscrypt.module.public.api",
-        "framework-connectivity",
+        "framework-connectivity.stubs.module_lib",
     ],
-    stub_only_libs: ["framework-connectivity"],
+    stub_only_libs: ["framework-connectivity.stubs.module_lib"],
 
     api_packages: [
         "android.net.eap",
@@ -107,7 +107,10 @@ java_library {
     name: "ike_test",
     installable: false, // Used only for testing; never installed alone.
     srcs: [":ike-srcs"],
-    libs: ["unsupportedappusage"],
+    libs: [
+        "unsupportedappusage",
+        "conscrypt.module.public.api"
+    ],
     static_libs: ["ike-internals"],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid

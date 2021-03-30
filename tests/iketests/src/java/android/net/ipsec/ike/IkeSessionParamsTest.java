@@ -52,7 +52,6 @@ import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.Network;
-import android.net.SocketKeepalive;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
@@ -383,12 +382,26 @@ public final class IkeSessionParamsTest {
 
     @Test
     public void testNattKeepaliveRange() {
-        assertTrue(
-                SocketKeepalive.MIN_INTERVAL_SEC
-                        <= IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN);
-        assertTrue(
-                SocketKeepalive.MAX_INTERVAL_SEC
-                        >= IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX);
+        // SocketKeepalive#start is documented to require an interval between 10 and 3600 seconds.
+        assertTrue(10 <= IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN);
+        assertTrue(3600 >= IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX);
+    }
+
+    @Test
+    public void testBuildWithPskAndDscp() throws Exception {
+        final int dscp = 38;
+
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS).setDscp(dscp).build();
+
+        // Verify DSCP value
+        assertEquals(dscp, sessionParams.getDscp());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSetInvalidDscp() throws Exception {
+        final int invalidDscp = 100;
+        buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS).setDscp(invalidDscp).build();
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -854,6 +867,14 @@ public final class IkeSessionParamsTest {
                 createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(100).build();
         IkeSessionParams sessionParamsB =
                 createIkeParamsBuilderMinimum().setNattKeepAliveDelaySeconds(200).build();
+
+        assertNotEquals(sessionParamsA, sessionParamsB);
+    }
+
+    @Test
+    public void testNotEqualsWhenDscpsAreDifferent() throws Exception {
+        IkeSessionParams sessionParamsA = createIkeParamsBuilderMinimum().setDscp(8).build();
+        IkeSessionParams sessionParamsB = createIkeParamsBuilderMinimum().setDscp(48).build();
 
         assertNotEquals(sessionParamsA, sessionParamsB);
     }

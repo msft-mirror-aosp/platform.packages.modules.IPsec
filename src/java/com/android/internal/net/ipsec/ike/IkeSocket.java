@@ -17,6 +17,10 @@
 package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.system.OsConstants.IPPROTO_IP;
+import static android.system.OsConstants.IPPROTO_IPV6;
+import static android.system.OsConstants.IPV6_TCLASS;
+import static android.system.OsConstants.IP_TOS;
 
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.os.Handler;
@@ -107,6 +111,24 @@ public abstract class IkeSocket implements AutoCloseable {
         } catch (IkeProtocolException e) {
             // Handle invalid IKE header
             getIkeLog().i(tag, "Can't parse malformed IKE packet header.");
+        }
+    }
+
+    /** Applies a socket configuration to an input socket. */
+    protected static void applySocketConfig(
+            IkeSocketConfig sockConfig, FileDescriptor sock, boolean isIpv6)
+            throws ErrnoException, IOException {
+        sockConfig.getNetwork().bindSocket(sock);
+        if (isIpv6) {
+            // Traffic class field consists of a 6-bit Differentiated Services Code Point (DSCP)
+            // field and a 2-bit Explicit Congestion Notification (ECN) field.
+            final int tClass = sockConfig.getDscp() << 2;
+            Os.setsockoptInt(sock, IPPROTO_IPV6, IPV6_TCLASS, tClass);
+        } else {
+            // TOS field consists of a 6-bit Differentiated Services Code Point (DSCP) field and a
+            // 2-bit Explicit Congestion Notification (ECN) field.
+            final int tos = sockConfig.getDscp() << 2;
+            Os.setsockoptInt(sock, IPPROTO_IP, IP_TOS, tos);
         }
     }
 
