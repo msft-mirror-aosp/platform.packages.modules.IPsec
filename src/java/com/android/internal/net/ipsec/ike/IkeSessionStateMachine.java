@@ -1227,19 +1227,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void enterState() {
             try {
-                // TODO(b/149954916): Do DNS resolution asynchronously
-                InetAddress[] allRemoteAddresses =
-                        mNetwork.getAllByName(mIkeSessionParams.getServerHostname());
-
-                logd("Resolved addresses for peer: " + Arrays.toString(allRemoteAddresses));
-
-                for (InetAddress remoteAddress : allRemoteAddresses) {
-                    if (remoteAddress instanceof Inet4Address) {
-                        mRemoteAddressesV4.add((Inet4Address) remoteAddress);
-                    } else {
-                        mRemoteAddressesV6.add((Inet6Address) remoteAddress);
-                    }
-                }
+                resolveAndSetAvailableRemoteAddresses();
 
                 setRemoteAddress();
 
@@ -5545,6 +5533,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         Network oldNetwork = mNetwork;
         mNetwork = network;
 
+        // If the network changes, perform a new DNS lookup to ensure that the correct remote
+        // address is used. This ensures that DNS returns addresses for the correct address families
+        // (important if using a v4/v6-only network). This also ensures that DNS64 is handled
+        // correctly when switching between networks that may have different IPv6 prefixes.
+        if (!mNetwork.equals(oldNetwork)) {
+            try {
+                resolveAndSetAvailableRemoteAddresses();
+            } catch (IOException e) {
+                handleIkeFatalError(e);
+                return;
+            }
+        }
+
         setRemoteAddress();
 
         boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
@@ -5593,6 +5594,30 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         sendMessage(
                 CMD_LOCAL_REQUEST_MOBIKE,
                 mLocalRequestFactory.getIkeLocalRequest(CMD_LOCAL_REQUEST_MOBIKE));
+    }
+
+    private void resolveAndSetAvailableRemoteAddresses() throws IOException {
+        // TODO(b/149954916): Do DNS resolution asynchronously
+        InetAddress[] allRemoteAddresses =
+                mNetwork.getAllByName(mIkeSessionParams.getServerHostname());
+
+        logd(
+                "Resolved addresses for peer: "
+                        + Arrays.toString(allRemoteAddresses)
+                        + " to replace old addresses: v4="
+                        + mRemoteAddressesV4
+                        + " v6="
+                        + mRemoteAddressesV6);
+
+        mRemoteAddressesV4.clear();
+        mRemoteAddressesV6.clear();
+        for (InetAddress remoteAddress : allRemoteAddresses) {
+            if (remoteAddress instanceof Inet4Address) {
+                mRemoteAddressesV4.add((Inet4Address) remoteAddress);
+            } else {
+                mRemoteAddressesV6.add((Inet6Address) remoteAddress);
+            }
+        }
     }
 
     @Override
