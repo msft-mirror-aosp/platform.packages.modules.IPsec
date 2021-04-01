@@ -40,9 +40,13 @@ public final class IkeUdp4SocketTest extends IkeSocketTestBase {
                 }
             };
 
-    @Override
-    protected IkeSocket.IPacketReceiver getPacketReceiver() {
+    private IkeSocket.IPacketReceiver getPacketReceiver() {
         return new IkeUdpSocket.PacketReceiver();
+    }
+
+    @Override
+    protected void setPacketReceiver(IkeSocket.IPacketReceiver packetReceiver) {
+        IkeUdpSocket.setPacketReceiver(packetReceiver);
     }
 
     @Test
