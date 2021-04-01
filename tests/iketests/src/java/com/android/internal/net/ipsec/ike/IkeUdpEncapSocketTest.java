@@ -114,9 +114,13 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
         super.tearDown();
     }
 
+    private IkeSocket.IPacketReceiver getPacketReceiver() {
+        return new IkeUdpEncapPortPacketHandler.PacketReceiver();
+    }
+
     @Override
-    protected IkeSocket.IPacketReceiver getPacketReceiver() {
-        return new IkeUdpEncapSocket.PacketReceiver();
+    protected void setPacketReceiver(IkeSocket.IPacketReceiver packetReceiver) {
+        IkeUdpEncapSocket.setPacketReceiver(packetReceiver);
     }
 
     @Test
@@ -156,8 +160,9 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
 
         // Verify received data
         ByteBuffer expectedBuffer =
-                ByteBuffer.allocate(IkeUdpEncapSocket.NON_ESP_MARKER_LEN + mDataOne.length);
-        expectedBuffer.put(IkeUdpEncapSocket.NON_ESP_MARKER).put(mDataOne);
+                ByteBuffer.allocate(
+                        IkeUdpEncapPortPacketHandler.NON_ESP_MARKER_LEN + mDataOne.length);
+        expectedBuffer.put(IkeUdpEncapPortPacketHandler.NON_ESP_MARKER).put(mDataOne);
 
         assertArrayEquals(expectedBuffer.array(), receivedData);
 
