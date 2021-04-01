@@ -41,9 +41,13 @@ public final class IkeUdp6WithEncapPortSocketTest extends IkeSocketTestBase {
                 }
             };
 
+    private IkeSocket.IPacketReceiver getPacketReceiver() {
+        return new IkeUdpEncapPortPacketHandler.PacketReceiver();
+    }
+
     @Override
-    protected IkeSocket.IPacketReceiver getPacketReceiver() {
-        return new IkeUdpSocket.PacketReceiver();
+    protected void setPacketReceiver(IkeSocket.IPacketReceiver packetReceiver) {
+        IkeUdp6WithEncapPortSocket.setPacketReceiver(packetReceiver);
     }
 
     @Test
@@ -60,12 +64,17 @@ public final class IkeUdp6WithEncapPortSocketTest extends IkeSocketTestBase {
 
     @Test
     public void testReceiveIkePacket() throws Exception {
-        verifyIkeUdpSocketReceivePacket(mIkeSocketFactory, getPacketReceiver());
+        verifyIkeUdpSocketReceivePacket(
+                mIkeSocketFactory,
+                getPacketReceiver(),
+                NON_ESP_MARKER_HEX_STRING + IKE_REQ_MESSAGE_HEX_STRING);
     }
 
     @Test
     public void testHandlePacket() throws Exception {
         verifyHandlePacket(
-                TestUtils.hexStringToByteArray(IKE_REQ_MESSAGE_HEX_STRING), getPacketReceiver());
+                TestUtils.hexStringToByteArray(
+                        NON_ESP_MARKER_HEX_STRING + IKE_REQ_MESSAGE_HEX_STRING),
+                getPacketReceiver());
     }
 }

@@ -19,8 +19,12 @@ package com.android.internal.net.ipsec.ike;
 import android.os.Handler;
 import android.system.ErrnoException;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -43,9 +47,16 @@ public final class IkeUdp6WithEncapPortSocket extends IkeUdp6Socket {
     private static Map<IkeSocketConfig, IkeUdp6WithEncapPortSocket> sConfigToSocketMap =
             new HashMap<>();
 
+    private static IPacketReceiver sPacketReceiver =
+            new IkeUdpEncapPortPacketHandler.PacketReceiver();
+
+    private final IkeUdpEncapPortPacketHandler mUdpEncapPortPacketHandler;
+
     private IkeUdp6WithEncapPortSocket(
             FileDescriptor socket, IkeSocketConfig sockConfig, Handler handler) {
         super(socket, sockConfig, handler);
+
+        mUdpEncapPortPacketHandler = new IkeUdpEncapPortPacketHandler(getFd());
     }
 
     /**
@@ -76,6 +87,26 @@ public final class IkeUdp6WithEncapPortSocket extends IkeUdp6Socket {
         }
         ikeSocket.mAliveIkeSessions.add(ikeSession);
         return ikeSocket;
+    }
+
+    /** Package private */
+    @VisibleForTesting
+    static void setPacketReceiver(IkeSocket.IPacketReceiver receiver) {
+        sPacketReceiver = receiver;
+    }
+
+    /**
+     * Handle received IKE packet. Invoked when there is a read event. Any desired copies of
+     * |recvbuf| should be made in here, as the underlying byte array is reused across all reads.
+     */
+    @Override
+    protected void handlePacket(byte[] recvbuf, int length) {
+        sPacketReceiver.handlePacket(Arrays.copyOfRange(recvbuf, 0, length), mSpiToIkeSession);
+    }
+
+    @Override
+    public void sendIkePacket(byte[] ikePacket, InetAddress serverAddress) {
+        mUdpEncapPortPacketHandler.sendIkePacket(ikePacket, serverAddress);
     }
 
     @Override
