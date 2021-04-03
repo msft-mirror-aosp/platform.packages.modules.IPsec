@@ -5893,39 +5893,70 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return callback;
     }
 
-    private void verifySetNetworkIdleState(boolean doesPeerSupportNatt, boolean isIpv4)
+    private void verifySetNetworkInIdleState(
+            boolean doesPeerSupportNatt,
+            boolean isIpv4BeforeNetworkChange,
+            boolean isIpv4AfterNetworkChange)
             throws Exception {
         IkeNetworkCallbackBase callback =
-                setupIdleStateMachineWithMobike(doesPeerSupportNatt, isIpv4);
+                setupIdleStateMachineWithMobike(doesPeerSupportNatt, isIpv4BeforeNetworkChange);
 
         verifySetNetwork(
                 callback,
                 null /* rekeySaRecord */,
                 mIkeSessionStateMachine.mMobikeLocalInfo,
-                isIpv4);
+                isIpv4AfterNetworkChange);
         assertTrue(
-                getExpectedSocketType(doesPeerSupportNatt, isIpv4)
+                getExpectedSocketType(doesPeerSupportNatt, isIpv4AfterNetworkChange)
                         .isInstance(mIkeSessionStateMachine.mIkeSocket));
     }
 
     @Test
-    public void testSetNetworkIdleStateNattSupportedIpv4() throws Exception {
-        verifySetNetworkIdleState(true /* doesPeerSupportNatt */, true /* isIpv4 */);
+    public void testSetNetworkInIdleStateNattSupportedIpv4ToIpv6() throws Exception {
+        verifySetNetworkInIdleState(
+                true /* doesPeerSupportNatt */,
+                false /* isIpv4BeforeNetworkChange */,
+                true /* isIpv4AfterNetworkChange */);
     }
 
     @Test
-    public void testSetNetworkIdleStateNattSupportedIpv6() throws Exception {
-        verifySetNetworkIdleState(true /* doesPeerSupportNatt */, false /* isIpv4 */);
+    public void testSetNetworkInIdleStateNattSupportedIpv6ToIpv4() throws Exception {
+        verifySetNetworkInIdleState(
+                true /* doesPeerSupportNatt */,
+                true /* isIpv4BeforeNetworkChange */,
+                false /* isIpv4AfterNetworkChange */);
     }
 
     @Test
-    public void testSetNetworkIdleStateNattUnsupportedIpv4() throws Exception {
-        verifySetNetworkIdleState(false /* doesPeerSupportNatt */, true /* isIpv4 */);
+    public void testSetNetworkInIdleStateNattSupportedIpv4ToIpv4() throws Exception {
+        verifySetNetworkInIdleState(
+                true /* doesPeerSupportNatt */,
+                true /* isIpv4BeforeNetworkChange */,
+                true /* isIpv4AfterNetworkChange */);
     }
 
     @Test
-    public void testSetNetworkIdleStateNattUnsupportedIpv6() throws Exception {
-        verifySetNetworkIdleState(false /* doesPeerSupportNatt */, false /* isIpv4 */);
+    public void testSetNetworkInIdleStateNattSupportedIpv6ToIpv6() throws Exception {
+        verifySetNetworkInIdleState(
+                true /* doesPeerSupportNatt */,
+                false /* isIpv4BeforeNetworkChange */,
+                false /* isIpv4AfterNetworkChange */);
+    }
+
+    @Test
+    public void testSetNetworkInIdleStateNattUnsupportedIpv4ToIpv4() throws Exception {
+        verifySetNetworkInIdleState(
+                false /* doesPeerSupportNatt */,
+                true /* isIpv4BeforeNetworkChange */,
+                true /* isIpv4AfterNetworkChange */);
+    }
+
+    @Test
+    public void testSetNetworkInIdleStateNattUnsupportedIpv6ToIpv6() throws Exception {
+        verifySetNetworkInIdleState(
+                false /* doesPeerSupportNatt */,
+                false /* isIpv4BeforeNetworkChange */,
+                false /* isIpv4AfterNetworkChange */);
     }
 
     @Test
