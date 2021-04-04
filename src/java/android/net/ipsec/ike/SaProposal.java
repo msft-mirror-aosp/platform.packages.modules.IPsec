@@ -661,7 +661,7 @@ public abstract class SaProposal {
      * @hide
      */
     public static String getIntegrityAlgorithmString(int algorithm) {
-        if (SUPPORTED_PRF_TO_STR.contains(algorithm)) {
+        if (SUPPORTED_INTEGRITY_ALGO_TO_STR.contains(algorithm)) {
             return SUPPORTED_INTEGRITY_ALGO_TO_STR.get(algorithm);
         }
         return "AUTH_Unknown_" + algorithm;
