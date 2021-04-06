@@ -77,16 +77,11 @@ package android.net.ipsec.ike {
     method public void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public void onIpSecTransformCreated(@NonNull android.net.IpSecTransform, int);
     method public void onIpSecTransformDeleted(@NonNull android.net.IpSecTransform, int);
-    method public default void onIpSecTransformsMigrated(@NonNull android.net.IpSecTransform, @NonNull android.net.IpSecTransform);
     method public void onOpened(@NonNull android.net.ipsec.ike.ChildSessionConfiguration);
   }
 
   public final class ChildSessionConfiguration {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getInboundTrafficSelectors();
-    method @NonNull public java.util.List<android.net.LinkAddress> getInternalAddresses();
-    method @NonNull public java.util.List<java.net.InetAddress> getInternalDhcpServers();
-    method @NonNull public java.util.List<java.net.InetAddress> getInternalDnsServers();
-    method @NonNull public java.util.List<android.net.IpPrefix> getInternalSubnets();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getOutboundTrafficSelectors();
   }
 
@@ -154,14 +149,12 @@ package android.net.ipsec.ike {
     method public void finalize();
     method public void kill();
     method public void openChildSession(@NonNull android.net.ipsec.ike.ChildSessionParams, @NonNull android.net.ipsec.ike.ChildSessionCallback);
-    method public void setNetwork(@NonNull android.net.Network);
   }
 
   public interface IkeSessionCallback {
     method public void onClosed();
     method public void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public default void onError(@NonNull android.net.ipsec.ike.exceptions.IkeException);
-    method public default void onIkeSessionConnectionInfoChanged(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
     method public void onOpened(@NonNull android.net.ipsec.ike.IkeSessionConfiguration);
   }
 

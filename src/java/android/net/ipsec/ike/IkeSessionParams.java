@@ -117,51 +117,12 @@ public final class IkeSessionParams {
     /**
      * If set, the IKE library will attempt to enable MOBIKE for the resulting IKE Session.
      *
-     * <p>To support MOBIKE, callers must implement:
-     *
-     * <ul>
-     *   <li>{@link IkeSessionCallback#onIkeSessionConnectionInfoChanged(IkeSessionConnectionInfo)}:
-     *       this MUST migrate all IpSecTunnelInterface instances associated with this IkeSession.
-     *   <li>{@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
-     *       android.net.IpSecTransform)}: this MUST re-apply the migrated transforms to the
-     *       IpSecTunnelInterface associated with this ChildSessionCallback, via
-     *       android.net.IpSecManager#applyTunnelModeTransform(
-     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform).
-     * </ul>
-     *
-     * <p>MOBIKE support is compatible with two Network modes:
-     *
-     * <ul>
-     *   <li><b>Caller managed:</b> The caller controls the underlying Network for the IKE Session
-     *       at all times. The IKE Session will only change underlying Networks if the caller
-     *       initiates it through {@link IkeSession#setNetwork(Network)}. If the caller-specified
-     *       Network is lost, they will be notified via {@link
-     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
-     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException} specifying the Network
-     *       that was lost.
-     *   <li><b>Platform Default:</b> The IKE Session will always track the application default
-     *       Network. The IKE Session will start on the application default Network, and any
-     *       subsequent changes to the default Network (after the IKE_AUTH exchange completes) will
-     *       cause the IKE Session's underlying Network to change. If the default Network is lost
-     *       with no replacements, the caller will be notified via {@link
-     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
-     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException}. The caller can either
-     *       wait until for a new default Network to become available or they may close the Session
-     *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
-     *       retransmissions may expire while waiting for a new default Network, in which case the
-     *       Session will automatically close.
-     * </ul>
-     *
-     * <p>Use of MOBIKE in the IKE Session requires the peer to also support MOBIKE.
-     *
      * <p>If this option is set for an IKE Session, Transport-mode SAs will not be allowed in that
      * Session.
      *
      * <p>Checking for MOBIKE use in an IKE Session is done via {@link
      * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      */
-    // TODO(b/175416035): Update docs to @link to API for migrating IpSecTunnelInterfaces
-    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public
     public static final int IKE_OPTION_MOBIKE = 2;
 
     /**

@@ -14,6 +14,17 @@ package android.net.eap {
 
 package android.net.ipsec.ike {
 
+  public interface ChildSessionCallback {
+    method public default void onIpSecTransformsMigrated(@NonNull android.net.IpSecTransform, @NonNull android.net.IpSecTransform);
+  }
+
+  public final class ChildSessionConfiguration {
+    method @NonNull public java.util.List<android.net.LinkAddress> getInternalAddresses();
+    method @NonNull public java.util.List<java.net.InetAddress> getInternalDhcpServers();
+    method @NonNull public java.util.List<java.net.InetAddress> getInternalDnsServers();
+    method @NonNull public java.util.List<android.net.IpPrefix> getInternalSubnets();
+  }
+
   public static final class ChildSessionConfiguration.Builder {
     ctor public ChildSessionConfiguration.Builder(@NonNull java.util.List<android.net.ipsec.ike.IkeTrafficSelector>, @NonNull java.util.List<android.net.ipsec.ike.IkeTrafficSelector>);
     method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder addInternalAddress(@NonNull android.net.LinkAddress);
@@ -23,8 +34,13 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration build();
   }
 
+  public final class IkeSession implements java.lang.AutoCloseable {
+    method public void setNetwork(@NonNull android.net.Network);
+  }
+
   public interface IkeSessionCallback {
     method @Deprecated public default void onError(@NonNull android.net.ipsec.ike.exceptions.IkeProtocolException);
+    method public default void onIkeSessionConnectionInfoChanged(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
   }
 
   public final class IkeSessionConfiguration {
