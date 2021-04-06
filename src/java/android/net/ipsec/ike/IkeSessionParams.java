@@ -626,7 +626,12 @@ public final class IkeSessionParams {
         return mConfigRequests;
     }
 
-    /** Retrieves the list of Configuration Requests */
+    /**
+     * Retrieves the list of Configuration Requests
+     *
+     * @hide
+     */
+    @SystemApi
     @NonNull
     public List<IkeConfigRequest> getConfigurationRequests() {
         return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
@@ -683,10 +688,20 @@ public final class IkeSessionParams {
                 && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
     }
 
-    /** Represents an IKE session configuration request type */
+    /**
+     * Represents an IKE session configuration request type
+     *
+     * @hide
+     */
+    @SystemApi
     public interface IkeConfigRequest {}
 
-    /** Represents an IPv4 P_CSCF request */
+    /**
+     * Represents an IPv4 P_CSCF request
+     *
+     * @hide
+     */
+    @SystemApi
     public interface ConfigRequestIpv4PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv4 P_CSCF server address
@@ -698,7 +713,12 @@ public final class IkeSessionParams {
         Inet4Address getAddress();
     }
 
-    /** Represents an IPv6 P_CSCF request */
+    /**
+     * Represents an IPv6 P_CSCF request
+     *
+     * @hide
+     */
+    @SystemApi
     public interface ConfigRequestIpv6PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv6 P_CSCF server address
@@ -1569,9 +1589,11 @@ public final class IkeSessionParams {
          *
          * @param address the requested P_CSCF address.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
         @SuppressLint("MissingGetterMatchingBuilder")
+        @SystemApi
         @NonNull
         public Builder addPcscfServerRequest(@NonNull InetAddress address) {
             if (address == null) {
@@ -1593,9 +1615,11 @@ public final class IkeSessionParams {
          * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
          *     allowed.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
         @SuppressLint("MissingGetterMatchingBuilder")
+        @SystemApi
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {

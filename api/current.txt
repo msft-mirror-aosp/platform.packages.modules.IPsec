@@ -167,7 +167,6 @@ package android.net.ipsec.ike {
 
   public final class IkeSessionConfiguration {
     method @NonNull public android.net.ipsec.ike.IkeSessionConnectionInfo getIkeSessionConnectionInfo();
-    method @NonNull public java.util.List<java.net.InetAddress> getPcscfServers();
     method @NonNull public String getRemoteApplicationVersion();
     method @NonNull public java.util.List<byte[]> getRemoteVendorIds();
     method public boolean isIkeExtensionEnabled(int);
@@ -182,7 +181,6 @@ package android.net.ipsec.ike {
   }
 
   public final class IkeSessionParams {
-    method @NonNull public java.util.List<android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest> getConfigurationRequests();
     method @Nullable public android.net.Network getConfiguredNetwork();
     method @IntRange(from=0x14, to=0x708) public int getDpdDelaySeconds();
     method @IntRange(from=0x12c, to=0x15180) public int getHardLifetimeSeconds();
@@ -206,8 +204,6 @@ package android.net.ipsec.ike {
     ctor public IkeSessionParams.Builder();
     ctor public IkeSessionParams.Builder(@NonNull android.net.ipsec.ike.IkeSessionParams);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addIkeOption(int);
-    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(@NonNull java.net.InetAddress);
-    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addPcscfServerRequest(int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addSaProposal(@NonNull android.net.ipsec.ike.IkeSaProposal);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams build();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder removeIkeOption(int);
@@ -223,14 +219,6 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRemoteIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRetransmissionTimeoutsMillis(@NonNull int[]);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setServerHostname(@NonNull String);
-  }
-
-  public static interface IkeSessionParams.ConfigRequestIpv4PcscfServer extends android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest {
-    method @Nullable public java.net.Inet4Address getAddress();
-  }
-
-  public static interface IkeSessionParams.ConfigRequestIpv6PcscfServer extends android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest {
-    method @Nullable public java.net.Inet6Address getAddress();
   }
 
   public abstract static class IkeSessionParams.IkeAuthConfig {
@@ -252,9 +240,6 @@ package android.net.ipsec.ike {
 
   public static class IkeSessionParams.IkeAuthPskConfig extends android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig {
     method @NonNull public byte[] getPsk();
-  }
-
-  public static interface IkeSessionParams.IkeConfigRequest {
   }
 
   public final class IkeTrafficSelector {
