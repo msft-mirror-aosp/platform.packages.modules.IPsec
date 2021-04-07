@@ -2949,7 +2949,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Verify IKE Session was closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
     }
 
     @Test
@@ -2968,7 +2968,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
     }
 
     @Test
@@ -2989,7 +2989,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         ArgumentCaptor<IkeProtocolException> captor =
                 ArgumentCaptor.forClass(IkeProtocolException.class);
-        verify(mMockIkeSessionCallback).onClosedExceptionally(captor.capture());
+        verify(mMockIkeSessionCallback).onClosedWithException(captor.capture());
         IkeProtocolException exception = captor.getValue();
         assertEquals(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE, exception.getErrorType());
     }
@@ -3014,7 +3014,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -3074,7 +3074,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
     }
 
     @Test
@@ -3198,7 +3198,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify state machine quit properly
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -3242,7 +3242,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Fires user error callbacks
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(argThat(err -> err.getCause() == error));
+                .onClosedWithException(argThat(err -> err.getCause() == error));
 
         // Verify state machine quit properly
         verify(mSpyCurrentIkeSaRecord).close();
@@ -3264,7 +3264,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Fires user error callbacks
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
 
         // Verify state machine quit properly
         verify(mSpyCurrentIkeSaRecord).close();
@@ -3439,7 +3439,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
 
         // Collected response fragments are cleared
         assertNull(mSpyCurrentIkeSaRecord.getCollectedFragments(true /*isResp*/));
@@ -3561,7 +3561,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -3610,7 +3610,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -3642,7 +3642,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
     }
 
     @Test
@@ -4539,7 +4539,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // Verify state machine quit properly
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -4564,7 +4564,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         // Verify state machine quit properly
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -4992,7 +4992,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         ArgumentCaptor<IkeInternalException> internalExceptionCaptor =
                 ArgumentCaptor.forClass(IkeInternalException.class);
-        verify(mMockIkeSessionCallback).onClosedExceptionally(internalExceptionCaptor.capture());
+        verify(mMockIkeSessionCallback).onClosedWithException(internalExceptionCaptor.capture());
         IkeInternalException internalException = internalExceptionCaptor.getValue();
 
         // Verify that the Exception which caused the IkeSessionStateMachine to close is the same
@@ -5012,7 +5012,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 
@@ -5040,7 +5040,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Fires user error callbacks
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(
+                .onClosedWithException(
                         argThat(err -> err instanceof NoValidProposalChosenException));
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -5105,7 +5105,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
     }
 
     @Test
@@ -5185,7 +5185,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -5214,7 +5214,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session has quit
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -5431,7 +5431,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(UnrecognizedIkeProtocolException.class));
+                .onClosedWithException(any(UnrecognizedIkeProtocolException.class));
 
         verifyBackoffTimer(expectedNotifyErrorCause);
     }
@@ -5743,7 +5743,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verify(mMockConnectManager)
                 .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
         verify(mMockConnectManager).unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }

@@ -58,7 +58,19 @@ public interface IkeSessionCallback {
      *
      * @param exception the detailed error information.
      */
+    // TODO: b/175706146 Deprecate this callback and provide an empty default implementation.
     void onClosedExceptionally(@NonNull IkeException exception);
+
+    /**
+     * Called if {@link IkeSession} setup failed or {@link IkeSession} is closed because of a fatal
+     * error.
+     *
+     * @param exception the detailed error information.
+     * @hide
+     */
+    default void onClosedWithException(@NonNull IkeException exception) {
+        onClosedExceptionally(exception);
+    }
 
     /**
      * Called if a recoverable error is encountered in an established {@link IkeSession}.

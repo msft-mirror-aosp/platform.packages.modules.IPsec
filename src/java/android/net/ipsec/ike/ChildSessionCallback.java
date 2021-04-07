@@ -69,7 +69,21 @@ public interface ChildSessionCallback {
      *
      * @param exception the detailed error information.
      */
+    // TODO: b/175706146 Deprecate this callback and provide an empty default implementation.
     void onClosedExceptionally(@NonNull IkeException exception);
+
+    /**
+     * Called if the Child Session setup failed or Child Session is closed because of a fatal error.
+     *
+     * <p>This method will be called immediately after {@link
+     * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
+     *
+     * @param exception the detailed error information.
+     * @hide
+     */
+    default void onClosedWithException(@NonNull IkeException exception) {
+        onClosedExceptionally(exception);
+    }
 
     /**
      * Called when an {@link IpSecTransform} is created by this Child Session.
