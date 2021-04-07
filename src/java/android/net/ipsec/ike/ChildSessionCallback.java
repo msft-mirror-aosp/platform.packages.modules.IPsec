@@ -68,9 +68,13 @@ public interface ChildSessionCallback {
      * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
      *
      * @param exception the detailed error information.
+     * @deprecated Implementers should override {@link #onClosedWithException(IkeException)} to
+     *     handle fatal {@link IkeException}s instead of using this method.
+     * @hide
      */
-    // TODO: b/175706146 Deprecate this callback and provide an empty default implementation.
-    void onClosedExceptionally(@NonNull IkeException exception);
+    @SystemApi
+    @Deprecated
+    default void onClosedExceptionally(@NonNull IkeException exception) {}
 
     /**
      * Called if the Child Session setup failed or Child Session is closed because of a fatal error.
@@ -79,7 +83,6 @@ public interface ChildSessionCallback {
      * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
      *
      * @param exception the detailed error information.
-     * @hide
      */
     default void onClosedWithException(@NonNull IkeException exception) {
         onClosedExceptionally(exception);

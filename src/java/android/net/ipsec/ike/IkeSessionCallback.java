@@ -57,16 +57,19 @@ public interface IkeSessionCallback {
      * error.
      *
      * @param exception the detailed error information.
+     * @deprecated Implementers should override {@link #onClosedWithException(IkeException)} to
+     *     handle fatal {@link IkeException}s instead of using this method.
+     * @hide
      */
-    // TODO: b/175706146 Deprecate this callback and provide an empty default implementation.
-    void onClosedExceptionally(@NonNull IkeException exception);
+    @SystemApi
+    @Deprecated
+    default void onClosedExceptionally(@NonNull IkeException exception) {}
 
     /**
      * Called if {@link IkeSession} setup failed or {@link IkeSession} is closed because of a fatal
      * error.
      *
      * @param exception the detailed error information.
-     * @hide
      */
     default void onClosedWithException(@NonNull IkeException exception) {
         onClosedExceptionally(exception);
