@@ -220,7 +220,10 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         public void tearDown() throws Exception {
             sCM.unregisterNetworkCallback(tunNetworkCallback);
 
-            sTNM.teardownTestNetwork(tunNetwork);
+            if (tunNetwork != null) {
+                sTNM.teardownTestNetwork(tunNetwork);
+            }
+
             tunFd.close();
         }
     }
