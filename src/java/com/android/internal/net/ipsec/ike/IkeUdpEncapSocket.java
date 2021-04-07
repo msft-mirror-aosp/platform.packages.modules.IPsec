@@ -24,15 +24,12 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.os.Handler;
 import android.os.Looper;
 import android.system.ErrnoException;
-import android.system.Os;
-import android.util.LongSparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.InetAddress;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -48,22 +45,23 @@ import java.util.Map;
 public final class IkeUdpEncapSocket extends IkeSocket {
     private static final String TAG = "IkeUdpEncapSocket";
 
-    // A Non-ESP marker helps the recipient to distinguish IKE packets from ESP packets.
-    @VisibleForTesting static final int NON_ESP_MARKER_LEN = 4;
-    @VisibleForTesting static final byte[] NON_ESP_MARKER = new byte[NON_ESP_MARKER_LEN];
-
     // Map from IkeSocketConfig to IkeSocket instances.
     private static Map<IkeSocketConfig, IkeUdpEncapSocket> sConfigToSocketMap = new HashMap<>();
 
-    private static IPacketReceiver sPacketReceiver = new PacketReceiver();
+    private static IPacketReceiver sPacketReceiver =
+            new IkeUdpEncapPortPacketHandler.PacketReceiver();
 
     // UdpEncapsulationSocket for sending and receving IKE packet.
     private final UdpEncapsulationSocket mUdpEncapSocket;
+
+    private final IkeUdpEncapPortPacketHandler mUdpEncapPortPacketHandler;
 
     private IkeUdpEncapSocket(
             UdpEncapsulationSocket udpEncapSocket, IkeSocketConfig sockConfig, Handler handler) {
         super(sockConfig, handler);
         mUdpEncapSocket = udpEncapSocket;
+
+        mUdpEncapPortPacketHandler = new IkeUdpEncapPortPacketHandler(getFd());
     }
 
     /**
@@ -117,32 +115,6 @@ public final class IkeUdpEncapSocket extends IkeSocket {
 
     /** Package private */
     @VisibleForTesting
-    static final class PacketReceiver implements IkeSocket.IPacketReceiver {
-        public void handlePacket(
-                byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession) {
-            ByteBuffer byteBuffer = ByteBuffer.wrap(recvbuf);
-
-            // Check the existence of the Non-ESP Marker. A received packet can be either an IKE
-            // packet starts with 4 zero-valued bytes Non-ESP Marker or an ESP packet starts with 4
-            // bytes ESP SPI. ESP SPI value can never be zero.
-            byte[] espMarker = new byte[NON_ESP_MARKER_LEN];
-            byteBuffer.get(espMarker);
-            if (!Arrays.equals(NON_ESP_MARKER, espMarker)) {
-                // Drop the received ESP packet.
-                getIkeLog().e(TAG, "Receive an ESP packet.");
-                return;
-            }
-
-            // Re-direct IKE packet to IkeSessionStateMachine according to the locally generated
-            // IKE SPI.
-            byte[] ikePacketBytes = new byte[byteBuffer.remaining()];
-            byteBuffer.get(ikePacketBytes);
-            parseAndDemuxIkePacket(ikePacketBytes, spiToIkeSession, TAG);
-        }
-    }
-
-    /** Package private */
-    @VisibleForTesting
     static void setPacketReceiver(IkeSocket.IPacketReceiver receiver) {
         sPacketReceiver = receiver;
     }
@@ -156,40 +128,9 @@ public final class IkeUdpEncapSocket extends IkeSocket {
         sPacketReceiver.handlePacket(Arrays.copyOfRange(recvbuf, 0, length), mSpiToIkeSession);
     }
 
-    /**
-     * Send encoded IKE packet to destination address
-     *
-     * @param ikePacket encoded IKE packet
-     * @param serverAddress IP address of remote server
-     */
     @Override
     public void sendIkePacket(byte[] ikePacket, InetAddress serverAddress) {
-        getIkeLog()
-                .d(
-                        TAG,
-                        "Send packet to "
-                                + serverAddress.getHostAddress()
-                                + "( "
-                                + ikePacket.length
-                                + " bytes)");
-        try {
-            ByteBuffer buffer = ByteBuffer.allocate(NON_ESP_MARKER_LEN + ikePacket.length);
-
-            // Build outbound UDP Encapsulation packet body for sending IKE message.
-            buffer.put(NON_ESP_MARKER).put(ikePacket);
-            buffer.rewind();
-
-            // Use unconnected UDP socket because one {@UdpEncapsulationSocket} may be shared by
-            // multiple IKE sessions that send messages to different destinations.
-            Os.sendto(
-                    mUdpEncapSocket.getFileDescriptor(),
-                    buffer,
-                    0,
-                    serverAddress,
-                    SERVER_PORT_UDP_ENCAPSULATED);
-        } catch (ErrnoException | IOException e) {
-            // TODO: Handle exception
-        }
+        mUdpEncapPortPacketHandler.sendIkePacket(ikePacket, serverAddress);
     }
 
     @Override

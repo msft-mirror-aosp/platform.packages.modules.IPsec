@@ -110,12 +110,7 @@ public abstract class IkeSessionTestBase {
                 .newWakeLock(anyInt(), argThat(tag -> tag.contains(LOCAL_REQUEST_WAKE_LOCK_TAG)));
 
         mMockDefaultNetwork = mock(Network.class);
-        doReturn(new InetAddress[] {REMOTE_ADDRESS})
-                .when(mMockDefaultNetwork)
-                .getAllByName(REMOTE_HOSTNAME);
-        doReturn(new InetAddress[] {REMOTE_ADDRESS})
-                .when(mMockDefaultNetwork)
-                .getAllByName(REMOTE_ADDRESS.getHostAddress());
+        resetDefaultNetwork();
 
         mMockSocketKeepalive = mock(SocketKeepalive.class);
 
@@ -146,5 +141,15 @@ public abstract class IkeSessionTestBase {
         doReturn(mMockNetworkCapabilities)
                 .when(mMockConnectManager)
                 .getNetworkCapabilities(any(Network.class));
+    }
+
+    protected void resetDefaultNetwork() throws Exception {
+        reset(mMockDefaultNetwork);
+        doReturn(new InetAddress[] {REMOTE_ADDRESS})
+                .when(mMockDefaultNetwork)
+                .getAllByName(REMOTE_HOSTNAME);
+        doReturn(new InetAddress[] {REMOTE_ADDRESS})
+                .when(mMockDefaultNetwork)
+                .getAllByName(REMOTE_ADDRESS.getHostAddress());
     }
 }
