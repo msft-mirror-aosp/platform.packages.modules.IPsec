@@ -48,7 +48,7 @@ public interface IkeSessionCallback {
      * Called when the {@link IkeSession} is closed.
      *
      * <p>When the closure is caused by a local, fatal error, {@link
-     * #onClosedExceptionally(IkeException)} will be fired instead of this method.
+     * #onClosedWithException(IkeException)} will be fired instead of this method.
      */
     void onClosed();
 

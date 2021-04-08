@@ -230,7 +230,7 @@ public final class IkeSession implements AutoCloseable {
      * <p>Implements {@link AutoCloseable#close()}
      *
      * <p>Upon closure, {@link IkeSessionCallback#onClosed()} or {@link
-     * IkeSessionCallback#onClosedExceptionally(IkeException)} will be fired.
+     * IkeSessionCallback#onClosedWithException(IkeException)} will be fired.
      *
      * <p>Closing an IKE Session implicitly closes any remaining Child Sessions negotiated under it.
      * Users SHOULD stop all outbound traffic that uses these Child Sessions ({@link
