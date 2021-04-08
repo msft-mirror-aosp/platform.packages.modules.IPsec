@@ -943,7 +943,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private IkeSessionParams.Builder buildIkeSessionParamsCommon() throws Exception {
         return new IkeSessionParams.Builder(mMockConnectManager)
-                .setServerHostname(REMOTE_ADDRESS.getHostAddress())
+                .setServerHostname(REMOTE_HOSTNAME)
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(LOCAL_ID_IPV4)
                 .setRemoteIdentification(REMOTE_ID_FQDN)
@@ -1449,6 +1449,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     @Test
     public void testResolveRemoteHostName() throws Exception {
         mIkeSessionStateMachine.quitNow();
+
+        // Reset the network to ignore DNS resolution from mIkeSessionStateMachine creation in
+        // setUp()
+        resetDefaultNetwork();
 
         IkeSessionParams ikeParams =
                 buildIkeSessionParamsCommon()
@@ -5717,7 +5721,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         callback.onAvailable(newNetwork);
         mLooper.dispatchAll();
 
-        verifyNetworkAndLocalAddress(newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
+        verifyNetworkAndLocalAddressUpdated(
+                newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
         verify(mMockIkeLocalAddressGenerator)
                 .generateLocalAddress(
                         eq(newNetwork), eq(true /* isIpv4 */), eq(REMOTE_ADDRESS), anyInt());
@@ -5755,6 +5760,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
         }
 
+        doReturn(new InetAddress[] {expectedRemoteAddress})
+                .when(newNetwork)
+                .getAllByName(REMOTE_HOSTNAME);
+
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
                         eq(newNetwork), eq(isIpv4), eq(expectedRemoteAddress), anyInt()))
                 .thenReturn(injectedLocalAddress);
@@ -5762,11 +5771,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return newNetwork;
     }
 
-    private void verifyNetworkAndLocalAddress(
+    private void verifyNetworkAndLocalAddressUpdated(
             Network underlyingNetwork,
             InetAddress localAddress,
             InetAddress remoteAddress,
-            IkeNetworkCallbackBase networkCallback) {
+            IkeNetworkCallbackBase networkCallback)
+            throws Exception {
         assertEquals(underlyingNetwork, mIkeSessionStateMachine.mNetwork);
         assertEquals(
                 underlyingNetwork,
@@ -5776,6 +5786,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verifyIkeSaAddresses(
                 mIkeSessionStateMachine.mCurrentIkeSaRecord, localAddress, remoteAddress);
+
+        verify(underlyingNetwork).getAllByName(REMOTE_HOSTNAME);
 
         assertEquals(underlyingNetwork, networkCallback.getNetwork());
         assertEquals(localAddress, networkCallback.getAddress());
@@ -5831,7 +5843,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 isIpv4 ? UPDATED_LOCAL_ADDRESS : UPDATED_LOCAL_ADDRESS_V6;
         InetAddress expectedRemoteAddress = isIpv4 ? REMOTE_ADDRESS : REMOTE_ADDRESS_V6;
 
-        verifyNetworkAndLocalAddress(
+        verifyNetworkAndLocalAddressUpdated(
                 newNetwork, expectedUpdatedLocalAddress, expectedRemoteAddress, callback);
         verify(mMockIkeLocalAddressGenerator)
                 .generateLocalAddress(
@@ -5881,39 +5893,70 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return callback;
     }
 
-    private void verifySetNetworkIdleState(boolean doesPeerSupportNatt, boolean isIpv4)
+    private void verifySetNetworkInIdleState(
+            boolean doesPeerSupportNatt,
+            boolean isIpv4BeforeNetworkChange,
+            boolean isIpv4AfterNetworkChange)
             throws Exception {
         IkeNetworkCallbackBase callback =
-                setupIdleStateMachineWithMobike(doesPeerSupportNatt, isIpv4);
+                setupIdleStateMachineWithMobike(doesPeerSupportNatt, isIpv4BeforeNetworkChange);
 
         verifySetNetwork(
                 callback,
                 null /* rekeySaRecord */,
                 mIkeSessionStateMachine.mMobikeLocalInfo,
-                isIpv4);
+                isIpv4AfterNetworkChange);
         assertTrue(
-                getExpectedSocketType(doesPeerSupportNatt, isIpv4)
+                getExpectedSocketType(doesPeerSupportNatt, isIpv4AfterNetworkChange)
                         .isInstance(mIkeSessionStateMachine.mIkeSocket));
     }
 
     @Test
-    public void testSetNetworkIdleStateNattSupportedIpv4() throws Exception {
-        verifySetNetworkIdleState(true /* doesPeerSupportNatt */, true /* isIpv4 */);
+    public void testSetNetworkInIdleStateNattSupportedIpv4ToIpv6() throws Exception {
+        verifySetNetworkInIdleState(
+                true /* doesPeerSupportNatt */,
+                false /* isIpv4BeforeNetworkChange */,
+                true /* isIpv4AfterNetworkChange */);
     }
 
     @Test
-    public void testSetNetworkIdleStateNattSupportedIpv6() throws Exception {
-        verifySetNetworkIdleState(true /* doesPeerSupportNatt */, false /* isIpv4 */);
+    public void testSetNetworkInIdleStateNattSupportedIpv6ToIpv4() throws Exception {
+        verifySetNetworkInIdleState(
+                true /* doesPeerSupportNatt */,
+                true /* isIpv4BeforeNetworkChange */,
+                false /* isIpv4AfterNetworkChange */);
     }
 
     @Test
-    public void testSetNetworkIdleStateNattUnsupportedIpv4() throws Exception {
-        verifySetNetworkIdleState(false /* doesPeerSupportNatt */, true /* isIpv4 */);
+    public void testSetNetworkInIdleStateNattSupportedIpv4ToIpv4() throws Exception {
+        verifySetNetworkInIdleState(
+                true /* doesPeerSupportNatt */,
+                true /* isIpv4BeforeNetworkChange */,
+                true /* isIpv4AfterNetworkChange */);
     }
 
     @Test
-    public void testSetNetworkIdleStateNattUnsupportedIpv6() throws Exception {
-        verifySetNetworkIdleState(false /* doesPeerSupportNatt */, false /* isIpv4 */);
+    public void testSetNetworkInIdleStateNattSupportedIpv6ToIpv6() throws Exception {
+        verifySetNetworkInIdleState(
+                true /* doesPeerSupportNatt */,
+                false /* isIpv4BeforeNetworkChange */,
+                false /* isIpv4AfterNetworkChange */);
+    }
+
+    @Test
+    public void testSetNetworkInIdleStateNattUnsupportedIpv4ToIpv4() throws Exception {
+        verifySetNetworkInIdleState(
+                false /* doesPeerSupportNatt */,
+                true /* isIpv4BeforeNetworkChange */,
+                true /* isIpv4AfterNetworkChange */);
+    }
+
+    @Test
+    public void testSetNetworkInIdleStateNattUnsupportedIpv6ToIpv6() throws Exception {
+        verifySetNetworkInIdleState(
+                false /* doesPeerSupportNatt */,
+                false /* isIpv4BeforeNetworkChange */,
+                false /* isIpv4AfterNetworkChange */);
     }
 
     @Test
@@ -6209,6 +6252,22 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(
                 mIkeSessionStateMachine.mMobikeLocalInfo,
                 mIkeSessionStateMachine.getCurrentState());
+    }
+
+    @Test
+    public void testDnsLookupOnSetNetwork() throws Exception {
+        final IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
+
+        final Network newNetwork = mockNewNetworkAndAddress(false /* isIpv4 */);
+
+        mIkeSessionStateMachine.setNetwork(newNetwork);
+        mLooper.dispatchAll();
+
+        assertTrue(mIkeSessionStateMachine.mRemoteAddressesV4.isEmpty());
+        assertEquals(Arrays.asList(REMOTE_ADDRESS_V6), mIkeSessionStateMachine.mRemoteAddressesV6);
+        verify(newNetwork).getAllByName(REMOTE_HOSTNAME);
+        verifyNetworkAndLocalAddressUpdated(
+                newNetwork, UPDATED_LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6, callback);
     }
 
     @Test
