@@ -57,6 +57,11 @@ public class IkeUdpEncapPortPacketHandler {
 
         public void handlePacket(
                 byte[] recvbuf, LongSparseArray<IkeSessionStateMachine> spiToIkeSession) {
+            if (recvbuf.length < NON_ESP_MARKER_LEN) {
+                getIkeLog().d(TAG, "Received too short of packet. Ignoring.");
+                return;
+            }
+
             ByteBuffer byteBuffer = ByteBuffer.wrap(recvbuf);
 
             // Check the existence of the Non-ESP Marker. A received packet can be either an IKE
