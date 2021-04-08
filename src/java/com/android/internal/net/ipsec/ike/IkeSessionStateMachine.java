@@ -449,7 +449,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting boolean mLocalNatDetected;
     /** Indicates if remote node is behind a NAT. */
     @VisibleForTesting boolean mRemoteNatDetected;
-    /** NATT keepalive scheduler. Initialized when a NAT is detected */
+    /** NATT keepalive scheduler. Initialized when a NAT is detected while using V4 addresses */
     @VisibleForTesting IkeNattKeepalive mIkeNattKeepalive;
 
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
@@ -3347,12 +3347,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             mSupportNatTraversal = true;
 
-            if (!(mRemoteAddress instanceof Inet4Address)) {
-                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
-                // IPv6, the best we can currently do is try non-encap'd anyways
-                return;
-            }
-
             // NAT detection
             long initIkeSpi = respMsg.ikeHeader.ikeInitiatorSpi;
             long respIkeSpi = respMsg.ikeHeader.ikeResponderSpi;
@@ -3361,13 +3355,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     initIkeSpi, respIkeSpi, natSourcePayloads, natDestPayload);
 
             if (mLocalNatDetected || mRemoteNatDetected) {
-                logd("Switching to UDP encap socket");
+                logd("Switching to send to remote port 4500");
+                boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
                 try {
-                    IkeSocket newSocket = getIkeSocket(true /* isIpv4 */, true /* useEncapPort */);
+                    IkeSocket newSocket = getIkeSocket(isIpv4, true /* useEncapPort */);
                     switchToIkeSocket(initIkeSpi, newSocket);
-                    mIkeNattKeepalive = buildAndStartNattKeepalive();
                     mLocalPort = mIkeSocket.getLocalPort();
+
+                    if (isIpv4) {
+                        mIkeNattKeepalive = buildAndStartNattKeepalive();
+                    }
                 } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                     handleIkeFatalError(e);
                 }
@@ -5345,8 +5343,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         /**
          * If MOBIKE and NAT-T are supported, we will already be using an IkeUdpEncapSocket for IPv4
-         * addresses. The only thing to do here is update our state for if the local and remote are
-         * behind NATs.
+         * addresses, or an IkeUdp6WithEncapPortSocket for IPv6 addresses. The only thing to do here
+         * is update our state for if the local and remote are behind NATs.
          */
         private void handleNatDetection(
                 IkeMessage resp,
@@ -5356,12 +5354,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             if (!didPeerIncludeNattDetectionPayloads(natSourcePayloads, natDestPayload)) {
                 // peer didn't include NAT-T detection payloads. NATT still supported for this
                 // session though
-                return;
-            }
-
-            if (!(mRemoteAddress instanceof Inet4Address)) {
-                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
-                // IPv6, the best we can currently do is try non-encap'd anyways
                 return;
             }
 
@@ -5394,22 +5386,23 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             int remotePort,
             long initIkeSpi,
             long respIkeSpi) {
-        if (localAddr instanceof Inet4Address) {
-            // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
-            // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
-            // in which the payloads were not in the "right" order" due to the lack of clarity
-            // of the payload order.
-            payloadList.add(
-                    new IkeNotifyPayload(
-                            NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
-                            IkeNotifyPayload.generateNatDetectionData(
-                                    initIkeSpi, respIkeSpi, localAddr, localPort)));
-            payloadList.add(
-                    new IkeNotifyPayload(
-                            NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
-                            IkeNotifyPayload.generateNatDetectionData(
-                                    initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
-        }
+        // Always include NAT Detection payloads. Even if the IKE Session starts on an IPv6 address,
+        // with MOBIKE it may migrate to using an IPv4 address with a NAT.
+        //
+        // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
+        // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
+        // in which the payloads were not in the "right" order" due to the lack of clarity
+        // of the payload order.
+        payloadList.add(
+                new IkeNotifyPayload(
+                        NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
+                        IkeNotifyPayload.generateNatDetectionData(
+                                initIkeSpi, respIkeSpi, localAddr, localPort)));
+        payloadList.add(
+                new IkeNotifyPayload(
+                        NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
+                        IkeNotifyPayload.generateNatDetectionData(
+                                initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
     }
 
     /**
