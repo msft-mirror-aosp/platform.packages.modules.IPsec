@@ -206,7 +206,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the assigned internal addresses, or an empty list when no addresses are assigned by
      *     the remote IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<LinkAddress> getInternalAddresses() {
         return Collections.unmodifiableList(mInternalAddressList);
@@ -217,7 +219,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal subnets, or an empty list when no information of protected subnets is
      *     provided by the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<IpPrefix> getInternalSubnets() {
         return Collections.unmodifiableList(mSubnetAddressList);
@@ -228,7 +232,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal DNS server addresses, or an empty list when no DNS server is provided by
      *     the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<InetAddress> getInternalDnsServers() {
         return Collections.unmodifiableList(mInternalDnsAddressList);
@@ -239,7 +245,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal DHCP server addresses, or an empty list when no DHCP server is provided
      *     by the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<InetAddress> getInternalDhcpServers() {
         return Collections.unmodifiableList(mInternalDhcpAddressList);
