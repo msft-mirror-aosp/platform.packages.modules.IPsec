@@ -18,6 +18,7 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 import android.net.IpSecManager;
 import android.net.IpSecManager.IpSecTunnelInterface;
 import android.net.IpSecTransform;
@@ -100,15 +101,16 @@ public interface ChildSessionCallback {
      * Session.
      *
      * <p>When this method is invoked, the caller MUST re-apply the transforms to their {@link
-     * IpSecTunnelInterface} via IpSecManager#applyTunnelModeTransform(IpSecTunnelInterface, int,
-     * IpSecTransform)
+     * IpSecTunnelInterface} via {@link IpSecManager#applyTunnelModeTransform(IpSecTunnelInterface,
+     * int, IpSecTransform)}
      *
      * @param inIpSecTransform IpSecTransform to be used for traffic with {@link
      *     IpSecManager#DIRECTION_IN}
      * @param outIpSecTransform IpSecTransform to be used for traffic with {@link
      *     IpSecManager#DIRECTION_OUT}
+     * @hide
      */
-    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public.
+    @SystemApi
     default void onIpSecTransformsMigrated(
             @NonNull IpSecTransform inIpSecTransform, @NonNull IpSecTransform outIpSecTransform) {}
 
