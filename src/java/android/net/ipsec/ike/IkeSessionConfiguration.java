@@ -189,7 +189,9 @@ public final class IkeSessionConfiguration {
      *
      * @return the assigned P_CSCF servers, or an empty list when no servers are assigned by the
      *     remote IKE server.
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<InetAddress> getPcscfServers() {
         return Collections.unmodifiableList(mPcscfServers);
