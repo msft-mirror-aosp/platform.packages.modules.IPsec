@@ -131,7 +131,8 @@ public interface IkeSessionCallback {
      *       wait until for a new default Network to become available or they may close the Session
      *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
      *       retransmissions may expire while waiting for a new default Network, in which case the
-     *       Session will automatically close.
+     *       Session will automatically close and {@link #onClosedWithException(IkeException)} will
+     *       be fired.
      * </ul>
      *
      * <p>There are three types of mobility events:
