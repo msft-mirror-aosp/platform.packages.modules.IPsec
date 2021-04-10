@@ -117,51 +117,12 @@ public final class IkeSessionParams {
     /**
      * If set, the IKE library will attempt to enable MOBIKE for the resulting IKE Session.
      *
-     * <p>To support MOBIKE, callers must implement:
-     *
-     * <ul>
-     *   <li>{@link IkeSessionCallback#onIkeSessionConnectionInfoChanged(IkeSessionConnectionInfo)}:
-     *       this MUST migrate all IpSecTunnelInterface instances associated with this IkeSession.
-     *   <li>{@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
-     *       android.net.IpSecTransform)}: this MUST re-apply the migrated transforms to the
-     *       IpSecTunnelInterface associated with this ChildSessionCallback, via
-     *       android.net.IpSecManager#applyTunnelModeTransform(
-     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform).
-     * </ul>
-     *
-     * <p>MOBIKE support is compatible with two Network modes:
-     *
-     * <ul>
-     *   <li><b>Caller managed:</b> The caller controls the underlying Network for the IKE Session
-     *       at all times. The IKE Session will only change underlying Networks if the caller
-     *       initiates it through {@link IkeSession#setNetwork(Network)}. If the caller-specified
-     *       Network is lost, they will be notified via {@link
-     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
-     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException} specifying the Network
-     *       that was lost.
-     *   <li><b>Platform Default:</b> The IKE Session will always track the application default
-     *       Network. The IKE Session will start on the application default Network, and any
-     *       subsequent changes to the default Network (after the IKE_AUTH exchange completes) will
-     *       cause the IKE Session's underlying Network to change. If the default Network is lost
-     *       with no replacements, the caller will be notified via {@link
-     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
-     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException}. The caller can either
-     *       wait until for a new default Network to become available or they may close the Session
-     *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
-     *       retransmissions may expire while waiting for a new default Network, in which case the
-     *       Session will automatically close.
-     * </ul>
-     *
-     * <p>Use of MOBIKE in the IKE Session requires the peer to also support MOBIKE.
-     *
      * <p>If this option is set for an IKE Session, Transport-mode SAs will not be allowed in that
      * Session.
      *
      * <p>Checking for MOBIKE use in an IKE Session is done via {@link
      * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      */
-    // TODO(b/175416035): Update docs to @link to API for migrating IpSecTunnelInterfaces
-    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public
     public static final int IKE_OPTION_MOBIKE = 2;
 
     /**
@@ -626,7 +587,12 @@ public final class IkeSessionParams {
         return mConfigRequests;
     }
 
-    /** Retrieves the list of Configuration Requests */
+    /**
+     * Retrieves the list of Configuration Requests
+     *
+     * @hide
+     */
+    @SystemApi
     @NonNull
     public List<IkeConfigRequest> getConfigurationRequests() {
         return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
@@ -683,10 +649,20 @@ public final class IkeSessionParams {
                 && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
     }
 
-    /** Represents an IKE session configuration request type */
+    /**
+     * Represents an IKE session configuration request type
+     *
+     * @hide
+     */
+    @SystemApi
     public interface IkeConfigRequest {}
 
-    /** Represents an IPv4 P_CSCF request */
+    /**
+     * Represents an IPv4 P_CSCF request
+     *
+     * @hide
+     */
+    @SystemApi
     public interface ConfigRequestIpv4PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv4 P_CSCF server address
@@ -698,7 +674,12 @@ public final class IkeSessionParams {
         Inet4Address getAddress();
     }
 
-    /** Represents an IPv6 P_CSCF request */
+    /**
+     * Represents an IPv6 P_CSCF request
+     *
+     * @hide
+     */
+    @SystemApi
     public interface ConfigRequestIpv6PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv6 P_CSCF server address
@@ -1569,9 +1550,11 @@ public final class IkeSessionParams {
          *
          * @param address the requested P_CSCF address.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
         @SuppressLint("MissingGetterMatchingBuilder")
+        @SystemApi
         @NonNull
         public Builder addPcscfServerRequest(@NonNull InetAddress address) {
             if (address == null) {
@@ -1593,9 +1576,11 @@ public final class IkeSessionParams {
          * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
          *     allowed.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
         @SuppressLint("MissingGetterMatchingBuilder")
+        @SystemApi
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
