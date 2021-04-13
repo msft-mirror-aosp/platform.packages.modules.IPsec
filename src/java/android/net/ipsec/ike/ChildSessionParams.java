@@ -19,6 +19,7 @@ package android.net.ipsec.ike;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 import android.net.InetAddresses;
 import android.os.PersistableBundle;
 
@@ -208,9 +209,23 @@ public abstract class ChildSessionParams {
         return Arrays.asList(mOutboundTrafficSelectors);
     }
 
-    /** Retrieves all ChildSaProposals configured */
+    /**
+     * Retrieves all ChildSaProposals configured
+     *
+     * @deprecated Callers should use {@link #getChildSaProposals()}. This method is deprecated
+     *     because its name does not match the return type,
+     * @hide
+     */
+    @Deprecated
+    @SystemApi
     @NonNull
     public List<ChildSaProposal> getSaProposals() {
+        return getChildSaProposals();
+    }
+
+    /** Retrieves all ChildSaProposals configured */
+    @NonNull
+    public List<ChildSaProposal> getChildSaProposals() {
         return Arrays.asList(mSaProposals);
     }
 
