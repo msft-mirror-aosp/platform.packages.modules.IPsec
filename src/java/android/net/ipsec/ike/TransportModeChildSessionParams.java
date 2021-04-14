@@ -19,6 +19,7 @@ package android.net.ipsec.ike;
 import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 import android.os.PersistableBundle;
 
 import java.util.Objects;
@@ -100,12 +101,33 @@ public final class TransportModeChildSessionParams extends ChildSessionParams {
          *
          * @param proposal Child SA proposal.
          * @return Builder this, to facilitate chaining.
+         * @deprecated Callers should use {@link #addChildSaProposal(ChildSaProposal)}. This method
+         *     is deprecated because its name does not match the input type.
+         * @hide
+         */
+        // The matching getter is defined in the super class. Please see
+        // {@link ChildSessionParams#getSaProposals}
+        @SuppressLint("MissingGetterMatchingBuilder")
+        @Deprecated
+        @SystemApi
+        @NonNull
+        public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
+            return addChildSaProposal(proposal);
+        }
+
+        /**
+         * Adds a Child SA proposal to the {@link TransportModeChildSessionParams} being built.
+         *
+         * @param proposal Child SA proposal.
+         * @return Builder this, to facilitate chaining.
          */
         // The matching getter is defined in the super class. Please see
         // {@link ChildSessionParams#getSaProposals}
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
-        public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
+        public Builder addChildSaProposal(@NonNull ChildSaProposal proposal) {
+            Objects.requireNonNull(proposal, "Required argument not provided");
+
             addProposal(proposal);
             return this;
         }

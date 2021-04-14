@@ -458,9 +458,23 @@ public final class IkeSessionParams {
         return mDefaultOrConfiguredNetwork;
     }
 
-    /** Retrieves all IkeSaProposals configured */
+    /**
+     * Retrieves all IkeSaProposals configured
+     *
+     * @deprecated Callers should use {@link #getIkeSaProposals()}. This method is deprecated
+     *     because its name does not match the return type.
+     * @hide
+     */
+    @Deprecated
+    @SystemApi
     @NonNull
     public List<IkeSaProposal> getSaProposals() {
+        return getIkeSaProposals();
+    }
+
+    /** Retrieves all IkeSaProposals configured */
+    @NonNull
+    public List<IkeSaProposal> getIkeSaProposals() {
         return Arrays.asList(mSaProposals);
     }
 
@@ -1346,9 +1360,25 @@ public final class IkeSessionParams {
          *
          * @param proposal IKE SA proposal.
          * @return Builder this, to facilitate chaining.
+         * @deprecated Callers should use {@link #addIkeSaProposal(IkeSaProposal)}. This method is
+         *     deprecated because its name does not match the input type.
+         * @hide
          */
+        @Deprecated
+        @SystemApi
         @NonNull
         public Builder addSaProposal(@NonNull IkeSaProposal proposal) {
+            return addIkeSaProposal(proposal);
+        }
+
+        /**
+         * Adds an IKE SA proposal to the {@link IkeSessionParams} being built.
+         *
+         * @param proposal IKE SA proposal.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder addIkeSaProposal(@NonNull IkeSaProposal proposal) {
             if (proposal == null) {
                 throw new NullPointerException("Required argument not provided");
             }
