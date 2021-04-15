@@ -604,7 +604,7 @@ public final class ChildSessionStateMachineTest {
         verify(mMockChildSessionSmCallback).onProcedureFinished(mChildSessionStateMachine);
         verify(mMockChildSessionSmCallback).onChildSessionClosed(mMockChildSessionCallback);
 
-        verify(mMockChildSessionCallback).onClosedExceptionally(any(exceptionClass));
+        verify(mMockChildSessionCallback).onClosedWithException(any(exceptionClass));
     }
 
     private void createChildSessionAndReceiveErrorNotification(int notifyType) throws Exception {
@@ -808,7 +808,7 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         assertNull(mChildSessionStateMachine.getCurrentState());
-        verify(mMockChildSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockChildSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
         verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
     }
 

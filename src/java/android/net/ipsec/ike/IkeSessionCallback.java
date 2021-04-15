@@ -48,7 +48,7 @@ public interface IkeSessionCallback {
      * Called when the {@link IkeSession} is closed.
      *
      * <p>When the closure is caused by a local, fatal error, {@link
-     * #onClosedExceptionally(IkeException)} will be fired instead of this method.
+     * #onClosedWithException(IkeException)} will be fired instead of this method.
      */
     void onClosed();
 
@@ -57,8 +57,23 @@ public interface IkeSessionCallback {
      * error.
      *
      * @param exception the detailed error information.
+     * @deprecated Implementers should override {@link #onClosedWithException(IkeException)} to
+     *     handle fatal {@link IkeException}s instead of using this method.
+     * @hide
      */
-    void onClosedExceptionally(@NonNull IkeException exception);
+    @SystemApi
+    @Deprecated
+    default void onClosedExceptionally(@NonNull IkeException exception) {}
+
+    /**
+     * Called if {@link IkeSession} setup failed or {@link IkeSession} is closed because of a fatal
+     * error.
+     *
+     * @param exception the detailed error information.
+     */
+    default void onClosedWithException(@NonNull IkeException exception) {
+        onClosedExceptionally(exception);
+    }
 
     /**
      * Called if a recoverable error is encountered in an established {@link IkeSession}.
@@ -116,7 +131,8 @@ public interface IkeSessionCallback {
      *       wait until for a new default Network to become available or they may close the Session
      *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
      *       retransmissions may expire while waiting for a new default Network, in which case the
-     *       Session will automatically close.
+     *       Session will automatically close and {@link #onClosedWithException(IkeException)} will
+     *       be fired.
      * </ul>
      *
      * <p>There are three types of mobility events:
