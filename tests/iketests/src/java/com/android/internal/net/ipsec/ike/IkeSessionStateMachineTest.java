@@ -1703,7 +1703,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         final IkeSessionParams params =
                 buildIkeSessionParamsCommon()
                         .setAuthPsk(mPsk)
-                        .setConfiguredNetwork(v6OnlyNetwork)
+                        .setNetwork(v6OnlyNetwork)
                         .addIkeOption(IKE_OPTION_MOBIKE)
                         .build();
         mIkeSessionStateMachine =
@@ -5719,7 +5719,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             ikeSessionParamsBuilder.addIkeOption(IKE_OPTION_FORCE_PORT_4500);
         }
         if (configuredNetwork != null) {
-            ikeSessionParamsBuilder.setConfiguredNetwork(configuredNetwork);
+            ikeSessionParamsBuilder.setNetwork(configuredNetwork);
         }
         return makeAndStartIkeSession(ikeSessionParamsBuilder.build());
     }
