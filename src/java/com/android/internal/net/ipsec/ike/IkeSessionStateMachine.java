@@ -853,7 +853,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                         + " of sync.");
                 executeUserCallback(
                         () -> {
-                            mIkeSessionCallback.onClosedExceptionally(
+                            mIkeSessionCallback.onClosedWithException(
                                     new IkeInternalException(error));
                         });
                 loge("Fatal error", error);
@@ -1101,7 +1101,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             executeUserCallback(
                     () -> {
-                        mIkeSessionCallback.onClosedExceptionally(new IkeInternalException(e));
+                        mIkeSessionCallback.onClosedWithException(new IkeInternalException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
@@ -1196,7 +1196,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         closeAllSaRecords(false /*expectSaClosed*/);
         executeUserCallback(
                 () -> {
-                    mIkeSessionCallback.onClosedExceptionally(ikeException);
+                    mIkeSessionCallback.onClosedWithException(ikeException);
                 });
         loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
