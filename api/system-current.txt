@@ -15,6 +15,7 @@ package android.net.eap {
 package android.net.ipsec.ike {
 
   public interface ChildSessionCallback {
+    method @Deprecated public default void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public default void onIpSecTransformsMigrated(@NonNull android.net.IpSecTransform, @NonNull android.net.IpSecTransform);
   }
 
@@ -43,6 +44,7 @@ package android.net.ipsec.ike {
   }
 
   public interface IkeSessionCallback {
+    method @Deprecated public default void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method @Deprecated public default void onError(@NonNull android.net.ipsec.ike.exceptions.IkeProtocolException);
     method public default void onIkeSessionConnectionInfoChanged(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
   }
