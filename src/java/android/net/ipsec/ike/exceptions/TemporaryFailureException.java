@@ -27,6 +27,7 @@ import android.net.ipsec.ike.IkeSessionCallback;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.7">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 public final class TemporaryFailureException extends IkeProtocolException {
     private static final int EXPECTED_ERROR_DATA_LEN = 0;
