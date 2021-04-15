@@ -41,7 +41,7 @@ import java.util.Objects;
  *       <ul>
  *         <li>Note: if the maximum retransmission time is encountered while waiting, the IKE
  *             Session will close. If this occurs, the caller will be notified via {@link
- *             IkeSessionCallback#onClosedExceptionally(IkeException)}.
+ *             IkeSessionCallback#onClosedWithException(IkeException)}.
  *       </ul>
  *   <li>close the corresponding IkeSession.
  * </ul>

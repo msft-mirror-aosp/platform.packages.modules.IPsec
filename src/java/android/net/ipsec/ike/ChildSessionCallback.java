@@ -57,7 +57,7 @@ public interface ChildSessionCallback {
      * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
      *
      * <p>When the closure is caused by a local, fatal error, {@link
-     * #onClosedExceptionally(IkeException)} will be fired instead of this method.
+     * #onClosedWithException(IkeException)} will be fired instead of this method.
      */
     void onClosed();
 
@@ -68,8 +68,25 @@ public interface ChildSessionCallback {
      * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
      *
      * @param exception the detailed error information.
+     * @deprecated Implementers should override {@link #onClosedWithException(IkeException)} to
+     *     handle fatal {@link IkeException}s instead of using this method.
+     * @hide
      */
-    void onClosedExceptionally(@NonNull IkeException exception);
+    @SystemApi
+    @Deprecated
+    default void onClosedExceptionally(@NonNull IkeException exception) {}
+
+    /**
+     * Called if the Child Session setup failed or Child Session is closed because of a fatal error.
+     *
+     * <p>This method will be called immediately after {@link
+     * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
+     *
+     * @param exception the detailed error information.
+     */
+    default void onClosedWithException(@NonNull IkeException exception) {
+        onClosedExceptionally(exception);
+    }
 
     /**
      * Called when an {@link IpSecTransform} is created by this Child Session.
@@ -119,7 +136,7 @@ public interface ChildSessionCallback {
      *
      * <p>This method is fired when a Child Session is closed or a Child Session has deleted old
      * IPsec SA during rekey. When this method is fired due to Child Session closure, it will be
-     * followed by {@link #onClosed()} or {@link #onClosedExceptionally(IkeException)}.
+     * followed by {@link #onClosed()} or {@link #onClosedWithException(IkeException)}.
      *
      * <p>Users SHOULD remove the {@link IpSecTransform} from the socket or interface when this
      * method is called. Otherwise the IPsec traffic protected by this {@link IpSecTransform} will
