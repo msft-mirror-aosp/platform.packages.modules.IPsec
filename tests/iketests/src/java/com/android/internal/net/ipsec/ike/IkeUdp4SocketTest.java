@@ -16,7 +16,6 @@
 
 package com.android.internal.net.ipsec.test.ike;
 
-import android.net.Network;
 import android.os.Handler;
 import android.os.test.TestLooper;
 import android.system.ErrnoException;
@@ -34,26 +33,31 @@ public final class IkeUdp4SocketTest extends IkeSocketTestBase {
     private final IkeSocketFactory mIkeSocketFactory =
             new IkeSocketFactory() {
                 @Override
-                public IkeSocket getIkeSocket(Network network, IkeSessionStateMachine ikeSession)
+                public IkeSocket getIkeSocket(
+                        IkeSocketConfig ikeSockConfig, IkeSessionStateMachine ikeSession)
                         throws ErrnoException, IOException {
-                    return IkeUdp4Socket.getInstance(network, ikeSession, mHandler);
+                    return IkeUdp4Socket.getInstance(ikeSockConfig, ikeSession, mHandler);
                 }
             };
 
-    @Override
-    protected IkeSocket.IPacketReceiver getPacketReceiver() {
+    private IkeSocket.IPacketReceiver getPacketReceiver() {
         return new IkeUdpSocket.PacketReceiver();
+    }
+
+    @Override
+    protected void setPacketReceiver(IkeSocket.IPacketReceiver packetReceiver) {
+        IkeUdpSocket.setPacketReceiver(packetReceiver);
     }
 
     @Test
     public void testGetAndCloseIkeUdp6SocketSameNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketSameNetwork(
+        verifyGetAndCloseIkeSocketSameConfig(
                 mIkeSocketFactory, IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED);
     }
 
     @Test
     public void testGetAndCloseIkeUdp6SocketDifferentNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketDifferentNetwork(
+        verifyGetAndCloseIkeSocketDifferentConfig(
                 mIkeSocketFactory, IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED);
     }
 

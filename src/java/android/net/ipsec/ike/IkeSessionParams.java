@@ -117,55 +117,26 @@ public final class IkeSessionParams {
     /**
      * If set, the IKE library will attempt to enable MOBIKE for the resulting IKE Session.
      *
-     * <p>To support MOBIKE, callers must implement:
-     *
-     * <ul>
-     *   <li>{@link IkeSessionCallback#onIkeSessionConnectionInfoChanged(IkeSessionConnectionInfo)}:
-     *       this MUST migrate all IpSecTunnelInterface instances associated with this IkeSession.
-     *   <li>{@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
-     *       android.net.IpSecTransform)}: this MUST re-apply the migrated transforms to the
-     *       IpSecTunnelInterface associated with this ChildSessionCallback, via
-     *       android.net.IpSecManager#applyTunnelModeTransform(
-     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform).
-     * </ul>
-     *
-     * <p>MOBIKE support is compatible with two Network modes:
-     *
-     * <ul>
-     *   <li><b>Caller managed:</b> The caller controls the underlying Network for the IKE Session
-     *       at all times. The IKE Session will only change underlying Networks if the caller
-     *       initiates it through {@link IkeSession#setNetwork(Network)}. If the caller-specified
-     *       Network is lost, they will be notified via {@link
-     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
-     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException} specifying the Network
-     *       that was lost.
-     *   <li><b>Platform Default:</b> The IKE Session will always track the application default
-     *       Network. The IKE Session will start on the application default Network, and any
-     *       subsequent changes to the default Network (after the IKE_AUTH exchange completes) will
-     *       cause the IKE Session's underlying Network to change. If the default Network is lost
-     *       with no replacements, the caller will be notified via {@link
-     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
-     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException}. The caller can either
-     *       wait until for a new default Network to become available or they may close the Session
-     *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
-     *       retransmissions may expire while waiting for a new default Network, in which case the
-     *       Session will automatically close.
-     * </ul>
-     *
-     * <p>Use of MOBIKE in the IKE Session requires the peer to also support MOBIKE.
-     *
      * <p>If this option is set for an IKE Session, Transport-mode SAs will not be allowed in that
      * Session.
      *
      * <p>Checking for MOBIKE use in an IKE Session is done via {@link
      * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      */
-    // TODO(b/175416035): Update docs to @link to API for migrating IpSecTunnelInterfaces
-    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public
     public static final int IKE_OPTION_MOBIKE = 2;
 
+    /**
+     * Configures the IKE session to always send to port 4500.
+     *
+     * <p>If set, the IKE Session will be initiated and maintained exclusively using
+     * destination port 4500, regardless of the presence of NAT. Otherwise, the IKE Session will
+     * be initiated on destination port 500; then, if either a NAT is detected or both MOBIKE
+     * and NAT-T are supported by the peer, it will proceed on port 4500.
+     */
+    public static final int IKE_OPTION_FORCE_PORT_4500 = 3;
+
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_MOBIKE;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_FORCE_PORT_4500;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
@@ -198,6 +169,13 @@ public final class IkeSessionParams {
     @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT = 10;
 
     /** @hide */
+    @VisibleForTesting static final int DSCP_MIN = 0;
+    /** @hide */
+    @VisibleForTesting static final int DSCP_MAX = 63;
+    /** @hide */
+    @VisibleForTesting static final int DSCP_DEFAULT = 0;
+
+    /** @hide */
     @VisibleForTesting static final int IKE_RETRANS_TIMEOUT_MS_MIN = 500;
     /** @hide */
     @VisibleForTesting
@@ -222,6 +200,7 @@ public final class IkeSessionParams {
     private static final String SOFT_LIFETIME_SEC_KEY = "mSoftLifetimeSec";
     private static final String DPD_DELAY_SEC_KEY = "mDpdDelaySec";
     private static final String NATT_KEEPALIVE_DELAY_SEC_KEY = "mNattKeepaliveDelaySec";
+    private static final String DSCP_KEY = "mDscp";
     private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
 
     @NonNull private final String mServerHostname;
@@ -257,8 +236,8 @@ public final class IkeSessionParams {
     private final int mSoftLifetimeSec;
 
     private final int mDpdDelaySec;
-
     private final int mNattKeepaliveDelaySec;
+    private final int mDscp;
 
     private final boolean mIsIkeFragmentationSupported;
 
@@ -279,6 +258,7 @@ public final class IkeSessionParams {
             int softLifetimeSec,
             int dpdDelaySec,
             int nattKeepaliveDelaySec,
+            int dscp,
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
         mDefaultOrConfiguredNetwork = defaultOrConfiguredNetwork;
@@ -304,8 +284,8 @@ public final class IkeSessionParams {
         mSoftLifetimeSec = softLifetimeSec;
 
         mDpdDelaySec = dpdDelaySec;
-
         mNattKeepaliveDelaySec = nattKeepaliveDelaySec;
+        mDscp = dscp;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
@@ -421,6 +401,7 @@ public final class IkeSessionParams {
         result.putInt(SOFT_LIFETIME_SEC_KEY, mSoftLifetimeSec);
         result.putInt(DPD_DELAY_SEC_KEY, mDpdDelaySec);
         result.putInt(NATT_KEEPALIVE_DELAY_SEC_KEY, mNattKeepaliveDelaySec);
+        result.putInt(DSCP_KEY, mDscp);
         result.putBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY, mIsIkeFragmentationSupported);
 
         return result;
@@ -477,9 +458,23 @@ public final class IkeSessionParams {
         return mDefaultOrConfiguredNetwork;
     }
 
-    /** Retrieves all IkeSaProposals configured */
+    /**
+     * Retrieves all IkeSaProposals configured
+     *
+     * @deprecated Callers should use {@link #getIkeSaProposals()}. This method is deprecated
+     *     because its name does not match the return type.
+     * @hide
+     */
+    @Deprecated
+    @SystemApi
     @NonNull
     public List<IkeSaProposal> getSaProposals() {
+        return getIkeSaProposals();
+    }
+
+    /** Retrieves all IkeSaProposals configured */
+    @NonNull
+    public List<IkeSaProposal> getIkeSaProposals() {
         return Arrays.asList(mSaProposals);
     }
 
@@ -545,6 +540,17 @@ public final class IkeSessionParams {
     }
 
     /**
+     * Retrieves the DSCP field of IKE packets.
+     *
+     * @hide
+     */
+    @SystemApi
+    @IntRange(from = DSCP_MIN, to = DSCP_MAX)
+    public int getDscp() {
+        return mDscp;
+    }
+
+    /**
      * Retrieves the relative retransmission timeout list in milliseconds
      *
      * <p>@see {@link Builder#setRetransmissionTimeoutsMillis(int[])}
@@ -595,7 +601,12 @@ public final class IkeSessionParams {
         return mConfigRequests;
     }
 
-    /** Retrieves the list of Configuration Requests */
+    /**
+     * Retrieves the list of Configuration Requests
+     *
+     * @hide
+     */
+    @SystemApi
     @NonNull
     public List<IkeConfigRequest> getConfigurationRequests() {
         return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
@@ -620,6 +631,7 @@ public final class IkeSessionParams {
                 mSoftLifetimeSec,
                 mDpdDelaySec,
                 mNattKeepaliveDelaySec,
+                mDscp,
                 mIsIkeFragmentationSupported);
     }
 
@@ -647,13 +659,24 @@ public final class IkeSessionParams {
                 && mSoftLifetimeSec == other.mSoftLifetimeSec
                 && mDpdDelaySec == other.mDpdDelaySec
                 && mNattKeepaliveDelaySec == other.mNattKeepaliveDelaySec
+                && mDscp == other.mDscp
                 && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
     }
 
-    /** Represents an IKE session configuration request type */
+    /**
+     * Represents an IKE session configuration request type
+     *
+     * @hide
+     */
+    @SystemApi
     public interface IkeConfigRequest {}
 
-    /** Represents an IPv4 P_CSCF request */
+    /**
+     * Represents an IPv4 P_CSCF request
+     *
+     * @hide
+     */
+    @SystemApi
     public interface ConfigRequestIpv4PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv4 P_CSCF server address
@@ -665,7 +688,12 @@ public final class IkeSessionParams {
         Inet4Address getAddress();
     }
 
-    /** Represents an IPv6 P_CSCF request */
+    /**
+     * Represents an IPv6 P_CSCF request
+     *
+     * @hide
+     */
+    @SystemApi
     public interface ConfigRequestIpv6PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv6 P_CSCF server address
@@ -1172,8 +1200,8 @@ public final class IkeSessionParams {
         private int mSoftLifetimeSec = IKE_SOFT_LIFETIME_SEC_DEFAULT;
 
         private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
-
         private int mNattKeepaliveDelaySec = IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT;
+        private int mDscp = DSCP_DEFAULT;
 
         private final boolean mIsIkeFragmentationSupported = true;
 
@@ -1235,6 +1263,7 @@ public final class IkeSessionParams {
             mSoftLifetimeSec = ikeSessionParams.getSoftLifetimeSeconds();
             mDpdDelaySec = ikeSessionParams.getDpdDelaySeconds();
             mNattKeepaliveDelaySec = ikeSessionParams.getNattKeepAliveDelaySeconds();
+            mDscp = ikeSessionParams.getDscp();
 
             mIkeOptions = ikeSessionParams.mIkeOptions;
 
@@ -1331,9 +1360,25 @@ public final class IkeSessionParams {
          *
          * @param proposal IKE SA proposal.
          * @return Builder this, to facilitate chaining.
+         * @deprecated Callers should use {@link #addIkeSaProposal(IkeSaProposal)}. This method is
+         *     deprecated because its name does not match the input type.
+         * @hide
          */
+        @Deprecated
+        @SystemApi
         @NonNull
         public Builder addSaProposal(@NonNull IkeSaProposal proposal) {
+            return addIkeSaProposal(proposal);
+        }
+
+        /**
+         * Adds an IKE SA proposal to the {@link IkeSessionParams} being built.
+         *
+         * @param proposal IKE SA proposal.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder addIkeSaProposal(@NonNull IkeSaProposal proposal) {
             if (proposal == null) {
                 throw new NullPointerException("Required argument not provided");
             }
@@ -1535,9 +1580,11 @@ public final class IkeSessionParams {
          *
          * @param address the requested P_CSCF address.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
         @SuppressLint("MissingGetterMatchingBuilder")
+        @SystemApi
         @NonNull
         public Builder addPcscfServerRequest(@NonNull InetAddress address) {
             if (address == null) {
@@ -1559,9 +1606,11 @@ public final class IkeSessionParams {
          * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
          *     allowed.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
         @SuppressLint("MissingGetterMatchingBuilder")
+        @SystemApi
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
@@ -1647,6 +1696,35 @@ public final class IkeSessionParams {
                 throw new IllegalArgumentException("Invalid NATT keepalive delay value");
             }
             mNattKeepaliveDelaySec = nattKeepaliveDelaySeconds;
+            return this;
+        }
+
+        /**
+         * Sets the DSCP field of the IKE packets.
+         *
+         * <p>Differentiated services code point (DSCP) is a 6-bit field in the IP header that is
+         * used for packet classification and prioritization. The DSCP field is encoded in the 6
+         * higher order bits of the Type of Service (ToS) in IPv4 header, or the traffic class (TC)
+         * field in IPv6 header.
+         *
+         * <p>Any 6-bit values (0 to 63) are acceptable, whether IANA-defined, or
+         * implementation-specific values.
+         *
+         * @see <a href="https://tools.ietf.org/html/rfc2474">RFC 2474, Definition of the
+         *     Differentiated Services Field (DS Field) in the IPv4 and IPv6 Headers</a>
+         * @see <a href="https://www.iana.org/assignments/dscp-registry/dscp-registry.xhtml">
+         *     Differentiated Services Field Codepoints (DSCP)</a>
+         * @param dscp the dscp value. Defaults to 0.
+         * @return Builder this, to facilitate chaining.
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder setDscp(@IntRange(from = DSCP_MIN, to = DSCP_MAX) int dscp) {
+            if (dscp < DSCP_MIN || dscp > DSCP_MAX) {
+                throw new IllegalArgumentException("Invalid DSCP value");
+            }
+            mDscp = dscp;
             return this;
         }
 
@@ -1752,12 +1830,9 @@ public final class IkeSessionParams {
             // makes sure if the Builder is constructed with the deprecated constructor
             // #Builder(Context), #build() still works in the same way and will throw exception when
             // there is no configured or default network.
-            Network defaultOrConfiguredNetwork = null;
-            if (mConnectivityManager != null) {
-                defaultOrConfiguredNetwork =
-                        mCallerConfiguredNetwork != null
-                                ? mCallerConfiguredNetwork
-                                : mConnectivityManager.getActiveNetwork();
+            Network defaultOrConfiguredNetwork = mCallerConfiguredNetwork;
+            if (mConnectivityManager != null && defaultOrConfiguredNetwork == null) {
+                defaultOrConfiguredNetwork = mConnectivityManager.getActiveNetwork();
                 if (defaultOrConfiguredNetwork == null) {
                     throw new IllegalArgumentException("Network not found");
                 }
@@ -1809,6 +1884,7 @@ public final class IkeSessionParams {
                     mSoftLifetimeSec,
                     mDpdDelaySec,
                     mNattKeepaliveDelaySec,
+                    mDscp,
                     mIsIkeFragmentationSupported);
         }
 

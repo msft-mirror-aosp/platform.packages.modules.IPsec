@@ -25,6 +25,7 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 
 import android.net.InetAddresses;
@@ -86,7 +87,9 @@ public abstract class IkeSocketTestBase {
     protected final LongSparseArray mSpiToIkeStateMachineMap =
             new LongSparseArray<IkeSessionStateMachine>();
 
-    protected final Network mMockNetwork = mock(Network.class);
+    protected static final int DUMMY_DSCP = 36;
+    protected final IkeSocketConfig mSpyIkeSocketConfig =
+            spy(new IkeSocketConfig(mock(Network.class), DUMMY_DSCP));
     protected final IkeSessionStateMachine mMockIkeSessionStateMachine =
             mock(IkeSessionStateMachine.class);
 
@@ -109,7 +112,7 @@ public abstract class IkeSocketTestBase {
         Os.close(mDummyRemoteServerFd);
     }
 
-    protected abstract IkeSocket.IPacketReceiver getPacketReceiver();
+    protected abstract void setPacketReceiver(IkeSocket.IPacketReceiver packetReceiver);
 
     protected static FileDescriptor getBoundUdpSocket(InetAddress address) throws Exception {
         FileDescriptor sock =
@@ -220,25 +223,34 @@ public abstract class IkeSocketTestBase {
     }
 
     protected interface IkeSocketFactory {
-        IkeSocket getIkeSocket(Network network, IkeSessionStateMachine ikeSession)
+        IkeSocket getIkeSocket(IkeSocketConfig sockConfig, IkeSessionStateMachine ikeSession)
                 throws ErrnoException, IOException;
     }
 
-    protected void verifyGetAndCloseIkeSocketSameNetwork(
+    private static void verifySocketConfigIsApplied(
+            IkeSocketConfig spySockConfig, IkeSocket ikeSocket) throws Exception {
+        verify(spySockConfig).getNetwork();
+        verify(spySockConfig).getDscp();
+        verify(spySockConfig.getNetwork()).bindSocket(eq(ikeSocket.getFd()));
+    }
+
+    protected void verifyGetAndCloseIkeSocketSameConfig(
             IkeSocketFactory ikeUdpSocketFactory, int expectedServerPort) throws Exception {
         IkeSessionStateMachine mockIkeSessionOne = mock(IkeSessionStateMachine.class);
         IkeSessionStateMachine mockIkeSessionTwo = mock(IkeSessionStateMachine.class);
 
-        IkeSocket ikeSocketOne = ikeUdpSocketFactory.getIkeSocket(mMockNetwork, mockIkeSessionOne);
+        IkeSocket ikeSocketOne =
+                ikeUdpSocketFactory.getIkeSocket(mSpyIkeSocketConfig, mockIkeSessionOne);
         assertEquals(expectedServerPort, ikeSocketOne.getIkeServerPort());
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
-        IkeSocket ikeSocketTwo = ikeUdpSocketFactory.getIkeSocket(mMockNetwork, mockIkeSessionTwo);
+        IkeSocket ikeSocketTwo =
+                ikeUdpSocketFactory.getIkeSocket(mSpyIkeSocketConfig, mockIkeSessionTwo);
         assertEquals(expectedServerPort, ikeSocketTwo.getIkeServerPort());
         assertEquals(2, ikeSocketTwo.mAliveIkeSessions.size());
         assertEquals(ikeSocketOne, ikeSocketTwo);
 
-        verify(mMockNetwork).bindSocket(eq(ikeSocketOne.getFd()));
+        verifySocketConfigIsApplied(mSpyIkeSocketConfig, ikeSocketOne);
 
         ikeSocketOne.releaseReference(mockIkeSessionOne);
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
@@ -249,21 +261,23 @@ public abstract class IkeSocketTestBase {
         verifyCloseFd(ikeSocketTwo.getFd());
     }
 
-    protected void verifyGetAndCloseIkeSocketDifferentNetwork(
+    protected void verifyGetAndCloseIkeSocketDifferentConfig(
             IkeSocketFactory ikeUdpSocketFactory, int expectedServerPort) throws Exception {
         IkeSessionStateMachine mockIkeSessionOne = mock(IkeSessionStateMachine.class);
         IkeSessionStateMachine mockIkeSessionTwo = mock(IkeSessionStateMachine.class);
 
-        Network mockNetworkOne = mock(Network.class);
-        Network mockNetworkTwo = mock(Network.class);
+        IkeSocketConfig spySockConfigOne =
+                spy(new IkeSocketConfig(mock(Network.class), DUMMY_DSCP));
+        IkeSocketConfig spySockConfigTwo =
+                spy(new IkeSocketConfig(mock(Network.class), DUMMY_DSCP));
 
         IkeSocket ikeSocketOne =
-                ikeUdpSocketFactory.getIkeSocket(mockNetworkOne, mockIkeSessionOne);
+                ikeUdpSocketFactory.getIkeSocket(spySockConfigOne, mockIkeSessionOne);
         assertEquals(expectedServerPort, ikeSocketOne.getIkeServerPort());
         assertEquals(1, ikeSocketOne.mAliveIkeSessions.size());
 
         IkeSocket ikeSocketTwo =
-                ikeUdpSocketFactory.getIkeSocket(mockNetworkTwo, mockIkeSessionTwo);
+                ikeUdpSocketFactory.getIkeSocket(spySockConfigTwo, mockIkeSessionTwo);
         assertEquals(expectedServerPort, ikeSocketTwo.getIkeServerPort());
         assertEquals(1, ikeSocketTwo.mAliveIkeSessions.size());
 
@@ -271,11 +285,12 @@ public abstract class IkeSocketTestBase {
 
         ArgumentCaptor<FileDescriptor> fdCaptorOne = ArgumentCaptor.forClass(FileDescriptor.class);
         ArgumentCaptor<FileDescriptor> fdCaptorTwo = ArgumentCaptor.forClass(FileDescriptor.class);
-        verify(mockNetworkOne).bindSocket(fdCaptorOne.capture());
-        verify(mockNetworkTwo).bindSocket(fdCaptorTwo.capture());
 
-        FileDescriptor fdOne = fdCaptorOne.getValue();
-        FileDescriptor fdTwo = fdCaptorTwo.getValue();
+        verifySocketConfigIsApplied(spySockConfigOne, ikeSocketOne);
+        verifySocketConfigIsApplied(spySockConfigTwo, ikeSocketTwo);
+
+        FileDescriptor fdOne = ikeSocketOne.getFd();
+        FileDescriptor fdTwo = ikeSocketTwo.getFd();
         assertNotNull(fdOne);
         assertNotNull(fdTwo);
         assertNotEquals(fdOne, fdTwo);
@@ -306,25 +321,35 @@ public abstract class IkeSocketTestBase {
     protected void verifyIkeUdpSocketReceivePacket(
             IkeSocketFactory ikeUdpSocketFactory, IkeSocket.IPacketReceiver packetReceiver)
             throws Exception {
+        verifyIkeUdpSocketReceivePacket(
+                ikeUdpSocketFactory, packetReceiver, IKE_REQ_MESSAGE_HEX_STRING);
+    }
+
+    protected void verifyIkeUdpSocketReceivePacket(
+            IkeSocketFactory ikeUdpSocketFactory,
+            IkeSocket.IPacketReceiver packetReceiver,
+            String messageToProcessHexString)
+            throws Exception {
         IkeSessionStateMachine mockIkeSession = mock(IkeSessionStateMachine.class);
         IkeUdpSocket ikeSocket =
-                (IkeUdpSocket) ikeUdpSocketFactory.getIkeSocket(mMockNetwork, mockIkeSession);
+                (IkeUdpSocket)
+                        ikeUdpSocketFactory.getIkeSocket(mSpyIkeSocketConfig, mockIkeSession);
         assertNotNull(ikeSocket);
 
         // Set up state
         ikeSocket.registerIke(LOCAL_SPI, mockIkeSession);
         IkeSocket.IPacketReceiver mockPacketReceiver = mock(IkeSocket.IPacketReceiver.class);
-        IkeUdpSocket.setPacketReceiver(mockPacketReceiver);
+        setPacketReceiver(mockPacketReceiver);
         try {
             // Send a packet
-            byte[] pktBytes = HexDump.hexStringToByteArray(IKE_REQ_MESSAGE_HEX_STRING);
+            byte[] pktBytes = HexDump.hexStringToByteArray(messageToProcessHexString);
             ikeSocket.handlePacket(pktBytes, pktBytes.length);
 
             verify(mockPacketReceiver).handlePacket(eq(pktBytes), any());
 
         } finally {
             ikeSocket.releaseReference(mockIkeSession);
-            IkeUdpSocket.setPacketReceiver(getPacketReceiver());
+            setPacketReceiver(packetReceiver);
         }
     }
 }

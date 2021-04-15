@@ -16,7 +16,6 @@
 
 package com.android.internal.net.ipsec.test.ike;
 
-import android.net.Network;
 import android.os.Handler;
 import android.os.test.TestLooper;
 import android.system.ErrnoException;
@@ -34,37 +33,48 @@ public final class IkeUdp6WithEncapPortSocketTest extends IkeSocketTestBase {
     private final IkeSocketFactory mIkeSocketFactory =
             new IkeSocketFactory() {
                 @Override
-                public IkeSocket getIkeSocket(Network network, IkeSessionStateMachine ikeSession)
+                public IkeSocket getIkeSocket(
+                        IkeSocketConfig ikeSockConfig, IkeSessionStateMachine ikeSession)
                         throws ErrnoException, IOException {
-                    return IkeUdp6WithEncapPortSocket.getInstance(network, ikeSession, mHandler);
+                    return IkeUdp6WithEncapPortSocket.getIkeUdpEncapSocket(
+                            ikeSockConfig, ikeSession, mHandler);
                 }
             };
 
+    private IkeSocket.IPacketReceiver getPacketReceiver() {
+        return new IkeUdpEncapPortPacketHandler.PacketReceiver();
+    }
+
     @Override
-    protected IkeSocket.IPacketReceiver getPacketReceiver() {
-        return new IkeUdpSocket.PacketReceiver();
+    protected void setPacketReceiver(IkeSocket.IPacketReceiver packetReceiver) {
+        IkeUdp6WithEncapPortSocket.setPacketReceiver(packetReceiver);
     }
 
     @Test
     public void testGetAndCloseIkeUdp6WithEncapPortSocketTestSameNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketSameNetwork(
+        verifyGetAndCloseIkeSocketSameConfig(
                 mIkeSocketFactory, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
     }
 
     @Test
     public void testGetAndCloseIkeUdp6WithEncapPortSocketTestDifferentNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketDifferentNetwork(
+        verifyGetAndCloseIkeSocketDifferentConfig(
                 mIkeSocketFactory, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
     }
 
     @Test
     public void testReceiveIkePacket() throws Exception {
-        verifyIkeUdpSocketReceivePacket(mIkeSocketFactory, getPacketReceiver());
+        verifyIkeUdpSocketReceivePacket(
+                mIkeSocketFactory,
+                getPacketReceiver(),
+                NON_ESP_MARKER_HEX_STRING + IKE_REQ_MESSAGE_HEX_STRING);
     }
 
     @Test
     public void testHandlePacket() throws Exception {
         verifyHandlePacket(
-                TestUtils.hexStringToByteArray(IKE_REQ_MESSAGE_HEX_STRING), getPacketReceiver());
+                TestUtils.hexStringToByteArray(
+                        NON_ESP_MARKER_HEX_STRING + IKE_REQ_MESSAGE_HEX_STRING),
+                getPacketReceiver());
     }
 }

@@ -32,7 +32,6 @@ import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
-import android.net.Network;
 import android.os.HandlerThread;
 import android.os.Looper;
 import android.os.test.TestLooper;
@@ -67,11 +66,12 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
     private final IkeSocketFactory mIkeSocketFactory =
             new IkeSocketFactory() {
                 @Override
-                public IkeSocket getIkeSocket(Network network, IkeSessionStateMachine ikeSession)
+                public IkeSocket getIkeSocket(
+                        IkeSocketConfig ikeSockConfig, IkeSessionStateMachine ikeSession)
                         throws ErrnoException, IOException {
                     try {
                         return IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                network, mSpyIpSecManager, ikeSession, mLooper.getLooper());
+                                ikeSockConfig, mSpyIpSecManager, ikeSession, mLooper.getLooper());
                     } catch (ResourceUnavailableException e) {
                         throw new IllegalStateException(e);
                     }
@@ -114,14 +114,18 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
         super.tearDown();
     }
 
+    private IkeSocket.IPacketReceiver getPacketReceiver() {
+        return new IkeUdpEncapPortPacketHandler.PacketReceiver();
+    }
+
     @Override
-    protected IkeSocket.IPacketReceiver getPacketReceiver() {
-        return new IkeUdpEncapSocket.PacketReceiver();
+    protected void setPacketReceiver(IkeSocket.IPacketReceiver packetReceiver) {
+        IkeUdpEncapSocket.setPacketReceiver(packetReceiver);
     }
 
     @Test
     public void testGetAndCloseIkeUdpEncapSocketSameNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketSameNetwork(
+        verifyGetAndCloseIkeSocketSameConfig(
                 mIkeSocketFactory, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         verify(mSpyIpSecManager).openUdpEncapsulationSocket();
         verify(mSpyDummyUdpEncapSocketOne).close();
@@ -129,7 +133,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
 
     @Test
     public void testGetAndCloseIkeUdpEncapSocketDifferentNetwork() throws Exception {
-        verifyGetAndCloseIkeSocketDifferentNetwork(
+        verifyGetAndCloseIkeSocketDifferentConfig(
                 mIkeSocketFactory, IkeSocket.SERVER_PORT_UDP_ENCAPSULATED);
         verify(mSpyIpSecManager, times(2)).openUdpEncapsulationSocket();
         verify(mSpyDummyUdpEncapSocketOne).close();
@@ -146,7 +150,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
         // Send IKE packet
         IkeUdpEncapSocket ikeSocket =
                 IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                        mMockNetwork,
+                        mSpyIkeSocketConfig,
                         mSpyIpSecManager,
                         mMockIkeSessionStateMachine,
                         Looper.myLooper());
@@ -156,8 +160,9 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
 
         // Verify received data
         ByteBuffer expectedBuffer =
-                ByteBuffer.allocate(IkeUdpEncapSocket.NON_ESP_MARKER_LEN + mDataOne.length);
-        expectedBuffer.put(IkeUdpEncapSocket.NON_ESP_MARKER).put(mDataOne);
+                ByteBuffer.allocate(
+                        IkeUdpEncapPortPacketHandler.NON_ESP_MARKER_LEN + mDataOne.length);
+        expectedBuffer.put(IkeUdpEncapPortPacketHandler.NON_ESP_MARKER).put(mDataOne);
 
         assertArrayEquals(expectedBuffer.array(), receivedData);
 
@@ -185,7 +190,7 @@ public final class IkeUdpEncapSocketTest extends IkeSocketTestBase {
                             try {
                                 socketReceiver.setIkeUdpEncapSocket(
                                         IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                                mMockNetwork,
+                                                mSpyIkeSocketConfig,
                                                 mSpyIpSecManager,
                                                 mMockIkeSessionStateMachine,
                                                 mIkeThread.getLooper()));

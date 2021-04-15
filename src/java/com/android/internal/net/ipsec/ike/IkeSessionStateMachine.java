@@ -18,6 +18,7 @@ package com.android.internal.net.ipsec.ike;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
@@ -448,7 +449,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting boolean mLocalNatDetected;
     /** Indicates if remote node is behind a NAT. */
     @VisibleForTesting boolean mRemoteNatDetected;
-    /** NATT keepalive scheduler. Initialized when a NAT is detected */
+    /** NATT keepalive scheduler. Initialized when a NAT is detected while using V4 addresses */
     @VisibleForTesting IkeNattKeepalive mIkeNattKeepalive;
 
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
@@ -912,22 +913,37 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         mIkeSocket = newSocket;
     }
 
-    private void buildAndSwitchToIkeSocketWithPort4500(boolean isIpv4) {
-        try {
+    private IkeSocket getIkeSocket(boolean isIpv4, boolean useEncapPort)
+            throws ErrnoException, IOException, ResourceUnavailableException {
+        IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork, mIkeSessionParams.getDscp());
+        if (useEncapPort) {
             if (isIpv4) {
-                IkeSocket newSocket =
-                        IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                mNetwork,
-                                mIpSecManager,
-                                IkeSessionStateMachine.this,
-                                getHandler().getLooper());
-                switchToIkeSocket(newSocket);
-                mIkeNattKeepalive = buildAndStartNattKeepalive();
+                return IkeUdpEncapSocket.getIkeUdpEncapSocket(
+                        sockConfig,
+                        mIpSecManager,
+                        IkeSessionStateMachine.this,
+                        getHandler().getLooper());
             } else {
-                IkeSocket newSocket =
-                        IkeUdp6WithEncapPortSocket.getInstance(
-                                mNetwork, IkeSessionStateMachine.this, getHandler());
-                switchToIkeSocket(newSocket);
+                return IkeUdp6WithEncapPortSocket.getIkeUdpEncapSocket(
+                        sockConfig, IkeSessionStateMachine.this, getHandler());
+            }
+        } else {
+            if (isIpv4) {
+                return IkeUdp4Socket.getInstance(
+                        sockConfig, IkeSessionStateMachine.this, getHandler());
+            } else {
+                return IkeUdp6Socket.getInstance(
+                        sockConfig, IkeSessionStateMachine.this, getHandler());
+            }
+        }
+    }
+
+    private void getAndSwitchToIkeSocket(boolean isIpv4, boolean useEncapPort) {
+        try {
+            IkeSocket newSocket = getIkeSocket(isIpv4, useEncapPort);
+            switchToIkeSocket(newSocket);
+            if (isIpv4 && useEncapPort) {
+                mIkeNattKeepalive = buildAndStartNattKeepalive();
             }
         } catch (ErrnoException | IOException | ResourceUnavailableException e) {
             handleIkeFatalError(e);
@@ -1211,38 +1227,24 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         public void enterState() {
             try {
-                // TODO(b/149954916): Do DNS resolution asynchronously
-                InetAddress[] allRemoteAddresses =
-                        mNetwork.getAllByName(mIkeSessionParams.getServerHostname());
-
-                logd("Resolved addresses for peer: " + Arrays.toString(allRemoteAddresses));
-
-                for (InetAddress remoteAddress : allRemoteAddresses) {
-                    if (remoteAddress instanceof Inet4Address) {
-                        mRemoteAddressesV4.add((Inet4Address) remoteAddress);
-                    } else {
-                        mRemoteAddressesV6.add((Inet6Address) remoteAddress);
-                    }
-                }
+                resolveAndSetAvailableRemoteAddresses();
 
                 setRemoteAddress();
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
-                if (isIpv4) {
-                    mIkeSocket =
-                            IkeUdp4Socket.getInstance(
-                                    mNetwork, IkeSessionStateMachine.this, getHandler());
-                } else {
-                    mIkeSocket =
-                            IkeUdp6Socket.getInstance(
-                                    mNetwork, IkeSessionStateMachine.this, getHandler());
-                }
+                mIkeSocket =
+                        getIkeSocket(
+                                isIpv4, mIkeSessionParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500));
                 mLocalPort = mIkeSocket.getLocalPort();
 
                 mLocalAddress =
                         mIkeLocalAddressGenerator.generateLocalAddress(
                                 mNetwork, isIpv4, mRemoteAddress, mIkeSocket.getIkeServerPort());
-            } catch (ErrnoException | IOException e) {
+
+                if (mIkeSocket instanceof IkeUdpEncapSocket) {
+                    mIkeNattKeepalive = buildAndStartNattKeepalive();
+                }
+            } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -3151,7 +3153,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mRemoteAddress,
                             mLocalPort,
                             mIkeSocket.getIkeServerPort(),
-                            mRandomFactory);
+                            mRandomFactory,
+                            mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE));
             payloadList.add(
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
@@ -3345,9 +3348,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             mSupportNatTraversal = true;
 
-            if (!(mRemoteAddress instanceof Inet4Address)) {
-                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
-                // IPv6, the best we can currently do is try non-encap'd anyways
+            if (mRemoteAddress instanceof Inet6Address
+                    && !mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
+                // TODO(b/184869678): support NAT detection for all cases
+                // UdpEncap for V6 is not supported in Android yet, so don't bother checking for NAT
+                // Detection payloads when using IPv6 addresses without Mobike
                 return;
             }
 
@@ -3359,18 +3364,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     initIkeSpi, respIkeSpi, natSourcePayloads, natDestPayload);
 
             if (mLocalNatDetected || mRemoteNatDetected) {
-                logd("Switching to UDP encap socket");
+                logd("Switching to send to remote port 4500");
+                boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
                 try {
-                    IkeSocket newSocket =
-                            IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                                    mNetwork,
-                                    mIpSecManager,
-                                    IkeSessionStateMachine.this,
-                                    getHandler().getLooper());
+                    IkeSocket newSocket = getIkeSocket(isIpv4, true /* useEncapPort */);
                     switchToIkeSocket(initIkeSpi, newSocket);
-                    mIkeNattKeepalive = buildAndStartNattKeepalive();
                     mLocalPort = mIkeSocket.getLocalPort();
+
+                    if (isIpv4) {
+                        mIkeNattKeepalive = buildAndStartNattKeepalive();
+                    }
                 } catch (ErrnoException | IOException | ResourceUnavailableException e) {
                     handleIkeFatalError(e);
                 }
@@ -3483,7 +3487,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         (Inet4Address) mLocalAddress,
                         (Inet4Address) mRemoteAddress,
                         ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
-                        mIkeSocket.getNetwork(),
+                        mIkeSocket.getIkeSocketConfig().getNetwork(),
                         keepaliveIntent);
         keepalive.start();
         return keepalive;
@@ -3661,10 +3665,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     throw new IkeInternalException("Error while registering NetworkCallback", e);
                 }
 
-                // Use port 4500 if NAT-T is enabled
-                if (mSupportNatTraversal && !(mIkeSocket instanceof IkeUdpEncapSocket)) {
-                    buildAndSwitchToIkeSocketWithPort4500(mIkeSocket instanceof IkeUdp4Socket);
+                // Switch to port 4500 if NAT-T is supported
+                if (mSupportNatTraversal
+                        && mIkeSocket.getIkeServerPort()
+                                != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
                     try {
+                        getAndSwitchToIkeSocket(
+                                mIkeSocket instanceof IkeUdp4Socket, true /* useEncapPort */);
                         mLocalPort = mIkeSocket.getLocalPort();
                     } catch (ErrnoException e) {
                         throw new IkeInternalException(e);
@@ -5345,8 +5352,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         /**
          * If MOBIKE and NAT-T are supported, we will already be using an IkeUdpEncapSocket for IPv4
-         * addresses. The only thing to do here is update our state for if the local and remote are
-         * behind NATs.
+         * addresses, or an IkeUdp6WithEncapPortSocket for IPv6 addresses. The only thing to do here
+         * is update our state for if the local and remote are behind NATs.
          */
         private void handleNatDetection(
                 IkeMessage resp,
@@ -5356,12 +5363,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             if (!didPeerIncludeNattDetectionPayloads(natSourcePayloads, natDestPayload)) {
                 // peer didn't include NAT-T detection payloads. NATT still supported for this
                 // session though
-                return;
-            }
-
-            if (!(mRemoteAddress instanceof Inet4Address)) {
-                // UDP encapsulation not (currently) supported on IPv6. Even if there is a NAT on
-                // IPv6, the best we can currently do is try non-encap'd anyways
                 return;
             }
 
@@ -5394,22 +5395,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             int remotePort,
             long initIkeSpi,
             long respIkeSpi) {
-        if (localAddr instanceof Inet4Address) {
-            // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
-            // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
-            // in which the payloads were not in the "right" order" due to the lack of clarity
-            // of the payload order.
-            payloadList.add(
-                    new IkeNotifyPayload(
-                            NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
-                            IkeNotifyPayload.generateNatDetectionData(
-                                    initIkeSpi, respIkeSpi, localAddr, localPort)));
-            payloadList.add(
-                    new IkeNotifyPayload(
-                            NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
-                            IkeNotifyPayload.generateNatDetectionData(
-                                    initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
-        }
+        // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
+        // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
+        // in which the payloads were not in the "right" order" due to the lack of clarity
+        // of the payload order.
+        payloadList.add(
+                new IkeNotifyPayload(
+                        NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
+                        IkeNotifyPayload.generateNatDetectionData(
+                                initIkeSpi, respIkeSpi, localAddr, localPort)));
+        payloadList.add(
+                new IkeNotifyPayload(
+                        NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
+                        IkeNotifyPayload.generateNatDetectionData(
+                                initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
     }
 
     /**
@@ -5425,7 +5424,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 InetAddress remoteAddr,
                 int localPort,
                 int remotePort,
-                RandomnessFactory randomFactory)
+                RandomnessFactory randomFactory,
+                boolean isMobikeSupportEnabled)
                 throws IOException {
             List<IkePayload> payloadList =
                     getCreateIkeSaPayloads(
@@ -5433,14 +5433,21 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             IkeSaPayload.createInitialIkeSaPayload(saProposals),
                             randomFactory);
 
-            addNatDetectionPayloadsToList(
-                    payloadList,
-                    localAddr,
-                    remoteAddr,
-                    localPort,
-                    remotePort,
-                    initIkeSpi,
-                    respIkeSpi);
+            if (remoteAddr instanceof Inet4Address || isMobikeSupportEnabled) {
+                // TODO(b/184869678): support NAT detection for all cases
+                // UdpEncap for V6 is not supported in Android yet, so only send NAT Detection
+                // payloads when using IPv4 addresses or Mobike is supported (in case the IKE
+                // Session starts with IPv6 addresses but later migrates to using IPv4 addresses
+                // with a NAT).
+                addNatDetectionPayloadsToList(
+                        payloadList,
+                        localAddr,
+                        remoteAddr,
+                        localPort,
+                        remotePort,
+                        initIkeSpi,
+                        respIkeSpi);
+            }
 
             return payloadList;
         }
@@ -5510,7 +5517,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             payloadList.add(saPayload);
 
             // SaPropoals.Builder guarantees that each SA proposal has at least one DH group.
-            payloadList.add(new IkeKePayload(selectedDhGroup, randomFactory));
+            payloadList.add(IkeKePayload.createOutboundKePayload(selectedDhGroup, randomFactory));
 
             payloadList.add(new IkeNoncePayload(randomFactory));
 
@@ -5533,35 +5540,42 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         Network oldNetwork = mNetwork;
         mNetwork = network;
 
+        // If the network changes, perform a new DNS lookup to ensure that the correct remote
+        // address is used. This ensures that DNS returns addresses for the correct address families
+        // (important if using a v4/v6-only network). This also ensures that DNS64 is handled
+        // correctly when switching between networks that may have different IPv6 prefixes.
+        if (!mNetwork.equals(oldNetwork)) {
+            try {
+                resolveAndSetAvailableRemoteAddresses();
+            } catch (IOException e) {
+                handleIkeFatalError(e);
+                return;
+            }
+        }
+
         setRemoteAddress();
 
         boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
+        int serverPort =
+                mSupportNatTraversal
+                        ? IkeSocket.SERVER_PORT_UDP_ENCAPSULATED
+                        : IkeSocket.SERVER_PORT_NON_UDP_ENCAPSULATED;
 
         try {
+            mLocalAddress =
+                    mIkeLocalAddressGenerator.generateLocalAddress(
+                            mNetwork, isIpv4, mRemoteAddress, serverPort);
+
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
             if (!mNetwork.equals(oldNetwork)) {
-                // Use port 4500 if NAT-T is supported by both sides
-                if (mSupportNatTraversal) {
-                    buildAndSwitchToIkeSocketWithPort4500(isIpv4);
-                } else {
-                    IkeSocket newSocket;
-                    if (isIpv4) {
-                        newSocket =
-                                IkeUdp4Socket.getInstance(
-                                        mNetwork, IkeSessionStateMachine.this, getHandler());
-                    } else {
-                        newSocket =
-                                IkeUdp6Socket.getInstance(
-                                        mNetwork, IkeSessionStateMachine.this, getHandler());
-                    }
-                    switchToIkeSocket(newSocket);
-                }
+                getAndSwitchToIkeSocket(
+                        isIpv4,
+                        mIkeSessionParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500)
+                                || mSupportNatTraversal);
             }
+
             mLocalPort = mIkeSocket.getLocalPort();
-            mLocalAddress =
-                    mIkeLocalAddressGenerator.generateLocalAddress(
-                            mNetwork, isIpv4, mRemoteAddress, mIkeSocket.getIkeServerPort());
         } catch (ErrnoException | IOException e) {
             handleIkeFatalError(e);
             return;
@@ -5587,6 +5601,30 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         sendMessage(
                 CMD_LOCAL_REQUEST_MOBIKE,
                 mLocalRequestFactory.getIkeLocalRequest(CMD_LOCAL_REQUEST_MOBIKE));
+    }
+
+    private void resolveAndSetAvailableRemoteAddresses() throws IOException {
+        // TODO(b/149954916): Do DNS resolution asynchronously
+        InetAddress[] allRemoteAddresses =
+                mNetwork.getAllByName(mIkeSessionParams.getServerHostname());
+
+        logd(
+                "Resolved addresses for peer: "
+                        + Arrays.toString(allRemoteAddresses)
+                        + " to replace old addresses: v4="
+                        + mRemoteAddressesV4
+                        + " v6="
+                        + mRemoteAddressesV6);
+
+        mRemoteAddressesV4.clear();
+        mRemoteAddressesV6.clear();
+        for (InetAddress remoteAddress : allRemoteAddresses) {
+            if (remoteAddress instanceof Inet4Address) {
+                mRemoteAddressesV4.add((Inet4Address) remoteAddress);
+            } else {
+                mRemoteAddressesV6.add((Inet6Address) remoteAddress);
+            }
+        }
     }
 
     @Override

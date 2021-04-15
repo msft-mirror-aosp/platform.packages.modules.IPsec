@@ -16,12 +16,15 @@
 
 package com.android.internal.net.ipsec.ike;
 
-import android.net.Network;
 import android.os.Handler;
 import android.system.ErrnoException;
 
+import com.android.internal.annotations.VisibleForTesting;
+
 import java.io.FileDescriptor;
 import java.io.IOException;
+import java.net.InetAddress;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -32,49 +35,78 @@ import java.util.Map;
  * <p>IkeUdp6WithEncapPortSocket is usually used when IKE Session has IPv6 address and is required
  * to send message to port 4500, as per MOBIKE spec (RFC 4555).
  *
- * <p>Caller MUST provide one {@link Network} when trying to get an instance of
- * IkeUdp6WithEncapPortSocket. Each {@link Network} will only be bound to by one
+ * <p>Caller MUST provide one IkeSocketConfig when trying to get an instance of
+ * IkeUdp6WithEncapPortSocket. Each IkeSocketConfig will only be bound to by one
  * IkeUdp6WithEncapPortSocket instance. When caller requests an IkeUdp6WithEncapPortSocket with an
- * already bound {@link Network}, the existing instance will be returned.
+ * already bound IkeSocketConfig, the existing instance will be returned.
  */
 public final class IkeUdp6WithEncapPortSocket extends IkeUdp6Socket {
     private static final String TAG = IkeUdp6WithEncapPortSocket.class.getSimpleName();
 
-    // Map from Network to IkeUdp6WithEncapPortSocket instances.
-    private static Map<Network, IkeUdp6WithEncapPortSocket> sNetworkToUdp6SocketMap =
+    // Map from IkeSocketConfig to IkeUdp6WithEncapPortSocket instances.
+    private static Map<IkeSocketConfig, IkeUdp6WithEncapPortSocket> sConfigToSocketMap =
             new HashMap<>();
 
-    private IkeUdp6WithEncapPortSocket(FileDescriptor socket, Network network, Handler handler) {
-        super(socket, network, handler);
+    private static IPacketReceiver sPacketReceiver =
+            new IkeUdpEncapPortPacketHandler.PacketReceiver();
+
+    private final IkeUdpEncapPortPacketHandler mUdpEncapPortPacketHandler;
+
+    private IkeUdp6WithEncapPortSocket(
+            FileDescriptor socket, IkeSocketConfig sockConfig, Handler handler) {
+        super(socket, sockConfig, handler);
+
+        mUdpEncapPortPacketHandler = new IkeUdpEncapPortPacketHandler(getFd());
     }
 
     /**
      * Get an IkeUdp6WithEncapPortSocket instance.
      *
      * <p>Return the existing IkeUdp6WithEncapPortSocket instance if it has been created for the
-     * input Network. Otherwise, create and return a new IkeUdp6WithEncapPortSocket instance.
+     * input IkeSocketConfig. Otherwise, create and return a new IkeUdp6WithEncapPortSocket
+     * instance.
      *
-     * @param network the Network this socket will be bound to
+     * @param sockConfig the socket configuration
      * @param ikeSession the IkeSessionStateMachine that is requesting an
      *     IkeUdp6WithEncapPortSocket.
      * @param handler the Handler used to process received packets
      * @return an IkeUdp6WithEncapPortSocket instance
      */
-    public static IkeUdp6WithEncapPortSocket getInstance(
-            Network network, IkeSessionStateMachine ikeSession, Handler handler)
+    public static IkeUdp6WithEncapPortSocket getIkeUdpEncapSocket(
+            IkeSocketConfig sockConfig, IkeSessionStateMachine ikeSession, Handler handler)
             throws ErrnoException, IOException {
-        IkeUdp6WithEncapPortSocket ikeSocket = sNetworkToUdp6SocketMap.get(network);
+        IkeUdp6WithEncapPortSocket ikeSocket = sConfigToSocketMap.get(sockConfig);
         if (ikeSocket == null) {
             ikeSocket =
-                    new IkeUdp6WithEncapPortSocket(openUdp6SockNonBlock(network), network, handler);
+                    new IkeUdp6WithEncapPortSocket(openUdp6Sock(sockConfig), sockConfig, handler);
 
             // Create and register FileDescriptor for receiving IKE packet on current thread.
             ikeSocket.start();
 
-            sNetworkToUdp6SocketMap.put(network, ikeSocket);
+            sConfigToSocketMap.put(sockConfig, ikeSocket);
         }
         ikeSocket.mAliveIkeSessions.add(ikeSession);
         return ikeSocket;
+    }
+
+    /** Package private */
+    @VisibleForTesting
+    static void setPacketReceiver(IkeSocket.IPacketReceiver receiver) {
+        sPacketReceiver = receiver;
+    }
+
+    /**
+     * Handle received IKE packet. Invoked when there is a read event. Any desired copies of
+     * |recvbuf| should be made in here, as the underlying byte array is reused across all reads.
+     */
+    @Override
+    protected void handlePacket(byte[] recvbuf, int length) {
+        sPacketReceiver.handlePacket(Arrays.copyOfRange(recvbuf, 0, length), mSpiToIkeSession);
+    }
+
+    @Override
+    public void sendIkePacket(byte[] ikePacket, InetAddress serverAddress) {
+        mUdpEncapPortPacketHandler.sendIkePacket(ikePacket, serverAddress);
     }
 
     @Override
@@ -85,7 +117,7 @@ public final class IkeUdp6WithEncapPortSocket extends IkeUdp6Socket {
     /** Implement {@link AutoCloseable#close()} */
     @Override
     public void close() {
-        sNetworkToUdp6SocketMap.remove(getNetwork());
+        sConfigToSocketMap.remove(getIkeSocketConfig());
 
         super.close();
     }
