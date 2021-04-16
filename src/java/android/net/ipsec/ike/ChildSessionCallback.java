@@ -34,6 +34,11 @@ import android.net.ipsec.ike.exceptions.IkeException;
  *
  * <p>{@link ChildSessionCallback}s are also used for identifying Child Sessions. It is required
  * when a caller wants to delete a specific Child Session.
+ *
+ * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
+ *     Version 2 (IKEv2)</a>
+ * @see <a href="https://tools.ietf.org/html/rfc4301">RFC 4301, Security Architecture for the
+ *     Internet Protocol (IKEv2)</a>
  */
 // Using interface instead of abstract class to indicate this callback does not have any state or
 // implementation.
