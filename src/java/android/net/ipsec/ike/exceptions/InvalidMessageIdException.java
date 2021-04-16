@@ -23,6 +23,7 @@ import android.net.ipsec.ike.IkeSessionCallback;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-2.3">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 // Notifications based on this exception contains the four-octet invalid message ID. It MUST only
 // ever be sent in an INFORMATIONAL request. Sending this notification is OPTIONAL, and

@@ -636,7 +636,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
             executeUserCallback(
                     () -> {
-                        mUserCallback.onClosedExceptionally(new IkeInternalException(e));
+                        mUserCallback.onClosedWithException(new IkeInternalException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
@@ -695,7 +695,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         executeUserCallback(
                 () -> {
-                    mUserCallback.onClosedExceptionally(ikeException);
+                    mUserCallback.onClosedWithException(ikeException);
                 });
         loge("Child Session fatal error", ikeException);
 
