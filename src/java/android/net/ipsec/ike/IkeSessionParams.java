@@ -1830,12 +1830,9 @@ public final class IkeSessionParams {
             // makes sure if the Builder is constructed with the deprecated constructor
             // #Builder(Context), #build() still works in the same way and will throw exception when
             // there is no configured or default network.
-            Network defaultOrConfiguredNetwork = null;
-            if (mConnectivityManager != null) {
-                defaultOrConfiguredNetwork =
-                        mCallerConfiguredNetwork != null
-                                ? mCallerConfiguredNetwork
-                                : mConnectivityManager.getActiveNetwork();
+            Network defaultOrConfiguredNetwork = mCallerConfiguredNetwork;
+            if (mConnectivityManager != null && defaultOrConfiguredNetwork == null) {
+                defaultOrConfiguredNetwork = mConnectivityManager.getActiveNetwork();
                 if (defaultOrConfiguredNetwork == null) {
                     throw new IllegalArgumentException("Network not found");
                 }
