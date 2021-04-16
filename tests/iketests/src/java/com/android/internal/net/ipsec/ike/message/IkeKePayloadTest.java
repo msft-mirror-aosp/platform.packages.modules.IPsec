@@ -27,6 +27,8 @@ import static org.junit.Assert.fail;
 import android.net.ipsec.test.ike.SaProposal;
 import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 
+import androidx.test.filters.SdkSuppress;
+
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.test.ike.IkeDhParams;
 import com.android.internal.net.utils.test.BigIntegerUtils;
@@ -235,6 +237,7 @@ public final class IkeKePayloadTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testGetIkeCurveKePayload() throws Exception {
         IkeKePayload payload =
                 IkeKePayload.createOutboundKePayload(
@@ -247,6 +250,7 @@ public final class IkeKePayloadTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testGetSharedKeyWithCurve25519() throws Exception {
         final String privateKeyHex =
                 "302e020100300506032b656e0422042077076d0a7318a57d3c16c17251b26645"

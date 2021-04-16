@@ -37,6 +37,7 @@ android_test {
         "androidx.test.rules",
         "frameworks-base-testutils",
         "mockito-target-inline-minus-junit4",
+        "modules-utils-build",
         "services.core",
     ],
 
