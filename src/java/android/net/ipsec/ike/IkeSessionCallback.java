@@ -28,6 +28,9 @@ import android.net.ipsec.ike.exceptions.IkeProtocolException;
  * <p>{@link IkeSessionCallback} MUST be unique to each {@link IkeSession}. It is registered when
  * callers are requesting a new {@link IkeSession}. It is automatically unregistered when an {@link
  * IkeSession} is closed.
+ *
+ * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
+ *     Version 2 (IKEv2)</a>
  */
 // Using interface instead of abstract class to indicate this callback does not have any state or
 // implementation.
