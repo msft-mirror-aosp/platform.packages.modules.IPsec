@@ -77,6 +77,16 @@ public final class Ike3gppParams {
         return mPduSessionId == ((Ike3gppParams) o).mPduSessionId;
     }
 
+    @Override
+    public String toString() {
+        return new StringBuilder()
+                .append("Ike3gppParams={ ")
+                .append("pduSessionId=")
+                .append(String.format("%02X", mPduSessionId))
+                .append(" }")
+                .toString();
+    }
+
     /** This class can be used to incrementally construct an {@link Ike3gppParams}. */
     public static final class Builder {
         private byte mPduSessionId = PDU_SESSION_ID_UNSET;
