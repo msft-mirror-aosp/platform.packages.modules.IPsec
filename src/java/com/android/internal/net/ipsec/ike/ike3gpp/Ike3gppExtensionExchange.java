@@ -104,6 +104,8 @@ public class Ike3gppExtensionExchange implements AutoCloseable {
                 throw new IllegalArgumentException(
                         "Ike3gppDataListener must be unique for each IkeSession");
             }
+
+            logd("IKE 3GPP Extension enabled: " + mIke3gppExtension.getIke3gppParams());
         } else {
             mIke3gppIkeAuth = null;
         }
@@ -176,5 +178,9 @@ public class Ike3gppExtensionExchange implements AutoCloseable {
 
     private void logw(String msg) {
         getIkeLog().w(TAG, msg);
+    }
+
+    private void logd(String msg) {
+        getIkeLog().d(TAG, msg);
     }
 }

@@ -1732,11 +1732,13 @@ public final class IkeSessionParams {
          * Sets the retransmission timeout list in milliseconds.
          *
          * <p>Configures the retransmission by providing an array of relative retransmission
-         * timeouts in milliseconds, where each timeout is the waiting time before next retry,
-         * except the last timeout is the waiting time before terminating the IKE Session. Each
-         * element in the array MUST be a value from 500 ms to 1800000 ms (30 minutes). The length
-         * of the array MUST NOT exceed 10. This retransmission timeout list defaults to {0.5s, 1s,
-         * 2s, 4s, 8s}
+         * timeouts in milliseconds. After sending out a request and before receiving the response,
+         * the IKE Session will iterate through the array and wait for the relative timeout before
+         * the next retry. If the last timeout is exceeded, the IKE Session will be terminated.
+         *
+         * <p>Each element in the array MUST be a value from 500 ms to 1800000 ms (30 minutes). The
+         * length of the array MUST NOT exceed 10. This retransmission timeout list defaults to
+         * {0.5s, 1s, 2s, 4s, 8s}
          *
          * @param retransTimeoutMillisList the array of relative retransmission timeout in
          *     milliseconds.
