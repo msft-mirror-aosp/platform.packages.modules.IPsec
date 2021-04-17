@@ -27,6 +27,7 @@ import android.net.ipsec.ike.IkeSessionCallback;
  *
  * @see <a href="https://tools.ietf.org/html/rfc7296#section-3.10.1">RFC 7296, Internet Key Exchange
  *     Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 // Include INVALID_SYNTAX Notify payload in an encrypted response message if current message is
 // an encrypted request and cryptographic checksum is valid. Fatal error.

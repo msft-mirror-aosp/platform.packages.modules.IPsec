@@ -23,6 +23,8 @@ import android.net.ipsec.ike.IkeSessionCallback;
  *
  * <p>This exception indicates either proposed Traffic Selectors by callers is not acceptable or the
  * negotiated Traffic Selectors from the remote server is invalid.
+ *
+ * @hide
  */
 // If remote server is the exchange initiator, IKE library should respond with a TS_UNACCEPTABLE
 // Notify message. If the remote server is the exchange responder, IKE library should initiate a
