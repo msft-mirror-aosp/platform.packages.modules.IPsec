@@ -28,8 +28,11 @@ import static org.junit.Assert.fail;
 import android.net.IpSecAlgorithm;
 import android.net.ipsec.test.ike.SaProposal;
 
+import androidx.test.filters.SdkSuppress;
+
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.modules.utils.build.SdkLevel;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -95,12 +98,15 @@ public final class IkeMacIntegrityTest {
                 IkeMacIntegrity.create(
                         new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_AES_XCBC_96));
 
-        mAesCmac96IntgerityMac =
-                IkeMacIntegrity.create(
-                        new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96));
+        if (SdkLevel.isAtLeastS()) {
+            mAesCmac96IntgerityMac =
+                    IkeMacIntegrity.create(
+                            new IntegrityTransform(SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96));
+        }
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testGenerateChecksum() throws Exception {
         byte[] calculatedChecksum =
                 mHmacSha1IntegrityMac.generateChecksum(mHmacSha1IntegrityKey, mDataToAuthenticate);
@@ -110,6 +116,7 @@ public final class IkeMacIntegrityTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testGenerateChecksumAuthAesCmac96() throws Exception {
         byte[] integrityKey = TestUtils.hexStringToByteArray(AUTH_AES_CMAC_96_KEY_HEX_STRING);
 
@@ -173,6 +180,7 @@ public final class IkeMacIntegrityTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSignBytesAuthAes128XCbc() throws Exception {
         byte[] skpBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_KEY_HEX_STRING);
         byte[] dataBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_DATA_TO_SIGN_HEX_STRING);
@@ -185,6 +193,7 @@ public final class IkeMacIntegrityTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSignBytesAuthAes128XCbcWith16ByteInput() throws Exception {
         // 16-byte is a multiple of aes block size. Hence key2 will be used instead of key3
         byte[] skpBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_KEY_HEX_STRING1);
@@ -198,6 +207,7 @@ public final class IkeMacIntegrityTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testBuildIpSecAlgorithmFromAuthAes128XCbcMac() throws Exception {
         byte[] keyBytes = TestUtils.hexStringToByteArray(AUTH_AES128XCBC_KEY_HEX_STRING);
 
