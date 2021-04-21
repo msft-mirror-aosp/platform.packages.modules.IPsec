@@ -206,7 +206,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the assigned internal addresses, or an empty list when no addresses are assigned by
      *     the remote IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<LinkAddress> getInternalAddresses() {
         return Collections.unmodifiableList(mInternalAddressList);
@@ -217,7 +219,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal subnets, or an empty list when no information of protected subnets is
      *     provided by the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<IpPrefix> getInternalSubnets() {
         return Collections.unmodifiableList(mSubnetAddressList);
@@ -228,7 +232,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal DNS server addresses, or an empty list when no DNS server is provided by
      *     the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<InetAddress> getInternalDnsServers() {
         return Collections.unmodifiableList(mInternalDnsAddressList);
@@ -239,7 +245,9 @@ public final class ChildSessionConfiguration {
      *
      * @return the internal DHCP server addresses, or an empty list when no DHCP server is provided
      *     by the IKE server (e.g. for a non-tunnel mode Child Session).
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<InetAddress> getInternalDhcpServers() {
         return Collections.unmodifiableList(mInternalDhcpAddressList);
@@ -251,10 +259,7 @@ public final class ChildSessionConfiguration {
      * <p>Except for testing, IKE library users normally do not instantiate {@link
      * ChildSessionConfiguration} themselves but instead get a reference via {@link
      * ChildSessionCallback}
-     *
-     * @hide
      */
-    @SystemApi
     public static final class Builder {
         private final List<IkeTrafficSelector> mInboundTs = new ArrayList<>();
         private final List<IkeTrafficSelector> mOutboundTs = new ArrayList<>();
@@ -285,7 +290,9 @@ public final class ChildSessionConfiguration {
          *
          * @param address an assigned internal addresses
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addInternalAddress(@NonNull LinkAddress address) {
             Objects.requireNonNull(address, "address was null");
@@ -294,15 +301,45 @@ public final class ChildSessionConfiguration {
         }
 
         /**
+         * Clears all assigned internal addresses from the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearInternalAddresses() {
+            mInternalAddressList.clear();
+            return this;
+        }
+
+        /**
          * Adds an assigned internal subnet for the {@link ChildSessionConfiguration} being built.
          *
          * @param subnet an assigned internal subnet
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addInternalSubnet(@NonNull IpPrefix subnet) {
             Objects.requireNonNull(subnet, "subnet was null");
             mSubnetAddressList.add(subnet);
+            return this;
+        }
+
+        /**
+         * Clears all assigned internal subnets from the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearInternalSubnets() {
+            mSubnetAddressList.clear();
             return this;
         }
 
@@ -312,11 +349,27 @@ public final class ChildSessionConfiguration {
          *
          * @param dnsServer an assigned internal DNS server
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addInternalDnsServer(@NonNull InetAddress dnsServer) {
             Objects.requireNonNull(dnsServer, "dnsServer was null");
             mInternalDnsAddressList.add(dnsServer);
+            return this;
+        }
+
+        /**
+         * Clears all assigned internal DNS servers from the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearInternalDnsServers() {
+            mInternalDnsAddressList.clear();
             return this;
         }
 
@@ -326,11 +379,27 @@ public final class ChildSessionConfiguration {
          *
          * @param dhcpServer an assigned internal DHCP server
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addInternalDhcpServer(@NonNull InetAddress dhcpServer) {
             Objects.requireNonNull(dhcpServer, "dhcpServer was null");
             mInternalDhcpAddressList.add(dhcpServer);
+            return this;
+        }
+
+        /**
+         * Clears all assigned internal DHCP servers for the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearInternalDhcpServers() {
+            mInternalDhcpAddressList.clear();
             return this;
         }
 

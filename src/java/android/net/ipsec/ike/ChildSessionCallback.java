@@ -18,6 +18,7 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 import android.net.IpSecManager;
 import android.net.IpSecManager.IpSecTunnelInterface;
 import android.net.IpSecTransform;
@@ -33,6 +34,11 @@ import android.net.ipsec.ike.exceptions.IkeException;
  *
  * <p>{@link ChildSessionCallback}s are also used for identifying Child Sessions. It is required
  * when a caller wants to delete a specific Child Session.
+ *
+ * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
+ *     Version 2 (IKEv2)</a>
+ * @see <a href="https://tools.ietf.org/html/rfc4301">RFC 4301, Security Architecture for the
+ *     Internet Protocol (IKEv2)</a>
  */
 // Using interface instead of abstract class to indicate this callback does not have any state or
 // implementation.
@@ -56,7 +62,7 @@ public interface ChildSessionCallback {
      * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
      *
      * <p>When the closure is caused by a local, fatal error, {@link
-     * #onClosedExceptionally(IkeException)} will be fired instead of this method.
+     * #onClosedWithException(IkeException)} will be fired instead of this method.
      */
     void onClosed();
 
@@ -67,8 +73,25 @@ public interface ChildSessionCallback {
      * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
      *
      * @param exception the detailed error information.
+     * @deprecated Implementers should override {@link #onClosedWithException(IkeException)} to
+     *     handle fatal {@link IkeException}s instead of using this method.
+     * @hide
      */
-    void onClosedExceptionally(@NonNull IkeException exception);
+    @SystemApi
+    @Deprecated
+    default void onClosedExceptionally(@NonNull IkeException exception) {}
+
+    /**
+     * Called if the Child Session setup failed or Child Session is closed because of a fatal error.
+     *
+     * <p>This method will be called immediately after {@link
+     * #onIpSecTransformDeleted(IpSecTransform, int)} for the deleted IPsec SA pair is fired.
+     *
+     * @param exception the detailed error information.
+     */
+    default void onClosedWithException(@NonNull IkeException exception) {
+        onClosedExceptionally(exception);
+    }
 
     /**
      * Called when an {@link IpSecTransform} is created by this Child Session.
@@ -100,15 +123,16 @@ public interface ChildSessionCallback {
      * Session.
      *
      * <p>When this method is invoked, the caller MUST re-apply the transforms to their {@link
-     * IpSecTunnelInterface} via IpSecManager#applyTunnelModeTransform(IpSecTunnelInterface, int,
-     * IpSecTransform)
+     * IpSecTunnelInterface} via {@link IpSecManager#applyTunnelModeTransform(IpSecTunnelInterface,
+     * int, IpSecTransform)}
      *
      * @param inIpSecTransform IpSecTransform to be used for traffic with {@link
      *     IpSecManager#DIRECTION_IN}
      * @param outIpSecTransform IpSecTransform to be used for traffic with {@link
      *     IpSecManager#DIRECTION_OUT}
+     * @hide
      */
-    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public.
+    @SystemApi
     default void onIpSecTransformsMigrated(
             @NonNull IpSecTransform inIpSecTransform, @NonNull IpSecTransform outIpSecTransform) {}
 
@@ -117,7 +141,7 @@ public interface ChildSessionCallback {
      *
      * <p>This method is fired when a Child Session is closed or a Child Session has deleted old
      * IPsec SA during rekey. When this method is fired due to Child Session closure, it will be
-     * followed by {@link #onClosed()} or {@link #onClosedExceptionally(IkeException)}.
+     * followed by {@link #onClosed()} or {@link #onClosedWithException(IkeException)}.
      *
      * <p>Users SHOULD remove the {@link IpSecTransform} from the socket or interface when this
      * method is called. Otherwise the IPsec traffic protected by this {@link IpSecTransform} will

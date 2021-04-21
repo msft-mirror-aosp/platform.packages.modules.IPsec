@@ -875,6 +875,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private IkeSessionStateMachine makeAndStartIkeSession(
             IkeSessionParams ikeParams, boolean needSetMockIkeSocket) throws Exception {
+        return makeAndStartIkeSession(
+                ikeParams, needSetMockIkeSocket, LOCAL_ADDRESS, REMOTE_ADDRESS);
+    }
+
+    private IkeSessionStateMachine makeAndStartIkeSession(
+            IkeSessionParams ikeParams,
+            boolean needSetMockIkeSocket,
+            InetAddress localAddress,
+            InetAddress expectedRemoteAddress)
+            throws Exception {
         IkeSessionStateMachine ikeSession =
                 new IkeSessionStateMachine(
                         mLooper.getLooper(),
@@ -892,8 +902,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         ikeSession.setDbg(true);
 
         mLooper.dispatchAll();
-        ikeSession.mLocalAddress = LOCAL_ADDRESS;
-        assertEquals(REMOTE_ADDRESS, ikeSession.mRemoteAddress);
+        ikeSession.mLocalAddress = localAddress;
+        assertEquals(expectedRemoteAddress, ikeSession.mRemoteAddress);
 
         if (ikeParams.getConfiguredNetwork() == null) {
             verify(mMockConnectManager, atLeast(1)).getActiveNetwork();
@@ -913,7 +923,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             doNothing().when(mSpyIkeUdpEncapSocket).sendIkePacket(any(), any());
 
             // Always start with unencap'd socket.
-            mSpyCurrentIkeSocket = mSpyIkeUdp4Socket;
+            if (expectedRemoteAddress instanceof Inet6Address) {
+                mSpyCurrentIkeSocket = mSpyIkeUdp6Socket;
+            } else {
+                mSpyCurrentIkeSocket = mSpyIkeUdp4Socket;
+            }
             ikeSession.mIkeSocket = mSpyCurrentIkeSocket;
         }
 
@@ -1643,21 +1657,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mSpyIkeUdp4Socket, never()).unregisterIke(anyLong());
     }
 
-    @Ignore
-    public void disableTestCreateIkeLocalIkeInit() throws Exception {
-        setupFirstIkeSa();
-
+    private void triggerAndVerifyIkeInitReq() throws Exception {
         // Send IKE INIT request
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
-
-        // Receive IKE INIT response
-        ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyReceivedIkePacket);
-        mLooper.dispatchAll();
-        verifyIncrementLocaReqMsgId();
 
         // Validate outbound IKE INIT request
         verify(mMockIkeMessageHelper, times(2)).encode(mIkeMessageCaptor.capture());
@@ -1676,6 +1680,55 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
         assertTrue(isNotifyExist(payloadList, NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS));
+    }
+
+    private ReceivedIkePacket receiveAndGetIkeInitResp() throws Exception {
+        ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyReceivedIkePacket);
+        mLooper.dispatchAll();
+        verifyIncrementLocaReqMsgId();
+        return dummyReceivedIkePacket;
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeInitSendsNatDetectionPayloadsWhenIpv6() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        resetMockConnectManager();
+        resetMockIkeMessageHelper();
+
+        // Restart mIkeSessionStateMachine so it uses IPv6 addresses
+        final Network v6OnlyNetwork =
+                mockNewNetworkAndAddress(false /* isIpv4 */, LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6);
+        final IkeSessionParams params =
+                buildIkeSessionParamsCommon()
+                        .setAuthPsk(mPsk)
+                        .setNetwork(v6OnlyNetwork)
+                        .addIkeOption(IKE_OPTION_MOBIKE)
+                        .build();
+        mIkeSessionStateMachine =
+                makeAndStartIkeSession(
+                        params,
+                        true /* needSetMockIkeSocket */,
+                        LOCAL_ADDRESS_V6,
+                        REMOTE_ADDRESS_V6);
+        setupFirstIkeSa();
+
+        triggerAndVerifyIkeInitReq();
+        receiveAndGetIkeInitResp();
+
+        assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdp6WithEncapPortSocket);
+        assertTrue(mIkeSessionStateMachine.mSupportNatTraversal);
+        assertTrue(mIkeSessionStateMachine.mLocalNatDetected);
+        assertTrue(mIkeSessionStateMachine.mRemoteNatDetected);
+    }
+
+    @Ignore
+    public void disableTestCreateIkeLocalIkeInit() throws Exception {
+        setupFirstIkeSa();
+
+        triggerAndVerifyIkeInitReq();
+        final ReceivedIkePacket dummyReceivedIkePacket = receiveAndGetIkeInitResp();
 
         verify(mSpyCurrentIkeSocket)
                 .registerIke(eq(mSpyCurrentIkeSaRecord.getLocalSpi()), eq(mIkeSessionStateMachine));
@@ -2896,7 +2949,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Verify IKE Session was closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
     }
 
     @Test
@@ -2915,7 +2968,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
     }
 
     @Test
@@ -2936,7 +2989,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         ArgumentCaptor<IkeProtocolException> captor =
                 ArgumentCaptor.forClass(IkeProtocolException.class);
-        verify(mMockIkeSessionCallback).onClosedExceptionally(captor.capture());
+        verify(mMockIkeSessionCallback).onClosedWithException(captor.capture());
         IkeProtocolException exception = captor.getValue();
         assertEquals(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE, exception.getErrorType());
     }
@@ -2961,7 +3014,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -3021,7 +3074,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
     }
 
     @Test
@@ -3145,7 +3198,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify state machine quit properly
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -3189,7 +3242,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Fires user error callbacks
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(argThat(err -> err.getCause() == error));
+                .onClosedWithException(argThat(err -> err.getCause() == error));
 
         // Verify state machine quit properly
         verify(mSpyCurrentIkeSaRecord).close();
@@ -3211,7 +3264,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Fires user error callbacks
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(AuthenticationFailedException.class));
+                .onClosedWithException(any(AuthenticationFailedException.class));
 
         // Verify state machine quit properly
         verify(mSpyCurrentIkeSaRecord).close();
@@ -3386,7 +3439,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
 
         // Collected response fragments are cleared
         assertNull(mSpyCurrentIkeSaRecord.getCollectedFragments(true /*isResp*/));
@@ -3508,7 +3561,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -3557,7 +3610,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -3589,7 +3642,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
     }
 
     @Test
@@ -4486,7 +4539,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyEncryptAndEncodeNeverCalled(mSpyCurrentIkeSaRecord);
 
         // Verify state machine quit properly
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -4511,7 +4564,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         // Verify state machine quit properly
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
@@ -4939,7 +4992,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         ArgumentCaptor<IkeInternalException> internalExceptionCaptor =
                 ArgumentCaptor.forClass(IkeInternalException.class);
-        verify(mMockIkeSessionCallback).onClosedExceptionally(internalExceptionCaptor.capture());
+        verify(mMockIkeSessionCallback).onClosedWithException(internalExceptionCaptor.capture());
         IkeInternalException internalException = internalExceptionCaptor.getValue();
 
         // Verify that the Exception which caused the IkeSessionStateMachine to close is the same
@@ -4959,7 +5012,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
         verify(spyIkeLog).wtf(anyString(), anyString(), any(RuntimeException.class));
     }
 
@@ -4987,7 +5040,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Fires user error callbacks
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(
+                .onClosedWithException(
                         argThat(err -> err instanceof NoValidProposalChosenException));
         // Verify state machine quit properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
@@ -5052,7 +5105,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
     }
 
     @Test
@@ -5132,7 +5185,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -5161,7 +5214,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Verify IKE Session has quit
         assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(InvalidSyntaxException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(InvalidSyntaxException.class));
     }
 
     @Test
@@ -5378,7 +5431,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
-                .onClosedExceptionally(any(UnrecognizedIkeProtocolException.class));
+                .onClosedWithException(any(UnrecognizedIkeProtocolException.class));
 
         verifyBackoffTimer(expectedNotifyErrorCause);
     }
@@ -5666,7 +5719,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             ikeSessionParamsBuilder.addIkeOption(IKE_OPTION_FORCE_PORT_4500);
         }
         if (configuredNetwork != null) {
-            ikeSessionParamsBuilder.setConfiguredNetwork(configuredNetwork);
+            ikeSessionParamsBuilder.setNetwork(configuredNetwork);
         }
         return makeAndStartIkeSession(ikeSessionParamsBuilder.build());
     }
@@ -5690,7 +5743,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verify(mMockConnectManager)
                 .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
-        verify(mMockIkeSessionCallback).onClosedExceptionally(any(IkeInternalException.class));
+        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
         verify(mMockConnectManager).unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
@@ -5741,32 +5794,38 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     private Network mockNewNetworkAndAddress(boolean isIpv4) throws Exception {
-        Network newNetwork = mock(Network.class);
-
         InetAddress expectedRemoteAddress;
         InetAddress injectedLocalAddress;
         if (isIpv4) {
             expectedRemoteAddress = REMOTE_ADDRESS;
             injectedLocalAddress = UPDATED_LOCAL_ADDRESS;
-
-            mIkeSessionStateMachine.mRemoteAddressesV4.add((Inet4Address) expectedRemoteAddress);
         } else {
             expectedRemoteAddress = REMOTE_ADDRESS_V6;
             injectedLocalAddress = UPDATED_LOCAL_ADDRESS_V6;
-            mIkeSessionStateMachine.mRemoteAddressesV6.add((Inet6Address) expectedRemoteAddress);
+        }
+
+        return mockNewNetworkAndAddress(isIpv4, injectedLocalAddress, expectedRemoteAddress);
+    }
+
+    private Network mockNewNetworkAndAddress(
+            boolean isIpv4, InetAddress localAddress, InetAddress remoteAddress) throws Exception {
+        Network newNetwork = mock(Network.class);
+
+        if (isIpv4) {
+            mIkeSessionStateMachine.mRemoteAddressesV4.add((Inet4Address) remoteAddress);
+        } else {
+            mIkeSessionStateMachine.mRemoteAddressesV6.add((Inet6Address) remoteAddress);
 
             LinkProperties linkProperties = new LinkProperties();
             linkProperties.addLinkAddress(mMockLinkAddressGlobalV6);
             when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
         }
 
-        doReturn(new InetAddress[] {expectedRemoteAddress})
-                .when(newNetwork)
-                .getAllByName(REMOTE_HOSTNAME);
+        doReturn(new InetAddress[] {remoteAddress}).when(newNetwork).getAllByName(REMOTE_HOSTNAME);
 
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
-                        eq(newNetwork), eq(isIpv4), eq(expectedRemoteAddress), anyInt()))
-                .thenReturn(injectedLocalAddress);
+                        eq(newNetwork), eq(isIpv4), eq(remoteAddress), anyInt()))
+                .thenReturn(localAddress);
 
         return newNetwork;
     }
@@ -6110,6 +6169,24 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.mNetwork,
                 mIkeSessionStateMachine.mLocalAddress,
                 mIkeSessionStateMachine.mRemoteAddress);
+    }
+
+    @Test
+    public void testMobikeLocalInfoHandlesResponseWithNatDetectionIpv6() throws Exception {
+        setupIdleStateMachineWithMobike(true /* doesPeerSupportNatt */, false /* isIpv4 */);
+
+        mIkeSessionStateMachine.sendMessage(
+                CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mMobikeLocalInfo);
+        mLooper.dispatchAll();
+
+        verifyUpdateSaAddressesResp(
+                true /* natTraversalSupported */,
+                true /* localNatDetected */,
+                true /* remoteNatDetected */,
+                mIkeSessionStateMachine.mNetwork,
+                mIkeSessionStateMachine.mLocalAddress,
+                mIkeSessionStateMachine.mRemoteAddress);
+        assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdp6WithEncapPortSocket);
     }
 
     @Test
