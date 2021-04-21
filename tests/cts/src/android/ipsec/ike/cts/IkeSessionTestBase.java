@@ -208,10 +208,12 @@ abstract class IkeSessionTestBase extends IkeTestBase {
                 }
             }
 
-            final TestNetworkInterface testIface =
-                    SdkLevel.isAtLeastS()
-                            ? sTNM.createTunInterface(Arrays.asList(linkAddresses))
-                            : sTNM.createTunInterface(linkAddresses);
+            final TestNetworkInterface testIface = SdkLevel.isAtLeastS()
+                    ? sTNM.createTunInterface(Arrays.asList(linkAddresses))
+                    // createTunInterface(LinkAddress[]) was TestApi until R
+                    : (TestNetworkInterface) sTNM.getClass().getMethod(
+                            "createTunInterface", LinkAddress[].class)
+                            .invoke(linkAddresses);
 
             tunFd = testIface.getFileDescriptor();
             tunNetworkCallback =
