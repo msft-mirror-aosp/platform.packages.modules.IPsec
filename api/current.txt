@@ -85,6 +85,11 @@ package android.net.ipsec.ike {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getOutboundTrafficSelectors();
   }
 
+  public static final class ChildSessionConfiguration.Builder {
+    ctor public ChildSessionConfiguration.Builder(@NonNull java.util.List<android.net.ipsec.ike.IkeTrafficSelector>, @NonNull java.util.List<android.net.ipsec.ike.IkeTrafficSelector>);
+    method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration build();
+  }
+
   public abstract class ChildSessionParams {
     method @NonNull public java.util.List<android.net.ipsec.ike.ChildSaProposal> getChildSaProposals();
     method @IntRange(from=0x12c, to=0x3840) public int getHardLifetimeSeconds();
@@ -167,7 +172,19 @@ package android.net.ipsec.ike {
     field public static final int EXTENSION_TYPE_MOBIKE = 2; // 0x2
   }
 
+  public static final class IkeSessionConfiguration.Builder {
+    ctor public IkeSessionConfiguration.Builder(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder addIkeExtension(int);
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder addRemoteVendorId(@NonNull byte[]);
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration build();
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder clearIkeExtensions();
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder clearRemoteApplicationVersion();
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder clearRemoteVendorIds();
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder setRemoteApplicationVersion(@NonNull String);
+  }
+
   public final class IkeSessionConnectionInfo {
+    ctor public IkeSessionConnectionInfo(@NonNull java.net.InetAddress, @NonNull java.net.InetAddress, @NonNull android.net.Network);
     method @NonNull public java.net.InetAddress getLocalAddress();
     method @NonNull public android.net.Network getNetwork();
     method @NonNull public java.net.InetAddress getRemoteAddress();
