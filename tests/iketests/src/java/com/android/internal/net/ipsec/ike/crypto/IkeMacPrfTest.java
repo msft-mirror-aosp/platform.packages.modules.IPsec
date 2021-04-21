@@ -23,8 +23,11 @@ import static org.junit.Assert.assertFalse;
 
 import android.net.ipsec.test.ike.SaProposal;
 
+import androidx.test.filters.SdkSuppress;
+
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
+import com.android.modules.utils.build.SdkLevel;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -176,8 +179,12 @@ public final class IkeMacPrfTest {
                 IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256));
         mIkeAes128XCbcPrf =
                 IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC));
-        mIkeAes128CmacPrf =
-                IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC));
+
+        if (SdkLevel.isAtLeastS()) {
+            mIkeAes128CmacPrf =
+                    IkeMacPrf.create(
+                            new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC));
+        }
     }
 
     @Test
@@ -332,6 +339,7 @@ public final class IkeMacPrfTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSignBytesPrfAes128Cmac() throws Exception {
         // 16-byte is a multiple of aes block size. Hence key2 will be used instead of key3
         byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_AES128_CMAC_KEY_HEX_STRING);
@@ -345,6 +353,7 @@ public final class IkeMacPrfTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSignBytesPrfAes128CmacWithKeyShorterThan16Bytes() throws Exception {
         byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_AES128_CMAC_KEY_HEX_STRING1);
         byte[] dataBytes = TestUtils.hexStringToByteArray(PRF_AES128_CMAC_DATA_TO_SIGN_HEX_STRING1);
@@ -357,6 +366,7 @@ public final class IkeMacPrfTest {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSignBytesPrfAes128CmacWithKeyLongerThan16Bytes() throws Exception {
         byte[] skpBytes = TestUtils.hexStringToByteArray(PRF_AES128_CMAC_KEY_HEX_STRING2);
         byte[] dataBytes = TestUtils.hexStringToByteArray(PRF_AES128_CMAC_DATA_TO_SIGN_HEX_STRING2);
