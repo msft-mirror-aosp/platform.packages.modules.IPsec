@@ -259,10 +259,7 @@ public final class ChildSessionConfiguration {
      * <p>Except for testing, IKE library users normally do not instantiate {@link
      * ChildSessionConfiguration} themselves but instead get a reference via {@link
      * ChildSessionCallback}
-     *
-     * @hide
      */
-    @SystemApi
     public static final class Builder {
         private final List<IkeTrafficSelector> mInboundTs = new ArrayList<>();
         private final List<IkeTrafficSelector> mOutboundTs = new ArrayList<>();
@@ -293,7 +290,9 @@ public final class ChildSessionConfiguration {
          *
          * @param address an assigned internal addresses
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addInternalAddress(@NonNull LinkAddress address) {
             Objects.requireNonNull(address, "address was null");
@@ -302,15 +301,45 @@ public final class ChildSessionConfiguration {
         }
 
         /**
+         * Clears all assigned internal addresses from the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearInternalAddresses() {
+            mInternalAddressList.clear();
+            return this;
+        }
+
+        /**
          * Adds an assigned internal subnet for the {@link ChildSessionConfiguration} being built.
          *
          * @param subnet an assigned internal subnet
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addInternalSubnet(@NonNull IpPrefix subnet) {
             Objects.requireNonNull(subnet, "subnet was null");
             mSubnetAddressList.add(subnet);
+            return this;
+        }
+
+        /**
+         * Clears all assigned internal subnets from the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearInternalSubnets() {
+            mSubnetAddressList.clear();
             return this;
         }
 
@@ -320,11 +349,27 @@ public final class ChildSessionConfiguration {
          *
          * @param dnsServer an assigned internal DNS server
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addInternalDnsServer(@NonNull InetAddress dnsServer) {
             Objects.requireNonNull(dnsServer, "dnsServer was null");
             mInternalDnsAddressList.add(dnsServer);
+            return this;
+        }
+
+        /**
+         * Clears all assigned internal DNS servers from the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearInternalDnsServers() {
+            mInternalDnsAddressList.clear();
             return this;
         }
 
@@ -334,11 +379,27 @@ public final class ChildSessionConfiguration {
          *
          * @param dhcpServer an assigned internal DHCP server
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addInternalDhcpServer(@NonNull InetAddress dhcpServer) {
             Objects.requireNonNull(dhcpServer, "dhcpServer was null");
             mInternalDhcpAddressList.add(dhcpServer);
+            return this;
+        }
+
+        /**
+         * Clears all assigned internal DHCP servers for the {@link ChildSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearInternalDhcpServers() {
+            mInternalDhcpAddressList.clear();
             return this;
         }
 

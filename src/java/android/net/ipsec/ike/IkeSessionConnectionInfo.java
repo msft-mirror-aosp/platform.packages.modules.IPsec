@@ -17,7 +17,6 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.annotation.SystemApi;
 import android.net.Network;
 
 import java.net.InetAddress;
@@ -40,10 +39,7 @@ public final class IkeSessionConnectionInfo {
      * <p>Except for testing, IKE library users normally do not instantiate {@link
      * IkeSessionConnectionInfo} themselves but instead get a reference via {@link
      * IkeSessionConfiguration} or {@link IkeSessionCallback}
-     *
-     * @hide
      */
-    @SystemApi
     public IkeSessionConnectionInfo(
             @NonNull InetAddress localAddress,
             @NonNull InetAddress remoteAddress,
