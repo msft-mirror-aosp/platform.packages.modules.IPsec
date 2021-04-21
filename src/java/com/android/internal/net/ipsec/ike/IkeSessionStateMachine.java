@@ -60,6 +60,7 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_R
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
 import android.annotation.IntDef;
+import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -3598,6 +3599,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             transitionTo(mChildProcedureOngoing);
         }
 
+        // IkeSessionConnectionInfo was released as system API since Android R and does not depend
+        // on any new platform or module API
+        @SuppressLint("NewApi")
         protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
             IkeConfigPayload configPayload =
                     ikeMessage.getPayloadForType(
@@ -5275,6 +5279,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
+        // IkeSessionConnectionInfo was released as system API since Android R and does not depend
+        // on any new platform or module API
+        @SuppressLint("NewApi")
         @Override
         public void handleResponseIkeMessage(IkeMessage resp) {
             mRetransmitter.stopRetransmitting();
