@@ -41,6 +41,7 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.lang.annotation.Retention;
@@ -1777,6 +1778,9 @@ public final class IkeSessionParams {
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
             validateIkeOptionOrThrow(ikeOption);
+            if (ikeOption == IKE_OPTION_MOBIKE && !SdkLevel.isAtLeastS()) {
+                throw new UnsupportedOperationException("MOBIKE only supported for S+");
+            }
             mIkeOptions |= getOptionBitValue(ikeOption);
             return this;
         }

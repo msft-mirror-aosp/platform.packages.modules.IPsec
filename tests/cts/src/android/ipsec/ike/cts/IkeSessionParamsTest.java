@@ -46,6 +46,7 @@ import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.filters.SdkSuppress;
 
 import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
@@ -326,6 +327,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testBuildWithPskMobikeEnabled() throws Exception {
         IkeSessionParams sessionParams =
                 createIkeParamsBuilderMinimumWithoutAuth()
@@ -448,5 +450,16 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
         verifyIkeParamsMinimumWithoutAuth(sessionParams);
         assertEquals(ike3gppExtension, sessionParams.getIke3gppExtension());
+    }
+
+    @Test
+    @SdkSuppress(maxSdkVersion = -1, codeName = "REL")
+    // TODO(b/186433137): update maxSdkVersion and codeName once S SDK is finalized
+    public void testBuildWithMobikeOptionPreS() throws Exception {
+        try {
+            new IkeSessionParams.Builder().addIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE);
+            fail("Expected UnsupportedOperationException for setting IKE_OPTION_MOBIKE before S");
+        } catch (UnsupportedOperationException expected) {
+        }
     }
 }
