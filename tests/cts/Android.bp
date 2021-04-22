@@ -36,6 +36,7 @@ android_test {
         "androidx.test.ext.junit",
         "compatibility-device-util-axt",
         "ctstestrunner-axt",
+        "modules-utils-build",
         "net-tests-utils",
         "ike-test-utils",
     ],
