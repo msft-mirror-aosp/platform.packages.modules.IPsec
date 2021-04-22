@@ -17,6 +17,7 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
+import android.annotation.SuppressLint;
 import android.net.TunnelConnectionParams;
 
 import java.util.Objects;
@@ -28,9 +29,14 @@ import java.util.Objects;
  * configuration, authentication and authorization parameters.
  *
  * @see TunnelConnectionParams
- * @hide
  */
-public class IkeTunnelConnectionParams implements TunnelConnectionParams {
+// TODO: b/186071626 Remove TunnelConnectionParams when non-updatable API stub can resolve
+// IkeTunnelConnectionParams.
+// TODO:b/185579441 Annotate this class with @RequiresApi(Build.VERSION_CODES.S) if it still
+// inherits TunnelConnectionParams when
+// @RequiresApi issue is fixed.
+@SuppressLint("NewApi")
+public final class IkeTunnelConnectionParams implements TunnelConnectionParams {
     private final IkeSessionParams mIkeParams;
     private final TunnelModeChildSessionParams mChildParams;
 
