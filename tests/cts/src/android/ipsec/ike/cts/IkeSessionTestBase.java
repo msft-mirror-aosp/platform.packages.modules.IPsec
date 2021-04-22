@@ -55,6 +55,7 @@ import androidx.test.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.compatibility.common.util.SystemUtil;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.net.module.util.ArrayTrackRecord;
 
 import org.junit.After;
@@ -206,8 +207,13 @@ abstract class IkeSessionTestBase extends IkeTestBase {
                     linkAddresses[i] = new LinkAddress(addr, IP6_PREFIX_LEN);
                 }
             }
-            final TestNetworkInterface testIface = sTNM.createTunInterface(
-                    Arrays.asList(linkAddresses));
+
+            final TestNetworkInterface testIface = SdkLevel.isAtLeastS()
+                    ? sTNM.createTunInterface(Arrays.asList(linkAddresses))
+                    // createTunInterface(LinkAddress[]) was TestApi until R
+                    : (TestNetworkInterface) sTNM.getClass().getMethod(
+                            "createTunInterface", LinkAddress[].class)
+                            .invoke(linkAddresses);
 
             tunFd = testIface.getFileDescriptor();
             tunNetworkCallback =
