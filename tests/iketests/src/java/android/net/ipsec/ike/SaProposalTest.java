@@ -122,16 +122,19 @@ public final class SaProposalTest {
         mDhGroup1024Transform = new DhGroupTransform(SaProposal.DH_GROUP_1024_BIT_MODP);
     }
 
+    // Package private for use in IkeTunnelConnectionParamsTest
+    static IkeSaProposal buildTestIkeProposal() {
+        return new IkeSaProposal.Builder()
+                .addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED)
+                .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
+                .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
+                .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
+                .build();
+    }
+
     @Test
     public void testBuildIkeSaProposalWithNormalModeCipher() throws Exception {
-        IkeSaProposal proposal =
-                new IkeSaProposal.Builder()
-                        .addEncryptionAlgorithm(
-                                SaProposal.ENCRYPTION_ALGORITHM_3DES, KEY_LEN_UNUSED)
-                        .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA1_96)
-                        .addPseudorandomFunction(SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC)
-                        .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
-                        .build();
+        IkeSaProposal proposal = buildTestIkeProposal();
 
         assertEquals(IkePayload.PROTOCOL_ID_IKE, proposal.getProtocolId());
         assertArrayEquals(
@@ -166,6 +169,15 @@ public final class SaProposalTest {
         assertArrayEquals(
                 new DhGroupTransform[] {mDhGroup1024Transform}, proposal.getDhGroupTransforms());
         assertTrue(proposal.getIntegrityTransforms().length == 0);
+    }
+
+    // Package private for use in IkeTunnelParamsTest
+    static ChildSaProposal buildTestChildProposal() {
+        return new ChildSaProposal.Builder()
+                .addEncryptionAlgorithm(SaProposal.ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128)
+                .addIntegrityAlgorithm(SaProposal.INTEGRITY_ALGORITHM_NONE)
+                .addDhGroup(SaProposal.DH_GROUP_1024_BIT_MODP)
+                .build();
     }
 
     @Test
