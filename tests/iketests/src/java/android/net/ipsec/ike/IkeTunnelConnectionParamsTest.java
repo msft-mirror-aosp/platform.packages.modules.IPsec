@@ -20,8 +20,11 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.fail;
 
+import androidx.test.filters.SdkSuppress;
+
 import org.junit.Test;
 
+@SdkSuppress(minSdkVersion = 31, codeName = "S")
 public class IkeTunnelConnectionParamsTest {
     private static final IkeSessionParams IKE_PARAMS =
             new IkeSessionParams.Builder()
