@@ -208,12 +208,16 @@ abstract class IkeSessionTestBase extends IkeTestBase {
                 }
             }
 
-            final TestNetworkInterface testIface = SdkLevel.isAtLeastS()
-                    ? sTNM.createTunInterface(Arrays.asList(linkAddresses))
-                    // createTunInterface(LinkAddress[]) was TestApi until R
-                    : (TestNetworkInterface) sTNM.getClass().getMethod(
-                            "createTunInterface", LinkAddress[].class)
-                            .invoke(linkAddresses);
+            final TestNetworkInterface testIface =
+                    SdkLevel.isAtLeastS()
+                            ? sTNM.createTunInterface(Arrays.asList(linkAddresses))
+                            // createTunInterface(LinkAddress[]) was TestApi until R.
+                            // Wrap linkAddresses in an Object[], so Method#invoke(Object,
+                            // Object...) doesn't treat linkAddresses as the varargs input.
+                            : (TestNetworkInterface)
+                                    sTNM.getClass()
+                                            .getMethod("createTunInterface", LinkAddress[].class)
+                                            .invoke(sTNM, new Object[] {linkAddresses});
 
             tunFd = testIface.getFileDescriptor();
             tunNetworkCallback =
