@@ -136,7 +136,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
             (ConnectivityManager) sContext.getSystemService(Context.CONNECTIVITY_SERVICE);
     static TestNetworkManager sTNM;
 
-    private static final int TIMEOUT_MS = 500;
+    private static final int TIMEOUT_MS = 1000;
 
     // Constants to be used for providing different IP addresses for each tests
     private static final byte IP_ADDR_LAST_BYTE_MAX = (byte) 100;
@@ -188,7 +188,9 @@ abstract class IkeSessionTestBase extends IkeTestBase {
 
     @After
     public void tearDown() throws Exception {
-        mTunNetworkContext.tearDown();
+        if (mTunNetworkContext != null) {
+            mTunNetworkContext.tearDown();
+        }
     }
 
     protected static class TunNetworkContext {
@@ -208,33 +210,44 @@ abstract class IkeSessionTestBase extends IkeTestBase {
                 }
             }
 
-            final TestNetworkInterface testIface =
-                    SdkLevel.isAtLeastS()
-                            ? sTNM.createTunInterface(Arrays.asList(linkAddresses))
-                            // createTunInterface(LinkAddress[]) was TestApi until R.
-                            // Wrap linkAddresses in an Object[], so Method#invoke(Object,
-                            // Object...) doesn't treat linkAddresses as the varargs input.
-                            : (TestNetworkInterface)
-                                    sTNM.getClass()
-                                            .getMethod("createTunInterface", LinkAddress[].class)
-                                            .invoke(sTNM, new Object[] {linkAddresses});
+            try {
+                final TestNetworkInterface testIface =
+                        SdkLevel.isAtLeastS()
+                                ? sTNM.createTunInterface(Arrays.asList(linkAddresses))
+                                // createTunInterface(LinkAddress[]) was TestApi until R.
+                                // Wrap linkAddresses in an Object[], so Method#invoke(Object,
+                                // Object...) doesn't treat linkAddresses as the varargs input.
+                                : (TestNetworkInterface)
+                                        sTNM.getClass()
+                                                .getMethod(
+                                                        "createTunInterface", LinkAddress[].class)
+                                                .invoke(sTNM, new Object[] {linkAddresses});
 
-            tunFd = testIface.getFileDescriptor();
-            tunNetworkCallback =
-                    TestNetworkUtils.setupAndGetTestNetwork(
-                            sCM, sTNM, testIface.getInterfaceName(), new Binder());
-            tunNetwork = tunNetworkCallback.getNetworkBlocking();
+                tunFd = testIface.getFileDescriptor();
+                tunNetworkCallback =
+                        TestNetworkUtils.setupAndGetTestNetwork(
+                                sCM, sTNM, testIface.getInterfaceName(), new Binder());
+                tunNetwork = tunNetworkCallback.getNetworkBlocking();
+            } catch (Exception e) {
+                tearDown();
+                throw e;
+            }
+
             tunUtils = new IkeTunUtils(tunFd);
         }
 
         public void tearDown() throws Exception {
-            sCM.unregisterNetworkCallback(tunNetworkCallback);
+            if (tunNetworkCallback != null) {
+                sCM.unregisterNetworkCallback(tunNetworkCallback);
+            }
 
             if (tunNetwork != null) {
                 sTNM.teardownTestNetwork(tunNetwork);
             }
 
-            tunFd.close();
+            if (tunFd != null) {
+                tunFd.close();
+            }
         }
     }
 
