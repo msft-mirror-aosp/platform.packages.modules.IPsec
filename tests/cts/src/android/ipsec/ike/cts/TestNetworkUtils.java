@@ -32,7 +32,7 @@ import java.util.concurrent.TimeUnit;
 
 // TODO(b/148689509): Share this class with net CTS test (e.g. IpSecManagerTunnelTest)
 public class TestNetworkUtils {
-    private static final int TIMEOUT_MS = 1000;
+    private static final int TIMEOUT_MS = 3000;
 
     /** Callback to receive requested test network. */
     public static class TestNetworkCallback extends ConnectivityManager.NetworkCallback {
