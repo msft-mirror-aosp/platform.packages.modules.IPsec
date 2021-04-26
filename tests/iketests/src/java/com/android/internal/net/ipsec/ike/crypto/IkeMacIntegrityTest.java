@@ -106,7 +106,6 @@ public final class IkeMacIntegrityTest {
     }
 
     @Test
-    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testGenerateChecksum() throws Exception {
         byte[] calculatedChecksum =
                 mHmacSha1IntegrityMac.generateChecksum(mHmacSha1IntegrityKey, mDataToAuthenticate);
