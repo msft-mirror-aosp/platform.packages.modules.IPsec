@@ -52,6 +52,7 @@ import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.IpSecTransform;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionConfiguration;
@@ -560,12 +561,36 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, outPayloads, this);
     }
 
-    /** Notify users the deletion of a Child SA. MUST be called on user callback executor */
-    private void onIpSecTransformPairDeleted(ChildSaRecord childSaRecord) {
-        mUserCallback.onIpSecTransformDeleted(
-                childSaRecord.getOutboundIpSecTransform(), IpSecManager.DIRECTION_OUT);
-        mUserCallback.onIpSecTransformDeleted(
-                childSaRecord.getInboundIpSecTransform(), IpSecManager.DIRECTION_IN);
+    class OnIpSecSaPairCreatedRunnable implements Runnable {
+        private final IpSecTransform mOut;
+        private final IpSecTransform mIn;
+
+        OnIpSecSaPairCreatedRunnable(ChildSaRecord childSaRecord) {
+            mOut = childSaRecord.getOutboundIpSecTransform();
+            mIn = childSaRecord.getInboundIpSecTransform();
+        }
+
+        @Override
+        public void run() {
+            mUserCallback.onIpSecTransformCreated(mOut, IpSecManager.DIRECTION_OUT);
+            mUserCallback.onIpSecTransformCreated(mIn, IpSecManager.DIRECTION_IN);
+        }
+    }
+
+    class OnIpSecSaPairDeletedRunnable implements Runnable {
+        private final IpSecTransform mOut;
+        private final IpSecTransform mIn;
+
+        OnIpSecSaPairDeletedRunnable(ChildSaRecord childSaRecord) {
+            mOut = childSaRecord.getOutboundIpSecTransform();
+            mIn = childSaRecord.getInboundIpSecTransform();
+        }
+
+        @Override
+        public void run() {
+            mUserCallback.onIpSecTransformDeleted(mOut, IpSecManager.DIRECTION_OUT);
+            mUserCallback.onIpSecTransformDeleted(mIn, IpSecManager.DIRECTION_IN);
+        }
     }
 
     /**
@@ -671,10 +696,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private void closeChildSaRecord(ChildSaRecord childSaRecord, boolean expectSaClosed) {
         if (childSaRecord == null) return;
 
-        executeUserCallback(
-                () -> {
-                    onIpSecTransformPairDeleted(childSaRecord);
-                });
+        OnIpSecSaPairDeletedRunnable delRunnable = new OnIpSecSaPairDeletedRunnable(childSaRecord);
+        executeUserCallback(delRunnable);
 
         mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
         childSaRecord.close();
@@ -788,14 +811,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         ChildSessionConfiguration sessionConfig =
                                 buildChildSessionConfigFromResp(createChildResult, respPayloads);
+
+                        OnIpSecSaPairCreatedRunnable createRunnable =
+                                new OnIpSecSaPairCreatedRunnable(mCurrentChildSaRecord);
                         executeUserCallback(
                                 () -> {
-                                    mUserCallback.onIpSecTransformCreated(
-                                            mCurrentChildSaRecord.getInboundIpSecTransform(),
-                                            IpSecManager.DIRECTION_IN);
-                                    mUserCallback.onIpSecTransformCreated(
-                                            mCurrentChildSaRecord.getOutboundIpSecTransform(),
-                                            IpSecManager.DIRECTION_OUT);
+                                    createRunnable.run();
                                     mUserCallback.onOpened(sessionConfig);
                                 });
 
@@ -1201,28 +1222,18 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 "Found no remote SPI for mCurrentChildSaRecord in a Delete Child"
                                         + " request."));
             } else {
-
-                executeUserCallback(
-                        () -> {
-                            mUserCallback.onClosed();
-                            onIpSecTransformPairDeleted(mCurrentChildSaRecord);
-                        });
-
                 sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
-
-                mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
-                mCurrentChildSaRecord.close();
-                mCurrentChildSaRecord = null;
-
-                quitNow();
+                closeSessionAndNotifyUser(true /* quitStateMachine */);
             }
         }
 
         protected void closeSessionAndNotifyUser(boolean quitStateMachine) {
+            OnIpSecSaPairDeletedRunnable delRunnable =
+                    new OnIpSecSaPairDeletedRunnable(mCurrentChildSaRecord);
             executeUserCallback(
                     () -> {
                         mUserCallback.onClosed();
-                        onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                        delRunnable.run();
                     });
 
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
@@ -1520,15 +1531,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         }
 
         protected void notifyCallerForLocalChildSaRekey() {
-            executeUserCallback(
-                    () -> {
-                        mUserCallback.onIpSecTransformCreated(
-                                mLocalInitNewChildSaRecord.getInboundIpSecTransform(),
-                                IpSecManager.DIRECTION_IN);
-                        mUserCallback.onIpSecTransformCreated(
-                                mLocalInitNewChildSaRecord.getOutboundIpSecTransform(),
-                                IpSecManager.DIRECTION_OUT);
-                    });
+            OnIpSecSaPairCreatedRunnable createRunnable =
+                    new OnIpSecSaPairCreatedRunnable(mLocalInitNewChildSaRecord);
+            executeUserCallback(createRunnable);
         }
 
         private void handleProcessRespOrSaCreationFailAndQuit(
@@ -1566,11 +1571,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     class MobikeRekeyChildLocalCreate extends RekeyChildLocalCreate {
         @Override
         protected void notifyCallerForLocalChildSaRekey() {
+            IpSecTransform inTransform = mLocalInitNewChildSaRecord.getInboundIpSecTransform();
+            IpSecTransform outTransform = mLocalInitNewChildSaRecord.getOutboundIpSecTransform();
             executeUserCallback(
-                    () ->
-                            mUserCallback.onIpSecTransformsMigrated(
-                                    mLocalInitNewChildSaRecord.getInboundIpSecTransform(),
-                                    mLocalInitNewChildSaRecord.getOutboundIpSecTransform()));
+                    () -> mUserCallback.onIpSecTransformsMigrated(inTransform, outTransform));
         }
     }
 
@@ -1719,11 +1723,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         // the remote has (implicitly) acknowledged our response via the
                         // delete-old-SA request. This will be performed in the finishRekey()
                         // method.
+                        IpSecTransform inTransform =
+                                mRemoteInitNewChildSaRecord.getInboundIpSecTransform();
                         executeUserCallback(
                                 () -> {
                                     mUserCallback.onIpSecTransformCreated(
-                                            mRemoteInitNewChildSaRecord.getInboundIpSecTransform(),
-                                            IpSecManager.DIRECTION_IN);
+                                            inTransform, IpSecManager.DIRECTION_IN);
                                 });
 
                         mChildSmCallback.onOutboundPayloadsReady(
@@ -1840,10 +1845,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         // Rekey timer for old SA will be cancelled as part of the closing of the SA.
         protected void finishRekey() {
-            executeUserCallback(
-                    () -> {
-                        onIpSecTransformPairDeleted(mCurrentChildSaRecord);
-                    });
+            OnIpSecSaPairDeletedRunnable delRunnable =
+                    new OnIpSecSaPairDeletedRunnable(mCurrentChildSaRecord);
+            executeUserCallback(delRunnable);
 
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
             mCurrentChildSaRecord.close();
@@ -1986,11 +1990,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         protected void finishRekey() {
+            IpSecTransform outTransform = mRemoteInitNewChildSaRecord.getOutboundIpSecTransform();
             executeUserCallback(
                     () -> {
                         mUserCallback.onIpSecTransformCreated(
-                                mRemoteInitNewChildSaRecord.getOutboundIpSecTransform(),
-                                IpSecManager.DIRECTION_OUT);
+                                outTransform, IpSecManager.DIRECTION_OUT);
                     });
 
             super.finishRekey();
