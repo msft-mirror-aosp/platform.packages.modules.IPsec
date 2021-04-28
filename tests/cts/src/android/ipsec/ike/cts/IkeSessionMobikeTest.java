@@ -25,6 +25,7 @@ import android.net.ipsec.ike.IkeSessionParams;
 import android.platform.test.annotations.AppModeFull;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.filters.SdkSuppress;
 
 import org.junit.After;
 import org.junit.Before;
@@ -35,6 +36,7 @@ import java.net.InetAddress;
 
 @RunWith(AndroidJUnit4.class)
 @AppModeFull(reason = "MANAGE_IPSEC_TUNNELS permission can't be granted to instant apps")
+@SdkSuppress(minSdkVersion = 31, codeName = "S")
 public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
     private TunNetworkContext mSecondaryTunNetworkContext;
 

@@ -140,6 +140,8 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
+import androidx.test.filters.SdkSuppress;
+
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.eap.test.EapAuthenticator;
 import com.android.internal.net.eap.test.IEapCallback;
@@ -1692,6 +1694,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testCreateIkeLocalIkeInitSendsNatDetectionPayloadsWhenIpv6() throws Exception {
         mIkeSessionStateMachine.quitNow();
         resetMockConnectManager();
@@ -4906,6 +4909,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test(expected = IllegalArgumentException.class)
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testOpenChildSessionWithMobikeAndTransport() throws Exception {
         mIkeSessionStateMachine = restartStateMachineWithMobikeConfigured();
 
@@ -5470,6 +5474,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabled() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportMobike */);
 
@@ -5477,6 +5482,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledPeerUnsupported() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportMobike */);
 
@@ -5484,6 +5490,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledWithEap() throws Exception {
         List<IkePayload> authRelatedPayloads = new ArrayList<>();
         authRelatedPayloads.add(new IkeNotifyPayload(NOTIFY_TYPE_MOBIKE_SUPPORTED));
@@ -5496,6 +5503,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNattSupportedIpv4() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportNatt */, true /* isIpv4 */);
 
@@ -5503,6 +5511,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNattUnsupportedIpv4() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportNatt */, true /* isIpv4 */);
 
@@ -5510,6 +5519,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNattSupportedIpv6() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportNatt */, false /* isIpv4 */);
 
@@ -5517,6 +5527,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNattUnsupportedIpv6() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportNatt */, false /* isIpv4 */);
 
@@ -5725,6 +5736,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeNetworkCallbackRegistrationFails() throws Exception {
         doThrow(new RuntimeException("Failed to register IKE NetworkCallback"))
                 .when(mMockConnectManager)
@@ -5749,6 +5761,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNetworkDies() throws Exception {
         IkeDefaultNetworkCallback callback = verifyMobikeEnabled(true /* doesPeerSupportMobike */);
         callback.onLost(mMockDefaultNetwork);
@@ -5782,12 +5795,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeActiveMobilityEvent() throws Exception {
         verifyMobikeActiveMobilityEvent(false /* isEnforcePort4500 */);
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdp4Socket);
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeActiveMobilityEventWithEnforcePort4500() throws Exception {
         verifyMobikeActiveMobilityEvent(true /* isEnforcePort4500 */);
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdpEncapSocket);
@@ -5873,6 +5888,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test(expected = IllegalStateException.class)
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkMobikeActiveNetworkNotSpecified() throws Exception {
         Network newNetwork = mock(Network.class);
 
@@ -5971,6 +5987,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattSupportedIpv4ToIpv6() throws Exception {
         verifySetNetworkInIdleState(
                 true /* doesPeerSupportNatt */,
@@ -5979,6 +5996,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattSupportedIpv6ToIpv4() throws Exception {
         verifySetNetworkInIdleState(
                 true /* doesPeerSupportNatt */,
@@ -5987,6 +6005,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattSupportedIpv4ToIpv4() throws Exception {
         verifySetNetworkInIdleState(
                 true /* doesPeerSupportNatt */,
@@ -5995,6 +6014,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattSupportedIpv6ToIpv6() throws Exception {
         verifySetNetworkInIdleState(
                 true /* doesPeerSupportNatt */,
@@ -6003,6 +6023,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattUnsupportedIpv4ToIpv4() throws Exception {
         verifySetNetworkInIdleState(
                 false /* doesPeerSupportNatt */,
@@ -6011,6 +6032,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattUnsupportedIpv6ToIpv6() throws Exception {
         verifySetNetworkInIdleState(
                 false /* doesPeerSupportNatt */,
@@ -6019,6 +6041,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkLocalRekeyState() throws Exception {
         // Start IKE Session + transition to Idle
         IkeNetworkCallbackBase callback =
@@ -6035,6 +6058,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkRemoteRekeyState() throws Exception {
         // Start IKE Session + transition to remote rekey
         IkeNetworkCallbackBase callback =
@@ -6132,6 +6156,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoSendsRequest() throws Exception {
         setupIdleStateMachineWithMobike();
 
@@ -6143,6 +6168,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoSendsRequestWithoutNatDetection() throws Exception {
         setupIdleStateMachineWithMobike();
         mIkeSessionStateMachine.mSupportNatTraversal = false;
@@ -6155,6 +6181,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesResponse() throws Exception {
         setupIdleStateMachineWithMobike();
 
@@ -6172,6 +6199,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesResponseWithNatDetectionIpv6() throws Exception {
         setupIdleStateMachineWithMobike(true /* doesPeerSupportNatt */, false /* isIpv4 */);
 
@@ -6190,6 +6218,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesResponseWithoutNatDetection() throws Exception {
         setupIdleStateMachineWithMobike();
         mIkeSessionStateMachine.mSupportNatTraversal = false;
@@ -6274,6 +6303,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testNattKeepaliveStoppedDuringMobilityEvent() throws Exception {
         IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
 
@@ -6288,6 +6318,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesDeleteRequest() throws Exception {
         setupIdleStateMachineWithMobike();
 
@@ -6305,6 +6336,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesNonDeleteRequest() throws Exception {
         setupIdleStateMachineWithMobike();
 
@@ -6332,6 +6364,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testDnsLookupOnSetNetwork() throws Exception {
         final IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
 

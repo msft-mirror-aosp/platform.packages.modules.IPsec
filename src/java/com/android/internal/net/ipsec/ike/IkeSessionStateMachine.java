@@ -160,6 +160,7 @@ import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
+import com.android.modules.utils.build.SdkLevel;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -552,10 +553,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             LocalRequestFactory localRequestFactory) {
         super(TAG, looper, userCbExecutor);
 
-        if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
-                && firstChildParams instanceof TransportModeChildSessionParams) {
-            throw new IllegalArgumentException(
-                    "Transport Mode SAs not supported when MOBIKE is enabled");
+        if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)) {
+            if (firstChildParams instanceof TransportModeChildSessionParams) {
+                throw new IllegalArgumentException(
+                        "Transport Mode SAs not supported when MOBIKE is enabled");
+            } else if (!SdkLevel.isAtLeastS()) {
+                throw new IllegalStateException("MOBIKE only supported for S+");
+            }
         }
 
         synchronized (IKE_SESSION_LOCK) {
