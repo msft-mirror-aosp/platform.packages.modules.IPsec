@@ -17,6 +17,7 @@
 package android.ipsec.ike.cts;
 
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.fail;
 
 import android.net.ipsec.ike.IkeSession;
 import android.net.ipsec.ike.IkeSessionConfiguration;
@@ -68,7 +69,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                 .build();
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testSetNetworkWithoutMobikeEnabled() throws Exception {
         if (!hasTunnelsFeature()) return;
 
@@ -103,8 +104,13 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         final IkeSessionConfiguration ikeConfig = mIkeSessionCallback.awaitIkeConfig();
         assertFalse(ikeConfig.isIkeExtensionEnabled(IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE));
 
-        // manually change network when MOBIKE is not enabled
-        mIkeSession.setNetwork(mSecondaryTunNetworkContext.tunNetwork);
+        try {
+            // manually change network when MOBIKE is not enabled
+            mIkeSession.setNetwork(mSecondaryTunNetworkContext.tunNetwork);
+
+            fail("Expected error for setNetwork() without MOBIKE enabled");
+        } catch (IllegalStateException expected) {
+        }
     }
 
     /** The MOBIKE spec explicitly disallows Transport mode. */
