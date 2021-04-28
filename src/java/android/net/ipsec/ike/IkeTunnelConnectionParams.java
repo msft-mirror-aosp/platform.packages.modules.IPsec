@@ -27,8 +27,6 @@ import java.util.Objects;
  * <p>This class containing IKEv2-specific configuration, authentication and authorization
  * parameters to establish an IKE/IPsec tunnel.
  */
-// This API does not depend on any platform API added after SDK 30
-@SuppressLint("NewApi")
 public final class IkeTunnelConnectionParams {
     private final IkeSessionParams mIkeParams;
     private final TunnelModeChildSessionParams mChildParams;
@@ -68,6 +66,10 @@ public final class IkeTunnelConnectionParams {
     }
 
     /** @hide */
+    // TODO: b/177434707 Calling IkeTunnelConnectionParams is safe because it does not depend on any
+    // platform API added after SDK R. Handle this case in a mainline standard way when b/177434707
+    // is fixed.
+    @SuppressLint("NewApi")
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof IkeTunnelConnectionParams)) {
