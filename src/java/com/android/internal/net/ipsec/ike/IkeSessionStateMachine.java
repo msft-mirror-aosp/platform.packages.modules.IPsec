@@ -3599,8 +3599,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             transitionTo(mChildProcedureOngoing);
         }
 
-        // IkeSessionConnectionInfo was released as system API since Android R and does not depend
-        // on any new platform or module API
+        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
+        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
+        // way when b/177434707 is fixed.
         @SuppressLint("NewApi")
         protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
             IkeConfigPayload configPayload =
@@ -5279,8 +5280,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
-        // IkeSessionConnectionInfo was released as system API since Android R and does not depend
-        // on any new platform or module API
+        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
+        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
+        // way when b/177434707 is fixed.
         @SuppressLint("NewApi")
         @Override
         public void handleResponseIkeMessage(IkeMessage resp) {
