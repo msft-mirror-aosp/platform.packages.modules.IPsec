@@ -260,7 +260,7 @@ package android.net.ipsec.ike {
     field @NonNull public final java.net.InetAddress startingAddress;
   }
 
-  public final class IkeTunnelConnectionParams implements android.net.TunnelConnectionParams {
+  public final class IkeTunnelConnectionParams {
     ctor public IkeTunnelConnectionParams(@NonNull android.net.ipsec.ike.IkeSessionParams, @NonNull android.net.ipsec.ike.TunnelModeChildSessionParams);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams getIkeSessionParams();
     method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams getTunnelModeChildSessionParams();
