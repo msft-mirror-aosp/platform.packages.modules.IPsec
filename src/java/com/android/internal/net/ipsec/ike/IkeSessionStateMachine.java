@@ -73,7 +73,6 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.LinkProperties;
 import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
@@ -363,11 +362,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DPD, "DPD");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_MOBIKE, "MOBIKE migration event");
     }
-
-    private static final NetworkRequest NETWORK_REQUEST =
-            new NetworkRequest.Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .build();
 
     /** Package */
     @VisibleForTesting final IkeSessionParams mIkeSessionParams;
@@ -3656,11 +3650,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 try {
                     if (mIkeSessionParams.getConfiguredNetwork() != null) {
                         // Caller configured a specific Network - track it
+                        // ConnectivityManager does not provide a callback for tracking a specific
+                        // Network. In order to do so, create a NetworkRequest without any
+                        // capabilities so it will match all Networks. The NetworkCallback will then
+                        // filter for the correct (caller-specified) Network.
+                        NetworkRequest request =
+                                new NetworkRequest.Builder().clearCapabilities().build();
                         mNetworkCallback =
                                 new IkeSpecificNetworkCallback(
                                         IkeSessionStateMachine.this, mNetwork, mLocalAddress);
                         mConnectivityManager.registerNetworkCallback(
-                                NETWORK_REQUEST, mNetworkCallback, getHandler());
+                                request, mNetworkCallback, getHandler());
                     } else {
                         // Caller did not configure a specific Network - track the default
                         mNetworkCallback =
