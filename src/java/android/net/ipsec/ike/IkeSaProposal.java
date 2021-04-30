@@ -27,10 +27,12 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransfo
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -140,13 +142,31 @@ public final class IkeSaProposal extends SaProposal {
     /** Returns supported integrity algorithms for IKE SA proposal negotiation. */
     @NonNull
     public static Set<Integer> getSupportedIntegrityAlgorithms() {
-        return getKeySet(SUPPORTED_INTEGRITY_ALGO_TO_STR);
+        final Set<Integer> supportedSet = new HashSet<>();
+        for (int algo : getKeySet(SUPPORTED_INTEGRITY_ALGO_TO_STR)) {
+            if (algo == INTEGRITY_ALGORITHM_AES_CMAC_96 && !SdkLevel.isAtLeastS()) {
+                continue;
+            } else {
+                supportedSet.add(algo);
+            }
+        }
+
+        return supportedSet;
     }
 
     /** Returns supported pseudorandom functions for IKE SA proposal negotiation. */
     @NonNull
     public static Set<Integer> getSupportedPseudorandomFunctions() {
-        return getKeySet(SUPPORTED_PRF_TO_STR);
+        final Set<Integer> supportedSet = new HashSet<>();
+        for (int algo : getKeySet(SUPPORTED_PRF_TO_STR)) {
+            if (algo == PSEUDORANDOM_FUNCTION_AES128_CMAC && !SdkLevel.isAtLeastS()) {
+                continue;
+            } else {
+                supportedSet.add(algo);
+            }
+        }
+
+        return supportedSet;
     }
 
     /**
