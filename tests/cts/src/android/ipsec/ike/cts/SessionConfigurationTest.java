@@ -16,6 +16,12 @@
 
 package android.ipsec.ike.cts;
 
+import static android.ipsec.ike.cts.IkeSessionTestBase.EXPECTED_DNS_SERVERS_ONE;
+import static android.ipsec.ike.cts.IkeSessionTestBase.EXPECTED_DNS_SERVERS_TWO;
+import static android.ipsec.ike.cts.IkeSessionTestBase.EXPECTED_INTERNAL_ADDR;
+import static android.ipsec.ike.cts.IkeSessionTestBase.EXPECTED_INTERNAL_ADDR_V6;
+import static android.ipsec.ike.cts.IkeSessionTestBase.EXPECTED_INTERNAL_LINK_ADDR;
+import static android.ipsec.ike.cts.IkeSessionTestBase.EXPECTED_INTERNAL_LINK_ADDR_V6;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 
@@ -23,16 +29,22 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import android.net.InetAddresses;
+import android.net.IpPrefix;
 import android.net.Network;
+import android.net.ipsec.ike.ChildSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionConnectionInfo;
+import android.net.ipsec.ike.IkeTrafficSelector;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
+import java.net.InetAddress;
 import java.util.Arrays;
+import java.util.List;
 
 @RunWith(AndroidJUnit4.class)
 public class SessionConfigurationTest extends IkeTestNetworkBase {
@@ -40,6 +52,16 @@ public class SessionConfigurationTest extends IkeTestNetworkBase {
     private static final byte[] REMOTE_VENDOR_ID_2 = "REMOTE_VENDOR_ID_2".getBytes();
     private static final String REMOTE_APP_VERSION = "REMOTE_APP_VERSION";
     private static final String REMOTE_APP_VERSION_NONE = "";
+
+    private static final List<IkeTrafficSelector> IN_TS_LIST =
+            Arrays.asList(INBOUND_V4_TS, INBOUND_V6_TS);
+    private static final List<IkeTrafficSelector> OUT_TS_LIST =
+            Arrays.asList(OUTBOUND_V4_TS, OUTBOUND_V6_TS);
+
+    private static final IpPrefix SUBNET_V4 = new IpPrefix(EXPECTED_INTERNAL_ADDR, 24);
+    private static final IpPrefix SUBNET_V6 = new IpPrefix(EXPECTED_INTERNAL_ADDR_V6, 64);
+    private static final InetAddress DHCP_SERVER =
+            InetAddresses.parseNumericAddress("198.51.100.111");
 
     private interface IkeSessionConnectionInfoTestRunner {
         void run(IkeSessionConnectionInfo connectionInfo, Network network) throws Exception;
@@ -118,5 +140,50 @@ public class SessionConfigurationTest extends IkeTestNetworkBase {
                     assertTrue(config.getRemoteVendorIds().isEmpty());
                     assertEquals(REMOTE_APP_VERSION_NONE, config.getRemoteApplicationVersion());
                 });
+    }
+
+    private ChildSessionConfiguration.Builder createChildSessionConfigBuilder() {
+        return new ChildSessionConfiguration.Builder(IN_TS_LIST, OUT_TS_LIST)
+                .addInternalAddress(EXPECTED_INTERNAL_LINK_ADDR)
+                .addInternalAddress(EXPECTED_INTERNAL_LINK_ADDR_V6)
+                .addInternalSubnet(SUBNET_V4)
+                .addInternalSubnet(SUBNET_V6)
+                .addInternalDnsServer(EXPECTED_DNS_SERVERS_ONE)
+                .addInternalDnsServer(EXPECTED_DNS_SERVERS_TWO)
+                .addInternalDhcpServer(DHCP_SERVER);
+    }
+
+    @Test
+    public void testChildSessionConfiguration() throws Exception {
+        final ChildSessionConfiguration config = createChildSessionConfigBuilder().build();
+
+        assertEquals(IN_TS_LIST, config.getInboundTrafficSelectors());
+        assertEquals(OUT_TS_LIST, config.getOutboundTrafficSelectors());
+        assertEquals(
+                Arrays.asList(EXPECTED_INTERNAL_LINK_ADDR, EXPECTED_INTERNAL_LINK_ADDR_V6),
+                config.getInternalAddresses());
+        assertEquals(Arrays.asList(SUBNET_V4, SUBNET_V6), config.getInternalSubnets());
+        assertEquals(
+                Arrays.asList(EXPECTED_DNS_SERVERS_ONE, EXPECTED_DNS_SERVERS_TWO),
+                config.getInternalDnsServers());
+        assertEquals(Arrays.asList(DHCP_SERVER), config.getInternalDhcpServers());
+    }
+
+    @Test
+    public void testChildSessionConfigurationClearMethods() throws Exception {
+        final ChildSessionConfiguration config =
+                createChildSessionConfigBuilder()
+                        .clearInternalAddresses()
+                        .clearInternalDhcpServers()
+                        .clearInternalDnsServers()
+                        .clearInternalSubnets()
+                        .build();
+
+        assertEquals(IN_TS_LIST, config.getInboundTrafficSelectors());
+        assertEquals(OUT_TS_LIST, config.getOutboundTrafficSelectors());
+        assertTrue(config.getInternalAddresses().isEmpty());
+        assertTrue(config.getInternalDhcpServers().isEmpty());
+        assertTrue(config.getInternalDnsServers().isEmpty());
+        assertTrue(config.getInternalSubnets().isEmpty());
     }
 }
