@@ -16,12 +16,27 @@
 
 package android.ipsec.ike.cts;
 
+import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
+import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
+import static android.net.ipsec.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
+import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
+import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96;
+import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_128;
+import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC;
+
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSession;
 import android.net.ipsec.ike.IkeSessionConfiguration;
+import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
+import android.net.ipsec.ike.exceptions.IkeException;
+import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
 import android.platform.test.annotations.AppModeFull;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -33,11 +48,59 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.net.InetAddress;
+import java.util.Arrays;
 
 @RunWith(AndroidJUnit4.class)
 @AppModeFull(reason = "MANAGE_IPSEC_TUNNELS permission can't be granted to instant apps")
 @SdkSuppress(minSdkVersion = 31, codeName = "S")
 public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
+    private static final String IKE_INIT_RESP =
+            "46b8eca1e0d72a189b9f8e0158e1c0a52120222000000000000001d022000030"
+                    + "0000002c010100040300000c0100000c800e0080030000080300000803000008"
+                    + "02000008000000080400000e28000108000e0000164d3413d855a1642d4d6355"
+                    + "a8ef6666bfaa28a4b5264600c9ffbaef7930bd33af49022926013aae0a48d764"
+                    + "750ccb3987605957e31a2ef0e6838cfa67af989933c2879434081c4e9787f0d4"
+                    + "4da0d7dacca5589702a4537ee4fb18e8db21a948b245260f55212a1c619f61c6"
+                    + "fa1caaff4474082f9714b14ef4bcc7b2b8f43fcb939931119e53b05274faec65"
+                    + "2816c563529e60c1a88183eba9c456ecb644faf57b726b83e3242e08489d95e9"
+                    + "81e59c7ad82cf3cdfb00fe0213c4e65d61e88bbefbd536261027da722a2bbf89"
+                    + "c6378e63ce6fbcef282421e5576bba1b2faa3c4c2d41028f91df7ba165a24a18"
+                    + "fcba4f96db3e5e0eed76dc7c3c432362dd4a82d32900002461cbd03c08819730"
+                    + "f1060ed0c0446f784eb8dd884d3f73f54eb2b0c3071cc4f32900001c00004004"
+                    + "07150f3fd9584dbebb7e88ad256c7bfb9b0bb55a2900001c00004005e3aa3788"
+                    + "7040e38dbb4de8fd435161cce904ec59290000080000402e290000100000402f"
+                    + "00020003000400050000000800004014";
+    private static final String IKE_AUTH_RESP =
+            "46b8eca1e0d72a189b9f8e0158e1c0a52e20232000000001000000fc240000e0"
+                    + "1a666eb2a02b37682436a18fff5e9cef67b9096d6c7887ed235f8b5173c9469e"
+                    + "361621b66849de2dbcabf956b3d055cafafd503530543540e81dac9bf8fb8826"
+                    + "e08bc99e9ed2185d8f1322c8885abe4f98a9832c694da775eaa4ae69f17b8cbf"
+                    + "b009bf82b4bf4012bca489595631c3168cd417f813e7d177d2ceb70766a0773c"
+                    + "8819d8763627ddc9455ae3d5a5a03224020a66c8e58c8073c4a1fcf5d67cfa95"
+                    + "15de86b392a63ff54ff5572302b9ce7725085b05839252794c3680f5d8f34019"
+                    + "fa1930ea045d2a9987850e2049235c7328ef148370b6a3403408b987";
+    private static final String IKE_UPDATE_SA_RESP =
+            "46b8eca1e0d72a189b9f8e0158e1c0a52e202520000000020000007c29000060"
+                    + "a1fd35f112d92d1df19ce734f6edf56ccda1bfd44ef6de428a097e04d5b40b28"
+                    + "3897e42f23dd53e444dc6c676cf9a7d9d73bb3975d663ec351fb5ae4e56a55d8"
+                    + "cbcf376a3b99cc6fd858621cc78b3017d895e4309f09a444028dba85";
+    private static final String IKE_CREATE_CHILD_RESP =
+            "46b8eca1e0d72a189b9f8e0158e1c0a52e20242000000003000000cc210000b0"
+                    + "e6bb78203dbe2189806c5cecef5040b8c4c0253895c7c0acea6483a1f0f72425"
+                    + "77ab46e18d553329d4ae1bd31cf57eec6ec31ceb1f2ed6b1195cac98b4b97a25"
+                    + "115d14c414e44dba8ebbdaf502e43f98a09036bee0ea2a621176300874a3eae8"
+                    + "c988357255b4e5923928d335b0ef62a565333fae6a64c85ac30e7da34ceeade4"
+                    + "1a161bcad0b51f8209ee1fdaf53d50359ad6b986ecd4290c9f69a34c64ddc0eb"
+                    + "73b8f3231f3f4e057404c18d";
+    private static final String IKE_DELETE_CHILD_RESP =
+            "46b8eca1e0d72a189b9f8e0158e1c0a52e202520000000040000004c2a000030"
+                    + "53d97806d48ce44e0d4e1adf1de36778f77c3823bfaf8186cc71d4dc73497099"
+                    + "a9049e7be8a2013affd56ab7";
+    private static final String DELETE_IKE_RESP =
+            "46b8eca1e0d72a189b9f8e0158e1c0a52e202520000000050000004c00000030"
+                    + "818e6679fef4924a27452805c98125660d4396ab002f5ae45dcf75ef0d1e2190"
+                    + "273b1c4527ba26ce37574852";
+
     private TunNetworkContext mSecondaryTunNetworkContext;
 
     private InetAddress mSecondaryLocalAddr;
@@ -69,6 +132,134 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         return createIkeParamsBuilderBase(remoteAddress)
                 .addIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
                 .build();
+    }
+
+    @Test
+    public void testMigrateNetworksWithoutXfrmMigrate() throws Exception {
+        if (!hasTunnelsFeature()) return;
+
+        final IkeSession ikeSession = setupAndVerifyIkeSessionWithMobike();
+
+        final IpSecTransformCallRecord firstTransformRecordA =
+                mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
+        final IpSecTransformCallRecord firstTransformRecordB =
+                mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
+        verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
+
+        // Local request message ID starts from 2 because there is one IKE_INIT message and a single
+        // IKE_AUTH message.
+        int expectedMsgId = 2;
+
+        setNetworkAndVerifyConnectionInfoChange(
+                ikeSession, mSecondaryTunNetworkContext, expectedMsgId++);
+        final IpSecTransformCallRecord[] migrateRecords =
+                injectCreateChildRespAndVerifyTransformsMigrated(
+                        mSecondaryTunNetworkContext, expectedMsgId++);
+        injectDeleteChildRespAndVerifyTransformsDeleted(
+                mSecondaryTunNetworkContext,
+                expectedMsgId++,
+                firstTransformRecordA,
+                firstTransformRecordB);
+
+        // Close IKE Session
+        ikeSession.close();
+        mSecondaryTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+                IKE_DETERMINISTIC_INITIATOR_SPI,
+                expectedMsgId++,
+                true /* expectedUseEncap */,
+                DELETE_IKE_RESP);
+        verifyCloseIkeAndChildBlocking(migrateRecords[0], migrateRecords[1]);
+    }
+
+    private IkeSession setupAndVerifyIkeSessionWithMobike() throws Exception {
+        final IkeSaProposal saProposal =
+                new IkeSaProposal.Builder()
+                        .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128)
+                        .addIntegrityAlgorithm(INTEGRITY_ALGORITHM_AES_CMAC_96)
+                        .addPseudorandomFunction(PSEUDORANDOM_FUNCTION_AES128_CMAC)
+                        .addDhGroup(DH_GROUP_2048_BIT_MODP)
+                        .build();
+        final IkeSessionParams ikeParams =
+                createIkeParamsBuilderBase(mRemoteAddress, saProposal)
+                        .addIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
+                        .build();
+
+        final IkeSession ikeSession = openIkeSessionWithTunnelModeChild(mRemoteAddress, ikeParams);
+        performSetupIkeAndFirstChildBlocking(
+                IKE_INIT_RESP, true /* expectedAuthUseEncap */, IKE_AUTH_RESP);
+        verifyIkeSessionSetupBlocking(EXTENSION_TYPE_FRAGMENTATION, EXTENSION_TYPE_MOBIKE);
+        verifyChildSessionSetupBlocking(
+                mFirstChildSessionCallback,
+                Arrays.asList(TUNNEL_MODE_INBOUND_TS),
+                Arrays.asList(TUNNEL_MODE_OUTBOUND_TS),
+                Arrays.asList(EXPECTED_INTERNAL_LINK_ADDR));
+        return ikeSession;
+    }
+
+    private void setNetworkAndVerifyConnectionInfoChange(
+            IkeSession ikeSession, TunNetworkContext tunNetworkContext, int expectedMsgId)
+            throws Exception {
+        ikeSession.setNetwork(tunNetworkContext.tunNetwork);
+
+        tunNetworkContext.tunUtils.awaitReqAndInjectResp(
+                IKE_DETERMINISTIC_INITIATOR_SPI,
+                expectedMsgId,
+                true /* expectedUseEncap */,
+                IKE_UPDATE_SA_RESP);
+        final IkeSessionConnectionInfo connectionInfo =
+                mIkeSessionCallback.awaitOnIkeSessionConnectionInfoChanged();
+        assertNotNull(connectionInfo);
+        assertEquals(tunNetworkContext.tunNetwork, connectionInfo.getNetwork());
+        assertEquals(mSecondaryLocalAddr, connectionInfo.getLocalAddress());
+        assertEquals(mRemoteAddress, connectionInfo.getRemoteAddress());
+    }
+
+    private IpSecTransformCallRecord[] injectCreateChildRespAndVerifyTransformsMigrated(
+            TunNetworkContext tunNetworkContext, int expectedMsgId) throws Exception {
+        tunNetworkContext.tunUtils.awaitReqAndInjectResp(
+                IKE_DETERMINISTIC_INITIATOR_SPI,
+                expectedMsgId,
+                true /* expectedUseEncap */,
+                IKE_CREATE_CHILD_RESP);
+
+        final IpSecTransformCallRecord[] migrateRecords =
+                mFirstChildSessionCallback.awaitNextMigratedIpSecTransform();
+        assertNotNull(migrateRecords);
+        verifyCreateIpSecTransformPair(migrateRecords[0], migrateRecords[1]);
+        return migrateRecords;
+    }
+
+    private void injectDeleteChildRespAndVerifyTransformsDeleted(
+            TunNetworkContext tunNetworkContext,
+            int expectedMsgId,
+            IpSecTransformCallRecord transformRecordA,
+            IpSecTransformCallRecord transformRecordB)
+            throws Exception {
+        tunNetworkContext.tunUtils.awaitReqAndInjectResp(
+                IKE_DETERMINISTIC_INITIATOR_SPI,
+                expectedMsgId,
+                true /* expectedUseEncap */,
+                IKE_DELETE_CHILD_RESP);
+
+        verifyDeleteIpSecTransformPair(
+                mFirstChildSessionCallback, transformRecordA, transformRecordB);
+    }
+
+    @Test
+    public void testNetworkDied() throws Exception {
+        if (!hasTunnelsFeature()) return;
+
+        final IkeSession ikeSession = setupAndVerifyIkeSessionWithMobike();
+
+        // Teardown test network to kill the IKE Session
+        mTunNetworkContext.tearDown();
+
+        final IkeException exception = mIkeSessionCallback.awaitNextOnErrorException();
+        assertTrue(exception instanceof IkeNetworkLostException);
+        final IkeNetworkLostException networkLostException = (IkeNetworkLostException) exception;
+        assertEquals(mTunNetworkContext.tunNetwork, networkLostException.getNetwork());
+
+        ikeSession.kill();
     }
 
     @Test
