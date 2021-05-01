@@ -940,6 +940,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     private void getAndSwitchToIkeSocket(boolean isIpv4, boolean useEncapPort) {
         try {
             IkeSocket newSocket = getIkeSocket(isIpv4, useEncapPort);
+            if (newSocket == mIkeSocket) {
+                // Attempting to switch to current socket - ignore.
+                return;
+            }
             switchToIkeSocket(newSocket);
             if (isIpv4 && useEncapPort) {
                 mIkeNattKeepalive = buildAndStartNattKeepalive();
@@ -3363,11 +3367,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     initIkeSpi, respIkeSpi, natSourcePayloads, natDestPayload);
 
             if (mLocalNatDetected || mRemoteNatDetected) {
-                logd("Switching to send to remote port 4500");
+                logd("Switching to send to remote port 4500 if it's not already");
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
                 try {
                     IkeSocket newSocket = getIkeSocket(isIpv4, true /* useEncapPort */);
+                    if (newSocket == mIkeSocket) {
+                        // Attempting to switch to current socket - ignore.
+                        return;
+                    }
+                    // TODO(b/186900683): use getAndSwitchToIkeSocket here instead
                     switchToIkeSocket(initIkeSpi, newSocket);
                     mLocalPort = mIkeSocket.getLocalPort();
 
