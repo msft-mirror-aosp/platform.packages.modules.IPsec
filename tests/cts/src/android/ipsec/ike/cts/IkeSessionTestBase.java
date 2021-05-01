@@ -573,12 +573,18 @@ abstract class IkeSessionTestBase extends IkeTestBase {
     }
 
     void verifyIkeSessionSetupBlocking() throws Exception {
+        verifyIkeSessionSetupBlocking(EXTENSION_TYPE_FRAGMENTATION);
+    }
+
+    void verifyIkeSessionSetupBlocking(int... expectedIkeExtensions) throws Exception {
         IkeSessionConfiguration ikeConfig = mIkeSessionCallback.awaitIkeConfig();
         assertNotNull(ikeConfig);
         assertEquals(EXPECTED_REMOTE_APP_VERSION_EMPTY, ikeConfig.getRemoteApplicationVersion());
         assertTrue(ikeConfig.getRemoteVendorIds().isEmpty());
         assertTrue(ikeConfig.getPcscfServers().isEmpty());
-        assertTrue(ikeConfig.isIkeExtensionEnabled(EXTENSION_TYPE_FRAGMENTATION));
+        for (int ikeExtension : expectedIkeExtensions) {
+            assertTrue(ikeConfig.isIkeExtensionEnabled(ikeExtension));
+        }
 
         IkeSessionConnectionInfo ikeConnectInfo = ikeConfig.getIkeSessionConnectionInfo();
         assertNotNull(ikeConnectInfo);
