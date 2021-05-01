@@ -1624,8 +1624,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mSpyIkeUdp4Socket).unregisterIke(anyLong());
     }
 
-    @Test
-    public void testInitialStateWithEnforcePort4500() throws Exception {
+    private void restartIkeSessionWithEnforcePort4500AndVerifyIkeSocket() throws Exception {
         // Quit and start a new IKE Session with IKE_OPTION_FORCE_PORT_4500
         mIkeSessionStateMachine.quitNow();
         IkeSessionParams ikeParams =
@@ -1635,6 +1634,31 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdpEncapSocket);
+    }
+
+    @Test
+    public void testInitialStateWithEnforcePort4500() throws Exception {
+        restartIkeSessionWithEnforcePort4500AndVerifyIkeSocket();
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeInitNatTraversalWithEnforcePort4500() throws Exception {
+        restartIkeSessionWithEnforcePort4500AndVerifyIkeSocket();
+        setupFirstIkeSa();
+
+        final IkeSocket ikeSocket = mIkeSessionStateMachine.mIkeSocket;
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        receiveAndGetIkeInitResp();
+
+        assertEquals(ikeSocket, mIkeSessionStateMachine.mIkeSocket);
+        assertTrue(mIkeSessionStateMachine.mSupportNatTraversal);
+        assertTrue(mIkeSessionStateMachine.mLocalNatDetected);
+        assertTrue(
+                mIkeSessionStateMachine.mLocalNatDetected
+                        || mIkeSessionStateMachine.mRemoteNatDetected);
     }
 
     @Test
