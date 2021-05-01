@@ -28,6 +28,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransfo
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.lang.annotation.Retention;
@@ -628,7 +629,15 @@ public abstract class SaProposal {
     /** Returns supported DH groups for IKE and Child SA proposal negotiation. */
     @NonNull
     public static Set<Integer> getSupportedDhGroups() {
-        return getKeySet(SUPPORTED_DH_GROUP_TO_STR);
+        final Set<Integer> supportedSet = new HashSet<>();
+        for (int dh : getKeySet(SUPPORTED_DH_GROUP_TO_STR)) {
+            if (dh == DH_GROUP_CURVE_25519 && !SdkLevel.isAtLeastS()) {
+                continue;
+            } else {
+                supportedSet.add(dh);
+            }
+        }
+        return supportedSet;
     }
 
     /**
