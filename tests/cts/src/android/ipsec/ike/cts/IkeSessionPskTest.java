@@ -265,7 +265,7 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
 
         // Teardown current test network that uses IPv4 address and set up new network with IPv6
         // address.
-        mTunNetworkContext.tearDown();
+        mTunNetworkContext.close();
         mTunNetworkContext = new TunNetworkContext(mLocalAddress);
 
         // Open IKE Session

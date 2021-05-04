@@ -118,7 +118,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
 
     @After
     public void tearDown() throws Exception {
-        mSecondaryTunNetworkContext.tearDown();
+        mSecondaryTunNetworkContext.close();
 
         if (mIkeSession != null) {
             mIkeSession.kill();
@@ -252,7 +252,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         final IkeSession ikeSession = setupAndVerifyIkeSessionWithMobike();
 
         // Teardown test network to kill the IKE Session
-        mTunNetworkContext.tearDown();
+        mTunNetworkContext.close();
 
         final IkeException exception = mIkeSessionCallback.awaitNextOnErrorException();
         assertTrue(exception instanceof IkeNetworkLostException);
