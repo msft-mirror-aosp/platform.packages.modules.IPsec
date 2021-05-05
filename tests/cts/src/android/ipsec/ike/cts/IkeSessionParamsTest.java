@@ -74,6 +74,8 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     private static final int NATT_KEEPALIVE_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(5L);
     private static final int[] RETRANS_TIMEOUT_MS_LIST = new int[] {500, 500, 500, 500, 500, 500};
 
+    private static final int DSCP = 8;
+
     private static final Map<Class<? extends IkeConfigRequest>, Integer> EXPECTED_REQ_COUNT =
             new HashMap<>();
     private static final HashSet<InetAddress> EXPECTED_PCSCF_SERVERS = new HashSet<>();
@@ -136,14 +138,22 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      * <p>Authentication method is arbitrarily selected. Using other method (e.g. setAuthEap) also
      * works.
      */
-    private IkeSessionParams.Builder createIkeParamsBuilderMinimum() {
-        return new IkeSessionParams.Builder(sContext)
-                .setNetwork(mTunNetworkContext.tunNetwork)
+    private IkeSessionParams.Builder createIkeParamsBuilderMinimum(boolean useContext) {
+        final IkeSessionParams.Builder builder =
+                useContext
+                        ? new IkeSessionParams.Builder(sContext)
+                        : new IkeSessionParams.Builder();
+
+        return builder.setNetwork(mTunNetworkContext.tunNetwork)
                 .setServerHostname(IPV4_ADDRESS_REMOTE.getHostAddress())
                 .addSaProposal(SA_PROPOSAL)
                 .setLocalIdentification(LOCAL_ID)
                 .setRemoteIdentification(REMOTE_ID)
                 .setAuthPsk(IKE_PSK);
+    }
+
+    private IkeSessionParams.Builder createIkeParamsBuilderMinimum() {
+        return createIkeParamsBuilderMinimum(true /* useContext */);
     }
 
     /**
@@ -183,6 +193,15 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
         }
         assertTrue(sessionParams.getConfigurationRequests().isEmpty());
         assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
+    }
+
+    @Test
+    public void testBuildWithIkeSessionParams() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum(false /* useContext */).build();
+        IkeSessionParams result = new IkeSessionParams.Builder(sessionParams).build();
+
+        assertEquals(sessionParams, result);
     }
 
     @Test
@@ -255,6 +274,14 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
             }
         }
         assertEquals(EXPECTED_PCSCF_SERVERS, resultAddresses);
+    }
+
+    @Test
+    public void testSetDscp() throws Exception {
+        IkeSessionParams sessionParams = createIkeParamsBuilderMinimum().setDscp(DSCP).build();
+
+        verifyIkeParamsMinimum(sessionParams);
+        assertEquals(DSCP, sessionParams.getDscp());
     }
 
     @Test
