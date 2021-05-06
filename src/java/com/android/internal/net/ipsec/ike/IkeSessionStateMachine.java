@@ -167,6 +167,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.cert.TrustAnchor;
@@ -246,6 +247,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     // indicates that something has gone wrong, and we are out of sync.
     @VisibleForTesting
     static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
+
+    // The maximum number of attempts allowed for a single DNS resolution.
+    static final int MAX_DNS_RESOLUTION_ATTEMPTS = 3;
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -5627,8 +5631,34 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void resolveAndSetAvailableRemoteAddresses() throws IOException {
         // TODO(b/149954916): Do DNS resolution asynchronously
-        InetAddress[] allRemoteAddresses =
-                mNetwork.getAllByName(mIkeSessionParams.getServerHostname());
+        InetAddress[] allRemoteAddresses = null;
+        final String hostname = mIkeSessionParams.getServerHostname();
+
+        for (int attempts = 1;
+                attempts <= MAX_DNS_RESOLUTION_ATTEMPTS && allRemoteAddresses == null;
+                attempts++) {
+            try {
+                allRemoteAddresses = mNetwork.getAllByName(hostname);
+            } catch (UnknownHostException e) {
+                final boolean willRetry = attempts < MAX_DNS_RESOLUTION_ATTEMPTS;
+                logd(
+                        "Failed to look up host for attempt "
+                                + attempts
+                                + ": "
+                                + hostname
+                                + " retrying? "
+                                + willRetry,
+                        e);
+            }
+        }
+        if (allRemoteAddresses == null) {
+            throw new IOException(
+                    "DNS resolution for "
+                            + hostname
+                            + " failed after "
+                            + MAX_DNS_RESOLUTION_ATTEMPTS
+                            + " attempts");
+        }
 
         logd(
                 "Resolved addresses for peer: "
