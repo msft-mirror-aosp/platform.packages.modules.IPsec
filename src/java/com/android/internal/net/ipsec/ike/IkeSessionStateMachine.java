@@ -2539,6 +2539,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mRemoteAddress,
                             getEncapSocketOrNull(),
                             mIkePrf,
+                            mSaProposal.getDhGroupTransforms()[0].id, // negotiated DH
                             mCurrentIkeSaRecord.getSkD());
                     return HANDLED;
                 case CMD_EXECUTE_LOCAL_REQ:
@@ -2622,6 +2623,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mRemoteAddress,
                             getEncapSocketOrNull(),
                             mIkePrf,
+                            mSaProposal.getDhGroupTransforms()[0].id, // negotiated DH
                             mCurrentIkeSaRecord.getSkD());
                     break;
                 case CMD_LOCAL_REQUEST_REKEY_CHILD:

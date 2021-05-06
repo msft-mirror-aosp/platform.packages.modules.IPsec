@@ -1941,6 +1941,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(REMOTE_ADDRESS),
                         any(), // udpEncapSocket
                         eq(mIkeSessionStateMachine.mIkePrf),
+                        eq(mIkeSessionStateMachine.mSaProposal.getDhGroupTransforms()[0].id),
                         any()); // sk_d
 
         // Once for initial child, a second time for the additional child.
@@ -2702,6 +2703,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         eq(expectedRemoteAddress),
                         any(), // udpEncapSocket
                         eq(mIkeSessionStateMachine.mIkePrf),
+                        eq(mIkeSessionStateMachine.mSaProposal.getDhGroupTransforms()[0].id),
                         any()); // sk_d
         List<IkePayload> childReqList = mReqPayloadListCaptor.getValue();
         List<IkePayload> childRespList = mRespPayloadListCaptor.getValue();
