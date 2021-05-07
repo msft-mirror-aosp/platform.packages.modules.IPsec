@@ -117,7 +117,7 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
 
         // Open additional Child Session
-        TestChildSessionCallback additionalChildCb = new TestChildSessionCallback();
+        TestChildSessionCallback additionalChildCb = new DefaultTestChildSessionCallback();
         ikeSession.openChildSession(buildTunnelModeChildSessionParams(), additionalChildCb);
         mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
@@ -313,8 +313,7 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         mIkeSessionCallback.awaitOnClosed();
     }
 
-    @Test
-    public void testIkeInitFail() throws Exception {
+    private void verifyIkeInitFail() throws Exception {
         final String ikeInitFailRespHex =
                 "46B8ECA1E0D72A180000000000000000292022200000000000000024000000080000000E";
 
@@ -333,6 +332,18 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
                 (IkeProtocolException) mIkeSessionCallback.awaitOnClosedException();
         assertEquals(ERROR_TYPE_NO_PROPOSAL_CHOSEN, protocolException.getErrorType());
         assertArrayEquals(EXPECTED_PROTOCOL_ERROR_DATA_NONE, protocolException.getErrorData());
+    }
+
+    @Test
+    public void testIkeInitFail() throws Exception {
+        verifyIkeInitFail();
+    }
+
+    @Test
+    public void testIkeInitFailWithLegacyCb() throws Exception {
+        mIkeSessionCallback = new LegacyTestIkeSessionCallback();
+        mFirstChildSessionCallback = new LegacyTestChildSessionCallback();
+        verifyIkeInitFail();
     }
 
     @Test
@@ -366,8 +377,7 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
         assertArrayEquals(EXPECTED_PROTOCOL_ERROR_DATA_NONE, protocolException.getErrorData());
     }
 
-    @Test
-    public void testIkeAuthHandlesFirstChildCreationFail() throws Exception {
+    private void verifyIkeAuthHandlesFirstChildCreationFail() throws Exception {
         final String ikeInitRespHex =
                 "46B8ECA1E0D72A18F5ABBF896A1240BE2120222000000000000001502200"
                         + "00300000002C010100040300000C0100000C800E0100030000080300000C"
@@ -405,5 +415,17 @@ public class IkeSessionPskTest extends IkeSessionPskTestBase {
 
         ikeSession.kill();
         mIkeSessionCallback.awaitOnClosed();
+    }
+
+    @Test
+    public void testIkeAuthHandlesFirstChildCreationFail() throws Exception {
+        verifyIkeAuthHandlesFirstChildCreationFail();
+    }
+
+    @Test
+    public void testIkeAuthHandlesFirstChildCreationFailWithLegacyCb() throws Exception {
+        mIkeSessionCallback = new LegacyTestIkeSessionCallback();
+        mFirstChildSessionCallback = new LegacyTestChildSessionCallback();
+        verifyIkeAuthHandlesFirstChildCreationFail();
     }
 }
