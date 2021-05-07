@@ -144,8 +144,8 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         mTunNetworkContext = new TunNetworkContext(mLocalAddress);
 
         mUserCbExecutor = Executors.newSingleThreadExecutor();
-        mIkeSessionCallback = new TestIkeSessionCallback();
-        mFirstChildSessionCallback = new TestChildSessionCallback();
+        mIkeSessionCallback = new DefaultTestIkeSessionCallback();
+        mFirstChildSessionCallback = new DefaultTestChildSessionCallback();
     }
 
     @After
@@ -287,19 +287,22 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
                 IKE_DETERMINISTIC_INITIATOR_SPI, expectedMsgId, expectedUseEncap, deleteIkeRespHex);
     }
 
-    /** Testing callback that allows caller to block current thread until a method get called */
-    static class TestIkeSessionCallback implements IkeSessionCallback {
+    /**
+     * Base testing callback that allows caller to block current thread until a method get called
+     */
+    abstract static class TestIkeSessionCallback implements IkeSessionCallback {
         private CompletableFuture<IkeSessionConfiguration> mFutureIkeConfig =
                 new CompletableFuture<>();
         private CompletableFuture<Boolean> mFutureOnClosedCall = new CompletableFuture<>();
-        private CompletableFuture<IkeException> mFutureOnClosedException =
-                new CompletableFuture<>();
         private CompletableFuture<IkeSessionConnectionInfo> mFutureConnectionConfig =
                 new CompletableFuture<>();
 
         private int mOnErrorExceptionsCount = 0;
         private ArrayTrackRecord<IkeException> mOnErrorExceptionsTrackRecord =
                 new ArrayTrackRecord<>();
+
+        protected CompletableFuture<IkeException> mFutureOnClosedException =
+                new CompletableFuture<>();
 
         @Override
         public void onOpened(@NonNull IkeSessionConfiguration sessionConfiguration) {
@@ -309,11 +312,6 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         @Override
         public void onClosed() {
             mFutureOnClosedCall.complete(true /* unused */);
-        }
-
-        @Override
-        public void onClosedExceptionally(@NonNull IkeException exception) {
-            mFutureOnClosedException.complete(exception);
         }
 
         @Override
@@ -353,12 +351,31 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         }
     }
 
-    /** Testing callback that allows caller to block current thread until a method get called */
-    static class TestChildSessionCallback implements ChildSessionCallback {
+    /** Default testing callback for all IKE exchange tests */
+    static class DefaultTestIkeSessionCallback extends TestIkeSessionCallback {
+        @Override
+        public void onClosedWithException(@NonNull IkeException exception) {
+            mFutureOnClosedException.complete(exception);
+        }
+    }
+
+    /** Testing callback to verify deprecated methods before they are removed */
+    static class LegacyTestIkeSessionCallback extends TestIkeSessionCallback {
+        @Override
+        public void onClosedExceptionally(@NonNull IkeException exception) {
+            mFutureOnClosedException.complete(exception);
+        }
+    }
+
+    /**
+     * Base testing callback that allows caller to block current thread until a method get called
+     */
+    abstract static class TestChildSessionCallback implements ChildSessionCallback {
         private CompletableFuture<ChildSessionConfiguration> mFutureChildConfig =
                 new CompletableFuture<>();
         private CompletableFuture<Boolean> mFutureOnClosedCall = new CompletableFuture<>();
-        private CompletableFuture<IkeException> mFutureOnClosedException =
+
+        protected CompletableFuture<IkeException> mFutureOnClosedException =
                 new CompletableFuture<>();
 
         private int mCreatedIpSecTransformCount = 0;
@@ -446,6 +463,22 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
 
         public void awaitOnClosed() throws Exception {
             mFutureOnClosedCall.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /** Default testing callback for all IKE exchange tests */
+    static class DefaultTestChildSessionCallback extends TestChildSessionCallback {
+        @Override
+        public void onClosedWithException(@NonNull IkeException exception) {
+            mFutureOnClosedException.complete(exception);
+        }
+    }
+
+    /** Testing callback to verify deprecated methods before they are removed */
+    static class LegacyTestChildSessionCallback extends TestChildSessionCallback {
+        @Override
+        public void onClosedExceptionally(@NonNull IkeException exception) {
+            mFutureOnClosedException.complete(exception);
         }
     }
 
