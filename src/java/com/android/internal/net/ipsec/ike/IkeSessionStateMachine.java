@@ -73,7 +73,6 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.LinkProperties;
 import android.net.Network;
-import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
@@ -160,6 +159,7 @@ import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.ike.utils.Retransmitter;
 import com.android.internal.util.State;
+import com.android.modules.utils.build.SdkLevel;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -167,6 +167,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.cert.TrustAnchor;
@@ -246,6 +247,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     // indicates that something has gone wrong, and we are out of sync.
     @VisibleForTesting
     static final long TEMP_FAILURE_RETRY_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(5L);
+
+    // The maximum number of attempts allowed for a single DNS resolution.
+    static final int MAX_DNS_RESOLUTION_ATTEMPTS = 3;
 
     // Package private IKE exchange subtypes describe the specific function of a IKE
     // request/response exchange. It helps IkeSessionStateMachine to do message validation according
@@ -362,11 +366,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DPD, "DPD");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_MOBIKE, "MOBIKE migration event");
     }
-
-    private static final NetworkRequest NETWORK_REQUEST =
-            new NetworkRequest.Builder()
-                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-                    .build();
 
     /** Package */
     @VisibleForTesting final IkeSessionParams mIkeSessionParams;
@@ -552,10 +551,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             LocalRequestFactory localRequestFactory) {
         super(TAG, looper, userCbExecutor);
 
-        if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
-                && firstChildParams instanceof TransportModeChildSessionParams) {
-            throw new IllegalArgumentException(
-                    "Transport Mode SAs not supported when MOBIKE is enabled");
+        if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)) {
+            if (firstChildParams instanceof TransportModeChildSessionParams) {
+                throw new IllegalArgumentException(
+                        "Transport Mode SAs not supported when MOBIKE is enabled");
+            } else if (!SdkLevel.isAtLeastS()) {
+                throw new IllegalStateException("MOBIKE only supported for S+");
+            }
         }
 
         synchronized (IKE_SESSION_LOCK) {
@@ -942,6 +944,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     private void getAndSwitchToIkeSocket(boolean isIpv4, boolean useEncapPort) {
         try {
             IkeSocket newSocket = getIkeSocket(isIpv4, useEncapPort);
+            if (newSocket == mIkeSocket) {
+                // Attempting to switch to current socket - ignore.
+                return;
+            }
             switchToIkeSocket(newSocket);
             if (isIpv4 && useEncapPort) {
                 mIkeNattKeepalive = buildAndStartNattKeepalive();
@@ -3365,11 +3371,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     initIkeSpi, respIkeSpi, natSourcePayloads, natDestPayload);
 
             if (mLocalNatDetected || mRemoteNatDetected) {
-                logd("Switching to send to remote port 4500");
+                logd("Switching to send to remote port 4500 if it's not already");
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
                 try {
                     IkeSocket newSocket = getIkeSocket(isIpv4, true /* useEncapPort */);
+                    if (newSocket == mIkeSocket) {
+                        // Attempting to switch to current socket - ignore.
+                        return;
+                    }
+                    // TODO(b/186900683): use getAndSwitchToIkeSocket here instead
                     switchToIkeSocket(initIkeSpi, newSocket);
                     mLocalPort = mIkeSocket.getLocalPort();
 
@@ -3599,8 +3610,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             transitionTo(mChildProcedureOngoing);
         }
 
-        // IkeSessionConnectionInfo was released as system API since Android R and does not depend
-        // on any new platform or module API
+        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
+        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
+        // way when b/177434707 is fixed.
         @SuppressLint("NewApi")
         protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
             IkeConfigPayload configPayload =
@@ -3651,11 +3663,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 try {
                     if (mIkeSessionParams.getConfiguredNetwork() != null) {
                         // Caller configured a specific Network - track it
+                        // ConnectivityManager does not provide a callback for tracking a specific
+                        // Network. In order to do so, create a NetworkRequest without any
+                        // capabilities so it will match all Networks. The NetworkCallback will then
+                        // filter for the correct (caller-specified) Network.
+                        NetworkRequest request =
+                                new NetworkRequest.Builder().clearCapabilities().build();
                         mNetworkCallback =
                                 new IkeSpecificNetworkCallback(
                                         IkeSessionStateMachine.this, mNetwork, mLocalAddress);
                         mConnectivityManager.registerNetworkCallback(
-                                NETWORK_REQUEST, mNetworkCallback, getHandler());
+                                request, mNetworkCallback, getHandler());
                     } else {
                         // Caller did not configure a specific Network - track the default
                         mNetworkCallback =
@@ -5279,8 +5297,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
-        // IkeSessionConnectionInfo was released as system API since Android R and does not depend
-        // on any new platform or module API
+        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
+        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
+        // way when b/177434707 is fixed.
         @SuppressLint("NewApi")
         @Override
         public void handleResponseIkeMessage(IkeMessage resp) {
@@ -5612,8 +5631,34 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void resolveAndSetAvailableRemoteAddresses() throws IOException {
         // TODO(b/149954916): Do DNS resolution asynchronously
-        InetAddress[] allRemoteAddresses =
-                mNetwork.getAllByName(mIkeSessionParams.getServerHostname());
+        InetAddress[] allRemoteAddresses = null;
+        final String hostname = mIkeSessionParams.getServerHostname();
+
+        for (int attempts = 1;
+                attempts <= MAX_DNS_RESOLUTION_ATTEMPTS && allRemoteAddresses == null;
+                attempts++) {
+            try {
+                allRemoteAddresses = mNetwork.getAllByName(hostname);
+            } catch (UnknownHostException e) {
+                final boolean willRetry = attempts < MAX_DNS_RESOLUTION_ATTEMPTS;
+                logd(
+                        "Failed to look up host for attempt "
+                                + attempts
+                                + ": "
+                                + hostname
+                                + " retrying? "
+                                + willRetry,
+                        e);
+            }
+        }
+        if (allRemoteAddresses == null) {
+            throw new IOException(
+                    "DNS resolution for "
+                            + hostname
+                            + " failed after "
+                            + MAX_DNS_RESOLUTION_ATTEMPTS
+                            + " attempts");
+        }
 
         logd(
                 "Resolved addresses for peer: "

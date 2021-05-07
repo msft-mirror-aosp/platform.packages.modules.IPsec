@@ -18,25 +18,16 @@ package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
 import android.annotation.SuppressLint;
-import android.net.TunnelConnectionParams;
 
 import java.util.Objects;
 
 /**
  * IkeTunnelConnectionParams contains IKEv2 configurations to establish an IKE/IPsec tunnel.
  *
- * <p>This class is an extension of the {@link TunnelConnectionParams}, containing IKEv2-specific
- * configuration, authentication and authorization parameters.
- *
- * @see TunnelConnectionParams
+ * <p>This class containing IKEv2-specific configuration, authentication and authorization
+ * parameters to establish an IKE/IPsec tunnel.
  */
-// TODO: b/186071626 Remove TunnelConnectionParams when non-updatable API stub can resolve
-// IkeTunnelConnectionParams.
-// TODO:b/185579441 Annotate this class with @RequiresApi(Build.VERSION_CODES.S) if it still
-// inherits TunnelConnectionParams when
-// @RequiresApi issue is fixed.
-@SuppressLint("NewApi")
-public final class IkeTunnelConnectionParams implements TunnelConnectionParams {
+public final class IkeTunnelConnectionParams {
     private final IkeSessionParams mIkeParams;
     private final TunnelModeChildSessionParams mChildParams;
 
@@ -75,6 +66,10 @@ public final class IkeTunnelConnectionParams implements TunnelConnectionParams {
     }
 
     /** @hide */
+    // TODO: b/177434707 Calling IkeTunnelConnectionParams is safe because it does not depend on any
+    // platform API added after SDK R. Handle this case in a mainline standard way when b/177434707
+    // is fixed.
+    @SuppressLint("NewApi")
     @Override
     public boolean equals(Object o) {
         if (!(o instanceof IkeTunnelConnectionParams)) {

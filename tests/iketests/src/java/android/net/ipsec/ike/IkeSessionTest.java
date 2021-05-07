@@ -30,6 +30,8 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
 
+import androidx.test.filters.SdkSuppress;
+
 import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine;
 import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachineTest;
 import com.android.internal.net.ipsec.test.ike.IkeSessionTestBase;
@@ -187,6 +189,7 @@ public final class IkeSessionTest extends IkeSessionTestBase {
     }
 
     @Test(expected = IllegalArgumentException.class)
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testThrowWhenSetupMobikeWithTransport() throws Exception {
         IkeSession ikeSession =
                 new IkeSession(

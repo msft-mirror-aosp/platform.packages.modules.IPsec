@@ -87,6 +87,7 @@ import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.atLeast;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -139,6 +140,8 @@ import android.net.ipsec.test.ike.ike3gpp.Ike3gppParams;
 import android.os.Looper;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
+
+import androidx.test.filters.SdkSuppress;
 
 import com.android.internal.net.TestUtils;
 import com.android.internal.net.eap.test.EapAuthenticator;
@@ -208,11 +211,13 @@ import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
@@ -1460,22 +1465,81 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         config.respSpi.close();
     }
 
-    @Test
-    public void testResolveRemoteHostName() throws Exception {
+    private void setupDnsResolutionForNetwork(
+            Network network, int dnsLookupsForSuccess, InetAddress remoteAddress)
+            throws Exception {
+        doAnswer(new Answer() {
+            private int mAttempedDnsLookups = 0;
+
+            public Object answer(InvocationOnMock invocation) throws IOException {
+                mAttempedDnsLookups++;
+                if (mAttempedDnsLookups < dnsLookupsForSuccess) {
+                    throw new UnknownHostException("DNS failed");
+                } else {
+                    return new InetAddress[] {remoteAddress};
+                }
+            }
+        }).when(network).getAllByName(REMOTE_HOSTNAME);
+    }
+
+    private void setupAndVerifyDnsResolutionForIkeSession(
+            int dnsLookupsForSuccess, int expectedDnsLookups, boolean expectSessionClosed)
+            throws Exception {
         mIkeSessionStateMachine.quitNow();
 
         // Reset the network to ignore DNS resolution from mIkeSessionStateMachine creation in
         // setUp()
         resetDefaultNetwork();
 
+        setupDnsResolutionForNetwork(mMockDefaultNetwork, dnsLookupsForSuccess, REMOTE_ADDRESS);
+
         IkeSessionParams ikeParams =
                 buildIkeSessionParamsCommon()
                         .setAuthPsk(mPsk)
                         .setServerHostname(REMOTE_HOSTNAME)
                         .build();
-        mIkeSessionStateMachine = makeAndStartIkeSession(ikeParams);
+        mIkeSessionStateMachine =
+                makeAndStartIkeSession(
+                        ikeParams,
+                        false /* needSetMockIkeSocket */,
+                        LOCAL_ADDRESS,
+                        expectSessionClosed ? null : REMOTE_ADDRESS);
 
-        verify(mMockDefaultNetwork).getAllByName(REMOTE_HOSTNAME);
+        verify(mMockDefaultNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
+        if (expectSessionClosed) {
+            assertNull(mIkeSessionStateMachine.getCurrentState());
+            verify(mMockIkeSessionCallback)
+                    .onClosedWithException(
+                            argThat(
+                                    e ->
+                                            e instanceof IkeInternalException
+                                                    && e.getCause() instanceof IOException));
+        }
+    }
+
+    @Test
+    public void testResolveRemoteHostName() throws Exception {
+        setupAndVerifyDnsResolutionForIkeSession(
+                1 /* dnsLookupsForSuccess */,
+                1 /* expectedDnsLookups */,
+                false /* expectSessionClosed */);
+    }
+
+    @Test
+    public void testResolveRemoteHostNameWithDnsRetries() throws Exception {
+        setupAndVerifyDnsResolutionForIkeSession(
+                2 /* dnsLookupsForSuccess */,
+                2 /* expectedDnsLookups */,
+                false /* expectSessionClosed */);
+    }
+
+    @Test
+    public void testResolveRemoteHostNameWithDnsFailure() throws Exception {
+        // Require more lookups for successful DNS than IKE allows to force failure
+        setupAndVerifyDnsResolutionForIkeSession(
+                4 /* dnsLookupsForSuccess */,
+                3 /* expectedDnsLookups */,
+                true /* expectSessionClosed */);
     }
 
     @Test
@@ -1622,8 +1686,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mSpyIkeUdp4Socket).unregisterIke(anyLong());
     }
 
-    @Test
-    public void testInitialStateWithEnforcePort4500() throws Exception {
+    private void restartIkeSessionWithEnforcePort4500AndVerifyIkeSocket() throws Exception {
         // Quit and start a new IKE Session with IKE_OPTION_FORCE_PORT_4500
         mIkeSessionStateMachine.quitNow();
         IkeSessionParams ikeParams =
@@ -1633,6 +1696,31 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdpEncapSocket);
+    }
+
+    @Test
+    public void testInitialStateWithEnforcePort4500() throws Exception {
+        restartIkeSessionWithEnforcePort4500AndVerifyIkeSocket();
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeInitNatTraversalWithEnforcePort4500() throws Exception {
+        restartIkeSessionWithEnforcePort4500AndVerifyIkeSocket();
+        setupFirstIkeSa();
+
+        final IkeSocket ikeSocket = mIkeSessionStateMachine.mIkeSocket;
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+        mLooper.dispatchAll();
+
+        receiveAndGetIkeInitResp();
+
+        assertEquals(ikeSocket, mIkeSessionStateMachine.mIkeSocket);
+        assertTrue(mIkeSessionStateMachine.mSupportNatTraversal);
+        assertTrue(mIkeSessionStateMachine.mLocalNatDetected);
+        assertTrue(
+                mIkeSessionStateMachine.mLocalNatDetected
+                        || mIkeSessionStateMachine.mRemoteNatDetected);
     }
 
     @Test
@@ -1692,6 +1780,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testCreateIkeLocalIkeInitSendsNatDetectionPayloadsWhenIpv6() throws Exception {
         mIkeSessionStateMachine.quitNow();
         resetMockConnectManager();
@@ -4906,6 +4995,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test(expected = IllegalArgumentException.class)
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testOpenChildSessionWithMobikeAndTransport() throws Exception {
         mIkeSessionStateMachine = restartStateMachineWithMobikeConfigured();
 
@@ -5470,6 +5560,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabled() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportMobike */);
 
@@ -5477,6 +5568,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledPeerUnsupported() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportMobike */);
 
@@ -5484,6 +5576,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledWithEap() throws Exception {
         List<IkePayload> authRelatedPayloads = new ArrayList<>();
         authRelatedPayloads.add(new IkeNotifyPayload(NOTIFY_TYPE_MOBIKE_SUPPORTED));
@@ -5496,6 +5589,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNattSupportedIpv4() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportNatt */, true /* isIpv4 */);
 
@@ -5503,6 +5597,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNattUnsupportedIpv4() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportNatt */, true /* isIpv4 */);
 
@@ -5510,6 +5605,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNattSupportedIpv6() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportNatt */, false /* isIpv4 */);
 
@@ -5517,6 +5613,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNattUnsupportedIpv6() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportNatt */, false /* isIpv4 */);
 
@@ -5725,6 +5822,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeNetworkCallbackRegistrationFails() throws Exception {
         doThrow(new RuntimeException("Failed to register IKE NetworkCallback"))
                 .when(mMockConnectManager)
@@ -5749,6 +5847,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeEnabledNetworkDies() throws Exception {
         IkeDefaultNetworkCallback callback = verifyMobikeEnabled(true /* doesPeerSupportMobike */);
         callback.onLost(mMockDefaultNetwork);
@@ -5782,12 +5881,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeActiveMobilityEvent() throws Exception {
         verifyMobikeActiveMobilityEvent(false /* isEnforcePort4500 */);
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdp4Socket);
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeActiveMobilityEventWithEnforcePort4500() throws Exception {
         verifyMobikeActiveMobilityEvent(true /* isEnforcePort4500 */);
         assertTrue(mIkeSessionStateMachine.mIkeSocket instanceof IkeUdpEncapSocket);
@@ -5809,6 +5910,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private Network mockNewNetworkAndAddress(
             boolean isIpv4, InetAddress localAddress, InetAddress remoteAddress) throws Exception {
+        return mockNewNetworkAndAddress(isIpv4, localAddress, remoteAddress, 1 /* dnsLookups */);
+    }
+
+    private Network mockNewNetworkAndAddress(
+            boolean isIpv4, InetAddress localAddress, InetAddress remoteAddress, int dnsLookups)
+            throws Exception {
         Network newNetwork = mock(Network.class);
 
         if (isIpv4) {
@@ -5821,7 +5928,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
         }
 
-        doReturn(new InetAddress[] {remoteAddress}).when(newNetwork).getAllByName(REMOTE_HOSTNAME);
+        setupDnsResolutionForNetwork(newNetwork, dnsLookups, remoteAddress);
 
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
                         eq(newNetwork), eq(isIpv4), eq(remoteAddress), anyInt()))
@@ -5846,7 +5953,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verifyIkeSaAddresses(
                 mIkeSessionStateMachine.mCurrentIkeSaRecord, localAddress, remoteAddress);
 
-        verify(underlyingNetwork).getAllByName(REMOTE_HOSTNAME);
+        verify(underlyingNetwork, atLeastOnce()).getAllByName(REMOTE_HOSTNAME);
 
         assertEquals(underlyingNetwork, networkCallback.getNetwork());
         assertEquals(localAddress, networkCallback.getAddress());
@@ -5873,6 +5980,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test(expected = IllegalStateException.class)
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkMobikeActiveNetworkNotSpecified() throws Exception {
         Network newNetwork = mock(Network.class);
 
@@ -5971,6 +6079,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattSupportedIpv4ToIpv6() throws Exception {
         verifySetNetworkInIdleState(
                 true /* doesPeerSupportNatt */,
@@ -5979,6 +6088,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattSupportedIpv6ToIpv4() throws Exception {
         verifySetNetworkInIdleState(
                 true /* doesPeerSupportNatt */,
@@ -5987,6 +6097,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattSupportedIpv4ToIpv4() throws Exception {
         verifySetNetworkInIdleState(
                 true /* doesPeerSupportNatt */,
@@ -5995,6 +6106,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattSupportedIpv6ToIpv6() throws Exception {
         verifySetNetworkInIdleState(
                 true /* doesPeerSupportNatt */,
@@ -6003,6 +6115,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattUnsupportedIpv4ToIpv4() throws Exception {
         verifySetNetworkInIdleState(
                 false /* doesPeerSupportNatt */,
@@ -6011,6 +6124,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkInIdleStateNattUnsupportedIpv6ToIpv6() throws Exception {
         verifySetNetworkInIdleState(
                 false /* doesPeerSupportNatt */,
@@ -6019,6 +6133,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkLocalRekeyState() throws Exception {
         // Start IKE Session + transition to Idle
         IkeNetworkCallbackBase callback =
@@ -6035,6 +6150,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testSetNetworkRemoteRekeyState() throws Exception {
         // Start IKE Session + transition to remote rekey
         IkeNetworkCallbackBase callback =
@@ -6132,6 +6248,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoSendsRequest() throws Exception {
         setupIdleStateMachineWithMobike();
 
@@ -6143,6 +6260,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoSendsRequestWithoutNatDetection() throws Exception {
         setupIdleStateMachineWithMobike();
         mIkeSessionStateMachine.mSupportNatTraversal = false;
@@ -6155,6 +6273,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesResponse() throws Exception {
         setupIdleStateMachineWithMobike();
 
@@ -6172,6 +6291,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesResponseWithNatDetectionIpv6() throws Exception {
         setupIdleStateMachineWithMobike(true /* doesPeerSupportNatt */, false /* isIpv4 */);
 
@@ -6190,6 +6310,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesResponseWithoutNatDetection() throws Exception {
         setupIdleStateMachineWithMobike();
         mIkeSessionStateMachine.mSupportNatTraversal = false;
@@ -6274,6 +6395,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testNattKeepaliveStoppedDuringMobilityEvent() throws Exception {
         IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
 
@@ -6288,6 +6410,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesDeleteRequest() throws Exception {
         setupIdleStateMachineWithMobike();
 
@@ -6305,6 +6428,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeLocalInfoHandlesNonDeleteRequest() throws Exception {
         setupIdleStateMachineWithMobike();
 
@@ -6331,20 +6455,65 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.getCurrentState());
     }
 
-    @Test
-    public void testDnsLookupOnSetNetwork() throws Exception {
+    private void setupAndVerifyDnsLookupsOnSetNetwork(
+            int dnsLookupsForSuccess, int expectedDnsLookups, boolean expectSessionClosed)
+            throws Exception {
         final IkeNetworkCallbackBase callback = setupIdleStateMachineWithMobike();
 
-        final Network newNetwork = mockNewNetworkAndAddress(false /* isIpv4 */);
+        final Network newNetwork =
+                mockNewNetworkAndAddress(
+                        false /* isIpv4 */,
+                        UPDATED_LOCAL_ADDRESS_V6,
+                        REMOTE_ADDRESS_V6,
+                        dnsLookupsForSuccess);
 
         mIkeSessionStateMachine.setNetwork(newNetwork);
         mLooper.dispatchAll();
 
-        assertTrue(mIkeSessionStateMachine.mRemoteAddressesV4.isEmpty());
-        assertEquals(Arrays.asList(REMOTE_ADDRESS_V6), mIkeSessionStateMachine.mRemoteAddressesV6);
-        verify(newNetwork).getAllByName(REMOTE_HOSTNAME);
-        verifyNetworkAndLocalAddressUpdated(
-                newNetwork, UPDATED_LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6, callback);
+        verify(newNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
+        if (expectSessionClosed) {
+            assertNull(mIkeSessionStateMachine.getCurrentState());
+            verify(mMockIkeSessionCallback)
+                    .onClosedWithException(
+                            argThat(
+                                    e ->
+                                            e instanceof IkeInternalException
+                                                    && e.getCause() instanceof IOException));
+        } else {
+            assertTrue(mIkeSessionStateMachine.mRemoteAddressesV4.isEmpty());
+            assertEquals(
+                    Arrays.asList(REMOTE_ADDRESS_V6), mIkeSessionStateMachine.mRemoteAddressesV6);
+            verifyNetworkAndLocalAddressUpdated(
+                    newNetwork, UPDATED_LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6, callback);
+        }
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testDnsLookupOnSetNetwork() throws Exception {
+        setupAndVerifyDnsLookupsOnSetNetwork(
+                1 /* dnsLookupsForSuccess */,
+                1 /* expectedDnsLookups */,
+                false /* expectSessionClosed */);
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testDnsLookupOnSetNetworkWithDnsRetries() throws Exception {
+        setupAndVerifyDnsLookupsOnSetNetwork(
+                2 /* dnsLookupsForSuccess */,
+                2 /* expectedDnsLookups */,
+                false /* expectSessionClosed */);
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testDnsLookupOnSetNetworkWithDnsFailure() throws Exception {
+        // Require more lookups for successful DNS than IKE allows to force failure
+        setupAndVerifyDnsLookupsOnSetNetwork(
+                4 /* dnsLookupsForSuccess */,
+                3 /* expectedDnsLookups */,
+                true /* expectSessionClosed */);
     }
 
     @Test
