@@ -74,14 +74,14 @@ java_sdk_library {
 filegroup {
     name: "ike-srcs",
     srcs: [
-        "src/java/**/*.java",
+        ":ike-internal-srcs",
         ":framework-ike-shared-srcs",
     ],
 }
 
 filegroup {
-    name: "ike-api-srcs",
-    srcs: ["src/java/android/**/*.java"],
+    name: "ike-internal-srcs",
+    srcs: ["src/java/**/*.java"],
     path: "src/java/",
 }
 
