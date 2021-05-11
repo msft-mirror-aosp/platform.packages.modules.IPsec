@@ -44,6 +44,7 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_R
 
 import android.annotation.IntDef;
 import android.annotation.Nullable;
+import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -1792,15 +1793,29 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
+        // TODO: b/177434707 Calling ChildSaProposal is safe because it does not depend on any
+        // platform API added after SDK R. Handle this case in a mainline standard way when
+        // b/177434707 is fixed.
+        @SuppressLint("NewApi")
         private boolean isKePayloadAcceptable(IkeKePayload reqKePayload) {
             ChildSaProposal proposal =
                     mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
 
             // Verify if this proposal is accepted by user
             for (SaProposal saProposal : mChildSessionParams.getSaProposals()) {
-                if (proposal.isNegotiatedFrom(saProposal)) {
+                if (!saProposal.getDhGroups().isEmpty() && proposal.isNegotiatedFrom(saProposal)) {
+                    // If user has specified Child DH group in this saProposal, check proposal
+                    // against saProposal
+                    return true;
+                } else if (reqKePayload.dhGroup == mIkeDhGroup
+                        && proposal.isNegotiatedFrom(
+                                ((ChildSaProposal) saProposal)
+                                        .getCopyWithAdditionalDhTransform(reqKePayload.dhGroup))) {
+                    // If user has not specified Child DH group in this saProposal, check proposal
+                    // against saProposal + mIkeDhGroup
                     return true;
                 }
+
             }
 
             return false;
