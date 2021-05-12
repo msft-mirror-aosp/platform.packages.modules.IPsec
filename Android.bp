@@ -23,6 +23,7 @@ java_sdk_library {
 
     // ike is used as a shared library.
     shared_library: true,
+    compile_dex: true,
 
     aidl: {
         local_include_dirs: ["src/java"],
