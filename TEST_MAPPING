@@ -13,6 +13,14 @@
     },
     {
       "name": "CtsIkeTestCases"
+    },
+    {
+      "name": "CtsNetTestCases",
+      "options": [
+        {
+          "include-filter": "android.net.cts.Ikev2VpnTest"
+        }
+      ]
     }
   ],
   "postsubmit": [
@@ -21,6 +29,14 @@
     },
     {
       "name": "CtsIkeTestCases"
+    },
+    {
+      "name": "CtsNetTestCases",
+      "options": [
+        {
+          "include-filter": "android.net.cts.Ikev2VpnTest"
+        }
+      ]
     }
   ]
 }
