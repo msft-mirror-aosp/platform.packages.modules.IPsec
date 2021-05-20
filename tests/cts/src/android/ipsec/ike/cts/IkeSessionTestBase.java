@@ -316,12 +316,14 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
 
         @Override
         public void onError(@NonNull IkeException exception) {
+            IkeSessionCallback.super.onError(exception);
             mOnErrorExceptionsTrackRecord.add(exception);
         }
 
         @Override
         public void onIkeSessionConnectionInfoChanged(
                 @NonNull IkeSessionConnectionInfo connectionInfo) {
+            IkeSessionCallback.super.onIkeSessionConnectionInfoChanged(connectionInfo);
             mFutureConnectionConfig.complete(connectionInfo);
         }
 
@@ -396,11 +398,6 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         @Override
         public void onClosed() {
             mFutureOnClosedCall.complete(true /* unused */);
-        }
-
-        @Override
-        public void onClosedExceptionally(@NonNull IkeException exception) {
-            mFutureOnClosedException.complete(exception);
         }
 
         @Override
