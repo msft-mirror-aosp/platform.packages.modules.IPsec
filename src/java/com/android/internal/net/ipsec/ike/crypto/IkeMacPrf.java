@@ -164,8 +164,9 @@ public class IkeMacPrf extends IkeMac {
      */
     public byte[] generateSKeySeed(byte[] nonceInit, byte[] nonceResp, byte[] sharedDhKey) {
         ByteBuffer keyBuffer = null;
-        if (getAlgorithmId() == SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC) {
-            keyBuffer = ByteBuffer.allocate(PSEUDORANDOM_FUNCTION_AES128_XCBC_KEY_LEN);
+        if (getAlgorithmId() == SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC
+                || getAlgorithmId() == SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC) {
+            keyBuffer = ByteBuffer.allocate(getKeyLength());
             // When generating initial keys, use 8 bytes each from initiator and responder nonces as
             // per RFC 7296
             keyBuffer

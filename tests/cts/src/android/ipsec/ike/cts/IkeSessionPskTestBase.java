@@ -20,6 +20,7 @@ import static android.app.AppOpsManager.OP_MANAGE_IPSEC_TUNNELS;
 
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeFqdnIdentification;
+import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSession;
 import android.net.ipsec.ike.IkeSessionParams;
 
@@ -48,27 +49,50 @@ abstract class IkeSessionPskTestBase extends IkeSessionTestBase {
         return openIkeSession(remoteAddress, buildTunnelModeChildSessionParams());
     }
 
+    protected IkeSession openIkeSessionWithTunnelModeChild(
+            InetAddress remoteAddress, IkeSessionParams ikeParams) {
+        return openIkeSession(remoteAddress, ikeParams, buildTunnelModeChildSessionParams());
+    }
+
     protected IkeSession openIkeSessionWithTransportModeChild(InetAddress remoteAddress) {
         return openIkeSession(remoteAddress, buildTransportModeChildParamsWithDefaultTs());
     }
 
     protected IkeSessionParams.Builder createIkeParamsBuilderBase(InetAddress remoteAddress) {
-        return new IkeSessionParams.Builder(sContext)
-                .setNetwork(mTunNetworkContext.tunNetwork)
-                .setServerHostname(remoteAddress.getHostAddress())
-                .addSaProposal(SaProposalTest.buildIkeSaProposalWithNormalModeCipher())
-                .addSaProposal(SaProposalTest.buildIkeSaProposalWithCombinedModeCipher())
-                .setLocalIdentification(new IkeFqdnIdentification(LOCAL_HOSTNAME))
-                .setRemoteIdentification(new IkeFqdnIdentification(REMOTE_HOSTNAME))
-                .setAuthPsk(IKE_PSK);
+        return createIkeParamsBuilderBase(
+                remoteAddress,
+                SaProposalTest.buildIkeSaProposalWithNormalModeCipher(),
+                SaProposalTest.buildIkeSaProposalWithCombinedModeCipher());
+    }
+
+    protected IkeSessionParams.Builder createIkeParamsBuilderBase(
+            InetAddress remoteAddress, IkeSaProposal... saProposals) {
+        final IkeSessionParams.Builder builder =
+                new IkeSessionParams.Builder(sContext)
+                        .setNetwork(mTunNetworkContext.tunNetwork)
+                        .setServerHostname(remoteAddress.getHostAddress())
+                        .setLocalIdentification(new IkeFqdnIdentification(LOCAL_HOSTNAME))
+                        .setRemoteIdentification(new IkeFqdnIdentification(REMOTE_HOSTNAME))
+                        .setAuthPsk(IKE_PSK);
+
+        for (IkeSaProposal saProposal : saProposals) {
+            builder.addSaProposal(saProposal);
+        }
+
+        return builder;
     }
 
     protected abstract IkeSessionParams getIkeSessionParams(InetAddress remoteAddress);
 
     private IkeSession openIkeSession(InetAddress remoteAddress, ChildSessionParams childParams) {
+        return openIkeSession(remoteAddress, getIkeSessionParams(remoteAddress), childParams);
+    }
+
+    private IkeSession openIkeSession(
+            InetAddress remoteAddress, IkeSessionParams ikeParams, ChildSessionParams childParams) {
         return new IkeSession(
                 sContext,
-                getIkeSessionParams(remoteAddress),
+                ikeParams,
                 childParams,
                 mUserCbExecutor,
                 mIkeSessionCallback,

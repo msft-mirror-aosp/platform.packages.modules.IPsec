@@ -74,7 +74,7 @@ package android.net.ipsec.ike {
 
   public interface ChildSessionCallback {
     method public void onClosed();
-    method public void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
+    method public default void onClosedWithException(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public void onIpSecTransformCreated(@NonNull android.net.IpSecTransform, int);
     method public void onIpSecTransformDeleted(@NonNull android.net.IpSecTransform, int);
     method public void onOpened(@NonNull android.net.ipsec.ike.ChildSessionConfiguration);
@@ -83,6 +83,11 @@ package android.net.ipsec.ike {
   public final class ChildSessionConfiguration {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getInboundTrafficSelectors();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeTrafficSelector> getOutboundTrafficSelectors();
+  }
+
+  public static final class ChildSessionConfiguration.Builder {
+    ctor public ChildSessionConfiguration.Builder(@NonNull java.util.List<android.net.ipsec.ike.IkeTrafficSelector>, @NonNull java.util.List<android.net.ipsec.ike.IkeTrafficSelector>);
+    method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration build();
   }
 
   public abstract class ChildSessionParams {
@@ -153,7 +158,7 @@ package android.net.ipsec.ike {
 
   public interface IkeSessionCallback {
     method public void onClosed();
-    method public void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
+    method public default void onClosedWithException(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public default void onError(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public void onOpened(@NonNull android.net.ipsec.ike.IkeSessionConfiguration);
   }
@@ -167,20 +172,32 @@ package android.net.ipsec.ike {
     field public static final int EXTENSION_TYPE_MOBIKE = 2; // 0x2
   }
 
+  public static final class IkeSessionConfiguration.Builder {
+    ctor public IkeSessionConfiguration.Builder(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder addIkeExtension(int);
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder addRemoteVendorId(@NonNull byte[]);
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration build();
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder clearIkeExtensions();
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder clearRemoteApplicationVersion();
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder clearRemoteVendorIds();
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder setRemoteApplicationVersion(@NonNull String);
+  }
+
   public final class IkeSessionConnectionInfo {
+    ctor public IkeSessionConnectionInfo(@NonNull java.net.InetAddress, @NonNull java.net.InetAddress, @NonNull android.net.Network);
     method @NonNull public java.net.InetAddress getLocalAddress();
     method @NonNull public android.net.Network getNetwork();
     method @NonNull public java.net.InetAddress getRemoteAddress();
   }
 
   public final class IkeSessionParams {
-    method @Nullable public android.net.Network getConfiguredNetwork();
     method @IntRange(from=0x14, to=0x708) public int getDpdDelaySeconds();
     method @IntRange(from=0x12c, to=0x15180) public int getHardLifetimeSeconds();
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getIkeSaProposals();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getLocalAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getLocalIdentification();
     method @IntRange(from=0xa, to=0xe10) public int getNattKeepAliveDelaySeconds();
+    method @Nullable public android.net.Network getNetwork();
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.IkeAuthConfig getRemoteAuthConfig();
     method @NonNull public android.net.ipsec.ike.IkeIdentification getRemoteIdentification();
     method @NonNull public int[] getRetransmissionTimeoutsMillis();
@@ -204,11 +221,11 @@ package android.net.ipsec.ike {
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthDigitalSignature(@Nullable java.security.cert.X509Certificate, @NonNull java.security.cert.X509Certificate, @NonNull java.util.List<java.security.cert.X509Certificate>, @NonNull java.security.PrivateKey);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthEap(@Nullable java.security.cert.X509Certificate, @NonNull android.net.eap.EapSessionConfig);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setAuthPsk(@NonNull byte[]);
-    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setConfiguredNetwork(@NonNull android.net.Network);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setDpdDelaySeconds(@IntRange(from=0x14, to=0x708) int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLifetimeSeconds(@IntRange(from=0x12c, to=0x15180) int, @IntRange(from=0x78, to=0x15180) int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setLocalIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNattKeepAliveDelaySeconds(@IntRange(from=0xa, to=0xe10) int);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@Nullable android.net.Network);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRemoteIdentification(@NonNull android.net.ipsec.ike.IkeIdentification);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setRetransmissionTimeoutsMillis(@NonNull int[]);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setServerHostname(@NonNull String);
@@ -241,6 +258,12 @@ package android.net.ipsec.ike {
     field @NonNull public final java.net.InetAddress endingAddress;
     field public final int startPort;
     field @NonNull public final java.net.InetAddress startingAddress;
+  }
+
+  public final class IkeTunnelConnectionParams {
+    ctor public IkeTunnelConnectionParams(@NonNull android.net.ipsec.ike.IkeSessionParams, @NonNull android.net.ipsec.ike.TunnelModeChildSessionParams);
+    method @NonNull public android.net.ipsec.ike.IkeSessionParams getIkeSessionParams();
+    method @NonNull public android.net.ipsec.ike.TunnelModeChildSessionParams getTunnelModeChildSessionParams();
   }
 
   public abstract class SaProposal {
@@ -341,20 +364,6 @@ package android.net.ipsec.ike {
 
 package android.net.ipsec.ike.exceptions {
 
-  public final class AuthenticationFailedException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public AuthenticationFailedException(@NonNull String);
-    ctor public AuthenticationFailedException(@NonNull Throwable);
-  }
-
-  public final class ChildSaNotFoundException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public ChildSaNotFoundException(int);
-    method public int getIpSecSpi();
-  }
-
-  public final class FailedCpRequiredException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public FailedCpRequiredException();
-  }
-
   public abstract class IkeException extends java.lang.Exception {
   }
 
@@ -391,14 +400,6 @@ package android.net.ipsec.ike.exceptions {
     field public static final int ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1; // 0x1
   }
 
-  public final class InternalAddressFailureException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public InternalAddressFailureException();
-  }
-
-  public final class InvalidIkeSpiException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public InvalidIkeSpiException();
-  }
-
   public final class InvalidKeException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
     ctor public InvalidKeException(int);
     method public int getDhGroup();
@@ -409,52 +410,10 @@ package android.net.ipsec.ike.exceptions {
     method public byte getMajorVersion();
   }
 
-  public final class InvalidMessageIdException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public InvalidMessageIdException(int);
-    method public int getMessageId();
-  }
-
   public final class InvalidSelectorsException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
     ctor public InvalidSelectorsException(int, @NonNull byte[]);
     method @NonNull public byte[] getIpSecPacketInfo();
     method public int getIpSecSpi();
-  }
-
-  public final class InvalidSyntaxException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public InvalidSyntaxException(@NonNull String);
-    ctor public InvalidSyntaxException(@NonNull Throwable);
-    ctor public InvalidSyntaxException(@NonNull String, @NonNull Throwable);
-  }
-
-  public final class NoAdditionalSasException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public NoAdditionalSasException();
-  }
-
-  public final class NoValidProposalChosenException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public NoValidProposalChosenException(@NonNull String);
-    ctor public NoValidProposalChosenException(@NonNull String, @NonNull Throwable);
-  }
-
-  public class SinglePairRequiredException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public SinglePairRequiredException();
-  }
-
-  public final class TemporaryFailureException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public TemporaryFailureException(@NonNull String);
-  }
-
-  public final class TsUnacceptableException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public TsUnacceptableException();
-  }
-
-  public final class UnrecognizedIkeProtocolException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public UnrecognizedIkeProtocolException(int, @NonNull byte[]);
-    method @NonNull public byte[] getUnrecognizedErrorData();
-  }
-
-  public final class UnsupportedCriticalPayloadException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
-    ctor public UnsupportedCriticalPayloadException(@NonNull java.util.List<java.lang.Integer>);
-    method @NonNull public java.util.List<java.lang.Integer> getUnsupportedCriticalPayloadList();
   }
 
 }

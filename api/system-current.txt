@@ -15,6 +15,7 @@ package android.net.eap {
 package android.net.ipsec.ike {
 
   public interface ChildSessionCallback {
+    method @Deprecated public default void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method public default void onIpSecTransformsMigrated(@NonNull android.net.IpSecTransform, @NonNull android.net.IpSecTransform);
   }
 
@@ -26,12 +27,14 @@ package android.net.ipsec.ike {
   }
 
   public static final class ChildSessionConfiguration.Builder {
-    ctor public ChildSessionConfiguration.Builder(@NonNull java.util.List<android.net.ipsec.ike.IkeTrafficSelector>, @NonNull java.util.List<android.net.ipsec.ike.IkeTrafficSelector>);
     method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder addInternalAddress(@NonNull android.net.LinkAddress);
     method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder addInternalDhcpServer(@NonNull java.net.InetAddress);
     method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder addInternalDnsServer(@NonNull java.net.InetAddress);
     method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder addInternalSubnet(@NonNull android.net.IpPrefix);
-    method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration build();
+    method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder clearInternalAddresses();
+    method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder clearInternalDhcpServers();
+    method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder clearInternalDnsServers();
+    method @NonNull public android.net.ipsec.ike.ChildSessionConfiguration.Builder clearInternalSubnets();
   }
 
   public abstract class ChildSessionParams {
@@ -43,6 +46,7 @@ package android.net.ipsec.ike {
   }
 
   public interface IkeSessionCallback {
+    method @Deprecated public default void onClosedExceptionally(@NonNull android.net.ipsec.ike.exceptions.IkeException);
     method @Deprecated public default void onError(@NonNull android.net.ipsec.ike.exceptions.IkeProtocolException);
     method public default void onIkeSessionConnectionInfoChanged(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
   }
@@ -52,24 +56,14 @@ package android.net.ipsec.ike {
   }
 
   public static final class IkeSessionConfiguration.Builder {
-    ctor public IkeSessionConfiguration.Builder(@NonNull android.net.ipsec.ike.IkeSessionConnectionInfo);
-    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder addIkeExtension(int);
     method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder addPcscfServer(@NonNull java.net.InetAddress);
-    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder addRemoteVendorId(@NonNull byte[]);
-    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration build();
-    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder removeIkeExtension(int);
-    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder setRemoteApplicationVersion(@NonNull String);
-  }
-
-  public final class IkeSessionConnectionInfo {
-    ctor public IkeSessionConnectionInfo(@NonNull java.net.InetAddress, @NonNull java.net.InetAddress, @NonNull android.net.Network);
+    method @NonNull public android.net.ipsec.ike.IkeSessionConfiguration.Builder clearPcscfServers();
   }
 
   public final class IkeSessionParams {
     method @NonNull public java.util.List<android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest> getConfigurationRequests();
     method @IntRange(from=0x0, to=0x3f) public int getDscp();
     method @Nullable public android.net.ipsec.ike.ike3gpp.Ike3gppExtension getIke3gppExtension();
-    method @Deprecated @NonNull public android.net.Network getNetwork();
     method @Deprecated @NonNull public java.util.List<android.net.ipsec.ike.IkeSaProposal> getSaProposals();
   }
 
@@ -80,7 +74,6 @@ package android.net.ipsec.ike {
     method @Deprecated @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder addSaProposal(@NonNull android.net.ipsec.ike.IkeSaProposal);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setDscp(@IntRange(from=0x0, to=0x3f) int);
     method @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setIke3gppExtension(@NonNull android.net.ipsec.ike.ike3gpp.Ike3gppExtension);
-    method @Deprecated @NonNull public android.net.ipsec.ike.IkeSessionParams.Builder setNetwork(@NonNull android.net.Network);
   }
 
   public static interface IkeSessionParams.ConfigRequestIpv4PcscfServer extends android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest {

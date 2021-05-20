@@ -23,6 +23,7 @@ java_sdk_library {
 
     // ike is used as a shared library.
     shared_library: true,
+    compile_dex: true,
 
     aidl: {
         local_include_dirs: ["src/java"],
@@ -74,14 +75,14 @@ java_sdk_library {
 filegroup {
     name: "ike-srcs",
     srcs: [
-        "src/java/**/*.java",
+        ":ike-internal-srcs",
         ":framework-ike-shared-srcs",
     ],
 }
 
 filegroup {
-    name: "ike-api-srcs",
-    srcs: ["src/java/android/**/*.java"],
+    name: "ike-internal-srcs",
+    srcs: ["src/java/**/*.java"],
     path: "src/java/",
 }
 
