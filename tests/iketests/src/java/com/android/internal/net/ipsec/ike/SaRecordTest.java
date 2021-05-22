@@ -50,6 +50,7 @@ import com.android.internal.net.ipsec.test.ike.SaRecord.SaRecordHelper;
 import com.android.internal.net.ipsec.test.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.test.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.test.ike.crypto.IkeMacPrf;
+import com.android.internal.net.ipsec.test.ike.message.IkeKePayload;
 import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.EncryptionTransform;
 import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IntegrityTransform;
 import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
@@ -64,6 +65,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
 import java.net.Inet4Address;
+import java.util.Arrays;
 
 @RunWith(JUnit4.class)
 public final class SaRecordTest {
@@ -330,5 +332,51 @@ public final class SaRecordTest {
         verify(mMockLifetimeAlarmScheduler).cancelLifetimeExpiryAlarm(anyString());
 
         SaRecord.setIpSecTransformHelper(new IpSecTransformHelper());
+    }
+
+    private void verifyChildKeyExchange(boolean isLocalInit) throws Exception {
+        IkeKePayload localKePayload =
+                IkeKePayload.createOutboundKePayload(
+                        SaProposal.DH_GROUP_1024_BIT_MODP, createMockRandomFactory());
+
+        String remoteKePayloadBody1024Modp =
+                "00020000b4a2faf4bb54878ae21d638512ece55d9236fc50"
+                        + "46ab6cef82220f421f3ce6361faf36564ecb6d28798a94aa"
+                        + "d7b2b4b603ddeaaa5630adb9ece8ac37534036040610ebdd"
+                        + "92f46bef84f0be7db860351843858f8acf87056e272377f7"
+                        + "0c9f2d81e29c7b0ce4f291a3a72476bb0b278fd4b7b0a4c2"
+                        + "6bbeb08214c7071376079587";
+        IkeKePayload remoteKePayload =
+                new IkeKePayload(
+                        false /* critical */,
+                        TestUtils.hexStringToByteArray(remoteKePayloadBody1024Modp));
+
+        byte[] sharedKey = new byte[0];
+        if (isLocalInit) {
+            sharedKey =
+                    SaRecordHelper.getChildSharedKey(
+                            Arrays.asList(localKePayload),
+                            Arrays.asList(remoteKePayload),
+                            true /* isLocalInit */);
+        } else {
+            sharedKey =
+                    SaRecordHelper.getChildSharedKey(
+                            Arrays.asList(remoteKePayload),
+                            Arrays.asList(localKePayload),
+                            false /* isLocalInit */);
+        }
+
+        int expectedSharedKeyLen = 128;
+        assertEquals(expectedSharedKeyLen, sharedKey.length);
+    }
+
+    @Test
+    public void testLocalInitChildKeyExchange() throws Exception {
+        verifyChildKeyExchange(true /* isLocalInit */);
+    }
+
+    @Test
+    public void testRemoteInitChildKeyExchange() throws Exception {
+        verifyChildKeyExchange(false /* isLocalInit */);
     }
 }
