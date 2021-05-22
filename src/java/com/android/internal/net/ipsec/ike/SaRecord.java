@@ -351,27 +351,38 @@ public abstract class SaRecord implements AutoCloseable {
                                     IkeNoncePayload.class,
                                     respPayloads)
                             .nonceData;
-
-            // Check if KE Payload exists and get DH shared key. Encoding/Decoding of payload list
-            // guarantees that there is either no KE payload in the reqPayloads and respPayloads
-            // lists, or only one KE payload in each list.
-            byte[] sharedDhKey = new byte[0];
-            IkeKePayload keInitPayload =
-                    IkePayload.getPayloadForTypeInProvidedList(
-                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloads);
-            if (keInitPayload != null) {
-                IkeKePayload keRespPayload =
-                        IkePayload.getPayloadForTypeInProvidedList(
-                                IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, respPayloads);
-                sharedDhKey =
-                        IkeKePayload.getSharedKey(
-                                keInitPayload.localPrivateKey,
-                                keRespPayload.keyExchangeData,
-                                keRespPayload.dhGroup);
-            }
+            byte[] sharedDhKey =
+                    getChildSharedKey(reqPayloads, respPayloads, childSaRecordConfig.isLocalInit);
 
             return makeChildSaRecord(sharedDhKey, nonceInit, nonceResp, childSaRecordConfig);
         }
+
+        @VisibleForTesting
+        static byte[] getChildSharedKey(
+                List<IkePayload> reqPayloads, List<IkePayload> respPayloads, boolean isLocalInit)
+                throws GeneralSecurityException {
+            // Check if KE Payload exists and get DH shared key. Encoding/Decoding of payload list
+            // guarantees that there is either no KE payload in the reqPayloads and respPayloads
+            // lists, or only one KE payload in each list.
+            IkeKePayload keInitPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloads);
+
+            if (keInitPayload == null) {
+                return new byte[0];
+            }
+
+            IkeKePayload keRespPayload =
+                    IkePayload.getPayloadForTypeInProvidedList(
+                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, respPayloads);
+            IkeKePayload localKePayload = isLocalInit ? keInitPayload : keRespPayload;
+            IkeKePayload remoteKePayload = isLocalInit ? keRespPayload : keInitPayload;
+            return IkeKePayload.getSharedKey(
+                    localKePayload.localPrivateKey,
+                    remoteKePayload.keyExchangeData,
+                    remoteKePayload.dhGroup);
+        }
+
         /**
          * Package private method for calculating keys, build IpSecTransforms and construct
          * ChildSaRecord.
