@@ -31,6 +31,7 @@ import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.util.SparseArray;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeDhParams;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.utils.BigIntegerUtils;
@@ -156,7 +157,8 @@ public final class IkeKePayload extends IkePayload {
      * @see <a href="https://tools.ietf.org/html/rfc7296#page-76">RFC 7296, Internet Key Exchange
      *     Protocol Version 2 (IKEv2), Critical.
      */
-    IkeKePayload(boolean critical, byte[] payloadBody) throws IkeProtocolException {
+    @VisibleForTesting
+    public IkeKePayload(boolean critical, byte[] payloadBody) throws IkeProtocolException {
         super(PAYLOAD_TYPE_KE, critical);
 
         isOutbound = false;
