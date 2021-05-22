@@ -721,7 +721,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             getHandler().getLooper(),
                             mContext,
                             mIkeSessionId,
-                            mAlarmManager,
+                            getHandler(),
                             mRandomFactory,
                             mIpSecSpiGenerator,
                             childParams,
@@ -1302,12 +1302,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             long dpdDelayMs = TimeUnit.SECONDS.toMillis(mIkeSessionParams.getDpdDelaySeconds());
 
             long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
+            Message intentIkeMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi);
             PendingIntent dpdIntent =
                     buildIkeAlarmIntent(
-                            mContext,
-                            ACTION_DPD,
-                            getIntentIdentifier(remoteIkeSpi),
-                            getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi));
+                            mContext, ACTION_DPD, getIntentIdentifier(remoteIkeSpi), intentIkeMsg);
 
             // Initiating DPD is a way to detect the aliveness of the remote server and also a
             // way to assert the aliveness of IKE library. Considering this, the alarm to
@@ -1318,7 +1316,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // Please check AlarmManager#setExactAndAllowWhileIdle for more details.
             mDpdAlarm =
                     IkeAlarm.newExactAndAllowWhileIdleAlarm(
-                            new IkeAlarmConfig(mContext, ACTION_DPD, dpdDelayMs, dpdIntent));
+                            new IkeAlarmConfig(
+                                    mContext, ACTION_DPD, dpdDelayMs, dpdIntent, intentIkeMsg));
             mDpdAlarm.schedule();
             logd("DPD Alarm scheduled with DPD delay: " + dpdDelayMs + "ms");
         }
@@ -1455,30 +1454,29 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     @VisibleForTesting
     SaLifetimeAlarmScheduler buildSaLifetimeAlarmScheduler(long remoteSpi) {
+        Message deleteMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_IKE, remoteSpi);
+        Message rekeyMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_IKE, remoteSpi);
+
         PendingIntent deleteSaIntent =
                 buildIkeAlarmIntent(
-                        mContext,
-                        ACTION_DELETE_IKE,
-                        getIntentIdentifier(remoteSpi),
-                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_IKE, remoteSpi));
+                        mContext, ACTION_DELETE_IKE, getIntentIdentifier(remoteSpi), deleteMsg);
         PendingIntent rekeySaIntent =
                 buildIkeAlarmIntent(
-                        mContext,
-                        ACTION_REKEY_IKE,
-                        getIntentIdentifier(remoteSpi),
-                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_IKE, remoteSpi));
+                        mContext, ACTION_REKEY_IKE, getIntentIdentifier(remoteSpi), rekeyMsg);
 
         return new SaLifetimeAlarmScheduler(
                 new IkeAlarmConfig(
                         mContext,
                         ACTION_DELETE_IKE,
                         mIkeSessionParams.getHardLifetimeMsInternal(),
-                        deleteSaIntent),
+                        deleteSaIntent,
+                        deleteMsg),
                 new IkeAlarmConfig(
                         mContext,
                         ACTION_REKEY_IKE,
                         mIkeSessionParams.getSoftLifetimeMsInternal(),
-                        rekeySaIntent));
+                        rekeySaIntent,
+                        rekeyMsg));
     }
 
     // Package private. Accessible to ChildSessionStateMachine
@@ -3491,12 +3489,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     "Cannot start NAT-T keepalive when IKE Session is not using UDP Encap socket");
         }
 
+        Message keepaliveMsg = obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE);
         PendingIntent keepaliveIntent =
                 buildIkeAlarmIntent(
-                        mContext,
-                        ACTION_KEEPALIVE,
-                        getIntentIdentifier(),
-                        obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE));
+                        mContext, ACTION_KEEPALIVE, getIntentIdentifier(), keepaliveMsg);
 
         int keepaliveDelay = mIkeSessionParams.getNattKeepAliveDelaySeconds();
         IkeNattKeepalive keepalive =
@@ -3509,7 +3505,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
                         mIkeSocket.getIkeSocketConfig().getNetwork(),
                         new IkeAlarmConfig(
-                                mContext, ACTION_KEEPALIVE, keepaliveDelay, keepaliveIntent));
+                                mContext,
+                                ACTION_KEEPALIVE,
+                                keepaliveDelay,
+                                keepaliveIntent,
+                                keepaliveMsg));
         keepalive.start();
         return keepalive;
     }
