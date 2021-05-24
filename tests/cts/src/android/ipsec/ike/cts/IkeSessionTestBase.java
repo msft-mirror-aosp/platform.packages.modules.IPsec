@@ -409,6 +409,9 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         @Override
         public void onIpSecTransformsMigrated(
                 IpSecTransform inIpSecTransform, IpSecTransform outIpSecTransform) {
+            ChildSessionCallback.super.onIpSecTransformsMigrated(
+                    inIpSecTransform, outIpSecTransform);
+
             IpSecTransformCallRecord inRecord =
                     new IpSecTransformCallRecord(inIpSecTransform, IpSecManager.DIRECTION_IN);
             IpSecTransformCallRecord outRecord =
