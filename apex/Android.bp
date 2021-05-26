@@ -22,6 +22,7 @@ apex_defaults {
     updatable: true,
     min_sdk_version: "30",
     bootclasspath_fragments: ["com.android.ipsec-bootclasspath-fragment"],
+    prebuilts: ["current_sdkinfo"],
     key: "com.android.ipsec.key",
     certificate: ":com.android.ipsec.certificate",
 }
