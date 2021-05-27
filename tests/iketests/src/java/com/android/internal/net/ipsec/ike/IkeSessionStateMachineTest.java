@@ -5574,7 +5574,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeEnabledPeerUnsupported() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(false /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
     }
 
     @Test
@@ -5763,25 +5763,22 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Expect different NetworkCallback registrations if there is a caller-configured Network
         if (configuredNetwork == null) {
-            verify(mMockConnectManager, doesPeerSupportMobike ? times(1) : never())
+            verify(mMockConnectManager)
                     .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
         } else {
-            verify(mMockConnectManager, doesPeerSupportMobike ? times(1) : never())
+            verify(mMockConnectManager)
                     .registerNetworkCallback(any(), networkCallbackCaptor.capture(), any());
         }
 
-        IkeNetworkCallbackBase networkCallback =
-                doesPeerSupportMobike ? networkCallbackCaptor.getValue() : null;
-        if (doesPeerSupportMobike) {
-            Class<? extends IkeNetworkCallbackBase> expectedCallbackType =
-                    configuredNetwork == null
-                            ? IkeDefaultNetworkCallback.class
-                            : IkeSpecificNetworkCallback.class;
-            assertTrue(expectedCallbackType.isInstance(networkCallback));
-            assertTrue(
-                    getExpectedSocketType(doesPeerSupportNatt, isIpv4)
-                            .isInstance(mIkeSessionStateMachine.mIkeSocket));
-        }
+        IkeNetworkCallbackBase networkCallback = networkCallbackCaptor.getValue();
+        Class<? extends IkeNetworkCallbackBase> expectedCallbackType =
+                configuredNetwork == null
+                        ? IkeDefaultNetworkCallback.class
+                        : IkeSpecificNetworkCallback.class;
+        assertTrue(expectedCallbackType.isInstance(networkCallback));
+        assertTrue(
+                getExpectedSocketType(doesPeerSupportNatt, isIpv4)
+                        .isInstance(mIkeSessionStateMachine.mIkeSocket));
         return networkCallback;
     }
 
@@ -5835,6 +5832,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         // Send IKE_AUTH resp and indicate MOBIKE support
         List<IkePayload> authRelatedPayloads = new ArrayList<>();
+        authRelatedPayloads.add(makeSpyRespPskPayload());
+        authRelatedPayloads.add(makeRespIdPayload());
         authRelatedPayloads.add(new IkeNotifyPayload(NOTIFY_TYPE_MOBIKE_SUPPORTED));
         ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
         mIkeSessionStateMachine.sendMessage(
