@@ -291,10 +291,6 @@ public final class IkeSession implements AutoCloseable {
      *   <li>the {@link IkeSessionParams} for this IkeSession must be configured with {@link
      *       IkeSessionParams#IKE_OPTION_MOBIKE} (set via {@link
      *       IkeSessionParams.Builder#addIkeOption(int)}), and
-     *   <li>the {@link IkeSessionConfiguration} provided in {@link
-     *       IkeSessionCallback#onOpened(IkeSessionConfiguration)} must indicate {@link
-     *       IkeSessionConfiguration#EXTENSION_TYPE_MOBIKE} (checked via {@link
-     *       IkeSessionConfiguration#isIkeExtensionEnabled(int)}), and
      *   <li>the IkeSession must have been started with the Network specified via {@link
      *       IkeSessionParams.Builder#setConfiguredNetwork(Network)}.
      * </ul>
@@ -302,8 +298,8 @@ public final class IkeSession implements AutoCloseable {
      * @see <a href="https://tools.ietf.org/html/rfc4555">RFC 4555, IKEv2 Mobility and Multihoming
      *     Protocol (MOBIKE)</a>
      * @param network the Network to use for this IkeSession
-     * @throws IllegalStateException if MOBIKE is not configured in IkeSessionParams, MOBIKE is not
-     *     active for this IkeSession, or if the Network was not specified in IkeSessionParams.
+     * @throws IllegalStateException if {@link IkeSessionParams#IKE_OPTION_MOBIKE} is not configured
+     *     in IkeSessionParams, or if the Network was not specified in IkeSessionParams.
      * @hide
      */
     @SystemApi
