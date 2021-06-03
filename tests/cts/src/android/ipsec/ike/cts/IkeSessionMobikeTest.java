@@ -30,6 +30,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import android.net.Network;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSession;
 import android.net.ipsec.ike.IkeSessionConfiguration;
@@ -138,7 +139,9 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
     public void testMigrateNetworksWithoutXfrmMigrate() throws Exception {
         if (!hasTunnelsFeature()) return;
 
-        final IkeSession ikeSession = setupAndVerifyIkeSessionWithMobike();
+        final IkeSession ikeSession =
+                setupAndVerifyIkeSessionWithOptionMobike(
+                        IKE_INIT_RESP, IKE_AUTH_RESP, true /* mobikeSupportedByServer */);
 
         final IpSecTransformCallRecord firstTransformRecordA =
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
@@ -151,13 +154,14 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         int expectedMsgId = 2;
 
         setNetworkAndVerifyConnectionInfoChange(
-                ikeSession, mSecondaryTunNetworkContext, expectedMsgId++);
+                ikeSession, mSecondaryTunNetworkContext, expectedMsgId++, IKE_UPDATE_SA_RESP);
         final IpSecTransformCallRecord[] migrateRecords =
                 injectCreateChildRespAndVerifyTransformsMigrated(
-                        mSecondaryTunNetworkContext, expectedMsgId++);
+                        mSecondaryTunNetworkContext, expectedMsgId++, IKE_CREATE_CHILD_RESP);
         injectDeleteChildRespAndVerifyTransformsDeleted(
                 mSecondaryTunNetworkContext,
                 expectedMsgId++,
+                IKE_DELETE_CHILD_RESP,
                 firstTransformRecordA,
                 firstTransformRecordB);
 
@@ -171,7 +175,9 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         verifyCloseIkeAndChildBlocking(migrateRecords[0], migrateRecords[1]);
     }
 
-    private IkeSession setupAndVerifyIkeSessionWithMobike() throws Exception {
+    private IkeSession setupAndVerifyIkeSessionWithOptionMobike(
+            String ikeInitRespHex, String ikeAuthRespHex, boolean mobikeSupportedByServer)
+            throws Exception {
         final IkeSaProposal saProposal =
                 new IkeSaProposal.Builder()
                         .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128)
@@ -186,8 +192,13 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
 
         final IkeSession ikeSession = openIkeSessionWithTunnelModeChild(mRemoteAddress, ikeParams);
         performSetupIkeAndFirstChildBlocking(
-                IKE_INIT_RESP, true /* expectedAuthUseEncap */, IKE_AUTH_RESP);
-        verifyIkeSessionSetupBlocking(EXTENSION_TYPE_FRAGMENTATION, EXTENSION_TYPE_MOBIKE);
+                ikeInitRespHex, true /* expectedAuthUseEncap */, ikeAuthRespHex);
+        if (mobikeSupportedByServer) {
+            verifyIkeSessionSetupBlocking(EXTENSION_TYPE_FRAGMENTATION, EXTENSION_TYPE_MOBIKE);
+        } else {
+            verifyIkeSessionSetupBlocking(EXTENSION_TYPE_FRAGMENTATION);
+        }
+
         verifyChildSessionSetupBlocking(
                 mFirstChildSessionCallback,
                 Arrays.asList(TUNNEL_MODE_INBOUND_TS),
@@ -197,7 +208,10 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
     }
 
     private void setNetworkAndVerifyConnectionInfoChange(
-            IkeSession ikeSession, TunNetworkContext tunNetworkContext, int expectedMsgId)
+            IkeSession ikeSession,
+            TunNetworkContext tunNetworkContext,
+            int expectedMsgId,
+            String ikeUpdateSaResp)
             throws Exception {
         ikeSession.setNetwork(tunNetworkContext.tunNetwork);
 
@@ -205,22 +219,29 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId,
                 true /* expectedUseEncap */,
-                IKE_UPDATE_SA_RESP);
+                ikeUpdateSaResp);
+
+        verifyConnectionInfoChange(tunNetworkContext.tunNetwork, mSecondaryLocalAddr);
+    }
+
+    private void verifyConnectionInfoChange(
+            Network expectedNetwork, InetAddress expectedLocalAddress) throws Exception {
         final IkeSessionConnectionInfo connectionInfo =
                 mIkeSessionCallback.awaitOnIkeSessionConnectionInfoChanged();
         assertNotNull(connectionInfo);
-        assertEquals(tunNetworkContext.tunNetwork, connectionInfo.getNetwork());
-        assertEquals(mSecondaryLocalAddr, connectionInfo.getLocalAddress());
+        assertEquals(expectedNetwork, connectionInfo.getNetwork());
+        assertEquals(expectedLocalAddress, connectionInfo.getLocalAddress());
         assertEquals(mRemoteAddress, connectionInfo.getRemoteAddress());
     }
 
     private IpSecTransformCallRecord[] injectCreateChildRespAndVerifyTransformsMigrated(
-            TunNetworkContext tunNetworkContext, int expectedMsgId) throws Exception {
+            TunNetworkContext tunNetworkContext, int expectedMsgId, String ikeCreateChildResp)
+            throws Exception {
         tunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId,
                 true /* expectedUseEncap */,
-                IKE_CREATE_CHILD_RESP);
+                ikeCreateChildResp);
 
         final IpSecTransformCallRecord[] migrateRecords =
                 mFirstChildSessionCallback.awaitNextMigratedIpSecTransform();
@@ -232,6 +253,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
     private void injectDeleteChildRespAndVerifyTransformsDeleted(
             TunNetworkContext tunNetworkContext,
             int expectedMsgId,
+            String ikeDeleteChildResp,
             IpSecTransformCallRecord transformRecordA,
             IpSecTransformCallRecord transformRecordB)
             throws Exception {
@@ -239,7 +261,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId,
                 true /* expectedUseEncap */,
-                IKE_DELETE_CHILD_RESP);
+                ikeDeleteChildResp);
 
         verifyDeleteIpSecTransformPair(
                 mFirstChildSessionCallback, transformRecordA, transformRecordB);
@@ -249,7 +271,9 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
     public void testNetworkDied() throws Exception {
         if (!hasTunnelsFeature()) return;
 
-        final IkeSession ikeSession = setupAndVerifyIkeSessionWithMobike();
+        final IkeSession ikeSession =
+                setupAndVerifyIkeSessionWithOptionMobike(
+                        IKE_INIT_RESP, IKE_AUTH_RESP, true /* mobikeSupportedByServer */);
 
         // Teardown test network to kill the IKE Session
         mTunNetworkContext.close();
@@ -264,6 +288,91 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
 
     @Test
     public void testSetNetworkWithoutMobikeEnabled() throws Exception {
+        if (!hasTunnelsFeature()) return;
+
+        final String ikeInitResp =
+                "46B8ECA1E0D72A1821D31742E82FA9232120222000000000000001D022000030"
+                        + "0000002C010100040300000C0100000C800E0080030000080300000803000008"
+                        + "02000008000000080400000E28000108000E0000CE0DFFE121D30D2B5C4DBEC4"
+                        + "AEBD2F8D83F0F8EC5E2998CE98BD90492D8AA6C9360F32AE98402F853DF12FA9"
+                        + "A64ABFBB83D5FFAD1F18B6CB6FEBAB222AF5C98D4575BE2380B42F2A4E5B7B0B"
+                        + "5528F372C4E70B5B7D01D706E3F1C2E4A9E8A687C427DDB1002B190A4D73BBBA"
+                        + "E41801798408D73870657B846B84A5D9292A007A9EDA719CA3A820BB513EBE59"
+                        + "C6BF5BEB7CC9A86F0722D98F6E73B5BBC2F5EEDB39992D036406B54BF0355534"
+                        + "960D4771623ECFC561211F0580EEC051BD477076F4454E185DA7744E7B7D145B"
+                        + "08C874529C2BFE387BB7C09FCD762CEBFF6C2DE0C4912DF5747B16F51D0A9570"
+                        + "37EC652A1F025C4E80DEE9D91BF0DFEE17F3EF6F29000024196ADD342DBD954F"
+                        + "A1160542E5F312A6A44A9D19AF6799698A781F4CF717CD722900001C00004004"
+                        + "3EFFE36169090E6F6B6CB5B5BD321257E67C2B922900001C000040050AB409D2"
+                        + "60D9EE157D15483E001603BB43D918C1290000080000402E290000100000402F"
+                        + "00020003000400050000000800004014";
+        final String IkeAuthRespWithoutMobikeSupport =
+                "46B8ECA1E0D72A1821D31742E82FA9232E20232000000001000000EC240000D0"
+                        + "493A4E97A90AE4F3CB4561D82F9123C22436EE0BAB686965D1EF7C724B2B3979"
+                        + "594D3CBCF70C3C78F46B2D9F198DCB07CEE0F774A51CF4224B4A3223500214F2"
+                        + "0AFBB7472156EF8FF03391D03A2D78001EE0B23AD5818BDAC15F348F3D97E54D"
+                        + "0C6A3DBC7F89A764A883631CFCB6C8C5A4E939E7AF7AC744D6530A88CD8EDDAC"
+                        + "F003BD73CE73A79D7ADDF53F9B3CCCBBF92F21FB29317F4151B17F0BC5F98CEE"
+                        + "89B739E4A46BC80B10D34B159CCFA847F12F85DEE5B8AED854DC460EA92BE17A"
+                        + "E2C1F56C7497001BF5B22E88";
+        final String createChildResp =
+                "46B8ECA1E0D72A1821D31742E82FA9232E20242000000002000000CC210000B0"
+                        + "10869163B82783B650AD180040F191A516588586F051F77147F06FDDC70EA4A3"
+                        + "C4FCCD61C1E3AF3672150207F0AAB3540D4E20AB4F89B70D5D8F57E6A6AD2A42"
+                        + "F95516715BB3317B62878DA4D77170FD29994D8553300F05DC28973899F58FE2"
+                        + "A60D0C1158B7A711F20FC2A2F95351A14650F63160746CCEF73F32033B766DD4"
+                        + "730712D9EBB2D58CB1635CBF74559FA66CB56CFBE506CBC86C89F604D1A80E73"
+                        + "9B269A1CE93F46451C3307E4";
+        final String deleteChildResp =
+                "46B8ECA1E0D72A1821D31742E82FA9232E202520000000030000004C2A000030"
+                        + "E2D0B074AF644A5AA58F999AA376450780BB66BBCB64C84BD8E5CBC9549A2A1A"
+                        + "524091EFE5D1ADE9694813B1";
+        final String deleteIkeResp =
+                "46B8ECA1E0D72A1821D31742E82FA9232E202520000000040000004C00000030"
+                        + "59205A0B069A0D6C95B044B16DC655BA28A968463CCBCF60996EE56897C14F2C"
+                        + "FF9F15D1120A78DD2DE2E1C9";
+
+        final IkeSession ikeSession =
+                setupAndVerifyIkeSessionWithOptionMobike(
+                        ikeInitResp,
+                        IkeAuthRespWithoutMobikeSupport,
+                        false /* mobikeSupportedByServer */);
+
+        final IpSecTransformCallRecord firstTransformRecordA =
+                mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
+        final IpSecTransformCallRecord firstTransformRecordB =
+                mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
+        verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
+
+        // Rekey-based mobility
+        ikeSession.setNetwork(mSecondaryTunNetworkContext.tunNetwork);
+        verifyConnectionInfoChange(mSecondaryTunNetworkContext.tunNetwork, mSecondaryLocalAddr);
+
+        // Local request message ID starts from 2 because there is one IKE_INIT message and a single
+        // IKE_AUTH message.
+        int expectedMsgId = 2;
+        final IpSecTransformCallRecord[] migrateRecords =
+                injectCreateChildRespAndVerifyTransformsMigrated(
+                        mSecondaryTunNetworkContext, expectedMsgId++, createChildResp);
+        injectDeleteChildRespAndVerifyTransformsDeleted(
+                mSecondaryTunNetworkContext,
+                expectedMsgId++,
+                deleteChildResp,
+                firstTransformRecordA,
+                firstTransformRecordB);
+
+        // Close IKE Session
+        ikeSession.close();
+        mSecondaryTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+                IKE_DETERMINISTIC_INITIATOR_SPI,
+                expectedMsgId++,
+                true /* expectedUseEncap */,
+                deleteIkeResp);
+        verifyCloseIkeAndChildBlocking(migrateRecords[0], migrateRecords[1]);
+    }
+
+    @Test
+    public void testSetNetworkWithoutOptionMobike() throws Exception {
         if (!hasTunnelsFeature()) return;
 
         final String ikeInitResp =
@@ -288,8 +397,10 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                         + "23D2F29E9C30658227D2BB0C9E1A481EAA80BC6BE9006BEDC13E925A755A0290"
                         + "AEC4164D29997F52ED7DCC2E";
 
-        // Open IKE Session
-        mIkeSession = openIkeSessionWithTunnelModeChild(mRemoteAddress);
+        // Open IKE Session without IKE_OPTION_MOBIKE
+        mIkeSession =
+                openIkeSessionWithTunnelModeChild(
+                        mRemoteAddress, createIkeParamsBuilderBase(mRemoteAddress).build());
         performSetupIkeAndFirstChildBlocking(ikeInitResp, IkeAuthRespWithoutMobikeSupport);
 
         verifyIkeSessionSetupBlocking();
@@ -298,10 +409,10 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         assertFalse(ikeConfig.isIkeExtensionEnabled(IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE));
 
         try {
-            // manually change network when MOBIKE is not enabled
+            // manually change network when IKE_OPTION_MOBIKE is not set
             mIkeSession.setNetwork(mSecondaryTunNetworkContext.tunNetwork);
 
-            fail("Expected error for setNetwork() without MOBIKE enabled");
+            fail("Expected error for setNetwork() when IKE_OPTION_MOBIKE is not set");
         } catch (IllegalStateException expected) {
         }
     }
