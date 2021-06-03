@@ -454,11 +454,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
     @VisibleForTesting boolean mSupportFragment;
-    /**
-     * Indicates if both sides support MOBIKE. Set in IKE AUTH. volatile to ensure mSupportMobike
-     * can be checked in #setNetwork outside of the Handler.
-     */
-    @VisibleForTesting volatile boolean mSupportMobike;
+    /** Indicates if both sides support MOBIKE. Set in IKE AUTH. */
+    @VisibleForTesting boolean mSupportMobike;
 
     /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
     @VisibleForTesting Set<Short> mPeerSignatureHashAlgorithms;
@@ -799,19 +796,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             throw new IllegalArgumentException("network must not be null");
         }
 
-        // Safe to check mSupportMobike outside the StateMachine Handler because mSupportMobike is
-        // always false until the last round of IKE_AUTH, where it may be set to true if the peer
-        // also supports MOBIKE. This means that this call will always fail as expected until
-        // IKE_AUTH updates it.
-        //
-        // There is a small race between updating this state and notifying the caller of MOBIKE
-        // support in IkeSessionCallback#onOpened where setNetwork may succeed before the caller
-        // knows it is supported. However, this is okay because the StateMachine has already
-        // established MOBIKE support.
-        if (!mSupportMobike) {
-            throw new IllegalStateException(
-                    "MOBIKE is not enabled or the remote server has not indicated MOBIKE support"
-                            + " yet");
+        if (!mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
+            throw new IllegalStateException("IKE_OPTION_MOBIKE is not set");
         }
 
         if (mIkeSessionParams.getConfiguredNetwork() == null) {
@@ -3661,47 +3647,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     && notifyPayload.notifyType == NOTIFY_TYPE_MOBIKE_SUPPORTED) {
                 mSupportMobike = true;
                 mEnabledExtensions.add(EXTENSION_TYPE_MOBIKE);
-
-                try {
-                    if (mIkeSessionParams.getConfiguredNetwork() != null) {
-                        // Caller configured a specific Network - track it
-                        // ConnectivityManager does not provide a callback for tracking a specific
-                        // Network. In order to do so, create a NetworkRequest without any
-                        // capabilities so it will match all Networks. The NetworkCallback will then
-                        // filter for the correct (caller-specified) Network.
-                        NetworkRequest request =
-                                new NetworkRequest.Builder().clearCapabilities().build();
-                        mNetworkCallback =
-                                new IkeSpecificNetworkCallback(
-                                        IkeSessionStateMachine.this, mNetwork, mLocalAddress);
-                        mConnectivityManager.registerNetworkCallback(
-                                request, mNetworkCallback, getHandler());
-                    } else {
-                        // Caller did not configure a specific Network - track the default
-                        mNetworkCallback =
-                                new IkeDefaultNetworkCallback(
-                                        IkeSessionStateMachine.this, mNetwork, mLocalAddress);
-                        mConnectivityManager.registerDefaultNetworkCallback(
-                                mNetworkCallback, getHandler());
-                    }
-                } catch (RuntimeException e) {
-                    // Error occurred while registering the NetworkCallback
-                    throw new IkeInternalException("Error while registering NetworkCallback", e);
-                }
-
-                // Switch to port 4500 if NAT-T is supported
-                if (mSupportNatTraversal
-                        && mIkeSocket.getIkeServerPort()
-                                != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
-                    try {
-                        getAndSwitchToIkeSocket(
-                                mIkeSocket instanceof IkeUdp4Socket, true /* useEncapPort */);
-                        mLocalPort = mIkeSocket.getLocalPort();
-                    } catch (ErrnoException e) {
-                        throw new IkeInternalException(e);
-                    }
-                }
-
                 return;
             } else {
                 // Unknown and unexpected status notifications are ignored as per
@@ -3710,6 +3655,49 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         "Received unknown or unexpected status notifications with"
                                 + " notify type: "
                                 + notifyPayload.notifyType);
+            }
+        }
+
+        protected void setUpMobilityHandling() throws IkeException {
+            try {
+                if (mIkeSessionParams.getConfiguredNetwork() != null) {
+                    // Caller configured a specific Network - track it
+                    // ConnectivityManager does not provide a callback for tracking a specific
+                    // Network. In order to do so, create a NetworkRequest without any
+                    // capabilities so it will match all Networks. The NetworkCallback will then
+                    // filter for the correct (caller-specified) Network.
+                    NetworkRequest request =
+                            new NetworkRequest.Builder().clearCapabilities().build();
+                    mNetworkCallback =
+                            new IkeSpecificNetworkCallback(
+                                    IkeSessionStateMachine.this, mNetwork, mLocalAddress);
+                    mConnectivityManager.registerNetworkCallback(
+                            request, mNetworkCallback, getHandler());
+                } else {
+                    // Caller did not configure a specific Network - track the default
+                    mNetworkCallback =
+                            new IkeDefaultNetworkCallback(
+                                    IkeSessionStateMachine.this, mNetwork, mLocalAddress);
+                    mConnectivityManager.registerDefaultNetworkCallback(
+                            mNetworkCallback, getHandler());
+                }
+            } catch (RuntimeException e) {
+                // Error occurred while registering the NetworkCallback
+                throw new IkeInternalException("Error while registering NetworkCallback", e);
+            }
+
+            // Switch to port 4500 if NAT-T is supported (whether or not mobility is done via MOBIKE
+            // or Rekey Child). This way, there is no need to change the ports later if a NAT
+            // is detected on the new path.
+            if (mSupportNatTraversal
+                    && mIkeSocket.getIkeServerPort() != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
+                try {
+                    getAndSwitchToIkeSocket(
+                            mIkeSocket instanceof IkeUdp4Socket, true /* useEncapPort */);
+                    mLocalPort = mIkeSocket.getLocalPort();
+                } catch (ErrnoException e) {
+                    throw new IkeInternalException(e);
+                }
             }
         }
     }
@@ -3778,6 +3766,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     deferMessage(obtainMessage(CMD_EAP_START_EAP_AUTH, ikeEapPayload));
                     transitionTo(mCreateIkeLocalIkeAuthInEap);
                 } else {
+                    if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
+                        setUpMobilityHandling();
+                    }
                     notifyIkeSessionSetup(ikeMessage);
 
                     performFirstChildNegotiation(
@@ -3951,7 +3942,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
 
             // Verify existence of payloads
-
             if (authPayload == null && mIkeSessionParams.hasIkeOption(IKE_OPTION_EAP_ONLY_AUTH)) {
                 // If EAP-only option is selected, the responder will not send auth payload if it
                 // accepts EAP-only authentication. Currently only EAP-only safe methods are
@@ -4249,6 +4239,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 }
 
                 validateIkeAuthRespPostEap(ikeMessage);
+
+                if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
+                    setUpMobilityHandling();
+                }
                 notifyIkeSessionSetup(ikeMessage);
 
                 performFirstChildNegotiation(
@@ -5234,12 +5228,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
     }
 
-    /** MobikeLocalMigrateState initiates an UPDATE_SA_ADDRESSES exchange for the IKE Session. */
+    /**
+     * MobikeLocalInfo handles mobility event for the IKE Session.
+     *
+     * <p>When MOBIKE is supported by both sides, MobikeLocalInfo will initiate an
+     * UPDATE_SA_ADDRESSES exchange for the IKE Session.
+     */
     class MobikeLocalInfo extends DeleteBase {
         private Retransmitter mRetransmitter;
 
         @Override
         public void enterState() {
+            if (!mSupportMobike) {
+                logd("non-MOBIKE mobility event");
+                migrateAllChildSAs();
+                notifyConnectionInfoChanged();
+                transitionTo(mIdle);
+                return;
+            }
+
+            logd("MOBIKE mobility event");
             mRetransmitter = new EncryptedRetransmitter(buildUpdateSaAddressesReq());
         }
 
@@ -5299,10 +5307,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
-        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
-        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
-        // way when b/177434707 is fixed.
-        @SuppressLint("NewApi")
         @Override
         public void handleResponseIkeMessage(IkeMessage resp) {
             mRetransmitter.stopRetransmitting();
@@ -5311,14 +5315,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 validateResp(resp);
 
                 migrateAllChildSAs();
-
-                IkeSessionConnectionInfo connectionInfo =
-                        new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
-                executeUserCallback(
-                        () ->
-                                mIkeSessionCallback.onIkeSessionConnectionInfoChanged(
-                                        connectionInfo));
-
+                notifyConnectionInfoChanged();
                 transitionTo(mIdle);
             } catch (IkeProtocolException | IOException e) {
                 handleIkeFatalError(e);
@@ -5412,6 +5409,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         mLocalRequestFactory.getChildLocalRequest(
                                 CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE, remoteChildSpi));
             }
+        }
+
+        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
+        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
+        // way when b/177434707 is fixed.
+        @SuppressLint("NewApi")
+        private void notifyConnectionInfoChanged() {
+            IkeSessionConnectionInfo connectionInfo =
+                    new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
+            executeUserCallback(
+                    () -> mIkeSessionCallback.onIkeSessionConnectionInfoChanged(connectionInfo));
         }
     }
 
@@ -5561,10 +5569,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      */
     @Override
     public void onUnderlyingNetworkUpdated(Network network) {
-        if (!mSupportMobike) {
-            throw new IllegalStateException("MOBIKE must be enabled to update the Network");
-        }
-
         Network oldNetwork = mNetwork;
         mNetwork = network;
 
