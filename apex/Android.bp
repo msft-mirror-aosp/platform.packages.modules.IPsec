@@ -25,6 +25,9 @@ apex_defaults {
     prebuilts: ["current_sdkinfo"],
     key: "com.android.ipsec.key",
     certificate: ":com.android.ipsec.certificate",
+    // Indicates that pre-installed version of this apex can be compressed.
+    // Whether it actually will be compressed is controlled on per-device basis.
+    compressible: true,
 }
 
 // Production APEX
