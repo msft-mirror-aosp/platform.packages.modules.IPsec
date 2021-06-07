@@ -116,13 +116,17 @@ public final class IkeSessionParams {
      */
     public static final int IKE_OPTION_EAP_ONLY_AUTH = 1;
     /**
-     * If set, the IKE library will attempt to enable MOBIKE for the resulting IKE Session.
+     * If set, the IKE library will be able to handle network and address changes.
+     *
+     * <p>The IKE library will first attempt to enable MOBIKE to handle the changes of underlying
+     * network and addresses. If the server does not support MOBIKE, the IKE library will handle the
+     * changes by rekeying all the underlying Child SAs.
      *
      * <p>If this option is set for an IKE Session, Transport-mode SAs will not be allowed in that
      * Session.
      *
-     * <p>Checking for MOBIKE use in an IKE Session is done via {@link
-     * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
+     * <p>Checking if MOBIKE is supported by both the IKE library and the server in an IKE Session
+     * is done via {@link IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      */
     public static final int IKE_OPTION_MOBIKE = 2;
 
