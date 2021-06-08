@@ -38,9 +38,9 @@ java_sdk_library {
         "unsupportedappusage",
         "framework-annotations-lib",
         "conscrypt.module.public.api",
-        "framework-connectivity",
+        "framework-connectivity.stubs.module_lib",
     ],
-    stub_only_libs: ["framework-connectivity"],
+    stub_only_libs: ["framework-connectivity.stubs.module_lib"],
 
     api_packages: [
         "android.net.eap",
