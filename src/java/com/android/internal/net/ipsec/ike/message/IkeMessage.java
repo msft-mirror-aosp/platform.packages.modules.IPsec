@@ -42,6 +42,7 @@ import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.Provider;
 import java.security.Security;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -78,16 +79,16 @@ public final class IkeMessage {
     }
 
     public final IkeHeader ikeHeader;
-    public final List<IkePayload> ikePayloadList;
+    public final List<IkePayload> ikePayloadList = new ArrayList<>();
     /**
-     * Conctruct an instance of IkeMessage. It is called by decode or for building outbound message.
+     * Construct an instance of IkeMessage. It is called by decode or for building outbound message.
      *
      * @param header the header of this IKE message
      * @param payloadList the list of decoded IKE payloads in this IKE message
      */
     public IkeMessage(IkeHeader header, List<IkePayload> payloadList) {
         ikeHeader = header;
-        ikePayloadList = payloadList;
+        ikePayloadList.addAll(payloadList);
     }
 
     /**
