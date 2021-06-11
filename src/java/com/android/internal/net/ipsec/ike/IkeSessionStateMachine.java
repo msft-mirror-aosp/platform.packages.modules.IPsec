@@ -2896,10 +2896,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 List<IkePayload> outboundPayloads,
                 ChildSessionStateMachine childSession) {
             // For each request IKE passed to Child, Child will send back to IKE a response. Even
-            // if the Child Sesison is under simultaneous deletion, it will send back an empty
+            // if the Child Session is under simultaneous deletion, it will send back an empty
             // payload list.
             mOutboundRespPayloads.addAll(outboundPayloads);
             mAwaitingChildResponse.remove(childSession);
+
+            // When the server tries to delete multiple Child Sessions in one IKE exchange,
+            // mAwaitingChildResponse may not be empty. It means that there are Child Sessions
+            // have not sent IKE Session the delete responses. In this case IKE Session needs to
+            // return and keep waiting for all the Child responses in this state.
             if (!mAwaitingChildResponse.isEmpty()) return;
 
             IkeHeader ikeHeader =
@@ -2913,6 +2918,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mLastInboundRequestMsgId);
             IkeMessage ikeMessage = new IkeMessage(ikeHeader, mOutboundRespPayloads);
             sendEncryptedIkeMessage(ikeMessage);
+
+            // Clear mOutboundRespPayloads so that in a two-exchange process (e.g. Rekey Child), the
+            // response of the first exchange won't be added to the response of the second exchange.
+            mOutboundRespPayloads.clear();
         }
     }
 
