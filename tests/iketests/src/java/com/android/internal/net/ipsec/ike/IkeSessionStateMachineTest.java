@@ -2410,9 +2410,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testTriggerRemoteRekeyChild() throws Exception {
+    public void testRemoteRekeyChild() throws Exception {
         setupIdleStateMachine();
 
+        // Receive Rekey Create request
         mIkeSessionStateMachine.sendMessage(
                 CMD_RECEIVE_IKE_PACKET,
                 makeRekeyChildCreateMessage(false /*isResp*/, CHILD_SPI_REMOTE));
@@ -2426,6 +2427,49 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
+
+        // Send Rekey Create response
+        List<IkePayload> mockRekeyCreatePayloads = Arrays.asList(mock(IkePayload.class));
+        mDummyChildSmCallback.onOutboundPayloadsReady(
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                true /*isResp*/,
+                mockRekeyCreatePayloads,
+                mMockChildSessionStateMachine);
+        mLooper.dispatchAll();
+
+        IkeMessage rekeyCreateResp =
+                verifyAndGetOutboundEncryptedResp(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA);
+        assertEquals(mockRekeyCreatePayloads, rekeyCreateResp.ikePayloadList);
+
+        // Forget sending Rekey Create response
+        resetMockIkeMessageHelper();
+
+        // Receive Delete Child Request
+        IkeDeletePayload[] inboundDelPayloads =
+                new IkeDeletePayload[] {new IkeDeletePayload(new int[] {CHILD_SPI_REMOTE})};
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeDeleteChildPacket(inboundDelPayloads, false /*isResp*/));
+        mLooper.dispatchAll();
+
+        verify(mMockChildSessionStateMachine)
+                .receiveRequest(
+                        eq(IKE_EXCHANGE_SUBTYPE_DELETE_CHILD),
+                        eq(EXCHANGE_TYPE_INFORMATIONAL),
+                        any(List.class));
+
+        // Send Rekey Delete response
+        List<IkePayload> mockRekeyDeletePayloads = Arrays.asList(mock(IkePayload.class));
+        mDummyChildSmCallback.onOutboundPayloadsReady(
+                IkeHeader.EXCHANGE_TYPE_INFORMATIONAL,
+                true /*isResp*/,
+                mockRekeyDeletePayloads,
+                mMockChildSessionStateMachine);
+        mLooper.dispatchAll();
+
+        IkeMessage rekeyDeleteResp =
+                verifyAndGetOutboundEncryptedResp(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL);
+        assertEquals(mockRekeyDeletePayloads, rekeyDeleteResp.ikePayloadList);
     }
 
     @Test
@@ -4018,12 +4062,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(IKE_REKEY_SA_INITIATOR_SPI, recordConfigCaptor.getValue().initSpi.getSpi());
 
         // Verify outbound CREATE_CHILD_SA message
-        IkeMessage rekeyCreateResp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
-        IkeHeader rekeyCreateRespHeader = rekeyCreateResp.ikeHeader;
-        assertEquals(IkePayload.PAYLOAD_TYPE_SK, rekeyCreateRespHeader.nextPayloadType);
-        assertEquals(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyCreateRespHeader.exchangeType);
-        assertTrue(rekeyCreateRespHeader.isResponseMsg);
-        assertTrue(rekeyCreateRespHeader.fromIkeInitiator);
+        IkeMessage rekeyCreateResp =
+                verifyAndGetOutboundEncryptedResp(IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA);
         assertNotNull(
                 rekeyCreateResp.getPayloadForType(IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class));
         assertNotNull(
@@ -4784,14 +4824,18 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockBusyWakelock).release();
     }
 
-    private IkeMessage verifyAndGetOutboundInformationalResp() {
+    private IkeMessage verifyAndGetOutboundEncryptedResp(int exchangeType) {
         IkeMessage resp = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
         IkeHeader ikeHeader = resp.ikeHeader;
         assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
-        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertEquals(exchangeType, ikeHeader.exchangeType);
         assertTrue(ikeHeader.isResponseMsg);
         assertEquals(mSpyCurrentIkeSaRecord.isLocalInit, ikeHeader.fromIkeInitiator);
         return resp;
+    }
+
+    private IkeMessage verifyAndGetOutboundInformationalResp() {
+        return verifyAndGetOutboundEncryptedResp(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL);
     }
 
     @Test
