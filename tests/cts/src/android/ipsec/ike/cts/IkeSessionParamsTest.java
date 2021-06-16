@@ -24,6 +24,7 @@ import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteCon
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthEapConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import static android.net.ipsec.ike.ike3gpp.Ike3gppDataListenerTest.TestIke3gppDataListener;
+import static android.os.Build.VERSION_CODES.R;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
@@ -49,8 +50,11 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SdkSuppress;
 
 import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -68,6 +72,8 @@ import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
 public final class IkeSessionParamsTest extends IkeSessionTestBase {
+    @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
+
     private static final int HARD_LIFETIME_SECONDS = (int) TimeUnit.HOURS.toSeconds(20L);
     private static final int SOFT_LIFETIME_SECONDS = (int) TimeUnit.HOURS.toSeconds(10L);
     private static final int DPD_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(10L);
@@ -480,8 +486,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     }
 
     @Test
-    @SdkSuppress(maxSdkVersion = -1, codeName = "REL")
-    // TODO(b/186433137): update maxSdkVersion and codeName once S SDK is finalized
+    @IgnoreAfter(R)
     public void testBuildWithMobikeOptionPreS() throws Exception {
         try {
             new IkeSessionParams.Builder().addIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE);
