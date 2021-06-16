@@ -39,6 +39,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PROTOCOL_ID_ESP;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 
@@ -949,11 +950,16 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_CHILD, remoteSpi));
 
         return new SaLifetimeAlarmScheduler(
-                mChildSessionParams.getHardLifetimeMsInternal(),
-                mChildSessionParams.getSoftLifetimeMsInternal(),
-                deleteSaIntent,
-                rekeySaIntent,
-                mAlarmManager);
+                new IkeAlarmConfig(
+                        mContext,
+                        ACTION_DELETE_CHILD,
+                        mChildSessionParams.getHardLifetimeMsInternal(),
+                        deleteSaIntent),
+                new IkeAlarmConfig(
+                        mContext,
+                        ACTION_REKEY_CHILD,
+                        mChildSessionParams.getSoftLifetimeMsInternal(),
+                        rekeySaIntent));
     }
 
     /** Initial state of ChildSessionStateMachine. */
