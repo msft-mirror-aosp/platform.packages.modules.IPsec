@@ -79,6 +79,7 @@ public final class SoftwareKeepaliveImpl implements IkeNattKeepalive.NattKeepali
 
     /** Send out keepalive packet and schedule next keepalive event */
     private void sendKeepaliveAndScheduleNext() {
+        getIkeLog().d(TAG, "Send keepalive to " + mDestAddress.getHostAddress());
         try {
             Os.sendto(
                     mSocket.getFileDescriptor(),
