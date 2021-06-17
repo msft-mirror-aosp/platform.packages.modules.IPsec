@@ -16,9 +16,10 @@
 
 package com.android.internal.net.eap.statemachine;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_MSCHAP_V2;
+
 import static com.android.internal.net.eap.EapAuthenticator.LOG;
 import static com.android.internal.net.eap.message.EapData.EAP_NOTIFICATION;
-import static com.android.internal.net.eap.message.EapData.EAP_TYPE_MSCHAP_V2;
 import static com.android.internal.net.eap.message.EapData.EAP_TYPE_STRING;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_RESPONSE;
@@ -30,6 +31,7 @@ import static com.android.internal.net.eap.message.mschapv2.EapMsChapV2TypeData.
 import static com.android.internal.net.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2FailureResponse.getEapMsChapV2FailureResponse;
 import static com.android.internal.net.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2SuccessResponse.getEapMsChapV2SuccessResponse;
 
+import android.net.eap.EapSessionConfig.EapMethodConfig.EapMethod;
 import android.net.eap.EapSessionConfig.EapMsChapV2Config;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -43,7 +45,6 @@ import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
 import com.android.internal.net.eap.exceptions.EapSilentException;
 import com.android.internal.net.eap.exceptions.mschapv2.EapMsChapV2ParsingException;
 import com.android.internal.net.eap.message.EapData;
-import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.eap.message.mschapv2.EapMsChapV2TypeData;
 import com.android.internal.net.eap.message.mschapv2.EapMsChapV2TypeData.EapMsChapV2ChallengeRequest;
