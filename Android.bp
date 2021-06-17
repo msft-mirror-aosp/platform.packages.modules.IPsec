@@ -141,7 +141,5 @@ java_library {
 
 sdk {
     name: "ipsec-module-sdk",
-    java_sdk_libs: [
-        "android.net.ipsec.ike",
-    ],
+    bootclasspath_fragments: ["com.android.ipsec-bootclasspath-fragment"],
 }
