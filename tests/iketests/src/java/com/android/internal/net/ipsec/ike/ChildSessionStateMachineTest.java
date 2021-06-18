@@ -65,7 +65,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.app.AlarmManager;
 import android.content.Context;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
@@ -85,6 +84,8 @@ import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.net.ipsec.test.ike.exceptions.InvalidKeException;
 import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
+import android.os.Handler;
+import android.os.Message;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -184,7 +185,7 @@ public final class ChildSessionStateMachineTest {
     private IkeMacPrf mIkePrf;
 
     private Context mContext;
-    private AlarmManager mMockAlarmManager;
+    private Handler mMockIkeHandler;
     private IpSecService mMockIpSecService;
     private IpSecManager mMockIpSecManager;
     private UdpEncapsulationSocket mMockUdpEncapSocket;
@@ -244,7 +245,9 @@ public final class ChildSessionStateMachineTest {
         mIkePrf = IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
 
         mContext = InstrumentationRegistry.getContext();
-        mMockAlarmManager = mock(AlarmManager.class);
+        mMockIkeHandler = mock(Handler.class);
+        when(mMockIkeHandler.obtainMessage(anyInt(), anyInt(), anyInt(), any()))
+                .thenReturn(mock(Message.class));
 
         mMockIpSecService = mock(IpSecService.class);
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
@@ -2003,7 +2006,7 @@ public final class ChildSessionStateMachineTest {
                 mLooper.getLooper(),
                 mContext,
                 IKE_SESSION_UNIQUE_ID,
-                mMockAlarmManager,
+                mMockIkeHandler,
                 createMockRandomFactory(),
                 mMockIpSecManager,
                 mIpSecSpiGenerator,
