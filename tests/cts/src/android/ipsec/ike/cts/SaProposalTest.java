@@ -76,8 +76,12 @@ import android.net.ipsec.ike.SaProposal;
 import android.util.Pair;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
-import androidx.test.filters.SdkSuppress;
 
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
+
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -93,6 +97,8 @@ import java.util.Set;
 
 @RunWith(AndroidJUnit4.class)
 public class SaProposalTest {
+    @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
+
     private static final List<Pair<Integer, Integer>> IKE_NORMAL_MODE_CIPHERS =
             getNormalModeCiphers(true /* isIke */);
     private static final List<Pair<Integer, Integer>> IKE_COMBINED_MODE_CIPHERS =
@@ -516,7 +522,7 @@ public class SaProposalTest {
     }
 
     @Test
-    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    @IgnoreUpTo(R)
     public void testGetSupportedChildAlgosAtLeastSdkS() {
         // MD5 is not allowed by IKE for security reasons
         final Set<String> expectedAlgos = new HashSet<>();
@@ -526,9 +532,8 @@ public class SaProposalTest {
         checkGetSupportedChildSaAlgos(expectedAlgos);
     }
 
-    // TODO(b/186433137): update maxSdkVersion and codeName once S SDK is finalized
-    @SdkSuppress(maxSdkVersion = -1, codeName = "REL")
     @Test
+    @IgnoreAfter(R)
     public void testGetSupportedChildAlgosPreS() {
         final Set<String> expectedAlgos = new HashSet<>();
         expectedAlgos.add(ALL_ENCRYPT_ALGOS.get(ENCRYPTION_ALGORITHM_AES_CBC).ipSecName);
