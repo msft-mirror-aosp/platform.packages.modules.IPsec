@@ -16,7 +16,11 @@
 
 package android.ipsec.ike.cts;
 
-import static android.app.AppOpsManager.OP_MANAGE_IPSEC_TUNNELS;
+import static android.net.ipsec.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
+import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
+import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96;
+import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_128;
+import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_AUTHENTICATION_FAILED;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TS_UNACCEPTABLE;
@@ -25,17 +29,15 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 import android.net.LinkAddress;
-import android.net.ipsec.ike.ChildSessionParams;
-import android.net.ipsec.ike.IkeFqdnIdentification;
+import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSession;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.platform.test.annotations.AppModeFull;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.filters.SdkSuppress;
 
-import org.junit.AfterClass;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -45,7 +47,7 @@ import java.util.Arrays;
 
 @RunWith(AndroidJUnit4.class)
 @AppModeFull(reason = "MANAGE_IPSEC_TUNNELS permission can't be granted to instant apps")
-public class IkeSessionPskTest extends IkeSessionTestBase {
+public class IkeSessionPskTest extends IkeSessionPskTestBase {
     // Test vectors for success workflow
     private static final String SUCCESS_IKE_INIT_RESP =
             "46B8ECA1E0D72A18B45427679F9245D421202220000000000000015022000030"
@@ -85,47 +87,9 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
                     + "9352D71100777B00ABCC6BD7DBEA697827FFAAA48DF9A54D1D68161939F5DC8"
                     + "6743A7CEB2BE34AC00095A5B8";
 
-    private IkeSession openIkeSessionWithTunnelModeChild(InetAddress remoteAddress) {
-        return openIkeSession(remoteAddress, buildTunnelModeChildSessionParams());
-    }
-
-    private IkeSession openIkeSessionWithTransportModeChild(InetAddress remoteAddress) {
-        return openIkeSession(remoteAddress, buildTransportModeChildParamsWithDefaultTs());
-    }
-
-    private IkeSession openIkeSession(InetAddress remoteAddress, ChildSessionParams childParams) {
-        IkeSessionParams ikeParams =
-                new IkeSessionParams.Builder(sContext)
-                        .setNetwork(mTunNetwork)
-                        .setServerHostname(remoteAddress.getHostAddress())
-                        .addSaProposal(SaProposalTest.buildIkeSaProposalWithNormalModeCipher())
-                        .addSaProposal(SaProposalTest.buildIkeSaProposalWithCombinedModeCipher())
-                        .setLocalIdentification(new IkeFqdnIdentification(LOCAL_HOSTNAME))
-                        .setRemoteIdentification(new IkeFqdnIdentification(REMOTE_HOSTNAME))
-                        .setAuthPsk(IKE_PSK)
-                        .build();
-        return new IkeSession(
-                sContext,
-                ikeParams,
-                childParams,
-                mUserCbExecutor,
-                mIkeSessionCallback,
-                mFirstChildSessionCallback);
-    }
-
-    @BeforeClass
-    public static void setUpTunnelPermissionBeforeClass() throws Exception {
-        // Under normal circumstances, the MANAGE_IPSEC_TUNNELS appop would be auto-granted, and
-        // a standard permission is insufficient. So we shell out the appop, to give us the
-        // right appop permissions.
-        setAppOp(OP_MANAGE_IPSEC_TUNNELS, true);
-    }
-
-    // This method is guaranteed to run in subclasses and will run after subclasses' @AfterClass
-    // methods.
-    @AfterClass
-    public static void tearDownTunnelPermissionAfterClass() throws Exception {
-        setAppOp(OP_MANAGE_IPSEC_TUNNELS, false);
+    @Override
+    protected IkeSessionParams getIkeSessionParams(InetAddress remoteAddress) {
+        return createIkeParamsBuilderBase(remoteAddress).build();
     }
 
     @Test
@@ -153,9 +117,9 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
         verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
 
         // Open additional Child Session
-        TestChildSessionCallback additionalChildCb = new TestChildSessionCallback();
+        TestChildSessionCallback additionalChildCb = new DefaultTestChildSessionCallback();
         ikeSession.openChildSession(buildTunnelModeChildSessionParams(), additionalChildCb);
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 true /* expectedUseEncap */,
@@ -175,7 +139,7 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
 
         // Close additional Child Session
         ikeSession.closeChildSession(additionalChildCb);
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 true /* expectedUseEncap */,
@@ -188,6 +152,80 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
         // Close IKE Session
         ikeSession.close();
         performCloseIkeBlocking(expectedMsgId++, SUCCESS_DELETE_IKE_RESP);
+        verifyCloseIkeAndChildBlocking(firstTransformRecordA, firstTransformRecordB);
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testIkeSessionSetupAndChildSessionSetupWithAesCmac() throws Exception {
+        if (!hasTunnelsFeature()) return;
+
+        final String ikeInitResp =
+                "46b8eca1e0d72a181571bb794f2d88d12120222000000000000001d022000030"
+                        + "0000002c010100040300000c0100000c800e0080030000080300000803000008"
+                        + "02000008000000080400000e28000108000e0000698f6f432a2a711c4bdd9c83"
+                        + "c7742f2b07a7c75b8d0d78ff0fe3d0f5940f782b5631ab109a82427508001b80"
+                        + "39aabdcd71af3d29f131aed4f5f018a5039c6a9884226771cf846b18b1a9ea88"
+                        + "d6ef99daacad4a81aa034ef9b73aa8b861976ea483d588cefee05a1e9d6b61fe"
+                        + "84d316c9b0b09e14e5fbaefed07dc2588391cab1363a0a8772114aff5a31c52f"
+                        + "9f1a75b16833203954e228ab43b6bf72860e0deb332961d5ee8ce09b8dc8033b"
+                        + "36cc7a769c790be07cb9177d9a9693396c6a76f5de4311d8174f5ad4a83236b7"
+                        + "233f0e713e97d2776ae65cf102d0c41cf4d306dcafff3ae9ca5d615c0cb00e20"
+                        + "0d43bb1476cf8c726f70ad0d20f5e02fb3cc003c2900002408c1ba8e08c5f87f"
+                        + "546bf302b3c45df0fe79275af94c63ed8f1615b7167937612900001c00004004"
+                        + "e9c337df6bc320e3511a9b746d25701c3ae6a2212900001c0000400558429be4"
+                        + "203e487f214627a71e0c77ac99666486290000080000402e290000100000402f"
+                        + "00020003000400050000000800004014";
+        final String ikeAuthResp =
+                "46b8eca1e0d72a181571bb794f2d88d12e20232000000001000000ec240000d0"
+                        + "0934e8476ec0d980f9ccd5f618be1a4be9ebbe294fa9a4d444eb5e6502b6479d"
+                        + "04e79b235336706744b443cbb96132e14757332e9902211c663e3aec4955dcb6"
+                        + "6f29f572925fd8641441b6a97256c727f22dcb8d68f436e85a203d044f367fa0"
+                        + "6571e433e5a3231fe403fb1bb891642a37416efd4ece8e63bae7a8d05f6e7162"
+                        + "79f2862848ae8ec9c36bc7b4b239161050dc97ae628f564a446379e235e37582"
+                        + "624724c41b607be1c06cb4bbc2f7c3f0c7be19796670f375e0c5d920a389b6e9"
+                        + "e6720b8f90b244279156f502";
+        final String deleteIkeResp =
+                "46b8eca1e0d72a181571bb794f2d88d12e202520000000020000004c00000030"
+                        + "462193d2d381b85205d234b1e20b5e8bd1931a6d6fabeeef0c61855a1882525f"
+                        + "1dd507d4e7119ad54349a3b1";
+        // Create IkeSessionParams with an SaProposal with integrity algorithm 'aescmac' and prf
+        // 'prfaescmac'.
+        final IkeSaProposal saProposal =
+                new IkeSaProposal.Builder()
+                        .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128)
+                        .addIntegrityAlgorithm(INTEGRITY_ALGORITHM_AES_CMAC_96)
+                        .addPseudorandomFunction(PSEUDORANDOM_FUNCTION_AES128_CMAC)
+                        .addDhGroup(DH_GROUP_2048_BIT_MODP)
+                        .build();
+
+        final IkeSessionParams params =
+                createIkeParamsBuilderBase(mRemoteAddress, saProposal).build();
+
+        // Open IKE Session
+        final IkeSession ikeSession = openIkeSessionWithTunnelModeChild(mRemoteAddress, params);
+        performSetupIkeAndFirstChildBlocking(ikeInitResp, ikeAuthResp);
+
+        // Local request message ID starts from 2 because there is one IKE_INIT message and a single
+        // IKE_AUTH message.
+        int expectedMsgId = 2;
+
+        verifyIkeSessionSetupBlocking();
+        verifyChildSessionSetupBlocking(
+                mFirstChildSessionCallback,
+                Arrays.asList(TUNNEL_MODE_INBOUND_TS),
+                Arrays.asList(TUNNEL_MODE_OUTBOUND_TS),
+                Arrays.asList(EXPECTED_INTERNAL_LINK_ADDR));
+
+        final IpSecTransformCallRecord firstTransformRecordA =
+                mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
+        final IpSecTransformCallRecord firstTransformRecordB =
+                mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
+        verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
+
+        // Close IKE Session
+        ikeSession.close();
+        performCloseIkeBlocking(expectedMsgId++, true /* expectedUseEncap */, deleteIkeResp);
         verifyCloseIkeAndChildBlocking(firstTransformRecordA, firstTransformRecordB);
     }
 
@@ -227,8 +265,8 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
 
         // Teardown current test network that uses IPv4 address and set up new network with IPv6
         // address.
-        tearDownTestNetwork();
-        setUpTestNetwork(mLocalAddress);
+        mTunNetworkContext.close();
+        mTunNetworkContext = new TunNetworkContext(mLocalAddress);
 
         // Open IKE Session
         IkeSession ikeSession = openIkeSessionWithTunnelModeChild(mRemoteAddress);
@@ -275,15 +313,14 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
         mIkeSessionCallback.awaitOnClosed();
     }
 
-    @Test
-    public void testIkeInitFail() throws Exception {
+    private void verifyIkeInitFail() throws Exception {
         final String ikeInitFailRespHex =
                 "46B8ECA1E0D72A180000000000000000292022200000000000000024000000080000000E";
 
         // Open IKE Session
         IkeSession ikeSession = openIkeSessionWithTransportModeChild(mRemoteAddress);
         int expectedMsgId = 0;
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 false /* expectedUseEncap */,
@@ -295,6 +332,18 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
                 (IkeProtocolException) mIkeSessionCallback.awaitOnClosedException();
         assertEquals(ERROR_TYPE_NO_PROPOSAL_CHOSEN, protocolException.getErrorType());
         assertArrayEquals(EXPECTED_PROTOCOL_ERROR_DATA_NONE, protocolException.getErrorData());
+    }
+
+    @Test
+    public void testIkeInitFail() throws Exception {
+        verifyIkeInitFail();
+    }
+
+    @Test
+    public void testIkeInitFailWithLegacyCb() throws Exception {
+        mIkeSessionCallback = new LegacyTestIkeSessionCallback();
+        mFirstChildSessionCallback = new LegacyTestChildSessionCallback();
+        verifyIkeInitFail();
     }
 
     @Test
@@ -328,8 +377,7 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
         assertArrayEquals(EXPECTED_PROTOCOL_ERROR_DATA_NONE, protocolException.getErrorData());
     }
 
-    @Test
-    public void testIkeAuthHandlesFirstChildCreationFail() throws Exception {
+    private void verifyIkeAuthHandlesFirstChildCreationFail() throws Exception {
         final String ikeInitRespHex =
                 "46B8ECA1E0D72A18F5ABBF896A1240BE2120222000000000000001502200"
                         + "00300000002C010100040300000C0100000C800E0100030000080300000C"
@@ -367,5 +415,17 @@ public class IkeSessionPskTest extends IkeSessionTestBase {
 
         ikeSession.kill();
         mIkeSessionCallback.awaitOnClosed();
+    }
+
+    @Test
+    public void testIkeAuthHandlesFirstChildCreationFail() throws Exception {
+        verifyIkeAuthHandlesFirstChildCreationFail();
+    }
+
+    @Test
+    public void testIkeAuthHandlesFirstChildCreationFailWithLegacyCb() throws Exception {
+        mIkeSessionCallback = new LegacyTestIkeSessionCallback();
+        mFirstChildSessionCallback = new LegacyTestChildSessionCallback();
+        verifyIkeAuthHandlesFirstChildCreationFail();
     }
 }
