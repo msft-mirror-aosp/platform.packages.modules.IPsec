@@ -19,10 +19,18 @@ package com.android.internal.net.ipsec.ike.utils;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
+import android.os.Message;
+import android.os.Process;
 import android.os.SystemClock;
 
+import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.util.WakeupMessage;
+
 /** IkeAlarm provides interfaces to use AlarmManager for scheduling system alarm. */
+// TODO: b/191056695 Improve test coverage for scheduling system alarms.
 public abstract class IkeAlarm {
+    private static final Dependencies sDeps = new Dependencies();
+
     protected final AlarmManager mAlarmManager;
     protected final String mTag;
     protected final long mDelayMs;
@@ -35,7 +43,13 @@ public abstract class IkeAlarm {
 
     /** Creates an alarm to be delivered precisely at the stated time. */
     public static IkeAlarm newExactAlarm(IkeAlarmConfig alarmConfig) {
-        return new IkeAlarmWithPendingIntent(alarmConfig, false /* allowWhileIdle */);
+        return new IkeAlarmWithListener(alarmConfig, sDeps);
+    }
+
+    /** Creates an alarm with a Dependencies instance for testing */
+    @VisibleForTesting
+    static IkeAlarm newExactAlarm(IkeAlarmConfig alarmConfig, Dependencies deps) {
+        return new IkeAlarmWithListener(alarmConfig, deps);
     }
 
     /**
@@ -43,8 +57,19 @@ public abstract class IkeAlarm {
      * low-power idle (a.k.a. doze) modes.
      */
     public static IkeAlarm newExactAndAllowWhileIdleAlarm(IkeAlarmConfig alarmConfig) {
-        // TODO: Do not use PendingIntent if it is system uid. Done in the followup CL.
-        return new IkeAlarmWithPendingIntent(alarmConfig, true /* allowWhileIdle */);
+        return newExactAndAllowWhileIdleAlarm(alarmConfig, sDeps);
+    }
+
+    /** Creates an alarm with a Dependencies instance for testing */
+    @VisibleForTesting
+    static IkeAlarm newExactAndAllowWhileIdleAlarm(IkeAlarmConfig alarmConfig, Dependencies deps) {
+        if (deps.getMyUid() == Process.SYSTEM_UID) {
+            // By using listener instead of PendingIntent, the system service does not need to
+            // declare the PendingIntent broadcast as protected in the AndroidManifest.
+            return new IkeAlarmWithListener(alarmConfig, deps);
+        } else {
+            return new IkeAlarmWithPendingIntent(alarmConfig);
+        }
     }
 
     /** Cancel the alarm */
@@ -53,17 +78,38 @@ public abstract class IkeAlarm {
     /** Schedule/re-schedule the alarm */
     public abstract void schedule();
 
-    /** Alarm that will be using a PendingIntent */
-    private static class IkeAlarmWithPendingIntent extends IkeAlarm {
-        private final PendingIntent mPendingIntent;
-        private final boolean mAllowWhileIdle;
+    /** External dependencies, for injection in tests */
+    @VisibleForTesting
+    static class Dependencies {
+        /** Get the UID of the current process */
+        public int getMyUid() {
+            return Process.myUid();
+        }
 
-        IkeAlarmWithPendingIntent(IkeAlarmConfig alarmConfig, boolean allowWhileIdle) {
+        /** Construct a WakeupMessage */
+        public WakeupMessage newWakeMessage(IkeAlarmConfig alarmConfig) {
+            Message alarmMessage = alarmConfig.message;
+            return new WakeupMessage(
+                    alarmConfig.context,
+                    alarmMessage.getTarget(),
+                    alarmConfig.tag,
+                    alarmMessage.what,
+                    alarmMessage.arg1,
+                    alarmMessage.arg2,
+                    alarmMessage.obj);
+        }
+    }
+
+    /** Alarm that will be using a PendingIntent and will be set with setExactAndAllowWhileIdle */
+    @VisibleForTesting
+    static class IkeAlarmWithPendingIntent extends IkeAlarm {
+        private final PendingIntent mPendingIntent;
+
+        IkeAlarmWithPendingIntent(IkeAlarmConfig alarmConfig) {
             super(alarmConfig);
             android.util.Log.d("IKE", "new IkeAlarmWithPendingIntent for " + mTag);
 
             mPendingIntent = alarmConfig.pendingIntent;
-            mAllowWhileIdle = allowWhileIdle;
         }
 
         @Override
@@ -74,35 +120,57 @@ public abstract class IkeAlarm {
 
         @Override
         public void schedule() {
-            if (mAllowWhileIdle) {
-                mAlarmManager.setExactAndAllowWhileIdle(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        SystemClock.elapsedRealtime() + mDelayMs,
-                        mPendingIntent);
-            } else {
-                mAlarmManager.setExact(
-                        AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                        SystemClock.elapsedRealtime() + mDelayMs,
-                        mPendingIntent);
-            }
+            mAlarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + mDelayMs,
+                    mPendingIntent);
         }
     }
 
-    // TODO: Create IkeAlarm that will use direct callback instead of PendingIntent. Done in the
-    // followup CL.
+    /**
+     * Alarm that will be using a OnAlarmListener and will be set with setExact
+     *
+     * <p>If the caller is a system service, the alarm can still be fired in doze mode.
+     */
+    @VisibleForTesting
+    static class IkeAlarmWithListener extends IkeAlarm {
+        private final WakeupMessage mWakeupMsg;
 
-    /** Configurations of creating an IkeAlarm */
+        IkeAlarmWithListener(IkeAlarmConfig alarmConfig, Dependencies deps) {
+            super(alarmConfig);
+            android.util.Log.d("IKE", "new IkeAlarmWithListener for " + mTag);
+
+            mWakeupMsg = deps.newWakeMessage(alarmConfig);
+        }
+
+        @Override
+        public void cancel() {
+            mWakeupMsg.cancel();
+        }
+
+        @Override
+        public void schedule() {
+            mWakeupMsg.schedule(SystemClock.elapsedRealtime() + mDelayMs);
+        }
+    }
+
     public static class IkeAlarmConfig {
         public final Context context;
         public final String tag;
         public final long delayMs;
+        public final Message message;
         public final PendingIntent pendingIntent;
 
         public IkeAlarmConfig(
-                Context context, String tag, long delayMs, PendingIntent pendingIntent) {
+                Context context,
+                String tag,
+                long delayMs,
+                PendingIntent pendingIntent,
+                Message message) {
             this.context = context;
             this.tag = tag;
             this.delayMs = delayMs;
+            this.message = message;
             this.pendingIntent = pendingIntent;
         }
     }
