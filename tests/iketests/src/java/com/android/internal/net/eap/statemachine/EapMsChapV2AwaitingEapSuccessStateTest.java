@@ -14,21 +14,21 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.statemachine;
+package com.android.internal.net.eap.test.statemachine;
 
-import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.ID_INT;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_EMSK;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_MSK;
-import static com.android.internal.net.eap.message.EapTestMessageDefinitions.MSCHAP_V2_NT_RESPONSE;
+import static com.android.internal.net.eap.test.message.EapMessage.EAP_CODE_SUCCESS;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.ID_INT;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.MSCHAP_V2_EMSK;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.MSCHAP_V2_MSK;
+import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.MSCHAP_V2_NT_RESPONSE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
-import com.android.internal.net.eap.EapResult;
-import com.android.internal.net.eap.EapResult.EapSuccess;
-import com.android.internal.net.eap.message.EapMessage;
-import com.android.internal.net.eap.statemachine.EapMethodStateMachine.FinalState;
+import com.android.internal.net.eap.test.EapResult;
+import com.android.internal.net.eap.test.EapResult.EapSuccess;
+import com.android.internal.net.eap.test.message.EapMessage;
+import com.android.internal.net.eap.test.statemachine.EapMethodStateMachine.FinalState;
 
 import org.junit.Before;
 import org.junit.Test;
