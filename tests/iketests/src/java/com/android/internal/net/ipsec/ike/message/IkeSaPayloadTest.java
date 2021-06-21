@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.ipsec.test.ike.message;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 
@@ -37,33 +37,33 @@ import static org.mockito.Mockito.when;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecSpiResponse;
-import android.net.ipsec.ike.ChildSaProposal;
-import android.net.ipsec.ike.IkeSaProposal;
-import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.ChildSaProposal;
+import android.net.ipsec.test.ike.IkeSaProposal;
+import android.net.ipsec.test.ike.SaProposal;
+import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
 import android.util.Pair;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Attribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.AttributeDecoder;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EsnTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.KeyLengthAttribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Proposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.TransformDecoder;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.UnrecognizedAttribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.UnrecognizedTransform;
-import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
-import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
-import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.Attribute;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.AttributeDecoder;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.ChildProposal;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.DhGroupTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.EncryptionTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.EsnTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IkeProposal;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.KeyLengthAttribute;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.Proposal;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.Transform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.TransformDecoder;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.UnrecognizedAttribute;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.UnrecognizedTransform;
+import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IkeSpiGenerator;
+import com.android.internal.net.ipsec.test.ike.utils.IpSecSpiGenerator;
 import com.android.server.IpSecService;
 
 import org.junit.After;
@@ -947,7 +947,7 @@ public final class IkeSaPayloadTest {
 
         final String saPayloadBodyHex =
                 "0000002c010100040300000c0100000c800e0080030000080300000c"
-                        + "0300000802000005000000080400001f";
+                        + "0300000802000005000000080400005f";
         IkeSaPayload saPayload =
                 new IkeSaPayload(
                         false /* isCritical*/,
