@@ -3494,12 +3494,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 buildIkeAlarmIntent(
                         mContext, ACTION_KEEPALIVE, getIntentIdentifier(), keepaliveMsg);
 
-        int keepaliveDelay = mIkeSessionParams.getNattKeepAliveDelaySeconds();
+        int keepaliveDelaySeconds = mIkeSessionParams.getNattKeepAliveDelaySeconds();
         IkeNattKeepalive keepalive =
                 new IkeNattKeepalive(
                         mContext,
                         mConnectivityManager,
-                        keepaliveDelay,
+                        keepaliveDelaySeconds,
                         (Inet4Address) mLocalAddress,
                         (Inet4Address) mRemoteAddress,
                         ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
@@ -3507,7 +3507,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         new IkeAlarmConfig(
                                 mContext,
                                 ACTION_KEEPALIVE,
-                                keepaliveDelay,
+                                TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds),
                                 keepaliveIntent,
                                 keepaliveMsg));
         keepalive.start();
