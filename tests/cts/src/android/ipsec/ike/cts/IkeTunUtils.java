@@ -221,19 +221,18 @@ public class IkeTunUtils extends TunUtils {
     }
 
     private static int getIkeOffset(byte[] pkt, boolean useEncap) {
-        if (isIpv6(pkt)) {
-            // IPv6 UDP expectedUseEncap not supported by kernels; assume non-expectedUseEncap.
-            return IP6_HDRLEN + UDP_HDRLEN;
-        } else {
-            // Use default IPv4 header length (assuming no options)
-            int ikeOffset = IP4_HDRLEN + UDP_HDRLEN;
-            return useEncap ? ikeOffset + NON_ESP_MARKER_LEN : ikeOffset;
-        }
+        int hdrLen = isIpv6(pkt) ? IP6_HDRLEN : IP4_HDRLEN;
+        int ikeOffset = UDP_HDRLEN + hdrLen;
+
+        // Port 4500 is used during MOBIKE (and a non-ESP marker is added). This is always done,
+        // regardless of whether the IP address is IPv4 or IPv6
+        return useEncap ? ikeOffset + NON_ESP_MARKER_LEN : ikeOffset;
     }
 
     private static boolean hasNonEspMarker(byte[] pkt) {
         ByteBuffer buffer = ByteBuffer.wrap(pkt);
-        int ikeOffset = IP4_HDRLEN + UDP_HDRLEN;
+        int hdrLen = isIpv6(pkt) ? IP6_HDRLEN : IP4_HDRLEN;
+        int ikeOffset = UDP_HDRLEN + hdrLen;
         if (buffer.remaining() < ikeOffset) return false;
 
         buffer.get(new byte[ikeOffset]); // Skip IP and UDP header
