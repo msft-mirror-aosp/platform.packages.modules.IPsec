@@ -125,6 +125,26 @@ public class ChildSessionParamsTest extends IkeTestBase {
     }
 
     @Test
+    public void testBuildTransportModeParamsWithTransportModeParams() {
+        TransportModeChildSessionParams childParams =
+                new TransportModeChildSessionParams.Builder().addSaProposal(mSaProposal).build();
+        TransportModeChildSessionParams result =
+                new TransportModeChildSessionParams.Builder(childParams).build();
+
+        assertEquals(childParams, result);
+    }
+
+    @Test
+    public void testBuildTunnelModeParamsWithTunnelModeParams() {
+        TunnelModeChildSessionParams childParams =
+                new TunnelModeChildSessionParams.Builder().addSaProposal(mSaProposal).build();
+        TunnelModeChildSessionParams result =
+                new TunnelModeChildSessionParams.Builder(childParams).build();
+
+        assertEquals(childParams, result);
+    }
+
+    @Test
     public void testBuildTransportModeParamsWithCustomizedValues() {
         TransportModeChildSessionParams childParams =
                 new TransportModeChildSessionParams.Builder()

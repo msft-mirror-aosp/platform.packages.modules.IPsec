@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+}
+
 android_test {
     name: "CtsIkeTestCases",
     defaults: ["cts_defaults"],
@@ -26,14 +30,15 @@ android_test {
 
     srcs: [
         "src/**/*.java",
-        ":ike-test-utils",
     ],
 
     static_libs: [
         "androidx.test.ext.junit",
         "compatibility-device-util-axt",
         "ctstestrunner-axt",
+        "modules-utils-build",
         "net-tests-utils",
+        "ike-test-utils",
     ],
 
     platform_apis: true,
@@ -44,5 +49,19 @@ android_test {
         "mts-ipsec",
         "vts",
         "general-tests",
+    ],
+
+    min_sdk_version: "30",
+}
+
+java_library {
+    name: "ike-tun-utils",
+    srcs: [
+        "src/**/IkeTunUtils.java",
+        "src/**/PacketUtils.java",
+        "src/**/TunUtils.java",
+    ],
+    static_libs: [
+        "junit",
     ],
 }

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.ipsec.test.ike.message;
 
-import static com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_256;
+import static com.android.internal.net.ipsec.test.ike.message.IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_256;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -25,13 +25,15 @@ import static org.junit.Assert.fail;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 
-import android.net.ipsec.ike.SaProposal;
+import android.net.ipsec.test.ike.SaProposal;
+import android.net.ipsec.test.ike.exceptions.AuthenticationFailedException;
+import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
+import android.util.ArraySet;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
-import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.test.ike.crypto.IkeMacPrf;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -43,6 +45,8 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAKey;
 import java.security.interfaces.RSAPrivateKey;
+import java.util.Arrays;
+import java.util.Set;
 
 public final class IkeAuthDigitalSignPayloadTest {
     // TODO: Build a RSA_SHA1 signature and add tests for it.
@@ -81,6 +85,11 @@ public final class IkeAuthDigitalSignPayloadTest {
             "a5dded450b5ffd2670f37954367fce28279a085c830a03358b10b0872c0578f9";
     private static final String ID_RESP_PAYLOAD_BODY_HEX_STRING = "01000000c0a82b8a";
     private static final String SKP_RESP_HEX_STRING = "8FE8EC3153EDE924C23D6630D3C992A494E2F256";
+
+    private static final byte[] SIGNATURE_HASH_ALGORITHMS =
+            TestUtils.hexStringToByteArray("0001000200030004");
+    private static final byte[] MALFORMATTED_SIGNATURE_HASH_ALGORITHMS =
+            TestUtils.hexStringToByteArray("0001000200");
 
     private static final String ANDROID_KEY_STORE_NAME = "AndroidKeyStore";
 
@@ -229,5 +238,42 @@ public final class IkeAuthDigitalSignPayloadTest {
 
         assertEquals(SIGNATURE_ALGO_RSA_SHA2_256, authPayload.signatureAndHashAlgos);
         assertArrayEquals(authPayload.signature, TestUtils.hexStringToByteArray(SIGNATURE));
+    }
+
+    @Test
+    public void testGetSignatureHashAlgorithmsFromIkeNotifyPayload() throws Exception {
+        IkeNotifyPayload payload =
+                new IkeNotifyPayload(
+                        IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS,
+                        SIGNATURE_HASH_ALGORITHMS);
+
+        Set<Short> expectedSignatureHashAlgos =
+                new ArraySet<>(
+                        Arrays.asList(
+                                IkeAuthDigitalSignPayload.HASH_ALGORITHM_RSA_SHA1,
+                                IkeAuthDigitalSignPayload.HASH_ALGORITHM_RSA_SHA2_256,
+                                IkeAuthDigitalSignPayload.HASH_ALGORITHM_RSA_SHA2_384,
+                                IkeAuthDigitalSignPayload.HASH_ALGORITHM_RSA_SHA2_512));
+
+        assertEquals(
+                expectedSignatureHashAlgos,
+                IkeAuthDigitalSignPayload.getSignatureHashAlgorithmsFromIkeNotifyPayload(payload));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testGetSignatureHashAlgorithmsFromIkeNotifyPayloadWrongType() throws Exception {
+        IkeNotifyPayload payload = new IkeNotifyPayload(IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA);
+
+        IkeAuthDigitalSignPayload.getSignatureHashAlgorithmsFromIkeNotifyPayload(payload);
+    }
+
+    @Test(expected = InvalidSyntaxException.class)
+    public void testGetSignatureHashAlgorithmsFromIkeNotifyPayloadMalformatted() throws Exception {
+        IkeNotifyPayload payload =
+                new IkeNotifyPayload(
+                        IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS,
+                        MALFORMATTED_SIGNATURE_HASH_ALGORITHMS);
+
+        IkeAuthDigitalSignPayload.getSignatureHashAlgorithmsFromIkeNotifyPayload(payload);
     }
 }
