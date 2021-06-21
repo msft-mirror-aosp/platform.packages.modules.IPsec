@@ -19,6 +19,8 @@
     package="android.ipsec.cts"
     android:targetSandboxVersion="2">
 
+    <uses-sdk android:minSdkVersion="30" android:targetSdkVersion="30" />
+
     <!--Allow tests to call ConnectivityManager#getActiveNetwork()-->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"/>
     <!--Allow tests to create socket -->
