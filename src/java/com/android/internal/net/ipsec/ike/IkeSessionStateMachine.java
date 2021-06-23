@@ -74,6 +74,7 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkRequest;
+import android.net.TrafficStats;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
@@ -99,6 +100,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
+import android.os.Process;
 import android.system.ErrnoException;
 import android.util.LongSparseArray;
 import android.util.Pair;
@@ -1228,6 +1230,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 resolveAndSetAvailableRemoteAddresses();
 
                 setRemoteAddress();
+
+                // TODO(b/191673438): Set a specific tag for VPN.
+                TrafficStats.setThreadStatsTag(Process.myUid());
 
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 mIkeSocket =
