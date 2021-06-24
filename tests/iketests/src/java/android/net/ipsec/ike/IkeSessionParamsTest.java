@@ -282,7 +282,7 @@ public final class IkeSessionParamsTest {
     public void testEncodeIkeSessionParamsWithConfiguredNetwork() throws Exception {
         IkeSessionParams sessionParams =
                 buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
-                        .setConfiguredNetwork(mMockUserConfigNetwork)
+                        .setNetwork(mMockUserConfigNetwork)
                         .build();
 
         PersistableBundle bundle = sessionParams.toPersistableBundle();
@@ -830,12 +830,10 @@ public final class IkeSessionParamsTest {
     @Test
     public void testCreateCopyWithNetworkCleared() throws Exception {
         IkeSessionParams sessionParams =
-                createIkeParamsBuilderMinimum()
-                        .setConfiguredNetwork(mMockUserConfigNetwork)
-                        .build();
+                createIkeParamsBuilderMinimum().setNetwork(mMockUserConfigNetwork).build();
 
         IkeSessionParams result =
-                new IkeSessionParams.Builder(sessionParams).setConfiguredNetwork(null).build();
+                new IkeSessionParams.Builder(sessionParams).setNetwork(null).build();
         assertNull(result.getConfiguredNetwork());
     }
 
@@ -859,6 +857,14 @@ public final class IkeSessionParamsTest {
                         .setAuthPsk(PSK)
                         .build();
         assertEquals(withConnectivityMgr, withoutConnectivityMgr);
+    }
+
+    @Test
+    public void testCreateAndSetNetworkWithoutConnectivityMgr() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum().setNetwork(mMockUserConfigNetwork).build();
+        assertEquals(mMockUserConfigNetwork, sessionParams.getNetwork());
+        assertEquals(mMockUserConfigNetwork, sessionParams.getConfiguredNetwork());
     }
 
     @Test

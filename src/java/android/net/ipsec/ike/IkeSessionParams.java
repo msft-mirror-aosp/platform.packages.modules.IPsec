@@ -41,6 +41,7 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribu
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
+import com.android.modules.utils.build.SdkLevel;
 import com.android.server.vcn.util.PersistableBundleUtils;
 
 import java.lang.annotation.Retention;
@@ -115,53 +116,18 @@ public final class IkeSessionParams {
      */
     public static final int IKE_OPTION_EAP_ONLY_AUTH = 1;
     /**
-     * If set, the IKE library will attempt to enable MOBIKE for the resulting IKE Session.
+     * If set, the IKE library will be able to handle network and address changes.
      *
-     * <p>To support MOBIKE, callers must implement:
-     *
-     * <ul>
-     *   <li>{@link IkeSessionCallback#onIkeSessionConnectionInfoChanged(IkeSessionConnectionInfo)}:
-     *       this MUST migrate all IpSecTunnelInterface instances associated with this IkeSession.
-     *   <li>{@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
-     *       android.net.IpSecTransform)}: this MUST re-apply the migrated transforms to the
-     *       IpSecTunnelInterface associated with this ChildSessionCallback, via
-     *       android.net.IpSecManager#applyTunnelModeTransform(
-     *       android.net.IpSecManager.IpSecTunnelInterface, int, android.net.IpSecTransform).
-     * </ul>
-     *
-     * <p>MOBIKE support is compatible with two Network modes:
-     *
-     * <ul>
-     *   <li><b>Caller managed:</b> The caller controls the underlying Network for the IKE Session
-     *       at all times. The IKE Session will only change underlying Networks if the caller
-     *       initiates it through {@link IkeSession#setNetwork(Network)}. If the caller-specified
-     *       Network is lost, they will be notified via {@link
-     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
-     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException} specifying the Network
-     *       that was lost.
-     *   <li><b>Platform Default:</b> The IKE Session will always track the application default
-     *       Network. The IKE Session will start on the application default Network, and any
-     *       subsequent changes to the default Network (after the IKE_AUTH exchange completes) will
-     *       cause the IKE Session's underlying Network to change. If the default Network is lost
-     *       with no replacements, the caller will be notified via {@link
-     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
-     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException}. The caller can either
-     *       wait until for a new default Network to become available or they may close the Session
-     *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
-     *       retransmissions may expire while waiting for a new default Network, in which case the
-     *       Session will automatically close.
-     * </ul>
-     *
-     * <p>Use of MOBIKE in the IKE Session requires the peer to also support MOBIKE.
+     * <p>The IKE library will first attempt to enable MOBIKE to handle the changes of underlying
+     * network and addresses. If the server does not support MOBIKE, the IKE library will handle the
+     * changes by rekeying all the underlying Child SAs.
      *
      * <p>If this option is set for an IKE Session, Transport-mode SAs will not be allowed in that
      * Session.
      *
-     * <p>Checking for MOBIKE use in an IKE Session is done via {@link
-     * IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
+     * <p>Checking if MOBIKE is supported by both the IKE library and the server in an IKE Session
+     * is done via {@link IkeSessionConfiguration#isIkeExtensionEnabled(int)}.
      */
-    // TODO(b/175416035): Update docs to @link to API for migrating IpSecTunnelInterfaces
-    // TODO(b/174606949): Use @link tag to reference #applyTunnelModeTransform when it is public
     public static final int IKE_OPTION_MOBIKE = 2;
 
     /**
@@ -456,50 +422,56 @@ public final class IkeSessionParams {
         return mServerHostname;
     }
 
-    /** Retrieves the configured {@link Network}, or null if was not set */
+    /**
+     * Retrieves the configured {@link Network}, or null if was not set
+     *
+     * <p>This getter is for internal use. Not matter {@link Builder#Builder(Context)} or {@link
+     * Builder#Builder()} is used, this method will always return null if no Network was set by the
+     * caller.
+     *
+     * @hide
+     */
     @Nullable
     public Network getConfiguredNetwork() {
         return mCallerConfiguredNetwork;
     }
 
+    // This method was first released as a @NonNull System APi and has been changed to @Nullable
+    // since Android S. This method needs to be @Nullable because a new Builder constructor {@link
+    // Builder#Builder() was added in Android S, and by using the new constructor the return value
+    // of this method will be null if no network was set.
+    // For apps that are using a null-safe language, making this method @Nullable will break
+    // compilation, and apps need to update their code. For apps that are not using null-safe
+    // language, making this change will not break the backwards compatibility because for any app
+    // that uses the deprecated constructor {@link Builder#Builder(Context)}, the return value of
+    // this method is still guaranteed to be non-null.
     /**
-     * Retrieves the configured or default {@link Network}
+     * Retrieves the configured {@link Network}, or null if was not set.
      *
-     * <p>This method is deprecated and its annotation has been changed from @NonNull to @Nullable
-     * since Android S. This method needs to be @Nullable because a new Builder constructor {@link
-     * Builder#Builder() was added in Android S, and by using the new constructor the return value
-     * of this method will be null.
-     *
-     * <p>For apps that are using a null-safe language, making this method @Nullable will break
-     * compilation, and apps need to update their code. For apps that are not using null-safe
-     * language, making this change will not break the backwards compatibility because for any app
-     * that uses the deprecated constructor {@link Builder#Builder(Context)}, the return value of
-     * this method is still guaranteed to be non-null.
-     *
-     * <p>For a caller that used {@link Builder#Builder(Context)} and did not set any Network,
-     * this method will return the default Network resolved in
-     * {@link IkeSessionParams.Builder#build()}. The return value of this method is only
-     * informational because if MOBIKE is enabled, IKE Session may switch to a different default
-     * Network.
-     *
-     * @hide
-     * @deprecated Callers should use {@link #getConfiguredNetwork}. This method is deprecated
-     *     because its name makes it sound like it will return the actual network the session is
-     *     running on, when it will only return the network that was configured or resolved in the
-     *     builder.
+     * <p>@see {@link Builder#setNetwork(Network)}
      */
-    @Deprecated
-    @SystemApi
-    @NonNull
-    // STOPSHIP: b/180521384 Make it @Nullable when java_sdk_library can support
-    // incompabilities baseline file
+    @Nullable
     public Network getNetwork() {
         return mDefaultOrConfiguredNetwork;
     }
 
-    /** Retrieves all IkeSaProposals configured */
+    /**
+     * Retrieves all IkeSaProposals configured
+     *
+     * @deprecated Callers should use {@link #getIkeSaProposals()}. This method is deprecated
+     *     because its name does not match the return type.
+     * @hide
+     */
+    @Deprecated
+    @SystemApi
     @NonNull
     public List<IkeSaProposal> getSaProposals() {
+        return getIkeSaProposals();
+    }
+
+    /** Retrieves all IkeSaProposals configured */
+    @NonNull
+    public List<IkeSaProposal> getIkeSaProposals() {
         return Arrays.asList(mSaProposals);
     }
 
@@ -626,7 +598,12 @@ public final class IkeSessionParams {
         return mConfigRequests;
     }
 
-    /** Retrieves the list of Configuration Requests */
+    /**
+     * Retrieves the list of Configuration Requests
+     *
+     * @hide
+     */
+    @SystemApi
     @NonNull
     public List<IkeConfigRequest> getConfigurationRequests() {
         return Collections.unmodifiableList(Arrays.asList(mConfigRequests));
@@ -683,10 +660,20 @@ public final class IkeSessionParams {
                 && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
     }
 
-    /** Represents an IKE session configuration request type */
+    /**
+     * Represents an IKE session configuration request type
+     *
+     * @hide
+     */
+    @SystemApi
     public interface IkeConfigRequest {}
 
-    /** Represents an IPv4 P_CSCF request */
+    /**
+     * Represents an IPv4 P_CSCF request
+     *
+     * @hide
+     */
+    @SystemApi
     public interface ConfigRequestIpv4PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv4 P_CSCF server address
@@ -698,7 +685,12 @@ public final class IkeSessionParams {
         Inet4Address getAddress();
     }
 
-    /** Represents an IPv6 P_CSCF request */
+    /**
+     * Represents an IPv6 P_CSCF request
+     *
+     * @hide
+     */
+    @SystemApi
     public interface ConfigRequestIpv6PcscfServer extends IkeConfigRequest {
         /**
          * Retrieves the requested IPv6 P_CSCF server address
@@ -1217,6 +1209,11 @@ public final class IkeSessionParams {
          * still expect {@link #build()} to throw if no configured or default network was found. But
          * apps that use {@link #Builder()} MUST NOT expect that behavior anymore.
          *
+         * <p>For a caller that used this constructor and did not set any Network, {@link
+         * IkeSessionParams#getNetwork()} will return the default Network resolved in {@link
+         * IkeSessionParams.Builder#build()}. This return value is only informational because if
+         * MOBIKE is enabled, IKE Session may switch to a different default Network.
+         *
          * @param context a valid {@link Context} instance.
          * @deprecated Callers should use {@link #Builder()}.This method is deprecated because it is
          *     unnecessary to try resolving a default network or to validate network is connected
@@ -1296,33 +1293,17 @@ public final class IkeSessionParams {
          * Sets the {@link Network} for the {@link IkeSessionParams} being built.
          *
          * <p>If no {@link Network} is provided, the default Network (as per {@link
-         * ConnectivityManager#getActiveNetwork()}) will be used.
+         * ConnectivityManager#getActiveNetwork()}) will be used when constructing an {@link
+         * IkeSession}.
          *
          * @param network the {@link Network} that IKE Session will use, or {@code null} to clear
          *     the previously set {@link Network}
          * @return Builder this, to facilitate chaining.
          */
-        // TODO(b/163604823): Making @NonNull to @Nullable
         @NonNull
-        public Builder setConfiguredNetwork(@NonNull Network network) {
+        public Builder setNetwork(@Nullable Network network) {
             mCallerConfiguredNetwork = network;
             return this;
-        }
-
-        /**
-         * Behaves identically to setConfiguredNetwork.
-         *
-         * @param network the {@link Network} that IKE Session will use.
-         * @return Builder this, to facilitate chaining.
-         * @hide
-         * @deprecated Callers should use {@link #setConfiguredNetwork}. This method is deprecated
-         *     because its name fail to match the corresponding getter name {@link #getNetwork()}
-         */
-        @Deprecated
-        @SystemApi
-        @NonNull
-        public Builder setNetwork(@NonNull Network network) {
-            return setConfiguredNetwork(network);
         }
 
         /**
@@ -1365,9 +1346,25 @@ public final class IkeSessionParams {
          *
          * @param proposal IKE SA proposal.
          * @return Builder this, to facilitate chaining.
+         * @deprecated Callers should use {@link #addIkeSaProposal(IkeSaProposal)}. This method is
+         *     deprecated because its name does not match the input type.
+         * @hide
          */
+        @Deprecated
+        @SystemApi
         @NonNull
         public Builder addSaProposal(@NonNull IkeSaProposal proposal) {
+            return addIkeSaProposal(proposal);
+        }
+
+        /**
+         * Adds an IKE SA proposal to the {@link IkeSessionParams} being built.
+         *
+         * @param proposal IKE SA proposal.
+         * @return Builder this, to facilitate chaining.
+         */
+        @NonNull
+        public Builder addIkeSaProposal(@NonNull IkeSaProposal proposal) {
             if (proposal == null) {
                 throw new NullPointerException("Required argument not provided");
             }
@@ -1569,9 +1566,11 @@ public final class IkeSessionParams {
          *
          * @param address the requested P_CSCF address.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
         @SuppressLint("MissingGetterMatchingBuilder")
+        @SystemApi
         @NonNull
         public Builder addPcscfServerRequest(@NonNull InetAddress address) {
             if (address == null) {
@@ -1593,9 +1592,11 @@ public final class IkeSessionParams {
          * @param addressFamily the address family. Only {@code AF_INET} and {@code AF_INET6} are
          *     allowed.
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         // #getConfigurationRequests is defined to retrieve PCSCF server requests
         @SuppressLint("MissingGetterMatchingBuilder")
+        @SystemApi
         @NonNull
         public Builder addPcscfServerRequest(int addressFamily) {
             if (addressFamily == AF_INET) {
@@ -1717,11 +1718,13 @@ public final class IkeSessionParams {
          * Sets the retransmission timeout list in milliseconds.
          *
          * <p>Configures the retransmission by providing an array of relative retransmission
-         * timeouts in milliseconds, where each timeout is the waiting time before next retry,
-         * except the last timeout is the waiting time before terminating the IKE Session. Each
-         * element in the array MUST be a value from 500 ms to 1800000 ms (30 minutes). The length
-         * of the array MUST NOT exceed 10. This retransmission timeout list defaults to {0.5s, 1s,
-         * 2s, 4s, 8s}
+         * timeouts in milliseconds. After sending out a request and before receiving the response,
+         * the IKE Session will iterate through the array and wait for the relative timeout before
+         * the next retry. If the last timeout is exceeded, the IKE Session will be terminated.
+         *
+         * <p>Each element in the array MUST be a value from 500 ms to 1800000 ms (30 minutes). The
+         * length of the array MUST NOT exceed 10. This retransmission timeout list defaults to
+         * {0.5s, 1s, 2s, 4s, 8s}
          *
          * @param retransTimeoutMillisList the array of relative retransmission timeout in
          *     milliseconds.
@@ -1779,6 +1782,9 @@ public final class IkeSessionParams {
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
             validateIkeOptionOrThrow(ikeOption);
+            if (ikeOption == IKE_OPTION_MOBIKE && !SdkLevel.isAtLeastS()) {
+                throw new UnsupportedOperationException("MOBIKE only supported for S+");
+            }
             mIkeOptions |= getOptionBitValue(ikeOption);
             return this;
         }
@@ -1815,12 +1821,9 @@ public final class IkeSessionParams {
             // makes sure if the Builder is constructed with the deprecated constructor
             // #Builder(Context), #build() still works in the same way and will throw exception when
             // there is no configured or default network.
-            Network defaultOrConfiguredNetwork = null;
-            if (mConnectivityManager != null) {
-                defaultOrConfiguredNetwork =
-                        mCallerConfiguredNetwork != null
-                                ? mCallerConfiguredNetwork
-                                : mConnectivityManager.getActiveNetwork();
+            Network defaultOrConfiguredNetwork = mCallerConfiguredNetwork;
+            if (mConnectivityManager != null && defaultOrConfiguredNetwork == null) {
+                defaultOrConfiguredNetwork = mConnectivityManager.getActiveNetwork();
                 if (defaultOrConfiguredNetwork == null) {
                     throw new IllegalArgumentException("Network not found");
                 }

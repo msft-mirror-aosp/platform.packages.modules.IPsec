@@ -23,6 +23,7 @@ import android.annotation.IntRange;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.annotation.SuppressLint;
+import android.annotation.SystemApi;
 import android.net.LinkAddress;
 import android.os.PersistableBundle;
 
@@ -241,12 +242,31 @@ public final class TunnelModeChildSessionParams extends ChildSessionParams {
          *
          * @param proposal Child SA proposal.
          * @return Builder this, to facilitate chaining.
+         * @deprecated Callers should use {@link #addChildSaProposal(ChildSaProposal)}. This method
+         *     is deprecated because its name does not match the input type.
+         * @hide
          */
         // The matching getter is defined in the super class. Please see
         // {@link ChildSessionParams#getSaProposals}
         @SuppressLint("MissingGetterMatchingBuilder")
+        @Deprecated
+        @SystemApi
         @NonNull
         public Builder addSaProposal(@NonNull ChildSaProposal proposal) {
+            return addChildSaProposal(proposal);
+        }
+
+        /**
+         * Adds an Child SA proposal to the {@link TunnelModeChildSessionParams} being built.
+         *
+         * @param proposal Child SA proposal.
+         * @return Builder this, to facilitate chaining.
+         */
+        // The matching getter is defined in the super class. Please see
+        // {@link ChildSessionParams#getChildSaProposals}
+        @SuppressLint("MissingGetterMatchingBuilder")
+        @NonNull
+        public Builder addChildSaProposal(@NonNull ChildSaProposal proposal) {
             if (proposal == null) {
                 throw new NullPointerException("Required argument not provided");
             }

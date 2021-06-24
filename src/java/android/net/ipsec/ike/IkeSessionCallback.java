@@ -28,6 +28,9 @@ import android.net.ipsec.ike.exceptions.IkeProtocolException;
  * <p>{@link IkeSessionCallback} MUST be unique to each {@link IkeSession}. It is registered when
  * callers are requesting a new {@link IkeSession}. It is automatically unregistered when an {@link
  * IkeSession} is closed.
+ *
+ * @see <a href="https://tools.ietf.org/html/rfc7296">RFC 7296, Internet Key Exchange Protocol
+ *     Version 2 (IKEv2)</a>
  */
 // Using interface instead of abstract class to indicate this callback does not have any state or
 // implementation.
@@ -48,7 +51,7 @@ public interface IkeSessionCallback {
      * Called when the {@link IkeSession} is closed.
      *
      * <p>When the closure is caused by a local, fatal error, {@link
-     * #onClosedExceptionally(IkeException)} will be fired instead of this method.
+     * #onClosedWithException(IkeException)} will be fired instead of this method.
      */
     void onClosed();
 
@@ -57,8 +60,23 @@ public interface IkeSessionCallback {
      * error.
      *
      * @param exception the detailed error information.
+     * @deprecated Implementers should override {@link #onClosedWithException(IkeException)} to
+     *     handle fatal {@link IkeException}s instead of using this method.
+     * @hide
      */
-    void onClosedExceptionally(@NonNull IkeException exception);
+    @SystemApi
+    @Deprecated
+    default void onClosedExceptionally(@NonNull IkeException exception) {}
+
+    /**
+     * Called if {@link IkeSession} setup failed or {@link IkeSession} is closed because of a fatal
+     * error.
+     *
+     * @param exception the detailed error information.
+     */
+    default void onClosedWithException(@NonNull IkeException exception) {
+        onClosedExceptionally(exception);
+    }
 
     /**
      * Called if a recoverable error is encountered in an established {@link IkeSession}.
@@ -96,10 +114,31 @@ public interface IkeSessionCallback {
      * Called if the IkeSessionConnectionInfo for an established {@link IkeSession} changes.
      *
      * <p>This method will only be called for MOBIKE-enabled Sessions, and only after a Mobility
-     * Event occurs.
+     * Event occurs. An mobility event can happen in two Network modes:
      *
-     * <p>A Mobility Event is an event that causes the established, MOBIKE-enabled IKE Session to
-     * undergo an address update. Specifically, these events are:
+     * <ul>
+     *   <li><b>Caller managed:</b> The caller controls the underlying Network for the IKE Session
+     *       at all times. The IKE Session will only change underlying Networks if the caller
+     *       initiates it through {@link IkeSession#setNetwork(Network)}. If the caller-specified
+     *       Network is lost, they will be notified via {@link
+     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
+     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException} specifying the Network
+     *       that was lost.
+     *   <li><b>Platform Default:</b> The IKE Session will always track the application default
+     *       Network. The IKE Session will start on the application default Network, and any
+     *       subsequent changes to the default Network (after the IKE_AUTH exchange completes) will
+     *       cause the IKE Session's underlying Network to change. If the default Network is lost
+     *       with no replacements, the caller will be notified via {@link
+     *       IkeSessionCallback#onError(android.net.ipsec.ike.exceptions.IkeException)} with an
+     *       {@link android.net.ipsec.ike.exceptions.IkeNetworkLostException}. The caller can either
+     *       wait until for a new default Network to become available or they may close the Session
+     *       manually via {@link IkeSession#close()}. Note that the IKE Session's maximum
+     *       retransmissions may expire while waiting for a new default Network, in which case the
+     *       Session will automatically close and {@link #onClosedWithException(IkeException)} will
+     *       be fired.
+     * </ul>
+     *
+     * <p>There are three types of mobility events:
      *
      * <ul>
      *   <li>The underlying Network changing, or
@@ -108,7 +147,9 @@ public interface IkeSessionCallback {
      * </ul>
      *
      * @param connectionInfo the updated IkeSessionConnectionInfo for the Session.
+     * @hide
      */
+    @SystemApi
     default void onIkeSessionConnectionInfoChanged(
             @NonNull IkeSessionConnectionInfo connectionInfo) {}
 }

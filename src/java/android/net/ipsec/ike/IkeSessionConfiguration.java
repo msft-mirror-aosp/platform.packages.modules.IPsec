@@ -189,7 +189,9 @@ public final class IkeSessionConfiguration {
      *
      * @return the assigned P_CSCF servers, or an empty list when no servers are assigned by the
      *     remote IKE server.
+     * @hide
      */
+    @SystemApi
     @NonNull
     public List<InetAddress> getPcscfServers() {
         return Collections.unmodifiableList(mPcscfServers);
@@ -211,10 +213,7 @@ public final class IkeSessionConfiguration {
      * <p>Except for testing, IKE library users normally do not instantiate {@link
      * IkeSessionConfiguration} themselves but instead get a reference via {@link
      * IkeSessionCallback}
-     *
-     * @hide
      */
-    @SystemApi
     public static final class Builder {
         private final IkeSessionConnectionInfo mIkeConnInfo;
         private final List<InetAddress> mPcscfServers = new ArrayList<>();
@@ -237,11 +236,26 @@ public final class IkeSessionConfiguration {
          *
          * @param pcscfServer an assigned P_CSCF server
          * @return Builder this, to facilitate chaining
+         * @hide
          */
+        @SystemApi
         @NonNull
         public Builder addPcscfServer(@NonNull InetAddress pcscfServer) {
             Objects.requireNonNull(pcscfServer, "pcscfServer was null");
             mPcscfServers.add(pcscfServer);
+            return this;
+        }
+
+        /**
+         * Clear all P_CSCF servers from the {@link IkeSessionConfiguration} being built.
+         *
+         * @return Builder this, to facilitate chaining
+         * @hide
+         */
+        @SystemApi
+        @NonNull
+        public Builder clearPcscfServers() {
+            mPcscfServers.clear();
             return this;
         }
 
@@ -259,6 +273,17 @@ public final class IkeSessionConfiguration {
         }
 
         /**
+         * Clears all remote vendor IDs from the {@link IkeSessionConfiguration} being built.
+         *
+         * @return Builder this, to facilitate chaining
+         */
+        @NonNull
+        public Builder clearRemoteVendorIds() {
+            mRemoteVendorIds.clear();
+            return this;
+        }
+
+        /**
          * Sets the remote application version for the {@link IkeSessionConfiguration} being built.
          *
          * @param remoteApplicationVersion the remote application version. Defaults to an empty
@@ -269,6 +294,18 @@ public final class IkeSessionConfiguration {
         public Builder setRemoteApplicationVersion(@NonNull String remoteApplicationVersion) {
             Objects.requireNonNull(remoteApplicationVersion, "remoteApplicationVersion was null");
             mRemoteApplicationVersion = remoteApplicationVersion;
+            return this;
+        }
+
+        /**
+         * Clears the remote application version from the {@link IkeSessionConfiguration} being
+         * built.
+         *
+         * @return Builder this, to facilitate chaining
+         */
+        @NonNull
+        public Builder clearRemoteApplicationVersion() {
+            mRemoteApplicationVersion = "";
             return this;
         }
 
@@ -297,18 +334,13 @@ public final class IkeSessionConfiguration {
         }
 
         /**
-         * Marks an IKE extension as disabled for the {@link IkeSessionConfiguration} being built.
+         * Clear all enabled IKE extensions from the {@link IkeSessionConfiguration} being built.
          *
-         * @param extensionType the disabled extension
          * @return Builder this, to facilitate chaining
          */
-        // BuilderSetStyle: "removeIkeExtension" makes more sense than "clearIkeExtension". "clear"
-        // sounds like this method is removing all extensions
-        @SuppressLint("BuilderSetStyle")
         @NonNull
-        public Builder removeIkeExtension(@ExtensionType int extensionType) {
-            validateExtensionOrThrow(extensionType);
-            mEnabledExtensions.remove(extensionType);
+        public Builder clearIkeExtensions() {
+            mEnabledExtensions.clear();
             return this;
         }
 

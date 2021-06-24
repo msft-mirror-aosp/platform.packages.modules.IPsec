@@ -21,6 +21,7 @@ import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_DGRAM;
 
 import android.net.InetAddresses;
+import android.net.TrafficStats;
 import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
@@ -67,6 +68,7 @@ public final class IkeUdp4Socket extends IkeUdpSocket {
         IkeUdp4Socket ikeSocket = sConfigToSocketMap.get(sockConfig);
         if (ikeSocket == null) {
             FileDescriptor sock = Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+            TrafficStats.tagFileDescriptor(sock);
             Os.bind(sock, INADDR_ANY, 0);
             applySocketConfig(sockConfig, sock, false /* isIpv6 */);
 
