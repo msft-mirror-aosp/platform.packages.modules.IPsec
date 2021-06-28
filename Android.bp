@@ -35,12 +35,14 @@ java_sdk_library {
     ],
 
     libs: [
+        // TODO (b/183097033) remove once system_server_current includes core_current
+        "stable.core.platform.api.stubs",
         "unsupportedappusage",
         "framework-annotations-lib",
         "conscrypt.module.public.api",
-        "framework-connectivity",
+        "framework-connectivity.stubs.module_lib",
     ],
-    stub_only_libs: ["framework-connectivity"],
+    stub_only_libs: ["framework-connectivity.stubs.module_lib"],
 
     api_packages: [
         "android.net.eap",
@@ -139,7 +141,5 @@ java_library {
 
 sdk {
     name: "ipsec-module-sdk",
-    java_sdk_libs: [
-        "android.net.ipsec.ike",
-    ],
+    bootclasspath_fragments: ["com.android.ipsec-bootclasspath-fragment"],
 }

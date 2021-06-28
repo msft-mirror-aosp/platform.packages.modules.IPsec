@@ -52,6 +52,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_VENDOR;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_IKE;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DPD;
@@ -74,6 +75,7 @@ import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkRequest;
+import android.net.TrafficStats;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
@@ -99,7 +101,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
-import android.os.SystemClock;
+import android.os.Process;
 import android.system.ErrnoException;
 import android.util.LongSparseArray;
 import android.util.Pair;
@@ -152,6 +154,7 @@ import com.android.internal.net.ipsec.ike.net.IkeLocalAddressGenerator;
 import com.android.internal.net.ipsec.ike.net.IkeNetworkCallbackBase;
 import com.android.internal.net.ipsec.ike.net.IkeNetworkUpdater;
 import com.android.internal.net.ipsec.ike.net.IkeSpecificNetworkCallback;
+import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
@@ -720,7 +723,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             getHandler().getLooper(),
                             mContext,
                             mIkeSessionId,
-                            mAlarmManager,
+                            getHandler(),
                             mRandomFactory,
                             mIpSecSpiGenerator,
                             childParams,
@@ -1224,6 +1227,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 setRemoteAddress();
 
+                // TODO(b/191673438): Set a specific tag for VPN.
+                TrafficStats.setThreadStatsTag(Process.myUid());
+
                 boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
                 mIkeSocket =
                         getIkeSocket(
@@ -1288,7 +1294,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * Idle represents a state when there is no ongoing IKE exchange affecting established IKE SA.
      */
     class Idle extends LocalRequestQueuer {
-        private PendingIntent mDpdIntent;
+        private IkeAlarm mDpdAlarm;
 
         // TODO (b/152236790): Add wakelock for awaiting LocalRequests and ongoing procedures.
 
@@ -1298,36 +1304,36 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mBusyWakeLock.release();
             }
 
-            if (mDpdIntent == null) {
-                long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
-                mDpdIntent =
-                        buildIkeAlarmIntent(
-                                mContext,
-                                ACTION_DPD,
-                                getIntentIdentifier(remoteIkeSpi),
-                                getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi));
-            }
             long dpdDelayMs = TimeUnit.SECONDS.toMillis(mIkeSessionParams.getDpdDelaySeconds());
 
+            long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
+            Message intentIkeMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi);
+            PendingIntent dpdIntent =
+                    buildIkeAlarmIntent(
+                            mContext, ACTION_DPD, getIntentIdentifier(remoteIkeSpi), intentIkeMsg);
+
             // Initiating DPD is a way to detect the aliveness of the remote server and also a
-            // way to assert the aliveness of IKE library. Considering this, the alarm to trigger
-            // DPD needs to go off even when device is in doze mode to decrease the chance the
-            // remote server thinks IKE library is dead. Also, since DPD initiation is
-            // time-critical, we need to use "setExact" to avoid the batching alarm delay which can
-            // be at most 75% for the alarm timeout (@see AlarmManagerService#maxTriggerTime).
+            // way to assert the aliveness of IKE library. Considering this, the alarm to
+            // trigger DPD needs to go off even when device is in doze mode to decrease the chance
+            // the remote server thinks IKE library is dead. Also, since DPD initiation is
+            // time-critical, we need to use "setExact" to avoid the batching alarm delay which
+            // can be at most 75% for the alarm timeout (@see AlarmManagerService#maxTriggerTime).
             // Please check AlarmManager#setExactAndAllowWhileIdle for more details.
-            mAlarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
-                    SystemClock.elapsedRealtime() + dpdDelayMs,
-                    mDpdIntent);
+            mDpdAlarm =
+                    IkeAlarm.newExactAndAllowWhileIdleAlarm(
+                            new IkeAlarmConfig(
+                                    mContext, ACTION_DPD, dpdDelayMs, dpdIntent, intentIkeMsg));
+            mDpdAlarm.schedule();
             logd("DPD Alarm scheduled with DPD delay: " + dpdDelayMs + "ms");
         }
 
         @Override
         protected void exitState() {
             // #exitState is guaranteed to be invoked when quit() or quitNow() is called
-            mAlarmManager.cancel(mDpdIntent);
-            logd("DPD Alarm canceled");
+            if (mDpdAlarm != null) {
+                mDpdAlarm.cancel();
+                logd("DPD Alarm canceled");
+            }
 
             mBusyWakeLock.acquire();
         }
@@ -1453,25 +1459,29 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     @VisibleForTesting
     SaLifetimeAlarmScheduler buildSaLifetimeAlarmScheduler(long remoteSpi) {
+        Message deleteMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_IKE, remoteSpi);
+        Message rekeyMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_IKE, remoteSpi);
+
         PendingIntent deleteSaIntent =
                 buildIkeAlarmIntent(
-                        mContext,
-                        ACTION_DELETE_IKE,
-                        getIntentIdentifier(remoteSpi),
-                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_IKE, remoteSpi));
+                        mContext, ACTION_DELETE_IKE, getIntentIdentifier(remoteSpi), deleteMsg);
         PendingIntent rekeySaIntent =
                 buildIkeAlarmIntent(
-                        mContext,
-                        ACTION_REKEY_IKE,
-                        getIntentIdentifier(remoteSpi),
-                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_IKE, remoteSpi));
+                        mContext, ACTION_REKEY_IKE, getIntentIdentifier(remoteSpi), rekeyMsg);
 
         return new SaLifetimeAlarmScheduler(
-                mIkeSessionParams.getHardLifetimeMsInternal(),
-                mIkeSessionParams.getSoftLifetimeMsInternal(),
-                deleteSaIntent,
-                rekeySaIntent,
-                mAlarmManager);
+                new IkeAlarmConfig(
+                        mContext,
+                        ACTION_DELETE_IKE,
+                        mIkeSessionParams.getHardLifetimeMsInternal(),
+                        deleteSaIntent,
+                        deleteMsg),
+                new IkeAlarmConfig(
+                        mContext,
+                        ACTION_REKEY_IKE,
+                        mIkeSessionParams.getSoftLifetimeMsInternal(),
+                        rekeySaIntent,
+                        rekeyMsg));
     }
 
     // Package private. Accessible to ChildSessionStateMachine
@@ -2321,9 +2331,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         protected void handleReceivedIkePacket(Message message) {
             super.handleReceivedIkePacket(message);
 
-            // If the received packet does not trigger a state transition or the packet causes this
-            // state machine to quit, transition back to Idle State. In the second case, state
-            // machine will first go back to Idle and then quit.
+            // If the IKE process triggered by the received packet is completed in this
+            // state, transition back to Idle. Otherwise, either stay in this state, or transition
+            // to another state specified in #handleRequestIkeMessage.
             if (mProcedureFinished) transitionTo(mIdle);
         }
 
@@ -2396,6 +2406,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     return;
                 case IKE_EXCHANGE_SUBTYPE_DELETE_IKE:
                     handleDeleteSessionRequest(ikeMessage);
+
+                    // Directly quit from this state. Do not need to transition back to Idle state
+                    mProcedureFinished = false;
                     return;
                 case IKE_EXCHANGE_SUBTYPE_CREATE_CHILD: // Fall through
                 case IKE_EXCHANGE_SUBTYPE_DELETE_CHILD: // Fall through
@@ -2896,10 +2909,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 List<IkePayload> outboundPayloads,
                 ChildSessionStateMachine childSession) {
             // For each request IKE passed to Child, Child will send back to IKE a response. Even
-            // if the Child Sesison is under simultaneous deletion, it will send back an empty
+            // if the Child Session is under simultaneous deletion, it will send back an empty
             // payload list.
             mOutboundRespPayloads.addAll(outboundPayloads);
             mAwaitingChildResponse.remove(childSession);
+
+            // When the server tries to delete multiple Child Sessions in one IKE exchange,
+            // mAwaitingChildResponse may not be empty. It means that there are Child Sessions
+            // have not sent IKE Session the delete responses. In this case IKE Session needs to
+            // return and keep waiting for all the Child responses in this state.
             if (!mAwaitingChildResponse.isEmpty()) return;
 
             IkeHeader ikeHeader =
@@ -2913,6 +2931,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mLastInboundRequestMsgId);
             IkeMessage ikeMessage = new IkeMessage(ikeHeader, mOutboundRespPayloads);
             sendEncryptedIkeMessage(ikeMessage);
+
+            // Clear mOutboundRespPayloads so that in a two-exchange process (e.g. Rekey Child), the
+            // response of the first exchange won't be added to the response of the second exchange.
+            mOutboundRespPayloads.clear();
         }
     }
 
@@ -3472,23 +3494,27 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     "Cannot start NAT-T keepalive when IKE Session is not using UDP Encap socket");
         }
 
+        Message keepaliveMsg = obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE);
         PendingIntent keepaliveIntent =
                 buildIkeAlarmIntent(
-                        mContext,
-                        ACTION_KEEPALIVE,
-                        getIntentIdentifier(),
-                        obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE));
+                        mContext, ACTION_KEEPALIVE, getIntentIdentifier(), keepaliveMsg);
 
+        int keepaliveDelaySeconds = mIkeSessionParams.getNattKeepAliveDelaySeconds();
         IkeNattKeepalive keepalive =
                 new IkeNattKeepalive(
                         mContext,
                         mConnectivityManager,
-                        mIkeSessionParams.getNattKeepAliveDelaySeconds(),
+                        keepaliveDelaySeconds,
                         (Inet4Address) mLocalAddress,
                         (Inet4Address) mRemoteAddress,
                         ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
                         mIkeSocket.getIkeSocketConfig().getNetwork(),
-                        keepaliveIntent);
+                        new IkeAlarmConfig(
+                                mContext,
+                                ACTION_KEEPALIVE,
+                                TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds),
+                                keepaliveIntent,
+                                keepaliveMsg));
         keepalive.start();
         return keepalive;
     }
