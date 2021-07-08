@@ -35,8 +35,6 @@ java_sdk_library {
     ],
 
     libs: [
-        // TODO (b/183097033) remove once system_server_current includes core_current
-        "stable.core.platform.api.stubs",
         "unsupportedappusage",
         "framework-annotations-lib",
         "conscrypt.module.public.api",
