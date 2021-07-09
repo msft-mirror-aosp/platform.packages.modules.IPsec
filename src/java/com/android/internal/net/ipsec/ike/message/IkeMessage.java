@@ -18,6 +18,7 @@ package com.android.internal.net.ipsec.ike.message;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PayloadType;
 
 import android.annotation.IntDef;
@@ -34,6 +35,7 @@ import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
+import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NotifyType;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -322,6 +324,18 @@ public final class IkeMessage {
 
         return IkePayload.getPayloadForTypeInProvidedList(
                 payloadType, payloadClass, ikePayloadList);
+    }
+
+    /** Returns if a notification payload with a specified type is included in this message. */
+    public boolean hasNotifyPayload(@NotifyType int notifyType) {
+        for (IkeNotifyPayload notify :
+                this.getPayloadListForType(PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class)) {
+            if (notify.notifyType == notifyType) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
