@@ -247,17 +247,17 @@ public abstract class ChildSessionParams {
 
     /** @hide */
     public IkeTrafficSelector[] getInboundTrafficSelectorsInternal() {
-        return mInboundTrafficSelectors;
+        return Arrays.copyOf(mInboundTrafficSelectors, mInboundTrafficSelectors.length);
     }
 
     /** @hide */
     public IkeTrafficSelector[] getOutboundTrafficSelectorsInternal() {
-        return mOutboundTrafficSelectors;
+        return Arrays.copyOf(mOutboundTrafficSelectors, mOutboundTrafficSelectors.length);
     }
 
     /** @hide */
     public ChildSaProposal[] getSaProposalsInternal() {
-        return mSaProposals;
+        return Arrays.copyOf(mSaProposals, mSaProposals.length);
     }
 
     /** @hide */
