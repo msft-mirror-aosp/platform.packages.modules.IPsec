@@ -54,6 +54,10 @@ java_sdk_library {
         "com.android.internal.net",
     ],
 
+    lint: {
+        strict_updatability_linting: true,
+    },
+
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
     jarjar_rules: "jarjar-rules-shared.txt",

@@ -61,7 +61,6 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_R
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
 import android.annotation.IntDef;
-import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -3635,10 +3634,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             transitionTo(mChildProcedureOngoing);
         }
 
-        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
-        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
-        // way when b/177434707 is fixed.
-        @SuppressLint("NewApi")
         protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
             IkeConfigPayload configPayload =
                     ikeMessage.getPayloadForType(
@@ -5475,10 +5470,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
-        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
-        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
-        // way when b/177434707 is fixed.
-        @SuppressLint("NewApi")
         private void notifyConnectionInfoChanged() {
             IkeSessionConnectionInfo connectionInfo =
                     new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
