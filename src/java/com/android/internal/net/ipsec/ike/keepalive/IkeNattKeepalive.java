@@ -18,10 +18,12 @@ package com.android.internal.net.ipsec.ike.keepalive;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
-import android.app.PendingIntent;
 import android.content.Context;
+import android.net.ConnectivityManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
+
+import com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -40,27 +42,24 @@ public class IkeNattKeepalive {
     /** Construct an instance of IkeNattKeepalive */
     public IkeNattKeepalive(
             Context context,
+            ConnectivityManager connectMgr,
             int keepaliveDelaySeconds,
             Inet4Address src,
             Inet4Address dest,
             UdpEncapsulationSocket socket,
             Network network,
-            PendingIntent keepAliveAlarmIntent)
+            IkeAlarmConfig ikeAlarmConfig)
             throws IOException {
         mNattKeepalive =
                 new HardwareKeepaliveImpl(
                         context,
+                        connectMgr,
                         keepaliveDelaySeconds,
                         src,
                         dest,
                         socket,
                         network,
-                        new HardwareKeepaliveCb(
-                                context,
-                                keepaliveDelaySeconds,
-                                dest,
-                                socket,
-                                keepAliveAlarmIntent));
+                        new HardwareKeepaliveCb(context, dest, socket, ikeAlarmConfig));
     }
 
     /** Start keepalive */
@@ -94,22 +93,19 @@ public class IkeNattKeepalive {
 
     private class HardwareKeepaliveCb implements HardwareKeepaliveImpl.HardwareKeepaliveCallback {
         private final Context mContext;
-        private final int mKeepaliveDelaySeconds;
         private final Inet4Address mDest;
         private final UdpEncapsulationSocket mSocket;
-        private final PendingIntent mKeepAliveAlarmIntent;
+        private final IkeAlarmConfig mIkeAlarmConfig;
 
         HardwareKeepaliveCb(
                 Context context,
-                int keepaliveDelaySeconds,
                 Inet4Address dest,
                 UdpEncapsulationSocket socket,
-                PendingIntent keepAliveAlarmIntent) {
+                IkeAlarmConfig ikeAlarmConfig) {
             mContext = context;
-            mKeepaliveDelaySeconds = keepaliveDelaySeconds;
             mDest = dest;
             mSocket = socket;
-            mKeepAliveAlarmIntent = keepAliveAlarmIntent;
+            mIkeAlarmConfig = ikeAlarmConfig;
         }
 
         @Override
@@ -117,13 +113,7 @@ public class IkeNattKeepalive {
             getIkeLog().d(TAG, "Switch to software keepalive");
             mNattKeepalive.stop();
 
-            mNattKeepalive =
-                    new SoftwareKeepaliveImpl(
-                            mContext,
-                            mKeepaliveDelaySeconds,
-                            mDest,
-                            mSocket,
-                            mKeepAliveAlarmIntent);
+            mNattKeepalive = new SoftwareKeepaliveImpl(mContext, mDest, mSocket, mIkeAlarmConfig);
             mNattKeepalive.start();
         }
 
