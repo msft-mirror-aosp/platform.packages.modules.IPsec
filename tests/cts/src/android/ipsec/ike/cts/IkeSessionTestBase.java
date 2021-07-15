@@ -25,18 +25,12 @@ import static org.junit.Assert.assertTrue;
 
 import android.annotation.NonNull;
 import android.app.AppOpsManager;
-import android.content.Context;
 import android.content.pm.PackageManager;
 import android.ipsec.ike.cts.IkeTunUtils.PortPair;
-import android.ipsec.ike.cts.TestNetworkUtils.TestNetworkCallback;
-import android.net.ConnectivityManager;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecTransform;
 import android.net.LinkAddress;
-import android.net.Network;
-import android.net.TestNetworkInterface;
-import android.net.TestNetworkManager;
 import android.net.annotations.PolicyDirection;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionConfiguration;
@@ -47,21 +41,16 @@ import android.net.ipsec.ike.IkeTrafficSelector;
 import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.os.Binder;
-import android.os.ParcelFileDescriptor;
+import android.os.UserHandle;
 import android.platform.test.annotations.AppModeFull;
 
-import androidx.test.InstrumentationRegistry;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
 import com.android.compatibility.common.util.SystemUtil;
 import com.android.net.module.util.ArrayTrackRecord;
 
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.runner.RunWith;
 
 import java.net.Inet4Address;
@@ -91,7 +80,7 @@ import java.util.concurrent.TimeUnit;
  */
 @RunWith(AndroidJUnit4.class)
 @AppModeFull(reason = "MANAGE_TEST_NETWORKS permission can't be granted to instant apps")
-abstract class IkeSessionTestBase extends IkeTestBase {
+abstract class IkeSessionTestBase extends IkeTestNetworkBase {
     // Package-wide common expected results that will be shared by all IKE/Child SA creation tests
     static final String EXPECTED_REMOTE_APP_VERSION_EMPTY = "";
     static final byte[] EXPECTED_PROTOCOL_ERROR_DATA_NONE = new byte[0];
@@ -129,13 +118,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
 
     static final long IKE_DETERMINISTIC_INITIATOR_SPI = Long.parseLong("46B8ECA1E0D72A18", 16);
 
-    // Static state to reduce setup/teardown
-    static Context sContext = InstrumentationRegistry.getContext();
-    static ConnectivityManager sCM =
-            (ConnectivityManager) sContext.getSystemService(Context.CONNECTIVITY_SERVICE);
-    static TestNetworkManager sTNM;
-
-    private static final int TIMEOUT_MS = 500;
+    private static final int TIMEOUT_MS = 1000;
 
     // Constants to be used for providing different IP addresses for each tests
     private static final byte IP_ADDR_LAST_BYTE_MAX = (byte) 100;
@@ -146,10 +129,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
     private static final byte[] NEXT_AVAILABLE_IP4_ADDR_LOCAL = INITIAL_AVAILABLE_IP4_ADDR_LOCAL;
     private static final byte[] NEXT_AVAILABLE_IP4_ADDR_REMOTE = INITIAL_AVAILABLE_IP4_ADDR_REMOTE;
 
-    ParcelFileDescriptor mTunFd;
-    TestNetworkCallback mTunNetworkCallback;
-    Network mTunNetwork;
-    IkeTunUtils mTunUtils;
+    TunNetworkContext mTunNetworkContext;
 
     InetAddress mLocalAddress;
     InetAddress mRemoteAddress;
@@ -158,60 +138,22 @@ abstract class IkeSessionTestBase extends IkeTestBase {
     TestIkeSessionCallback mIkeSessionCallback;
     TestChildSessionCallback mFirstChildSessionCallback;
 
-    // This method is guaranteed to run in subclasses and will run before subclasses' @BeforeClass
-    // methods.
-    @BeforeClass
-    public static void setUpPermissionBeforeClass() throws Exception {
-        InstrumentationRegistry.getInstrumentation()
-                .getUiAutomation()
-                .adoptShellPermissionIdentity();
-        sTNM = sContext.getSystemService(TestNetworkManager.class);
-    }
-
-    // This method is guaranteed to run in subclasses and will run after subclasses' @AfterClass
-    // methods.
-    @AfterClass
-    public static void tearDownPermissionAfterClass() throws Exception {
-        InstrumentationRegistry.getInstrumentation()
-                .getUiAutomation()
-                .dropShellPermissionIdentity();
-    }
-
     @Before
     public void setUp() throws Exception {
         mLocalAddress = getNextAvailableIpv4AddressLocal();
         mRemoteAddress = getNextAvailableIpv4AddressRemote();
-        setUpTestNetwork(mLocalAddress);
+        mTunNetworkContext = new TunNetworkContext(mLocalAddress);
 
         mUserCbExecutor = Executors.newSingleThreadExecutor();
-        mIkeSessionCallback = new TestIkeSessionCallback();
-        mFirstChildSessionCallback = new TestChildSessionCallback();
+        mIkeSessionCallback = new DefaultTestIkeSessionCallback();
+        mFirstChildSessionCallback = new DefaultTestChildSessionCallback();
     }
 
     @After
     public void tearDown() throws Exception {
-        tearDownTestNetwork();
-    }
-
-    void setUpTestNetwork(InetAddress localAddr) throws Exception {
-        int prefixLen = localAddr instanceof Inet4Address ? IP4_PREFIX_LEN : IP6_PREFIX_LEN;
-
-        TestNetworkInterface testIface =
-                sTNM.createTunInterface(new LinkAddress[] {new LinkAddress(localAddr, prefixLen)});
-
-        mTunFd = testIface.getFileDescriptor();
-        mTunNetworkCallback =
-                TestNetworkUtils.setupAndGetTestNetwork(
-                        sCM, sTNM, testIface.getInterfaceName(), new Binder());
-        mTunNetwork = mTunNetworkCallback.getNetworkBlocking();
-        mTunUtils = new IkeTunUtils(mTunFd);
-    }
-
-    void tearDownTestNetwork() throws Exception {
-        sCM.unregisterNetworkCallback(mTunNetworkCallback);
-
-        sTNM.teardownTestNetwork(mTunNetwork);
-        mTunFd.close();
+        if (mTunNetworkContext != null) {
+            mTunNetworkContext.close();
+        }
     }
 
     static void setAppOp(int appop, boolean allow) {
@@ -219,10 +161,11 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         for (String pkg : new String[] {"com.android.shell", sContext.getPackageName()}) {
             String cmd =
                     String.format(
-                            "appops set %s %s %s",
+                            "appops set %s %s %s --user %d",
                             pkg, // Package name
                             opName, // Appop
-                            (allow ? "allow" : "deny")); // Action
+                            (allow ? "allow" : "deny"), // Action
+                            UserHandle.myUserId());
 
             SystemUtil.runShellCommand(cmd);
         }
@@ -317,14 +260,15 @@ abstract class IkeSessionTestBase extends IkeTestBase {
             boolean expectedAuthUseEncap,
             String... ikeAuthRespHexes)
             throws Exception {
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 0 /* expectedMsgId */,
                 false /* expectedUseEncap */,
                 ikeInitRespHex);
 
         byte[] ikeAuthReqPkt =
-                mTunUtils
+                mTunNetworkContext
+                        .tunUtils
                         .awaitReqAndInjectResp(
                                 IKE_DETERMINISTIC_INITIATOR_SPI,
                                 1 /* expectedMsgId */,
@@ -341,21 +285,26 @@ abstract class IkeSessionTestBase extends IkeTestBase {
 
     void performCloseIkeBlocking(
             int expectedMsgId, boolean expectedUseEncap, String deleteIkeRespHex) throws Exception {
-        mTunUtils.awaitReqAndInjectResp(
+        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI, expectedMsgId, expectedUseEncap, deleteIkeRespHex);
     }
 
-    /** Testing callback that allows caller to block current thread until a method get called */
-    static class TestIkeSessionCallback implements IkeSessionCallback {
+    /**
+     * Base testing callback that allows caller to block current thread until a method get called
+     */
+    abstract static class TestIkeSessionCallback implements IkeSessionCallback {
         private CompletableFuture<IkeSessionConfiguration> mFutureIkeConfig =
                 new CompletableFuture<>();
         private CompletableFuture<Boolean> mFutureOnClosedCall = new CompletableFuture<>();
-        private CompletableFuture<IkeException> mFutureOnClosedException =
+        private CompletableFuture<IkeSessionConnectionInfo> mFutureConnectionConfig =
                 new CompletableFuture<>();
 
         private int mOnErrorExceptionsCount = 0;
-        private ArrayTrackRecord<IkeProtocolException> mOnErrorExceptionsTrackRecord =
+        private ArrayTrackRecord<IkeException> mOnErrorExceptionsTrackRecord =
                 new ArrayTrackRecord<>();
+
+        protected CompletableFuture<IkeException> mFutureOnClosedException =
+                new CompletableFuture<>();
 
         @Override
         public void onOpened(@NonNull IkeSessionConfiguration sessionConfiguration) {
@@ -368,13 +317,16 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         }
 
         @Override
-        public void onClosedExceptionally(@NonNull IkeException exception) {
-            mFutureOnClosedException.complete(exception);
+        public void onError(@NonNull IkeException exception) {
+            IkeSessionCallback.super.onError(exception);
+            mOnErrorExceptionsTrackRecord.add(exception);
         }
 
         @Override
-        public void onError(@NonNull IkeProtocolException exception) {
-            mOnErrorExceptionsTrackRecord.add(exception);
+        public void onIkeSessionConnectionInfoChanged(
+                @NonNull IkeSessionConnectionInfo connectionInfo) {
+            IkeSessionCallback.super.onIkeSessionConnectionInfoChanged(connectionInfo);
+            mFutureConnectionConfig.complete(connectionInfo);
         }
 
         public IkeSessionConfiguration awaitIkeConfig() throws Exception {
@@ -385,7 +337,7 @@ abstract class IkeSessionTestBase extends IkeTestBase {
             return mFutureOnClosedException.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
 
-        public IkeProtocolException awaitNextOnErrorException() {
+        public IkeException awaitNextOnErrorException() {
             return mOnErrorExceptionsTrackRecord.poll(
                     (long) TIMEOUT_MS,
                     mOnErrorExceptionsCount++,
@@ -397,19 +349,45 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         public void awaitOnClosed() throws Exception {
             mFutureOnClosedCall.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
         }
+
+        public IkeSessionConnectionInfo awaitOnIkeSessionConnectionInfoChanged() throws Exception {
+            return mFutureConnectionConfig.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        }
     }
 
-    /** Testing callback that allows caller to block current thread until a method get called */
-    static class TestChildSessionCallback implements ChildSessionCallback {
+    /** Default testing callback for all IKE exchange tests */
+    static class DefaultTestIkeSessionCallback extends TestIkeSessionCallback {
+        @Override
+        public void onClosedWithException(@NonNull IkeException exception) {
+            mFutureOnClosedException.complete(exception);
+        }
+    }
+
+    /** Testing callback to verify deprecated methods before they are removed */
+    static class LegacyTestIkeSessionCallback extends TestIkeSessionCallback {
+        @Override
+        public void onClosedExceptionally(@NonNull IkeException exception) {
+            mFutureOnClosedException.complete(exception);
+        }
+    }
+
+    /**
+     * Base testing callback that allows caller to block current thread until a method get called
+     */
+    abstract static class TestChildSessionCallback implements ChildSessionCallback {
         private CompletableFuture<ChildSessionConfiguration> mFutureChildConfig =
                 new CompletableFuture<>();
         private CompletableFuture<Boolean> mFutureOnClosedCall = new CompletableFuture<>();
-        private CompletableFuture<IkeException> mFutureOnClosedException =
+
+        protected CompletableFuture<IkeException> mFutureOnClosedException =
                 new CompletableFuture<>();
 
         private int mCreatedIpSecTransformCount = 0;
+        private int mMigratedIpSecTransformCount = 0;
         private int mDeletedIpSecTransformCount = 0;
         private ArrayTrackRecord<IpSecTransformCallRecord> mCreatedIpSecTransformsTrackRecord =
+                new ArrayTrackRecord<>();
+        private ArrayTrackRecord<IpSecTransformCallRecord[]> mMigratedIpSecTransformsTrackRecord =
                 new ArrayTrackRecord<>();
         private ArrayTrackRecord<IpSecTransformCallRecord> mDeletedIpSecTransformsTrackRecord =
                 new ArrayTrackRecord<>();
@@ -425,14 +403,23 @@ abstract class IkeSessionTestBase extends IkeTestBase {
         }
 
         @Override
-        public void onClosedExceptionally(@NonNull IkeException exception) {
-            mFutureOnClosedException.complete(exception);
-        }
-
-        @Override
         public void onIpSecTransformCreated(@NonNull IpSecTransform ipSecTransform, int direction) {
             mCreatedIpSecTransformsTrackRecord.add(
                     new IpSecTransformCallRecord(ipSecTransform, direction));
+        }
+
+        @Override
+        public void onIpSecTransformsMigrated(
+                IpSecTransform inIpSecTransform, IpSecTransform outIpSecTransform) {
+            ChildSessionCallback.super.onIpSecTransformsMigrated(
+                    inIpSecTransform, outIpSecTransform);
+
+            IpSecTransformCallRecord inRecord =
+                    new IpSecTransformCallRecord(inIpSecTransform, IpSecManager.DIRECTION_IN);
+            IpSecTransformCallRecord outRecord =
+                    new IpSecTransformCallRecord(outIpSecTransform, IpSecManager.DIRECTION_OUT);
+            mMigratedIpSecTransformsTrackRecord.add(
+                    new IpSecTransformCallRecord[] {inRecord, outRecord});
         }
 
         @Override
@@ -458,6 +445,15 @@ abstract class IkeSessionTestBase extends IkeTestBase {
                     });
         }
 
+        public IpSecTransformCallRecord[] awaitNextMigratedIpSecTransform() {
+            return mMigratedIpSecTransformsTrackRecord.poll(
+                    (long) TIMEOUT_MS,
+                    mMigratedIpSecTransformCount++,
+                    (transform) -> {
+                        return true;
+                    });
+        }
+
         public IpSecTransformCallRecord awaitNextDeletedIpSecTransform() {
             return mDeletedIpSecTransformsTrackRecord.poll(
                     (long) TIMEOUT_MS,
@@ -469,6 +465,22 @@ abstract class IkeSessionTestBase extends IkeTestBase {
 
         public void awaitOnClosed() throws Exception {
             mFutureOnClosedCall.get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /** Default testing callback for all IKE exchange tests */
+    static class DefaultTestChildSessionCallback extends TestChildSessionCallback {
+        @Override
+        public void onClosedWithException(@NonNull IkeException exception) {
+            mFutureOnClosedException.complete(exception);
+        }
+    }
+
+    /** Testing callback to verify deprecated methods before they are removed */
+    static class LegacyTestChildSessionCallback extends TestChildSessionCallback {
+        @Override
+        public void onClosedExceptionally(@NonNull IkeException exception) {
+            mFutureOnClosedException.complete(exception);
         }
     }
 
@@ -500,18 +512,24 @@ abstract class IkeSessionTestBase extends IkeTestBase {
     }
 
     void verifyIkeSessionSetupBlocking() throws Exception {
+        verifyIkeSessionSetupBlocking(EXTENSION_TYPE_FRAGMENTATION);
+    }
+
+    void verifyIkeSessionSetupBlocking(int... expectedIkeExtensions) throws Exception {
         IkeSessionConfiguration ikeConfig = mIkeSessionCallback.awaitIkeConfig();
         assertNotNull(ikeConfig);
         assertEquals(EXPECTED_REMOTE_APP_VERSION_EMPTY, ikeConfig.getRemoteApplicationVersion());
         assertTrue(ikeConfig.getRemoteVendorIds().isEmpty());
         assertTrue(ikeConfig.getPcscfServers().isEmpty());
-        assertTrue(ikeConfig.isIkeExtensionEnabled(EXTENSION_TYPE_FRAGMENTATION));
+        for (int ikeExtension : expectedIkeExtensions) {
+            assertTrue(ikeConfig.isIkeExtensionEnabled(ikeExtension));
+        }
 
         IkeSessionConnectionInfo ikeConnectInfo = ikeConfig.getIkeSessionConnectionInfo();
         assertNotNull(ikeConnectInfo);
         assertEquals(mLocalAddress, ikeConnectInfo.getLocalAddress());
         assertEquals(mRemoteAddress, ikeConnectInfo.getRemoteAddress());
-        assertEquals(mTunNetwork, ikeConnectInfo.getNetwork());
+        assertEquals(mTunNetworkContext.tunNetwork, ikeConnectInfo.getNetwork());
     }
 
     void verifyChildSessionSetupBlocking(
