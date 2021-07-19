@@ -5632,6 +5632,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onUnderlyingNetworkUpdated(Network network) {
         Network oldNetwork = mNetwork;
+        InetAddress oldLocalAddress = mLocalAddress;
+        InetAddress oldRemoteAddress = mRemoteAddress;
+
         mNetwork = network;
 
         // If the network changes, perform a new DNS lookup to ensure that the correct remote
@@ -5662,6 +5665,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             mLocalAddress =
                     mIkeLocalAddressGenerator.generateLocalAddress(
                             mNetwork, isIpv4, mRemoteAddress, serverPort);
+
+            if (mNetwork.equals(oldNetwork)
+                    && mLocalAddress.equals(oldLocalAddress)
+                    && mRemoteAddress.equals(oldRemoteAddress)) {
+                logw(
+                        "onUnderlyingNetworkUpdated: None of network, local or remote address has"
+                                + " changed. No action needed here.");
+                return;
+            }
 
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
