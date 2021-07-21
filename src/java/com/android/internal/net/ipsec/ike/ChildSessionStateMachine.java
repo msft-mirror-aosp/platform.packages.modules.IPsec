@@ -39,12 +39,13 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PROTOCOL_ID_ESP;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 
 import android.annotation.IntDef;
 import android.annotation.Nullable;
-import android.app.AlarmManager;
+import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.net.IpSecManager;
@@ -52,6 +53,7 @@ import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.IpSecTransform;
 import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionConfiguration;
@@ -62,7 +64,13 @@ import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.ike.exceptions.InvalidKeException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.TemporaryFailureException;
+import android.net.ipsec.ike.exceptions.TsUnacceptableException;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
@@ -70,17 +78,13 @@ import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequestFactory;
 import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeExchangeSubType;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidKeException;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.ipsec.ike.exceptions.TemporaryFailureException;
-import com.android.internal.net.ipsec.ike.exceptions.TsUnacceptableException;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
@@ -140,8 +144,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private static final int CMD_HANDLE_RECEIVED_REQUEST = CMD_GENERAL_BASE + 2;
     /** Receive a reponse from the remote. */
     private static final int CMD_HANDLE_RECEIVED_RESPONSE = CMD_GENERAL_BASE + 3;
-    /** Kill Session and close all alive Child SAs immediately. */
-    private static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 4;
 
     private static final SparseArray<String> CMD_TO_STR;
 
@@ -150,12 +152,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_HANDLE_FIRST_CHILD_EXCHANGE, "Handle First Child");
         CMD_TO_STR.put(CMD_HANDLE_RECEIVED_REQUEST, "Rcv request");
         CMD_TO_STR.put(CMD_HANDLE_RECEIVED_RESPONSE, "Rcv response");
-        CMD_TO_STR.put(CMD_KILL_SESSION, "Kill session");
     }
 
     private final Context mContext;
     private final int mIkeSessionId;
-    private final AlarmManager mAlarmManager;
+    private final Handler mIkeHandler;
     private final IpSecManager mIpSecManager;
 
     private final RandomnessFactory mRandomFactory;
@@ -164,6 +165,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * collision in test mode.
      */
     private final IpSecSpiGenerator mIpSecSpiGenerator;
+
+    private final LocalRequestFactory mLocalRequestFactory = new LocalRequestFactory();
 
     /** User provided configurations. */
     @VisibleForTesting final ChildSessionParams mChildSessionParams;
@@ -190,6 +193,16 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting IkeMacPrf mIkePrf;
 
     @VisibleForTesting byte[] mSkD;
+
+    /**
+     * Negotiated IKE DH group
+     *
+     * <p>First Child SA, and all additional Child SAs that do not have user specified DH group are
+     * set up with crypto keys that are implicitly generated by the negotiated IKE DH group. For
+     * those Child SAs, incoming rekey requests that match the negotiated IKE DH group should also
+     * be acceptable. This for improving the interoperability with other IKE implementations.
+     */
+    @VisibleForTesting int mIkeDhGroup;
 
     /** Package private ChildSaProposal that represents the negotiated Child SA proposal. */
     @VisibleForTesting ChildSaProposal mSaProposal;
@@ -222,6 +235,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     @VisibleForTesting final State mDeleteChildLocalDelete = new DeleteChildLocalDelete();
     @VisibleForTesting final State mDeleteChildRemoteDelete = new DeleteChildRemoteDelete();
     @VisibleForTesting final State mRekeyChildLocalCreate = new RekeyChildLocalCreate();
+    @VisibleForTesting final State mMobikeRekeyChildLocalCreate = new MobikeRekeyChildLocalCreate();
     @VisibleForTesting final State mRekeyChildRemoteCreate = new RekeyChildRemoteCreate();
     @VisibleForTesting final State mRekeyChildLocalDelete = new RekeyChildLocalDelete();
     @VisibleForTesting final State mRekeyChildRemoteDelete = new RekeyChildRemoteDelete();
@@ -243,7 +257,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             Looper looper,
             Context context,
             int ikeSessionUniqueId,
-            AlarmManager alarmManager,
+            Handler ikeHandler,
             RandomnessFactory randomnessFactory,
             IpSecManager ipSecManager,
             IpSecSpiGenerator ipSecSpiGenerator,
@@ -255,7 +269,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         mContext = context;
         mIkeSessionId = ikeSessionUniqueId;
-        mAlarmManager = alarmManager;
+        mIkeHandler = ikeHandler;
         mRandomFactory = randomnessFactory;
         mIpSecManager = ipSecManager;
         mIpSecSpiGenerator = ipSecSpiGenerator;
@@ -274,6 +288,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         addState(mDeleteChildLocalDelete, mKillChildSessionParent);
         addState(mDeleteChildRemoteDelete, mKillChildSessionParent);
         addState(mRekeyChildLocalCreate, mKillChildSessionParent);
+        addState(mMobikeRekeyChildLocalCreate, mKillChildSessionParent);
         addState(mRekeyChildRemoteCreate, mKillChildSessionParent);
         addState(mRekeyChildLocalDelete, mKillChildSessionParent);
         addState(mRekeyChildRemoteDelete, mKillChildSessionParent);
@@ -349,6 +364,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * @param remoteAddress The remote (outer) address of the Child Session.
      * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
      * @param ikePrf The pseudo-random function to use for key derivation
+     * @param ikeDh The negotiated IKE DH group
      * @param skD The key for which to derive new keying information from.
      */
     public void handleFirstChildExchange(
@@ -358,12 +374,14 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             InetAddress remoteAddress,
             UdpEncapsulationSocket udpEncapSocket,
             IkeMacPrf ikePrf,
+            int ikeDh,
             byte[] skD) {
 
         this.mLocalAddress = localAddress;
         this.mRemoteAddress = remoteAddress;
         this.mUdpEncapSocket = udpEncapSocket;
         this.mIkePrf = ikePrf;
+        this.mIkeDhGroup = ikeDh;
         this.mSkD = skD;
         mIsFirstChild = true;
 
@@ -383,6 +401,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * @param remoteAddress The remote (outer) address to which traffic will be sent.
      * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
      * @param ikePrf The pseudo-random function to use for key derivation
+     * @param ikeDh The negotiated IKE DH group
      * @param skD The key for which to derive new keying information from.
      */
     public void createChildSession(
@@ -390,11 +409,13 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             InetAddress remoteAddress,
             UdpEncapsulationSocket udpEncapSocket,
             IkeMacPrf ikePrf,
+            int ikeDh,
             byte[] skD) {
         this.mLocalAddress = localAddress;
         this.mRemoteAddress = remoteAddress;
         this.mUdpEncapSocket = udpEncapSocket;
         this.mIkePrf = ikePrf;
+        this.mIkeDhGroup = ikeDh;
         this.mSkD = skD;
         mIsFirstChild = false;
 
@@ -422,12 +443,32 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     /**
-     * Kill Child Session and all alive Child SAs without doing IKE exchange.
+     * Initiate Rekey Child procedure for MOBIKE (instead of migrating IPsec SAs).
      *
-     * <p>It is usually called when IKE Session is being closed.
+     * <p>This method should only be used as a fallback mode for devices that do not have
+     * XFRM_MIGRATE kernel support.
+     *
+     * <p>This method is called synchronously from IkeStateMachine. It proxies the synchronous call
+     * as an asynchronous job to the ChildStateMachine handler.
+     *
+     * <p>This method works similarly to {@link #rekeyChildSession()} in that it rekeys the Child
+     * SAs associated with this state machine. However, the caller is notified of Child SA creation
+     * via {@link ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
+     * android.net.IpSecTransform)};
+     *
+     * @param localAddress The local (outer) address from which traffic will originate.
+     * @param remoteAddress The remote (outer) address to which traffic will be sent.
+     * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
      */
-    public void killSession() {
-        sendMessage(CMD_KILL_SESSION);
+    public void rekeyChildSessionForMobike(
+            InetAddress localAddress,
+            InetAddress remoteAddress,
+            UdpEncapsulationSocket udpEncapSocket) {
+        this.mLocalAddress = localAddress;
+        this.mRemoteAddress = remoteAddress;
+        this.mUdpEncapSocket = udpEncapSocket;
+
+        sendMessage(CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE);
     }
 
     /**
@@ -476,6 +517,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private boolean isAwaitingCreateResp() {
         return (getCurrentState() == mCreateChildLocalCreate
+                || getCurrentState() == mMobikeRekeyChildLocalCreate
                 || getCurrentState() == mRekeyChildLocalCreate);
     }
 
@@ -525,12 +567,36 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, outPayloads, this);
     }
 
-    /** Notify users the deletion of a Child SA. MUST be called on user callback executor */
-    private void onIpSecTransformPairDeleted(ChildSaRecord childSaRecord) {
-        mUserCallback.onIpSecTransformDeleted(
-                childSaRecord.getOutboundIpSecTransform(), IpSecManager.DIRECTION_OUT);
-        mUserCallback.onIpSecTransformDeleted(
-                childSaRecord.getInboundIpSecTransform(), IpSecManager.DIRECTION_IN);
+    class OnIpSecSaPairCreatedRunnable implements Runnable {
+        private final IpSecTransform mOut;
+        private final IpSecTransform mIn;
+
+        OnIpSecSaPairCreatedRunnable(ChildSaRecord childSaRecord) {
+            mOut = childSaRecord.getOutboundIpSecTransform();
+            mIn = childSaRecord.getInboundIpSecTransform();
+        }
+
+        @Override
+        public void run() {
+            mUserCallback.onIpSecTransformCreated(mOut, IpSecManager.DIRECTION_OUT);
+            mUserCallback.onIpSecTransformCreated(mIn, IpSecManager.DIRECTION_IN);
+        }
+    }
+
+    class OnIpSecSaPairDeletedRunnable implements Runnable {
+        private final IpSecTransform mOut;
+        private final IpSecTransform mIn;
+
+        OnIpSecSaPairDeletedRunnable(ChildSaRecord childSaRecord) {
+            mOut = childSaRecord.getOutboundIpSecTransform();
+            mIn = childSaRecord.getInboundIpSecTransform();
+        }
+
+        @Override
+        public void run() {
+            mUserCallback.onIpSecTransformDeleted(mOut, IpSecManager.DIRECTION_OUT);
+            mUserCallback.onIpSecTransformDeleted(mIn, IpSecManager.DIRECTION_IN);
+        }
     }
 
     /**
@@ -601,7 +667,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
             executeUserCallback(
                     () -> {
-                        mUserCallback.onClosedExceptionally(new IkeInternalException(e));
+                        mUserCallback.onClosedWithException(new IkeInternalException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitNow();
@@ -636,10 +702,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private void closeChildSaRecord(ChildSaRecord childSaRecord, boolean expectSaClosed) {
         if (childSaRecord == null) return;
 
-        executeUserCallback(
-                () -> {
-                    onIpSecTransformPairDeleted(childSaRecord);
-                });
+        OnIpSecSaPairDeletedRunnable delRunnable = new OnIpSecSaPairDeletedRunnable(childSaRecord);
+        executeUserCallback(delRunnable);
 
         mChildSmCallback.onChildSaDeleted(childSaRecord.getRemoteSpi());
         childSaRecord.close();
@@ -660,7 +724,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         executeUserCallback(
                 () -> {
-                    mUserCallback.onClosedExceptionally(ikeException);
+                    mUserCallback.onClosedWithException(ikeException);
                 });
         loge("Child Session fatal error", ikeException);
 
@@ -753,14 +817,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         ChildSessionConfiguration sessionConfig =
                                 buildChildSessionConfigFromResp(createChildResult, respPayloads);
+
+                        OnIpSecSaPairCreatedRunnable createRunnable =
+                                new OnIpSecSaPairCreatedRunnable(mCurrentChildSaRecord);
                         executeUserCallback(
                                 () -> {
-                                    mUserCallback.onIpSecTransformCreated(
-                                            mCurrentChildSaRecord.getInboundIpSecTransform(),
-                                            IpSecManager.DIRECTION_IN);
-                                    mUserCallback.onIpSecTransformCreated(
-                                            mCurrentChildSaRecord.getOutboundIpSecTransform(),
-                                            IpSecManager.DIRECTION_OUT);
+                                    createRunnable.run();
                                     mUserCallback.onOpened(sessionConfig);
                                 });
 
@@ -856,31 +918,34 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         Bundle spiBundle = new Bundle();
         spiBundle.putInt(BUNDLE_KEY_CHILD_REMOTE_SPI, remoteSpi);
 
-        // This Message will eventually gets fired on the IKE session state machine's handler, since
-        // the pendingIntent clears the target
-        return obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, localRequestType, spiBundle);
+        return mIkeHandler.obtainMessage(
+                CMD_ALARM_FIRED, mIkeSessionId, localRequestType, spiBundle);
     }
 
     private SaLifetimeAlarmScheduler buildSaLifetimeAlarmSched(int remoteSpi) {
+        Message deleteMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_CHILD, remoteSpi);
+        Message rekeyMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_CHILD, remoteSpi);
+
         PendingIntent deleteSaIntent =
                 buildIkeAlarmIntent(
-                        mContext,
-                        ACTION_DELETE_CHILD,
-                        getIntentIdentifier(remoteSpi),
-                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DELETE_CHILD, remoteSpi));
+                        mContext, ACTION_DELETE_CHILD, getIntentIdentifier(remoteSpi), deleteMsg);
         PendingIntent rekeySaIntent =
                 buildIkeAlarmIntent(
-                        mContext,
-                        ACTION_REKEY_CHILD,
-                        getIntentIdentifier(remoteSpi),
-                        getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_CHILD, remoteSpi));
+                        mContext, ACTION_REKEY_CHILD, getIntentIdentifier(remoteSpi), rekeyMsg);
 
         return new SaLifetimeAlarmScheduler(
-                mChildSessionParams.getHardLifetimeMsInternal(),
-                mChildSessionParams.getSoftLifetimeMsInternal(),
-                deleteSaIntent,
-                rekeySaIntent,
-                mAlarmManager);
+                new IkeAlarmConfig(
+                        mContext,
+                        ACTION_DELETE_CHILD,
+                        mChildSessionParams.getHardLifetimeMsInternal(),
+                        deleteSaIntent,
+                        deleteMsg),
+                new IkeAlarmConfig(
+                        mContext,
+                        ACTION_REKEY_CHILD,
+                        mChildSessionParams.getSoftLifetimeMsInternal(),
+                        rekeySaIntent,
+                        rekeyMsg));
     }
 
     /** Initial state of ChildSessionStateMachine. */
@@ -989,7 +1054,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         transitionTo(mInitial);
 
                         mChildSmCallback.scheduleRetryLocalRequest(
-                                new ChildLocalRequest(
+                                mLocalRequestFactory.getChildLocalRequest(
                                         CMD_LOCAL_REQUEST_CREATE_CHILD,
                                         mUserCallback,
                                         mChildSessionParams));
@@ -1041,6 +1106,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     return HANDLED;
                 case CMD_LOCAL_REQUEST_REKEY_CHILD:
                     transitionTo(mRekeyChildLocalCreate);
+                    return HANDLED;
+                case CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE:
+                    transitionTo(mMobikeRekeyChildLocalCreate);
                     return HANDLED;
                 case CMD_HANDLE_RECEIVED_REQUEST:
                     ReceivedRequest req = (ReceivedRequest) message.obj;
@@ -1163,28 +1231,18 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 "Found no remote SPI for mCurrentChildSaRecord in a Delete Child"
                                         + " request."));
             } else {
-
-                executeUserCallback(
-                        () -> {
-                            mUserCallback.onClosed();
-                            onIpSecTransformPairDeleted(mCurrentChildSaRecord);
-                        });
-
                 sendDeleteChild(mCurrentChildSaRecord, true /*isResp*/);
-
-                mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
-                mCurrentChildSaRecord.close();
-                mCurrentChildSaRecord = null;
-
-                quitNow();
+                closeSessionAndNotifyUser(true /* quitStateMachine */);
             }
         }
 
         protected void closeSessionAndNotifyUser(boolean quitStateMachine) {
+            OnIpSecSaPairDeletedRunnable delRunnable =
+                    new OnIpSecSaPairDeletedRunnable(mCurrentChildSaRecord);
             executeUserCallback(
                     () -> {
                         mUserCallback.onClosed();
-                        onIpSecTransformPairDeleted(mCurrentChildSaRecord);
+                        delRunnable.run();
                     });
 
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
@@ -1442,17 +1500,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                                 buildSaLifetimeAlarmSched(
                                                         createChildResult.respSpi.getSpi()));
 
-                                executeUserCallback(
-                                        () -> {
-                                            mUserCallback.onIpSecTransformCreated(
-                                                    mLocalInitNewChildSaRecord
-                                                            .getInboundIpSecTransform(),
-                                                    IpSecManager.DIRECTION_IN);
-                                            mUserCallback.onIpSecTransformCreated(
-                                                    mLocalInitNewChildSaRecord
-                                                            .getOutboundIpSecTransform(),
-                                                    IpSecManager.DIRECTION_OUT);
-                                        });
+                                notifyCallerForLocalChildSaRekey();
 
                                 transitionTo(mRekeyChildLocalDelete);
                             } catch (GeneralSecurityException
@@ -1491,6 +1539,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
+        protected void notifyCallerForLocalChildSaRekey() {
+            OnIpSecSaPairCreatedRunnable createRunnable =
+                    new OnIpSecSaPairCreatedRunnable(mLocalInitNewChildSaRecord);
+            executeUserCallback(createRunnable);
+        }
+
         private void handleProcessRespOrSaCreationFailAndQuit(
                 int registeredSpi, Exception exception) {
             // We don't retry rekey if failure was caused by invalid response or SA creation error.
@@ -1508,6 +1562,28 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         @Override
         public void exitState() {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
+        }
+    }
+
+    /**
+     * MobikeRekeyChildLocalCreate represents the state where Child Session initiates the Rekey
+     * Child exchange for MOBIKE-enabled IKE Sessions.
+     *
+     * <p>MobikeRekeyChildLocalCreate behaves similarly to RekeyChildLocalCreate except that it
+     * notifies the caller of Child SA creation via {@link
+     * ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
+     * android.net.IpSecTransform)}.
+     *
+     * <p>As indicated in RFC 7296 section 2.8, "when rekeying, the new Child SA SHOULD NOT have
+     * different Traffic Selectors and algorithms than the old one."
+     */
+    class MobikeRekeyChildLocalCreate extends RekeyChildLocalCreate {
+        @Override
+        protected void notifyCallerForLocalChildSaRekey() {
+            IpSecTransform inTransform = mLocalInitNewChildSaRecord.getInboundIpSecTransform();
+            IpSecTransform outTransform = mLocalInitNewChildSaRecord.getOutboundIpSecTransform();
+            executeUserCallback(
+                    () -> mUserCallback.onIpSecTransformsMigrated(inTransform, outTransform));
         }
     }
 
@@ -1656,11 +1732,12 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         // the remote has (implicitly) acknowledged our response via the
                         // delete-old-SA request. This will be performed in the finishRekey()
                         // method.
+                        IpSecTransform inTransform =
+                                mRemoteInitNewChildSaRecord.getInboundIpSecTransform();
                         executeUserCallback(
                                 () -> {
                                     mUserCallback.onIpSecTransformCreated(
-                                            mRemoteInitNewChildSaRecord.getInboundIpSecTransform(),
-                                            IpSecManager.DIRECTION_IN);
+                                            inTransform, IpSecManager.DIRECTION_IN);
                                 });
 
                         mChildSmCallback.onOutboundPayloadsReady(
@@ -1708,15 +1785,29 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
+        // TODO: b/177434707 Calling ChildSaProposal is safe because it does not depend on any
+        // platform API added after SDK R. Handle this case in a mainline standard way when
+        // b/177434707 is fixed.
+        @SuppressLint("NewApi")
         private boolean isKePayloadAcceptable(IkeKePayload reqKePayload) {
             ChildSaProposal proposal =
                     mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
 
             // Verify if this proposal is accepted by user
             for (SaProposal saProposal : mChildSessionParams.getSaProposals()) {
-                if (proposal.isNegotiatedFrom(saProposal)) {
+                if (!saProposal.getDhGroups().isEmpty() && proposal.isNegotiatedFrom(saProposal)) {
+                    // If user has specified Child DH group in this saProposal, check proposal
+                    // against saProposal
+                    return true;
+                } else if (reqKePayload.dhGroup == mIkeDhGroup
+                        && proposal.isNegotiatedFrom(
+                                ((ChildSaProposal) saProposal)
+                                        .getCopyWithAdditionalDhTransform(reqKePayload.dhGroup))) {
+                    // If user has not specified Child DH group in this saProposal, check proposal
+                    // against saProposal + mIkeDhGroup
                     return true;
                 }
+
             }
 
             return false;
@@ -1777,10 +1868,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         // Rekey timer for old SA will be cancelled as part of the closing of the SA.
         protected void finishRekey() {
-            executeUserCallback(
-                    () -> {
-                        onIpSecTransformPairDeleted(mCurrentChildSaRecord);
-                    });
+            OnIpSecSaPairDeletedRunnable delRunnable =
+                    new OnIpSecSaPairDeletedRunnable(mCurrentChildSaRecord);
+            executeUserCallback(delRunnable);
 
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
             mCurrentChildSaRecord.close();
@@ -1923,11 +2013,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         @Override
         protected void finishRekey() {
+            IpSecTransform outTransform = mRemoteInitNewChildSaRecord.getOutboundIpSecTransform();
             executeUserCallback(
                     () -> {
                         mUserCallback.onIpSecTransformCreated(
-                                mRemoteInitNewChildSaRecord.getOutboundIpSecTransform(),
-                                IpSecManager.DIRECTION_OUT);
+                                outTransform, IpSecManager.DIRECTION_OUT);
                     });
 
             super.finishRekey();
@@ -2066,7 +2156,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     ((ChildProposal) saPayload.proposalList.get(0))
                             .saProposal.getDhGroupTransforms();
             if (dhGroups.length != 0 && dhGroups[0].id != DH_GROUP_NONE) {
-                payloadList.add(new IkeKePayload(dhGroups[0].id, randomFactory));
+                payloadList.add(
+                        IkeKePayload.createOutboundKePayload(dhGroups[0].id, randomFactory));
             }
 
             if (isTransport) payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_USE_TRANSPORT_MODE));

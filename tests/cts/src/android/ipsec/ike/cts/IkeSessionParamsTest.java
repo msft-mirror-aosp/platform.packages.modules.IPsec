@@ -23,6 +23,8 @@ import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignLocalConf
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthDigitalSignRemoteConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthEapConfig;
 import static android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
+import static android.net.ipsec.ike.ike3gpp.Ike3gppDataListenerTest.TestIke3gppDataListener;
+import static android.os.Build.VERSION_CODES.R;
 import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
@@ -41,13 +43,18 @@ import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.IkeSessionParams.ConfigRequestIpv4PcscfServer;
 import android.net.ipsec.ike.IkeSessionParams.ConfigRequestIpv6PcscfServer;
 import android.net.ipsec.ike.IkeSessionParams.IkeConfigRequest;
+import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
+import android.net.ipsec.ike.ike3gpp.Ike3gppParams;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.filters.SdkSuppress;
 
-import com.android.internal.net.ipsec.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -65,10 +72,15 @@ import java.util.concurrent.TimeUnit;
 
 @RunWith(AndroidJUnit4.class)
 public final class IkeSessionParamsTest extends IkeSessionTestBase {
+    @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
+
     private static final int HARD_LIFETIME_SECONDS = (int) TimeUnit.HOURS.toSeconds(20L);
     private static final int SOFT_LIFETIME_SECONDS = (int) TimeUnit.HOURS.toSeconds(10L);
     private static final int DPD_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(10L);
+    private static final int NATT_KEEPALIVE_DELAY_SECONDS = (int) TimeUnit.MINUTES.toSeconds(5L);
     private static final int[] RETRANS_TIMEOUT_MS_LIST = new int[] {500, 500, 500, 500, 500, 500};
+
+    private static final int DSCP = 8;
 
     private static final Map<Class<? extends IkeConfigRequest>, Integer> EXPECTED_REQ_COUNT =
             new HashMap<>();
@@ -106,8 +118,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
     @Before
     public void setUp() throws Exception {
-        // This address is never used except for setting up the test network
-        setUpTestNetwork(IPV4_ADDRESS_LOCAL);
+        super.setUp();
 
         mServerCaCert = CertUtils.createCertFromPemFile("server-a-self-signed-ca.pem");
         mClientEndCert = CertUtils.createCertFromPemFile("client-a-end-cert.pem");
@@ -116,11 +127,6 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
         mClientIntermediateCaCertTwo =
                 CertUtils.createCertFromPemFile("client-a-intermediate-ca-two.pem");
         mClientPrivateKey = CertUtils.createRsaPrivateKeyFromKeyFile("client-a-private-key.key");
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        tearDownTestNetwork();
     }
 
     private static EapSessionConfig.Builder createEapOnlySafeMethodsBuilder() {
@@ -138,14 +144,22 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      * <p>Authentication method is arbitrarily selected. Using other method (e.g. setAuthEap) also
      * works.
      */
-    private IkeSessionParams.Builder createIkeParamsBuilderMinimum() {
-        return new IkeSessionParams.Builder(sContext)
-                .setNetwork(mTunNetwork)
+    private IkeSessionParams.Builder createIkeParamsBuilderMinimum(boolean useContext) {
+        final IkeSessionParams.Builder builder =
+                useContext
+                        ? new IkeSessionParams.Builder(sContext)
+                        : new IkeSessionParams.Builder();
+
+        return builder.setNetwork(mTunNetworkContext.tunNetwork)
                 .setServerHostname(IPV4_ADDRESS_REMOTE.getHostAddress())
                 .addSaProposal(SA_PROPOSAL)
                 .setLocalIdentification(LOCAL_ID)
                 .setRemoteIdentification(REMOTE_ID)
                 .setAuthPsk(IKE_PSK);
+    }
+
+    private IkeSessionParams.Builder createIkeParamsBuilderMinimum() {
+        return createIkeParamsBuilderMinimum(true /* useContext */);
     }
 
     /**
@@ -154,7 +168,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      * @see #createIkeParamsBuilderMinimum
      */
     private void verifyIkeParamsMinimum(IkeSessionParams sessionParams) {
-        assertEquals(mTunNetwork, sessionParams.getNetwork());
+        assertEquals(mTunNetworkContext.tunNetwork, sessionParams.getNetwork());
         assertEquals(IPV4_ADDRESS_REMOTE.getHostAddress(), sessionParams.getServerHostname());
         assertEquals(Arrays.asList(SA_PROPOSAL), sessionParams.getSaProposals());
         assertEquals(LOCAL_ID, sessionParams.getLocalIdentification());
@@ -188,6 +202,15 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     }
 
     @Test
+    public void testBuildWithIkeSessionParams() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum(false /* useContext */).build();
+        IkeSessionParams result = new IkeSessionParams.Builder(sessionParams).build();
+
+        assertEquals(sessionParams, result);
+    }
+
+    @Test
     public void testSetLifetimes() throws Exception {
         IkeSessionParams sessionParams =
                 createIkeParamsBuilderMinimum()
@@ -206,6 +229,17 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
         verifyIkeParamsMinimum(sessionParams);
         assertEquals(DPD_DELAY_SECONDS, sessionParams.getDpdDelaySeconds());
+    }
+
+    @Test
+    public void testSetNattKeepaliveDelay() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum()
+                        .setNattKeepAliveDelaySeconds(NATT_KEEPALIVE_DELAY_SECONDS)
+                        .build();
+
+        verifyIkeParamsMinimum(sessionParams);
+        assertEquals(NATT_KEEPALIVE_DELAY_SECONDS, sessionParams.getNattKeepAliveDelaySeconds());
     }
 
     @Test
@@ -249,6 +283,14 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
     }
 
     @Test
+    public void testSetDscp() throws Exception {
+        IkeSessionParams sessionParams = createIkeParamsBuilderMinimum().setDscp(DSCP).build();
+
+        verifyIkeParamsMinimum(sessionParams);
+        assertEquals(DSCP, sessionParams.getDscp());
+    }
+
+    @Test
     public void testAddIkeOption() throws Exception {
         IkeSessionParams sessionParams =
                 createIkeParamsBuilderMinimum()
@@ -277,7 +319,7 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      */
     private IkeSessionParams.Builder createIkeParamsBuilderMinimumWithoutAuth() {
         return new IkeSessionParams.Builder(sContext)
-                .setNetwork(mTunNetwork)
+                .setNetwork(mTunNetworkContext.tunNetwork)
                 .setServerHostname(IPV4_ADDRESS_REMOTE.getHostAddress())
                 .addSaProposal(SA_PROPOSAL)
                 .setLocalIdentification(LOCAL_ID)
@@ -291,11 +333,20 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
      * @see #createIkeParamsBuilderMinimumWithoutAuth
      */
     private void verifyIkeParamsMinimumWithoutAuth(IkeSessionParams sessionParams) {
-        assertEquals(mTunNetwork, sessionParams.getNetwork());
+        assertEquals(mTunNetworkContext.tunNetwork, sessionParams.getNetwork());
         assertEquals(IPV4_ADDRESS_REMOTE.getHostAddress(), sessionParams.getServerHostname());
         assertEquals(Arrays.asList(SA_PROPOSAL), sessionParams.getSaProposals());
         assertEquals(LOCAL_ID, sessionParams.getLocalIdentification());
         assertEquals(REMOTE_ID, sessionParams.getRemoteIdentification());
+    }
+
+    private void verifyIkeParamsWithPsk(IkeSessionParams sessionParams) {
+        IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
+        assertTrue(localConfig instanceof IkeAuthPskConfig);
+        assertArrayEquals(IKE_PSK, ((IkeAuthPskConfig) localConfig).getPsk());
+        IkeAuthConfig remoteConfig = sessionParams.getRemoteAuthConfig();
+        assertTrue(remoteConfig instanceof IkeAuthPskConfig);
+        assertArrayEquals(IKE_PSK, ((IkeAuthPskConfig) remoteConfig).getPsk());
     }
 
     @Test
@@ -305,12 +356,22 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
 
         verifyIkeParamsMinimumWithoutAuth(sessionParams);
 
-        IkeAuthConfig localConfig = sessionParams.getLocalAuthConfig();
-        assertTrue(localConfig instanceof IkeAuthPskConfig);
-        assertArrayEquals(IKE_PSK, ((IkeAuthPskConfig) localConfig).getPsk());
-        IkeAuthConfig remoteConfig = sessionParams.getRemoteAuthConfig();
-        assertTrue(remoteConfig instanceof IkeAuthPskConfig);
-        assertArrayEquals(IKE_PSK, ((IkeAuthPskConfig) remoteConfig).getPsk());
+        verifyIkeParamsWithPsk(sessionParams);
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testBuildWithPskMobikeEnabled() throws Exception {
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimumWithoutAuth()
+                        .setAuthPsk(IKE_PSK)
+                        .addIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
+                        .build();
+
+        verifyIkeParamsMinimumWithoutAuth(sessionParams);
+
+        verifyIkeParamsWithPsk(sessionParams);
+        assertTrue(sessionParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE));
     }
 
     @Test
@@ -410,5 +471,27 @@ public final class IkeSessionParamsTest extends IkeSessionTestBase {
         assertTrue(remoteConfig instanceof IkeAuthDigitalSignRemoteConfig);
         assertEquals(
                 mServerCaCert, ((IkeAuthDigitalSignRemoteConfig) remoteConfig).getRemoteCaCert());
+    }
+
+    @Test
+    public void testBuildWithIke3gppExtension() throws Exception {
+        Ike3gppExtension ike3gppExtension =
+                new Ike3gppExtension(
+                        new Ike3gppParams.Builder().build(), new TestIke3gppDataListener());
+        IkeSessionParams sessionParams =
+                createIkeParamsBuilderMinimum().setIke3gppExtension(ike3gppExtension).build();
+
+        verifyIkeParamsMinimumWithoutAuth(sessionParams);
+        assertEquals(ike3gppExtension, sessionParams.getIke3gppExtension());
+    }
+
+    @Test
+    @IgnoreAfter(R)
+    public void testBuildWithMobikeOptionPreS() throws Exception {
+        try {
+            new IkeSessionParams.Builder().addIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE);
+            fail("Expected UnsupportedOperationException for setting IKE_OPTION_MOBIKE before S");
+        } catch (UnsupportedOperationException expected) {
+        }
     }
 }
