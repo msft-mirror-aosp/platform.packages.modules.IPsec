@@ -326,10 +326,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     static final int CMD_ALARM_FIRED = CMD_GENERAL_BASE + 15;
     /** Send keepalive packet */
     static final int CMD_SEND_KEEPALIVE = CMD_GENERAL_BASE + 16;
-    /** Force close the session. This is initiated locally, but will not go into the scheduler */
-    static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 17;
     /** Update the Session's underlying Network */
-    static final int CMD_SET_NETWORK = CMD_GENERAL_BASE + 18;
+    static final int CMD_SET_NETWORK = CMD_GENERAL_BASE + 17;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -795,11 +793,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         sendMessage(
                 CMD_LOCAL_REQUEST_DELETE_IKE,
                 mLocalRequestFactory.getIkeLocalRequest(CMD_LOCAL_REQUEST_DELETE_IKE));
-    }
-
-    /** Forcibly close IKE Session. */
-    public void killSession() {
-        sendMessage(CMD_KILL_SESSION);
     }
 
     /** Update the IkeSessionStateMachine to use the specified Network. */
@@ -5627,6 +5620,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onUnderlyingNetworkUpdated(Network network) {
         Network oldNetwork = mNetwork;
+        InetAddress oldLocalAddress = mLocalAddress;
+        InetAddress oldRemoteAddress = mRemoteAddress;
+
         mNetwork = network;
 
         // If the network changes, perform a new DNS lookup to ensure that the correct remote
@@ -5657,6 +5653,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             mLocalAddress =
                     mIkeLocalAddressGenerator.generateLocalAddress(
                             mNetwork, isIpv4, mRemoteAddress, serverPort);
+
+            if (mNetwork.equals(oldNetwork)
+                    && mLocalAddress.equals(oldLocalAddress)
+                    && mRemoteAddress.equals(oldRemoteAddress)) {
+                logw(
+                        "onUnderlyingNetworkUpdated: None of network, local or remote address has"
+                                + " changed. No action needed here.");
+                return;
+            }
 
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
