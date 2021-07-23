@@ -19,6 +19,7 @@ package com.android.internal.net.ipsec.ike.net;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
 import android.net.ConnectivityManager.NetworkCallback;
+import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
 
@@ -59,16 +60,23 @@ public abstract class IkeNetworkCallbackBase extends NetworkCallback {
             return;
         }
 
-        if (!linkProperties.getAddresses().contains(mCurrAddress)) {
-            // The underlying Network didn't change, but the current address disappeared. A MOBIKE
-            // event is necessary to update the local address and notify the peer of this change.
-            logd(
-                    "onLinkPropertiesChanged indicates current address "
-                            + mCurrAddress
-                            + " lost on current Network "
-                            + mCurrAddress);
-            mIkeNetworkUpdater.onUnderlyingNetworkUpdated(mCurrNetwork);
+        // Use getAllLinkAddresses (instead of getLinkAddresses()) so that the return value also
+        // includes addresses of stacked LinkProperties. This is useful for handling the address of
+        // a CLAT interface.
+        for (LinkAddress linkAddress : linkProperties.getAllLinkAddresses()) {
+            if (mCurrAddress.equals(linkAddress.getAddress())) {
+                return;
+            }
         }
+
+        // The underlying Network didn't change, but the current address disappeared. A MOBIKE
+        // event is necessary to update the local address and notify the peer of this change.
+        logd(
+                "onLinkPropertiesChanged indicates current address "
+                        + mCurrAddress
+                        + " lost on current Network "
+                        + mCurrNetwork.getNetId());
+        mIkeNetworkUpdater.onUnderlyingNetworkUpdated(mCurrNetwork);
     }
 
     /**
