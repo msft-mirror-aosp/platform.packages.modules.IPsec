@@ -45,7 +45,6 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_R
 
 import android.annotation.IntDef;
 import android.annotation.Nullable;
-import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.net.IpSecManager;
@@ -1785,10 +1784,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        // TODO: b/177434707 Calling ChildSaProposal is safe because it does not depend on any
-        // platform API added after SDK R. Handle this case in a mainline standard way when
-        // b/177434707 is fixed.
-        @SuppressLint("NewApi")
         private boolean isKePayloadAcceptable(IkeKePayload reqKePayload) {
             ChildSaProposal proposal =
                     mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
