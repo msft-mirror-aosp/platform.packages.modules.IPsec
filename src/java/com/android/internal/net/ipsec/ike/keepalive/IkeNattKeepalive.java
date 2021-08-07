@@ -37,6 +37,8 @@ import java.net.Inet4Address;
 public class IkeNattKeepalive {
     private static final String TAG = "IkeNattKeepalive";
 
+    private final Dependencies mDeps;
+
     private NattKeepalive mNattKeepalive;
 
     /** Construct an instance of IkeNattKeepalive */
@@ -50,6 +52,29 @@ public class IkeNattKeepalive {
             Network network,
             IkeAlarmConfig ikeAlarmConfig)
             throws IOException {
+        this(
+                context,
+                connectMgr,
+                keepaliveDelaySeconds,
+                src,
+                dest,
+                socket,
+                network,
+                ikeAlarmConfig,
+                new Dependencies());
+    }
+
+    IkeNattKeepalive(
+            Context context,
+            ConnectivityManager connectMgr,
+            int keepaliveDelaySeconds,
+            Inet4Address src,
+            Inet4Address dest,
+            UdpEncapsulationSocket socket,
+            Network network,
+            IkeAlarmConfig ikeAlarmConfig,
+            Dependencies deps)
+            throws IOException {
         mNattKeepalive =
                 new HardwareKeepaliveImpl(
                         context,
@@ -60,6 +85,7 @@ public class IkeNattKeepalive {
                         socket,
                         network,
                         new HardwareKeepaliveCb(context, dest, socket, ikeAlarmConfig));
+        mDeps = deps;
     }
 
     /** Start keepalive */
@@ -91,6 +117,16 @@ public class IkeNattKeepalive {
         void onAlarmFired();
     }
 
+    static class Dependencies {
+        SoftwareKeepaliveImpl createSoftwareKeepaliveImpl(
+                Context context,
+                Inet4Address dest,
+                UdpEncapsulationSocket socket,
+                IkeAlarmConfig alarmConfig) {
+            return new SoftwareKeepaliveImpl(context, dest, socket, alarmConfig);
+        }
+    }
+
     private class HardwareKeepaliveCb implements HardwareKeepaliveImpl.HardwareKeepaliveCallback {
         private final Context mContext;
         private final Inet4Address mDest;
@@ -113,7 +149,8 @@ public class IkeNattKeepalive {
             getIkeLog().d(TAG, "Switch to software keepalive");
             mNattKeepalive.stop();
 
-            mNattKeepalive = new SoftwareKeepaliveImpl(mContext, mDest, mSocket, mIkeAlarmConfig);
+            mNattKeepalive =
+                    mDeps.createSoftwareKeepaliveImpl(mContext, mDest, mSocket, mIkeAlarmConfig);
             mNattKeepalive.start();
         }
 
@@ -121,9 +158,12 @@ public class IkeNattKeepalive {
         public void onNetworkError() {
             // Stop doing keepalive when getting network error since it will also fail software
             // keepalive. Considering the only user of IkeNattKeepalive is IkeSessionStateMachine,
-            // not notifying user this error won't bring user extral risk. When there is a network
+            // not notifying user this error won't bring user extra risk. When there is a network
             // error, IkeSessionStateMachine will eventually hit the max request retransmission
             // times and be terminated anyway.
+
+            // TODO: b/182209475 Terminate IKE Sessions when
+            // HardwareKeepaliveCallback#onNetworkError is fired
             stop();
         }
     }
