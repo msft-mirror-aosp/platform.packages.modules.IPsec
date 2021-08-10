@@ -45,7 +45,6 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_R
 
 import android.annotation.IntDef;
 import android.annotation.Nullable;
-import android.annotation.SuppressLint;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.net.IpSecManager;
@@ -144,8 +143,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     private static final int CMD_HANDLE_RECEIVED_REQUEST = CMD_GENERAL_BASE + 2;
     /** Receive a reponse from the remote. */
     private static final int CMD_HANDLE_RECEIVED_RESPONSE = CMD_GENERAL_BASE + 3;
-    /** Kill Session and close all alive Child SAs immediately. */
-    private static final int CMD_KILL_SESSION = CMD_GENERAL_BASE + 4;
 
     private static final SparseArray<String> CMD_TO_STR;
 
@@ -154,7 +151,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_HANDLE_FIRST_CHILD_EXCHANGE, "Handle First Child");
         CMD_TO_STR.put(CMD_HANDLE_RECEIVED_REQUEST, "Rcv request");
         CMD_TO_STR.put(CMD_HANDLE_RECEIVED_RESPONSE, "Rcv response");
-        CMD_TO_STR.put(CMD_KILL_SESSION, "Kill session");
     }
 
     private final Context mContext;
@@ -472,15 +468,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         this.mUdpEncapSocket = udpEncapSocket;
 
         sendMessage(CMD_LOCAL_REQUEST_REKEY_CHILD_MOBIKE);
-    }
-
-    /**
-     * Kill Child Session and all alive Child SAs without doing IKE exchange.
-     *
-     * <p>It is usually called when IKE Session is being closed.
-     */
-    public void killSession() {
-        sendMessage(CMD_KILL_SESSION);
     }
 
     /**
@@ -1797,10 +1784,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             }
         }
 
-        // TODO: b/177434707 Calling ChildSaProposal is safe because it does not depend on any
-        // platform API added after SDK R. Handle this case in a mainline standard way when
-        // b/177434707 is fixed.
-        @SuppressLint("NewApi")
         private boolean isKePayloadAcceptable(IkeKePayload reqKePayload) {
             ChildSaProposal proposal =
                     mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
