@@ -4819,6 +4819,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                 mIkeSessionStateMachine.mCreateIkeLocalIkeInit);
+        mLooper.dispatchAll();
 
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
