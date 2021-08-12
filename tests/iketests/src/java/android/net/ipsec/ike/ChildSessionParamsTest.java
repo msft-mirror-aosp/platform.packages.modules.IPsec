@@ -21,6 +21,7 @@ import static android.system.OsConstants.AF_INET;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.fail;
 
 import android.net.InetAddresses;
@@ -72,6 +73,19 @@ public final class ChildSessionParamsTest {
                 new IkeTrafficSelector[] {getExpectedDefaultIpv4Ts(), getExpectedDefaultIpv6Ts()},
                 sessionParams.getOutboundTrafficSelectorsInternal());
         assertFalse(sessionParams.isTransportMode());
+    }
+
+    @Test
+    public void testInternalGetterReturnsDifferentInstances() throws Exception {
+        ChildSessionParams sessionParams =
+                new TunnelModeChildSessionParams.Builder().addSaProposal(mSaProposal).build();
+
+        sessionParams.getSaProposalsInternal()[0] = null;
+        assertNotNull(sessionParams.getSaProposalsInternal()[0]);
+        sessionParams.getInboundTrafficSelectorsInternal()[0] = null;
+        assertNotNull(sessionParams.getInboundTrafficSelectorsInternal()[0]);
+        sessionParams.getOutboundTrafficSelectorsInternal()[0] = null;
+        assertNotNull(sessionParams.getOutboundTrafficSelectorsInternal()[0]);
     }
 
     private static void verifyPersistableBundleEncodeDecodeIsLossless(ChildSessionParams params) {
