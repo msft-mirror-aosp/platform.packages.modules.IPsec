@@ -55,4 +55,22 @@ bootclasspath_fragment {
     name: "com.android.ipsec-bootclasspath-fragment",
     contents: ["android.net.ipsec.ike"],
     apex_available: ["com.android.ipsec"],
+
+    // The bootclasspath_fragments that provide APIs on which this depends.
+    fragments: [
+        {
+            apex: "com.android.art",
+            module: "art-bootclasspath-fragment",
+        },
+        {
+            apex: "com.android.tethering",
+            module: "com.android.tethering-bootclasspath-fragment",
+        },
+    ],
+
+    // Additional stubs libraries that this fragment's contents use which are
+    // not provided by another bootclasspath_fragment.
+    additional_stubs: [
+        "android-non-updatable",
+    ],
 }
