@@ -61,7 +61,6 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_R
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
 import android.annotation.IntDef;
-import android.annotation.SuppressLint;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -1601,12 +1600,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         ikeSaRecord,
                         mSupportFragment,
                         DEFAULT_FRAGMENT_SIZE);
-        for (byte[] packet : packetList) {
-            mIkeSocket.sendIkePacket(packet, mRemoteAddress);
-        }
+        sendEncryptedIkePackets(packetList);
+
         if (msg.ikeHeader.isResponseMsg) {
             ikeSaRecord.updateLastSentRespAllPackets(
                     Arrays.asList(packetList), msg.ikeHeader.messageId);
+        }
+    }
+
+    private void sendEncryptedIkePackets(byte[][] packetList) {
+        for (byte[] packet : packetList) {
+            mIkeSocket.sendIkePacket(packet, mRemoteAddress);
         }
     }
 
@@ -2200,7 +2204,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      */
     @VisibleForTesting
     class EncryptedRetransmitter extends Retransmitter {
-        private final IkeSaRecord mIkeSaRecord;
+        private final byte[][] mIkePacketList;
 
         @VisibleForTesting
         EncryptedRetransmitter(IkeMessage msg) {
@@ -2209,15 +2213,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         private EncryptedRetransmitter(IkeSaRecord ikeSaRecord, IkeMessage msg) {
             super(getHandler(), msg, mIkeSessionParams.getRetransmissionTimeoutsMillis());
-
-            mIkeSaRecord = ikeSaRecord;
+            mIkePacketList =
+                    msg.encryptAndEncode(
+                            mIkeIntegrity,
+                            mIkeCipher,
+                            ikeSaRecord,
+                            mSupportFragment,
+                            DEFAULT_FRAGMENT_SIZE);
 
             retransmit();
         }
 
         @Override
-        public void send(IkeMessage msg) {
-            sendEncryptedIkeMessage(mIkeSaRecord, msg);
+        public void send() {
+            sendEncryptedIkePackets(mIkePacketList);
         }
 
         @Override
@@ -3419,16 +3428,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         private class UnencryptedRetransmitter extends Retransmitter {
+            private final byte[] mIkePacket;
+
             private UnencryptedRetransmitter(IkeMessage msg) {
                 super(getHandler(), msg, mIkeSessionParams.getRetransmissionTimeoutsMillis());
-
+                mIkePacket = msg.encode();
                 retransmit();
             }
 
             @Override
-            public void send(IkeMessage msg) {
-                // Sends unencrypted
-                mIkeSocket.sendIkePacket(msg.encode(), mRemoteAddress);
+            public void send() {
+                // Sends unencrypted packet
+                mIkeSocket.sendIkePacket(mIkePacket, mRemoteAddress);
             }
 
             @Override
@@ -3623,10 +3634,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             transitionTo(mChildProcedureOngoing);
         }
 
-        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
-        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
-        // way when b/177434707 is fixed.
-        @SuppressLint("NewApi")
         protected IkeSessionConfiguration buildIkeSessionConfiguration(IkeMessage ikeMessage) {
             IkeConfigPayload configPayload =
                     ikeMessage.getPayloadForType(
@@ -5463,10 +5470,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
-        // TODO: b/177434707 Calling IkeSessionConnectionInfo constructor is safe because it does
-        // not depend on any platform API added after SDK R. Handle this case in a mainline standard
-        // way when b/177434707 is fixed.
-        @SuppressLint("NewApi")
         private void notifyConnectionInfoChanged() {
             IkeSessionConnectionInfo connectionInfo =
                     new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
@@ -5620,6 +5623,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onUnderlyingNetworkUpdated(Network network) {
         Network oldNetwork = mNetwork;
+        InetAddress oldLocalAddress = mLocalAddress;
+        InetAddress oldRemoteAddress = mRemoteAddress;
+
         mNetwork = network;
 
         // If the network changes, perform a new DNS lookup to ensure that the correct remote
@@ -5650,6 +5656,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             mLocalAddress =
                     mIkeLocalAddressGenerator.generateLocalAddress(
                             mNetwork, isIpv4, mRemoteAddress, serverPort);
+
+            if (mNetwork.equals(oldNetwork)
+                    && mLocalAddress.equals(oldLocalAddress)
+                    && mRemoteAddress.equals(oldRemoteAddress)) {
+                logw(
+                        "onUnderlyingNetworkUpdated: None of network, local or remote address has"
+                                + " changed. No action needed here.");
+                return;
+            }
 
             // Only switch the IkeSocket if the underlying Network actually changes. This may not
             // always happen (ex: the underlying Network loses the current local address)
