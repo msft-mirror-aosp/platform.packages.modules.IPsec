@@ -1600,12 +1600,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         ikeSaRecord,
                         mSupportFragment,
                         DEFAULT_FRAGMENT_SIZE);
-        for (byte[] packet : packetList) {
-            mIkeSocket.sendIkePacket(packet, mRemoteAddress);
-        }
+        sendEncryptedIkePackets(packetList);
+
         if (msg.ikeHeader.isResponseMsg) {
             ikeSaRecord.updateLastSentRespAllPackets(
                     Arrays.asList(packetList), msg.ikeHeader.messageId);
+        }
+    }
+
+    private void sendEncryptedIkePackets(byte[][] packetList) {
+        for (byte[] packet : packetList) {
+            mIkeSocket.sendIkePacket(packet, mRemoteAddress);
         }
     }
 
@@ -2199,7 +2204,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      */
     @VisibleForTesting
     class EncryptedRetransmitter extends Retransmitter {
-        private final IkeSaRecord mIkeSaRecord;
+        private final byte[][] mIkePacketList;
 
         @VisibleForTesting
         EncryptedRetransmitter(IkeMessage msg) {
@@ -2208,15 +2213,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         private EncryptedRetransmitter(IkeSaRecord ikeSaRecord, IkeMessage msg) {
             super(getHandler(), msg, mIkeSessionParams.getRetransmissionTimeoutsMillis());
-
-            mIkeSaRecord = ikeSaRecord;
+            mIkePacketList =
+                    msg.encryptAndEncode(
+                            mIkeIntegrity,
+                            mIkeCipher,
+                            ikeSaRecord,
+                            mSupportFragment,
+                            DEFAULT_FRAGMENT_SIZE);
 
             retransmit();
         }
 
         @Override
-        public void send(IkeMessage msg) {
-            sendEncryptedIkeMessage(mIkeSaRecord, msg);
+        public void send() {
+            sendEncryptedIkePackets(mIkePacketList);
         }
 
         @Override
@@ -3418,16 +3428,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         private class UnencryptedRetransmitter extends Retransmitter {
+            private final byte[] mIkePacket;
+
             private UnencryptedRetransmitter(IkeMessage msg) {
                 super(getHandler(), msg, mIkeSessionParams.getRetransmissionTimeoutsMillis());
-
+                mIkePacket = msg.encode();
                 retransmit();
             }
 
             @Override
-            public void send(IkeMessage msg) {
-                // Sends unencrypted
-                mIkeSocket.sendIkePacket(msg.encode(), mRemoteAddress);
+            public void send() {
+                // Sends unencrypted packet
+                mIkeSocket.sendIkePacket(mIkePacket, mRemoteAddress);
             }
 
             @Override
