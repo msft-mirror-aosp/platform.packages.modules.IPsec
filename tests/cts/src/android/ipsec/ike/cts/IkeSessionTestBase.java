@@ -41,6 +41,7 @@ import android.net.ipsec.ike.IkeTrafficSelector;
 import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
+import android.os.UserHandle;
 import android.platform.test.annotations.AppModeFull;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -160,10 +161,11 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         for (String pkg : new String[] {"com.android.shell", sContext.getPackageName()}) {
             String cmd =
                     String.format(
-                            "appops set %s %s %s",
+                            "appops set %s %s %s --user %d",
                             pkg, // Package name
                             opName, // Appop
-                            (allow ? "allow" : "deny")); // Action
+                            (allow ? "allow" : "deny"), // Action
+                            UserHandle.myUserId());
 
             SystemUtil.runShellCommand(cmd);
         }
@@ -316,12 +318,14 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
 
         @Override
         public void onError(@NonNull IkeException exception) {
+            IkeSessionCallback.super.onError(exception);
             mOnErrorExceptionsTrackRecord.add(exception);
         }
 
         @Override
         public void onIkeSessionConnectionInfoChanged(
                 @NonNull IkeSessionConnectionInfo connectionInfo) {
+            IkeSessionCallback.super.onIkeSessionConnectionInfoChanged(connectionInfo);
             mFutureConnectionConfig.complete(connectionInfo);
         }
 
@@ -399,11 +403,6 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         }
 
         @Override
-        public void onClosedExceptionally(@NonNull IkeException exception) {
-            mFutureOnClosedException.complete(exception);
-        }
-
-        @Override
         public void onIpSecTransformCreated(@NonNull IpSecTransform ipSecTransform, int direction) {
             mCreatedIpSecTransformsTrackRecord.add(
                     new IpSecTransformCallRecord(ipSecTransform, direction));
@@ -412,6 +411,9 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         @Override
         public void onIpSecTransformsMigrated(
                 IpSecTransform inIpSecTransform, IpSecTransform outIpSecTransform) {
+            ChildSessionCallback.super.onIpSecTransformsMigrated(
+                    inIpSecTransform, outIpSecTransform);
+
             IpSecTransformCallRecord inRecord =
                     new IpSecTransformCallRecord(inIpSecTransform, IpSecManager.DIRECTION_IN);
             IpSecTransformCallRecord outRecord =

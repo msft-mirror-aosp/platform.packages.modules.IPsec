@@ -23,6 +23,7 @@ java_sdk_library {
 
     // ike is used as a shared library.
     shared_library: true,
+    compile_dex: true,
 
     aidl: {
         local_include_dirs: ["src/java"],
@@ -37,9 +38,9 @@ java_sdk_library {
         "unsupportedappusage",
         "framework-annotations-lib",
         "conscrypt.module.public.api",
-        "framework-connectivity",
+        "framework-connectivity.stubs.module_lib",
     ],
-    stub_only_libs: ["framework-connectivity"],
+    stub_only_libs: ["framework-connectivity.stubs.module_lib"],
 
     api_packages: [
         "android.net.eap",
@@ -52,6 +53,10 @@ java_sdk_library {
     hidden_api_packages: [
         "com.android.internal.net",
     ],
+
+    lint: {
+        strict_updatability_linting: true,
+    },
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
@@ -74,14 +79,14 @@ java_sdk_library {
 filegroup {
     name: "ike-srcs",
     srcs: [
-        "src/java/**/*.java",
+        ":ike-internal-srcs",
         ":framework-ike-shared-srcs",
     ],
 }
 
 filegroup {
-    name: "ike-api-srcs",
-    srcs: ["src/java/android/**/*.java"],
+    name: "ike-internal-srcs",
+    srcs: ["src/java/**/*.java"],
     path: "src/java/",
 }
 
@@ -138,7 +143,5 @@ java_library {
 
 sdk {
     name: "ipsec-module-sdk",
-    java_sdk_libs: [
-        "android.net.ipsec.ike",
-    ],
+    bootclasspath_fragments: ["com.android.ipsec-bootclasspath-fragment"],
 }
