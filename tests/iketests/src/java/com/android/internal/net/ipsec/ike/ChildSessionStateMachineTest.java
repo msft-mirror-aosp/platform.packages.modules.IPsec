@@ -16,7 +16,9 @@
 
 package com.android.internal.net.ipsec.test.ike;
 
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.system.OsConstants.AF_INET;
@@ -2111,6 +2113,45 @@ public final class ChildSessionStateMachineTest {
 
         ChildSaProposal saProposal = buildSaProposalWithDhGroup(IKE_DH_GROUP);
         verifyRemoteRekeyWithKePayload(saProposal, IKE_DH_GROUP);
+    }
+
+    @Test
+    public void testRemoteRekeyWithInvalidKePayload() throws Exception {
+        setupIdleStateMachine();
+
+        assertEquals(0, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
+        assertEquals(IKE_DH_GROUP, mChildSessionStateMachine.mIkeDhGroup);
+        for (SaProposal userProposal :
+                mChildSessionStateMachine.mChildSessionParams.getChildSaProposals()) {
+            assertTrue(userProposal.getDhGroups().isEmpty());
+        }
+
+        // Build an inbound Rekey Child request
+        // Build an SA Payload that includes a Proposal with IKE_DH_GROUP
+        IkeSaPayload saPayload =
+                IkeSaPayload.createChildSaRequestPayload(
+                        new ChildSaProposal[] {buildSaProposalWithDhGroup(IKE_DH_GROUP)},
+                        mIpSecSpiGenerator,
+                        LOCAL_ADDRESS);
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT, saPayload, false /*isLocalInitRekey*/);
+
+        // Build a KE Payload that uses a different DH group from the IKE_DH_GROUP
+        rekeyReqPayloads.add(
+                IkeKePayload.createOutboundKePayload(
+                        DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
+
+        // Receive Rekey Child request
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+
+        verifyOutboundErrorNotify(EXCHANGE_TYPE_CREATE_CHILD_SA, ERROR_TYPE_INVALID_KE_PAYLOAD);
     }
 
     @Test
