@@ -1658,13 +1658,15 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloads);
 
                 ChildSaProposal saProposal = mSaProposal;
-
-                // Try accepting a DH group requested during remote rekey for both first and
-                // additional Child Sessions even if it is different from the previously negotiated
-                // proposal.
-                if (reqKePayload != null && isKePayloadAcceptable(reqKePayload)) {
-                    saProposal = mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
+                if (reqKePayload != null) {
+                    saProposal =
+                            reqSaPayload.getNegotiatedChildProposalWithDh(
+                                    mSaProposal,
+                                    mChildSessionParams.getChildSaProposals(),
+                                    reqKePayload.dhGroup,
+                                    mIkeDhGroup);
                 }
+
 
                 byte respProposalNumber = reqSaPayload.getNegotiatedProposalNumber(saProposal);
 
@@ -1679,7 +1681,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mRemoteTs,
                                 mCurrentChildSaRecord.getLocalSpi(),
                                 mChildSessionParams.isTransportMode());
-            } catch (NoValidProposalChosenException e) {
+            } catch (NoValidProposalChosenException | InvalidKeException e) {
                 handleCreationFailureAndBackToIdle(e);
                 return;
             } catch (SpiUnavailableException | ResourceUnavailableException e) {
@@ -1782,30 +1784,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             new IllegalStateException(
                                     "Unrecognized status: " + createChildResult.status));
             }
-        }
-
-        private boolean isKePayloadAcceptable(IkeKePayload reqKePayload) {
-            ChildSaProposal proposal =
-                    mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
-
-            // Verify if this proposal is accepted by user
-            for (SaProposal saProposal : mChildSessionParams.getSaProposals()) {
-                if (!saProposal.getDhGroups().isEmpty() && proposal.isNegotiatedFrom(saProposal)) {
-                    // If user has specified Child DH group in this saProposal, check proposal
-                    // against saProposal
-                    return true;
-                } else if (reqKePayload.dhGroup == mIkeDhGroup
-                        && proposal.isNegotiatedFrom(
-                                ((ChildSaProposal) saProposal)
-                                        .getCopyWithAdditionalDhTransform(reqKePayload.dhGroup))) {
-                    // If user has not specified Child DH group in this saProposal, check proposal
-                    // against saProposal + mIkeDhGroup
-                    return true;
-                }
-
-            }
-
-            return false;
         }
 
         private void handleCreationFailureAndBackToIdle(IkeProtocolException e) {
