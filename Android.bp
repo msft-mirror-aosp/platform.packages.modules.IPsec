@@ -104,7 +104,9 @@ java_library {
     ],
     static_libs: [
         "bouncycastle_ike_digests",
-        "modules-utils-build",],
+        "modules-utils-build",
+        "modules-utils-statemachine",
+    ],
     sdk_version: "module_current",
 }
 
