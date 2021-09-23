@@ -149,6 +149,7 @@ import com.android.internal.net.ipsec.ike.message.IkePayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
+import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
 import com.android.internal.net.ipsec.ike.net.IkeDefaultNetworkCallback;
 import com.android.internal.net.ipsec.ike.net.IkeLocalAddressGenerator;
 import com.android.internal.net.ipsec.ike.net.IkeNetworkCallbackBase;
@@ -170,7 +171,6 @@ import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.cert.TrustAnchor;
@@ -1317,29 +1317,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /**
      * Set the remote address for the peer.
-     *
-     * <p>Prefers IPv6 addresses if:
-     *
-     * <ul>
-     *   <li>an IPv6 address is known for the peer, and
-     *   <li>the current underlying Network has a global (non-link local) IPv6 address available
-     * </ul>
-     *
-     * Otherwise, an IPv4 address will be used.
      */
     private void setRemoteAddress() {
         LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
-        if (!mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address()) {
-            // TODO(b/175348096): randomly choose from available addresses
-            mRemoteAddress = mRemoteAddressesV6.get(0);
-        } else {
-            if (mRemoteAddressesV4.isEmpty()) {
-                throw new IllegalArgumentException("No valid IPv4 or IPv6 addresses for peer");
-            }
-
-            // TODO(b/175348096): randomly choose from available addresses
-            mRemoteAddress = mRemoteAddressesV4.get(0);
-        }
+        mRemoteAddress =
+                IkeConnectionController.getRemoteAddress(
+                        linkProperties, mRemoteAddressesV4, mRemoteAddressesV6);
     }
 
     /**
@@ -5776,43 +5759,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     }
 
     private void resolveAndSetAvailableRemoteAddresses() throws IOException {
-        // TODO(b/149954916): Do DNS resolution asynchronously
-        InetAddress[] allRemoteAddresses = null;
-        final String hostname = mIkeSessionParams.getServerHostname();
-
-        for (int attempts = 1;
-                attempts <= MAX_DNS_RESOLUTION_ATTEMPTS && allRemoteAddresses == null;
-                attempts++) {
-            try {
-                allRemoteAddresses = mNetwork.getAllByName(hostname);
-            } catch (UnknownHostException e) {
-                final boolean willRetry = attempts < MAX_DNS_RESOLUTION_ATTEMPTS;
-                logd(
-                        "Failed to look up host for attempt "
-                                + attempts
-                                + ": "
-                                + hostname
-                                + " retrying? "
-                                + willRetry,
-                        e);
-            }
-        }
-        if (allRemoteAddresses == null) {
-            throw new IOException(
-                    "DNS resolution for "
-                            + hostname
-                            + " failed after "
-                            + MAX_DNS_RESOLUTION_ATTEMPTS
-                            + " attempts");
-        }
-
-        logd(
-                "Resolved addresses for peer: "
-                        + Arrays.toString(allRemoteAddresses)
-                        + " to replace old addresses: v4="
-                        + mRemoteAddressesV4
-                        + " v6="
-                        + mRemoteAddressesV6);
+        InetAddress[] allRemoteAddresses =
+                IkeConnectionController.resolveAndGetAvailableRemoteAddresses(
+                        mIkeSessionParams.getServerHostname(),
+                        mNetwork,
+                        mRemoteAddressesV4,
+                        mRemoteAddressesV6);
 
         mRemoteAddressesV4.clear();
         mRemoteAddressesV6.clear();
