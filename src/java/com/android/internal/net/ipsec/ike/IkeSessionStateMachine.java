@@ -18,7 +18,6 @@ package com.android.internal.net.ipsec.ike;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
-import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_INITIAL_CONTACT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
@@ -104,7 +103,6 @@ import android.os.Looper;
 import android.os.Message;
 import android.os.PowerManager;
 import android.os.Process;
-import android.system.ErrnoException;
 import android.util.LongSparseArray;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -152,7 +150,6 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
-import com.android.internal.net.ipsec.ike.net.IkeLocalAddressGenerator;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
@@ -412,13 +409,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** Peer-selected DH group to use. Defaults to first proposed DH group in first SA proposal. */
     @VisibleForTesting int mPeerSelectedDhGroup;
 
-    /**
-     * Package private socket that sends and receives encoded IKE message. Initialized in Initial
-     * State.
-     */
-    @VisibleForTesting IkeSocket mIkeSocket;
-    @VisibleForTesting int mLocalPort;
-
     /** Indicates if local node is behind a NAT. */
     @VisibleForTesting boolean mLocalNatDetected;
     /** Indicates if remote node is behind a NAT. */
@@ -577,7 +567,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         new IkeConnectionController.Config(
                                 mIkeContext,
                                 mIkeSessionParams,
-                                new IkeLocalAddressGenerator(),
                                 this));
         mIkeSpiGenerator = new IkeSpiGenerator(mIkeContext.getRandomnessFactory());
         mIpSecSpiGenerator =
@@ -893,78 +882,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     // TODO: Add methods for building and validating general Informational packet.
 
-    /** Switch all IKE SAs to the new IKE socket due to an underlying network change. */
-    private void switchToIkeSocket(IkeSocket newSocket) {
-        // Changing IkeSockets - make sure to quit NAT-T keepalive if it's going
-        if (mIkeNattKeepalive != null) {
-            mIkeNattKeepalive.stop();
-            mIkeNattKeepalive = null;
-        }
-
-        long currentLocalSpi = mCurrentIkeSaRecord.getLocalSpi();
-        migrateSpiToIkeSocket(currentLocalSpi, mIkeSocket, newSocket);
-
-        if (mLocalInitNewIkeSaRecord != null) {
-            long newLocalSpi = mLocalInitNewIkeSaRecord.getLocalSpi();
-            migrateSpiToIkeSocket(newLocalSpi, mIkeSocket, newSocket);
-        }
-        if (mRemoteInitNewIkeSaRecord != null) {
-            long newLocalSpi = mRemoteInitNewIkeSaRecord.getLocalSpi();
-            migrateSpiToIkeSocket(newLocalSpi, mIkeSocket, newSocket);
-        }
-
-        mIkeSocket.releaseReference(this);
-        mIkeSocket = newSocket;
-    }
-
-    private IkeSocket getIkeSocket(boolean isIpv4, boolean useEncapPort)
-            throws ErrnoException, IOException, ResourceUnavailableException {
-        IkeSocketConfig sockConfig =
-                new IkeSocketConfig(mIkeConnectionCtrl.getNetwork(), mIkeSessionParams.getDscp());
-        if (useEncapPort) {
-            if (isIpv4) {
-                return IkeUdpEncapSocket.getIkeUdpEncapSocket(
-                        sockConfig,
-                        mIpSecManager,
-                        IkeSessionStateMachine.this,
-                        getHandler().getLooper());
-            } else {
-                return IkeUdp6WithEncapPortSocket.getIkeUdpEncapSocket(
-                        sockConfig, IkeSessionStateMachine.this, getHandler());
-            }
-        } else {
-            if (isIpv4) {
-                return IkeUdp4Socket.getInstance(
-                        sockConfig, IkeSessionStateMachine.this, getHandler());
-            } else {
-                return IkeUdp6Socket.getInstance(
-                        sockConfig, IkeSessionStateMachine.this, getHandler());
-            }
-        }
-    }
-
-    private void getAndSwitchToIkeSocket(boolean isIpv4, boolean useEncapPort) {
-        try {
-            IkeSocket newSocket = getIkeSocket(isIpv4, useEncapPort);
-            if (newSocket == mIkeSocket) {
-                // Attempting to switch to current socket - ignore.
-                return;
-            }
-            switchToIkeSocket(newSocket);
-            if (isIpv4 && useEncapPort) {
-                mIkeNattKeepalive = buildAndStartNattKeepalive();
-            }
-            mLocalPort = mIkeSocket.getLocalPort();
-        } catch (ErrnoException | IOException | ResourceUnavailableException e) {
-            handleIkeFatalError(e);
-        }
-    }
-
-    private void migrateSpiToIkeSocket(long localSpi, IkeSocket oldSocket, IkeSocket newSocket) {
-        newSocket.registerIke(localSpi, IkeSessionStateMachine.this);
-        oldSocket.unregisterIke(localSpi);
-    }
-
     @VisibleForTesting
     void addIkeSaRecord(IkeSaRecord record) {
         mLocalSpiToIkeSaRecordMap.put(record.getLocalSpi(), record);
@@ -972,12 +889,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         // In IKE_INIT exchange, local SPI was registered with this IkeSessionStateMachine before
         // IkeSaRecord is created. Calling this method at the end of exchange will double-register
         // the SPI but it is safe because the key and value are not changed.
-        mIkeSocket.registerIke(record.getLocalSpi(), this);
+        mIkeConnectionCtrl.registerIkeSaRecord(record);
     }
 
     @VisibleForTesting
     void removeIkeSaRecord(IkeSaRecord record) {
-        mIkeSocket.unregisterIke(record.getLocalSpi());
+        mIkeConnectionCtrl.unregisterIkeSaRecord(record);
         mLocalSpiToIkeSaRecordMap.remove(record.getLocalSpi());
     }
 
@@ -1132,10 +1049,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             mIkeNattKeepalive.stop();
         }
 
-        if (mIkeSocket != null) {
-            mIkeSocket.releaseReference(this);
-        }
-
         mIkeConnectionCtrl.tearDown();
 
         sIkeAlarmReceiver.unregisterIkeSession(mIkeSessionId);
@@ -1225,20 +1138,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 // TODO(b/191673438): Set a specific tag for VPN.
                 TrafficStats.setThreadStatsTag(Process.myUid());
-
-                boolean isIpv4 = mIkeConnectionCtrl.getRemoteAddress() instanceof Inet4Address;
-                mIkeSocket =
-                        getIkeSocket(
-                                isIpv4, mIkeSessionParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500));
-                mLocalPort = mIkeSocket.getLocalPort();
-
-                if (mIkeSocket instanceof IkeUdpEncapSocket) {
-                    mIkeNattKeepalive = buildAndStartNattKeepalive();
-                }
-            } catch (IkeInternalException
-                    | ErrnoException
-                    | IOException
-                    | ResourceUnavailableException e) {
+            } catch (IkeInternalException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -1592,7 +1492,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void sendEncryptedIkePackets(byte[][] packetList) {
         for (byte[] packet : packetList) {
-            mIkeSocket.sendIkePacket(packet, mIkeConnectionCtrl.getRemoteAddress());
+            mIkeConnectionCtrl.sendIkePacket(packet);
         }
     }
 
@@ -1926,8 +1826,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                             + ikeHeader.messageId
                                             + " Retransmitting response");
                             for (byte[] packet : ikeSaRecord.getLastSentRespAllPackets()) {
-                                mIkeSocket.sendIkePacket(
-                                        packet, mIkeConnectionCtrl.getRemoteAddress());
+                                mIkeConnectionCtrl.sendIkePacket(packet);
                             }
                         } else {
                             logd(
@@ -2598,10 +2497,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         // ChildSessionStateMachine to build IPsec transforms that can send and receive IPsec
         // traffic through a NAT.
         private UdpEncapsulationSocket getEncapSocketOrNull() {
-            if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
+            if (!mIkeConnectionCtrl.useUdpEncapSocket()) {
                 return null;
             }
-            return ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket();
+            return ((IkeUdpEncapSocket) mIkeConnectionCtrl.getIkeSocket())
+                    .getUdpEncapsulationSocket();
         }
 
         private void executeLocalRequest(ChildLocalRequest req) {
@@ -2963,7 +2863,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         private void sendRequest(IkeMessage request) {
             // Register local SPI to receive the IKE INIT response.
-            mIkeSocket.registerIke(request.ikeHeader.ikeInitiatorSpi, IkeSessionStateMachine.this);
+            mIkeConnectionCtrl.registerIkeSpi(request.ikeHeader.ikeInitiatorSpi);
 
             mIkeInitRequestBytes = request.encode();
             mIkeInitNoncePayload =
@@ -3127,7 +3027,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         mPeerSelectedDhGroup = requestedDhGroup;
 
                         // Remove state set during request creation
-                        mIkeSocket.unregisterIke(
+                        mIkeConnectionCtrl.unregisterIkeSpi(
                                 mRetransmitter.getMessage().ikeHeader.ikeInitiatorSpi);
                         mIkeInitRequestBytes = null;
                         mIkeInitNoncePayload = null;
@@ -3173,8 +3073,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             respSpi,
                             mIkeConnectionCtrl.getLocalAddress(),
                             mIkeConnectionCtrl.getRemoteAddress(),
-                            mLocalPort,
-                            mIkeSocket.getIkeServerPort(),
+                            mIkeConnectionCtrl.getLocalPort(),
+                            mIkeConnectionCtrl.getRemotePort(),
                             mIkeContext.getRandomnessFactory(),
                             mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE));
             payloadList.add(
@@ -3384,33 +3284,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     initIkeSpi, respIkeSpi, natSourcePayloads, natDestPayload);
 
             if (mLocalNatDetected || mRemoteNatDetected) {
-                logd("Switching to send to remote port 4500 if it's not already");
-                boolean isIpv4 = mIkeConnectionCtrl.getRemoteAddress() instanceof Inet4Address;
-
                 try {
-                    IkeSocket newSocket = getIkeSocket(isIpv4, true /* useEncapPort */);
-                    if (newSocket == mIkeSocket) {
-                        // Attempting to switch to current socket - ignore.
-                        return;
-                    }
-                    // TODO(b/186900683): use getAndSwitchToIkeSocket here instead
-                    switchToIkeSocket(initIkeSpi, newSocket);
-                    mLocalPort = mIkeSocket.getLocalPort();
-
-                    if (isIpv4) {
-                        mIkeNattKeepalive = buildAndStartNattKeepalive();
-                    }
-                } catch (ErrnoException | IOException | ResourceUnavailableException e) {
+                    mIkeConnectionCtrl.handleNatDetectedInIkeInit(initIkeSpi);
+                } catch (IkeInternalException e) {
                     handleIkeFatalError(e);
                 }
             }
-        }
-
-        /** Switch to a new IKE socket due to NAT detection */
-        private void switchToIkeSocket(long localSpi, IkeSocket newSocket) {
-            migrateSpiToIkeSocket(localSpi, mIkeSocket, newSocket);
-            mIkeSocket.releaseReference(IkeSessionStateMachine.this);
-            mIkeSocket = newSocket;
         }
 
         @Override
@@ -3434,7 +3313,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             @Override
             public void send() {
                 // Sends unencrypted packet
-                mIkeSocket.sendIkePacket(mIkePacket, mIkeConnectionCtrl.getRemoteAddress());
+                mIkeConnectionCtrl.sendIkePacket(mIkePacket);
             }
 
             @Override
@@ -3475,7 +3354,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         // Check if local node is behind NAT
         byte[] expectedLocalNatData =
                 IkeNotifyPayload.generateNatDetectionData(
-                        initIkeSpi, respIkeSpi, mIkeConnectionCtrl.getLocalAddress(), mLocalPort);
+                        initIkeSpi,
+                        respIkeSpi,
+                        mIkeConnectionCtrl.getLocalAddress(),
+                        mIkeConnectionCtrl.getLocalPort());
         mLocalNatDetected = !Arrays.equals(expectedLocalNatData, natDestPayload.notifyData);
 
         // Check if the remote node is behind NAT
@@ -3484,7 +3366,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         initIkeSpi,
                         respIkeSpi,
                         mIkeConnectionCtrl.getRemoteAddress(),
-                        mIkeSocket.getIkeServerPort());
+                        mIkeConnectionCtrl.getRemotePort());
         mRemoteNatDetected = true;
         for (IkeNotifyPayload natPayload : natSourcePayloads) {
             // If none of the received hash matches the expected value, the remote node is
@@ -3497,7 +3379,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** Starts NAT-T keepalive for current IkeUdpEncapSocket */
     private IkeNattKeepalive buildAndStartNattKeepalive() throws IOException {
-        if (!(mIkeSocket instanceof IkeUdpEncapSocket)) {
+        if (!mIkeConnectionCtrl.useUdpEncapSocket()) {
             throw new IllegalStateException(
                     "Cannot start NAT-T keepalive when IKE Session is not using UDP Encap socket");
         }
@@ -3518,8 +3400,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         keepaliveDelaySeconds,
                         (Inet4Address) mIkeConnectionCtrl.getLocalAddress(),
                         (Inet4Address) mIkeConnectionCtrl.getRemoteAddress(),
-                        ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
-                        mIkeSocket.getIkeSocketConfig().getNetwork(),
+                        ((IkeUdpEncapSocket) mIkeConnectionCtrl.getIkeSocket())
+                                .getUdpEncapsulationSocket(),
+                        mIkeConnectionCtrl.getNetwork(),
                         new IkeAlarmConfig(
                                 mIkeContext.getContext(),
                                 ACTION_KEEPALIVE,
@@ -3690,19 +3573,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 + notifyPayload.notifyType);
             }
         }
-
-        protected void setUpMobilityHandling() throws IkeException {
-            mIkeConnectionCtrl.enableMobility();
-
-            // Switch to port 4500 if NAT-T is supported (whether or not mobility is done via MOBIKE
-            // or Rekey Child). This way, there is no need to change the ports later if a NAT
-            // is detected on the new path.
-            if (mIkeConnectionCtrl.getNatStatus() == NAT_TRAVERSAL_SUPPORTED
-                    && mIkeSocket.getIkeServerPort() != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
-                getAndSwitchToIkeSocket(
-                        mIkeSocket instanceof IkeUdp4Socket, true /* useEncapPort */);
-            }
-        }
     }
 
     /**
@@ -3770,7 +3640,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     transitionTo(mCreateIkeLocalIkeAuthInEap);
                 } else {
                     if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
-                        setUpMobilityHandling();
+                        mIkeConnectionCtrl.enableMobility();
                     }
                     notifyIkeSessionSetup(ikeMessage);
 
@@ -4243,7 +4113,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 validateIkeAuthRespPostEap(ikeMessage);
 
                 if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
-                    setUpMobilityHandling();
+                    mIkeConnectionCtrl.enableMobility();
                 }
                 notifyIkeSessionSetup(ikeMessage);
 
@@ -5292,8 +5162,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         (List<IkePayload>) payloadList,
                         mIkeConnectionCtrl.getLocalAddress(),
                         mIkeConnectionCtrl.getRemoteAddress(),
-                        mLocalPort,
-                        mIkeSocket.getIkeServerPort(),
+                        mIkeConnectionCtrl.getLocalPort(),
+                        mIkeConnectionCtrl.getRemotePort(),
                         mCurrentIkeSaRecord.getInitiatorSpi(),
                         mCurrentIkeSaRecord.getResponderSpi());
             }
@@ -5436,10 +5306,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             new UnsupportedOperationException("An IPv6 NAT is detected."));
                 }
 
-                logd("Switching to send to remote port 4500 if it's not already");
-                getAndSwitchToIkeSocket(
-                        mIkeConnectionCtrl.getRemoteAddress() instanceof Inet4Address,
-                        true /* useEncapPort */);
+                mIkeConnectionCtrl.handleNatDetectedWithMobilityEvent();
             }
         }
 
@@ -5600,39 +5467,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
     }
 
-    /**
-     * Updates the underlying Network for this IKE Session to be the specified Network. This will
-     * also update the local address and IkeSocket for the IKE Session.
-     *
-     * <p>MUST be called from the Handler Thread to avoid races.
-     */
     @Override
-    public void onUnderlyingNetworkUpdated(boolean isDifferentNetwork, boolean nattSupported) {
-        InetAddress localAddress = mIkeConnectionCtrl.getLocalAddress();
-        InetAddress remoteAddress = mIkeConnectionCtrl.getRemoteAddress();
-
-        // Only switch the IkeSocket if the underlying Network actually changes. This may not
-        // always happen (ex: the underlying Network loses the current local address)
-        if (isDifferentNetwork) {
-                boolean useEncapPort =
-                        mIkeSessionParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500) || nattSupported;
-            getAndSwitchToIkeSocket(localAddress instanceof Inet4Address, useEncapPort);
-        }
-
-        try {
-            mCurrentIkeSaRecord.migrate(localAddress, remoteAddress);
-            if (mLocalInitNewIkeSaRecord != null) {
-                mLocalInitNewIkeSaRecord.migrate(localAddress, remoteAddress);
-            }
-            if (mRemoteInitNewIkeSaRecord != null) {
-                mRemoteInitNewIkeSaRecord.migrate(localAddress, remoteAddress);
-            }
-        } catch (IOException e) {
-            // Failed to migrate IKE SAs due to IKE SPI collision
-            handleIkeFatalError(e);
-            return;
-        }
-
+    public void onUnderlyingNetworkUpdated() {
         // TODO(b/172013873): restart transmission timeouts on IKE SAs after changing networks
         sendMessage(
                 CMD_LOCAL_REQUEST_MOBIKE,
@@ -5653,5 +5489,21 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onIkePacketReceived(IkeHeader ikeHeader, byte[] ikePacketBytes) {
         sendMessage(CMD_RECEIVE_IKE_PACKET, new ReceivedIkePacket(ikeHeader, ikePacketBytes));
+    }
+
+    @Override
+    public void onIkeSocketSwitched(boolean isUdpEncapSocket) {
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.stop();
+            mIkeNattKeepalive = null;
+        }
+
+        if (isUdpEncapSocket) {
+            try {
+                mIkeNattKeepalive = buildAndStartNattKeepalive();
+            } catch (IOException e) {
+                handleIkeFatalError(e);
+            }
+        }
     }
 }
