@@ -1243,6 +1243,15 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return makeRekeyIkeRequest(saPayload);
     }
 
+    private ReceivedIkePacket makeRekeyIkeRequestWithPayloads(List<IkePayload> payloads)
+            throws Exception {
+        return makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                mSpyCurrentIkeSaRecord,
+                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
+                false /*isResp*/,
+                payloads);
+    }
+
     private ReceivedIkePacket makeRekeyIkeRequest(IkeSaPayload saPayload) throws Exception {
         List<Integer> payloadTypeList = new ArrayList<>();
         List<String> payloadHexStringList = new ArrayList<>();
@@ -1257,11 +1266,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 hexStrListToIkePayloadList(payloadTypeList, payloadHexStringList, false /*isResp*/);
         payloadList.add(saPayload);
 
-        return makeDummyEncryptedReceivedIkePacketWithPayloadList(
-                mSpyCurrentIkeSaRecord,
-                IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA,
-                false /*isResp*/,
-                payloadList);
+        return makeRekeyIkeRequestWithPayloads(payloadList);
     }
 
     private ReceivedIkePacket makeDeleteIkeRequest(IkeSaRecord saRecord) throws Exception {
@@ -4164,6 +4169,58 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         verifyProcessRekeyReqFailure(ERROR_TYPE_INVALID_KE_PAYLOAD);
+    }
+
+    @Test
+    public void testRejectRemoteRekeyWithoutDhGroupInProposal() throws Exception {
+        setupIdleStateMachine();
+
+        // Build a Rekey request that does not propose DH groups.
+        String rekeySaPayloadWithoutDhGroup =
+                "22000038000000340101080400000000000000FF0300000c0100000c800e0080030"
+                        + "000080300000203000008020000020000000802000002";
+        IkePayload saPayload =
+                IkeTestUtils.hexStringToIkePayload(
+                        IkePayload.PAYLOAD_TYPE_SA, false /*isResp*/, rekeySaPayloadWithoutDhGroup);
+        IkePayload kePayload =
+                IkeTestUtils.hexStringToIkePayload(
+                        IkePayload.PAYLOAD_TYPE_KE, false /*isResp*/, KE_PAYLOAD_HEX_STRING);
+        IkePayload noncePayload =
+                IkeTestUtils.hexStringToIkePayload(
+                        IkePayload.PAYLOAD_TYPE_NONCE,
+                        false /*isResp*/,
+                        NONCE_INIT_PAYLOAD_HEX_STRING);
+        ReceivedIkePacket request =
+                makeRekeyIkeRequestWithPayloads(Arrays.asList(saPayload, kePayload, noncePayload));
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
+        mLooper.dispatchAll();
+
+        verifyProcessRekeyReqFailure(ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+    }
+
+    @Test
+    public void testRejectRemoteRekeyWithoutKePayload() throws Exception {
+        setupIdleStateMachine();
+
+        // Build a Rekey request that proposes DH groups but does not include a KE payload
+        IkePayload saPayload =
+                IkeTestUtils.hexStringToIkePayload(
+                        IkePayload.PAYLOAD_TYPE_SA,
+                        false /*isResp*/,
+                        IKE_REKEY_SA_PAYLOAD_HEX_STRING);
+        IkePayload noncePayload =
+                IkeTestUtils.hexStringToIkePayload(
+                        IkePayload.PAYLOAD_TYPE_NONCE,
+                        false /*isResp*/,
+                        NONCE_INIT_PAYLOAD_HEX_STRING);
+        ReceivedIkePacket request =
+                makeRekeyIkeRequestWithPayloads(Arrays.asList(saPayload, noncePayload));
+
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, request);
+        mLooper.dispatchAll();
+
+        verifyProcessRekeyReqFailure(ERROR_TYPE_INVALID_SYNTAX);
     }
 
     private void verifyProcessRekeyReqFailure(int expectedErrorCode) {
