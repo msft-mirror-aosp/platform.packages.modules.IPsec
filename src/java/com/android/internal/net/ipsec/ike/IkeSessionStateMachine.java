@@ -2362,15 +2362,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     try {
                         validateIkeRekeyReq(ikeMessage);
 
-                        // TODO: Add support for limited re-negotiation of parameters
-
                         // Build a rekey response payload with our previously selected proposal,
-                        // against which we will validate the received proposals.
+                        // against which we will validate the received proposals. Re-negotiating
+                        // proposal with different algorithms is not supported since there
+                        // is no use case.
                         IkeSaPayload reqSaPayload =
                                 ikeMessage.getPayloadForType(
                                         IkePayload.PAYLOAD_TYPE_SA, IkeSaPayload.class);
                         byte respProposalNumber =
                                 reqSaPayload.getNegotiatedProposalNumber(mSaProposal);
+
+                        IkeKePayload reqKePayload =
+                                ikeMessage.getPayloadForType(
+                                        IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
+                        if (reqKePayload.dhGroup != mSaProposal.getDhGroups().get(0)) {
+                            throw new InvalidKeException(mSaProposal.getDhGroups().get(0));
+                        }
 
                         List<IkePayload> payloadList =
                                 CreateIkeSaHelper.getRekeyIkeSaResponsePayloads(
