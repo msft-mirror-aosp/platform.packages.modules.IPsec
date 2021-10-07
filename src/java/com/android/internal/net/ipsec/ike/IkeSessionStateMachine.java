@@ -75,6 +75,7 @@ import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkRequest;
 import android.net.TrafficStats;
+import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
 import android.net.ipsec.ike.IkeSaProposal;
@@ -394,9 +395,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     private final AlarmManager mAlarmManager;
     private final IkeLocalRequestScheduler mScheduler;
     private final IkeSessionCallback mIkeSessionCallback;
-    private final IkeEapAuthenticatorFactory mEapAuthenticatorFactory;
     private final TempFailureHandler mTempFailHandler;
-    private final IkeLocalAddressGenerator mIkeLocalAddressGenerator;
+    private final Dependencies mDeps;
 
     /** Package private */
     @VisibleForTesting final RandomnessFactory mRandomFactory;
@@ -554,9 +554,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             Executor userCbExecutor,
             IkeSessionCallback ikeSessionCallback,
             ChildSessionCallback firstChildSessionCallback,
-            IkeEapAuthenticatorFactory eapAuthenticatorFactory,
-            IkeLocalAddressGenerator ikeLocalAddressGenerator,
-            LocalRequestFactory localRequestFactory) {
+            Dependencies deps) {
         super(TAG, looper, userCbExecutor);
 
         if (ikeParams.hasIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)) {
@@ -602,12 +600,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
-        mEapAuthenticatorFactory = eapAuthenticatorFactory;
-
-        mIkeLocalAddressGenerator = ikeLocalAddressGenerator;
-
-        mLocalRequestFactory = localRequestFactory;
-
         // SaProposals.Builder guarantees there is at least one SA proposal, and each SA proposal
         // has at least one DH group.
         mPeerSelectedDhGroup =
@@ -622,6 +614,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         mContext = context;
         mIpSecManager = ipSecManager;
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+
+        mDeps = deps;
+        mLocalRequestFactory = mDeps.newLocalRequestFactory();
 
         mRandomFactory = new RandomnessFactory(mContext, mNetwork);
         mIkeSpiGenerator = new IkeSpiGenerator(mRandomFactory);
@@ -693,9 +688,39 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 userCbExecutor,
                 ikeSessionCallback,
                 firstChildSessionCallback,
-                new IkeEapAuthenticatorFactory(),
-                new IkeLocalAddressGenerator(),
-                new LocalRequestFactory());
+                new Dependencies());
+    }
+
+    /** External dependencies, for injection in tests */
+    @VisibleForTesting
+    public static class Dependencies {
+        /**
+         * Builds and returns a new EapAuthenticator
+         *
+         * @param looper Looper for running a message loop
+         * @param cb IEapCallback for callbacks to the client
+         * @param context Context for the EapAuthenticator
+         * @param eapSessionConfig EAP session configuration
+         * @param randomnessFactory the randomness factory
+         */
+        public EapAuthenticator newEapAuthenticator(
+                Looper looper,
+                IEapCallback cb,
+                Context context,
+                EapSessionConfig eapSessionConfig,
+                RandomnessFactory randomnessFactory) {
+            return new EapAuthenticator(looper, cb, context, eapSessionConfig, randomnessFactory);
+        }
+
+        /** Gets an IkeLocalAddressGenerator */
+        public IkeLocalAddressGenerator newIkeLocalAddressGenerator() {
+            return new IkeLocalAddressGenerator();
+        }
+
+        /** Gets a LocalRequestFactory */
+        public LocalRequestFactory newLocalRequestFactory() {
+            return new LocalRequestFactory();
+        }
     }
 
     private boolean hasChildSessionCallback(ChildSessionCallback callback) {
@@ -1241,8 +1266,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mLocalPort = mIkeSocket.getLocalPort();
 
                 mLocalAddress =
-                        mIkeLocalAddressGenerator.generateLocalAddress(
-                                mNetwork, isIpv4, mRemoteAddress, mIkeSocket.getIkeServerPort());
+                        mDeps.newIkeLocalAddressGenerator()
+                                .generateLocalAddress(
+                                        mNetwork,
+                                        isIpv4,
+                                        mRemoteAddress,
+                                        mIkeSocket.getIkeServerPort());
 
                 if (mIkeSocket instanceof IkeUdpEncapSocket) {
                     mIkeNattKeepalive = buildAndStartNattKeepalive();
@@ -4096,7 +4125,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             // TODO(b/148689509): Pass in deterministic random when test mode is enabled
             mEapAuthenticator =
-                    mEapAuthenticatorFactory.newEapAuthenticator(
+                    mDeps.newEapAuthenticator(
                             getHandler().getLooper(),
                             new IkeEapCallback(),
                             mContext,
@@ -5666,8 +5695,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         try {
             mLocalAddress =
-                    mIkeLocalAddressGenerator.generateLocalAddress(
-                            mNetwork, isIpv4, mRemoteAddress, serverPort);
+                    mDeps.newIkeLocalAddressGenerator()
+                            .generateLocalAddress(mNetwork, isIpv4, mRemoteAddress, serverPort);
 
             if (mNetwork.equals(oldNetwork)
                     && mLocalAddress.equals(oldLocalAddress)
