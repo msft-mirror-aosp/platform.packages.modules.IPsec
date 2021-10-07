@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.crypto;
 
+import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC;
 import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC;
 
 import android.net.ipsec.ike.SaProposal;
@@ -77,6 +78,10 @@ public class IkeMacPrf extends IkeMac {
                 isJceSupported = false;
                 algorithmName = ALGO_NAME_JCE_UNSUPPORTED;
                 break;
+            case SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC:
+                keyLength = 16;
+                algorithmName = "AESCMAC";
+                break;
             case SaProposal.PSEUDORANDOM_FUNCTION_SHA2_256:
                 keyLength = 32;
                 algorithmName = "HmacSHA256";
@@ -105,9 +110,11 @@ public class IkeMacPrf extends IkeMac {
             } catch (GeneralSecurityException | IllegalStateException e) {
                 throw new IllegalArgumentException("Failed to generate MAC: ", e);
             }
-        } else {
-            return super.signBytes(keyBytes, dataToSign);
+        } else if (getAlgorithmId() == PSEUDORANDOM_FUNCTION_AES128_CMAC) {
+            keyBytes = modifyAesCmacKeyIfNeeded(keyBytes);
         }
+
+        return super.signBytes(keyBytes, dataToSign);
     }
 
     private byte[] modifyAesXCbcKeyIfNeeded(byte[] keyBytes) throws GeneralSecurityException {
@@ -132,6 +139,21 @@ public class IkeMacPrf extends IkeMac {
         return keyBytes;
     }
 
+    private byte[] modifyAesCmacKeyIfNeeded(byte[] keyBytes) {
+        // As per RFC 4615:
+        // The key for AES-CMAC-PRF-128 is created as follows:
+        //
+        // 1. If the key, VK, is exactly 128 bits, then we use it as-is.
+        //
+        // 2. If it is longer or shorter than 128 bits, then we derive the key, K, by applying the
+        // AES-CMAC algorithm using the 128-bit all-zero string as the key and VK as the input
+        // message.
+        if (keyBytes.length != 16) {
+            keyBytes = signBytes(new byte[16], keyBytes);
+        }
+        return keyBytes;
+    }
+
     /**
      * Generates SKEYSEED based on the nonces and shared DH secret.
      *
@@ -142,8 +164,9 @@ public class IkeMacPrf extends IkeMac {
      */
     public byte[] generateSKeySeed(byte[] nonceInit, byte[] nonceResp, byte[] sharedDhKey) {
         ByteBuffer keyBuffer = null;
-        if (getAlgorithmId() == SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC) {
-            keyBuffer = ByteBuffer.allocate(PSEUDORANDOM_FUNCTION_AES128_XCBC_KEY_LEN);
+        if (getAlgorithmId() == SaProposal.PSEUDORANDOM_FUNCTION_AES128_XCBC
+                || getAlgorithmId() == SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC) {
+            keyBuffer = ByteBuffer.allocate(getKeyLength());
             // When generating initial keys, use 8 bytes each from initiator and responder nonces as
             // per RFC 7296
             keyBuffer

@@ -31,12 +31,14 @@ import android.net.ipsec.ike.ChildSaProposal;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.ike.exceptions.InvalidKeException;
+import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import android.os.PersistableBundle;
 import android.util.ArraySet;
 import android.util.Pair;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
@@ -344,6 +346,72 @@ public final class IkeSaPayload extends IkePayload {
             }
         }
         throw new NoValidProposalChosenException("No remotely proposed protocol acceptable");
+    }
+
+    /**
+     * Finds or builds the negotiated Child proposal when there is a key exchange.
+     *
+     * <p>This method will be used in Remote Rekey Child. For better interoperability, IKE library
+     * allows the server to set up new Child SA with a different DH group if (1) caller has
+     * configured that DH group in the Child SA Proposal, or (2) that DH group is the DH group
+     * negotiated as part of IKE Session.
+     *
+     * @param currentProposal the current negotiated Child SA Proposal
+     * @param callerConfiguredProposals all caller configured Child SA Proposals
+     * @param reqKePayloadDh the DH group in the request KE payload
+     * @param ikeDh the DH group negotiated as part of IKE Session
+     * @return the negotiated Child SA Proposal
+     * @throws NoValidProposalChosenException when there is no acceptable proposal in the SA payload
+     * @throws InvalidKeException when the request KE payload has a mismatched DH group
+     */
+    public ChildSaProposal getNegotiatedChildProposalWithDh(
+            ChildSaProposal currentProposal,
+            List<ChildSaProposal> callerConfiguredProposals,
+            int reqKePayloadDh,
+            int ikeDh)
+            throws NoValidProposalChosenException, InvalidKeException {
+
+        List<ChildSaProposal> proposalCandidates = new ArrayList<>();
+        for (ChildSaProposal callerProposal : callerConfiguredProposals) {
+            // Check if current proposal can be negotiated from the callerProposal.
+            if (!currentProposal.isNegotiatedFromExceptDhGroup(callerProposal)) {
+                continue;
+            }
+
+            // Check if current proposal can be negotiated from the Rekey Child request.
+            // Try all DH groups in this caller configured proposal and see if current
+            // proposal + the DH group can be negotiated from the Rekey request. For
+            // better interoperability, if caller does not configure any DH group for
+            // this proposal, try DH group negotiated as part of IKE Session. Some
+            // implementation will request using the IKE DH group when rekeying the
+            // Child SA which is built during IKE Auth
+            if (callerProposal.getDhGroups().isEmpty()) {
+                callerProposal = callerProposal.getCopyWithAdditionalDhTransform(ikeDh);
+            }
+
+            for (int callerDh : callerProposal.getDhGroups()) {
+                ChildSaProposal negotiatedProposal =
+                        currentProposal.getCopyWithAdditionalDhTransform(callerDh);
+                try {
+                    getNegotiatedProposalNumber(negotiatedProposal);
+                    proposalCandidates.add(negotiatedProposal);
+                } catch (NoValidProposalChosenException e) {
+                    continue;
+                }
+            }
+        }
+
+        // Check if any negotiated proposal match reqKePayloadDh
+        if (proposalCandidates.isEmpty()) {
+            throw new NoValidProposalChosenException("No acceptable SA proposal in the request");
+        } else {
+            for (ChildSaProposal negotiatedProposal : proposalCandidates) {
+                if (reqKePayloadDh == negotiatedProposal.getDhGroups().get(0)) {
+                    return negotiatedProposal;
+                }
+            }
+            throw new InvalidKeException(proposalCandidates.get(0).getDhGroups().get(0));
+        }
     }
 
     /**
@@ -1123,6 +1191,9 @@ public final class IkeSaPayload extends IkePayload {
     public static final class EncryptionTransform extends Transform {
         public static final int KEY_LEN_UNSPECIFIED = 0;
 
+        private static final String ID_KEY = "id";
+        private static final String SPECIFIED_KEY_LEN_KEY = "mSpecifiedKeyLength";
+
         // When using encryption algorithm with variable-length keys, mSpecifiedKeyLength MUST be
         // set and a KeyLengthAttribute MUST be attached. Otherwise, mSpecifiedKeyLength MUST NOT be
         // set and KeyLengthAttribute MUST NOT be attached.
@@ -1154,6 +1225,21 @@ public final class IkeSaPayload extends IkePayload {
             } catch (InvalidSyntaxException e) {
                 throw new IllegalArgumentException(e);
             }
+        }
+
+        /** Constructs this object by deserializing a PersistableBundle */
+        public static EncryptionTransform fromPersistableBundle(@NonNull PersistableBundle in) {
+            Objects.requireNonNull(in, "PersistableBundle is null");
+            return new EncryptionTransform(in.getInt(ID_KEY), in.getInt(SPECIFIED_KEY_LEN_KEY));
+        }
+
+        /** Serializes this object to a PersistableBundle */
+        public PersistableBundle toPersistableBundle() {
+            final PersistableBundle result = new PersistableBundle();
+            result.putInt(ID_KEY, id);
+            result.putInt(SPECIFIED_KEY_LEN_KEY, mSpecifiedKeyLength);
+
+            return result;
         }
 
         /**
@@ -1205,7 +1291,8 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedEncryptionAlgorithm(id);
+            return IkeSaProposal.getSupportedEncryptionAlgorithms().contains(id)
+                    || ChildSaProposal.getSupportedEncryptionAlgorithms().contains(id);
         }
 
         @Override
@@ -1230,6 +1317,8 @@ public final class IkeSaPayload extends IkePayload {
         private void validateKeyLength() throws InvalidSyntaxException {
             switch (id) {
                 case SaProposal.ENCRYPTION_ALGORITHM_3DES:
+                    /* fall through */
+                case SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305:
                     if (mSpecifiedKeyLength != KEY_LEN_UNSPECIFIED) {
                         throw new InvalidSyntaxException(
                                 "Must not set Key Length value for this "
@@ -1239,6 +1328,8 @@ public final class IkeSaPayload extends IkePayload {
                     }
                     return;
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_CBC:
+                    /* fall through */
+                case SaProposal.ENCRYPTION_ALGORITHM_AES_CTR:
                     /* fall through */
                 case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
                     /* fall through */
@@ -1351,7 +1442,7 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedPseudorandomFunction(id);
+            return IkeSaProposal.getSupportedPseudorandomFunctions().contains(id);
         }
 
         @Override
@@ -1432,7 +1523,8 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedIntegrityAlgorithm(id);
+            return IkeSaProposal.getSupportedIntegrityAlgorithms().contains(id)
+                    || ChildSaProposal.getSupportedIntegrityAlgorithms().contains(id);
         }
 
         @Override
@@ -1513,7 +1605,7 @@ public final class IkeSaPayload extends IkePayload {
 
         @Override
         protected boolean isSupportedTransformId(int id) {
-            return SaProposal.isSupportedDhGroup(id);
+            return SaProposal.getSupportedDhGroups().contains(id);
         }
 
         @Override

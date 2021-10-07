@@ -14,7 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.ike.message;
+package com.android.internal.net.ipsec.test.ike.message;
+
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_1024_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_3072_BIT_MODP;
+import static android.net.ipsec.test.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
+import static android.net.ipsec.test.ike.SaProposal.INTEGRITY_ALGORITHM_HMAC_SHA2_512_256;
+import static android.net.ipsec.test.ike.SaProposal.KEY_LEN_AES_128;
+import static android.net.ipsec.test.ike.SaProposal.KEY_LEN_AES_256;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 
@@ -37,33 +45,34 @@ import static org.mockito.Mockito.when;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
 import android.net.IpSecSpiResponse;
-import android.net.ipsec.ike.ChildSaProposal;
-import android.net.ipsec.ike.IkeSaProposal;
-import android.net.ipsec.ike.SaProposal;
-import android.net.ipsec.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.ChildSaProposal;
+import android.net.ipsec.test.ike.IkeSaProposal;
+import android.net.ipsec.test.ike.SaProposal;
+import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.exceptions.InvalidKeException;
+import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
+import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
 import android.util.Pair;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import com.android.internal.net.ipsec.ike.exceptions.NoValidProposalChosenException;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Attribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.AttributeDecoder;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EncryptionTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.EsnTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IntegrityTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.KeyLengthAttribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.PrfTransform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Proposal;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.Transform;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.TransformDecoder;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.UnrecognizedAttribute;
-import com.android.internal.net.ipsec.ike.message.IkeSaPayload.UnrecognizedTransform;
-import com.android.internal.net.ipsec.ike.testutils.MockIpSecTestUtils;
-import com.android.internal.net.ipsec.ike.utils.IkeSpiGenerator;
-import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.Attribute;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.AttributeDecoder;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.ChildProposal;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.DhGroupTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.EncryptionTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.EsnTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IkeProposal;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.IntegrityTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.KeyLengthAttribute;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.PrfTransform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.Proposal;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.Transform;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.TransformDecoder;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.UnrecognizedAttribute;
+import com.android.internal.net.ipsec.test.ike.message.IkeSaPayload.UnrecognizedTransform;
+import com.android.internal.net.ipsec.test.ike.testutils.MockIpSecTestUtils;
+import com.android.internal.net.ipsec.test.ike.utils.IkeSpiGenerator;
+import com.android.internal.net.ipsec.test.ike.utils.IpSecSpiGenerator;
 import com.android.server.IpSecService;
 
 import org.junit.After;
@@ -947,7 +956,7 @@ public final class IkeSaPayloadTest {
 
         final String saPayloadBodyHex =
                 "0000002c010100040300000c0100000c800e0080030000080300000c"
-                        + "0300000802000005000000080400001f";
+                        + "0300000802000005000000080400005f";
         IkeSaPayload saPayload =
                 new IkeSaPayload(
                         false /* isCritical*/,
@@ -956,5 +965,101 @@ public final class IkeSaPayloadTest {
         IkeProposal proposal = (IkeProposal) saPayload.proposalList.get(0);
         DhGroupTransform unsupportedDh = proposal.saProposal.getDhGroupTransforms()[0];
         assertFalse(unsupportedDh.isSupported);
+    }
+
+    private List<ChildSaProposal> getDefaultCallerConfiguredProposals() {
+        ChildSaProposal callerConfiguredProposal =
+                new ChildSaProposal.Builder()
+                        .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_256)
+                        .addIntegrityAlgorithm(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256)
+                        .build();
+        return Arrays.asList(mChildSaProposalOne, mChildSaProposalTwo, callerConfiguredProposal);
+    }
+
+    private ChildSaProposal verifyAndGetNegotiatedChildProposalWithDh(
+            List<ChildSaProposal> callerConfiguredProposals, int reqKePayloadDh, int ikeDh)
+            throws Exception {
+        Proposal.resetTransformDecoder();
+        Transform.resetAttributeDecoder();
+
+        ChildSaProposal currentProposal =
+                new ChildSaProposal.Builder()
+                        .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_256)
+                        .addIntegrityAlgorithm(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256)
+                        .build();
+
+        // ESP:ENCR_AES_CBC(256)|AUTH_HMAC_SHA2_512_256|DH_2048_BIT_MODP|
+        // DH_3072_BIT_MODP|DH_4096_BIT_MODP|DH(17)|DH(18)|ESN_No_Extended
+        final String inboundRequestSaPayload =
+                "00000050010304080f1180010300000c0100000c800e010003000008"
+                        + "0300000e030000080400000e030000080400000f0300000804000010"
+                        + "030000080400001103000008040000120000000805000000";
+        IkeSaPayload reqSaPayload =
+                new IkeSaPayload(
+                        false /* isCritical*/,
+                        false /* isResp */,
+                        TestUtils.hexStringToByteArray(inboundRequestSaPayload));
+
+        return reqSaPayload.getNegotiatedChildProposalWithDh(
+                currentProposal, callerConfiguredProposals, reqKePayloadDh, ikeDh);
+    }
+
+    @Test
+    public void testGetNegotiatedChildProposalWithDhAcceptsIkeDh() throws Exception {
+        ChildSaProposal resultProposal =
+                verifyAndGetNegotiatedChildProposalWithDh(
+                        getDefaultCallerConfiguredProposals(),
+                        DH_GROUP_2048_BIT_MODP,
+                        DH_GROUP_2048_BIT_MODP);
+
+        ChildSaProposal expected =
+                new ChildSaProposal.Builder()
+                        .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_256)
+                        .addIntegrityAlgorithm(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256)
+                        .addDhGroup(DH_GROUP_2048_BIT_MODP)
+                        .build();
+
+        assertEquals(expected, resultProposal);
+    }
+
+    @Test
+    public void testGetNegotiatedChildProposalWithDhAcceptsConfiguredDh() throws Exception {
+        ChildSaProposal configuredProposal =
+                new ChildSaProposal.Builder()
+                        .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_128)
+                        .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_256)
+                        .addIntegrityAlgorithm(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256)
+                        .addDhGroup(DH_GROUP_3072_BIT_MODP)
+                        .build();
+        List<ChildSaProposal> callerConfiguredProposals =
+                Arrays.asList(mChildSaProposalOne, mChildSaProposalTwo, configuredProposal);
+
+        ChildSaProposal resultProposal =
+                verifyAndGetNegotiatedChildProposalWithDh(
+                        callerConfiguredProposals, DH_GROUP_3072_BIT_MODP, DH_GROUP_2048_BIT_MODP);
+
+        ChildSaProposal expected =
+                new ChildSaProposal.Builder()
+                        .addEncryptionAlgorithm(ENCRYPTION_ALGORITHM_AES_CBC, KEY_LEN_AES_256)
+                        .addIntegrityAlgorithm(INTEGRITY_ALGORITHM_HMAC_SHA2_512_256)
+                        .addDhGroup(DH_GROUP_3072_BIT_MODP)
+                        .build();
+        assertEquals(expected, resultProposal);
+    }
+
+    @Test(expected = InvalidKeException.class)
+    public void testGetNegotiatedChildProposalWithDhThrowsInvalidKeException() throws Exception {
+        verifyAndGetNegotiatedChildProposalWithDh(
+                getDefaultCallerConfiguredProposals(),
+                DH_GROUP_3072_BIT_MODP,
+                DH_GROUP_2048_BIT_MODP);
+    }
+
+    @Test(expected = NoValidProposalChosenException.class)
+    public void testGetNegotiatedChildProposalWithDhThrowsNoProposalException() throws Exception {
+        verifyAndGetNegotiatedChildProposalWithDh(
+                getDefaultCallerConfiguredProposals(),
+                DH_GROUP_2048_BIT_MODP,
+                DH_GROUP_1024_BIT_MODP);
     }
 }
