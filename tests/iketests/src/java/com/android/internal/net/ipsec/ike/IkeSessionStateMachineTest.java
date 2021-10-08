@@ -414,8 +414,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private int mExpectedCurrentSaLocalReqMsgId;
     private int mExpectedCurrentSaRemoteReqMsgId;
 
+    private IkeSessionStateMachine.Dependencies mSpyDeps;
+
     private EapSessionConfig mEapSessionConfig;
-    private IkeEapAuthenticatorFactory mMockEapAuthenticatorFactory;
     private EapAuthenticator mMockEapAuthenticator;
 
     private IkeLocalAddressGenerator mMockIkeLocalAddressGenerator;
@@ -776,6 +777,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
                         .build();
 
+        mSpyDeps = spy(new IkeSessionStateMachine.Dependencies());
+
         mMockIkeLocalAddressGenerator = mock(IkeLocalAddressGenerator.class);
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
                         eq(mMockDefaultNetwork), eq(true /* isIpv4 */), any(), anyInt()))
@@ -783,15 +786,15 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
                         eq(mMockDefaultNetwork), eq(false /* isIpv4 */), any(), anyInt()))
                 .thenReturn(LOCAL_ADDRESS_V6);
+        doReturn(mMockIkeLocalAddressGenerator).when(mSpyDeps).newIkeLocalAddressGenerator();
 
         mMockLinkAddressGlobalV6 = mock(LinkAddress.class);
         when(mMockLinkAddressGlobalV6.getAddress()).thenReturn(UPDATED_LOCAL_ADDRESS_V6);
         when(mMockLinkAddressGlobalV6.isGlobalPreferred()).thenReturn(true);
 
-        mMockEapAuthenticatorFactory = mock(IkeEapAuthenticatorFactory.class);
         mMockEapAuthenticator = mock(EapAuthenticator.class);
         doReturn(mMockEapAuthenticator)
-                .when(mMockEapAuthenticatorFactory)
+                .when(mSpyDeps)
                 .newEapAuthenticator(
                         any(Looper.class),
                         any(IEapCallback.class),
@@ -826,6 +829,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mMockChildSessionCallback = mock(ChildSessionCallback.class);
 
         mLocalRequestFactory = new LocalRequestFactory();
+        doReturn(mLocalRequestFactory).when(mSpyDeps).newLocalRequestFactory();
 
         mLooper = new TestLooper();
 
@@ -902,9 +906,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         mSpyUserCbExecutor,
                         mMockIkeSessionCallback,
                         mMockChildSessionCallback,
-                        mMockEapAuthenticatorFactory,
-                        mMockIkeLocalAddressGenerator,
-                        mLocalRequestFactory);
+                        mSpyDeps);
         ikeSession.setDbg(true);
 
         mLooper.dispatchAll();
@@ -3271,7 +3273,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private IEapCallback verifyEapAuthenticatorCreatedAndGetCallback() {
         ArgumentCaptor<IEapCallback> captor = ArgumentCaptor.forClass(IEapCallback.class);
 
-        verify(mMockEapAuthenticatorFactory)
+        verify(mSpyDeps)
                 .newEapAuthenticator(
                         eq(mIkeSessionStateMachine.getHandler().getLooper()),
                         captor.capture(),
