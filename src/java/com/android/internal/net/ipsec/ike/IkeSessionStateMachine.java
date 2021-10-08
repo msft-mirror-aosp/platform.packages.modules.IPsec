@@ -389,18 +389,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      */
     private final SparseArray<ChildSessionStateMachine> mRemoteSpiToChildSessionMap;
 
+    @VisibleForTesting final IkeContext mIkeContext;
+
     private final int mIkeSessionId;
-    private final Context mContext;
     private final IpSecManager mIpSecManager;
     private final AlarmManager mAlarmManager;
     private final IkeLocalRequestScheduler mScheduler;
     private final IkeSessionCallback mIkeSessionCallback;
     private final TempFailureHandler mTempFailHandler;
     private final Dependencies mDeps;
-
-    /** Package private */
-    @VisibleForTesting final RandomnessFactory mRandomFactory;
-
     private final LocalRequestFactory mLocalRequestFactory;
 
     /**
@@ -611,16 +608,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         mLocalSpiToIkeSaRecordMap = new LongSparseArray<>(3);
         mRemoteSpiToChildSessionMap = new SparseArray<>();
 
-        mContext = context;
         mIpSecManager = ipSecManager;
         mAlarmManager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
 
         mDeps = deps;
         mLocalRequestFactory = mDeps.newLocalRequestFactory();
-
-        mRandomFactory = new RandomnessFactory(mContext, mNetwork);
-        mIkeSpiGenerator = new IkeSpiGenerator(mRandomFactory);
-        mIpSecSpiGenerator = new IpSecSpiGenerator(mIpSecManager, mRandomFactory);
+        mIkeContext = mDeps.newIkeContext(looper, context, mNetwork);
+        mIkeSpiGenerator = new IkeSpiGenerator(mIkeContext.getRandomnessFactory());
+        mIpSecSpiGenerator =
+                new IpSecSpiGenerator(mIpSecManager, mIkeContext.getRandomnessFactory());
 
         mIkeSessionCallback = ikeSessionCallback;
 
@@ -662,7 +658,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         localReq -> {
                             sendMessageAtFrontOfQueue(CMD_EXECUTE_LOCAL_REQ, localReq);
                         },
-                        mContext);
+                        mIkeContext.getContext());
 
         mBusyWakeLock.acquire();
         start();
@@ -694,22 +690,47 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** External dependencies, for injection in tests */
     @VisibleForTesting
     public static class Dependencies {
+        /** Builds and returns a new IkeContext */
+        public IkeContext newIkeContext(Looper looper, Context context, Network network) {
+            return new IkeContext(looper, context, new RandomnessFactory(context, network));
+        }
+
         /**
          * Builds and returns a new EapAuthenticator
          *
-         * @param looper Looper for running a message loop
+         * @param ikeContext context of an IKE Session
          * @param cb IEapCallback for callbacks to the client
-         * @param context Context for the EapAuthenticator
          * @param eapSessionConfig EAP session configuration
-         * @param randomnessFactory the randomness factory
          */
         public EapAuthenticator newEapAuthenticator(
-                Looper looper,
-                IEapCallback cb,
-                Context context,
-                EapSessionConfig eapSessionConfig,
-                RandomnessFactory randomnessFactory) {
-            return new EapAuthenticator(looper, cb, context, eapSessionConfig, randomnessFactory);
+                IkeContext ikeContext, IEapCallback cb, EapSessionConfig eapSessionConfig) {
+            return new EapAuthenticator(ikeContext, cb, eapSessionConfig);
+        }
+
+        /** Builds and starts a new ChildSessionStateMachine */
+        public ChildSessionStateMachine getChildSessionStateMachine(
+                IkeContext ikeContext,
+                int ikeSessionUniqueId,
+                Handler ikeHandler,
+                IpSecSpiGenerator ipSecSpiGenerator,
+                ChildSessionParams sessionParams,
+                Executor userCbExecutor,
+                ChildSessionCallback userCallbacks,
+                ChildSessionStateMachine.IChildSessionSmCallback childSmCallback) {
+            ChildSessionStateMachine childSession =
+                    new ChildSessionStateMachine(
+                            ikeContext,
+                            ikeSessionUniqueId,
+                            ikeHandler,
+                            (IpSecManager)
+                                    ikeContext.getContext().getSystemService(Context.IPSEC_SERVICE),
+                            ipSecSpiGenerator,
+                            sessionParams,
+                            userCbExecutor,
+                            userCallbacks,
+                            childSmCallback);
+            childSession.start();
+            return childSession;
         }
 
         /** Gets an IkeLocalAddressGenerator */
@@ -752,12 +773,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             mChildCbToSessions.put(
                     callbacks,
-                    ChildSessionStateMachineFactory.makeChildSessionStateMachine(
-                            getHandler().getLooper(),
-                            mContext,
+                    mDeps.getChildSessionStateMachine(
+                            mIkeContext,
                             mIkeSessionId,
                             getHandler(),
-                            mRandomFactory,
                             mIpSecSpiGenerator,
                             childParams,
                             mUserCbExecutor,
@@ -1172,11 +1191,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         sIkeAlarmReceiver.unregisterIkeSession(mIkeSessionId);
 
         synchronized (IKE_SESSION_LOCK) {
-            Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(mContext);
+            Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(mIkeContext.getContext());
             ikeSet.remove(this);
             if (ikeSet.isEmpty()) {
-                mContext.unregisterReceiver(sIkeAlarmReceiver);
-                sContextToIkeSmMap.remove(mContext);
+                mIkeContext.getContext().unregisterReceiver(sIkeAlarmReceiver);
+                sContextToIkeSmMap.remove(mIkeContext.getContext());
             }
             // TODO: Remove the stored ikeSessionCallback
         }
@@ -1343,7 +1362,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             Message intentIkeMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi);
             PendingIntent dpdIntent =
                     buildIkeAlarmIntent(
-                            mContext, ACTION_DPD, getIntentIdentifier(remoteIkeSpi), intentIkeMsg);
+                            mIkeContext.getContext(),
+                            ACTION_DPD,
+                            getIntentIdentifier(remoteIkeSpi),
+                            intentIkeMsg);
 
             // Initiating DPD is a way to detect the aliveness of the remote server and also a
             // way to assert the aliveness of IKE library. Considering this, the alarm to
@@ -1355,7 +1377,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             mDpdAlarm =
                     IkeAlarm.newExactAndAllowWhileIdleAlarm(
                             new IkeAlarmConfig(
-                                    mContext, ACTION_DPD, dpdDelayMs, dpdIntent, intentIkeMsg));
+                                    mIkeContext.getContext(),
+                                    ACTION_DPD,
+                                    dpdDelayMs,
+                                    dpdIntent,
+                                    intentIkeMsg));
             mDpdAlarm.schedule();
             logd("DPD Alarm scheduled with DPD delay: " + dpdDelayMs + "ms");
         }
@@ -1497,20 +1523,26 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         PendingIntent deleteSaIntent =
                 buildIkeAlarmIntent(
-                        mContext, ACTION_DELETE_IKE, getIntentIdentifier(remoteSpi), deleteMsg);
+                        mIkeContext.getContext(),
+                        ACTION_DELETE_IKE,
+                        getIntentIdentifier(remoteSpi),
+                        deleteMsg);
         PendingIntent rekeySaIntent =
                 buildIkeAlarmIntent(
-                        mContext, ACTION_REKEY_IKE, getIntentIdentifier(remoteSpi), rekeyMsg);
+                        mIkeContext.getContext(),
+                        ACTION_REKEY_IKE,
+                        getIntentIdentifier(remoteSpi),
+                        rekeyMsg);
 
         return new SaLifetimeAlarmScheduler(
                 new IkeAlarmConfig(
-                        mContext,
+                        mIkeContext.getContext(),
                         ACTION_DELETE_IKE,
                         mIkeSessionParams.getHardLifetimeMsInternal(),
                         deleteSaIntent,
                         deleteMsg),
                 new IkeAlarmConfig(
-                        mContext,
+                        mIkeContext.getContext(),
                         ACTION_REKEY_IKE,
                         mIkeSessionParams.getSoftLifetimeMsInternal(),
                         rekeySaIntent,
@@ -2419,7 +2451,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                         mSaProposal,
                                         mIkeSpiGenerator,
                                         mLocalAddress,
-                                        mRandomFactory);
+                                        mIkeContext.getRandomnessFactory());
 
                         // Build IKE header
                         IkeHeader ikeHeader =
@@ -3223,7 +3255,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mRemoteAddress,
                             mLocalPort,
                             mIkeSocket.getIkeServerPort(),
-                            mRandomFactory,
+                            mIkeContext.getRandomnessFactory(),
                             mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE));
             payloadList.add(
                     new IkeNotifyPayload(
@@ -3548,12 +3580,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         Message keepaliveMsg = obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE);
         PendingIntent keepaliveIntent =
                 buildIkeAlarmIntent(
-                        mContext, ACTION_KEEPALIVE, getIntentIdentifier(), keepaliveMsg);
+                        mIkeContext.getContext(),
+                        ACTION_KEEPALIVE,
+                        getIntentIdentifier(),
+                        keepaliveMsg);
 
         int keepaliveDelaySeconds = mIkeSessionParams.getNattKeepAliveDelaySeconds();
         IkeNattKeepalive keepalive =
                 new IkeNattKeepalive(
-                        mContext,
+                        mIkeContext.getContext(),
                         mConnectivityManager,
                         keepaliveDelaySeconds,
                         (Inet4Address) mLocalAddress,
@@ -3561,7 +3596,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
                         mIkeSocket.getIkeSocketConfig().getNetwork(),
                         new IkeAlarmConfig(
-                                mContext,
+                                mIkeContext.getContext(),
                                 ACTION_KEEPALIVE,
                                 TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds),
                                 keepaliveIntent,
@@ -3934,7 +3969,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             payloadList.addAll(
                     CreateChildSaHelper.getInitChildCreateReqPayloads(
-                            mRandomFactory,
+                            mIkeContext.getRandomnessFactory(),
                             mIpSecSpiGenerator,
                             mLocalAddress,
                             mFirstChildSessionParams,
@@ -4126,11 +4161,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // TODO(b/148689509): Pass in deterministic random when test mode is enabled
             mEapAuthenticator =
                     mDeps.newEapAuthenticator(
-                            getHandler().getLooper(),
-                            new IkeEapCallback(),
-                            mContext,
-                            ikeAuthEapConfig.mEapConfig,
-                            mRandomFactory);
+                            mIkeContext, new IkeEapCallback(), ikeAuthEapConfig.mEapConfig);
         }
 
         @Override
@@ -4634,7 +4665,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // getRekeyIkeSaRequestPayloads
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getRekeyIkeSaRequestPayloads(
-                            saProposals, mIkeSpiGenerator, mLocalAddress, mRandomFactory);
+                            saProposals,
+                            mIkeSpiGenerator,
+                            mLocalAddress,
+                            mIkeContext.getRandomnessFactory());
 
             // Build IKE header
             IkeHeader ikeHeader =
