@@ -2006,11 +2006,9 @@ public final class ChildSessionStateMachineTest {
     private ChildSessionStateMachine buildChildSession(
             ChildSessionParams childSessionParams, Executor executor) {
         return new ChildSessionStateMachine(
-                mLooper.getLooper(),
-                mContext,
+                new IkeContext(mLooper.getLooper(), mContext, createMockRandomFactory()),
                 IKE_SESSION_UNIQUE_ID,
                 mMockIkeHandler,
-                createMockRandomFactory(),
                 mMockIpSecManager,
                 mIpSecSpiGenerator,
                 childSessionParams,
