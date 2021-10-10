@@ -62,12 +62,15 @@ bootclasspath_fragment {
             apex: "com.android.art",
             module: "art-bootclasspath-fragment",
         },
+        {
+            apex: "com.android.tethering",
+            module: "com.android.tethering-bootclasspath-fragment",
+        },
     ],
 
     // Additional stubs libraries that this fragment's contents use which are
     // not provided by another bootclasspath_fragment.
     additional_stubs: [
         "android-non-updatable",
-        "framework-connectivity",
     ],
 }
