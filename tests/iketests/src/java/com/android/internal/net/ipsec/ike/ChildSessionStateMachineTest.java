@@ -2007,12 +2007,13 @@ public final class ChildSessionStateMachineTest {
             ChildSessionParams childSessionParams, Executor executor) {
         return new ChildSessionStateMachine(
                 new IkeContext(mLooper.getLooper(), mContext, createMockRandomFactory()),
-                IKE_SESSION_UNIQUE_ID,
-                mMockIkeHandler,
-                mMockIpSecManager,
-                mIpSecSpiGenerator,
-                childSessionParams,
-                executor,
+                new ChildSessionStateMachine.Config(
+                        IKE_SESSION_UNIQUE_ID,
+                        mMockIkeHandler,
+                        childSessionParams,
+                        mMockIpSecManager,
+                        mIpSecSpiGenerator,
+                        executor),
                 mMockChildSessionCallback,
                 mMockChildSessionSmCallback);
     }
