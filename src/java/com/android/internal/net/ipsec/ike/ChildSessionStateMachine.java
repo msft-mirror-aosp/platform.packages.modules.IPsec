@@ -46,7 +46,6 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_R
 import android.annotation.IntDef;
 import android.annotation.Nullable;
 import android.app.PendingIntent;
-import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
@@ -70,7 +69,6 @@ import android.net.ipsec.ike.exceptions.TemporaryFailureException;
 import android.net.ipsec.ike.exceptions.TsUnacceptableException;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -153,12 +151,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_HANDLE_RECEIVED_RESPONSE, "Rcv response");
     }
 
-    private final Context mContext;
+    private final IkeContext mIkeContext;
     private final int mIkeSessionId;
     private final Handler mIkeHandler;
     private final IpSecManager mIpSecManager;
 
-    private final RandomnessFactory mRandomFactory;
     /**
      * mIpSecSpiGenerator will be used by all Child SA creations in this Child Session to avoid SPI
      * collision in test mode.
@@ -253,23 +250,20 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * <p>Package private
      */
     ChildSessionStateMachine(
-            Looper looper,
-            Context context,
+            IkeContext ikeContext,
             int ikeSessionUniqueId,
             Handler ikeHandler,
-            RandomnessFactory randomnessFactory,
             IpSecManager ipSecManager,
             IpSecSpiGenerator ipSecSpiGenerator,
             ChildSessionParams sessionParams,
             Executor userCbExecutor,
             ChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback) {
-        super(TAG, looper, userCbExecutor);
+        super(TAG, ikeContext.getLooper(), userCbExecutor);
 
-        mContext = context;
+        mIkeContext = ikeContext;
         mIkeSessionId = ikeSessionUniqueId;
         mIkeHandler = ikeHandler;
-        mRandomFactory = randomnessFactory;
         mIpSecManager = ipSecManager;
         mIpSecSpiGenerator = ipSecSpiGenerator;
         mChildSessionParams = sessionParams;
@@ -797,7 +791,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         mCurrentChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
-                                        mContext,
+                                        mIkeContext.getContext(),
                                         reqPayloads,
                                         respPayloads,
                                         createChildResult.initSpi,
@@ -927,20 +921,26 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         PendingIntent deleteSaIntent =
                 buildIkeAlarmIntent(
-                        mContext, ACTION_DELETE_CHILD, getIntentIdentifier(remoteSpi), deleteMsg);
+                        mIkeContext.getContext(),
+                        ACTION_DELETE_CHILD,
+                        getIntentIdentifier(remoteSpi),
+                        deleteMsg);
         PendingIntent rekeySaIntent =
                 buildIkeAlarmIntent(
-                        mContext, ACTION_REKEY_CHILD, getIntentIdentifier(remoteSpi), rekeyMsg);
+                        mIkeContext.getContext(),
+                        ACTION_REKEY_CHILD,
+                        getIntentIdentifier(remoteSpi),
+                        rekeyMsg);
 
         return new SaLifetimeAlarmScheduler(
                 new IkeAlarmConfig(
-                        mContext,
+                        mIkeContext.getContext(),
                         ACTION_DELETE_CHILD,
                         mChildSessionParams.getHardLifetimeMsInternal(),
                         deleteSaIntent,
                         deleteMsg),
                 new IkeAlarmConfig(
-                        mContext,
+                        mIkeContext.getContext(),
                         ACTION_REKEY_CHILD,
                         mChildSessionParams.getSoftLifetimeMsInternal(),
                         rekeySaIntent,
@@ -1007,7 +1007,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             try {
                 mRequestPayloads =
                         CreateChildSaHelper.getInitChildCreateReqPayloads(
-                                mRandomFactory,
+                                mIkeContext.getRandomnessFactory(),
                                 mIpSecSpiGenerator,
                                 mLocalAddress,
                                 mChildSessionParams,
@@ -1425,7 +1425,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 // Build request with negotiated proposal and TS.
                 mRequestPayloads =
                         CreateChildSaHelper.getRekeyChildCreateReqPayloads(
-                                mRandomFactory,
+                                mIkeContext.getRandomnessFactory(),
                                 mIpSecSpiGenerator,
                                 mLocalAddress,
                                 saProposal,
@@ -1482,7 +1482,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                                 mLocalInitNewChildSaRecord =
                                         ChildSaRecord.makeChildSaRecord(
-                                                mContext,
+                                                mIkeContext.getContext(),
                                                 mRequestPayloads,
                                                 resp.responsePayloads,
                                                 createChildResult.initSpi,
@@ -1672,7 +1672,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                 respPayloads =
                         CreateChildSaHelper.getRekeyChildCreateRespPayloads(
-                                mRandomFactory,
+                                mIkeContext.getRandomnessFactory(),
                                 mIpSecSpiGenerator,
                                 mLocalAddress,
                                 respProposalNumber,
@@ -1708,7 +1708,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         mRemoteInitNewChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
-                                        mContext,
+                                        mIkeContext.getContext(),
                                         reqPayloads,
                                         respPayloads,
                                         createChildResult.initSpi,
