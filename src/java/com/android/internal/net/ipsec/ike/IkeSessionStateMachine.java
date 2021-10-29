@@ -19,6 +19,7 @@ import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGM
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_INITIAL_CONTACT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
@@ -37,6 +38,7 @@ import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
+import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_INITIAL_CONTACT;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_MOBIKE_SUPPORTED;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -3901,6 +3903,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
             if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
                 payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_MOBIKE_SUPPORTED));
+            }
+            if (mIkeSessionParams.hasIkeOption(IKE_OPTION_INITIAL_CONTACT)) {
+                payloadList.add(new IkeNotifyPayload(NOTIFY_TYPE_INITIAL_CONTACT));
             }
 
             // Build Authentication payload
