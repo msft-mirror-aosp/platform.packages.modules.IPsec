@@ -1987,7 +1987,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             } else {
                 int expectedMsgId = ikeSaRecord.getRemoteRequestMessageId();
                 if (expectedMsgId - 1 == ikeHeader.messageId) {
-
                     if (ikeSaRecord.isRetransmittedRequest(ikePacketBytes)) {
                         if (ikeSaRecord.getLastSentRespMsgId() == ikeHeader.messageId) {
                             logd(
@@ -2006,7 +2005,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                         // TODO:Support resetting remote rekey delete timer.
                     } else {
-                        logi(methodTag + "Received response with invalid message ID. Discard it.");
+                        logi(methodTag + "Received a request with invalid message ID. Discard it.");
                     }
                 } else {
                     DecodeResult decodeResult =
