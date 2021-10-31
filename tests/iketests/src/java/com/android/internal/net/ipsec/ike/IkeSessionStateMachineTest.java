@@ -59,6 +59,7 @@ import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.N
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_COOKIE2;
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION;
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED;
+import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_INITIAL_CONTACT;
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_MOBIKE_SUPPORTED;
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP;
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP;
@@ -2766,7 +2767,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         List<IkeNotifyPayload> notifyPayloads =
                 ikeAuthReqMessage.getPayloadListForType(
                         IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
-        assertFalse(hasEapOnlyNotifyPayload(notifyPayloads));
+        assertFalse(hasExpectedNotifyPayload(notifyPayloads, NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION));
 
         // Validate the N1 Mode Capability payload
         verifyN1ModeCapabilityPayload(notifyPayloads);
@@ -5524,15 +5525,29 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .setAuthEap(mRootCertificate, mEapSessionConfig)
                         .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH)
                         .build();
+
+        verifyIkeAuthWithNotifyPayload(ikeSessionParams, NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION);
+    }
+
+    @Test
+    public void testInitialContact() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        IkeSessionParams ikeSessionParams =
+                buildIkeSessionParamsWithIkeOptions(IkeSessionParams.IKE_OPTION_INITIAL_CONTACT);
+
+        verifyIkeAuthWithNotifyPayload(ikeSessionParams, NOTIFY_TYPE_INITIAL_CONTACT);
+    }
+
+    private void verifyIkeAuthWithNotifyPayload(
+            IkeSessionParams ikeSessionParams, int expectedNotifyType) throws Exception {
+        mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine = makeAndStartIkeSession(ikeSessionParams);
-
         mockIkeInitAndTransitionToIkeAuth(mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
-
         IkeMessage ikeAuthReqMessage = verifyAuthReqAndGetMsg();
         List<IkeNotifyPayload> notifyPayloads =
                 ikeAuthReqMessage.getPayloadListForType(
                         IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
-        assertTrue(hasEapOnlyNotifyPayload(notifyPayloads));
+        assertTrue(hasExpectedNotifyPayload(notifyPayloads, expectedNotifyType));
     }
 
     private IkeConfigPayload makeConfigPayload() throws Exception {
@@ -5541,9 +5556,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         IkePayload.PAYLOAD_TYPE_CP, true /*isResp*/, CP_PAYLOAD_HEX_STRING);
     }
 
-    private boolean hasEapOnlyNotifyPayload(List<IkeNotifyPayload> notifyPayloads) {
+    private boolean hasExpectedNotifyPayload(
+            List<IkeNotifyPayload> notifyPayloads, int expectedNotifyType) {
         for (IkeNotifyPayload payload : notifyPayloads) {
-            if (payload.notifyType == NOTIFY_TYPE_EAP_ONLY_AUTHENTICATION) {
+            if (payload.notifyType == expectedNotifyType) {
                 return true;
             }
         }
