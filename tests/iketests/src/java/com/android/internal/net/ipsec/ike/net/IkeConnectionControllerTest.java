@@ -22,12 +22,11 @@ import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionControlle
 import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionController.NAT_TRAVERSAL_SUPPORT_NOT_CHECKED;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyInt;
+import static org.mockito.Matchers.anyBoolean;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyInt;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -43,55 +42,60 @@ import android.os.Looper;
 
 import com.android.internal.net.ipsec.test.ike.IkeContext;
 import com.android.internal.net.ipsec.test.ike.IkeSessionTestBase;
+import com.android.internal.net.ipsec.test.ike.IkeSocket;
+import com.android.internal.net.ipsec.test.ike.IkeUdp4Socket;
+import com.android.internal.net.ipsec.test.ike.IkeUdp6Socket;
+import com.android.internal.net.ipsec.test.ike.IkeUdp6WithEncapPortSocket;
+import com.android.internal.net.ipsec.test.ike.IkeUdpEncapSocket;
+import com.android.internal.net.ipsec.test.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
-import java.io.IOException;
-import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.util.HashSet;
 
 public class IkeConnectionControllerTest extends IkeSessionTestBase {
+    private static final long IKE_LOCAL_SPI = 11L;
+
     private IkeSessionParams mMockIkeParams;
-    private IkeLocalAddressGenerator mMockIkeLocalAddressGenerator;
+
     private IkeConnectionController.Callback mMockConnectionCtrlCb;
+    private IkeConnectionController.Dependencies mMockConnectionCtrlDeps;
     private Network mMockCallerConfiguredNetwork;
+    private IkeSaRecord mMockIkeSaRecord;
+
+    private IkeUdp4Socket mMockIkeUdp4Socket;
+    private IkeUdp6Socket mMockIkeUdp6Socket;
+    private IkeUdpEncapSocket mMockIkeUdpEncapSocket;
+    private IkeUdp6WithEncapPortSocket mMockIkeUdp6WithEncapPortSocket;
 
     private IkeContext mIkeContext;
     private IkeConnectionController mIkeConnectionCtrl;
 
-    private void setupLocalAddressForNetwork(Network network, InetAddress address)
-            throws Exception {
-        boolean isIpv4 = address instanceof Inet4Address;
-        when(mMockIkeLocalAddressGenerator.generateLocalAddress(
-                        eq(network), eq(isIpv4), any(), anyInt()))
-                .thenReturn(address);
-    }
+    private IkeConnectionController buildIkeConnectionCtrl() throws Exception {
+        mMockConnectionCtrlCb = mock(IkeConnectionController.Callback.class);
+        mMockConnectionCtrlDeps = mock(IkeConnectionController.Dependencies.class);
 
-    private void setupRemoteAddressForNetwork(Network network, InetAddress address)
-            throws Exception {
-        doAnswer(
-                new Answer() {
-                    public Object answer(InvocationOnMock invocation) throws IOException {
-                        return new InetAddress[] {address};
-                    }
-                })
-                .when(network)
-                .getAllByName(REMOTE_HOSTNAME);
-    }
+        when(mMockConnectionCtrlDeps.newIkeLocalAddressGenerator())
+                .thenReturn(mMockIkeLocalAddressGenerator);
 
-    private IkeConnectionController buildDefaultIkeConnectionCtrl() throws Exception {
+        when(mMockConnectionCtrlDeps.newIkeUdp4Socket(any(), any(), any()))
+                .thenReturn(mMockIkeUdp4Socket);
+        when(mMockConnectionCtrlDeps.newIkeUdp6Socket(any(), any(), any()))
+                .thenReturn(mMockIkeUdp6Socket);
+        when(mMockConnectionCtrlDeps.newIkeUdpEncapSocket(any(), any(), any(), any()))
+                .thenReturn(mMockIkeUdpEncapSocket);
+        when(mMockConnectionCtrlDeps.newIkeUdp6WithEncapPortSocket(any(), any(), any()))
+                .thenReturn(mMockIkeUdp6WithEncapPortSocket);
+
         return new IkeConnectionController(
                 new IkeConnectionController.Config(
-                        mIkeContext,
-                        mMockIkeParams,
-                        mMockIkeLocalAddressGenerator,
-                        mMockConnectionCtrlCb));
+                        mIkeContext, mMockIkeParams, mMockConnectionCtrlCb),
+                mMockConnectionCtrlDeps);
     }
 
     private IkeConnectionController buildIkeConnectionCtrlWithNetwork(Network callerConfiguredNw)
@@ -103,7 +107,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         setupLocalAddressForNetwork(networkBeingUsed, LOCAL_ADDRESS);
         setupRemoteAddressForNetwork(networkBeingUsed, REMOTE_ADDRESS);
 
-        return buildDefaultIkeConnectionCtrl();
+        return buildIkeConnectionCtrl();
     }
 
     @Before
@@ -112,9 +116,13 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeContext =
                 new IkeContext(mock(Looper.class), mSpyContext, mock(RandomnessFactory.class));
         mMockIkeParams = mock(IkeSessionParams.class);
-        mMockIkeLocalAddressGenerator = mock(IkeLocalAddressGenerator.class);
-        mMockConnectionCtrlCb = mock(IkeConnectionController.Callback.class);
         mMockCallerConfiguredNetwork = mock(Network.class);
+        mMockIkeSaRecord = mock(IkeSaRecord.class);
+
+        mMockIkeUdp4Socket = newMockIkeSocket(IkeUdp4Socket.class);
+        mMockIkeUdp6Socket = newMockIkeSocket(IkeUdp6Socket.class);
+        mMockIkeUdpEncapSocket = newMockIkeSocket(IkeUdpEncapSocket.class);
+        mMockIkeUdp6WithEncapPortSocket = newMockIkeSocket(IkeUdp6WithEncapPortSocket.class);
 
         when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(false);
         when(mMockIkeParams.getServerHostname()).thenReturn(REMOTE_HOSTNAME);
@@ -123,13 +131,34 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
         setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
 
-        mIkeConnectionCtrl = buildDefaultIkeConnectionCtrl();
+        when(mMockIkeSaRecord.getLocalSpi()).thenReturn(IKE_LOCAL_SPI);
+
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
         mIkeConnectionCtrl.setUp();
+        mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
     }
 
     @After
     public void tearDown() throws Exception {
         mIkeConnectionCtrl.tearDown();
+    }
+
+    private void verifySetup(
+            Network expectedNetwork,
+            InetAddress expectedLocalAddress,
+            InetAddress expectedRemoteAddress,
+            Class<? extends IkeSocket> socketType)
+            throws Exception {
+
+        assertEquals(expectedNetwork, mIkeConnectionCtrl.getNetwork());
+        assertEquals(expectedLocalAddress, mIkeConnectionCtrl.getLocalAddress());
+        assertEquals(expectedRemoteAddress, mIkeConnectionCtrl.getRemoteAddress());
+        assertTrue(socketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
+        boolean isIkeUdpEncapSocketExpected =
+                mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket;
+        mMockConnectionCtrlCb.onIkeSocketSwitched(isIkeUdpEncapSocketExpected);
+
+        assertEquals(NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, mIkeConnectionCtrl.getNatStatus());
     }
 
     private void verifySetupAndTeardownWithNw(Network callerConfiguredNw) throws Exception {
@@ -139,10 +168,45 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         Network expectedNetwork =
                 callerConfiguredNw == null ? mMockDefaultNetwork : callerConfiguredNw;
-        assertEquals(expectedNetwork, mIkeConnectionCtrl.getNetwork());
-        assertEquals(LOCAL_ADDRESS, mIkeConnectionCtrl.getLocalAddress());
-        assertEquals(REMOTE_ADDRESS, mIkeConnectionCtrl.getRemoteAddress());
-        assertEquals(NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, mIkeConnectionCtrl.getNatStatus());
+        verifySetup(expectedNetwork, LOCAL_ADDRESS, REMOTE_ADDRESS, IkeUdp4Socket.class);
+
+        mIkeConnectionCtrl.tearDown();
+        verify(mMockConnectManager, never()).unregisterNetworkCallback(any(NetworkCallback.class));
+    }
+
+    private Class<? extends IkeSocket> getExpectedSocketType(boolean isIpv4, boolean force4500) {
+        if (force4500) {
+            if (isIpv4) {
+                return IkeUdpEncapSocket.class;
+            } else {
+                return IkeUdp6WithEncapPortSocket.class;
+            }
+        } else {
+            if (isIpv4) {
+                return IkeUdp4Socket.class;
+            } else {
+                return IkeUdp6Socket.class;
+            }
+        }
+    }
+
+    private void verifySetupAndTeardownWithIpVersionAndPort(boolean isIpv4, boolean force4500)
+            throws Exception {
+        mIkeConnectionCtrl.tearDown();
+        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(force4500);
+
+        InetAddress expectedLocalAddress = isIpv4 ? LOCAL_ADDRESS : LOCAL_ADDRESS_V6;
+        InetAddress expectedRemoteAddress = isIpv4 ? REMOTE_ADDRESS : REMOTE_ADDRESS_V6;
+        setupLocalAddressForNetwork(mMockDefaultNetwork, expectedLocalAddress);
+        setupRemoteAddressForNetwork(mMockDefaultNetwork, expectedRemoteAddress);
+
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+        mIkeConnectionCtrl.setUp();
+        verifySetup(
+                mMockDefaultNetwork,
+                expectedLocalAddress,
+                expectedRemoteAddress,
+                getExpectedSocketType(isIpv4, force4500));
 
         mIkeConnectionCtrl.tearDown();
         verify(mMockConnectManager, never()).unregisterNetworkCallback(any(NetworkCallback.class));
@@ -159,14 +223,82 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     }
 
     @Test
+    public void testSetupAndTeardownIpv4Force4500() throws Exception {
+        verifySetupAndTeardownWithIpVersionAndPort(true /* isIpv4 */, true /* force4500 */);
+    }
+
+    @Test
+    public void testSetupAndTeardownIpv4NotForce4500() throws Exception {
+        verifySetupAndTeardownWithIpVersionAndPort(true /* isIpv4 */, false /* force4500 */);
+    }
+
+    @Test
+    public void testSetupAndTeardownIpv6Force4500() throws Exception {
+        verifySetupAndTeardownWithIpVersionAndPort(false /* isIpv4 */, true /* force4500 */);
+    }
+
+    @Test
+    public void testSetupAndTeardownIpv6NotForce4500() throws Exception {
+        verifySetupAndTeardownWithIpVersionAndPort(false /* isIpv4 */, false /* force4500 */);
+    }
+
+    @Test
+    public void testSendIkePacket() throws Exception {
+        byte[] ikePacket = "testSendIkePacket".getBytes();
+        mIkeConnectionCtrl.sendIkePacket(ikePacket);
+
+        verify(mMockIkeUdp4Socket).sendIkePacket(eq(ikePacket), eq(REMOTE_ADDRESS));
+    }
+
+    @Test
+    public void testRegisterAndUnregisterIkeSpi() throws Exception {
+        // Clear invocation in setup
+        reset(mMockIkeUdp4Socket);
+
+        mIkeConnectionCtrl.registerIkeSpi(IKE_LOCAL_SPI);
+        verify(mMockIkeUdp4Socket).registerIke(IKE_LOCAL_SPI, mIkeConnectionCtrl);
+
+        mIkeConnectionCtrl.unregisterIkeSpi(IKE_LOCAL_SPI);
+        verify(mMockIkeUdp4Socket).unregisterIke(IKE_LOCAL_SPI);
+    }
+
+    @Test
+    public void testRegisterAndUnregisterIkeSaRecord() throws Exception {
+        // Clear invocation in setup
+        reset(mMockIkeUdp4Socket);
+        mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
+        verify(mMockIkeUdp4Socket).registerIke(IKE_LOCAL_SPI, mIkeConnectionCtrl);
+        HashSet<IkeSaRecord> expectedSet = new HashSet<>();
+        expectedSet.add(mMockIkeSaRecord);
+        assertEquals(expectedSet, mIkeConnectionCtrl.getIkeSaRecords());
+
+        mIkeConnectionCtrl.unregisterIkeSaRecord(mMockIkeSaRecord);
+        verify(mMockIkeUdp4Socket).unregisterIke(IKE_LOCAL_SPI);
+        assertTrue(mIkeConnectionCtrl.getIkeSaRecords().isEmpty());
+    }
+
+    @Test
     public void testSetSeverNattSupport() throws Exception {
         mIkeConnectionCtrl.setSeverNattSupport(true);
 
         assertEquals(NAT_TRAVERSAL_SUPPORTED, mIkeConnectionCtrl.getNatStatus());
     }
 
+    @Test
+    public void handleNatDetectedInIkeInit() throws Exception {
+        // Clear call in IkeConnectionController#setUp()
+        reset(mMockConnectionCtrlCb);
+
+        mIkeConnectionCtrl.handleNatDetectedInIkeInit(IKE_LOCAL_SPI);
+
+        assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
+        verify(mMockConnectionCtrlCb).onIkeSocketSwitched(true);
+    }
+
     private IkeNetworkCallbackBase enableMobilityAndReturnCb(boolean isDefaultNetwork)
             throws Exception {
+        // Clear call in IkeConnectionController#setUp()
+        reset(mMockConnectionCtrlCb);
         mIkeConnectionCtrl.enableMobility();
 
         ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
@@ -202,13 +334,39 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertEquals(LOCAL_ADDRESS, callback.getAddress());
     }
 
+    @Test
+    public void testEnableMobilityWithServerSupportNatt() throws Exception {
+        mIkeConnectionCtrl.setSeverNattSupport(true);
+        enableMobilityAndReturnCb(true /* isDefaultNetwork */);
+
+        assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
+        verify(mMockConnectionCtrlCb).onIkeSocketSwitched(true);
+    }
+
+    @Test
+    public void testEnableMobilityWithServerNotSupportNatt() throws Exception {
+        mIkeConnectionCtrl.setSeverNattSupport(false);
+        enableMobilityAndReturnCb(true /* isDefaultNetwork */);
+
+        assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp4Socket);
+        verify(mMockConnectionCtrlCb, never()).onIkeSocketSwitched(anyBoolean());
+    }
+
+    @Test
+    public void handleNatDetectedWithMobilityEvent() throws Exception {
+        mIkeConnectionCtrl.handleNatDetectedWithMobilityEvent();
+
+        assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
+        verify(mMockConnectionCtrlCb).onIkeSocketSwitched(true);
+    }
+
     private void verifyNetworkAndAddressesAfterMobilityEvent(
             Network expectedNetwork,
             InetAddress expectedLocalAddress,
             InetAddress expectedRemoteAddress,
             IkeNetworkCallbackBase callback) {
         assertEquals(expectedNetwork, mIkeConnectionCtrl.getNetwork());
-        assertEquals(UPDATED_LOCAL_ADDRESS, mIkeConnectionCtrl.getLocalAddress());
+        assertEquals(expectedLocalAddress, mIkeConnectionCtrl.getLocalAddress());
         assertEquals(expectedRemoteAddress, mIkeConnectionCtrl.getRemoteAddress());
 
         assertEquals(expectedNetwork, callback.getNetwork());
@@ -226,7 +384,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         verifyNetworkAndAddressesAfterMobilityEvent(
                 newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
-        verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated(eq(true), eq(false));
+        verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated();
+        verify(mMockIkeSaRecord).migrate(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
     }
 
     @Test
@@ -240,7 +399,75 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         verifyNetworkAndAddressesAfterMobilityEvent(
                 mMockDefaultNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
-        verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated(eq(false), eq(false));
+        verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated();
+        verify(mMockIkeSaRecord).migrate(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
+    }
+
+    // Test updating network from IPv4 network to IPv6 network
+    private void verifyUnderlyingNetworkUpdated(
+            boolean force4500,
+            boolean doesPeerSupportNatt,
+            Class<? extends IkeSocket> expectedSocketType)
+            throws Exception {
+        mIkeConnectionCtrl.tearDown();
+
+        // Set up mIkeConnectionCtrl for the test case
+        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(force4500);
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+        mIkeConnectionCtrl.setUp();
+        mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
+        mIkeConnectionCtrl.setSeverNattSupport(doesPeerSupportNatt);
+
+        // Update network from IPv4 network to IPv6 network
+        Network newNetwork = mock(Network.class);
+        setupLocalAddressForNetwork(newNetwork, UPDATED_LOCAL_ADDRESS_V6);
+        setupRemoteAddressForNetwork(newNetwork, REMOTE_ADDRESS_V6);
+        IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
+
+        // Clear call in IkeConnectionController#setUp() and
+        // IkeConnectionController#enableMobility()
+        reset(mMockConnectionCtrlCb);
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(newNetwork);
+
+        // Validation
+        verifyNetworkAndAddressesAfterMobilityEvent(
+                newNetwork, UPDATED_LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6, callback);
+        verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated();
+        verify(mMockIkeSaRecord).migrate(UPDATED_LOCAL_ADDRESS_V6, REMOTE_ADDRESS_V6);
+        assertTrue(expectedSocketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
+        boolean isIkeUdpEncapSocketExpected =
+                mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket;
+        mMockConnectionCtrlCb.onIkeSocketSwitched(isIkeUdpEncapSocketExpected);
+    }
+
+    @Test
+    public void testOnUnderlyingNetworkUpdatedForce4500NattSupported() throws Exception {
+        verifyUnderlyingNetworkUpdated(
+                true /* force4500 */,
+                true /* doesPeerSupportNatt */,
+                IkeUdp6WithEncapPortSocket.class);
+    }
+
+    @Test
+    public void testOnUnderlyingNetworkUpdatedForce4500NattUnsupported() throws Exception {
+        verifyUnderlyingNetworkUpdated(
+                true /* force4500 */,
+                false /* doesPeerSupportNatt */,
+                IkeUdp6WithEncapPortSocket.class);
+    }
+
+    @Test
+    public void testOnUnderlyingNetworkUpdatedNotForce4500NattSupported() throws Exception {
+        verifyUnderlyingNetworkUpdated(
+                false /* force4500 */,
+                true /* doesPeerSupportNatt */,
+                IkeUdp6WithEncapPortSocket.class);
+    }
+
+    @Test
+    public void testOnUnderlyingNetworkUpdatedNOtForce4500NattUnsupported() throws Exception {
+        verifyUnderlyingNetworkUpdated(
+                false /* force4500 */, false /* doesPeerSupportNatt */, IkeUdp6Socket.class);
     }
 
     @Test
