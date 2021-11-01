@@ -58,12 +58,12 @@ public class IkeUdp6Socket extends IkeUdpSocket {
      * IkeSocketConfig. Otherwise, create and return a new IkeUdp6Socket instance.
      *
      * @param sockConfig the socket configuration
-     * @param ikeSession the IkeSessionStateMachine that is requesting an IkeUdp6Socket.
+     * @param callback the callback for signalling IkeSocket events
      * @param handler the Handler used to process received packets
      * @return an IkeUdp6Socket instance
      */
     public static IkeUdp6Socket getInstance(
-            IkeSocketConfig sockConfig, IkeSessionStateMachine ikeSession, Handler handler)
+            IkeSocketConfig sockConfig, IkeSocket.Callback callback, Handler handler)
             throws ErrnoException, IOException {
         IkeUdp6Socket ikeSocket = sConfigToSocketMap.get(sockConfig);
         if (ikeSocket == null) {
@@ -74,7 +74,7 @@ public class IkeUdp6Socket extends IkeUdpSocket {
 
             sConfigToSocketMap.put(sockConfig, ikeSocket);
         }
-        ikeSocket.mAliveIkeSessions.add(ikeSession);
+        ikeSocket.mRegisteredCallbacks.add(callback);
         return ikeSocket;
     }
 
