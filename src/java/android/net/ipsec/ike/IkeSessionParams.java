@@ -156,7 +156,6 @@ public final class IkeSessionParams {
      * Protocol Version 2 (IKEv2)
      *
      * <p>@see {@link Builder#addIkeOption(int)}
-     * @hide
      */
     public static final int IKE_OPTION_INITIAL_CONTACT = 4;
 

@@ -207,6 +207,7 @@ package android.net.ipsec.ike {
     field public static final int IKE_OPTION_ACCEPT_ANY_REMOTE_ID = 0; // 0x0
     field public static final int IKE_OPTION_EAP_ONLY_AUTH = 1; // 0x1
     field public static final int IKE_OPTION_FORCE_PORT_4500 = 3; // 0x3
+    field public static final int IKE_OPTION_INITIAL_CONTACT = 4; // 0x4
     field public static final int IKE_OPTION_MOBIKE = 2; // 0x2
   }
 
