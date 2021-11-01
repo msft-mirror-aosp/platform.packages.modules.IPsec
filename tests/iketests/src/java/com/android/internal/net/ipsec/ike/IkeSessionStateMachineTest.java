@@ -6229,14 +6229,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         assertEquals(
                 mIkeSessionStateMachine,
-                mIkeSessionStateMachine.mIkeSocket.mSpiToIkeSession.get(
+                mIkeSessionStateMachine.mIkeSocket.mSpiToCallback.get(
                         mIkeSessionStateMachine.mCurrentIkeSaRecord.getLocalSpi()));
 
         if (rekeySaRecord != null) {
             verifyIkeSaAddresses(rekeySaRecord, expectedUpdatedLocalAddress, expectedRemoteAddress);
             assertEquals(
                     mIkeSessionStateMachine,
-                    mIkeSessionStateMachine.mIkeSocket.mSpiToIkeSession.get(
+                    mIkeSessionStateMachine.mIkeSocket.mSpiToCallback.get(
                             rekeySaRecord.getLocalSpi()));
         }
 

@@ -204,7 +204,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </pre>
  */
 public class IkeSessionStateMachine extends AbstractSessionStateMachine
-        implements IkeConnectionController.Callback {
+        implements IkeConnectionController.Callback, IkeSocket.Callback {
     // Package private
     static final String TAG = "IkeSessionStateMachine";
 
@@ -979,19 +979,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     void removeIkeSaRecord(IkeSaRecord record) {
         mIkeSocket.unregisterIke(record.getLocalSpi());
         mLocalSpiToIkeSaRecordMap.remove(record.getLocalSpi());
-    }
-
-    /**
-     * Receive IKE packet from remote server.
-     *
-     * <p>This method is called synchronously from IkeSocket. It proxies the synchronous call as an
-     * asynchronous job to the IkeSessionStateMachine handler.
-     *
-     * @param ikeHeader the decoded IKE header.
-     * @param ikePacketBytes the byte array of the entire received IKE packet.
-     */
-    public void receiveIkePacket(IkeHeader ikeHeader, byte[] ikePacketBytes) {
-        sendMessage(CMD_RECEIVE_IKE_PACKET, new ReceivedIkePacket(ikeHeader, ikePacketBytes));
     }
 
     /**
@@ -5660,5 +5647,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onError(IkeInternalException exception) {
         handleIkeFatalError(exception);
+    }
+
+    @Override
+    public void onIkePacketReceived(IkeHeader ikeHeader, byte[] ikePacketBytes) {
+        sendMessage(CMD_RECEIVE_IKE_PACKET, new ReceivedIkePacket(ikeHeader, ikePacketBytes));
     }
 }
