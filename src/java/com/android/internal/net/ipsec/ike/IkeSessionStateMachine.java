@@ -408,11 +408,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** Peer-selected DH group to use. Defaults to first proposed DH group in first SA proposal. */
     @VisibleForTesting int mPeerSelectedDhGroup;
 
-    /** Indicates if both sides support fragmentation. Set in IKE INIT */
-    @VisibleForTesting boolean mSupportFragment;
-    /** Indicates if both sides support MOBIKE. Set in IKE AUTH. */
-    @VisibleForTesting boolean mSupportMobike;
-
     /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
     @VisibleForTesting Set<Short> mPeerSignatureHashAlgorithms;
 
@@ -1481,7 +1476,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         mIkeIntegrity,
                         mIkeCipher,
                         ikeSaRecord,
-                        mSupportFragment,
+                        mEnabledExtensions.contains(EXTENSION_TYPE_FRAGMENTATION),
                         DEFAULT_FRAGMENT_SIZE);
         sendEncryptedIkePackets(packetList);
 
@@ -2096,7 +2091,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mIkeIntegrity,
                             mIkeCipher,
                             ikeSaRecord,
-                            mSupportFragment,
+                            mEnabledExtensions.contains(EXTENSION_TYPE_FRAGMENTATION),
                             DEFAULT_FRAGMENT_SIZE);
 
             retransmit();
@@ -3195,7 +3190,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 natDestPayload = notifyPayload;
                                 break;
                             case NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED:
-                                mSupportFragment = true;
                                 mEnabledExtensions.add(EXTENSION_TYPE_FRAGMENTATION);
                                 break;
                             case NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS:
@@ -3516,7 +3510,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 return;
             } else if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)
                     && notifyPayload.notifyType == NOTIFY_TYPE_MOBIKE_SUPPORTED) {
-                mSupportMobike = true;
                 mEnabledExtensions.add(EXTENSION_TYPE_MOBIKE);
                 return;
             } else {
@@ -5078,7 +5071,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         @Override
         public void enterState() {
-            if (!mSupportMobike) {
+            if (!mEnabledExtensions.contains(EXTENSION_TYPE_MOBIKE)) {
                 logd("non-MOBIKE mobility event");
                 migrateAllChildSAs();
                 notifyConnectionInfoChanged();
