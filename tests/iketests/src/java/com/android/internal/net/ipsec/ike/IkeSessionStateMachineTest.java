@@ -138,7 +138,6 @@ import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppN1ModeInformation;
 import android.net.ipsec.test.ike.ike3gpp.Ike3gppParams;
-import android.os.Handler;
 import android.os.test.TestLooper;
 import android.telephony.TelephonyManager;
 
@@ -200,7 +199,6 @@ import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
 import com.android.internal.net.ipsec.test.ike.utils.IkeSecurityParameterIndex;
 import com.android.internal.net.ipsec.test.ike.utils.IkeSpiGenerator;
-import com.android.internal.net.ipsec.test.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.test.ike.utils.State;
 import com.android.internal.net.utils.test.Log;
@@ -844,11 +842,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .when(spyDeps)
                 .newChildSessionStateMachine(
                         any(IkeContext.class),
-                        anyInt(),
-                        any(Handler.class),
-                        any(IpSecSpiGenerator.class),
-                        any(ChildSessionParams.class),
-                        any(Executor.class),
+                        any(ChildSessionStateMachine.Config.class),
                         eq(childCb),
                         any(IChildSessionSmCallback.class));
     }
@@ -866,7 +860,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         any(EapSessionConfig.class));
         doReturn(mSpyIkeConnectionCtrl)
                 .when(spyDeps)
-                .newIkeConnectionController(any(IkeConnectionController.Config.class));
+                .newIkeConnectionController(
+                        any(IkeContext.class), any(IkeConnectionController.Config.class));
         injectChildSessionInSpyDeps(spyDeps, child, childCb);
 
 
@@ -951,11 +946,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         mSpyIkeConnectionCtrl =
                 new IkeConnectionController(
+                        ikeContext,
                         new IkeConnectionController.Config(
-                                ikeContext,
-                                ikeParams,
-                                mock(IkeAlarmConfig.class),
-                                mockIkeConnectionCtrlCb),
+                                ikeParams, mock(IkeAlarmConfig.class), mockIkeConnectionCtrlCb),
                         spyIkeConnectionCtrlDeps);
         mSpyDeps =
                 buildSpyDepsWithChildSession(
@@ -2015,11 +2008,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mSpyDeps)
                 .newChildSessionStateMachine(
                         ikeContextCaptor.capture(),
-                        anyInt(),
-                        any(Handler.class),
-                        any(IpSecSpiGenerator.class),
-                        eq(mChildSessionParams),
-                        eq(mSpyUserCbExecutor),
+                        any(ChildSessionStateMachine.Config.class),
                         eq(expectedChildSessionCb),
                         mChildSessionSmCbCaptor.capture());
 
