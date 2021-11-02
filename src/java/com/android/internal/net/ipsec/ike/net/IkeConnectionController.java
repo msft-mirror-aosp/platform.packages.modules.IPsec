@@ -19,10 +19,14 @@ package com.android.internal.net.ipsec.ike.net;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
+
 import android.annotation.IntDef;
+import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
+import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkRequest;
@@ -41,6 +45,7 @@ import com.android.internal.net.ipsec.ike.IkeUdp6Socket;
 import com.android.internal.net.ipsec.ike.IkeUdp6WithEncapPortSocket;
 import com.android.internal.net.ipsec.ike.IkeUdpEncapSocket;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
+import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
 
 import java.io.IOException;
@@ -56,6 +61,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * IkeConnectionController manages all connectivity events for an IKE Session
@@ -78,18 +84,22 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private static final int MAX_DNS_RESOLUTION_ATTEMPTS = 3;
 
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, NAT_TRAVERSAL_UNSUPPORTED, NAT_TRAVERSAL_SUPPORTED})
+    @IntDef({
+        NAT_TRAVERSAL_SUPPORT_NOT_CHECKED,
+        NAT_TRAVERSAL_UNSUPPORTED,
+        NAT_NOT_DETECTED,
+        NAT_DETECTED
+    })
     public @interface NatStatus {}
 
     /** The IKE client has not checked whether the server supports NAT-T */
     public static final int NAT_TRAVERSAL_SUPPORT_NOT_CHECKED = 0;
     /** The IKE server does not support NAT-T */
     public static final int NAT_TRAVERSAL_UNSUPPORTED = 1;
-    /** The IKE server supports NAT-T */
-    public static final int NAT_TRAVERSAL_SUPPORTED = 2;
-
-    // TODO: Remove NAT_TRAVERSAL_SUPPORTED ,and add NAT_NOT_DETECTED and NAT_DETECTED when
-    // IkeConnectionController can manage IkeNattKeepalive
+    /** There is no NAT between the IKE client and the server */
+    public static final int NAT_NOT_DETECTED = 2;
+    /** There is at least a NAT between the IKE client and the server */
+    public static final int NAT_DETECTED = 3;
 
     private final IkeContext mIkeContext;
     private final ConnectivityManager mConnectivityManager;
@@ -102,6 +112,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private final boolean mUseCallerConfiguredNetwork;
     private final String mRemoteHostname;
     private final int mDscp = 0;
+    private final IkeAlarmConfig mKeepaliveAlarmConfig;
 
     private IkeSocket mIkeSocket;
 
@@ -126,6 +137,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     @NatStatus private int mNatStatus;
 
+    private IkeNattKeepalive mIkeNattKeepalive;
+
     /** Constructor of IkeConnectionController */
     @VisibleForTesting
     public IkeConnectionController(Config config, Dependencies dependencies) {
@@ -139,6 +152,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mForcePort4500 = config.ikeParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500);
         mRemoteHostname = config.ikeParams.getServerHostname();
         mUseCallerConfiguredNetwork = config.ikeParams.getConfiguredNetwork() != null;
+        mKeepaliveAlarmConfig = config.keepaliveAlarmConfig;
 
         if (mUseCallerConfiguredNetwork) {
             mNetwork = config.ikeParams.getConfiguredNetwork();
@@ -161,15 +175,18 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     public static class Config {
         public final IkeContext ikeContext;
         public final IkeSessionParams ikeParams;
+        public final IkeAlarmConfig keepaliveAlarmConfig;
         public final Callback callback;
 
         /** Constructor for IkeConnectionController.Config */
         public Config(
                 IkeContext ikeContext,
                 IkeSessionParams ikeParams,
+                IkeAlarmConfig keepaliveAlarmConfig,
                 Callback callback) {
             this.ikeContext = ikeContext;
             this.ikeParams = ikeParams;
+            this.keepaliveAlarmConfig = keepaliveAlarmConfig;
             this.callback = callback;
         }
     }
@@ -187,10 +204,6 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         /** Notify the IkeConnectionController caller of the internal error */
         void onError(IkeInternalException exception);
-
-        /** Notify the IkeConnectionController caller that the IkeSocket has switched */
-        // TODO: Remove this callback when IkeConnectrionController can manage IkeSocket
-        void onIkeSocketSwitched(boolean isUdpEncapSocket);
     }
 
     /** External dependencies, for injection in tests */
@@ -199,6 +212,29 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         /** Gets an IkeLocalAddressGenerator */
         public IkeLocalAddressGenerator newIkeLocalAddressGenerator() {
             return new IkeLocalAddressGenerator();
+        }
+
+        /** Builds and starts NATT keepalive */
+        public IkeNattKeepalive newIkeNattKeepalive(
+                Context context,
+                InetAddress localAddress,
+                InetAddress remoteAddress,
+                UdpEncapsulationSocket udpEncapSocket,
+                Network network,
+                IkeAlarmConfig alarmConfig)
+                throws IOException {
+            IkeNattKeepalive keepalive =
+                    new IkeNattKeepalive(
+                            context,
+                            context.getSystemService(ConnectivityManager.class),
+                            (int) TimeUnit.MILLISECONDS.toSeconds(alarmConfig.delayMs),
+                            (Inet4Address) localAddress,
+                            (Inet4Address) remoteAddress,
+                            udpEncapSocket,
+                            network,
+                            alarmConfig);
+            keepalive.start();
+            return keepalive;
         }
 
         /** Builds and returns a new IkeUdp4Socket */
@@ -232,6 +268,20 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             return IkeUdpEncapSocket.getIkeUdpEncapSocket(
                     sockConfig, ipSecManager, callback, handler.getLooper());
         }
+    }
+
+    /** Starts NAT-T keepalive for current IkeUdpEncapSocket */
+    private IkeNattKeepalive buildAndStartNattKeepalive() throws IOException {
+        IkeNattKeepalive keepalive =
+                mDependencies.newIkeNattKeepalive(
+                        mIkeContext.getContext(),
+                        mLocalAddress,
+                        mRemoteAddress,
+                        ((IkeUdpEncapSocket) mIkeSocket).getUdpEncapsulationSocket(),
+                        mNetwork,
+                        mKeepaliveAlarmConfig);
+
+        return keepalive;
     }
 
     private IkeSocket getIkeSocket(boolean isIpv4, boolean useEncapPort)
@@ -274,15 +324,25 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             return;
         }
 
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.stop();
+            mIkeNattKeepalive = null;
+        }
+
         for (IkeSaRecord saRecord : mIkeSaRecords) {
             migrateSpiToIkeSocket(saRecord.getLocalSpi(), mIkeSocket, newSocket);
         }
         mIkeSocket.releaseReference(this);
         mIkeSocket = newSocket;
 
-        mCallback.onIkeSocketSwitched(mIkeSocket instanceof IkeUdpEncapSocket);
+        try {
+            if (mIkeSocket instanceof IkeUdpEncapSocket) {
+                mIkeNattKeepalive = buildAndStartNattKeepalive();
+            }
+        } catch (IOException e) {
+            throw new IkeInternalException(e);
+        }
     }
-
     /** Sets up the IkeConnectionController */
     public void setUp() throws IkeInternalException {
         try {
@@ -298,7 +358,10 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
                     mIkeLocalAddressGenerator.generateLocalAddress(
                             mNetwork, isIpv4, mRemoteAddress, remotePort);
             mIkeSocket = getIkeSocket(isIpv4, mForcePort4500);
-            mCallback.onIkeSocketSwitched(mIkeSocket instanceof IkeUdpEncapSocket);
+
+            if (mIkeSocket instanceof IkeUdpEncapSocket) {
+                mIkeNattKeepalive = buildAndStartNattKeepalive();
+            }
         } catch (IOException | ErrnoException e) {
             throw new IkeInternalException(e);
         }
@@ -306,6 +369,10 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     /** Tears down the IkeConnectionController */
     public void tearDown() {
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.stop();
+        }
+
         if (mNetworkCallback != null) {
             mConnectivityManager.unregisterNetworkCallback(mNetworkCallback);
             mNetworkCallback = null;
@@ -442,8 +509,15 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return mIkeSocket.getIkeServerPort();
     }
 
-    /** Handles the case tha a NAT has been detected during IKE INIT */
-    public void handleNatDetectedInIkeInit(long localSpi) throws IkeInternalException {
+    /** Handles NAT detection result in IKE INIT */
+    public void handleNatDetectionResultInIkeInit(boolean isNatDetected, long localSpi)
+            throws IkeInternalException {
+        if (!isNatDetected) {
+            mNatStatus = NAT_NOT_DETECTED;
+            return;
+        }
+
+        mNatStatus = NAT_DETECTED;
         if (mRemoteAddress instanceof Inet6Address) {
             throw new IkeInternalException(
                     new UnsupportedOperationException("IPv6 NAT-T not supported"));
@@ -457,15 +531,33 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             return;
         }
 
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.stop();
+            mIkeNattKeepalive = null;
+        }
+
         migrateSpiToIkeSocket(localSpi, mIkeSocket, newSocket);
         mIkeSocket.releaseReference(this);
         mIkeSocket = newSocket;
 
-        mCallback.onIkeSocketSwitched(mIkeSocket instanceof IkeUdpEncapSocket);
+        try {
+            if (mIkeSocket instanceof IkeUdpEncapSocket) {
+                mIkeNattKeepalive = buildAndStartNattKeepalive();
+            }
+        } catch (IOException e) {
+            throw new IkeInternalException(e);
+        }
     }
 
-    /** Handles the case tha a NAT has been detected with a mobility event */
-    public void handleNatDetectedWithMobilityEvent() throws IkeInternalException {
+    /** Handles NAT detection result in the MOBIKE INFORMATIONAL exchange */
+    public void handleNatDetectionResultInMobike(boolean isNatDetected)
+            throws IkeInternalException {
+        if (!isNatDetected) {
+            mNatStatus = NAT_NOT_DETECTED;
+            return;
+        }
+
+        mNatStatus = NAT_DETECTED;
         if (mRemoteAddress instanceof Inet6Address) {
             throw new IkeInternalException(
                     new UnsupportedOperationException("IPv6 NAT-T not supported"));
@@ -476,13 +568,14 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
 
     /**
-     * Sets if the server support NAT-T or not.
+     * Marks that the server does not support NAT-T
      *
-     * <p>This is method should be called at the first time IKE client sends NAT_DETECTION (in other
-     * words the first time IKE client is using IPv4 address since IKE does not support IPv6 NAT-T)
+     * <p>This is method should only be called at the first time IKE client sends NAT_DETECTION (in
+     * other words the first time IKE client is using IPv4 address since IKE does not support IPv6
+     * NAT-T)
      */
-    public void setSeverNattSupport(boolean doesServerSupportNatt) {
-        mNatStatus = doesServerSupportNatt ? NAT_TRAVERSAL_SUPPORTED : NAT_TRAVERSAL_UNSUPPORTED;
+    public void markSeverNattUnsupported() {
+        mNatStatus = NAT_TRAVERSAL_UNSUPPORTED;
     }
 
     /**
@@ -495,10 +588,35 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mNatStatus = NAT_TRAVERSAL_SUPPORT_NOT_CHECKED;
     }
 
+    /** This MUST only be called in a test. */
+    @VisibleForTesting
+    public void setNatDetected(boolean isNatDetected) {
+        if (!isNatDetected) {
+            mNatStatus = NAT_NOT_DETECTED;
+            return;
+        }
+
+        mNatStatus = NAT_DETECTED;
+    }
+
     /** Returns the NAT status */
     @NatStatus
     public int getNatStatus() {
         return mNatStatus;
+    }
+
+    /** Returns the IkeNattKeepalive */
+    public IkeNattKeepalive getIkeNattKeepalive() {
+        return mIkeNattKeepalive;
+    }
+
+    /** Fire software keepalive */
+    public void fireKeepAlive() {
+        // Software keepalive alarm is fired. Ignore the alarm whe NAT-T keepalive is no
+        // longer needed (e.g. migrating from IPv4 to IPv6)
+        if (mIkeNattKeepalive != null) {
+            mIkeNattKeepalive.onAlarmFired();
+        }
     }
 
     private void resolveAndSetAvailableRemoteAddresses() throws IOException {
@@ -610,10 +728,11 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             // Switch to port 4500 if NAT-T is supported (whether or not mobility is done via MOBIKE
             // or Rekey Child). This way, there is no need to change the ports later if a NAT
             // is detected on the new path.
-            if (mNatStatus == NAT_TRAVERSAL_SUPPORTED
+
+            if (mNatStatus != NAT_TRAVERSAL_UNSUPPORTED
                     && mIkeSocket.getIkeServerPort() != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
                 getAndSwitchToIkeSocket(
-                        mIkeSocket instanceof IkeUdp4Socket, true /* useEncapPort */);
+                        mRemoteAddress instanceof Inet4Address, true /* useEncapPort */);
             }
         } catch (RuntimeException e) {
             // Error occurred while registering the NetworkCallback
@@ -652,7 +771,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
         // If it is known that the server supports NAT-T, use port 4500. Otherwise, use port 500.
-        boolean nattSupported = mNatStatus == NAT_TRAVERSAL_SUPPORTED;
+        boolean nattSupported = mNatStatus != NAT_TRAVERSAL_UNSUPPORTED;
         int serverPort =
                 nattSupported
                         ? IkeSocket.SERVER_PORT_UDP_ENCAPSULATED
