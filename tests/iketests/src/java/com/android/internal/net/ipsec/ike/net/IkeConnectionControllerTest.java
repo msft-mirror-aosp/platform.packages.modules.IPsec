@@ -99,8 +99,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 .thenReturn(mMockIkeUdp6WithEncapPortSocket);
 
         return new IkeConnectionController(
+                mIkeContext,
                 new IkeConnectionController.Config(
-                        mIkeContext, mMockIkeParams, mMockAlarmConfig, mMockConnectionCtrlCb),
+                        mMockIkeParams, mMockAlarmConfig, mMockConnectionCtrlCb),
                 mMockConnectionCtrlDeps);
     }
 
