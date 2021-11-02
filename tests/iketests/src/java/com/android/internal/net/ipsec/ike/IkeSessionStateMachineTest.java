@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.test.ike;
 
+import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.test.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
@@ -1912,7 +1913,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertByteArrayListEquals(vendorIds, mIkeSessionStateMachine.mRemoteVendorIds);
 
         // Validate fragmentation support negotiation
-        assertTrue(mIkeSessionStateMachine.mSupportFragment);
         assertEquals(
                 Arrays.asList(EXTENSION_TYPE_FRAGMENTATION),
                 mIkeSessionStateMachine.mEnabledExtensions);
@@ -1931,10 +1931,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.mIkePrf = mock(IkeMacPrf.class);
         mIkeSessionStateMachine.mSaProposal = buildNegotiatedSaProposal();
         mIkeSessionStateMachine.mCurrentIkeSaRecord = mSpyCurrentIkeSaRecord;
-        mIkeSessionStateMachine.mSupportFragment = true;
         mIkeSessionStateMachine.mRemoteVendorIds =
                 Arrays.asList(REMOTE_VENDOR_ID_ONE, REMOTE_VENDOR_ID_TWO);
-        mIkeSessionStateMachine.mEnabledExtensions = new ArrayList<>();
         mIkeSessionStateMachine.mEnabledExtensions.add(EXTENSION_TYPE_FRAGMENTATION);
         mIkeSessionStateMachine.addIkeSaRecord(mSpyCurrentIkeSaRecord);
 
@@ -5764,7 +5762,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 buildIkeSessionParamsWithIkeOptions(IKE_OPTION_MOBIKE),
                 authRelatedPayloads,
                 true /* isMobikeEnabled */);
-        assertTrue(mIkeSessionStateMachine.mSupportMobike);
+        assertTrue(mIkeSessionStateMachine.mEnabledExtensions.contains(EXTENSION_TYPE_MOBIKE));
     }
 
     @Test
@@ -5912,7 +5910,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         }
         assertTrue(isMobikeSupportIndicated);
 
-        assertEquals(doesPeerSupportMobike, mIkeSessionStateMachine.mSupportMobike);
+        assertEquals(
+                doesPeerSupportMobike,
+                mIkeSessionStateMachine.mEnabledExtensions.contains(EXTENSION_TYPE_MOBIKE));
 
         ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
                 ArgumentCaptor.forClass(IkeNetworkCallbackBase.class);
