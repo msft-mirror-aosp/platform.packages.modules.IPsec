@@ -141,8 +141,9 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     /** Constructor of IkeConnectionController */
     @VisibleForTesting
-    public IkeConnectionController(Config config, Dependencies dependencies) {
-        mIkeContext = config.ikeContext;
+    public IkeConnectionController(
+            IkeContext ikeContext, Config config, Dependencies dependencies) {
+        mIkeContext = ikeContext;
         mConnectivityManager = mIkeContext.getContext().getSystemService(ConnectivityManager.class);
         mIpSecManager = mIkeContext.getContext().getSystemService(IpSecManager.class);
         mDependencies = dependencies;
@@ -167,24 +168,21 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
 
     /** Constructor of IkeConnectionController */
-    public IkeConnectionController(Config config) {
-        this(config, new Dependencies());
+    public IkeConnectionController(IkeContext ikeContext, Config config) {
+        this(ikeContext, config, new Dependencies());
     }
 
     /** Config includes all configurations to build an IkeConnectionController */
     public static class Config {
-        public final IkeContext ikeContext;
         public final IkeSessionParams ikeParams;
         public final IkeAlarmConfig keepaliveAlarmConfig;
         public final Callback callback;
 
         /** Constructor for IkeConnectionController.Config */
         public Config(
-                IkeContext ikeContext,
                 IkeSessionParams ikeParams,
                 IkeAlarmConfig keepaliveAlarmConfig,
                 Callback callback) {
-            this.ikeContext = ikeContext;
             this.ikeParams = ikeParams;
             this.keepaliveAlarmConfig = keepaliveAlarmConfig;
             this.callback = callback;
