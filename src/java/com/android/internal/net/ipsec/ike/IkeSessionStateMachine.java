@@ -53,8 +53,9 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_INITIATOR;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_VENDOR;
-import static com.android.internal.net.ipsec.ike.net.IkeConnectionController.NAT_TRAVERSAL_SUPPORTED;
+import static com.android.internal.net.ipsec.ike.net.IkeConnectionController.NAT_DETECTED;
 import static com.android.internal.net.ipsec.ike.net.IkeConnectionController.NAT_TRAVERSAL_SUPPORT_NOT_CHECKED;
+import static com.android.internal.net.ipsec.ike.net.IkeConnectionController.NAT_TRAVERSAL_UNSUPPORTED;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_IKE;
@@ -122,7 +123,6 @@ import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
 import com.android.internal.net.ipsec.ike.crypto.IkeMacPrf;
 import com.android.internal.net.ipsec.ike.ike3gpp.Ike3gppExtensionExchange;
-import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.ike.message.IkeAuthDigitalSignPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPayload;
 import com.android.internal.net.ipsec.ike.message.IkeAuthPskPayload;
@@ -164,7 +164,6 @@ import java.io.IOException;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.net.Inet4Address;
-import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
@@ -409,13 +408,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** Peer-selected DH group to use. Defaults to first proposed DH group in first SA proposal. */
     @VisibleForTesting int mPeerSelectedDhGroup;
 
-    /** Indicates if local node is behind a NAT. */
-    @VisibleForTesting boolean mLocalNatDetected;
-    /** Indicates if remote node is behind a NAT. */
-    @VisibleForTesting boolean mRemoteNatDetected;
-    /** NATT keepalive scheduler. Initialized when a NAT is detected while using V4 addresses */
-    @VisibleForTesting IkeNattKeepalive mIkeNattKeepalive;
-
     /** Indicates if both sides support fragmentation. Set in IKE INIT */
     @VisibleForTesting boolean mSupportFragment;
     /** Indicates if both sides support MOBIKE. Set in IKE AUTH. */
@@ -567,6 +559,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         new IkeConnectionController.Config(
                                 mIkeContext,
                                 mIkeSessionParams,
+                                buildKeepaliveAlarmConfig(
+                                        getHandler(),
+                                        context,
+                                        mIkeSessionId,
+                                        mIkeSessionParams.getNattKeepAliveDelaySeconds()),
                                 this));
         mIkeSpiGenerator = new IkeSpiGenerator(mIkeContext.getRandomnessFactory());
         mIpSecSpiGenerator =
@@ -1045,10 +1042,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         // that contains the first child SA proposal
         CreateChildSaHelper.releaseSpiResources(mFirstChildReqList);
 
-        if (mIkeNattKeepalive != null) {
-            mIkeNattKeepalive.stop();
-        }
-
         mIkeConnectionCtrl.tearDown();
 
         sIkeAlarmReceiver.unregisterIkeSession(mIkeSessionId);
@@ -1180,7 +1173,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     buildIkeAlarmIntent(
                             mIkeContext.getContext(),
                             ACTION_DPD,
-                            getIntentIdentifier(remoteIkeSpi),
+                            getIntentIdentifier(mIkeSessionId, remoteIkeSpi),
                             intentIkeMsg);
 
             // Initiating DPD is a way to detect the aliveness of the remote server and also a
@@ -1317,12 +1310,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
     }
 
-    private String getIntentIdentifier() {
-        return TAG + "_" + mIkeSessionId;
+    private static String getIntentIdentifier(int ikeSessionId) {
+        return TAG + "_" + ikeSessionId;
     }
 
-    private String getIntentIdentifier(long remoteIkeSpi) {
-        return TAG + "_" + mIkeSessionId + "_" + remoteIkeSpi;
+    private static String getIntentIdentifier(int ikeSessionId, long remoteIkeSpi) {
+        return TAG + "_" + ikeSessionId + "_" + remoteIkeSpi;
     }
 
     private Message getIntentIkeSmMsg(int localRequestType, long remoteIkeSpi) {
@@ -1341,13 +1334,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 buildIkeAlarmIntent(
                         mIkeContext.getContext(),
                         ACTION_DELETE_IKE,
-                        getIntentIdentifier(remoteSpi),
+                        getIntentIdentifier(mIkeSessionId, remoteSpi),
                         deleteMsg);
         PendingIntent rekeySaIntent =
                 buildIkeAlarmIntent(
                         mIkeContext.getContext(),
                         ACTION_REKEY_IKE,
-                        getIntentIdentifier(remoteSpi),
+                        getIntentIdentifier(mIkeSessionId, remoteSpi),
                         rekeyMsg);
 
         return new SaLifetimeAlarmScheduler(
@@ -1378,6 +1371,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         return PendingIntent.getBroadcast(
                 context, 0 /* requestCode; unused */, intent, PendingIntent.FLAG_IMMUTABLE);
+    }
+
+    private static IkeAlarmConfig buildKeepaliveAlarmConfig(
+            Handler handler, Context context, int ikeSessionId, int keepaliveDelaySeconds) {
+        Message keepaliveMsg =
+                handler.obtainMessage(CMD_ALARM_FIRED, ikeSessionId, CMD_SEND_KEEPALIVE);
+        PendingIntent keepaliveIntent =
+                buildIkeAlarmIntent(
+                        context, ACTION_KEEPALIVE, getIntentIdentifier(ikeSessionId), keepaliveMsg);
+
+        return new IkeAlarmConfig(
+                context,
+                ACTION_KEEPALIVE,
+                TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds),
+                keepaliveIntent,
+                keepaliveMsg);
     }
 
     /**
@@ -1613,11 +1622,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         protected void handleFiredAlarm(Message message) {
             switch (message.arg2) {
                 case CMD_SEND_KEEPALIVE:
-                    // Software keepalive alarm is fired. Ignore the alarm whe NAT-T keepalive is no
-                    // longer needed (e.g. migrating from IPv4 to IPv6)
-                    if (mIkeNattKeepalive != null) {
-                        mIkeNattKeepalive.onAlarmFired();
-                    }
+                    mIkeConnectionCtrl.fireKeepAlive();
                     return;
                 case CMD_LOCAL_REQUEST_DELETE_CHILD: // Hits hard lifetime; fall through
                 case CMD_LOCAL_REQUEST_REKEY_CHILD: // Hits soft lifetime
@@ -3269,25 +3274,21 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 IkeNotifyPayload natDestPayload)
                 throws InvalidSyntaxException, IOException {
             if (!didPeerIncludeNattDetectionPayloads(natSourcePayloads, natDestPayload)) {
-                mIkeConnectionCtrl.setSeverNattSupport(false);
+                mIkeConnectionCtrl.markSeverNattUnsupported();
                 return;
             }
-
-            mIkeConnectionCtrl.setSeverNattSupport(true);
 
             // NAT detection
             long initIkeSpi = respMsg.ikeHeader.ikeInitiatorSpi;
             long respIkeSpi = respMsg.ikeHeader.ikeResponderSpi;
+            boolean isNatDetected =
+                    isLocalOrRemoteNatDetected(
+                            initIkeSpi, respIkeSpi, natSourcePayloads, natDestPayload);
 
-            updateLocalAndRemoteNatDetected(
-                    initIkeSpi, respIkeSpi, natSourcePayloads, natDestPayload);
-
-            if (mLocalNatDetected || mRemoteNatDetected) {
-                try {
-                    mIkeConnectionCtrl.handleNatDetectedInIkeInit(initIkeSpi);
-                } catch (IkeInternalException e) {
-                    handleIkeFatalError(e);
-                }
+            try {
+                mIkeConnectionCtrl.handleNatDetectionResultInIkeInit(isNatDetected, initIkeSpi);
+            } catch (IkeInternalException e) {
+                handleIkeFatalError(e);
             }
         }
 
@@ -3341,11 +3342,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
     }
 
-    /**
-     * Updates whether the local or remote peer are behind NATs. Assumes that mIkeConnectionCtrl is
-     * using IPv4 addresses.
-     */
-    private void updateLocalAndRemoteNatDetected(
+    /** Returns whether the local or remote peer is a behind NAT. */
+    private boolean isLocalOrRemoteNatDetected(
             long initIkeSpi,
             long respIkeSpi,
             List<IkeNotifyPayload> natSourcePayloads,
@@ -3357,7 +3355,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         respIkeSpi,
                         mIkeConnectionCtrl.getLocalAddress(),
                         mIkeConnectionCtrl.getLocalPort());
-        mLocalNatDetected = !Arrays.equals(expectedLocalNatData, natDestPayload.notifyData);
+        boolean localNatDetected = !Arrays.equals(expectedLocalNatData, natDestPayload.notifyData);
 
         // Check if the remote node is behind NAT
         byte[] expectedRemoteNatData =
@@ -3366,50 +3364,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         respIkeSpi,
                         mIkeConnectionCtrl.getRemoteAddress(),
                         mIkeConnectionCtrl.getRemotePort());
-        mRemoteNatDetected = true;
+        boolean remoteNatDetected = true;
         for (IkeNotifyPayload natPayload : natSourcePayloads) {
             // If none of the received hash matches the expected value, the remote node is
             // behind NAT.
             if (Arrays.equals(expectedRemoteNatData, natPayload.notifyData)) {
-                mRemoteNatDetected = false;
+                remoteNatDetected = false;
             }
         }
-    }
 
-    /** Starts NAT-T keepalive for current IkeUdpEncapSocket */
-    private IkeNattKeepalive buildAndStartNattKeepalive() throws IOException {
-        if (!mIkeConnectionCtrl.useUdpEncapSocket()) {
-            throw new IllegalStateException(
-                    "Cannot start NAT-T keepalive when IKE Session is not using UDP Encap socket");
-        }
-
-        Message keepaliveMsg = obtainMessage(CMD_ALARM_FIRED, mIkeSessionId, CMD_SEND_KEEPALIVE);
-        PendingIntent keepaliveIntent =
-                buildIkeAlarmIntent(
-                        mIkeContext.getContext(),
-                        ACTION_KEEPALIVE,
-                        getIntentIdentifier(),
-                        keepaliveMsg);
-
-        int keepaliveDelaySeconds = mIkeSessionParams.getNattKeepAliveDelaySeconds();
-        IkeNattKeepalive keepalive =
-                new IkeNattKeepalive(
-                        mIkeContext.getContext(),
-                        mIkeContext.getContext().getSystemService(ConnectivityManager.class),
-                        keepaliveDelaySeconds,
-                        (Inet4Address) mIkeConnectionCtrl.getLocalAddress(),
-                        (Inet4Address) mIkeConnectionCtrl.getRemoteAddress(),
-                        ((IkeUdpEncapSocket) mIkeConnectionCtrl.getIkeSocket())
-                                .getUdpEncapsulationSocket(),
-                        mIkeConnectionCtrl.getNetwork(),
-                        new IkeAlarmConfig(
-                                mIkeContext.getContext(),
-                                ACTION_KEEPALIVE,
-                                TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds),
-                                keepaliveIntent,
-                                keepaliveMsg));
-        keepalive.start();
-        return keepalive;
+        return localNatDetected || remoteNatDetected;
     }
 
     /**
@@ -5139,14 +5103,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 // Add NAT_DETECTION payloads when it is unknown if server supports NAT-T or not, or
                 // it is known that server supports NAT-T.
                 return mIkeConnectionCtrl.getNatStatus() == NAT_TRAVERSAL_SUPPORT_NOT_CHECKED
-                        || mIkeConnectionCtrl.getNatStatus() == NAT_TRAVERSAL_SUPPORTED;
+                        || mIkeConnectionCtrl.getNatStatus() != NAT_TRAVERSAL_UNSUPPORTED;
             } else {
                 // Add NAT_DETECTION payloads only when a NAT has been detected previously. This is
                 // mainly for updating the previous NAT detection result, so that if IKE Session
                 // migrates from a v4 NAT environment to a v6 non-NAT environment, both sides can
                 // switch to use non-encap ESP SA. This is especially beneficial for implementations
                 // that do not support Ipv6 NAT-T.
-                return mLocalNatDetected || mRemoteNatDetected;
+                return mIkeConnectionCtrl.getNatStatus() == NAT_DETECTED;
             }
         }
 
@@ -5282,31 +5246,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 // If this is first time that IKE client sends NAT_DETECTION payloads, mark that the
                 // server does not support NAT-T
                 if (mIkeConnectionCtrl.getNatStatus() == NAT_TRAVERSAL_SUPPORT_NOT_CHECKED) {
-                    mIkeConnectionCtrl.setSeverNattSupport(false);
+                    mIkeConnectionCtrl.markSeverNattUnsupported();
                 }
                 return;
             }
 
-            // If this is first time that IKE client sends NAT_DETECTION payloads, mark that the
-            // server supports NAT-T, and switch socket if a NAT is detected.
-            if (mIkeConnectionCtrl.getNatStatus() == NAT_TRAVERSAL_SUPPORT_NOT_CHECKED) {
-                mIkeConnectionCtrl.setSeverNattSupport(true);
-            }
-
-            updateLocalAndRemoteNatDetected(
-                    resp.ikeHeader.ikeInitiatorSpi,
-                    resp.ikeHeader.ikeResponderSpi,
-                    natSourcePayloads,
-                    natDestPayload);
-
-            if (mLocalNatDetected || mRemoteNatDetected) {
-                if (mIkeConnectionCtrl.getRemoteAddress() instanceof Inet6Address) {
-                    throw new IkeInternalException(
-                            new UnsupportedOperationException("An IPv6 NAT is detected."));
-                }
-
-                mIkeConnectionCtrl.handleNatDetectedWithMobilityEvent();
-            }
+            boolean isNatDetected =
+                    isLocalOrRemoteNatDetected(
+                            resp.ikeHeader.ikeInitiatorSpi,
+                            resp.ikeHeader.ikeResponderSpi,
+                            natSourcePayloads,
+                            natDestPayload);
+            mIkeConnectionCtrl.handleNatDetectionResultInMobike(isNatDetected);
         }
 
         private void migrateAllChildSAs() {
@@ -5488,21 +5439,5 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onIkePacketReceived(IkeHeader ikeHeader, byte[] ikePacketBytes) {
         sendMessage(CMD_RECEIVE_IKE_PACKET, new ReceivedIkePacket(ikeHeader, ikePacketBytes));
-    }
-
-    @Override
-    public void onIkeSocketSwitched(boolean isUdpEncapSocket) {
-        if (mIkeNattKeepalive != null) {
-            mIkeNattKeepalive.stop();
-            mIkeNattKeepalive = null;
-        }
-
-        if (isUdpEncapSocket) {
-            try {
-                mIkeNattKeepalive = buildAndStartNattKeepalive();
-            } catch (IOException e) {
-                handleIkeFatalError(e);
-            }
-        }
     }
 }
