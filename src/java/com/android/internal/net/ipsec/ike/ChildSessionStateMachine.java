@@ -251,23 +251,18 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      */
     ChildSessionStateMachine(
             IkeContext ikeContext,
-            int ikeSessionUniqueId,
-            Handler ikeHandler,
-            IpSecManager ipSecManager,
-            IpSecSpiGenerator ipSecSpiGenerator,
-            ChildSessionParams sessionParams,
-            Executor userCbExecutor,
+            ChildSessionStateMachine.Config childSmConfig,
             ChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback) {
-        super(TAG, ikeContext.getLooper(), userCbExecutor);
+        super(TAG, ikeContext.getLooper(), childSmConfig.userCbExecutor);
 
         mIkeContext = ikeContext;
-        mIkeSessionId = ikeSessionUniqueId;
-        mIkeHandler = ikeHandler;
-        mIpSecManager = ipSecManager;
-        mIpSecSpiGenerator = ipSecSpiGenerator;
-        mChildSessionParams = sessionParams;
+        mIkeSessionId = childSmConfig.ikeSessionId;
+        mIkeHandler = childSmConfig.ikeHandler;
+        mIpSecManager = childSmConfig.ipSecManager;
+        mIpSecSpiGenerator = childSmConfig.ipSecSpiGenerator;
 
+        mChildSessionParams = childSmConfig.sessionParams;
         mUserCallback = userCallback;
         mChildSmCallback = childSmCallback;
 
@@ -287,6 +282,31 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         addState(mRekeyChildRemoteDelete, mKillChildSessionParent);
 
         setInitialState(mInitial);
+    }
+
+    // Configurations provided by an IKE Session for building the Child Session
+    static class Config {
+        public final int ikeSessionId;
+        public final Handler ikeHandler;
+        public final ChildSessionParams sessionParams;
+        public final IpSecManager ipSecManager;
+        public final IpSecSpiGenerator ipSecSpiGenerator;
+        public final Executor userCbExecutor;
+
+        Config(
+                int ikeSessionId,
+                Handler ikeHandler,
+                ChildSessionParams sessionParams,
+                IpSecManager ipSecManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
+                Executor userCbExecutor) {
+            this.ikeSessionId = ikeSessionId;
+            this.ikeHandler = ikeHandler;
+            this.sessionParams = sessionParams;
+            this.ipSecManager = ipSecManager;
+            this.ipSecSpiGenerator = ipSecSpiGenerator;
+            this.userCbExecutor = userCbExecutor;
+        }
     }
 
     /**
