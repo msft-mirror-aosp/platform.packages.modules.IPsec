@@ -556,8 +556,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         mLocalRequestFactory = mDeps.newLocalRequestFactory();
         mIkeConnectionCtrl =
                 mDeps.newIkeConnectionController(
+                        mIkeContext,
                         new IkeConnectionController.Config(
-                                mIkeContext,
                                 mIkeSessionParams,
                                 buildKeepaliveAlarmConfig(
                                         getHandler(),
@@ -660,33 +660,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         /** Builds and starts a new ChildSessionStateMachine */
         public ChildSessionStateMachine newChildSessionStateMachine(
                 IkeContext ikeContext,
-                int ikeSessionUniqueId,
-                Handler ikeHandler,
-                IpSecSpiGenerator ipSecSpiGenerator,
-                ChildSessionParams sessionParams,
-                Executor userCbExecutor,
+                ChildSessionStateMachine.Config childSessionSmConfig,
                 ChildSessionCallback userCallbacks,
                 ChildSessionStateMachine.IChildSessionSmCallback childSmCallback) {
             ChildSessionStateMachine childSession =
                     new ChildSessionStateMachine(
-                            ikeContext,
-                            ikeSessionUniqueId,
-                            ikeHandler,
-                            (IpSecManager)
-                                    ikeContext.getContext().getSystemService(Context.IPSEC_SERVICE),
-                            ipSecSpiGenerator,
-                            sessionParams,
-                            userCbExecutor,
-                            userCallbacks,
-                            childSmCallback);
+                            ikeContext, childSessionSmConfig, userCallbacks, childSmCallback);
             childSession.start();
             return childSession;
         }
 
         /** Builds and returns a new IkeConnectionController */
         public IkeConnectionController newIkeConnectionController(
-                IkeConnectionController.Config config) {
-            return new IkeConnectionController(config);
+                IkeContext ikeContext, IkeConnectionController.Config config) {
+            return new IkeConnectionController(ikeContext, config);
         }
 
         /** Gets a LocalRequestFactory */
@@ -726,11 +713,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     callbacks,
                     mDeps.newChildSessionStateMachine(
                             mIkeContext,
-                            mIkeSessionId,
-                            getHandler(),
-                            mIpSecSpiGenerator,
-                            childParams,
-                            mUserCbExecutor,
+                            new ChildSessionStateMachine.Config(
+                                    mIkeSessionId,
+                                    getHandler(),
+                                    childParams,
+                                    (IpSecManager)
+                                            mIkeContext
+                                                    .getContext()
+                                                    .getSystemService(Context.IPSEC_SERVICE),
+                                    mIpSecSpiGenerator,
+                                    mUserCbExecutor),
                             callbacks,
                             new ChildSessionSmCallback()));
         }
