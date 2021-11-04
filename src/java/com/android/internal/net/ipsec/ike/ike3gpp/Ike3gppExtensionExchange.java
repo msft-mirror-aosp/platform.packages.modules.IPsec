@@ -17,7 +17,7 @@ package com.android.internal.net.ipsec.ike.ike3gpp;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_IKE_AUTH;
+import static com.android.internal.net.ipsec.ike.message.IkeMessage.IKE_EXCHANGE_SUBTYPE_IKE_AUTH;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
@@ -26,7 +26,7 @@ import android.net.ipsec.ike.ike3gpp.Ike3gppExtension;
 import android.net.ipsec.ike.ike3gpp.Ike3gppExtension.Ike3gppDataListener;
 import android.util.ArraySet;
 
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
+import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
 
 import java.util.Collections;
@@ -128,7 +128,7 @@ public class Ike3gppExtensionExchange implements AutoCloseable {
             default:
                 // No 3GPP-specific behavior for this exchange subtype
                 String exchangeSubtypeString =
-                        IkeSessionStateMachine.EXCHANGE_SUBTYPE_TO_STRING.get(exchangeSubtype);
+                        IkeMessage.getIkeExchangeSubTypeString(exchangeSubtype);
                 logw("No 3GPP request payloads added for: " + exchangeSubtypeString);
                 return Collections.EMPTY_LIST;
         }
@@ -148,7 +148,7 @@ public class Ike3gppExtensionExchange implements AutoCloseable {
             default:
                 // No 3GPP-specific behavior for this exchange subtype
                 String exchangeSubtypeString =
-                        IkeSessionStateMachine.EXCHANGE_SUBTYPE_TO_STRING.get(exchangeSubtype);
+                        IkeMessage.getIkeExchangeSubTypeString(exchangeSubtype);
                 logw("No 3GPP response payloads expected for: " + exchangeSubtypeString);
                 return Collections.EMPTY_LIST;
         }
@@ -171,7 +171,7 @@ public class Ike3gppExtensionExchange implements AutoCloseable {
             default:
                 // No 3GPP-specific behavior for this exchange subtype
                 String exchangeSubtypeString =
-                        IkeSessionStateMachine.EXCHANGE_SUBTYPE_TO_STRING.get(exchangeSubtype);
+                        IkeMessage.getIkeExchangeSubTypeString(exchangeSubtype);
                 logw("Received unexpected 3GPP payloads in: " + exchangeSubtypeString);
         }
     }
