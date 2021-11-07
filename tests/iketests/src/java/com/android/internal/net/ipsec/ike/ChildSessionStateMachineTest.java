@@ -28,11 +28,11 @@ import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.test.ike.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
-import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
-import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
 import static com.android.internal.net.ipsec.test.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.test.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+import static com.android.internal.net.ipsec.test.ike.message.IkeMessage.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.internal.net.ipsec.test.ike.message.IkeMessage.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
 import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_CP;
 import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_DELETE;
@@ -2007,12 +2007,13 @@ public final class ChildSessionStateMachineTest {
             ChildSessionParams childSessionParams, Executor executor) {
         return new ChildSessionStateMachine(
                 new IkeContext(mLooper.getLooper(), mContext, createMockRandomFactory()),
-                IKE_SESSION_UNIQUE_ID,
-                mMockIkeHandler,
-                mMockIpSecManager,
-                mIpSecSpiGenerator,
-                childSessionParams,
-                executor,
+                new ChildSessionStateMachine.Config(
+                        IKE_SESSION_UNIQUE_ID,
+                        mMockIkeHandler,
+                        childSessionParams,
+                        mMockIpSecManager,
+                        mIpSecSpiGenerator,
+                        executor),
                 mMockChildSessionCallback,
                 mMockChildSessionSmCallback);
     }
