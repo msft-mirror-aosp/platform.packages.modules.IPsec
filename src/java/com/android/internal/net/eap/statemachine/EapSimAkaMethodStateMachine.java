@@ -266,12 +266,21 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
     @VisibleForTesting
     EapResult buildResponseMessageWithMac(int identifier, int eapSubtype, byte[] extraData) {
         // capacity of 1 for AtMac to be added
-        return buildResponseMessageWithMac(identifier, eapSubtype, extraData, new ArrayList<>(1));
+        return buildResponseMessageWithMac(
+                identifier,
+                eapSubtype,
+                extraData,
+                new ArrayList<>(1) /* attributes */,
+                null /* flagsToAdd */);
     }
 
     @VisibleForTesting
     EapResult buildResponseMessageWithMac(
-            int identifier, int eapSubtype, byte[] extraData, List<EapSimAkaAttribute> attributes) {
+            int identifier,
+            int eapSubtype,
+            byte[] extraData,
+            List<EapSimAkaAttribute> attributes,
+            @EapResponse.EapResponseFlag int[] flagsToAdd) {
         try {
             attributes = new ArrayList<>(attributes);
             attributes.add(new AtMac());
@@ -282,7 +291,7 @@ public abstract class EapSimAkaMethodStateMachine extends EapMethodStateMachine 
             eapSimAkaTypeData.attributeMap.put(EAP_AT_MAC, new AtMac(mac));
             EapData eapData = new EapData(getEapMethod(), eapSimAkaTypeData.encode());
             EapMessage eapMessage = new EapMessage(EAP_CODE_RESPONSE, identifier, eapData);
-            return EapResponse.getEapResponse(eapMessage);
+            return EapResponse.getEapResponse(eapMessage, flagsToAdd);
         } catch (EapSimAkaInvalidAttributeException | EapSilentException ex) {
             // this should never happen
             return new EapError(ex);
