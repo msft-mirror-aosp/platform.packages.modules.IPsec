@@ -394,32 +394,49 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     private final Ike3gppExtensionExchange mIke3gppExtensionExchange;
 
     // States
-    @VisibleForTesting final State mKillIkeSessionParent = new KillIkeSessionParent();
-
-    @VisibleForTesting final State mInitial = new Initial();
-    @VisibleForTesting final State mIdle = new Idle();
-    @VisibleForTesting final State mChildProcedureOngoing = new ChildProcedureOngoing();
-    @VisibleForTesting final State mReceiving = new Receiving();
-    @VisibleForTesting final State mCreateIkeLocalIkeInit = new CreateIkeLocalIkeInit();
-    @VisibleForTesting final State mCreateIkeLocalIkeAuth = new CreateIkeLocalIkeAuth();
-    @VisibleForTesting final State mCreateIkeLocalIkeAuthInEap = new CreateIkeLocalIkeAuthInEap();
+    @VisibleForTesting
+    final KillIkeSessionParent mKillIkeSessionParent = new KillIkeSessionParent();
+    @VisibleForTesting
+    final Initial mInitial = new Initial();
+    @VisibleForTesting
+    final Idle mIdle = new Idle();
+    @VisibleForTesting
+    final ChildProcedureOngoing mChildProcedureOngoing = new ChildProcedureOngoing();
+    @VisibleForTesting
+    final Receiving mReceiving = new Receiving();
+    @VisibleForTesting
+    final CreateIkeLocalIkeInit mCreateIkeLocalIkeInit = new CreateIkeLocalIkeInit();
 
     @VisibleForTesting
-    final State mCreateIkeLocalIkeAuthPostEap = new CreateIkeLocalIkeAuthPostEap();
-
-    @VisibleForTesting final State mRekeyIkeLocalCreate = new RekeyIkeLocalCreate();
-    @VisibleForTesting final State mSimulRekeyIkeLocalCreate = new SimulRekeyIkeLocalCreate();
+    final CreateIkeLocalIkeAuth mCreateIkeLocalIkeAuth = new CreateIkeLocalIkeAuth();
+    @VisibleForTesting
+    final CreateIkeLocalIkeAuthInEap mCreateIkeLocalIkeAuthInEap = new CreateIkeLocalIkeAuthInEap();
+    @VisibleForTesting
+    final CreateIkeLocalIkeAuthPostEap mCreateIkeLocalIkeAuthPostEap =
+            new CreateIkeLocalIkeAuthPostEap();
 
     @VisibleForTesting
-    final State mSimulRekeyIkeLocalDeleteRemoteDelete = new SimulRekeyIkeLocalDeleteRemoteDelete();
+    final RekeyIkeLocalCreate mRekeyIkeLocalCreate = new RekeyIkeLocalCreate();
+    @VisibleForTesting
+    final SimulRekeyIkeLocalCreate mSimulRekeyIkeLocalCreate = new SimulRekeyIkeLocalCreate();
+    @VisibleForTesting
+    final SimulRekeyIkeLocalDeleteRemoteDelete mSimulRekeyIkeLocalDeleteRemoteDelete =
+            new SimulRekeyIkeLocalDeleteRemoteDelete();
+    @VisibleForTesting
+    final SimulRekeyIkeLocalDelete mSimulRekeyIkeLocalDelete = new SimulRekeyIkeLocalDelete();
+    @VisibleForTesting
+    final SimulRekeyIkeRemoteDelete mSimulRekeyIkeRemoteDelete = new SimulRekeyIkeRemoteDelete();
+    @VisibleForTesting
+    final RekeyIkeLocalDelete mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
+    @VisibleForTesting
+    final RekeyIkeRemoteDelete mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
 
-    @VisibleForTesting final State mSimulRekeyIkeLocalDelete = new SimulRekeyIkeLocalDelete();
-    @VisibleForTesting final State mSimulRekeyIkeRemoteDelete = new SimulRekeyIkeRemoteDelete();
-    @VisibleForTesting final State mRekeyIkeLocalDelete = new RekeyIkeLocalDelete();
-    @VisibleForTesting final State mRekeyIkeRemoteDelete = new RekeyIkeRemoteDelete();
-    @VisibleForTesting final State mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
-    @VisibleForTesting final State mDpdIkeLocalInfo = new DpdIkeLocalInfo();
-    @VisibleForTesting final State mMobikeLocalInfo = new MobikeLocalInfo();
+    @VisibleForTesting
+    final DeleteIkeLocalDelete mDeleteIkeLocalDelete = new DeleteIkeLocalDelete();
+    @VisibleForTesting
+    final DpdIkeLocalInfo mDpdIkeLocalInfo = new DpdIkeLocalInfo();
+    @VisibleForTesting
+    final MobikeLocalInfo mMobikeLocalInfo = new MobikeLocalInfo();
 
     /** Constructor for testing. */
     @VisibleForTesting
@@ -530,10 +547,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         // Peer-selected DH group to use. Defaults to first proposed DH group in first SA proposal.
         int peerSelectedDhGroup =
                 mIkeSessionParams.getSaProposals().get(0).getDhGroupTransforms()[0].id;
-        ((Initial) mInitial)
-                .setIkeSetupData(
-                        new InitialSetupData(
-                                firstChildParams, firstChildSessionCallback, peerSelectedDhGroup));
+        mInitial.setIkeSetupData(
+                new InitialSetupData(
+                        firstChildParams, firstChildSessionCallback, peerSelectedDhGroup));
         setInitialState(mInitial);
 
         // TODO: Find a way to make it safe to release WakeLock when #onNewProcedureReady is called
@@ -1178,8 +1194,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_LOCAL_REQUEST_CREATE_IKE:
-                    ((CreateIkeLocalIkeInit) mCreateIkeLocalIkeInit)
-                            .setIkeSetupData(mInitialSetupData);
+                    mCreateIkeLocalIkeInit.setIkeSetupData(mInitialSetupData);
                     transitionTo(mCreateIkeLocalIkeInit);
                     return HANDLED;
                 case CMD_FORCE_TRANSITION:
@@ -3005,15 +3020,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
 
-                ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth)
-                        .setIkeSetupData(
-                                new IkeInitData(
-                                        mInitialSetupData,
-                                        mIkeInitRequestBytes,
-                                        mIkeInitResponseBytes,
-                                        mIkeInitNoncePayload,
-                                        mIkeRespNoncePayload,
-                                        mPeerSignatureHashAlgorithms));
+                mCreateIkeLocalIkeAuth.setIkeSetupData(
+                        new IkeInitData(
+                                mInitialSetupData,
+                                mIkeInitRequestBytes,
+                                mIkeInitResponseBytes,
+                                mIkeInitNoncePayload,
+                                mIkeRespNoncePayload,
+                                mPeerSignatureHashAlgorithms));
                 transitionTo(mCreateIkeLocalIkeAuth);
             } catch (IkeProtocolException | GeneralSecurityException | IOException e) {
                 if (e instanceof InvalidKeException) {
@@ -3035,12 +3049,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         mIkeInitRequestBytes = null;
                         mIkeInitNoncePayload = null;
 
-                        ((Initial) mInitial)
-                                .setIkeSetupData(
-                                        new InitialSetupData(
-                                                mInitialSetupData.firstChildSessionParams,
-                                                mInitialSetupData.firstChildCallback,
-                                                requestedDhGroup));
+                        mInitial.setIkeSetupData(
+                                new InitialSetupData(
+                                        mInitialSetupData.firstChildSessionParams,
+                                        mInitialSetupData.firstChildCallback,
+                                        requestedDhGroup));
                         transitionTo(mInitial);
                         openSession();
 
@@ -3631,13 +3644,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     }
                     deferMessage(obtainMessage(CMD_EAP_START_EAP_AUTH, ikeEapPayload));
 
-                    ((CreateIkeLocalIkeAuthInEap) mCreateIkeLocalIkeAuthInEap)
-                            .setIkeSetupData(
-                                    new IkeAuthData(
-                                            mSetupData,
-                                            mInitIdPayload,
-                                            mRespIdPayload,
-                                            mFirstChildReqList));
+                    mCreateIkeLocalIkeAuthInEap.setIkeSetupData(
+                            new IkeAuthData(
+                                    mSetupData,
+                                    mInitIdPayload,
+                                    mRespIdPayload,
+                                    mFirstChildReqList));
                     transitionTo(mCreateIkeLocalIkeAuthInEap);
                 } else {
                     if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
@@ -3968,8 +3980,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     return HANDLED;
                 case CMD_EAP_FINISH_EAP_AUTH:
                     deferMessage(msg);
-                    ((CreateIkeLocalIkeAuthPostEap) mCreateIkeLocalIkeAuthPostEap)
-                            .setIkeSetupData(mSetupData);
+                    mCreateIkeLocalIkeAuthPostEap.setIkeSetupData(mSetupData);
                     transitionTo(mCreateIkeLocalIkeAuthPostEap);
 
                     return HANDLED;
