@@ -156,8 +156,6 @@ import com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.IkeLocal
 import com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.LocalRequestFactory;
 import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CreateIkeLocalIkeAuth;
 import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CreateIkeLocalIkeAuthInEap;
-import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CreateIkeLocalIkeAuthPostEap;
-import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CreateIkeLocalIkeInit;
 import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.ReceivedIkePacket;
 import com.android.internal.net.ipsec.test.ike.SaRecord.ISaRecordHelper;
 import com.android.internal.net.ipsec.test.ike.SaRecord.IkeSaRecord;
@@ -2024,8 +2022,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         @Override
         void performStateTransition() throws Exception {
-            ((CreateIkeLocalIkeAuth) mIkeSessionStateMachine.mCreateIkeLocalIkeAuth)
-                    .setIkeSetupData(mIkeInitData);
+            mIkeSessionStateMachine.mCreateIkeLocalIkeAuth.setIkeSetupData(mIkeInitData);
             mIkeSessionStateMachine.sendMessage(
                     IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                     mIkeSessionStateMachine.mCreateIkeLocalIkeAuth);
@@ -2071,8 +2068,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         @Override
         void performStateTransition() throws Exception {
-            ((CreateIkeLocalIkeAuthInEap) mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap)
-                    .setIkeSetupData(mIkeAuthData);
+            mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap.setIkeSetupData(mIkeAuthData);
             mIkeSessionStateMachine.sendMessage(
                     IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                     mIkeSessionStateMachine.mCreateIkeLocalIkeAuthInEap);
@@ -2088,8 +2084,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         @Override
         void performStateTransition() throws Exception {
-            ((CreateIkeLocalIkeAuthPostEap) mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap)
-                    .setIkeSetupData(mIkeAuthData);
+            mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap.setIkeSetupData(mIkeAuthData);
             mIkeSessionStateMachine.sendMessage(
                     IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                     mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap);
@@ -5042,8 +5037,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         mChildSessionParams,
                         mMockChildSessionCallback,
                         SaProposal.DH_GROUP_1024_BIT_MODP);
-        ((CreateIkeLocalIkeInit) mIkeSessionStateMachine.mCreateIkeLocalIkeInit)
-                .setIkeSetupData(initialSetupData);
+        mIkeSessionStateMachine.mCreateIkeLocalIkeInit.setIkeSetupData(initialSetupData);
         mIkeSessionStateMachine.sendMessage(
                 IkeSessionStateMachine.CMD_FORCE_TRANSITION,
                 mIkeSessionStateMachine.mCreateIkeLocalIkeInit);
