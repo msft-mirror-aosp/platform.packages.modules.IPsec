@@ -367,12 +367,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
 
-    /** Peer-selected DH group to use. Defaults to first proposed DH group in first SA proposal. */
-    @VisibleForTesting int mPeerSelectedDhGroup;
-
-    /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
-    @VisibleForTesting Set<Short> mPeerSignatureHashAlgorithms;
-
     /** Package private IkeSaProposal that represents the negotiated IKE SA proposal. */
     @VisibleForTesting IkeSaProposal mSaProposal;
 
@@ -380,25 +374,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @VisibleForTesting IkeMacIntegrity mIkeIntegrity;
     @VisibleForTesting IkeMacPrf mIkePrf;
 
-    // FIXME: b/131265898 Pass these parameters from CreateIkeLocalIkeInit to CreateIkeLocalIkeAuth
-    // as entry data when Android StateMachine can support that.
-    @VisibleForTesting byte[] mIkeInitRequestBytes;
-    @VisibleForTesting byte[] mIkeInitResponseBytes;
-    @VisibleForTesting IkeNoncePayload mIkeInitNoncePayload;
-    @VisibleForTesting IkeNoncePayload mIkeRespNoncePayload;
     @VisibleForTesting List<byte[]> mRemoteVendorIds = new ArrayList<>();
     @VisibleForTesting List<Integer> mEnabledExtensions = new ArrayList<>();
-
-    // FIXME: b/131265898 Pass these parameters from CreateIkeLocalIkeAuth through to
-    // CreateIkeLocalIkeAuthPostEap as entry data when Android StateMachine can support that.
-    @VisibleForTesting IkeIdPayload mInitIdPayload;
-    @VisibleForTesting IkeIdPayload mRespIdPayload;
-    @VisibleForTesting List<IkePayload> mFirstChildReqList;
-
-    // FIXME: b/131265898 Move into CreateIkeLocalIkeAuth, and pass through to
-    // CreateIkeLocalIkeAuthPostEap once passing entry data is supported
-    private ChildSessionParams mFirstChildSessionParams;
-    private ChildSessionCallback mFirstChildCallbacks;
 
     /** Package */
     @VisibleForTesting IkeSaRecord mCurrentIkeSaRecord;
@@ -493,11 +470,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         mIkeSessionParams = ikeParams;
 
-        // SaProposals.Builder guarantees there is at least one SA proposal, and each SA proposal
-        // has at least one DH group.
-        mPeerSelectedDhGroup =
-                mIkeSessionParams.getSaProposals().get(0).getDhGroupTransforms()[0].id;
-
         mTempFailHandler = new TempFailureHandler(looper);
 
         // There are at most three IkeSaRecords co-existing during simultaneous rekeying.
@@ -527,8 +499,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 new IpSecSpiGenerator(mIpSecManager, mIkeContext.getRandomnessFactory());
 
         mIkeSessionCallback = ikeSessionCallback;
-        mFirstChildSessionParams = firstChildParams;
-        mFirstChildCallbacks = firstChildSessionCallback;
         registerChildSessionCallback(firstChildParams, firstChildSessionCallback, true);
 
         mIke3gppExtensionExchange =
@@ -557,6 +527,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             addState(mMobikeLocalInfo, mKillIkeSessionParent);
         // CHECKSTYLE:ON IndentationCheck
 
+        // Peer-selected DH group to use. Defaults to first proposed DH group in first SA proposal.
+        int peerSelectedDhGroup =
+                mIkeSessionParams.getSaProposals().get(0).getDhGroupTransforms()[0].id;
+        ((Initial) mInitial)
+                .setIkeSetupData(
+                        new InitialSetupData(
+                                firstChildParams, firstChildSessionCallback, peerSelectedDhGroup));
         setInitialState(mInitial);
 
         // TODO: Find a way to make it safe to release WakeLock when #onNewProcedureReady is called
@@ -592,6 +569,109 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 ikeSessionCallback,
                 firstChildSessionCallback,
                 new Dependencies());
+    }
+
+    /**
+     * InitialSetupData contains original caller configurations that will be used in IKE setup.
+     *
+     * <p>This class will be instantiated in IkeSessionStateMachine constructor, and then passed to
+     * Initial state and eventually CreateIkeLocalIkeInit state
+     */
+    @VisibleForTesting
+    static class InitialSetupData {
+        public final ChildSessionParams firstChildSessionParams;
+        public final ChildSessionCallback firstChildCallback;
+
+        /** Peer-selected DH group to use. */
+        public final int peerSelectedDhGroup;
+
+        InitialSetupData(
+                ChildSessionParams firstChildSessionParams,
+                ChildSessionCallback firstChildCallback,
+                int peerSelectedDhGroup) {
+            this.firstChildSessionParams = firstChildSessionParams;
+            this.firstChildCallback = firstChildCallback;
+            this.peerSelectedDhGroup = peerSelectedDhGroup;
+        }
+
+        InitialSetupData(InitialSetupData initialSetupData) {
+            this(
+                    initialSetupData.firstChildSessionParams,
+                    initialSetupData.firstChildCallback,
+                    initialSetupData.peerSelectedDhGroup);
+        }
+    }
+
+    /**
+     * IkeInitData contains caller configurations and IKE INIT exchange results that will be used in
+     * IKE AUTH.
+     *
+     * <p>This class will be instantiated in CreateIkeLocalIkeInit state, and then passed to
+     * CreateIkeLocalIkeAuth state for IKE AUTH exchange(s).
+     */
+    @VisibleForTesting
+    static class IkeInitData extends InitialSetupData {
+        public final byte[] ikeInitRequestBytes;
+        public final byte[] ikeInitResponseBytes;
+        public final IkeNoncePayload ikeInitNoncePayload;
+        public final IkeNoncePayload ikeRespNoncePayload;
+
+        /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
+        public final Set<Short> peerSignatureHashAlgorithms;
+
+        IkeInitData(
+                InitialSetupData initialSetupData,
+                byte[] ikeInitRequestBytes,
+                byte[] ikeInitResponseBytes,
+                IkeNoncePayload ikeInitNoncePayload,
+                IkeNoncePayload ikeRespNoncePayload,
+                Set<Short> peerSignatureHashAlgorithms) {
+            super(initialSetupData);
+            this.ikeInitRequestBytes = ikeInitRequestBytes;
+            this.ikeInitResponseBytes = ikeInitResponseBytes;
+            this.ikeInitNoncePayload = ikeInitNoncePayload;
+            this.ikeRespNoncePayload = ikeRespNoncePayload;
+            this.peerSignatureHashAlgorithms = peerSignatureHashAlgorithms;
+        }
+
+        IkeInitData(IkeInitData ikeInitData) {
+            this(
+                    new InitialSetupData(
+                            ikeInitData.firstChildSessionParams,
+                            ikeInitData.firstChildCallback,
+                            ikeInitData.peerSelectedDhGroup),
+                    ikeInitData.ikeInitRequestBytes,
+                    ikeInitData.ikeInitResponseBytes,
+                    ikeInitData.ikeInitNoncePayload,
+                    ikeInitData.ikeRespNoncePayload,
+                    ikeInitData.peerSignatureHashAlgorithms);
+        }
+    }
+
+    /**
+     * IkeAuthData contains caller configuration and results of IKE INIT and first IKE AUTH exchange
+     * that will be used in the remaining IKE AUTH exchanges.
+     *
+     * <p>This class will be instantiated in CreateIkeLocalIkeAuth state, ane then passed to the
+     * later IKE AUTH states if the authentication requires multiple IKE exchanges.
+     */
+    @VisibleForTesting
+    static class IkeAuthData extends IkeInitData {
+        public final IkeIdPayload initIdPayload;
+        public final IkeIdPayload respIdPayload;
+        public final List<IkePayload> firstChildReqList;
+
+        IkeAuthData(
+                IkeInitData ikeInitData,
+                IkeIdPayload initIdPayload,
+                IkeIdPayload respIdPayload,
+                List<IkePayload> firstChildReqList) {
+            super(ikeInitData);
+            this.initIdPayload = initIdPayload;
+            this.respIdPayload = respIdPayload;
+            this.firstChildReqList = new ArrayList<IkePayload>();
+            this.firstChildReqList.addAll(firstChildReqList);
+        }
     }
 
     /** External dependencies, for injection in tests */
@@ -798,7 +878,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 loge("Fatal error", error);
 
                 closeAllSaRecords(false /*expectSaClosed*/);
-                quitNow();
+                quitSessionNow();
             } else {
                 logWtf("Unknown message.what: " + msg.what);
             }
@@ -964,7 +1044,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         mIkeSessionCallback.onClosedWithException(new IkeInternalException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
-            quitNow();
+            quitSessionNow();
         }
 
         @Override
@@ -986,10 +1066,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 child.killSession();
             }
         }
-
-        // Release IPsec SPIs if IKE Session is terminated before receiving the IKE AUTH response
-        // that contains the first child SA proposal
-        CreateChildSaHelper.releaseSpiResources(mFirstChildReqList);
 
         mIkeConnectionCtrl.tearDown();
 
@@ -1049,7 +1125,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 });
         loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
-        quitNow();
+        quitSessionNow();
     }
 
     /** Parent state used to delete IKE sessions */
@@ -1063,7 +1139,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             () -> {
                                 mIkeSessionCallback.onClosed();
                             });
-                    quitNow();
+                    quitSessionNow();
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1073,8 +1149,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     /** Initial state of IkeSessionStateMachine. */
     class Initial extends ExceptionHandler {
+        private InitialSetupData mInitialSetupData;
+
         @Override
         public void enterState() {
+            if (mInitialSetupData == null) {
+                handleIkeFatalError(
+                        new IkeInternalException(
+                                new IllegalStateException("mInitialSetupData is null")));
+                return;
+            }
+
             try {
                 mIkeConnectionCtrl.setUp();
 
@@ -1085,10 +1170,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
+        public void setIkeSetupData(InitialSetupData setupData) {
+            mInitialSetupData = setupData;
+        }
+
         @Override
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_LOCAL_REQUEST_CREATE_IKE:
+                    ((CreateIkeLocalIkeInit) mCreateIkeLocalIkeInit)
+                            .setIkeSetupData(mInitialSetupData);
                     transitionTo(mCreateIkeLocalIkeInit);
                     return HANDLED;
                 case CMD_FORCE_TRANSITION:
@@ -1097,6 +1188,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 default:
                     return NOT_HANDLED;
             }
+        }
+
+        @Override
+        public void exitState() {
+            mInitialSetupData = null;
         }
     }
 
@@ -1146,7 +1242,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         @Override
         protected void exitState() {
-            // #exitState is guaranteed to be invoked when quit() or quitNow() is called
+            // #exitState is guaranteed to be invoked when quit() or quitSessionNow() is called
             if (mDpdAlarm != null) {
                 mDpdAlarm.cancel();
                 logd("DPD Alarm canceled");
@@ -2040,7 +2136,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mCurrentIkeSaRecord.close();
                 mCurrentIkeSaRecord = null;
 
-                quitNow();
+                quitSessionNow();
             } catch (InvalidSyntaxException e) {
                 // Got deletion of a non-Current IKE SA. Program error.
                 cleanUpAndQuit(new IllegalStateException(e));
@@ -2238,6 +2334,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         private ChildLocalRequest mLocalRequestOngoing;
 
+        // Keep a reference to the first Child SA request so that if IKE Session is killed before
+        // first Child negotiation is done, ChildProcedureOngoing can release the IPSec SPI resource
+        // using this reference.
+        private List<IkePayload> mFirstChildReqList;
+
         private int mLastInboundRequestMsgId;
         private List<IkePayload> mOutboundRespPayloads;
         private Set<ChildSessionStateMachine> mAwaitingChildResponse;
@@ -2297,6 +2398,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     return HANDLED;
                 case CMD_HANDLE_FIRST_CHILD_NEGOTIATION:
                     FirstChildNegotiationData childData = (FirstChildNegotiationData) message.obj;
+                    mFirstChildReqList = childData.reqPayloads;
 
                     mChildInLocalProcedure = getChildSession(childData.childSessionCallback);
                     if (mChildInLocalProcedure == null) {
@@ -2332,6 +2434,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 default:
                     return super.processStateMessage(message);
             }
+        }
+
+        @Override
+        public void exitState() {
+            if (mIsClosing && mFirstChildReqList != null) {
+                CreateChildSaHelper.releaseSpiResources(mFirstChildReqList);
+            }
+            super.exitState();
         }
 
         @Override
@@ -2713,6 +2823,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     /** CreateIkeLocalIkeInit represents state when IKE library initiates IKE_INIT exchange. */
     @VisibleForTesting
     public class CreateIkeLocalIkeInit extends BusyState {
+        private InitialSetupData mInitialSetupData;
+        private byte[] mIkeInitRequestBytes;
+        private byte[] mIkeInitResponseBytes;
+        private IkeNoncePayload mIkeInitNoncePayload;
+        private IkeNoncePayload mIkeRespNoncePayload;
+        private Set<Short> mPeerSignatureHashAlgorithms;
+
         private IkeSecurityParameterIndex mLocalIkeSpiResource;
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
         private Retransmitter mRetransmitter;
@@ -2721,6 +2838,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         @Override
         public void enterState() {
+            if (mInitialSetupData == null) {
+                handleIkeFatalError(
+                        new IkeInternalException(
+                                new IllegalStateException("mInitialSetupData is null")));
+                return;
+            }
+
             try {
                 sendRequest(buildIkeInitReq());
             } catch (IOException e) {
@@ -2746,6 +2870,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         protected void triggerRetransmit() {
             mRetransmitter.retransmit();
+        }
+
+        public void setIkeSetupData(InitialSetupData setupData) {
+            mInitialSetupData = setupData;
         }
 
         @Override
@@ -2785,8 +2913,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 switch (decodeResult.status) {
                     case DECODE_STATUS_OK:
-                        handleResponseIkeMessage(((DecodeResultOk) decodeResult).ikeMessage);
                         mIkeInitResponseBytes = ikePacketBytes;
+                        handleResponseIkeMessage(((DecodeResultOk) decodeResult).ikeMessage);
 
                         // SA negotiation failed
                         if (mCurrentIkeSaRecord == null) break;
@@ -2877,6 +3005,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 addIkeSaRecord(mCurrentIkeSaRecord);
                 ikeInitSuccess = true;
 
+                ((CreateIkeLocalIkeAuth) mCreateIkeLocalIkeAuth)
+                        .setIkeSetupData(
+                                new IkeInitData(
+                                        mInitialSetupData,
+                                        mIkeInitRequestBytes,
+                                        mIkeInitResponseBytes,
+                                        mIkeInitNoncePayload,
+                                        mIkeRespNoncePayload,
+                                        mPeerSignatureHashAlgorithms));
                 transitionTo(mCreateIkeLocalIkeAuth);
             } catch (IkeProtocolException | GeneralSecurityException | IOException e) {
                 if (e instanceof InvalidKeException) {
@@ -2892,14 +3029,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     // If DH group is not acceptable for all proposals, fail. The caller explicitly
                     // did not want that combination, and the IKE library must honor it.
                     if (doAllProposalsHaveDhGroup) {
-                        mPeerSelectedDhGroup = requestedDhGroup;
-
                         // Remove state set during request creation
                         mIkeConnectionCtrl.unregisterIkeSpi(
                                 mRetransmitter.getMessage().ikeHeader.ikeInitiatorSpi);
                         mIkeInitRequestBytes = null;
                         mIkeInitNoncePayload = null;
 
+                        ((Initial) mInitial)
+                                .setIkeSetupData(
+                                        new InitialSetupData(
+                                                mInitialSetupData.firstChildSessionParams,
+                                                mInitialSetupData.firstChildCallback,
+                                                requestedDhGroup));
                         transitionTo(mInitial);
                         openSession();
 
@@ -2936,7 +3077,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             List<IkePayload> payloadList =
                     CreateIkeSaHelper.getIkeInitSaRequestPayloads(
                             saProposals,
-                            mPeerSelectedDhGroup,
+                            mInitialSetupData.peerSelectedDhGroup,
                             initSpi,
                             respSpi,
                             mIkeConnectionCtrl.getLocalAddress(),
@@ -3122,7 +3263,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             IkeKePayload reqKePayload =
                     reqMsg.getPayloadForType(IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
             if (reqKePayload.dhGroup != respKePayload.dhGroup
-                    && respKePayload.dhGroup != mPeerSelectedDhGroup) {
+                    && respKePayload.dhGroup != mInitialSetupData.peerSelectedDhGroup) {
                 throw new InvalidSyntaxException("Received KE payload with mismatched DH group.");
             }
 
@@ -3159,6 +3300,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         public void exitState() {
             super.exitState();
 
+            mInitialSetupData = null;
             if (mRetransmitter != null) {
                 mRetransmitter.stopRetransmitting();
             }
@@ -3243,12 +3385,35 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * CreateIkeLocalIkeAuthBase represents the common state and functionality required to perform
      * IKE AUTH exchanges in both the EAP and non-EAP flows.
      */
-    abstract class CreateIkeLocalIkeAuthBase extends DeleteBase {
+    abstract class CreateIkeLocalIkeAuthBase<T extends IkeInitData> extends DeleteBase {
+        protected T mSetupData;
         protected Retransmitter mRetransmitter;
+
+        @Override
+        public void enterState() {
+            if (mSetupData == null) {
+                handleIkeFatalError(
+                        new IkeInternalException(new IllegalStateException("mSetupData is null")));
+                return;
+            }
+        }
+
+        public void setIkeSetupData(T setupData) {
+            mSetupData = setupData;
+        }
 
         @Override
         protected void triggerRetransmit() {
             mRetransmitter.retransmit();
+        }
+
+        @Override
+        public void exitState() {
+            mSetupData = null;
+
+            if (mRetransmitter != null) {
+                mRetransmitter.stopRetransmitting();
+            }
         }
 
         // TODO: b/139482382 If receiving a remote request while waiting for the last IKE AUTH
@@ -3295,7 +3460,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             IkeAuthPskPayload pskPayload = (IkeAuthPskPayload) authPayload;
             pskPayload.verifyInboundSignature(
                     psk,
-                    mIkeInitResponseBytes,
+                    mSetupData.ikeInitResponseBytes,
                     mCurrentIkeSaRecord.nonceInitiator,
                     respIdPayload.getEncodedPayloadBody(),
                     mIkePrf,
@@ -3329,15 +3494,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         protected void performFirstChildNegotiation(
                 List<IkePayload> childReqList, List<IkePayload> childRespList) {
-            childReqList.add(mIkeInitNoncePayload);
-            childRespList.add(mIkeRespNoncePayload);
+            childReqList.add(mSetupData.ikeInitNoncePayload);
+            childRespList.add(mSetupData.ikeRespNoncePayload);
 
             deferMessage(
                     obtainMessage(
                             CMD_HANDLE_FIRST_CHILD_NEGOTIATION,
                             new FirstChildNegotiationData(
-                                    mFirstChildSessionParams,
-                                    mFirstChildCallbacks,
+                                    mSetupData.firstChildSessionParams,
+                                    mSetupData.firstChildCallback,
                                     childReqList,
                                     childRespList)));
 
@@ -3406,7 +3571,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * <p>If using EAP, CreateIkeLocalIkeAuth will transition to CreateIkeLocalIkeAuthInEap state
      * after validating the IKE AUTH response.
      */
-    class CreateIkeLocalIkeAuth extends CreateIkeLocalIkeAuthBase {
+    class CreateIkeLocalIkeAuth extends CreateIkeLocalIkeAuthBase<IkeInitData> {
+        private IkeIdPayload mInitIdPayload;
+        private IkeIdPayload mRespIdPayload;
+        private List<IkePayload> mFirstChildReqList;
         private boolean mUseEap;
 
         @Override
@@ -3462,6 +3630,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         throw new AuthenticationFailedException("Missing EAP payload");
                     }
                     deferMessage(obtainMessage(CMD_EAP_START_EAP_AUTH, ikeEapPayload));
+
+                    ((CreateIkeLocalIkeAuthInEap) mCreateIkeLocalIkeAuthInEap)
+                            .setIkeSetupData(
+                                    new IkeAuthData(
+                                            mSetupData,
+                                            mInitIdPayload,
+                                            mRespIdPayload,
+                                            mFirstChildReqList));
                     transitionTo(mCreateIkeLocalIkeAuthInEap);
                 } else {
                     if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
@@ -3484,8 +3660,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         @Override
         protected void handleResponseGenericProcessError(
                 IkeSaRecord ikeSaRecord, InvalidSyntaxException ikeException) {
-            mRetransmitter.stopRetransmitting();
-
             if (!mUseEap) {
                 // Notify the remote because they may have set up the IKE SA.
                 sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
@@ -3524,7 +3698,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     IkeAuthPskPayload pskPayload =
                             new IkeAuthPskPayload(
                                     ((IkeAuthPskConfig) authConfig).mPsk,
-                                    mIkeInitRequestBytes,
+                                    mSetupData.ikeInitRequestBytes,
                                     mCurrentIkeSaRecord.nonceResponder,
                                     mInitIdPayload.getEncodedPayloadBody(),
                                     mIkePrf,
@@ -3546,7 +3720,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             new IkeAuthDigitalSignPayload(
                                     IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_512,
                                     localAuthConfig.mPrivateKey,
-                                    mIkeInitRequestBytes,
+                                    mSetupData.ikeInitRequestBytes,
                                     mCurrentIkeSaRecord.nonceResponder,
                                     mInitIdPayload.getEncodedPayloadBody(),
                                     mIkePrf,
@@ -3569,13 +3743,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mIkeContext.getRandomnessFactory(),
                             mIpSecSpiGenerator,
                             mIkeConnectionCtrl.getLocalAddress(),
-                            mFirstChildSessionParams,
+                            mSetupData.firstChildSessionParams,
                             true /*isFirstChildSa*/));
 
             final List<ConfigAttribute> configAttributes = new ArrayList<>();
             configAttributes.addAll(
                     Arrays.asList(
-                            CreateChildSaHelper.getConfigAttributes(mFirstChildSessionParams)));
+                            CreateChildSaHelper.getConfigAttributes(
+                                    mSetupData.firstChildSessionParams)));
             configAttributes.addAll(
                     Arrays.asList(mIkeSessionParams.getConfigurationAttributesInternal()));
             // Always request app version
@@ -3730,7 +3905,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             IkeAuthDigitalSignPayload signPayload = (IkeAuthDigitalSignPayload) authPayload;
             signPayload.verifyInboundSignature(
                     endCert,
-                    mIkeInitResponseBytes,
+                    mSetupData.ikeInitResponseBytes,
                     mCurrentIkeSaRecord.nonceInitiator,
                     respIdPayload.getEncodedPayloadBody(),
                     mIkePrf,
@@ -3739,7 +3914,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         @Override
         public void exitState() {
-            mRetransmitter.stopRetransmitting();
+            if (mIsClosing && mFirstChildReqList != null) {
+                CreateChildSaHelper.releaseSpiResources(mFirstChildReqList);
+            }
+            super.exitState();
         }
     }
 
@@ -3747,7 +3925,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * CreateIkeLocalIkeAuthInEap represents the state when the IKE library authenticates the client
      * with an EAP session.
      */
-    class CreateIkeLocalIkeAuthInEap extends CreateIkeLocalIkeAuthBase {
+    class CreateIkeLocalIkeAuthInEap extends CreateIkeLocalIkeAuthBase<IkeAuthData> {
         private EapAuthenticator mEapAuthenticator;
 
         @Override
@@ -3790,6 +3968,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     return HANDLED;
                 case CMD_EAP_FINISH_EAP_AUTH:
                     deferMessage(msg);
+                    ((CreateIkeLocalIkeAuthPostEap) mCreateIkeLocalIkeAuthPostEap)
+                            .setIkeSetupData(mSetupData);
                     transitionTo(mCreateIkeLocalIkeAuthPostEap);
 
                     return HANDLED;
@@ -3889,13 +4069,21 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 sendMessage(CMD_EAP_ERRORED, cause);
             }
         }
+
+        @Override
+        public void exitState() {
+            if (mIsClosing) {
+                CreateChildSaHelper.releaseSpiResources(mSetupData.firstChildReqList);
+            }
+            super.exitState();
+        }
     }
 
     /**
      * CreateIkeLocalIkeAuthPostEap represents the state when the IKE library is performing the
      * post-EAP PSK-base authentication run.
      */
-    class CreateIkeLocalIkeAuthPostEap extends CreateIkeLocalIkeAuthBase {
+    class CreateIkeLocalIkeAuthPostEap extends CreateIkeLocalIkeAuthBase<IkeAuthData> {
         private byte[] mEapMsk = new byte[0];
 
         @Override
@@ -3907,9 +4095,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     IkeAuthPskPayload pskPayload =
                             new IkeAuthPskPayload(
                                     mEapMsk,
-                                    mIkeInitRequestBytes,
+                                    mSetupData.ikeInitRequestBytes,
                                     mCurrentIkeSaRecord.nonceResponder,
-                                    mInitIdPayload.getEncodedPayloadBody(),
+                                    mSetupData.initIdPayload.getEncodedPayloadBody(),
                                     mIkePrf,
                                     mCurrentIkeSaRecord.getSkPi());
                     IkeMessage postEapAuthMsg = buildIkeAuthReqMessage(Arrays.asList(pskPayload));
@@ -3943,7 +4131,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 notifyIkeSessionSetup(ikeMessage);
 
                 performFirstChildNegotiation(
-                        mFirstChildReqList, extractChildPayloadsFromMessage(ikeMessage));
+                        mSetupData.firstChildReqList, extractChildPayloadsFromMessage(ikeMessage));
             } catch (IkeException e) {
                 // Notify the remote because they may have set up the IKE SA.
                 sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
@@ -4001,12 +4189,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 throw new AuthenticationFailedException("Post-EAP Auth payload missing.");
             }
 
-            authenticatePsk(mEapMsk, authPayload, mRespIdPayload);
+            authenticatePsk(mEapMsk, authPayload, mSetupData.respIdPayload);
         }
 
         @Override
         public void exitState() {
-            mRetransmitter.stopRetransmitting();
+            if (mIsClosing) {
+                CreateChildSaHelper.releaseSpiResources(mSetupData.firstChildReqList);
+            }
+            super.exitState();
         }
     }
 
@@ -4845,7 +5036,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 removeIkeSaRecord(mCurrentIkeSaRecord);
                 mCurrentIkeSaRecord.close();
                 mCurrentIkeSaRecord = null;
-                quitNow();
+                quitSessionNow();
             } catch (InvalidSyntaxException e) {
                 handleResponseGenericProcessError(mCurrentIkeSaRecord, e);
             }
@@ -4856,7 +5047,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 IkeSaRecord ikeSaRecord, InvalidSyntaxException exception) {
             loge("Invalid syntax on IKE Delete response. Shutting down anyways", exception);
             handleIkeFatalError(exception);
-            quitNow();
+            quitSessionNow();
         }
 
         @Override
@@ -4928,7 +5119,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             handleIkeFatalError(exception);
 
             // #exitState will be called when StateMachine quits
-            quitNow();
+            quitSessionNow();
         }
 
         @Override
