@@ -685,6 +685,12 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      */
     private void setRemoteAddress() {
         LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
+        if (linkProperties == null) {
+            getIkeLog().e(TAG, "LinkProperties is null. Network disconnected");
+            mCallback.onUnderlyingNetworkDied(mNetwork);
+            return;
+        }
+
         if (!mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address()) {
             // TODO(b/175348096): randomly choose from available addresses
             mRemoteAddress = mRemoteAddressesV6.get(0);
