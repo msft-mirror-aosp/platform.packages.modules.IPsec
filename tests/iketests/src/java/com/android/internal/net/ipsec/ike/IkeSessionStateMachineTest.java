@@ -109,7 +109,6 @@ import static org.mockito.Mockito.when;
 
 import android.annotation.Nullable;
 import android.net.LinkAddress;
-import android.net.LinkProperties;
 import android.net.Network;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ChildSaProposal;
@@ -1596,6 +1595,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .when(mMockNetworkCapabilities)
                 .hasTransport(RandomnessFactory.TRANSPORT_TEST);
 
+        // Clear #getActiveNetwork() call in #setUp() to pass the verification in
+        // #makeAndStartIkeSession()
+        resetMockConnectManager();
+
         Network network = mockNewNetworkAndAddress(true /*isIpv4*/);
         IkeSessionParams ikeParams =
                 buildIkeSessionParamsCommon()
@@ -1603,9 +1606,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .setAuthPsk("psk".getBytes())
                         .build();
 
-        // Clear #getActiveNetwork() call in #setUp() to pass the verification in
-        // #makeAndStartIkeSession()
-        resetMockConnectManager();
         IkeSessionStateMachine ikeSession = makeAndStartIkeSession(ikeParams);
 
         SecureRandom random = ikeSession.mIkeContext.getRandomnessFactory().getRandom();
@@ -6184,13 +6184,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             throws Exception {
         Network newNetwork = mock(Network.class);
 
-        mSpyIkeConnectionCtrl.addRemoteAddress(remoteAddress);
-        if (!isIpv4) {
-            LinkProperties linkProperties = new LinkProperties();
-            linkProperties.addLinkAddress(mMockLinkAddressGlobalV6);
-            when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
-        }
-
+        setupRemoteAddressForNetwork(newNetwork, remoteAddress);
         setupDnsResolutionForNetwork(newNetwork, dnsLookups, remoteAddress);
         setupLocalAddressForNetwork(newNetwork, localAddress);
 
