@@ -91,7 +91,7 @@ abstract class AbstractSessionStateMachine extends StateMachine {
     protected final Executor mUserCbExecutor;
     private final String mLogTag;
 
-    private volatile boolean mIsClosing = false;
+    protected volatile boolean mIsClosing = false;
 
     protected AbstractSessionStateMachine(String name, Looper looper, Executor userCbExecutor) {
         super(name, looper);
@@ -191,6 +191,21 @@ abstract class AbstractSessionStateMachine extends StateMachine {
 
         mIsClosing = true;
         sendMessage(CMD_KILL_SESSION);
+    }
+
+    /**
+     * Quit SessionStateMachine immediately.
+     *
+     * <p>This method pushes SM_QUIT_CMD in front of the message queue and mark mIsClosing as true.
+     * All currently queued messages will be discarded.
+     *
+     * <p>Subclasses MUST call this method instead of quitNow()
+     */
+    // quitNow() is a public final method in the base class. Thus there is no good way to prevent
+    // caller from calling it within the current inheritance structure.
+    protected void quitSessionNow() {
+        mIsClosing = true;
+        quitNow();
     }
 
     @Override
