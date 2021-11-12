@@ -98,7 +98,12 @@ public final class IkeSessionParams {
 
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
-    @IntDef({IKE_OPTION_ACCEPT_ANY_REMOTE_ID, IKE_OPTION_EAP_ONLY_AUTH, IKE_OPTION_MOBIKE})
+    @IntDef({
+        IKE_OPTION_ACCEPT_ANY_REMOTE_ID,
+        IKE_OPTION_EAP_ONLY_AUTH,
+        IKE_OPTION_MOBIKE,
+        IKE_OPTION_INITIAL_CONTACT
+    })
     public @interface IkeOption {}
 
     /**
@@ -140,8 +145,23 @@ public final class IkeSessionParams {
      */
     public static final int IKE_OPTION_FORCE_PORT_4500 = 3;
 
+    /**
+     * If set, the IKE library will send INITIAL_CONTACT notification to the peers.
+     *
+     * <p>If this option is set, the INITIAL_CONTACT notification payload is sent in IKE_AUTH. The
+     * client can use this option to assert to the peer that this IKE SA is the only IKE SA
+     * currently active between the authenticated identities.
+     *
+     * <p>@see "https://tools.ietf.org/html/rfc7296#section-2.4" RFC 7296, Internet Key Exchange
+     * Protocol Version 2 (IKEv2)
+     *
+     * <p>@see {@link Builder#addIkeOption(int)}
+     * @hide
+     */
+    public static final int IKE_OPTION_INITIAL_CONTACT = 4;
+
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_FORCE_PORT_4500;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_INITIAL_CONTACT;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
