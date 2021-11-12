@@ -683,7 +683,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         mUserCallback.onClosedWithException(new IkeInternalException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
-            quitNow();
+            quitSessionNow();
         }
 
         @Override
@@ -743,7 +743,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         // Clean up all SaRecords and quit
         closeAllSaRecords(false /*expectSaClosed*/);
-        quitNow();
+        quitSessionNow();
     }
 
     /**
@@ -766,7 +766,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                     closeAllSaRecords(false /*expectSaClosed*/);
 
-                    quitNow();
+                    quitSessionNow();
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -999,7 +999,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             () -> {
                                 mUserCallback.onClosed();
                             });
-                    quitNow();
+                    quitSessionNow();
                     return HANDLED;
                 case CMD_FORCE_TRANSITION:
                     transitionTo((State) message.obj);
@@ -1185,7 +1185,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     // Do not need to verify the response since the Child Session is already closed
-                    quitNow();
+                    quitSessionNow();
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1269,7 +1269,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             mCurrentChildSaRecord = null;
 
             if (quitStateMachine) {
-                quitNow();
+                quitSessionNow();
             }
         }
     }
