@@ -623,7 +623,7 @@ public final class IkeMessage {
                             - IkePayload.GENERIC_HEADER_LENGTH
                             - IkeSkfPayload.SKF_HEADER_LEN
                             - encryptCipher.getIvLen()
-                            - integrityMac.getChecksumLen()
+                            - (integrityMac == null ? 0 : integrityMac.getChecksumLen())
                             - encryptCipher.getBlockSize();
 
             // Caller of this method MUST validate fragSize is valid.
