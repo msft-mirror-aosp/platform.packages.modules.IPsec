@@ -777,13 +777,13 @@ public abstract class SaRecord implements AutoCloseable {
             return mResponderSpiResource;
         }
 
-        /** Package private */
-        long getLocalSpi() {
+        /** Get the locally generated IKE SPI */
+        public long getLocalSpi() {
             return isLocalInit ? mInitiatorSpiResource.getSpi() : mResponderSpiResource.getSpi();
         }
 
-        /** Package private */
-        long getRemoteSpi() {
+        /** Get the remotely generated IKE SPI */
+        public long getRemoteSpi() {
             return isLocalInit ? mResponderSpiResource.getSpi() : mInitiatorSpiResource.getSpi();
         }
 
