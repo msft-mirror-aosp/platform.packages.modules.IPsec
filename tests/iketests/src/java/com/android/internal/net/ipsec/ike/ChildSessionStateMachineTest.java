@@ -16,7 +16,10 @@
 
 package com.android.internal.net.ipsec.test.ike;
 
+import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
+import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.system.OsConstants.AF_INET;
@@ -25,11 +28,11 @@ import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_CHILD;
 import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.test.ike.ChildSessionStateMachine.CMD_FORCE_TRANSITION;
-import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
-import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.REKEY_DELETE_TIMEOUT_MS;
 import static com.android.internal.net.ipsec.test.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.test.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
+import static com.android.internal.net.ipsec.test.ike.message.IkeMessage.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.internal.net.ipsec.test.ike.message.IkeMessage.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.test.ike.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
 import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_CP;
 import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_DELETE;
@@ -65,7 +68,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.app.AlarmManager;
 import android.content.Context;
 import android.net.InetAddresses;
 import android.net.IpSecManager;
@@ -85,6 +87,8 @@ import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.net.ipsec.test.ike.exceptions.InvalidKeException;
 import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
+import android.os.Handler;
+import android.os.Message;
 import android.os.test.TestLooper;
 
 import androidx.test.InstrumentationRegistry;
@@ -184,7 +188,7 @@ public final class ChildSessionStateMachineTest {
     private IkeMacPrf mIkePrf;
 
     private Context mContext;
-    private AlarmManager mMockAlarmManager;
+    private Handler mMockIkeHandler;
     private IpSecService mMockIpSecService;
     private IpSecManager mMockIpSecManager;
     private UdpEncapsulationSocket mMockUdpEncapSocket;
@@ -244,7 +248,9 @@ public final class ChildSessionStateMachineTest {
         mIkePrf = IkeMacPrf.create(new PrfTransform(SaProposal.PSEUDORANDOM_FUNCTION_HMAC_SHA1));
 
         mContext = InstrumentationRegistry.getContext();
-        mMockAlarmManager = mock(AlarmManager.class);
+        mMockIkeHandler = mock(Handler.class);
+        when(mMockIkeHandler.obtainMessage(anyInt(), anyInt(), anyInt(), any()))
+                .thenReturn(mock(Message.class));
 
         mMockIpSecService = mock(IpSecService.class);
         mMockIpSecManager = new IpSecManager(mContext, mMockIpSecService);
@@ -2000,15 +2006,14 @@ public final class ChildSessionStateMachineTest {
     private ChildSessionStateMachine buildChildSession(
             ChildSessionParams childSessionParams, Executor executor) {
         return new ChildSessionStateMachine(
-                mLooper.getLooper(),
-                mContext,
-                IKE_SESSION_UNIQUE_ID,
-                mMockAlarmManager,
-                createMockRandomFactory(),
-                mMockIpSecManager,
-                mIpSecSpiGenerator,
-                childSessionParams,
-                executor,
+                new IkeContext(mLooper.getLooper(), mContext, createMockRandomFactory()),
+                new ChildSessionStateMachine.Config(
+                        IKE_SESSION_UNIQUE_ID,
+                        mMockIkeHandler,
+                        childSessionParams,
+                        mMockIpSecManager,
+                        mIpSecSpiGenerator,
+                        executor),
                 mMockChildSessionCallback,
                 mMockChildSessionSmCallback);
     }
@@ -2027,6 +2032,20 @@ public final class ChildSessionStateMachineTest {
         childSession.start();
         mLooper.dispatchAll();
 
+        return childSession;
+    }
+
+    private ChildSessionStateMachine buildAndStartStateMachineWithProposal(
+            ChildSaProposal childProposal) {
+        ChildSessionParams childSessionParams =
+                new TunnelModeChildSessionParams.Builder()
+                        .addSaProposal(childProposal)
+                        .addInternalAddressRequest(AF_INET)
+                        .addInternalAddressRequest(INTERNAL_ADDRESS)
+                        .build();
+        ChildSessionStateMachine childSession = buildChildSession(childSessionParams);
+        childSession.setDbg(true);
+        childSession.start();
         return childSession;
     }
 
@@ -2079,15 +2098,8 @@ public final class ChildSessionStateMachineTest {
     public void testRemoteRekeyWithUserSpecifiedKePayload() throws Exception {
         // Use child session params with dh group to initiate the state machine
         ChildSaProposal saProposal = buildSaProposalWithDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP);
-        ChildSessionParams childSessionParams =
-                new TunnelModeChildSessionParams.Builder()
-                        .addSaProposal(saProposal)
-                        .addInternalAddressRequest(AF_INET)
-                        .addInternalAddressRequest(INTERNAL_ADDRESS)
-                        .build();
-        mChildSessionStateMachine = buildChildSession(childSessionParams);
-        mChildSessionStateMachine.setDbg(true);
-        mChildSessionStateMachine.start();
+        mChildSessionStateMachine.quitNow();
+        mChildSessionStateMachine = buildAndStartStateMachineWithProposal(saProposal);
 
         setupIdleStateMachine();
         assertEquals(0, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
@@ -2108,6 +2120,96 @@ public final class ChildSessionStateMachineTest {
 
         ChildSaProposal saProposal = buildSaProposalWithDhGroup(IKE_DH_GROUP);
         verifyRemoteRekeyWithKePayload(saProposal, IKE_DH_GROUP);
+    }
+
+    private void verifyRcvRekeyReqAndRejectWithErrorNotify(
+            List<IkePayload> rekeyReqPayloads, int expectedErrorType) {
+        mChildSessionStateMachine.receiveRequest(
+                IKE_EXCHANGE_SUBTYPE_REKEY_CHILD, EXCHANGE_TYPE_CREATE_CHILD_SA, rekeyReqPayloads);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mChildSessionStateMachine.getCurrentState()
+                        instanceof ChildSessionStateMachine.Idle);
+
+        verifyOutboundErrorNotify(EXCHANGE_TYPE_CREATE_CHILD_SA, expectedErrorType);
+    }
+
+    @Test
+    public void testRemoteRekeyWithInvalidKePayload() throws Exception {
+        setupIdleStateMachine();
+
+        assertEquals(0, mChildSessionStateMachine.mSaProposal.getDhGroups().size());
+        assertEquals(IKE_DH_GROUP, mChildSessionStateMachine.mIkeDhGroup);
+        for (SaProposal userProposal :
+                mChildSessionStateMachine.mChildSessionParams.getChildSaProposals()) {
+            assertTrue(userProposal.getDhGroups().isEmpty());
+        }
+
+        // Build an inbound Rekey Child request
+        // Build an SA Payload that includes a Proposal with IKE_DH_GROUP
+        IkeSaPayload saPayload =
+                IkeSaPayload.createChildSaRequestPayload(
+                        new ChildSaProposal[] {buildSaProposalWithDhGroup(IKE_DH_GROUP)},
+                        mIpSecSpiGenerator,
+                        LOCAL_ADDRESS);
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT, saPayload, false /*isLocalInitRekey*/);
+
+        // Build a KE Payload that uses a different DH group from the IKE_DH_GROUP
+        rekeyReqPayloads.add(
+                IkeKePayload.createOutboundKePayload(
+                        DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
+
+        verifyRcvRekeyReqAndRejectWithErrorNotify(rekeyReqPayloads, ERROR_TYPE_INVALID_KE_PAYLOAD);
+    }
+
+    @Test
+    public void testRejectRemoteRekeyWithoutDhGroupInProposal() throws Exception {
+        // Use child session params with dh group to initiate the state machine
+        mChildSessionStateMachine.quitNow();
+        ChildSaProposal saProposal = buildSaProposalWithDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP);
+        mChildSessionStateMachine = buildAndStartStateMachineWithProposal(saProposal);
+
+        setupIdleStateMachine();
+        mChildSessionStateMachine.mSaProposal = saProposal;
+
+        // Build a Rekey request that does not propose DH groups.
+        IkeSaPayload saPayload =
+                IkeSaPayload.createChildSaRequestPayload(
+                        new ChildSaProposal[] {buildSaProposal()}, // Proposal with no DH group
+                        mIpSecSpiGenerator,
+                        LOCAL_ADDRESS);
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT, saPayload, false /* isLocalInitRekey */);
+        rekeyReqPayloads.add(
+                IkeKePayload.createOutboundKePayload(
+                        DH_GROUP_2048_BIT_MODP, createMockRandomFactory()));
+
+        verifyRcvRekeyReqAndRejectWithErrorNotify(rekeyReqPayloads, ERROR_TYPE_NO_PROPOSAL_CHOSEN);
+    }
+
+    @Test
+    public void testRejectRemoteRekeyWithoutKePayload() throws Exception {
+        // Use child session params with dh group to initiate the state machine
+        mChildSessionStateMachine.quitNow();
+        ChildSaProposal saProposal = buildSaProposalWithDhGroup(SaProposal.DH_GROUP_2048_BIT_MODP);
+        mChildSessionStateMachine = buildAndStartStateMachineWithProposal(saProposal);
+
+        setupIdleStateMachine();
+        mChildSessionStateMachine.mSaProposal = saProposal;
+
+        // Build a Rekey request that proposes DH groups but does not include a KE payload
+        IkeSaPayload saPayload =
+                IkeSaPayload.createChildSaRequestPayload(
+                        new ChildSaProposal[] {saProposal}, mIpSecSpiGenerator, LOCAL_ADDRESS);
+        List<IkePayload> rekeyReqPayloads =
+                makeInboundRekeyChildPayloads(
+                        REMOTE_INIT_NEW_CHILD_SA_SPI_OUT, saPayload, false /* isLocalInitRekey */);
+
+        verifyRcvRekeyReqAndRejectWithErrorNotify(rekeyReqPayloads, ERROR_TYPE_INVALID_SYNTAX);
     }
 
     @Test

@@ -22,6 +22,7 @@ import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MINIMUM;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_INITIAL_CONTACT;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_RETRANS_TIMEOUT_MS_LIST_DEFAULT;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_SOFT_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.test.ike.IkeSessionParams.IkeAuthConfig;
@@ -246,6 +247,19 @@ public final class IkeSessionParamsTest {
     }
 
     @Test
+    public void testAddInitialContactIkeOption() throws Exception {
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .addIkeOption(IKE_OPTION_INITIAL_CONTACT)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        assertTrue(sessionParams.hasIkeOption(IKE_OPTION_INITIAL_CONTACT));
+    }
+
+    @Test
     public void testAddAndRemoveIkeOption() throws Exception {
         IkeSessionParams sessionParams =
                 buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
@@ -257,6 +271,20 @@ public final class IkeSessionParamsTest {
         verifyAuthPskConfig(sessionParams);
 
         assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
+    }
+
+    @Test
+    public void testAddAndRemoveInitialContactIkeOption() throws Exception {
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .addIkeOption(IKE_OPTION_INITIAL_CONTACT)
+                        .removeIkeOption(IKE_OPTION_INITIAL_CONTACT)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        assertFalse(sessionParams.hasIkeOption(IKE_OPTION_INITIAL_CONTACT));
     }
 
     private IkeSessionParams.Builder createIkeParamsBuilderMinimum() {
