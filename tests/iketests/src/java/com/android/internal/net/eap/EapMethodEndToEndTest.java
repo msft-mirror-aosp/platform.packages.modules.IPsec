@@ -46,6 +46,7 @@ public class EapMethodEndToEndTest {
     protected TestLooper mTestLooper;
     protected EapSessionConfig mEapSessionConfig;
     protected EapAuthenticator mEapAuthenticator;
+    protected static final int EAP_RESPONSE_FLAGS_NOT_SET = 0;
 
     @Before
     public void setUp() {
@@ -61,7 +62,7 @@ public class EapMethodEndToEndTest {
         mTestLooper.dispatchAll();
 
         // verify EAP-Response/Nak returned
-        verify(mMockCallback).onResponse(eq(nakResponse));
+        verify(mMockCallback).onResponse(eq(nakResponse), eq(EAP_RESPONSE_FLAGS_NOT_SET));
         verifyNoMoreInteractions(mMockCallback);
     }
 
@@ -70,7 +71,7 @@ public class EapMethodEndToEndTest {
         mTestLooper.dispatchAll();
 
         verify(mMockCallback, times(callsToVerify))
-                .onResponse(eq(EAP_RESPONSE_NOTIFICATION_PACKET));
+                .onResponse(eq(EAP_RESPONSE_NOTIFICATION_PACKET), eq(EAP_RESPONSE_FLAGS_NOT_SET));
         verifyNoMoreInteractions(mMockCallback);
     }
 
