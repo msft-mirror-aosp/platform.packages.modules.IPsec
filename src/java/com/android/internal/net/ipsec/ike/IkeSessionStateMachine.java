@@ -119,6 +119,7 @@ import android.util.SparseArray;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapAuthenticator;
+import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.IEapCallback;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
@@ -1956,6 +1957,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                     "Received unexpected payload in an INFORMATIONAL request."
                                             + " Payload type: "
                                             + payload.payloadType);
+                    }
+                }
+
+                // add any 3GPP informational payloads if needed
+                List<IkePayload> ikePayloads =
+                        mIke3gppExtensionExchange.getResponsePayloads(
+                                IKE_EXCHANGE_SUBTYPE_GENERIC_INFO, ikeMessage.ikePayloadList);
+                for (IkePayload payload : ikePayloads) {
+                    if (payload instanceof IkeInformationalPayload) {
+                        infoPayloadList.add((IkeInformationalPayload) payload);
+                    } else {
+                        logd(
+                                "Ignoring unexpected payload that is not an IkeInformationalPayload"
+                                        + payload);
                     }
                 }
 
@@ -3960,13 +3975,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                     return HANDLED;
                 case CMD_EAP_OUTBOUND_MSG_READY:
-                    byte[] eapMsgBytes = (byte[]) msg.obj;
-                    IkeEapPayload eapPayload = new IkeEapPayload(eapMsgBytes);
+                    IkeEapOutboundMsgWrapper msgWrapper = (IkeEapOutboundMsgWrapper) msg.obj;
+                    IkeEapPayload eapPayload = new IkeEapPayload(msgWrapper.getEapMsg());
+
+                    List<IkePayload> payloadList = new LinkedList<>();
+                    payloadList.add(eapPayload);
+
+                    // Add 3GPP-specific payloads for this exchange subtype
+                    payloadList.addAll(
+                            mIke3gppExtensionExchange.getRequestPayloadsInEap(
+                                    msgWrapper.isServerAuthenticated()));
 
                     // Setup new retransmitter with EAP response
                     mRetransmitter =
-                            new EncryptedRetransmitter(
-                                    buildIkeAuthReqMessage(Arrays.asList(eapPayload)));
+                            new EncryptedRetransmitter(buildIkeAuthReqMessage(payloadList));
 
                     return HANDLED;
                 case CMD_EAP_ERRORED:
@@ -4071,8 +4093,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
 
             @Override
-            public void onResponse(byte[] eapMsg) {
-                sendMessage(CMD_EAP_OUTBOUND_MSG_READY, eapMsg);
+            public void onResponse(byte[] eapMsg, int flagMask) {
+
+                // for now we only check if server is authenticated for EAP-AKA
+                boolean serverAuthenticated =
+                        EapResult.EapResponse.hasFlag(
+                                flagMask,
+                                EapResult.EapResponse.RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED);
+                IkeEapOutboundMsgWrapper msg =
+                        new IkeEapOutboundMsgWrapper(serverAuthenticated, eapMsg);
+                sendMessage(CMD_EAP_OUTBOUND_MSG_READY, msg);
             }
 
             @Override
@@ -5369,6 +5399,23 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
     }
 
+    private static class IkeEapOutboundMsgWrapper {
+        private final boolean serverAuthenticated;
+        private final byte[] eapMsg;
+
+        public IkeEapOutboundMsgWrapper(boolean serverAuthenticated, byte[] eapMsg) {
+            this.serverAuthenticated = serverAuthenticated;
+            this.eapMsg = eapMsg;
+        }
+
+        public boolean isServerAuthenticated() {
+            return serverAuthenticated;
+        }
+
+        public byte[] getEapMsg() {
+            return eapMsg;
+        }
+    }
     /**
      * Helper class to generate IKE SA creation payloads, in both request and response directions.
      */
