@@ -1251,7 +1251,7 @@ public abstract class EapSimAkaAttribute {
     /** AtEncrData represents the AT_ENCR_DATA attribute defined in RFC 4187#10.12 */
     public static class AtEncrData extends EapSimAkaReservedBytesAttribute {
         private static final String CIPHER_ALGORITHM = "AES_128/CBC/NoPadding";
-        private static final int CIPHER_BLOCK_LENGTH = 16;
+        public static final int CIPHER_BLOCK_LENGTH = 16;
 
         public final byte[] encrData;
 
