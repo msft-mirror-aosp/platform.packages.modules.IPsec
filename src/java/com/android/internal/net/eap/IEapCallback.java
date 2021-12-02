@@ -44,8 +44,12 @@ public interface IEapCallback {
      * Callback used to return an EAP-Response message for the message being processed.
      *
      * @param eapMsg byte-array encoded EAP-Response message to be sent to the Authentication server
+     * @param flagMask contains flags that convey additional high level EAP state information that
+     *     is relevant to the clients. Clients can use
+     *     {@link com.android.internal.net.eap.EapResult.EapResponse.hasFlag() to check if a
+     *     specific flag is set in the flagMask. The flagMask is set 0 when no flags are set.
      */
-    void onResponse(byte[] eapMsg);
+    void onResponse(byte[] eapMsg, int flagMask);
 
     /**
      * Callback used to indicate that there was an error processing the current EAP message.
