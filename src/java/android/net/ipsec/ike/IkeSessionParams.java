@@ -1872,7 +1872,7 @@ public final class IkeSessionParams {
 
             // as of today, the device_identity feature is only implemented for EAP-AKA
             if ((mIke3gppExtension != null
-                    && mIke3gppExtension.getIke3gppParams().getDeviceIdentity() != null)) {
+                    && mIke3gppExtension.getIke3gppParams().getMobileDeviceIdentity() != null)) {
                 if (!(mLocalAuthConfig instanceof IkeAuthEapConfig)
                         || ((IkeAuthEapConfig) mLocalAuthConfig).getEapConfig().getEapAkaConfig()
                                 == null) {
