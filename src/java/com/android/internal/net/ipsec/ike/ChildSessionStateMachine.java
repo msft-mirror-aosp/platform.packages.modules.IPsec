@@ -21,13 +21,13 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.BUNDLE_KEY_CHILD_REMOTE_SPI;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_ALARM_FIRED;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.buildIkeAlarmIntent;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.ExchangeType;
+import static com.android.internal.net.ipsec.ike.message.IkeMessage.IKE_EXCHANGE_SUBTYPE_DELETE_CHILD;
+import static com.android.internal.net.ipsec.ike.message.IkeMessage.IKE_EXCHANGE_SUBTYPE_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_REKEY_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NOTIFY_TYPE_USE_TRANSPORT_MODE;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_CP;
@@ -46,7 +46,6 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_R
 import android.annotation.IntDef;
 import android.annotation.Nullable;
 import android.app.PendingIntent;
-import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.SecurityParameterIndex;
@@ -70,7 +69,6 @@ import android.net.ipsec.ike.exceptions.TemporaryFailureException;
 import android.net.ipsec.ike.exceptions.TsUnacceptableException;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.os.Message;
 import android.util.Pair;
 import android.util.SparseArray;
@@ -78,7 +76,6 @@ import android.util.SparseArray;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequestFactory;
-import com.android.internal.net.ipsec.ike.IkeSessionStateMachine.IkeExchangeSubType;
 import com.android.internal.net.ipsec.ike.SaRecord.ChildSaRecord;
 import com.android.internal.net.ipsec.ike.SaRecord.SaLifetimeAlarmScheduler;
 import com.android.internal.net.ipsec.ike.crypto.IkeCipher;
@@ -88,6 +85,7 @@ import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
 import com.android.internal.net.ipsec.ike.message.IkeDeletePayload;
 import com.android.internal.net.ipsec.ike.message.IkeKePayload;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.IkeExchangeSubType;
 import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload;
 import com.android.internal.net.ipsec.ike.message.IkeNotifyPayload.NotifyType;
@@ -153,12 +151,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         CMD_TO_STR.put(CMD_HANDLE_RECEIVED_RESPONSE, "Rcv response");
     }
 
-    private final Context mContext;
+    private final IkeContext mIkeContext;
     private final int mIkeSessionId;
     private final Handler mIkeHandler;
     private final IpSecManager mIpSecManager;
 
-    private final RandomnessFactory mRandomFactory;
     /**
      * mIpSecSpiGenerator will be used by all Child SA creations in this Child Session to avoid SPI
      * collision in test mode.
@@ -253,27 +250,19 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * <p>Package private
      */
     ChildSessionStateMachine(
-            Looper looper,
-            Context context,
-            int ikeSessionUniqueId,
-            Handler ikeHandler,
-            RandomnessFactory randomnessFactory,
-            IpSecManager ipSecManager,
-            IpSecSpiGenerator ipSecSpiGenerator,
-            ChildSessionParams sessionParams,
-            Executor userCbExecutor,
+            IkeContext ikeContext,
+            ChildSessionStateMachine.Config childSmConfig,
             ChildSessionCallback userCallback,
             IChildSessionSmCallback childSmCallback) {
-        super(TAG, looper, userCbExecutor);
+        super(TAG, ikeContext.getLooper(), childSmConfig.userCbExecutor);
 
-        mContext = context;
-        mIkeSessionId = ikeSessionUniqueId;
-        mIkeHandler = ikeHandler;
-        mRandomFactory = randomnessFactory;
-        mIpSecManager = ipSecManager;
-        mIpSecSpiGenerator = ipSecSpiGenerator;
-        mChildSessionParams = sessionParams;
+        mIkeContext = ikeContext;
+        mIkeSessionId = childSmConfig.ikeSessionId;
+        mIkeHandler = childSmConfig.ikeHandler;
+        mIpSecManager = childSmConfig.ipSecManager;
+        mIpSecSpiGenerator = childSmConfig.ipSecSpiGenerator;
 
+        mChildSessionParams = childSmConfig.sessionParams;
         mUserCallback = userCallback;
         mChildSmCallback = childSmCallback;
 
@@ -293,6 +282,31 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         addState(mRekeyChildRemoteDelete, mKillChildSessionParent);
 
         setInitialState(mInitial);
+    }
+
+    // Configurations provided by an IKE Session for building the Child Session
+    static class Config {
+        public final int ikeSessionId;
+        public final Handler ikeHandler;
+        public final ChildSessionParams sessionParams;
+        public final IpSecManager ipSecManager;
+        public final IpSecSpiGenerator ipSecSpiGenerator;
+        public final Executor userCbExecutor;
+
+        Config(
+                int ikeSessionId,
+                Handler ikeHandler,
+                ChildSessionParams sessionParams,
+                IpSecManager ipSecManager,
+                IpSecSpiGenerator ipSecSpiGenerator,
+                Executor userCbExecutor) {
+            this.ikeSessionId = ikeSessionId;
+            this.ikeHandler = ikeHandler;
+            this.sessionParams = sessionParams;
+            this.ipSecManager = ipSecManager;
+            this.ipSecSpiGenerator = ipSecSpiGenerator;
+            this.userCbExecutor = userCbExecutor;
+        }
     }
 
     /**
@@ -669,7 +683,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                         mUserCallback.onClosedWithException(new IkeInternalException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
-            quitNow();
+            quitSessionNow();
         }
 
         @Override
@@ -729,7 +743,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         // Clean up all SaRecords and quit
         closeAllSaRecords(false /*expectSaClosed*/);
-        quitNow();
+        quitSessionNow();
     }
 
     /**
@@ -752,7 +766,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                     closeAllSaRecords(false /*expectSaClosed*/);
 
-                    quitNow();
+                    quitSessionNow();
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -797,7 +811,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         mCurrentChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
-                                        mContext,
+                                        mIkeContext.getContext(),
                                         reqPayloads,
                                         respPayloads,
                                         createChildResult.initSpi,
@@ -927,20 +941,26 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         PendingIntent deleteSaIntent =
                 buildIkeAlarmIntent(
-                        mContext, ACTION_DELETE_CHILD, getIntentIdentifier(remoteSpi), deleteMsg);
+                        mIkeContext.getContext(),
+                        ACTION_DELETE_CHILD,
+                        getIntentIdentifier(remoteSpi),
+                        deleteMsg);
         PendingIntent rekeySaIntent =
                 buildIkeAlarmIntent(
-                        mContext, ACTION_REKEY_CHILD, getIntentIdentifier(remoteSpi), rekeyMsg);
+                        mIkeContext.getContext(),
+                        ACTION_REKEY_CHILD,
+                        getIntentIdentifier(remoteSpi),
+                        rekeyMsg);
 
         return new SaLifetimeAlarmScheduler(
                 new IkeAlarmConfig(
-                        mContext,
+                        mIkeContext.getContext(),
                         ACTION_DELETE_CHILD,
                         mChildSessionParams.getHardLifetimeMsInternal(),
                         deleteSaIntent,
                         deleteMsg),
                 new IkeAlarmConfig(
-                        mContext,
+                        mIkeContext.getContext(),
                         ACTION_REKEY_CHILD,
                         mChildSessionParams.getSoftLifetimeMsInternal(),
                         rekeySaIntent,
@@ -979,7 +999,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             () -> {
                                 mUserCallback.onClosed();
                             });
-                    quitNow();
+                    quitSessionNow();
                     return HANDLED;
                 case CMD_FORCE_TRANSITION:
                     transitionTo((State) message.obj);
@@ -1007,7 +1027,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             try {
                 mRequestPayloads =
                         CreateChildSaHelper.getInitChildCreateReqPayloads(
-                                mRandomFactory,
+                                mIkeContext.getRandomnessFactory(),
                                 mIpSecSpiGenerator,
                                 mLocalAddress,
                                 mChildSessionParams,
@@ -1165,7 +1185,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             switch (message.what) {
                 case CMD_HANDLE_RECEIVED_RESPONSE:
                     // Do not need to verify the response since the Child Session is already closed
-                    quitNow();
+                    quitSessionNow();
                     return HANDLED;
                 default:
                     return NOT_HANDLED;
@@ -1249,7 +1269,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             mCurrentChildSaRecord = null;
 
             if (quitStateMachine) {
-                quitNow();
+                quitSessionNow();
             }
         }
     }
@@ -1425,7 +1445,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                 // Build request with negotiated proposal and TS.
                 mRequestPayloads =
                         CreateChildSaHelper.getRekeyChildCreateReqPayloads(
-                                mRandomFactory,
+                                mIkeContext.getRandomnessFactory(),
                                 mIpSecSpiGenerator,
                                 mLocalAddress,
                                 saProposal,
@@ -1482,7 +1502,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                                 mLocalInitNewChildSaRecord =
                                         ChildSaRecord.makeChildSaRecord(
-                                                mContext,
+                                                mIkeContext.getContext(),
                                                 mRequestPayloads,
                                                 resp.responsePayloads,
                                                 createChildResult.initSpi,
@@ -1658,19 +1678,21 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloads);
 
                 ChildSaProposal saProposal = mSaProposal;
-
-                // Try accepting a DH group requested during remote rekey for both first and
-                // additional Child Sessions even if it is different from the previously negotiated
-                // proposal.
-                if (reqKePayload != null && isKePayloadAcceptable(reqKePayload)) {
-                    saProposal = mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
+                if (reqKePayload != null) {
+                    saProposal =
+                            reqSaPayload.getNegotiatedChildProposalWithDh(
+                                    mSaProposal,
+                                    mChildSessionParams.getChildSaProposals(),
+                                    reqKePayload.dhGroup,
+                                    mIkeDhGroup);
                 }
+
 
                 byte respProposalNumber = reqSaPayload.getNegotiatedProposalNumber(saProposal);
 
                 respPayloads =
                         CreateChildSaHelper.getRekeyChildCreateRespPayloads(
-                                mRandomFactory,
+                                mIkeContext.getRandomnessFactory(),
                                 mIpSecSpiGenerator,
                                 mLocalAddress,
                                 respProposalNumber,
@@ -1679,7 +1701,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                 mRemoteTs,
                                 mCurrentChildSaRecord.getLocalSpi(),
                                 mChildSessionParams.isTransportMode());
-            } catch (NoValidProposalChosenException e) {
+            } catch (NoValidProposalChosenException | InvalidKeException e) {
                 handleCreationFailureAndBackToIdle(e);
                 return;
             } catch (SpiUnavailableException | ResourceUnavailableException e) {
@@ -1706,7 +1728,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
                         mRemoteInitNewChildSaRecord =
                                 ChildSaRecord.makeChildSaRecord(
-                                        mContext,
+                                        mIkeContext.getContext(),
                                         reqPayloads,
                                         respPayloads,
                                         createChildResult.initSpi,
@@ -1782,30 +1804,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                             new IllegalStateException(
                                     "Unrecognized status: " + createChildResult.status));
             }
-        }
-
-        private boolean isKePayloadAcceptable(IkeKePayload reqKePayload) {
-            ChildSaProposal proposal =
-                    mSaProposal.getCopyWithAdditionalDhTransform(reqKePayload.dhGroup);
-
-            // Verify if this proposal is accepted by user
-            for (SaProposal saProposal : mChildSessionParams.getSaProposals()) {
-                if (!saProposal.getDhGroups().isEmpty() && proposal.isNegotiatedFrom(saProposal)) {
-                    // If user has specified Child DH group in this saProposal, check proposal
-                    // against saProposal
-                    return true;
-                } else if (reqKePayload.dhGroup == mIkeDhGroup
-                        && proposal.isNegotiatedFrom(
-                                ((ChildSaProposal) saProposal)
-                                        .getCopyWithAdditionalDhTransform(reqKePayload.dhGroup))) {
-                    // If user has not specified Child DH group in this saProposal, check proposal
-                    // against saProposal + mIkeDhGroup
-                    return true;
-                }
-
-            }
-
-            return false;
         }
 
         private void handleCreationFailureAndBackToIdle(IkeProtocolException e) {
