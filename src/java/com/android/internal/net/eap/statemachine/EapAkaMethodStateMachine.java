@@ -55,6 +55,7 @@ import com.android.internal.net.eap.exceptions.simaka.EapSimAkaIdentityUnavailab
 import com.android.internal.net.eap.exceptions.simaka.EapSimAkaInvalidAttributeException;
 import com.android.internal.net.eap.exceptions.simaka.EapSimAkaInvalidLengthException;
 import com.android.internal.net.eap.message.EapMessage;
+import com.android.internal.net.eap.message.simaka.EapAkaPrimeTypeData;
 import com.android.internal.net.eap.message.simaka.EapAkaTypeData;
 import com.android.internal.net.eap.message.simaka.EapAkaTypeData.EapAkaTypeDataDecoder;
 import com.android.internal.net.eap.message.simaka.EapSimAkaAttribute;
@@ -443,7 +444,12 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                         message.eapIdentifier,
                         EAP_AKA_CHALLENGE,
                         new byte[0],
-                        Arrays.asList(AtRes.getAtRes(result.res)));
+                        Arrays.asList(AtRes.getAtRes(result.res)),
+                        (eapAkaTypeData instanceof EapAkaPrimeTypeData)
+                                ? null /* no flags set */
+                                : new int[] {
+                                    EapResult.EapResponse.RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED
+                                });
             } catch (EapSimAkaInvalidAttributeException ex) {
                 LOG.wtf(mTAG, "Error creating AtRes value", ex);
                 return new EapError(ex);
