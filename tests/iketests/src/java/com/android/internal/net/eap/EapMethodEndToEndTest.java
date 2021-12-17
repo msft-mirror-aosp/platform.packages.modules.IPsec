@@ -81,7 +81,7 @@ public class EapMethodEndToEndTest {
         mTestLooper.dispatchAll();
 
         // verify that onSuccess callback made
-        verify(mMockCallback).onSuccess(eq(msk), eq(emsk));
+        verify(mMockCallback).onSuccess(eq(msk), eq(emsk), eq(null));
         verifyNoMoreInteractions(mMockContext, mMockSecureRandom, mMockCallback);
     }
 
