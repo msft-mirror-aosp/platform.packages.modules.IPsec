@@ -29,6 +29,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import android.content.Context;
+import android.net.eap.test.EapInfo;
 import android.net.eap.test.EapSessionConfig;
 import android.os.test.TestLooper;
 
@@ -82,7 +83,16 @@ public class EapMethodEndToEndTest {
 
         // verify that onSuccess callback made
         verify(mMockCallback).onSuccess(eq(msk), eq(emsk), eq(null));
-        verifyNoMoreInteractions(mMockContext, mMockSecureRandom, mMockCallback);
+        verifyNoMoreInteractions(mMockContext, mMockCallback);
+    }
+
+    protected void verifyEapSuccessWithOption(byte[] msk, byte[] emsk) {
+        // EAP-Success
+        mEapAuthenticator.processEapMessage(EAP_SUCCESS);
+        mTestLooper.dispatchAll();
+
+        // verify that onSuccess callback made
+        verify(mMockCallback).onSuccess(eq(msk), eq(emsk), any(EapInfo.class));
     }
 
     protected void verifyEapFailure() {
