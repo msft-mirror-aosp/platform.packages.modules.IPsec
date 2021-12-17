@@ -83,7 +83,7 @@ public class EapTestAttributeDefinitions {
     public static final byte[] AT_BIDDING_SUPPORTS_AKA_PRIME = hexStringToByteArray("88018000");
     public static final byte[] AT_BIDDING_DOES_NOT_SUPPORT_AKA_PRIME =
             hexStringToByteArray("88010000");
-    public static final String IV = "0123456789ABCDEFFEDCBA9876543210";
+    public static final String IV = "DB4786A0ABC44CBB85669F34C72FD604";
     public static final byte[] IV_BYTES = hexStringToByteArray(IV);
     public static final byte[] AT_IV = hexStringToByteArray("81050000" + IV);
     // Network Name = "android.net"
