@@ -22,6 +22,8 @@ import static com.android.internal.net.eap.statemachine.EapMethodStateMachine.MI
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
+import android.annotation.Nullable;
+import android.net.eap.EapInfo;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.exceptions.InvalidEapResponseException;
@@ -42,8 +44,13 @@ public abstract class EapResult {
 
         public final byte[] msk;
         public final byte[] emsk;
+        public final EapInfo mEapInfo;
 
         public EapSuccess(@NonNull byte[] msk, @NonNull byte[] emsk) {
+            this(msk, emsk, null);
+        }
+
+        public EapSuccess(@NonNull byte[] msk, @NonNull byte[] emsk, @Nullable EapInfo eapInfo) {
             if (msk == null || emsk == null) {
                 throw new IllegalArgumentException("msk and emsk must not be null");
             }
@@ -57,6 +64,12 @@ public abstract class EapResult {
             }
             this.msk = msk;
             this.emsk = emsk;
+            this.mEapInfo = eapInfo;
+        }
+
+        @Nullable
+        public EapInfo getEapInfo() {
+            return mEapInfo;
         }
     }
 
