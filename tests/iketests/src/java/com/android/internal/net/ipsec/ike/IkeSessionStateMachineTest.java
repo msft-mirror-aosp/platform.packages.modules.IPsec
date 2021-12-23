@@ -16,7 +16,6 @@
 
 package com.android.internal.net.ipsec.test.ike;
 
-import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.test.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
@@ -3600,7 +3599,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfig);
 
         EapAkaInfo eapInfo =
-                new EapAkaInfo.Builder(EAP_TYPE_AKA).setReauthId(REAUTH_ID_BYTES).build();
+                new EapAkaInfo.Builder().setReauthId(REAUTH_ID_BYTES).build();
 
         callback.onSuccess(mPsk, new byte[0], eapInfo); // use mPsk as MSK, eMSK does not matter
         mLooper.dispatchAll();
@@ -3679,7 +3678,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .mockIkeInitAndTransitionToIkeAuth();
 
         EapAkaInfo eapInfo =
-                new EapAkaInfo.Builder(EAP_TYPE_AKA).setReauthId(REAUTH_ID_BYTES).build();
+                new EapAkaInfo.Builder().setReauthId(REAUTH_ID_BYTES).build();
         mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap.setEapInfo(eapInfo);
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_EAP_FINISH_EAP_AUTH, mPsk);
         mLooper.dispatchAll();
