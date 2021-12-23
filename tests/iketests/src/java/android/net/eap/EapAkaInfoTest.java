@@ -33,7 +33,7 @@ public class EapAkaInfoTest {
     @Test
     public void testBuild() {
         EapAkaInfo eapAkaInfo =
-                new EapAkaInfo.Builder(EAP_TYPE_AKA).setReauthId(REAUTH_ID_BYTES).build();
+                new EapAkaInfo.Builder().setReauthId(REAUTH_ID_BYTES).build();
 
         assertEquals(EAP_TYPE_AKA, eapAkaInfo.getEapMethodType());
         assertArrayEquals(REAUTH_ID_BYTES, eapAkaInfo.getReauthId());
@@ -42,7 +42,7 @@ public class EapAkaInfoTest {
     @Test
     public void testBuildNullReauthId() {
         EapAkaInfo eapAkaInfo =
-                new EapAkaInfo.Builder(EAP_TYPE_AKA).build();
+                new EapAkaInfo.Builder().build();
 
         assertEquals(EAP_TYPE_AKA, eapAkaInfo.getEapMethodType());
         assertNull(eapAkaInfo.getReauthId());
