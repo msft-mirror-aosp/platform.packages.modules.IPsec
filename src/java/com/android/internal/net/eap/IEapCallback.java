@@ -16,6 +16,9 @@
 
 package com.android.internal.net.eap;
 
+import android.annotation.Nullable;
+import android.net.eap.EapInfo;
+
 /**
  * IEapCallback represents a Callback interface to be implemented by clients of the
  * {@link EapAuthenticator}.
@@ -32,8 +35,9 @@ public interface IEapCallback {
      *
      * @param msk The Master Session Key (MSK) generated in the session
      * @param emsk The Extended Master Session Key (EMSK) generated in the session
+     * @param eapInfo EAP information {@link EapInfo}
      */
-    void onSuccess(byte[] msk, byte[] emsk);
+    void onSuccess(byte[] msk, byte[] emsk, @Nullable EapInfo eapInfo);
 
     /**
      * Callback used to indicate that the EAP Authentication Session was unsuccessful.

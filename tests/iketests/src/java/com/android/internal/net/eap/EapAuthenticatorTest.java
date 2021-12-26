@@ -34,6 +34,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import android.net.eap.test.EapInfo;
 import android.os.Looper;
 import android.os.test.TestLooper;
 
@@ -128,15 +129,16 @@ public class EapAuthenticatorTest {
 
     @Test
     public void testProcessEapMessageSuccess() {
-        EapCallback eapCallback = new EapCallback() {
-            @Override
-            public void onSuccess(byte[] msk, byte[] emsk) {
-                assertArrayEquals(MSK, msk);
-                assertArrayEquals(EMSK, emsk);
-                assertFalse("Callback has already been fired", mCallbackFired);
-                mCallbackFired = true;
-            }
-        };
+        EapCallback eapCallback =
+                new EapCallback() {
+                    @Override
+                    public void onSuccess(byte[] msk, byte[] emsk, EapInfo eapInfo) {
+                        assertArrayEquals(MSK, msk);
+                        assertArrayEquals(EMSK, emsk);
+                        assertFalse("Callback has already been fired", mCallbackFired);
+                        mCallbackFired = true;
+                    }
+                };
         EapSuccess eapSuccess = new EapSuccess(MSK, EMSK);
         doReturn(eapSuccess).when(mMockEapStateMachine).process(eq(EAP_SUCCESS_PACKET));
 
@@ -234,7 +236,7 @@ public class EapAuthenticatorTest {
      */
     private abstract static class EapCallback implements IEapCallback {
         @Override
-        public void onSuccess(byte[] msk, byte[] emsk) {
+        public void onSuccess(byte[] msk, byte[] emsk, EapInfo eapInfo) {
             throw new UnsupportedOperationException();
         }
 
