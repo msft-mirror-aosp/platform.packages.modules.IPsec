@@ -927,9 +927,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     new EapSuccess(
                             mMsk,
                             mEmsk,
-                            new EapAkaInfo.Builder(EAP_TYPE_AKA)
-                                    .setReauthId(nextReauthId)
-                                    .build());
+                            new EapAkaInfo.Builder().setReauthId(nextReauthId).build());
         } else {
             eapSuccess = new EapSuccess(mMsk, mEmsk);
         }
