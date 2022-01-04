@@ -19,6 +19,7 @@ package com.android.internal.net.eap.test;
 import static android.telephony.TelephonyManager.APPTYPE_USIM;
 
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
+import static com.android.internal.net.eap.test.EapResult.EapResponse.RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED;
 import static com.android.internal.net.eap.test.message.EapTestMessageDefinitions.EAP_REQUEST_SIM_START_PACKET;
 
 import static org.mockito.ArgumentMatchers.eq;
@@ -51,7 +52,8 @@ public class EapAkaTest extends EapMethodEndToEndTest {
     // EAP_IDENTITY = hex("test@android.net")
     private static final byte[] EAP_IDENTITY =
             hexStringToByteArray("7465737440616E64726F69642E6E6574");
-
+    private static final int EAP_RESPONSE_FLAG_MASK_WITH_EAP_AKA_SERVER_AUTHENTICATED =
+            (1 << RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED);
     // TODO(b/140797965): find valid AUTN/RAND values for the CTS test sim
     // CK: 070AC6E26957E00C83A4B577210A8AEC
     // IK: 0B48923D40B48C476B0EE8A43F780356
@@ -210,7 +212,10 @@ public class EapAkaTest extends EapMethodEndToEndTest {
     @Test
     public void testEapAkaEndToEnd() {
         verifyEapAkaIdentity();
-        verifyEapAkaChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_CHALLENGE_RESPONSE);
+        verifyEapAkaChallenge(
+                BASE_64_RESPONSE_SUCCESS,
+                EAP_AKA_CHALLENGE_RESPONSE,
+                true /* expectServerAuthenticated */);
         verifyEapSuccess(MSK, EMSK);
     }
 
@@ -226,7 +231,10 @@ public class EapAkaTest extends EapMethodEndToEndTest {
         verifyEapAkaIdentity();
 
         verifyEapNotification(2);
-        verifyEapAkaChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_CHALLENGE_RESPONSE);
+        verifyEapAkaChallenge(
+                BASE_64_RESPONSE_SUCCESS,
+                EAP_AKA_CHALLENGE_RESPONSE,
+                true /* expectServerAuthenticated */);
 
         verifyEapNotification(3);
         verifyEapSuccess(MSK, EMSK);
@@ -237,7 +245,10 @@ public class EapAkaTest extends EapMethodEndToEndTest {
         verifyUnsupportedType(EAP_REQUEST_SIM_START_PACKET, EAP_RESPONSE_NAK_PACKET);
 
         verifyEapAkaIdentity();
-        verifyEapAkaChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_CHALLENGE_RESPONSE);
+        verifyEapAkaChallenge(
+                BASE_64_RESPONSE_SUCCESS,
+                EAP_AKA_CHALLENGE_RESPONSE,
+                true /* expectServerAuthenticated */);
         verifyEapSuccess(MSK, EMSK);
     }
 
@@ -245,7 +256,10 @@ public class EapAkaTest extends EapMethodEndToEndTest {
     public void testEapAkaSynchronizationFailure() {
         verifyEapAkaIdentity();
         verifyEapAkaSynchronizationFailure();
-        verifyEapAkaChallenge(BASE_64_RESPONSE_SUCCESS, EAP_AKA_CHALLENGE_RESPONSE);
+        verifyEapAkaChallenge(
+                BASE_64_RESPONSE_SUCCESS,
+                EAP_AKA_CHALLENGE_RESPONSE,
+                true /* expectServerAuthenticated */);
         verifyEapSuccess(MSK, EMSK);
     }
 
@@ -254,7 +268,8 @@ public class EapAkaTest extends EapMethodEndToEndTest {
         verifyEapAkaIdentity();
 
         // return null from TelephonyManager to simluate rejection of AUTN
-        verifyEapAkaChallenge(null, EAP_AKA_AUTHENTICATION_REJECT);
+        verifyEapAkaChallenge(
+                null, EAP_AKA_AUTHENTICATION_REJECT, false /* expectServerAuthenticated */);
         verifyExpectsEapFailure(EAP_AKA_CHALLENGE_REQUEST);
         verifyEapFailure();
     }
@@ -269,7 +284,8 @@ public class EapAkaTest extends EapMethodEndToEndTest {
         // verify EAP-AKA/Identity response
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
         verify(mMockTelephonyManager).getSubscriberId();
-        verify(mMockCallback).onResponse(eq(EAP_AKA_IDENTITY_RESPONSE));
+        verify(mMockCallback)
+                .onResponse(eq(EAP_AKA_IDENTITY_RESPONSE), eq(EAP_RESPONSE_FLAGS_NOT_SET));
         verifyNoMoreInteractions(
                 mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
     }
@@ -278,7 +294,8 @@ public class EapAkaTest extends EapMethodEndToEndTest {
             String challengeBase64,
             String responseBase64,
             byte[] incomingEapPacket,
-            byte[] outgoingEapPacket) {
+            byte[] outgoingEapPacket,
+            boolean expectServerAuthenticated) {
         // EAP-AKA/Challenge request
         when(mMockTelephonyManager.getIccAuthentication(
                         TelephonyManager.APPTYPE_USIM,
@@ -295,12 +312,22 @@ public class EapAkaTest extends EapMethodEndToEndTest {
                         TelephonyManager.APPTYPE_USIM,
                         TelephonyManager.AUTHTYPE_EAP_AKA,
                         challengeBase64);
-        verify(mMockCallback).onResponse(eq(outgoingEapPacket));
+        verify(mMockCallback)
+                .onResponse(
+                        eq(outgoingEapPacket),
+                        (expectServerAuthenticated)
+                                ? eq(EAP_RESPONSE_FLAG_MASK_WITH_EAP_AKA_SERVER_AUTHENTICATED)
+                                : eq(EAP_RESPONSE_FLAGS_NOT_SET));
     }
 
-    private void verifyEapAkaChallenge(String responseBase64, byte[] outgoingPacket) {
+    private void verifyEapAkaChallenge(
+            String responseBase64, byte[] outgoingPacket, boolean expectServerAuthenticated) {
         verifyEapAkaChallenge(
-                BASE64_CHALLENGE_1, responseBase64, EAP_AKA_CHALLENGE_REQUEST, outgoingPacket);
+                BASE64_CHALLENGE_1,
+                responseBase64,
+                EAP_AKA_CHALLENGE_REQUEST,
+                outgoingPacket,
+                expectServerAuthenticated);
         verifyNoMoreInteractions(
                 mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
     }
@@ -310,7 +337,8 @@ public class EapAkaTest extends EapMethodEndToEndTest {
                 BASE64_CHALLENGE_1,
                 BASE_64_RESPONSE_SUCCESS,
                 EAP_AKA_CHALLENGE_REQUEST_WITHOUT_IDENTITY_REQ,
-                EAP_AKA_CHALLENGE_RESPONSE_WITHOUT_IDENTITY_REQUEST);
+                EAP_AKA_CHALLENGE_RESPONSE_WITHOUT_IDENTITY_REQUEST,
+                true /* expectServerAuthenticated */);
 
         // also need to verify interactions with Context and TelephonyManager
         verify(mMockContext).getSystemService(eq(Context.TELEPHONY_SERVICE));
@@ -323,7 +351,8 @@ public class EapAkaTest extends EapMethodEndToEndTest {
                 BASE64_CHALLENGE_2,
                 BASE_64_RESPONSE_SYNC_FAIL,
                 EAP_AKA_CHALLENGE_REQUEST_SYNC_FAIL,
-                EAP_AKA_SYNC_FAIL_RESPONSE);
+                EAP_AKA_SYNC_FAIL_RESPONSE,
+                false /* expectServerAuthenticated */);
         verifyNoMoreInteractions(
                 mMockContext, mMockTelephonyManager, mMockSecureRandom, mMockCallback);
     }
