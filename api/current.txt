@@ -38,6 +38,7 @@ package android.net.eap {
 
   public static class EapSessionConfig.EapAkaConfig extends android.net.eap.EapSessionConfig.EapMethodConfig {
     method public int getAppType();
+    method @NonNull public android.net.eap.EapSessionConfig.EapAkaOption getEapAkaOption();
     method public int getSubId();
   }
 
