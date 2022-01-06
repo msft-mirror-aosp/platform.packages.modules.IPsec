@@ -73,6 +73,7 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_K
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
+import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -85,9 +86,11 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.net.TrafficStats;
+import android.net.eap.EapInfo;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
+import android.net.ipsec.ike.IkeManager;
 import android.net.ipsec.ike.IkeSaProposal;
 import android.net.ipsec.ike.IkeSessionCallback;
 import android.net.ipsec.ike.IkeSessionConfiguration;
@@ -119,6 +122,7 @@ import android.util.SparseArray;
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapAuthenticator;
+import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.IEapCallback;
 import com.android.internal.net.ipsec.ike.ChildSessionStateMachine.CreateChildSaHelper;
 import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.ChildLocalRequest;
@@ -171,6 +175,7 @@ import com.android.modules.utils.build.SdkLevel;
 import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.security.cert.TrustAnchor;
@@ -209,6 +214,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         implements IkeConnectionController.Callback, IkeSocket.Callback {
     // Package private
     static final String TAG = "IkeSessionStateMachine";
+
+    // "192.0.2.0" is selected from RFC5737, "IPv4 Address Blocks Reserved for Documentation"
+    private static final InetAddress FORCE_ENCAP_FAKE_LOCAL_ADDRESS_IPV4 =
+            new InetSocketAddress("192.0.2.0", 0).getAddress();
+    // "001:DB8::" is selected from RFC3849, "IPv6 Address Prefix Reserved for Documentation"
+    private static final InetAddress FORCE_ENCAP_FAKE_LOCAL_ADDRESS_IPV6 =
+            new InetSocketAddress("2001:DB8::", 0).getAddress();
 
     @VisibleForTesting static final String BUSY_WAKE_LOCK_TAG = "mBusyWakeLock";
 
@@ -857,6 +869,19 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void scheduleRetry(LocalRequest localRequest) {
         sendMessageDelayed(localRequest.procedureType, localRequest, RETRY_INTERVAL_MS);
+    }
+
+    private boolean needEnableForceUdpEncap() {
+        // When IKE library uses IPv4 and needs to do NAT detection, it needs to enforce UDP
+        // encapsulation to prevent the server from sending non-UDP-encap packets.
+        //
+        // NOTE: Although the IKE spec requires implementations to handle both UDP-encap and
+        // non-UDP-encap ESP packets when both the IKE client and server support NAT-T, due to
+        // kernel restrictions, the Android IPsec stack is unable to allow receiving two types of
+        // packets with a single SA. As a result, before kernel issues (b/210164853) are resolved,
+        // the IKE library MUST enforce UDP Encap to ensure that the server only sends UDP-encap
+        // packets in order to avoid dropping packets.
+        return (mIkeConnectionCtrl.getRemoteAddress() instanceof Inet4Address);
     }
 
     // TODO: Support initiating Delete IKE exchange when IKE SA expires
@@ -1956,6 +1981,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                     "Received unexpected payload in an INFORMATIONAL request."
                                             + " Payload type: "
                                             + payload.payloadType);
+                    }
+                }
+
+                // add any 3GPP informational payloads if needed
+                List<IkePayload> ikePayloads =
+                        mIke3gppExtensionExchange.getResponsePayloads(
+                                IKE_EXCHANGE_SUBTYPE_GENERIC_INFO, ikeMessage.ikePayloadList);
+                for (IkePayload payload : ikePayloads) {
+                    if (payload instanceof IkeInformationalPayload) {
+                        infoPayloadList.add((IkeInformationalPayload) payload);
+                    } else {
+                        logd(
+                                "Ignoring unexpected payload that is not an IkeInformationalPayload"
+                                        + payload);
                     }
                 }
 
@@ -3098,7 +3137,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             mIkeConnectionCtrl.getLocalPort(),
                             mIkeConnectionCtrl.getRemotePort(),
                             mIkeContext.getRandomnessFactory(),
-                            mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE));
+                            needEnableForceUdpEncap());
             payloadList.add(
                     new IkeNotifyPayload(
                             IkeNotifyPayload.NOTIFY_TYPE_IKEV2_FRAGMENTATION_SUPPORTED));
@@ -3391,6 +3430,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
+        if (!localNatDetected && needEnableForceUdpEncap()) {
+            logd("there is no actual local NAT, but we have faked it");
+            localNatDetected = true;
+        }
+
         return localNatDetected || remoteNatDetected;
     }
 
@@ -3401,6 +3445,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     abstract class CreateIkeLocalIkeAuthBase<T extends IkeInitData> extends DeleteBase {
         protected T mSetupData;
         protected Retransmitter mRetransmitter;
+        protected EapInfo mEapInfo = null;
 
         @Override
         public void enterState() {
@@ -3413,6 +3458,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         public void setIkeSetupData(T setupData) {
             mSetupData = setupData;
+        }
+
+        protected void setEapInfo(EapInfo eapInfo) {
+            mEapInfo = eapInfo;
         }
 
         @Override
@@ -3537,7 +3586,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     mIkeConnectionCtrl.buildIkeSessionConnectionInfo(),
                     configPayload,
                     mRemoteVendorIds,
-                    mEnabledExtensions);
+                    mEnabledExtensions,
+                    mEapInfo);
         }
 
         protected void notifyIkeSessionSetup(IkeMessage msg) {
@@ -3960,13 +4010,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                     return HANDLED;
                 case CMD_EAP_OUTBOUND_MSG_READY:
-                    byte[] eapMsgBytes = (byte[]) msg.obj;
-                    IkeEapPayload eapPayload = new IkeEapPayload(eapMsgBytes);
+                    IkeEapOutboundMsgWrapper msgWrapper = (IkeEapOutboundMsgWrapper) msg.obj;
+                    IkeEapPayload eapPayload = new IkeEapPayload(msgWrapper.getEapMsg());
+
+                    List<IkePayload> payloadList = new LinkedList<>();
+                    payloadList.add(eapPayload);
+
+                    // Add 3GPP-specific payloads for this exchange subtype
+                    payloadList.addAll(
+                            mIke3gppExtensionExchange.getRequestPayloadsInEap(
+                                    msgWrapper.isServerAuthenticated()));
 
                     // Setup new retransmitter with EAP response
                     mRetransmitter =
-                            new EncryptedRetransmitter(
-                                    buildIkeAuthReqMessage(Arrays.asList(eapPayload)));
+                            new EncryptedRetransmitter(buildIkeAuthReqMessage(payloadList));
 
                     return HANDLED;
                 case CMD_EAP_ERRORED:
@@ -4060,8 +4117,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         private class IkeEapCallback implements IEapCallback {
             @Override
-            public void onSuccess(byte[] msk, byte[] emsk) {
+            public void onSuccess(byte[] msk, byte[] emsk, @Nullable EapInfo eapInfo) {
                 // Extended MSK not used in IKEv2, drop.
+                mCreateIkeLocalIkeAuthPostEap.setEapInfo(eapInfo);
                 sendMessage(CMD_EAP_FINISH_EAP_AUTH, msk);
             }
 
@@ -4071,8 +4129,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
 
             @Override
-            public void onResponse(byte[] eapMsg) {
-                sendMessage(CMD_EAP_OUTBOUND_MSG_READY, eapMsg);
+            public void onResponse(byte[] eapMsg, int flagMask) {
+
+                // for now we only check if server is authenticated for EAP-AKA
+                boolean serverAuthenticated =
+                        EapResult.EapResponse.hasFlag(
+                                flagMask,
+                                EapResult.EapResponse.RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED);
+                IkeEapOutboundMsgWrapper msg =
+                        new IkeEapOutboundMsgWrapper(serverAuthenticated, eapMsg);
+                sendMessage(CMD_EAP_OUTBOUND_MSG_READY, msg);
             }
 
             @Override
@@ -5192,7 +5258,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         mIkeConnectionCtrl.getLocalPort(),
                         mIkeConnectionCtrl.getRemotePort(),
                         mCurrentIkeSaRecord.getInitiatorSpi(),
-                        mCurrentIkeSaRecord.getResponderSpi());
+                        mCurrentIkeSaRecord.getResponderSpi(),
+                        needEnableForceUdpEncap());
             }
 
             return buildEncryptedInformationalMessage(
@@ -5352,23 +5419,55 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             int localPort,
             int remotePort,
             long initIkeSpi,
-            long respIkeSpi) {
+            long respIkeSpi,
+            boolean isForceUdpEncapEnabled) {
         // Though RFC says Notify-NAT payload is "just after the Ni and Nr payloads (before
         // the optional CERTREQ payload)", it also says recipient MUST NOT reject " messages
         // in which the payloads were not in the "right" order" due to the lack of clarity
-        // of the payload order.
-        payloadList.add(
+        // of the payload order
+        InetAddress localAddressToUse = localAddr;
+
+        if (isForceUdpEncapEnabled) {
+            IkeManager.getIkeLog().d(TAG, " Faking NAT situation to enforce UDP encapsulation");
+            localAddressToUse =
+                    (remoteAddr instanceof Inet4Address)
+                            ? FORCE_ENCAP_FAKE_LOCAL_ADDRESS_IPV4
+                            : FORCE_ENCAP_FAKE_LOCAL_ADDRESS_IPV6;
+        }
+
+        IkeNotifyPayload natdSrcIp =
                 new IkeNotifyPayload(
                         NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP,
                         IkeNotifyPayload.generateNatDetectionData(
-                                initIkeSpi, respIkeSpi, localAddr, localPort)));
-        payloadList.add(
+                                initIkeSpi, respIkeSpi, localAddressToUse, localPort));
+
+        IkeNotifyPayload natdDstIp =
                 new IkeNotifyPayload(
                         NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP,
                         IkeNotifyPayload.generateNatDetectionData(
-                                initIkeSpi, respIkeSpi, remoteAddr, remotePort)));
+                                initIkeSpi, respIkeSpi, remoteAddr, remotePort));
+
+        payloadList.add(natdSrcIp);
+        payloadList.add(natdDstIp);
     }
 
+    private static class IkeEapOutboundMsgWrapper {
+        private final boolean serverAuthenticated;
+        private final byte[] eapMsg;
+
+        public IkeEapOutboundMsgWrapper(boolean serverAuthenticated, byte[] eapMsg) {
+            this.serverAuthenticated = serverAuthenticated;
+            this.eapMsg = eapMsg;
+        }
+
+        public boolean isServerAuthenticated() {
+            return serverAuthenticated;
+        }
+
+        public byte[] getEapMsg() {
+            return eapMsg;
+        }
+    }
     /**
      * Helper class to generate IKE SA creation payloads, in both request and response directions.
      */
@@ -5383,7 +5482,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 int localPort,
                 int remotePort,
                 RandomnessFactory randomFactory,
-                boolean isMobikeSupportEnabled)
+                boolean isForceUdpEncapEnabled)
                 throws IOException {
             List<IkePayload> payloadList =
                     getCreateIkeSaPayloads(
@@ -5402,7 +5501,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         localPort,
                         remotePort,
                         initIkeSpi,
-                        respIkeSpi);
+                        respIkeSpi,
+                        isForceUdpEncapEnabled);
             }
 
             return payloadList;
