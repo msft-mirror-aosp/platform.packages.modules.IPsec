@@ -3780,7 +3780,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                     IkeAuthDigitalSignPayload digitalSignaturePayload =
                             new IkeAuthDigitalSignPayload(
-                                    IkeAuthDigitalSignPayload.SIGNATURE_ALGO_RSA_SHA2_512,
+                                    mSetupData.peerSignatureHashAlgorithms,
                                     localAuthConfig.mPrivateKey,
                                     mSetupData.ikeInitRequestBytes,
                                     mCurrentIkeSaRecord.nonceResponder,

@@ -137,7 +137,10 @@ java_library {
 
 java_library {
     name: "ike-test-utils",
-    srcs: ["tests/iketests/src/java/**/CertUtils.java"],
+    srcs: [
+        "src/java/**/PolicyDirection.java",
+        "tests/iketests/src/java/**/CertUtils.java",
+    ],
     static_libs: ["ike-test-utils-dependency"],
     libs: ["androidx.test.rules"],
     visibility: ["//packages/modules/IPsec/tests/cts"]
