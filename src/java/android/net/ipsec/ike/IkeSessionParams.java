@@ -1871,6 +1871,18 @@ public final class IkeSessionParams {
                 }
             }
 
+            // as of today, the device_identity feature is only implemented for EAP-AKA
+            if ((mIke3gppExtension != null
+                    && mIke3gppExtension.getIke3gppParams().getDeviceIdentity() != null)) {
+                if (!(mLocalAuthConfig instanceof IkeAuthEapConfig)
+                        || ((IkeAuthEapConfig) mLocalAuthConfig).getEapConfig().getEapAkaConfig()
+                                == null) {
+                    throw new IllegalArgumentException(
+                            "If device identity is set in Ike3gppParams, then EAP-KA MUST be"
+                                    + " configured as an acceptable authentication method");
+                }
+            }
+
             if (mLocalAuthConfig.mAuthMethod == IKE_AUTH_METHOD_PUB_KEY_SIGNATURE
                     && mLocalIdentification.idType == IkeIdentification.ID_TYPE_KEY_ID) {
                 throw new IllegalArgumentException(
