@@ -696,10 +696,9 @@ public final class EapSessionConfig {
          * Retrieves EapAkaOption
          *
          * @return the {@link EapAkaOption}
-         * @hide
          */
         @NonNull
-        public EapAkaOption getOptions() {
+        public EapAkaOption getEapAkaOption() {
             return mEapAkaOption;
         }
     }
