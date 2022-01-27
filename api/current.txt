@@ -396,6 +396,11 @@ package android.net.ipsec.ike.exceptions {
   public abstract class IkeException extends java.lang.Exception {
   }
 
+  public final class IkeIOException extends android.net.ipsec.ike.exceptions.IkeNonProtocolException {
+    ctor public IkeIOException(@NonNull java.io.IOException);
+    method @NonNull public java.io.IOException getCause();
+  }
+
   public final class IkeInternalException extends android.net.ipsec.ike.exceptions.IkeNonProtocolException {
     ctor public IkeInternalException(@NonNull Throwable);
     ctor public IkeInternalException(@NonNull String, @NonNull Throwable);
@@ -427,6 +432,10 @@ package android.net.ipsec.ike.exceptions {
     field public static final int ERROR_TYPE_TEMPORARY_FAILURE = 43; // 0x2b
     field public static final int ERROR_TYPE_TS_UNACCEPTABLE = 38; // 0x26
     field public static final int ERROR_TYPE_UNSUPPORTED_CRITICAL_PAYLOAD = 1; // 0x1
+  }
+
+  public final class IkeTimeoutException extends java.io.IOException {
+    ctor public IkeTimeoutException(@NonNull String);
   }
 
   public final class InvalidKeException extends android.net.ipsec.ike.exceptions.IkeProtocolException {
