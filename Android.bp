@@ -39,8 +39,12 @@ java_sdk_library {
         "framework-annotations-lib",
         "conscrypt.module.public.api",
         "framework-connectivity.stubs.module_lib",
+        "framework-connectivity-tiramisu.stubs.module_lib",
     ],
-    stub_only_libs: ["framework-connectivity.stubs.module_lib"],
+    stub_only_libs: [
+        "framework-connectivity.stubs.module_lib",
+        "framework-connectivity-tiramisu.stubs.module_lib",
+    ],
 
     api_packages: [
         "android.net.eap",
