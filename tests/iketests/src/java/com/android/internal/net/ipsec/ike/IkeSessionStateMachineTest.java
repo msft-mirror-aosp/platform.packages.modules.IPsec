@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.test.ike;
 
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 import static android.net.ipsec.test.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
@@ -36,6 +37,7 @@ import static android.system.OsConstants.AF_INET;
 import static android.system.OsConstants.AF_INET6;
 
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
+import static com.android.internal.net.eap.test.EapResult.EapResponse.RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED;
 import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
@@ -45,6 +47,7 @@ import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.Ini
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.RETRY_INTERVAL_MS;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.TEMP_FAILURE_RETRY_TIMEOUT_MS;
 import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_BACKOFF_TIMER;
+import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_DEVICE_IDENTITY;
 import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_CAPABILITY;
 import static com.android.internal.net.ipsec.test.ike.ike3gpp.Ike3gppExtensionExchange.NOTIFY_TYPE_N1_MODE_INFORMATION;
 import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
@@ -110,6 +113,7 @@ import static org.mockito.Mockito.when;
 import android.annotation.Nullable;
 import android.net.LinkAddress;
 import android.net.Network;
+import android.net.eap.test.EapAkaInfo;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ChildSaProposal;
 import android.net.ipsec.test.ike.ChildSessionCallback;
@@ -207,6 +211,7 @@ import com.android.internal.net.ipsec.test.ike.utils.IkeSpiGenerator;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.test.ike.utils.State;
 import com.android.internal.net.utils.test.Log;
+import com.android.internal.util.HexDump;
 
 import org.junit.After;
 import org.junit.Before;
@@ -221,6 +226,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
@@ -324,6 +330,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private static final String PCSCF_IPV6_ADDRESS3 = "2001:4888:5:713a:e0:104:0:c9";
 
     private static final byte[] EAP_DUMMY_MSG = "EAP Message".getBytes();
+    private static final int EAP_RESPONSE_FLAG_MASK_WITH_EAP_AKA_SERVER_AUTHENTICATED =
+            (1 << RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED);
+    private static final int EAP_RESPONSE_FLAGS_NOT_SET = 0;
     private static final byte[] REMOTE_VENDOR_ID_ONE = "Remote Vendor ID One".getBytes();
     private static final byte[] REMOTE_VENDOR_ID_TWO = "Remote Vendor ID Two".getBytes();
 
@@ -361,6 +370,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private static final int NATT_KEEPALIVE_DELAY = 20;
 
+    private static final String DEVICE_IDENTITY_IMEI = "123456789123456";
+    private static final byte[] DEVICE_IDENTITY_PAYLOAD_IMEI =
+            HexDump.hexStringToByteArray("00090121436587193254F6");
+
     static {
         new Random().nextBytes(COOKIE_DATA);
         new Random().nextBytes(COOKIE2_DATA);
@@ -373,6 +386,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private static final Ike3gppParams IKE_3GPP_PARAMS =
             new Ike3gppParams.Builder().setPduSessionId(PDU_SESSION_ID).build();
+
+    private static final byte[] REAUTH_ID_BYTES =
+            "4OLUpQCqFyhm1/UgD56anTzYTqJDckibqjU6PlS4sZaiuLc=".getBytes(StandardCharsets.UTF_8);
 
     private IkeUdpEncapSocket mMockIkeUdpEncapSocket;
     private IkeUdp6WithEncapPortSocket mMockIkeUdp6WithEncapPortSocket;
@@ -418,6 +434,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private IkeSessionStateMachine.Dependencies mSpyDeps;
 
     private EapSessionConfig mEapSessionConfig;
+    private EapSessionConfig mEapSessionConfigEapAka;
     private EapAuthenticator mMockEapAuthenticator;
 
     private IkeConnectionController mSpyIkeConnectionCtrl;
@@ -1030,6 +1047,23 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .build();
     }
 
+    private IkeSessionParams buildIkeSessionParamsEapAkaWithDeviceIdentity() throws Exception {
+        Ike3gppParams ike3gppParams =
+                new Ike3gppParams.Builder().setMobileDeviceIdentity(DEVICE_IDENTITY_IMEI).build();
+        Ike3gppExtension ike3gppExtension =
+                new Ike3gppExtension(ike3gppParams, mock(Ike3gppDataListener.class));
+        mEapSessionConfigEapAka =
+                new EapSessionConfig.Builder()
+                        .setEapAkaConfig(0, TelephonyManager.APPTYPE_ISIM)
+                        .build();
+
+        return buildIkeSessionParamsCommon()
+                .setAuthEap(mock(X509Certificate.class), mEapSessionConfigEapAka)
+                .setIke3gppExtension(ike3gppExtension)
+                .addIkeOption(IKE_OPTION_EAP_ONLY_AUTH)
+                .build();
+    }
+
     private IkeSessionParams buildIkeSessionParamsDigitalSignature() throws Exception {
         return buildIkeSessionParamsCommon()
                 .setAuthDigitalSignature(mRootCertificate, mUserEndCert, mUserPrivateKey)
@@ -1255,6 +1289,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 msgId,
                 new ArrayList<>(),
                 dummyIkePacketBytes);
+    }
+
+    private ReceivedIkePacket makeDeviceIdentityIkeRequest() throws Exception {
+        IkeNotifyPayload deviceIdentity =
+                new IkeNotifyPayload(
+                        NOTIFY_TYPE_DEVICE_IDENTITY, HexDump.hexStringToByteArray("01"));
+        return makeDummyEncryptedReceivedIkePacketWithPayloadList(
+                mSpyCurrentIkeSaRecord,
+                EXCHANGE_TYPE_INFORMATIONAL,
+                false /*isResp*/,
+                Arrays.asList(deviceIdentity));
     }
 
     private ReceivedIkePacket makeRoutabilityCheckIkeRequest() throws Exception {
@@ -1733,20 +1778,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testCreateIkeLocalIkeInitSwitchesToEncapPorts() throws Exception {
+    public void testCreateIkeLocalIkeInitSwitchesToEncapPortsIpv4() throws Exception {
         setupFirstIkeSa();
-        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
-        mLooper.dispatchAll();
+        assertFalse(mSpyIkeConnectionCtrl.useUdpEncapSocket());
 
-        // Receive IKE INIT response
-        ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyReceivedIkePacket);
-        mLooper.dispatchAll();
+        triggerAndVerifyIkeInitReq(true /* expectingNatDetection */, true /* expectingFakedNatd */);
 
-        // Validate socket switched
+        receiveAndGetIkeInitResp();
+
         assertTrue(mSpyIkeConnectionCtrl.useUdpEncapSocket());
         assertEquals(NAT_DETECTED, mSpyIkeConnectionCtrl.getNatStatus());
+
         verify(mMockIkeUdp4Socket).unregisterIke(anyLong());
     }
 
@@ -1770,15 +1812,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testCreateIkeLocalIkeInitNatTraversalWithEnforcePort4500() throws Exception {
         restartIkeSessionWithEnforcePort4500AndVerifyIkeSocket();
         setupFirstIkeSa();
+        assertTrue(mSpyIkeConnectionCtrl.useUdpEncapSocket());
 
-        final IkeSocket ikeSocket = mSpyIkeConnectionCtrl.getIkeSocket();
-
-        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
-        mLooper.dispatchAll();
+        triggerAndVerifyIkeInitReq(true /* expectingNatDetection */, true /* expectingFakedNatd */);
 
         receiveAndGetIkeInitResp();
 
-        assertEquals(ikeSocket, mSpyIkeConnectionCtrl.getIkeSocket());
+        assertTrue(mSpyIkeConnectionCtrl.useUdpEncapSocket());
         assertEquals(NAT_DETECTED, mSpyIkeConnectionCtrl.getNatStatus());
     }
 
@@ -1802,7 +1842,41 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockIkeUdp4Socket, never()).unregisterIke(anyLong());
     }
 
+    private void verifyNatdSrcIpFromIkeInitReqMessage(IkeMessage ikeInitReqMessag) {
+        verifyNatdSrcIpFromIkeInitReqMessage(ikeInitReqMessag, false /* expectingFakedNatd */);
+    }
+
+    private void verifyNatdSrcIpFromIkeInitReqMessage(
+            IkeMessage ikeInitReqMessage, boolean expectingFakedNatd) {
+        List<IkeNotifyPayload> notifyPayloads =
+                ikeInitReqMessage.getPayloadListForType(
+                        IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        IkeNotifyPayload natdSrcIpPayload = null;
+        for (IkeNotifyPayload notifyPayload : notifyPayloads) {
+            if (notifyPayload.notifyType == NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP) {
+                natdSrcIpPayload = notifyPayload;
+            }
+        }
+        assertNotNull(natdSrcIpPayload);
+
+        byte[] localNatDataNotFaked =
+                IkeNotifyPayload.generateNatDetectionData(
+                        ikeInitReqMessage.ikeHeader.ikeInitiatorSpi,
+                        ikeInitReqMessage.ikeHeader.ikeResponderSpi,
+                        mSpyIkeConnectionCtrl.getLocalAddress(),
+                        mSpyIkeConnectionCtrl.getLocalPort());
+
+        assertEquals(
+                !expectingFakedNatd,
+                Arrays.equals(localNatDataNotFaked, natdSrcIpPayload.notifyData));
+    }
+
     private void triggerAndVerifyIkeInitReq(boolean expectingNatDetection) throws Exception {
+        triggerAndVerifyIkeInitReq(expectingNatDetection, false);
+    }
+
+    private void triggerAndVerifyIkeInitReq(
+            boolean expectingNatDetection, boolean expectingFakedNatd) throws Exception {
         // Send IKE INIT request
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
         mLooper.dispatchAll();
@@ -1830,6 +1904,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(
                 expectingNatDetection,
                 isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
+
+        if (expectingNatDetection) {
+            verifyNatdSrcIpFromIkeInitReqMessage(ikeInitReqMessage, expectingFakedNatd);
+        }
     }
 
     private ReceivedIkePacket receiveAndGetIkeInitResp() throws Exception {
@@ -3046,6 +3124,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return makeRespIdPayload(REMOTE_ID_FQDN);
     }
 
+    private IkeNotifyPayload makeDeviceIdentityPayloadFromNetwork() {
+        return new IkeNotifyPayload(
+                NOTIFY_TYPE_DEVICE_IDENTITY, HexDump.hexStringToByteArray("01"));
+    }
+
     private IkeIdPayload makeRespIdPayload(IkeIdentification ikeId) {
         return new IkeIdPayload(false /* isInitiator */, ikeId);
     }
@@ -3378,13 +3461,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNotNull(setupData.respIdPayload);
     }
 
-    private IEapCallback verifyEapAuthenticatorCreatedAndGetCallback() {
+    private IEapCallback verifyEapAuthenticatorCreatedAndGetCallback(
+            EapSessionConfig eapSessionConfig) {
         ArgumentCaptor<IkeContext> ikeContextCaptor = ArgumentCaptor.forClass(IkeContext.class);
         ArgumentCaptor<IEapCallback> eapCbCaptor = ArgumentCaptor.forClass(IEapCallback.class);
 
         verify(mSpyDeps)
                 .newEapAuthenticator(
-                        ikeContextCaptor.capture(), eapCbCaptor.capture(), eq(mEapSessionConfig));
+                        ikeContextCaptor.capture(), eapCbCaptor.capture(), eq(eapSessionConfig));
 
         IkeContext ikeContext = ikeContextCaptor.getValue();
         assertEquals(mIkeSessionStateMachine.getHandler().getLooper(), ikeContext.getLooper());
@@ -3407,9 +3491,81 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 IkeSessionStateMachine.CMD_EAP_START_EAP_AUTH, new IkeEapPayload(EAP_DUMMY_MSG));
         mLooper.dispatchAll();
 
-        verifyEapAuthenticatorCreatedAndGetCallback();
+        verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfig);
 
         verify(mMockEapAuthenticator).processEapMessage(eq(EAP_DUMMY_MSG));
+    }
+
+    @Test
+    public void testInformationalResponseWithDeviceIdentity() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine =
+                makeAndStartIkeSession(buildIkeSessionParamsEapAkaWithDeviceIdentity());
+        setIkeInitResults();
+
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_FORCE_TRANSITION, mIkeSessionStateMachine.mIdle);
+        mLooper.dispatchAll();
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState() instanceof IkeSessionStateMachine.Idle);
+        verifyRcvDeviceIdentityCheckReqAndReply();
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthInEapOutboundResponseIncludesDeviceIdentity()
+            throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mIkeSessionStateMachine =
+                makeAndStartIkeSession(buildIkeSessionParamsEapAkaWithDeviceIdentity());
+
+        new IkeFirstAuthTestPretest().mockIkeInitAndTransitionToIkeAuth();
+        verifyRetransmissionStarted();
+
+        // Build IKE AUTH response with EAP. Auth, ID-Resp and device identity
+        List<IkePayload> authRelatedPayloads = new ArrayList<>();
+        authRelatedPayloads.add(new IkeEapPayload(EAP_DUMMY_MSG));
+        authRelatedPayloads.add(makeRespIdPayload());
+        authRelatedPayloads.add(makeDeviceIdentityPayloadFromNetwork());
+
+        // Send IKE AUTH response to IKE state machine
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET,
+                makeIkeAuthRespWithoutChildPayloads(authRelatedPayloads));
+        mLooper.dispatchAll();
+
+        IEapCallback callback =
+                verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfigEapAka);
+        callback.onResponse(
+                EAP_DUMMY_MSG, EAP_RESPONSE_FLAG_MASK_WITH_EAP_AKA_SERVER_AUTHENTICATED);
+        mLooper.dispatchAll();
+        verifyRetransmissionStarted();
+
+        verify(mMockIkeMessageHelper, times(2))
+                .encryptAndEncode(
+                        anyObject(),
+                        anyObject(),
+                        eq(mSpyCurrentIkeSaRecord),
+                        mIkeMessageCaptor.capture(),
+                        anyBoolean(),
+                        anyInt());
+        IkeMessage ikeAuthReqMessage = mIkeMessageCaptor.getValue();
+
+        // Validate the DEVICE_IDENTITY payload and the content sent to the network
+        List<IkeNotifyPayload> notifyPayloads =
+                ikeAuthReqMessage.getPayloadListForType(
+                        IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        IkeNotifyPayload deviceIdentityPayload = null;
+        for (IkeNotifyPayload notifyPayload : notifyPayloads) {
+            if (notifyPayload.notifyType == NOTIFY_TYPE_DEVICE_IDENTITY) {
+                deviceIdentityPayload = notifyPayload;
+            }
+        }
+        assertArrayEquals(DEVICE_IDENTITY_PAYLOAD_IMEI, deviceIdentityPayload.notifyData);
+
+        assertTrue(
+                mIkeSessionStateMachine.getCurrentState()
+                        instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuthInEap);
     }
 
     @Test
@@ -3421,8 +3577,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         new IkeAuthInEapTestPretest().mockIkeInitAndTransitionToIkeAuth();
         mLooper.dispatchAll();
 
-        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
-        callback.onResponse(EAP_DUMMY_MSG);
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfig);
+        callback.onResponse(EAP_DUMMY_MSG, EAP_RESPONSE_FLAGS_NOT_SET);
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
 
@@ -3448,8 +3604,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         // Mock sending IKE_AUTH{EAP} request
-        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
-        callback.onResponse(EAP_DUMMY_MSG);
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfig);
+        callback.onResponse(EAP_DUMMY_MSG, EAP_RESPONSE_FLAGS_NOT_SET);
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
 
@@ -3474,14 +3630,18 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         new IkeAuthInEapTestPretest().mockIkeInitAndTransitionToIkeAuth();
         mLooper.dispatchAll();
 
-        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfig);
 
-        callback.onSuccess(mPsk, new byte[0]); // use mPsk as MSK, eMSK does not matter
+        EapAkaInfo eapInfo =
+                new EapAkaInfo.Builder(EAP_TYPE_AKA).setReauthId(REAUTH_ID_BYTES).build();
+
+        callback.onSuccess(mPsk, new byte[0], eapInfo); // use mPsk as MSK, eMSK does not matter
         mLooper.dispatchAll();
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuthPostEap);
+        assertEquals(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap.mEapInfo, eapInfo);
     }
 
     @Test
@@ -3493,7 +3653,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         new IkeAuthInEapTestPretest().mockIkeInitAndTransitionToIkeAuth();
         mLooper.dispatchAll();
 
-        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfig);
 
         Throwable error = new IllegalArgumentException();
         callback.onError(error);
@@ -3517,7 +3677,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         new IkeAuthInEapTestPretest().mockIkeInitAndTransitionToIkeAuth();
         mLooper.dispatchAll();
 
-        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback();
+        IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfig);
         callback.onFail();
         mLooper.dispatchAll();
 
@@ -3551,6 +3711,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         new IkeAuthPostEapTestPretest(initIdPayload, respIdPayload)
                 .mockIkeInitAndTransitionToIkeAuth();
 
+        EapAkaInfo eapInfo =
+                new EapAkaInfo.Builder(EAP_TYPE_AKA).setReauthId(REAUTH_ID_BYTES).build();
+        mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap.setEapInfo(eapInfo);
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_EAP_FINISH_EAP_AUTH, mPsk);
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
@@ -3569,6 +3732,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 true /* isIpv4 */,
                 0 /* ike3gppDataListenerInvocations */);
         verifyRetransmissionStopped();
+
+        ArgumentCaptor<IkeSessionConfiguration> ikeSessionConfigurationArgumentCaptor =
+                ArgumentCaptor.forClass(IkeSessionConfiguration.class);
+        verify(mMockIkeSessionCallback).onOpened(ikeSessionConfigurationArgumentCaptor.capture());
+
+        IkeSessionConfiguration sessionConfig = ikeSessionConfigurationArgumentCaptor.getValue();
+        assertNotNull(sessionConfig);
+        assertArrayEquals(REAUTH_ID_BYTES, ((EapAkaInfo) sessionConfig.getEapInfo()).getReauthId());
     }
 
     @Test
@@ -5962,8 +6133,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         configuredNetwork, isEnforcePort4500, isIpv4);
         new IkeFirstAuthTestPretest().mockIkeInitAndTransitionToIkeAuth();
 
+        // Enable force_udp_encap under IPv4 network because the kernel cannot process both
+        // UDP-encap and non-UDP-encap ESP packets for a single SA
+        boolean doesEnableForceUdpEncap = isIpv4;
+
         if (isIpv4) {
-            if (doesPeerSupportNatt) {
+            if (doesPeerSupportNatt || doesEnableForceUdpEncap) {
                 // Either NAT detected or not detected won't affect the test since both cases
                 // indicate the server support NAT-T
                 mSpyIkeConnectionCtrl.handleNatDetectionResultInIkeInit(
@@ -6037,7 +6212,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         : IkeSpecificNetworkCallback.class;
         assertTrue(expectedCallbackType.isInstance(networkCallback));
         assertTrue(
-                getExpectedSocketType(doesPeerSupportNatt, isEnforcePort4500, isIpv4)
+                getExpectedSocketType(
+                                doesPeerSupportNatt || doesEnableForceUdpEncap,
+                                isEnforcePort4500,
+                                isIpv4)
                         .isInstance(mSpyIkeConnectionCtrl.getIkeSocket()));
         return networkCallback;
     }
@@ -6150,7 +6328,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeActiveMobilityEvent() throws Exception {
         verifyMobikeActiveMobilityEvent(false /* isEnforcePort4500 */);
-        assertTrue(mSpyIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp4Socket);
+        assertTrue(mSpyIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
     }
 
     @Test
@@ -6325,7 +6503,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 isIpv4AfterNetworkChange);
         assertTrue(
                 getExpectedSocketType(
-                                doesPeerSupportNatt,
+                                doesPeerSupportNatt
+                                        || isIpv4AfterNetworkChange /* force UDP-encap */,
                                 false /* isEnforcePort4500*/,
                                 isIpv4AfterNetworkChange)
                         .isInstance(mSpyIkeConnectionCtrl.getIkeSocket()));
@@ -6411,6 +6590,23 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 callback,
                 mIkeSessionStateMachine.mRemoteInitNewIkeSaRecord,
                 mIkeSessionStateMachine.mRekeyIkeRemoteDelete);
+    }
+
+    private void verifyRcvDeviceIdentityCheckReqAndReply() throws Exception {
+        // Receive a Information req with DEVICE_IDENTITY payload
+        ReceivedIkePacket dummyRequest = makeDeviceIdentityIkeRequest();
+        mIkeSessionStateMachine.sendMessage(
+                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyRequest);
+        mLooper.dispatchAll();
+
+        IkeMessage resp = verifyAndGetOutboundInformationalResp();
+
+        List<IkeNotifyPayload> notifyPayloads =
+                resp.getPayloadListForType(PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        assertEquals(1, notifyPayloads.size());
+        IkeNotifyPayload deviceIdentity = notifyPayloads.get(0);
+        assertEquals(NOTIFY_TYPE_DEVICE_IDENTITY, deviceIdentity.notifyType);
+        assertArrayEquals(DEVICE_IDENTITY_PAYLOAD_IMEI, deviceIdentity.notifyData);
     }
 
     private void verifyRcvRoutabilityCheckReqAndReply() throws Exception {
