@@ -750,7 +750,7 @@ public class EapTtlsTest extends EapMethodEndToEndTest {
         mTestLooper.dispatchAll();
 
         // verify that onSuccess callback made
-        verify(mMockCallback).onSuccess(eq(msk), eq(emsk));
+        verify(mMockCallback).onSuccess(eq(msk), eq(emsk), eq(null));
         verify(mTlsSessionSpy).generateKeyingMaterial();
         verifyNoMoreInteractions(mMockContext, mMockSecureRandom, mMockCallback);
     }
