@@ -112,6 +112,7 @@ import static org.mockito.Mockito.when;
 import android.annotation.Nullable;
 import android.net.LinkAddress;
 import android.net.Network;
+import android.net.eap.test.EapAkaInfo;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ChildSaProposal;
 import android.net.ipsec.test.ike.ChildSessionCallback;
@@ -224,6 +225,7 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.PrivateKey;
 import java.security.SecureRandom;
@@ -383,6 +385,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private static final Ike3gppParams IKE_3GPP_PARAMS =
             new Ike3gppParams.Builder().setPduSessionId(PDU_SESSION_ID).build();
+
+    private static final byte[] REAUTH_ID_BYTES =
+            "4OLUpQCqFyhm1/UgD56anTzYTqJDckibqjU6PlS4sZaiuLc=".getBytes(StandardCharsets.UTF_8);
 
     private IkeUdpEncapSocket mMockIkeUdpEncapSocket;
     private IkeUdp6WithEncapPortSocket mMockIkeUdp6WithEncapPortSocket;
@@ -1772,20 +1777,17 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testCreateIkeLocalIkeInitSwitchesToEncapPorts() throws Exception {
+    public void testCreateIkeLocalIkeInitSwitchesToEncapPortsIpv4() throws Exception {
         setupFirstIkeSa();
-        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
-        mLooper.dispatchAll();
+        assertFalse(mSpyIkeConnectionCtrl.useUdpEncapSocket());
 
-        // Receive IKE INIT response
-        ReceivedIkePacket dummyReceivedIkePacket = makeIkeInitResponse();
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, dummyReceivedIkePacket);
-        mLooper.dispatchAll();
+        triggerAndVerifyIkeInitReq(true /* expectingNatDetection */, true /* expectingFakedNatd */);
 
-        // Validate socket switched
+        receiveAndGetIkeInitResp();
+
         assertTrue(mSpyIkeConnectionCtrl.useUdpEncapSocket());
         assertEquals(NAT_DETECTED, mSpyIkeConnectionCtrl.getNatStatus());
+
         verify(mMockIkeUdp4Socket).unregisterIke(anyLong());
     }
 
@@ -1809,15 +1811,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testCreateIkeLocalIkeInitNatTraversalWithEnforcePort4500() throws Exception {
         restartIkeSessionWithEnforcePort4500AndVerifyIkeSocket();
         setupFirstIkeSa();
+        assertTrue(mSpyIkeConnectionCtrl.useUdpEncapSocket());
 
-        final IkeSocket ikeSocket = mSpyIkeConnectionCtrl.getIkeSocket();
-
-        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
-        mLooper.dispatchAll();
+        triggerAndVerifyIkeInitReq(true /* expectingNatDetection */, true /* expectingFakedNatd */);
 
         receiveAndGetIkeInitResp();
 
-        assertEquals(ikeSocket, mSpyIkeConnectionCtrl.getIkeSocket());
+        assertTrue(mSpyIkeConnectionCtrl.useUdpEncapSocket());
         assertEquals(NAT_DETECTED, mSpyIkeConnectionCtrl.getNatStatus());
     }
 
@@ -1841,7 +1841,41 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockIkeUdp4Socket, never()).unregisterIke(anyLong());
     }
 
+    private void verifyNatdSrcIpFromIkeInitReqMessage(IkeMessage ikeInitReqMessag) {
+        verifyNatdSrcIpFromIkeInitReqMessage(ikeInitReqMessag, false /* expectingFakedNatd */);
+    }
+
+    private void verifyNatdSrcIpFromIkeInitReqMessage(
+            IkeMessage ikeInitReqMessage, boolean expectingFakedNatd) {
+        List<IkeNotifyPayload> notifyPayloads =
+                ikeInitReqMessage.getPayloadListForType(
+                        IkePayload.PAYLOAD_TYPE_NOTIFY, IkeNotifyPayload.class);
+        IkeNotifyPayload natdSrcIpPayload = null;
+        for (IkeNotifyPayload notifyPayload : notifyPayloads) {
+            if (notifyPayload.notifyType == NOTIFY_TYPE_NAT_DETECTION_SOURCE_IP) {
+                natdSrcIpPayload = notifyPayload;
+            }
+        }
+        assertNotNull(natdSrcIpPayload);
+
+        byte[] localNatDataNotFaked =
+                IkeNotifyPayload.generateNatDetectionData(
+                        ikeInitReqMessage.ikeHeader.ikeInitiatorSpi,
+                        ikeInitReqMessage.ikeHeader.ikeResponderSpi,
+                        mSpyIkeConnectionCtrl.getLocalAddress(),
+                        mSpyIkeConnectionCtrl.getLocalPort());
+
+        assertEquals(
+                !expectingFakedNatd,
+                Arrays.equals(localNatDataNotFaked, natdSrcIpPayload.notifyData));
+    }
+
     private void triggerAndVerifyIkeInitReq(boolean expectingNatDetection) throws Exception {
+        triggerAndVerifyIkeInitReq(expectingNatDetection, false);
+    }
+
+    private void triggerAndVerifyIkeInitReq(
+            boolean expectingNatDetection, boolean expectingFakedNatd) throws Exception {
         // Send IKE INIT request
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
         mLooper.dispatchAll();
@@ -1869,6 +1903,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertEquals(
                 expectingNatDetection,
                 isNotifyExist(payloadList, NOTIFY_TYPE_NAT_DETECTION_DESTINATION_IP));
+
+        if (expectingNatDetection) {
+            verifyNatdSrcIpFromIkeInitReqMessage(ikeInitReqMessage, expectingFakedNatd);
+        }
     }
 
     private ReceivedIkePacket receiveAndGetIkeInitResp() throws Exception {
@@ -3593,12 +3631,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         IEapCallback callback = verifyEapAuthenticatorCreatedAndGetCallback(mEapSessionConfig);
 
-        callback.onSuccess(mPsk, new byte[0]); // use mPsk as MSK, eMSK does not matter
+        EapAkaInfo eapInfo =
+                new EapAkaInfo.Builder().setReauthId(REAUTH_ID_BYTES).build();
+
+        callback.onSuccess(mPsk, new byte[0], eapInfo); // use mPsk as MSK, eMSK does not matter
         mLooper.dispatchAll();
 
         assertTrue(
                 mIkeSessionStateMachine.getCurrentState()
                         instanceof IkeSessionStateMachine.CreateIkeLocalIkeAuthPostEap);
+        assertEquals(mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap.mEapInfo, eapInfo);
     }
 
     @Test
@@ -3668,6 +3710,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         new IkeAuthPostEapTestPretest(initIdPayload, respIdPayload)
                 .mockIkeInitAndTransitionToIkeAuth();
 
+        EapAkaInfo eapInfo =
+                new EapAkaInfo.Builder().setReauthId(REAUTH_ID_BYTES).build();
+        mIkeSessionStateMachine.mCreateIkeLocalIkeAuthPostEap.setEapInfo(eapInfo);
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_EAP_FINISH_EAP_AUTH, mPsk);
         mLooper.dispatchAll();
         verifyRetransmissionStarted();
@@ -3686,6 +3731,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 true /* isIpv4 */,
                 0 /* ike3gppDataListenerInvocations */);
         verifyRetransmissionStopped();
+
+        ArgumentCaptor<IkeSessionConfiguration> ikeSessionConfigurationArgumentCaptor =
+                ArgumentCaptor.forClass(IkeSessionConfiguration.class);
+        verify(mMockIkeSessionCallback).onOpened(ikeSessionConfigurationArgumentCaptor.capture());
+
+        IkeSessionConfiguration sessionConfig = ikeSessionConfigurationArgumentCaptor.getValue();
+        assertNotNull(sessionConfig);
+        assertArrayEquals(REAUTH_ID_BYTES, ((EapAkaInfo) sessionConfig.getEapInfo()).getReauthId());
     }
 
     @Test
@@ -6079,8 +6132,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         configuredNetwork, isEnforcePort4500, isIpv4);
         new IkeFirstAuthTestPretest().mockIkeInitAndTransitionToIkeAuth();
 
+        // Enable force_udp_encap under IPv4 network because the kernel cannot process both
+        // UDP-encap and non-UDP-encap ESP packets for a single SA
+        boolean doesEnableForceUdpEncap = isIpv4;
+
         if (isIpv4) {
-            if (doesPeerSupportNatt) {
+            if (doesPeerSupportNatt || doesEnableForceUdpEncap) {
                 // Either NAT detected or not detected won't affect the test since both cases
                 // indicate the server support NAT-T
                 mSpyIkeConnectionCtrl.handleNatDetectionResultInIkeInit(
@@ -6154,7 +6211,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         : IkeSpecificNetworkCallback.class;
         assertTrue(expectedCallbackType.isInstance(networkCallback));
         assertTrue(
-                getExpectedSocketType(doesPeerSupportNatt, isEnforcePort4500, isIpv4)
+                getExpectedSocketType(
+                                doesPeerSupportNatt || doesEnableForceUdpEncap,
+                                isEnforcePort4500,
+                                isIpv4)
                         .isInstance(mSpyIkeConnectionCtrl.getIkeSocket()));
         return networkCallback;
     }
@@ -6267,7 +6327,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobikeActiveMobilityEvent() throws Exception {
         verifyMobikeActiveMobilityEvent(false /* isEnforcePort4500 */);
-        assertTrue(mSpyIkeConnectionCtrl.getIkeSocket() instanceof IkeUdp4Socket);
+        assertTrue(mSpyIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
     }
 
     @Test
@@ -6442,7 +6502,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 isIpv4AfterNetworkChange);
         assertTrue(
                 getExpectedSocketType(
-                                doesPeerSupportNatt,
+                                doesPeerSupportNatt
+                                        || isIpv4AfterNetworkChange /* force UDP-encap */,
                                 false /* isEnforcePort4500*/,
                                 isIpv4AfterNetworkChange)
                         .isInstance(mSpyIkeConnectionCtrl.getIkeSocket()));

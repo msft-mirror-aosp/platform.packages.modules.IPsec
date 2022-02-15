@@ -27,7 +27,6 @@ import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyInt;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.eq;
@@ -55,10 +54,7 @@ import com.android.internal.net.ipsec.test.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 
 import org.junit.Before;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
-import java.io.IOException;
 import java.net.Inet4Address;
 import java.net.Inet6Address;
 import java.net.InetAddress;
@@ -76,7 +72,7 @@ public abstract class IkeSessionTestBase {
     protected static final Inet6Address UPDATED_LOCAL_ADDRESS_V6 =
             (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::201");
     protected static final Inet6Address REMOTE_ADDRESS_V6 =
-            (Inet6Address) InetAddresses.parseNumericAddress("::1");
+            (Inet6Address) InetAddresses.parseNumericAddress("2001:db8::300");
     protected static final String REMOTE_HOSTNAME = "ike.test.android.com";
 
     protected PowerManager.WakeLock mMockBusyWakelock;
@@ -105,7 +101,8 @@ public abstract class IkeSessionTestBase {
                         any(IkeAlarmReceiver.class),
                         any(IntentFilter.class),
                         any(),
-                        any(Handler.class));
+                        any(Handler.class),
+                        anyInt());
         doNothing().when(mSpyContext).unregisterReceiver(any(IkeAlarmReceiver.class));
 
         mPowerManager = mock(PowerManager.class);
@@ -122,8 +119,6 @@ public abstract class IkeSessionTestBase {
                 .newWakeLock(anyInt(), argThat(tag -> tag.contains(LOCAL_REQUEST_WAKE_LOCK_TAG)));
 
         mMockDefaultNetwork = mock(Network.class);
-        resetDefaultNetwork();
-
         mMockSocketKeepalive = mock(SocketKeepalive.class);
 
         mMockNetworkCapabilities = mock(NetworkCapabilities.class);
@@ -138,6 +133,8 @@ public abstract class IkeSessionTestBase {
         resetMockConnectManager();
 
         mMockIkeLocalAddressGenerator = mock(IkeLocalAddressGenerator.class);
+
+        resetDefaultNetwork();
     }
 
     protected void resetMockConnectManager() throws Exception {
@@ -160,6 +157,7 @@ public abstract class IkeSessionTestBase {
 
     protected void resetDefaultNetwork() throws Exception {
         reset(mMockDefaultNetwork);
+        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
         doReturn(new InetAddress[] {REMOTE_ADDRESS})
                 .when(mMockDefaultNetwork)
                 .getAllByName(REMOTE_HOSTNAME);
@@ -181,31 +179,43 @@ public abstract class IkeSessionTestBase {
 
     protected void setupLocalAddressForNetwork(Network network, InetAddress address)
             throws Exception {
-        boolean isIpv4 = address instanceof Inet4Address;
-        when(mMockIkeLocalAddressGenerator.generateLocalAddress(
-                        eq(network), eq(isIpv4), any(), anyInt()))
-                .thenReturn(address);
+        if (address instanceof Inet4Address) {
+            setupLocalAddressForNetwork(network, (Inet4Address) address, null);
+        } else {
+            setupLocalAddressForNetwork(network, null, (Inet6Address) address);
+        }
     }
 
-    protected void setupRemoteAddressForNetwork(Network network, InetAddress address)
-            throws Exception {
-        LinkAddress mockLinkAddress = mock(LinkAddress.class);
-        when(mockLinkAddress.getAddress()).thenReturn(address);
-        if (address instanceof Inet6Address) {
-            when(mockLinkAddress.isGlobalPreferred()).thenReturn(true);
-        }
-
+    protected LinkProperties setupLocalAddressForNetwork(
+            Network network, Inet4Address ipv4Address, Inet6Address ipv6Address) throws Exception {
         LinkProperties linkProperties = new LinkProperties();
-        linkProperties.addLinkAddress(mockLinkAddress);
         when(mMockConnectManager.getLinkProperties(eq(network))).thenReturn(linkProperties);
 
-        doAnswer(
-                new Answer() {
-                        public Object answer(InvocationOnMock invocation) throws IOException {
-                        return new InetAddress[] {address};
-                        }
-                })
-                .when(network)
-                .getAllByName(REMOTE_HOSTNAME);
+        if (ipv4Address != null) {
+            when(mMockIkeLocalAddressGenerator.generateLocalAddress(
+                            eq(network), eq(true), any(), anyInt()))
+                    .thenReturn(ipv4Address);
+            LinkAddress mockLinkAddress = mock(LinkAddress.class);
+            when(mockLinkAddress.getAddress()).thenReturn(ipv4Address);
+            linkProperties.addLinkAddress(mockLinkAddress);
+        }
+
+        if (ipv6Address != null) {
+            when(mMockIkeLocalAddressGenerator.generateLocalAddress(
+                            eq(network), eq(false), any(), anyInt()))
+                    .thenReturn(ipv6Address);
+
+            LinkAddress mockLinkAddress = mock(LinkAddress.class);
+            when(mockLinkAddress.getAddress()).thenReturn(ipv6Address);
+            when(mockLinkAddress.isGlobalPreferred()).thenReturn(true);
+            linkProperties.addLinkAddress(mockLinkAddress);
+        }
+
+        return linkProperties;
+    }
+
+    protected void setupRemoteAddressForNetwork(Network network, InetAddress... addresses)
+            throws Exception {
+        doReturn(addresses).when(network).getAllByName(REMOTE_HOSTNAME);
     }
 }
