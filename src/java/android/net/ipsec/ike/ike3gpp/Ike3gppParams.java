@@ -72,8 +72,10 @@ public final class Ike3gppParams {
      * Retrieves the Device Identity for this Ike3gppParams.
      *
      * <p>If the Device Identity was not set and this method is called, null is returned
+     *
+     * @hide
      */
-    public @Nullable String getMobileDeviceIdentity() {
+    public @Nullable String getDeviceIdentity() {
         return mDeviceIdentity;
     }
 
@@ -141,6 +143,7 @@ public final class Ike3gppParams {
          *     device identity is set, EAP-AKA MUST be configured to be an acceptable auth method.
          *     Device identity can be unset by passing null.
          * @return Builder this, to facilitate chaining
+         * @hide
          */
         @NonNull
         public Builder setMobileDeviceIdentity(@Nullable String deviceIdentity) {
