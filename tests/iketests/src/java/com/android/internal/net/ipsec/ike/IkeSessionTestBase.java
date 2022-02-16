@@ -101,8 +101,7 @@ public abstract class IkeSessionTestBase {
                         any(IkeAlarmReceiver.class),
                         any(IntentFilter.class),
                         any(),
-                        any(Handler.class),
-                        anyInt());
+                        any(Handler.class));
         doNothing().when(mSpyContext).unregisterReceiver(any(IkeAlarmReceiver.class));
 
         mPowerManager = mock(PowerManager.class);
