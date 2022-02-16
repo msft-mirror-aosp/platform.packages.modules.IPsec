@@ -133,9 +133,11 @@ import android.net.ipsec.test.ike.TransportModeChildSessionParams;
 import android.net.ipsec.test.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.test.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.test.ike.exceptions.IkeException;
+import android.net.ipsec.test.ike.exceptions.IkeIOException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.net.ipsec.test.ike.exceptions.IkeNetworkLostException;
 import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.exceptions.IkeTimeoutException;
 import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
 import android.net.ipsec.test.ike.exceptions.UnrecognizedIkeProtocolException;
@@ -213,6 +215,7 @@ import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.test.ike.utils.State;
 import com.android.internal.net.utils.test.Log;
 import com.android.internal.util.HexDump;
+import com.android.modules.utils.build.SdkLevel;
 
 import org.junit.After;
 import org.junit.Before;
@@ -1577,6 +1580,18 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         }).when(network).getAllByName(REMOTE_HOSTNAME);
     }
 
+    private void verifyFireCallbackOnDnsFailure(IkeSessionCallback callback) {
+        if (SdkLevel.isAtLeastT()) {
+            verify(callback).onClosedWithException(
+                    argThat(e -> e instanceof IkeIOException
+                            && e.getCause() instanceof UnknownHostException));
+        } else {
+            verify(callback).onClosedWithException(
+                    argThat(e -> e instanceof IkeInternalException
+                            && e.getCause() instanceof IOException));
+        }
+    }
+
     private void setupAndVerifyDnsResolutionForIkeSession(
             int dnsLookupsForSuccess, int expectedDnsLookups, boolean expectSessionClosed)
             throws Exception {
@@ -1602,12 +1617,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockDefaultNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
         if (expectSessionClosed) {
             assertNull(mIkeSessionStateMachine.getCurrentState());
-            verify(mMockIkeSessionCallback)
-                    .onClosedWithException(
-                            argThat(
-                                    e ->
-                                            e instanceof IkeInternalException
-                                                    && e.getCause() instanceof IOException));
+            verifyFireCallbackOnDnsFailure(mMockIkeSessionCallback);
         }
     }
 
@@ -7153,12 +7163,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(newNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
         if (expectSessionClosed) {
             assertNull(mIkeSessionStateMachine.getCurrentState());
-            verify(mMockIkeSessionCallback)
-                    .onClosedWithException(
-                            argThat(
-                                    e ->
-                                            e instanceof IkeInternalException
-                                                    && e.getCause() instanceof IOException));
+            verifyFireCallbackOnDnsFailure(mMockIkeSessionCallback);
         } else {
             assertTrue(mSpyIkeConnectionCtrl.getAllRemoteIpv4Addresses().isEmpty());
             assertEquals(
@@ -7217,5 +7222,29 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         verify(mMockIkeNattKeepalive).start();
+    }
+
+    @Test
+    public void testHandleRetransmissionTimeout() throws Exception {
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+
+        for (long delay :
+                mIkeSessionStateMachine.mIkeSessionParams.getRetransmissionTimeoutsMillis()) {
+            mLooper.dispatchAll();
+            mLooper.moveTimeForward(delay);
+        }
+
+        mLooper.dispatchAll();
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+
+        if (SdkLevel.isAtLeastT()) {
+            verify(mMockIkeSessionCallback).onClosedWithException(
+                    argThat(e -> e instanceof IkeIOException
+                            && e.getCause() instanceof IkeTimeoutException));
+        } else {
+            verify(mMockIkeSessionCallback).onClosedWithException(
+                    argThat(e -> e instanceof IkeInternalException
+                            && e.getCause() instanceof IOException));
+        }
     }
 }
