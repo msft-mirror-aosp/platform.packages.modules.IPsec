@@ -262,11 +262,10 @@ public class EapStateMachine extends SimpleStateMachine<byte[], EapResult> {
         @VisibleForTesting
         byte[] getEapIdentity() {
             if (mEapSessionConfig.getEapAkaConfig() != null
-                    && mEapSessionConfig.getEapAkaConfig().getEapAkaOption() != null
-                    && mEapSessionConfig.getEapAkaConfig().getEapAkaOption()
-                    .getReauthId() != null) {
+                    && mEapSessionConfig.getEapAkaConfig().getOptions() != null
+                    && mEapSessionConfig.getEapAkaConfig().getOptions().getReauthId() != null) {
                 byte[] reauthIdBytes =
-                        mEapSessionConfig.getEapAkaConfig().getEapAkaOption().getReauthId();
+                        mEapSessionConfig.getEapAkaConfig().getOptions().getReauthId();
                 String reauthId = new String(reauthIdBytes, StandardCharsets.UTF_8);
                 String permanentId =
                         new String(mEapSessionConfig.getEapIdentity(), StandardCharsets.UTF_8);
