@@ -19,14 +19,16 @@ package android.net.eap;
 import static android.net.eap.EapSessionConfig.EapMethodConfig.EapMethod;
 
 /**
- * EapInfo represents data provided by the server during EAP authentication
+ * EapInfo represents a container for EAP information from a server during Authentication.
+ *
+ * @hide
  */
 public abstract class EapInfo {
     /** @hide */
     private final int mEapMethodType;
 
     /** @hide */
-    protected EapInfo(@EapMethod int eapMethodType) {
+    public EapInfo(@EapMethod int eapMethodType) {
         mEapMethodType = eapMethodType;
     }
 
@@ -34,9 +36,9 @@ public abstract class EapInfo {
      * Retrieves EAP method type
      *
      * @return EAP method type
+     * @hide
      */
-    @EapMethod
-    public final int getEapMethodType() {
+    public int getEapMethodType() {
         return mEapMethodType;
     }
 }

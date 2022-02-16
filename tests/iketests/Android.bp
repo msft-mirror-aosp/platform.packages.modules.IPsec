@@ -18,7 +18,7 @@ package {
 
 android_test {
     name: "FrameworksIkeTests",
-    defaults: ["framework-connectivity-test-defaults"],
+
     srcs: ["src/java/**/*.java"],
 
     platform_apis: true,
@@ -40,7 +40,6 @@ android_test {
         "modules-utils-build",
         "net-tests-utils",
         "services.core",
-        "service-connectivity-tiramisu-pre-jarjar",
     ],
 
     jni_libs: [
