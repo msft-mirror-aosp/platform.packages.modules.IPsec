@@ -16,20 +16,20 @@
 
 package android.net.eap;
 
-import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
-
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.net.ipsec.ike.IkeSessionConfiguration;
 
 import com.android.internal.annotations.VisibleForTesting;
 
 import java.util.Objects;
 
 /**
- * EapAkaInfo represents data provided by the server during EAP AKA authentication
+ * EapAkaInfo represents a container for EAP AKA information
+ * during Authentication.
+ *
+ * @hide
  */
-public final class EapAkaInfo extends EapInfo {
+public class EapAkaInfo extends EapInfo {
     /**
      * Re-authentication ID for next use
      *
@@ -41,13 +41,13 @@ public final class EapAkaInfo extends EapInfo {
 
     /** @hide */
     @VisibleForTesting
-    public EapAkaInfo(@Nullable byte[] reauthId) {
-        super(EAP_TYPE_AKA);
+    public EapAkaInfo(int eapType, @Nullable byte[] reauthId) {
+        super(eapType);
         mReauthId = reauthId;
     }
 
     private EapAkaInfo(Builder builder) {
-        super(EAP_TYPE_AKA);
+        super(builder.mEapMethodType);
         mReauthId = builder.mReauthId;
     }
 
@@ -56,9 +56,7 @@ public final class EapAkaInfo extends EapInfo {
      *
      * @return re-authentication ID
      *
-     * @see <a href="https://datatracker.ietf.org/doc/html/rfc4187#section-5">RFC 4186,
-     *     Extensible Authentication Protocol Method for 3rd Generation Authentication and
-     *     Key Agreement (EAP-AKA)</a>
+     * @hide
      */
     @Nullable
     public byte[] getReauthId() {
@@ -68,17 +66,30 @@ public final class EapAkaInfo extends EapInfo {
     /**
      * This class can be used to incrementally construct an {@link EapAkaInfo}.
      *
-     * <p>Except for testing, IKE library users normally do not instantiate {@link EapAkaInfo}
-     * themselves but instead get a reference via {@link IkeSessionConfiguration}
+     * @hide
      */
     public static final class Builder {
+        private int mEapMethodType;
         private byte[] mReauthId;
+
+        /**
+         * Constructs and returns a new Builder for constructing an {@link EapAkaInfo}.
+         *
+         * @param eapType EAP type
+         *
+         * @hide
+         */
+        public Builder(int eapType) {
+            mEapMethodType = eapType;
+        }
 
         /**
          * Sets the re-authentication ID for next use.
          *
          * @param reauthId byte[] representing the client's EAP Identity.
          * @return Builder this, to facilitate chaining.
+         *
+         * @hide
          */
         @NonNull
         public Builder setReauthId(@NonNull byte[] reauthId) {
@@ -93,6 +104,8 @@ public final class EapAkaInfo extends EapInfo {
          * Builder.
          *
          * @return the EapAkaInfo constructed by this Builder.
+         *
+         * @hide
          */
         @NonNull
         public EapAkaInfo build() {
