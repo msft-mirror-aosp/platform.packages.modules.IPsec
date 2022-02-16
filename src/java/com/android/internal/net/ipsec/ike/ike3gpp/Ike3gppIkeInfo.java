@@ -53,7 +53,7 @@ public class Ike3gppIkeInfo extends Ike3gppExchangeBase {
             switch (notifyPayload.notifyType) {
                 case NOTIFY_TYPE_DEVICE_IDENTITY:
                     String deviceIdentity =
-                            mIke3gppExtension.getIke3gppParams().getMobileDeviceIdentity();
+                            mIke3gppExtension.getIke3gppParams().getDeviceIdentity();
                     if (deviceIdentity != null) {
                         ike3gppPayloads.add(
                                 Ike3gppDeviceIdentityUtils.generateDeviceIdentityPayload(

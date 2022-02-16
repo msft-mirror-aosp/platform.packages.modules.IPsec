@@ -156,6 +156,7 @@ public final class IkeSessionParams {
      * Protocol Version 2 (IKEv2)
      *
      * <p>@see {@link Builder#addIkeOption(int)}
+     * @hide
      */
     public static final int IKE_OPTION_INITIAL_CONTACT = 4;
 
@@ -1872,7 +1873,7 @@ public final class IkeSessionParams {
 
             // as of today, the device_identity feature is only implemented for EAP-AKA
             if ((mIke3gppExtension != null
-                    && mIke3gppExtension.getIke3gppParams().getMobileDeviceIdentity() != null)) {
+                    && mIke3gppExtension.getIke3gppParams().getDeviceIdentity() != null)) {
                 if (!(mLocalAuthConfig instanceof IkeAuthEapConfig)
                         || ((IkeAuthEapConfig) mLocalAuthConfig).getEapConfig().getEapAkaConfig()
                                 == null) {
