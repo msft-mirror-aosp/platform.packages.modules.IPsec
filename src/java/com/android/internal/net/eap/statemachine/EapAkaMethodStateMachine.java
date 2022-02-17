@@ -160,8 +160,9 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
 
     private byte[] getReauthIdentity() {
         EapAkaConfig akaConfig = (EapAkaConfig) mEapUiccConfig;
-        if (akaConfig.getOptions() != null && akaConfig.getOptions().getReauthId() != null) {
-            return akaConfig.getOptions().getReauthId();
+        if (akaConfig.getEapAkaOption() != null
+                && akaConfig.getEapAkaOption().getReauthId() != null) {
+            return akaConfig.getEapAkaOption().getReauthId();
         }
         return null;
     }
@@ -927,9 +928,7 @@ class EapAkaMethodStateMachine extends EapSimAkaMethodStateMachine {
                     new EapSuccess(
                             mMsk,
                             mEmsk,
-                            new EapAkaInfo.Builder(EAP_TYPE_AKA)
-                                    .setReauthId(nextReauthId)
-                                    .build());
+                            new EapAkaInfo.Builder().setReauthId(nextReauthId).build());
         } else {
             eapSuccess = new EapSuccess(mMsk, mEmsk);
         }
