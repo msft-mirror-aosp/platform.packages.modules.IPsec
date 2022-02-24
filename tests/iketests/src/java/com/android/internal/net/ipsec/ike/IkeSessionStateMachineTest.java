@@ -6324,16 +6324,26 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
-    @Test
-    @SdkSuppress(minSdkVersion = 31, codeName = "S")
-    public void testMobikeEnabledNetworkDies() throws Exception {
-        IkeDefaultNetworkCallback callback = verifyMobikeEnabled(true /* doesPeerSupportMobike */);
+    private void verifyMobikeEnabledNetworkDies(boolean doesPeerSupportMobike) throws Exception {
+        IkeDefaultNetworkCallback callback = verifyMobikeEnabled(doesPeerSupportMobike);
         callback.onLost(mMockDefaultNetwork);
 
         ArgumentCaptor<IkeException> exceptionCaptor = ArgumentCaptor.forClass(IkeException.class);
         verify(mMockIkeSessionCallback).onError(exceptionCaptor.capture());
         IkeNetworkLostException cause = (IkeNetworkLostException) exceptionCaptor.getValue();
         assertEquals(mMockDefaultNetwork, cause.getNetwork());
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testMobikeEnabledNetworkDiesWithPeerRfcMobikeSupport() throws Exception {
+        verifyMobikeEnabledNetworkDies(true /* doesPeerSupportMobike */);
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testMobikeEnabledNetworkDiesWithoutPeerRfcMobikeSupport() throws Exception {
+        verifyMobikeEnabledNetworkDies(false /* doesPeerSupportMobike */);
     }
 
     private void verifyMobikeActiveMobilityEvent(boolean isEnforcePort4500) throws Exception {
