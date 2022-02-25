@@ -5611,17 +5611,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     @Override
     public void onUnderlyingNetworkDied(Network network) {
-        if (mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)) {
+        if (mEnabledExtensions.contains(IKE_OPTION_MOBIKE)) {
             executeUserCallback(
                     () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
         } else {
-            // When IKE_OPTION_MOBIKE is unset, the onUnderlyingNetworkDied callback will be only
-            // fired if the LinkProperties is null in the IKE Session initial setup, since IKE
-            // Session will never register a network callback in this case. Thus create a else
-            // statement to preserve the behaviour that null value LinkProperties is reported as
-            // an IkeInternalException.
-            // TODO: b/215406210 Monitor the underlying network and report all network loss issues
-            // as IkeNetworkLostExceptions even if IKE_OPTION_MOBIKE is unset.
             handleIkeFatalError(new IkeInternalException("Network " + network + " disconnected"));
         }
     }
