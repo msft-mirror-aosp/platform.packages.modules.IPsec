@@ -2711,17 +2711,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockIkeSessionCallback).onClosed();
     }
 
-    private void verifyNotifyUserCloseSessionWithException(Exception exception) {
-        IkeException ikeException =
-                exception instanceof IkeException
-                        ? (IkeException) exception
-                        : new IkeInternalException(exception);
-
-        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback)
-                .onClosedWithException(argThat(e -> e.getCause() == ikeException.getCause()));
-    }
-
     @Test
     public void testRcvRemoteDeleteIkeWhenChildProcedureOngoing() throws Exception {
         setupIdleStateMachine();
@@ -5184,40 +5173,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
-    private void verifySessionKilled(boolean hasDeleteRequestSent) {
-        verifySessionKilledWithException(hasDeleteRequestSent, null);
-    }
-
-    private void verifySessionKilledWithException(
-            boolean hasDeleteRequestSent, Exception exception) {
-        verify(mSpyCurrentIkeSaRecord).close();
-        verify(mMockCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
-
-        if (exception != null) {
-            verifyNotifyUserCloseSessionWithException(exception);
-        } else {
-            verifyNotifyUserCloseSession();
-        }
-
-        if (hasDeleteRequestSent) {
-            // Verify outbound request
-            IkeMessage req = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
-            IkeHeader ikeHeader = req.ikeHeader;
-            assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
-            assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
-            assertFalse(ikeHeader.isResponseMsg);
-            assertEquals(1, req.ikePayloadList.size());
-            assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, req.ikePayloadList.get(0).payloadType);
-        } else {
-            // Verify no outbound request
-            verifyEncryptAndEncodeNeverCalled();
-        }
-
-        // Verify state machine quit properly
-        assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockBusyWakelock).release();
-    }
-
     @Test
     public void testKillSessionDeleteIkeRequestSent() throws Exception {
         setupIdleStateMachine();
@@ -5225,7 +5180,22 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verifySessionKilled(true /* hasDeleteRequestSent */);
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mMockCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
+        verifyNotifyUserCloseSession();
+
+        // Verify outbound request
+        IkeMessage req = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
+        IkeHeader ikeHeader = req.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertEquals(1, req.ikePayloadList.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, req.ikePayloadList.get(0).payloadType);
+
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockBusyWakelock).release();
     }
 
     @Test
@@ -5247,20 +5217,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verifySessionKilled(false /* hasDeleteRequestSent */);
-    }
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mMockCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
+        verifyNotifyUserCloseSession();
 
-    @Test
-    public void testOnFatalIkeSessionErrorFromChild() throws Exception {
-        setupIdleStateMachine();
+        // Verify no outbound request
+        verifyEncryptAndEncodeNeverCalled();
 
-        transitionToChildProcedureOngoing();
-
-        Exception exception = new IkeInternalException("IkeStateMachineTest");
-        mDummyChildSmCallback.onFatalIkeSessionError(exception);
-        mLooper.dispatchAll();
-
-        verifySessionKilledWithException(false /* hasDeleteRequestSent */, exception);
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockBusyWakelock).release();
     }
 
     private IkeMessage verifyAndGetOutboundEncryptedResp(int exchangeType) {
