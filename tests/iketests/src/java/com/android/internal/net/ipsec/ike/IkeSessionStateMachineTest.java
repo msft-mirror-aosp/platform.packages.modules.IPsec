@@ -111,6 +111,7 @@ import static org.mockito.Mockito.when;
 
 import android.annotation.Nullable;
 import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.eap.test.EapAkaInfo;
 import android.net.eap.test.EapSessionConfig;
@@ -1639,10 +1640,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .when(mMockNetworkCapabilities)
                 .hasTransport(RandomnessFactory.TRANSPORT_TEST);
 
-        // Clear #getActiveNetwork() call in #setUp() to pass the verification in
-        // #makeAndStartIkeSession()
-        resetMockConnectManager();
-
         Network network = mockNewNetworkAndAddress(true /*isIpv4*/);
         IkeSessionParams ikeParams =
                 buildIkeSessionParamsCommon()
@@ -1650,6 +1647,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .setAuthPsk("psk".getBytes())
                         .build();
 
+        // Clear #getActiveNetwork() call in #setUp() to pass the verification in
+        // #makeAndStartIkeSession()
+        resetMockConnectManager();
         IkeSessionStateMachine ikeSession = makeAndStartIkeSession(ikeParams);
 
         SecureRandom random = ikeSession.mIkeContext.getRandomnessFactory().getRandom();
@@ -6361,7 +6361,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             throws Exception {
         Network newNetwork = mock(Network.class);
 
-        setupRemoteAddressForNetwork(newNetwork, remoteAddress);
+        mSpyIkeConnectionCtrl.addRemoteAddress(remoteAddress);
+        if (!isIpv4) {
+            LinkProperties linkProperties = new LinkProperties();
+            linkProperties.addLinkAddress(mMockLinkAddressGlobalV6);
+            when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
+        }
+
         setupDnsResolutionForNetwork(newNetwork, dnsLookups, remoteAddress);
         setupLocalAddressForNetwork(newNetwork, localAddress);
 
