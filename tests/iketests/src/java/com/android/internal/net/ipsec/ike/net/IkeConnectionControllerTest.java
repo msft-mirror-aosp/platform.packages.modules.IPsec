@@ -26,10 +26,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -38,8 +36,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.net.ConnectivityManager.NetworkCallback;
-import android.net.IpPrefix;
-import android.net.LinkProperties;
 import android.net.Network;
 import android.net.ipsec.test.ike.IkeSessionParams;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
@@ -61,10 +57,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.invocation.InvocationOnMock;
-import org.mockito.stubbing.Answer;
 
-import java.io.IOException;
 import java.net.InetAddress;
 import java.util.HashSet;
 
@@ -245,30 +238,6 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testSetupWithNullLinkPropertiesNw() throws Exception {
-        mIkeConnectionCtrl.tearDown();
-
-        Network invalidNw = mock(Network.class);
-        when(mMockIkeParams.getConfiguredNetwork()).thenReturn(invalidNw);
-        doAnswer(
-                new Answer() {
-                    public Object answer(InvocationOnMock invocation) throws IOException {
-                        return new InetAddress[] {REMOTE_ADDRESS_V6};
-                    }
-                })
-                .when(invalidNw)
-                .getAllByName(REMOTE_HOSTNAME);
-        when(mMockConnectManager.getLinkProperties(eq(invalidNw))).thenReturn(null);
-
-        // Build with mMockIkeParams
-        mIkeConnectionCtrl = buildIkeConnectionCtrl();
-        mIkeConnectionCtrl.setUp();
-
-        // Expect to fail due to null value LinkProperties
-        verify(mMockConnectionCtrlCb).onUnderlyingNetworkDied(invalidNw);
-    }
-
-    @Test
     public void testSetupAndTeardownIpv4Force4500() throws Exception {
         verifySetupAndTeardownWithIpVersionAndPort(true /* isIpv4 */, true /* force4500 */);
     }
@@ -425,7 +394,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertEquals(expectedLocalAddress, callback.getAddress());
     }
 
-    private void checkSwitchToNewNetwork(boolean expectDnsResolution) throws Exception {
+    @Test
+    public void testOnUnderlyingNetworkUpdatedWithNewNetwork() throws Exception {
         Network newNetwork = mock(Network.class);
         setupLocalAddressForNetwork(newNetwork, UPDATED_LOCAL_ADDRESS);
         setupRemoteAddressForNetwork(newNetwork, REMOTE_ADDRESS);
@@ -437,49 +407,6 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
         verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated();
         verify(mMockIkeSaRecord).migrate(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
-
-        if (expectDnsResolution) {
-            verify(newNetwork).getAllByName(anyString());
-        } else {
-            verify(newNetwork, never()).getAllByName(anyString());
-        }
-    }
-
-    @Test
-    public void testSwitchToNewNetworkFromV4Only() throws Exception {
-        checkSwitchToNewNetwork(true /* expectDnsResolution */);
-    }
-
-    @Test
-    public void testSwitchToNewNetworkFromV4AndNat64V6() throws Exception {
-        mIkeConnectionCtrl.tearDown();
-        mIkeConnectionCtrl = buildIkeConnectionCtrl();
-
-        LinkProperties linkProperties =
-                setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS, LOCAL_ADDRESS_V6);
-        setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS, REMOTE_ADDRESS_V6);
-
-        IpPrefix ipPrefix = new IpPrefix("2001:db8::/96");
-        linkProperties.setNat64Prefix(ipPrefix);
-
-        mIkeConnectionCtrl.setUp();
-        mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
-
-        checkSwitchToNewNetwork(true /* expectDnsResolution */);
-    }
-
-    @Test
-    public void testSwitchToNewNetworkFromV4AndNativeV6() throws Exception {
-        mIkeConnectionCtrl.tearDown();
-        mIkeConnectionCtrl = buildIkeConnectionCtrl();
-
-        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS, LOCAL_ADDRESS_V6);
-        setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS, REMOTE_ADDRESS_V6);
-
-        mIkeConnectionCtrl.setUp();
-        mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
-
-        checkSwitchToNewNetwork(false /* expectDnsResolution */);
     }
 
     @Test
@@ -572,11 +499,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Test
     public void testOnUnderlyingNetworkUpdatedFail() throws Exception {
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-
-        Network newNetwork = mock(Network.class);
-        when(mMockConnectManager.getLinkProperties(eq(newNetwork)))
-                .thenReturn(new LinkProperties());
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(newNetwork);
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(mock(Network.class));
 
         // Expected to fail due to DNS resolution failure
         verify(mMockConnectionCtrlCb).onError(any(IkeInternalException.class));
