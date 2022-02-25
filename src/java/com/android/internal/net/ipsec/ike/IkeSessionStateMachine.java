@@ -5591,12 +5591,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     @Override
     public void onUnderlyingNetworkDied(Network network) {
-        if (mEnabledExtensions.contains(IKE_OPTION_MOBIKE)) {
-            executeUserCallback(
-                    () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
-        } else {
-            handleIkeFatalError(new IkeInternalException("Network " + network + " disconnected"));
-        }
+        executeUserCallback(
+                () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
     }
 
     @Override
