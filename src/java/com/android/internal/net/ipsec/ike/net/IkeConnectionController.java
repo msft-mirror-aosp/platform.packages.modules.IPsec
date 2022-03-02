@@ -24,7 +24,6 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 import android.annotation.IntDef;
 import android.content.Context;
 import android.net.ConnectivityManager;
-import android.net.IpPrefix;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -57,6 +56,7 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -131,7 +131,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     /** Available remote addresses that are v4. */
     private final List<Inet4Address> mRemoteAddressesV4 = new ArrayList<>();
     /** Available remote addresses that are v6. */
-    private final List<Ipv6AddrInfo> mRemoteAddressesV6 = new ArrayList<>();
+    private final List<Inet6Address> mRemoteAddressesV6 = new ArrayList<>();
 
     private final Set<IkeSaRecord> mIkeSaRecords = new HashSet<>();
 
@@ -170,25 +170,6 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     /** Constructor of IkeConnectionController */
     public IkeConnectionController(IkeContext ikeContext, Config config) {
         this(ikeContext, config, new Dependencies());
-    }
-
-    private static class Ipv6AddrInfo {
-        public final Inet6Address address;
-        public final boolean isNat64Addr;
-
-        Ipv6AddrInfo(Inet6Address address, boolean isNat64Addr) {
-            this.address = address;
-            this.isNat64Addr = isNat64Addr;
-        }
-
-        @Override
-        public String toString() {
-            String result = address.toString();
-            if (isNat64Addr) {
-                return result + "(Nat64)";
-            }
-            return result;
-        }
     }
 
     /** Config includes all configurations to build an IkeConnectionController */
@@ -363,15 +344,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     /** Sets up the IkeConnectionController */
     public void setUp() throws IkeInternalException {
         try {
-            LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
-            if (linkProperties == null) {
-                getIkeLog().e(TAG, "LinkProperties is null. Network disconnected");
-                mCallback.onUnderlyingNetworkDied(mNetwork);
-                return;
-            }
-
-            resolveAndSetAvailableRemoteAddresses(linkProperties);
-            setRemoteAddress(linkProperties);
+            resolveAndSetAvailableRemoteAddresses();
+            setRemoteAddress();
 
             int remotePort =
                     mForcePort4500
@@ -386,7 +360,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             if (mIkeSocket instanceof IkeUdpEncapSocket) {
                 mIkeNattKeepalive = buildAndStartNattKeepalive();
             }
-        } catch (IOException | ErrnoException | IllegalArgumentException e) {
+        } catch (IOException | ErrnoException e) {
             throw new IkeInternalException(e);
         }
     }
@@ -500,8 +474,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         if (address instanceof Inet4Address) {
             mRemoteAddressesV4.add((Inet4Address) address);
         } else {
-            mRemoteAddressesV6.add(
-                    new Ipv6AddrInfo((Inet6Address) address, false /* isNat64Addr */));
+            mRemoteAddressesV6.add((Inet6Address) address);
         }
     }
 
@@ -517,11 +490,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     /** Gets all the IPv6 remote addresses */
     public List<Inet6Address> getAllRemoteIpv6Addresses() {
-        final List<Inet6Address> addresses = new ArrayList<>();
-        for (Ipv6AddrInfo info : mRemoteAddressesV6) {
-            addresses.add(info.address);
-        }
-        return addresses;
+        return new ArrayList<>(mRemoteAddressesV6);
     }
 
     /** Gets the local port */
@@ -648,12 +617,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         }
     }
 
-    private void resolveAndSetAvailableRemoteAddresses(LinkProperties linkProperties)
-            throws IOException {
-        if (linkProperties == null) {
-            throw new IllegalArgumentException("linkProperties MUST NOT be null");
-        }
-
+    private void resolveAndSetAvailableRemoteAddresses() throws IOException {
         // TODO(b/149954916): Do DNS resolution asynchronously
         InetAddress[] allRemoteAddresses = null;
 
@@ -686,8 +650,15 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
                             + " attempts");
         }
 
-        final List<Inet4Address> oldRemoteAddressesV4 = new ArrayList<>(mRemoteAddressesV4);
-        final List<Ipv6AddrInfo> oldRemoteAddressesV6 = new ArrayList<>(mRemoteAddressesV6);
+        getIkeLog()
+                .d(
+                        TAG,
+                        "Resolved addresses for peer: "
+                                + Arrays.toString(allRemoteAddresses)
+                                + " to replace old addresses: v4="
+                                + mRemoteAddressesV4
+                                + " v6="
+                                + mRemoteAddressesV6);
 
         mRemoteAddressesV4.clear();
         mRemoteAddressesV6.clear();
@@ -695,24 +666,9 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             if (remoteAddress instanceof Inet4Address) {
                 mRemoteAddressesV4.add((Inet4Address) remoteAddress);
             } else {
-                Inet6Address address = (Inet6Address) remoteAddress;
-                IpPrefix ipPrefix = linkProperties.getNat64Prefix();
-                mRemoteAddressesV6.add(
-                        new Ipv6AddrInfo(address, ipPrefix != null && ipPrefix.contains(address)));
+                mRemoteAddressesV6.add((Inet6Address) remoteAddress);
             }
         }
-
-        getIkeLog()
-                .d(
-                        TAG,
-                        "Resolved addresses for peer: v4="
-                                + mRemoteAddressesV4
-                                + " v6="
-                                + mRemoteAddressesV6
-                                + " to replace old addresses: v4="
-                                + oldRemoteAddressesV4
-                                + " v6="
-                                + oldRemoteAddressesV6);
     }
 
     /**
@@ -727,14 +683,11 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      *
      * Otherwise, an IPv4 address will be used.
      */
-    private void setRemoteAddress(LinkProperties linkProperties) {
-        if (linkProperties == null) {
-            throw new IllegalArgumentException("linkProperties MUST NOT be null");
-        }
-
+    private void setRemoteAddress() {
+        LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
         if (!mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address()) {
             // TODO(b/175348096): randomly choose from available addresses
-            mRemoteAddress = mRemoteAddressesV6.get(0).address;
+            mRemoteAddress = mRemoteAddressesV6.get(0);
         } else {
             if (mRemoteAddressesV4.isEmpty()) {
                 throw new IllegalArgumentException("No valid IPv4 or IPv6 addresses for peer");
@@ -790,19 +743,6 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
     }
 
-    boolean needDnsResolution() {
-        // Skip DNS resolution when there are both IPv4 and native IPv6 addresses. This reduces the
-        // MOBIKE switch time, and would allow handling of a network where DNS doesn't work well at
-        // startup
-        for (Ipv6AddrInfo info : mRemoteAddressesV6) {
-            if (!info.isNat64Addr && !mRemoteAddressesV4.isEmpty()) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
     @Override
     public void onUnderlyingNetworkUpdated(Network network) {
         Network oldNetwork = mNetwork;
@@ -811,42 +751,20 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         mNetwork = network;
 
-        LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
-        if (linkProperties == null) {
-            getIkeLog().e(TAG, "LinkProperties is null. Network disconnected");
-            mCallback.onUnderlyingNetworkDied(mNetwork);
-            return;
-        }
-
         // If the network changes, perform a new DNS lookup to ensure that the correct remote
         // address is used. This ensures that DNS returns addresses for the correct address families
         // (important if using a v4/v6-only network). This also ensures that DNS64 is handled
         // correctly when switching between networks that may have different IPv6 prefixes.
         if (!mNetwork.equals(oldNetwork)) {
-            if (needDnsResolution()) {
-                getIkeLog().d(TAG, "Do DNS resolution on the new network");
-                try {
-                    resolveAndSetAvailableRemoteAddresses(linkProperties);
-                } catch (IOException e) {
-                    mCallback.onError(new IkeInternalException(e));
-                    return;
-                }
-            } else {
-                getIkeLog().d(TAG, "Skip DNS resolution on the new network");
-                for (Ipv6AddrInfo info : mRemoteAddressesV6) {
-                    if (info.isNat64Addr) {
-                        mRemoteAddressesV6.remove(info);
-                    }
-                }
+            try {
+                resolveAndSetAvailableRemoteAddresses();
+            } catch (IOException e) {
+                mCallback.onError(new IkeInternalException(e));
+                return;
             }
         }
 
-        try {
-            setRemoteAddress(linkProperties);
-        } catch (IllegalArgumentException e) {
-            mCallback.onError(new IkeInternalException(e));
-            return;
-        }
+        setRemoteAddress();
 
         boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
