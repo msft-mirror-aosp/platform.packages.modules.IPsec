@@ -73,6 +73,7 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_K
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
+import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -85,6 +86,7 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.net.TrafficStats;
+import android.net.eap.EapInfo;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
@@ -3443,6 +3445,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     abstract class CreateIkeLocalIkeAuthBase<T extends IkeInitData> extends DeleteBase {
         protected T mSetupData;
         protected Retransmitter mRetransmitter;
+        protected EapInfo mEapInfo = null;
 
         @Override
         public void enterState() {
@@ -3455,6 +3458,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         public void setIkeSetupData(T setupData) {
             mSetupData = setupData;
+        }
+
+        protected void setEapInfo(EapInfo eapInfo) {
+            mEapInfo = eapInfo;
         }
 
         @Override
@@ -3579,7 +3586,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     mIkeConnectionCtrl.buildIkeSessionConnectionInfo(),
                     configPayload,
                     mRemoteVendorIds,
-                    mEnabledExtensions);
+                    mEnabledExtensions,
+                    mEapInfo);
         }
 
         protected void notifyIkeSessionSetup(IkeMessage msg) {
@@ -4109,8 +4117,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         private class IkeEapCallback implements IEapCallback {
             @Override
-            public void onSuccess(byte[] msk, byte[] emsk) {
+            public void onSuccess(byte[] msk, byte[] emsk, @Nullable EapInfo eapInfo) {
                 // Extended MSK not used in IKEv2, drop.
+                mCreateIkeLocalIkeAuthPostEap.setEapInfo(eapInfo);
                 sendMessage(CMD_EAP_FINISH_EAP_AUTH, msk);
             }
 
@@ -5582,12 +5591,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     @Override
     public void onUnderlyingNetworkDied(Network network) {
-        if (mEnabledExtensions.contains(IKE_OPTION_MOBIKE)) {
-            executeUserCallback(
-                    () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
-        } else {
-            handleIkeFatalError(new IkeInternalException("Network " + network + " disconnected"));
-        }
+        executeUserCallback(
+                () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
     }
 
     @Override
