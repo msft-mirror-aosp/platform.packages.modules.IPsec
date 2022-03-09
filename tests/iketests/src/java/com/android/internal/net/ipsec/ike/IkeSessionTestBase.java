@@ -140,10 +140,9 @@ public abstract class IkeSessionTestBase {
         mMockIkeLocalAddressGenerator = mock(IkeLocalAddressGenerator.class);
     }
 
-    protected void resetMockConnectManager() throws Exception {
+    protected void resetMockConnectManager() {
         reset(mMockConnectManager);
         doReturn(mMockDefaultNetwork).when(mMockConnectManager).getActiveNetwork();
-        setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
         doReturn(mMockSocketKeepalive)
                 .when(mMockConnectManager)
                 .createSocketKeepalive(
@@ -189,16 +188,15 @@ public abstract class IkeSessionTestBase {
 
     protected void setupRemoteAddressForNetwork(Network network, InetAddress address)
             throws Exception {
-        LinkAddress mockLinkAddress = mock(LinkAddress.class);
-        when(mockLinkAddress.getAddress()).thenReturn(address);
         if (address instanceof Inet6Address) {
-            when(mockLinkAddress.isGlobalPreferred()).thenReturn(true);
+            LinkAddress mockLinkAddressGlobalV6 = mock(LinkAddress.class);
+            when(mockLinkAddressGlobalV6.getAddress()).thenReturn(address);
+            when(mockLinkAddressGlobalV6.isGlobalPreferred()).thenReturn(true);
+
+            LinkProperties linkProperties = new LinkProperties();
+            linkProperties.addLinkAddress(mockLinkAddressGlobalV6);
+            when(mMockConnectManager.getLinkProperties(eq(network))).thenReturn(linkProperties);
         }
-
-        LinkProperties linkProperties = new LinkProperties();
-        linkProperties.addLinkAddress(mockLinkAddress);
-        when(mMockConnectManager.getLinkProperties(eq(network))).thenReturn(linkProperties);
-
         doAnswer(
                 new Answer() {
                         public Object answer(InvocationOnMock invocation) throws IOException {
