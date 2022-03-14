@@ -19,8 +19,7 @@ package {
 
 apex_defaults {
     name: "com.android.ipsec-defaults",
-    updatable: true,
-    min_sdk_version: "30",
+    defaults: ["r-launched-apex-module"],
     bootclasspath_fragments: ["com.android.ipsec-bootclasspath-fragment"],
     prebuilts: ["current_sdkinfo"],
     key: "com.android.ipsec.key",

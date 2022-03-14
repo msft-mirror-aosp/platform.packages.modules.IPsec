@@ -111,6 +111,7 @@ import static org.mockito.Mockito.when;
 
 import android.annotation.Nullable;
 import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.Network;
 import android.net.eap.test.EapAkaInfo;
 import android.net.eap.test.EapSessionConfig;
@@ -1639,10 +1640,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .when(mMockNetworkCapabilities)
                 .hasTransport(RandomnessFactory.TRANSPORT_TEST);
 
-        // Clear #getActiveNetwork() call in #setUp() to pass the verification in
-        // #makeAndStartIkeSession()
-        resetMockConnectManager();
-
         Network network = mockNewNetworkAndAddress(true /*isIpv4*/);
         IkeSessionParams ikeParams =
                 buildIkeSessionParamsCommon()
@@ -1650,6 +1647,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .setAuthPsk("psk".getBytes())
                         .build();
 
+        // Clear #getActiveNetwork() call in #setUp() to pass the verification in
+        // #makeAndStartIkeSession()
+        resetMockConnectManager();
         IkeSessionStateMachine ikeSession = makeAndStartIkeSession(ikeParams);
 
         SecureRandom random = ikeSession.mIkeContext.getRandomnessFactory().getRandom();
@@ -2708,17 +2708,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private void verifyNotifyUserCloseSession() {
         verify(mSpyUserCbExecutor).execute(any(Runnable.class));
         verify(mMockIkeSessionCallback).onClosed();
-    }
-
-    private void verifyNotifyUserCloseSessionWithException(Exception exception) {
-        IkeException ikeException =
-                exception instanceof IkeException
-                        ? (IkeException) exception
-                        : new IkeInternalException(exception);
-
-        verify(mSpyUserCbExecutor).execute(any(Runnable.class));
-        verify(mMockIkeSessionCallback)
-                .onClosedWithException(argThat(e -> e.getCause() == ikeException.getCause()));
     }
 
     @Test
@@ -5183,40 +5172,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
-    private void verifySessionKilled(boolean hasDeleteRequestSent) {
-        verifySessionKilledWithException(hasDeleteRequestSent, null);
-    }
-
-    private void verifySessionKilledWithException(
-            boolean hasDeleteRequestSent, Exception exception) {
-        verify(mSpyCurrentIkeSaRecord).close();
-        verify(mMockCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
-
-        if (exception != null) {
-            verifyNotifyUserCloseSessionWithException(exception);
-        } else {
-            verifyNotifyUserCloseSession();
-        }
-
-        if (hasDeleteRequestSent) {
-            // Verify outbound request
-            IkeMessage req = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
-            IkeHeader ikeHeader = req.ikeHeader;
-            assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
-            assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
-            assertFalse(ikeHeader.isResponseMsg);
-            assertEquals(1, req.ikePayloadList.size());
-            assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, req.ikePayloadList.get(0).payloadType);
-        } else {
-            // Verify no outbound request
-            verifyEncryptAndEncodeNeverCalled();
-        }
-
-        // Verify state machine quit properly
-        assertNull(mIkeSessionStateMachine.getCurrentState());
-        verify(mMockBusyWakelock).release();
-    }
-
     @Test
     public void testKillSessionDeleteIkeRequestSent() throws Exception {
         setupIdleStateMachine();
@@ -5224,7 +5179,22 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verifySessionKilled(true /* hasDeleteRequestSent */);
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mMockCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
+        verifyNotifyUserCloseSession();
+
+        // Verify outbound request
+        IkeMessage req = verifyEncryptAndEncodeAndGetMessage(mSpyCurrentIkeSaRecord);
+        IkeHeader ikeHeader = req.ikeHeader;
+        assertEquals(IkePayload.PAYLOAD_TYPE_SK, ikeHeader.nextPayloadType);
+        assertEquals(IkeHeader.EXCHANGE_TYPE_INFORMATIONAL, ikeHeader.exchangeType);
+        assertFalse(ikeHeader.isResponseMsg);
+        assertEquals(1, req.ikePayloadList.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, req.ikePayloadList.get(0).payloadType);
+
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockBusyWakelock).release();
     }
 
     @Test
@@ -5246,20 +5216,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verifySessionKilled(false /* hasDeleteRequestSent */);
-    }
+        verify(mSpyCurrentIkeSaRecord).close();
+        verify(mMockCurrentIkeSocket).unregisterIke(mSpyCurrentIkeSaRecord.getInitiatorSpi());
+        verifyNotifyUserCloseSession();
 
-    @Test
-    public void testOnFatalIkeSessionErrorFromChild() throws Exception {
-        setupIdleStateMachine();
+        // Verify no outbound request
+        verifyEncryptAndEncodeNeverCalled();
 
-        transitionToChildProcedureOngoing();
-
-        Exception exception = new IkeInternalException("IkeStateMachineTest");
-        mDummyChildSmCallback.onFatalIkeSessionError(exception);
-        mLooper.dispatchAll();
-
-        verifySessionKilledWithException(false /* hasDeleteRequestSent */, exception);
+        // Verify state machine quit properly
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verify(mMockBusyWakelock).release();
     }
 
     private IkeMessage verifyAndGetOutboundEncryptedResp(int exchangeType) {
@@ -6323,26 +6289,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         assertNull(mIkeSessionStateMachine.getCurrentState());
     }
 
-    private void verifyMobikeEnabledNetworkDies(boolean doesPeerSupportMobike) throws Exception {
-        IkeDefaultNetworkCallback callback = verifyMobikeEnabled(doesPeerSupportMobike);
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testMobikeEnabledNetworkDies() throws Exception {
+        IkeDefaultNetworkCallback callback = verifyMobikeEnabled(true /* doesPeerSupportMobike */);
         callback.onLost(mMockDefaultNetwork);
 
         ArgumentCaptor<IkeException> exceptionCaptor = ArgumentCaptor.forClass(IkeException.class);
         verify(mMockIkeSessionCallback).onError(exceptionCaptor.capture());
         IkeNetworkLostException cause = (IkeNetworkLostException) exceptionCaptor.getValue();
         assertEquals(mMockDefaultNetwork, cause.getNetwork());
-    }
-
-    @Test
-    @SdkSuppress(minSdkVersion = 31, codeName = "S")
-    public void testMobikeEnabledNetworkDiesWithPeerRfcMobikeSupport() throws Exception {
-        verifyMobikeEnabledNetworkDies(true /* doesPeerSupportMobike */);
-    }
-
-    @Test
-    @SdkSuppress(minSdkVersion = 31, codeName = "S")
-    public void testMobikeEnabledNetworkDiesWithoutPeerRfcMobikeSupport() throws Exception {
-        verifyMobikeEnabledNetworkDies(false /* doesPeerSupportMobike */);
     }
 
     private void verifyMobikeActiveMobilityEvent(boolean isEnforcePort4500) throws Exception {
@@ -6405,7 +6361,13 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             throws Exception {
         Network newNetwork = mock(Network.class);
 
-        setupRemoteAddressForNetwork(newNetwork, remoteAddress);
+        mSpyIkeConnectionCtrl.addRemoteAddress(remoteAddress);
+        if (!isIpv4) {
+            LinkProperties linkProperties = new LinkProperties();
+            linkProperties.addLinkAddress(mMockLinkAddressGlobalV6);
+            when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
+        }
+
         setupDnsResolutionForNetwork(newNetwork, dnsLookups, remoteAddress);
         setupLocalAddressForNetwork(newNetwork, localAddress);
 
