@@ -102,6 +102,7 @@ public final class IkeSessionParams {
         IKE_OPTION_ACCEPT_ANY_REMOTE_ID,
         IKE_OPTION_EAP_ONLY_AUTH,
         IKE_OPTION_MOBIKE,
+        IKE_OPTION_FORCE_PORT_4500,
         IKE_OPTION_INITIAL_CONTACT
     })
     public @interface IkeOption {}
