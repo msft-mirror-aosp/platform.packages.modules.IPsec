@@ -20,7 +20,6 @@ import static android.net.ipsec.test.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INTERNAL_ADDRESS_FAILURE;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_KE_PAYLOAD;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
-import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_PROPOSAL_CHOSEN;
 import static android.net.ipsec.test.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 import static android.system.OsConstants.AF_INET;
@@ -87,7 +86,6 @@ import android.net.ipsec.test.ike.exceptions.IkeException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.net.ipsec.test.ike.exceptions.InvalidKeException;
 import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
-import android.net.ipsec.test.ike.exceptions.NoAdditionalSasException;
 import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
 import android.os.Handler;
 import android.os.Message;
@@ -1234,81 +1232,6 @@ public final class ChildSessionStateMachineTest {
         // Verify no SPI for provisional Child was registered.
         verify(mMockChildSessionSmCallback, never())
                 .onChildSaCreated(anyInt(), eq(mChildSessionStateMachine));
-    }
-
-    private void verifySendOutboundIkeDeleteRequest() {
-        verify(mMockChildSessionSmCallback)
-                .onOutboundPayloadsReady(
-                        eq(EXCHANGE_TYPE_INFORMATIONAL),
-                        eq(false),
-                        mPayloadListCaptor.capture(),
-                        eq(mChildSessionStateMachine));
-
-        List<IkePayload> reqPayloadList = mPayloadListCaptor.getValue();
-
-        List<IkeDeletePayload> deletePayloads =
-                IkePayload.getPayloadListForTypeInProvidedList(
-                        PAYLOAD_TYPE_DELETE, IkeDeletePayload.class, reqPayloadList);
-        assertEquals(deletePayloads.size(), 1);
-
-        IkeDeletePayload deletePayload = deletePayloads.get(0);
-        assertEquals(deletePayload.protocolId, IkePayload.PROTOCOL_ID_IKE);
-        assertEquals(deletePayload.spisToDelete.length, 0);
-    }
-
-    private <T extends IkeException> void verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(
-            Class<T> exceptionClass) {
-        verifySendOutboundIkeDeleteRequest();
-
-        // Verify callback onFatalIkeSessionError() has been invoked
-        verify(mMockChildSessionSmCallback).onFatalIkeSessionError(any(exceptionClass));
-
-        // Verify retry was not scheduled
-        verify(mMockChildSessionSmCallback, never()).scheduleRetryLocalRequest(any());
-    }
-
-    @Test
-    public void testMobikeRekeyLocalCreateAndHandlesErrorNotifyResp() throws Exception {
-        setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
-
-        // Send Mobike-Rekey-Create request
-        mChildSessionStateMachine.rekeyChildSessionForMobike(
-                UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket);
-        mLooper.dispatchAll();
-
-        // Receive error notification in Create response
-        mChildSessionStateMachine.receiveResponse(
-                EXCHANGE_TYPE_CREATE_CHILD_SA,
-                Arrays.asList(new IkeNotifyPayload(ERROR_TYPE_NO_ADDITIONAL_SAS)));
-        mLooper.dispatchAll();
-
-        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(NoAdditionalSasException.class);
-    }
-
-    @Test
-    public void testMobikeRekeyLocalCreateAndHandlesMissingPayloadInResp() throws Exception {
-        setupStateMachineAndSpiForLocalRekey(UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS);
-
-        // Send Mobike-Rekey-Create request
-        mChildSessionStateMachine.rekeyChildSessionForMobike(
-                UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, mMockUdpEncapSocket);
-        mLooper.dispatchAll();
-
-        // Receive response with no SA Payload
-        List<IkePayload> validRekeyRespPayloads =
-                makeInboundRekeyChildPayloads(
-                        LOCAL_INIT_NEW_CHILD_SA_SPI_OUT,
-                        REKEY_CHILD_RESP_SA_PAYLOAD,
-                        true /*isLocalInitRekey*/);
-        List<IkePayload> respPayloads = new ArrayList<>();
-        for (IkePayload payload : validRekeyRespPayloads) {
-            if (IkePayload.PAYLOAD_TYPE_SA == payload.payloadType) continue;
-            respPayloads.add(payload);
-        }
-        mChildSessionStateMachine.receiveResponse(EXCHANGE_TYPE_CREATE_CHILD_SA, respPayloads);
-        mLooper.dispatchAll();
-
-        verifyIkeSessionFatalErrorAndSendOutboundIkeDeletePayload(IkeException.class);
     }
 
     @Test

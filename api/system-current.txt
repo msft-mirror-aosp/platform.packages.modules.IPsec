@@ -139,7 +139,6 @@ package android.net.ipsec.ike.ike3gpp {
   }
 
   public final class Ike3gppParams {
-    method @Nullable public String getMobileDeviceIdentity();
     method public byte getPduSessionId();
     field public static final byte PDU_SESSION_ID_UNSET = 0; // 0x0
   }
@@ -147,7 +146,6 @@ package android.net.ipsec.ike.ike3gpp {
   public static final class Ike3gppParams.Builder {
     ctor public Ike3gppParams.Builder();
     method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppParams build();
-    method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppParams.Builder setMobileDeviceIdentity(@Nullable String);
     method @NonNull public android.net.ipsec.ike.ike3gpp.Ike3gppParams.Builder setPduSessionId(byte);
   }
 
