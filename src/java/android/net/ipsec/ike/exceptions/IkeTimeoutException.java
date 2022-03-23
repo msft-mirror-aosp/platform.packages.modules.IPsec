@@ -30,6 +30,7 @@ import java.io.IOException;
  *
  * @see <a href="https://datatracker.ietf.org/doc/html/rfc7296#section-2.1">RFC 7296, Internet Key
  *     Exchange Protocol Version 2 (IKEv2)</a>
+ * @hide
  */
 public final class IkeTimeoutException extends IOException {
 
@@ -42,6 +43,7 @@ public final class IkeTimeoutException extends IOException {
      *
      * @param message The detail message (which is saved for later retrieval by the {@link
      *     #getMessage()} method)
+     * @hide
      */
     public IkeTimeoutException(@NonNull String message) {
         super(message);

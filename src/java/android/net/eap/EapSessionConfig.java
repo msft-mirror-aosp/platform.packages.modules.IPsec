@@ -265,16 +265,17 @@ public final class EapSessionConfig {
         }
 
         /**
-         * Sets the configuration for EAP AKA with options.
+         * Sets the configuration for EAP AKA with option.
          *
          * @param subId int the client's subId to be authenticated.
          * @param apptype the {@link UiccAppType} apptype to be used for authentication.
          * @param options optional configuration for EAP AKA
          * @return Builder this, to facilitate chaining.
+         * @hide
          */
         @NonNull
         public Builder setEapAkaConfig(
-                int subId, @UiccAppType int apptype, @NonNull EapAkaOption options) {
+                int subId, @UiccAppType int apptype, @Nullable EapAkaOption options) {
             mEapConfigs.put(
                     EapMethodConfig.EAP_TYPE_AKA, new EapAkaConfig(subId, apptype, options));
             return this;
@@ -696,9 +697,10 @@ public final class EapSessionConfig {
          * Retrieves EapAkaOption
          *
          * @return the {@link EapAkaOption}
+         * @hide
          */
         @NonNull
-        public EapAkaOption getEapAkaOption() {
+        public EapAkaOption getOptions() {
             return mEapAkaOption;
         }
     }
@@ -1029,9 +1031,11 @@ public final class EapSessionConfig {
     }
 
     /**
-     * EapAkaOption represents optional configurations for EAP AKA authentication.
+     * EapAkaOption represents the options supported for EAP AKA methods.
+     *
+     * @hide
      */
-    public static final class EapAkaOption {
+    public static class EapAkaOption {
         /** @hide */
         private static final String REAUTH_ID_KEY = "reauthId";
 
@@ -1088,6 +1092,7 @@ public final class EapSessionConfig {
          * Retrieves the re-authentication ID
          *
          * @return the re-authentication ID
+         * @hide
          */
         @Nullable
         public byte[] getReauthId() {
@@ -1114,6 +1119,8 @@ public final class EapSessionConfig {
 
         /**
          * This class can be used to incrementally construct an {@link EapAkaOption}.
+         *
+         * @hide
          */
         public static final class Builder {
             byte[] mReauthId;
@@ -1124,22 +1131,17 @@ public final class EapSessionConfig {
              * <p>If keys are found matching the combination of reauthId and permanent ID,
              * re-authentication will be attempted.
              *
-             * <p>Permanent ID MUST be set in setEapIdentity
-             *
              * <p>Upon session establishment, new re-authentication IDs will be listed in the
-             * EapAkaInfo returned as part of IkeSessionCallback#onOpened().
+             * EapSimAkaInfo returned as part of IkeSessionCallback#onOpened().
              *
              * <p>Reauthentication is generally considered less secure, as it does not prove the
              * existence of the full credentials, and should be used only when a strong correlation
              * can be provided to the full authentication (eg shared keys from previous
              * authentication runs)
              *
-             * @see <a href="https://datatracker.ietf.org/doc/html/rfc4187#section-5">RFC 4186,
-             *     Extensible Authentication Protocol Method for 3rd Generation Authentication and
-             *     Key Agreement (EAP-AKA)</a>
-             *
              * @param reauthId re-authentication ID encoded with UTF-8
              * @return Builder this, to facilitate chaining.
+             * @hide
              */
             @NonNull
             public Builder setReauthId(@NonNull byte[] reauthId) {
@@ -1152,6 +1154,7 @@ public final class EapSessionConfig {
              * Builder.
              *
              * @return the EapAkaOption constructed by this Builder.
+             * @hide
              */
             @NonNull
             public EapAkaOption build() {

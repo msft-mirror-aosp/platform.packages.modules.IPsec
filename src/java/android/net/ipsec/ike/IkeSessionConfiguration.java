@@ -217,9 +217,8 @@ public final class IkeSessionConfiguration {
     /**
      * Retrieves the EAP information.
      *
-     * @return the EAP information provided by the server during EAP authentication (e.g. next
-     *    re-authentication ID), or null if the server did not provide any information that will be
-     *    useful after the authentication.
+     * @return the EAP information containing specific information of EAP Methods.
+     * @hide
      */
     @Nullable
     public EapInfo getEapInfo() {
@@ -368,6 +367,7 @@ public final class IkeSessionConfiguration {
          * Sets EapInfo for the {@link IkeSessionConfiguration} being built.
          *
          * @return Builder this, to facilitate chaining
+         * @hide
          */
         @NonNull
         public Builder setEapInfo(@Nullable EapInfo eapInfo) {
