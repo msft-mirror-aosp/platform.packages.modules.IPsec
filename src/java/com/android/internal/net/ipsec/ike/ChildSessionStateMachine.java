@@ -311,6 +311,21 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     /**
      * Interface for ChildSessionStateMachine to notify IkeSessionStateMachine of state changes.
+     *
+     * <p>Child Session may encounter an IKE Session fatal error in three cases with different
+     * handling rules:
+     *
+     * <pre>
+     * - When there is a fatal error in an inbound request, onOutboundPayloadsReady will be
+     *   called first to send out an error notification and then onFatalIkeSessionError(false)
+     *   will be called to locally close the IKE Session.
+     * - When there is a fatal error in an inbound response, only onFatalIkeSessionError(true)
+     *   will be called to notify the remote with a Delete request and then close the IKE Session.
+     * - When there is an fatal error notification in an inbound response, only
+     *   onFatalIkeSessionError(false) is called to close the IKE Session locally.
+     * </pre>
+     *
+     * <p>Package private.
      */
     interface IChildSessionSmCallback {
         /** Notify that new Child SA is created. */
@@ -344,21 +359,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
          * Notify that a Child procedure has been finished and the IKE Session should close itself
          * because of a fatal error.
          *
-         * <p>Child Session may encounter an IKE Session fatal error in three cases with different
-         * handling rules:
-         *
-         * <pre>
-         * - When there is a fatal error in an inbound request, onOutboundPayloadsReady will be
-         *   called first to send out an error notification, and then onFatalIkeSessionError() will
-         *   be called to locally close the IKE Session.
-         * - When there is a fatal error in an inbound response, onOutboundPayloadsReady will be
-         *   called first to send out an IKE Delete message, and then onFatalIkeSessionError() will
-         *   be called to locally close the IKE Session.
-         * - When there is a fatal error notification in an inbound response,
-         *   onFatalIkeSessionError() will be called to locally close the IKE Session"
-         * </pre>
+         * <p>The IKE Session should send a Delete IKE request before closing when needsNotifyRemote
+         * is true.
          */
-        void onFatalIkeSessionError(Exception exception);
+        void onFatalIkeSessionError(boolean needsNotifyRemote);
     }
 
     /**
@@ -574,17 +578,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
         mChildSmCallback.onOutboundPayloadsReady(
                 EXCHANGE_TYPE_INFORMATIONAL, true /*isResp*/, outPayloads, this);
-    }
-
-    private void sendDeleteIkeRequest() {
-        List<IkePayload> outIkePayloads = new ArrayList<>(1);
-        outIkePayloads.add(new IkeDeletePayload());
-
-        mChildSmCallback.onOutboundPayloadsReady(
-                EXCHANGE_TYPE_INFORMATIONAL,
-                false /*isResp*/,
-                outIkePayloads,
-                ChildSessionStateMachine.this);
     }
 
     class OnIpSecSaPairCreatedRunnable implements Runnable {
@@ -1547,7 +1540,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     resp.registeredSpi, createChildResult.exception);
                             break;
                         case CREATE_STATUS_CHILD_ERROR_RCV_NOTIFY:
-                            handleErrorNotify(createChildResult.exception);
+                            loge(
+                                    "Received error notification for rekey Child. Schedule a"
+                                            + " retry");
+                            mCurrentChildSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
+
                             transitionTo(mIdle);
                             break;
                         default:
@@ -1567,7 +1564,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             executeUserCallback(createRunnable);
         }
 
-        protected void handleProcessRespOrSaCreationFailAndQuit(
+        private void handleProcessRespOrSaCreationFailAndQuit(
                 int registeredSpi, Exception exception) {
             // We don't retry rekey if failure was caused by invalid response or SA creation error.
             // Reason is there is no way to notify the remote side the old SA is still alive but the
@@ -1581,11 +1578,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             handleChildFatalError(exception);
         }
 
-        protected void handleErrorNotify(Exception exception) {
-            loge("Received error notification for rekey Child. Schedule a retry");
-            mCurrentChildSaRecord.rescheduleRekey(RETRY_INTERVAL_MS);
-        }
-
         @Override
         public void exitState() {
             CreateChildSaHelper.releaseSpiResources(mRequestPayloads);
@@ -1596,18 +1588,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * MobikeRekeyChildLocalCreate represents the state where Child Session initiates the Rekey
      * Child exchange for MOBIKE-enabled IKE Sessions.
      *
-     * <p>MobikeRekeyChildLocalCreate behaves similarly to RekeyChildLocalCreate except:
-     *
-     * <ul>
-     *   <li>It notifies the caller of Child SA creation via {@link
-     *       ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
-     *       android.net.IpSecTransform)}. .
-     *   <li>It tears down IKE SA immediately if any error occurs. In this case the origin Child SA
-     *       has lost connectivity due to the changed IP addresses, and renewing the Child SA by
-     *       MOBIKE rekey has failed. IKE module will handle this failure by tearing down the IKE
-     *       Session and notifying the caller. In this way, the caller can immediately re-establish
-     *       the IKE session if needed.
-     * </ul>
+     * <p>MobikeRekeyChildLocalCreate behaves similarly to RekeyChildLocalCreate except that it
+     * notifies the caller of Child SA creation via {@link
+     * ChildSessionCallback#onIpSecTransformsMigrated(android.net.IpSecTransform,
+     * android.net.IpSecTransform)}.
      *
      * <p>As indicated in RFC 7296 section 2.8, "when rekeying, the new Child SA SHOULD NOT have
      * different Traffic Selectors and algorithms than the old one."
@@ -1619,20 +1603,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
             IpSecTransform outTransform = mLocalInitNewChildSaRecord.getOutboundIpSecTransform();
             executeUserCallback(
                     () -> mUserCallback.onIpSecTransformsMigrated(inTransform, outTransform));
-        }
-
-        @Override
-        protected void handleProcessRespOrSaCreationFailAndQuit(
-                int registeredSpi, Exception exception) {
-            sendDeleteIkeRequest();
-            mChildSmCallback.onFatalIkeSessionError(exception);
-        }
-
-        @Override
-        protected void handleErrorNotify(Exception exception) {
-            loge("Received error notification for rekey Child. Tear down IKE SA");
-            sendDeleteIkeRequest();
-            mChildSmCallback.onFatalIkeSessionError(exception);
         }
     }
 
