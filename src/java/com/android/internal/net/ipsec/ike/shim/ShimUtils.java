@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
+import android.net.Network;
 import android.net.ipsec.ike.exceptions.IkeException;
 
 import com.android.modules.utils.build.SdkLevel;
@@ -59,4 +60,8 @@ public abstract class ShimUtils {
 
     /** Create an IOException for a DNS lookup failure */
     public abstract IOException getDnsFailedException(String errMsg);
+
+    /** Handle network loss on an IkeSessionStateMachine without mobility */
+    public abstract void onUnderlyingNetworkDiedWithoutMobility(
+            IIkeSessionStateMachineShim ikeSession, Network network);
 }

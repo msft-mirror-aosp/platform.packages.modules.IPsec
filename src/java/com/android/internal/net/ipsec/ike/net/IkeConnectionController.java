@@ -126,6 +126,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      */
     private IkeNetworkCallbackBase mNetworkCallback;
 
+    private boolean mMobilityEnabled = false;
+
     /** Local address assigned on device. */
     private InetAddress mLocalAddress;
     /** Remote address resolved from caller configured hostname. */
@@ -165,6 +167,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
                 throw new IllegalStateException("No active default network found");
             }
         }
+
+        getIkeLog().d(TAG, "Set up on Network " + mNetwork);
 
         mNatStatus = NAT_TRAVERSAL_SUPPORT_NOT_CHECKED;
     }
@@ -363,6 +367,28 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         } catch (IOException | ErrnoException e) {
             throw wrapAsIkeException(e);
         }
+
+        try {
+            if (mUseCallerConfiguredNetwork) {
+                // Caller configured a specific Network - track it
+                // ConnectivityManager does not provide a callback for tracking a specific
+                // Network. In order to do so, create a NetworkRequest without any
+                // capabilities so it will match all Networks. The NetworkCallback will then
+                // filter for the correct (caller-specified) Network.
+                NetworkRequest request = new NetworkRequest.Builder().clearCapabilities().build();
+                mNetworkCallback = new IkeSpecificNetworkCallback(this, mNetwork, mLocalAddress);
+                mConnectivityManager.registerNetworkCallback(
+                        request, mNetworkCallback, new Handler(mIkeContext.getLooper()));
+            } else {
+                // Caller did not configure a specific Network - track the default
+                mNetworkCallback = new IkeDefaultNetworkCallback(this, mNetwork, mLocalAddress);
+                mConnectivityManager.registerDefaultNetworkCallback(
+                        mNetworkCallback, new Handler(mIkeContext.getLooper()));
+            }
+        } catch (RuntimeException e) {
+            mNetworkCallback = null;
+            throw wrapAsIkeException(e);
+        }
     }
 
     /** Tears down the IkeConnectionController */
@@ -430,12 +456,24 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     /** Updates the underlying network */
     public void setNetwork(Network network) {
+        if (!mMobilityEnabled) {
+            // Program error. IkeSessionStateMachine should never call this method before enabling
+            // mobility.
+            getIkeLog().wtf(TAG, "Attempt to update network when mobility is disabled");
+            return;
+        }
+
         onUnderlyingNetworkUpdated(network);
     }
 
     /** Gets the underlying network */
     public Network getNetwork() {
         return mNetwork;
+    }
+
+    /** Check if mobility is enabled */
+    public boolean isMobilityEnabled() {
+        return mMobilityEnabled;
     }
 
     /**
@@ -704,36 +742,12 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      * underlying network and addresses.
      */
     public void enableMobility() throws IkeException {
-        try {
-            if (mUseCallerConfiguredNetwork) {
-                // Caller configured a specific Network - track it
-                // ConnectivityManager does not provide a callback for tracking a specific
-                // Network. In order to do so, create a NetworkRequest without any
-                // capabilities so it will match all Networks. The NetworkCallback will then
-                // filter for the correct (caller-specified) Network.
-                NetworkRequest request = new NetworkRequest.Builder().clearCapabilities().build();
-                mNetworkCallback = new IkeSpecificNetworkCallback(this, mNetwork, mLocalAddress);
-                mConnectivityManager.registerNetworkCallback(
-                        request, mNetworkCallback, new Handler(mIkeContext.getLooper()));
-            } else {
-                // Caller did not configure a specific Network - track the default
-                mNetworkCallback = new IkeDefaultNetworkCallback(this, mNetwork, mLocalAddress);
-                mConnectivityManager.registerDefaultNetworkCallback(
-                        mNetworkCallback, new Handler(mIkeContext.getLooper()));
-            }
+        mMobilityEnabled = true;
 
-            // Switch to port 4500 if NAT-T is supported (whether or not mobility is done via MOBIKE
-            // or Rekey Child). This way, there is no need to change the ports later if a NAT
-            // is detected on the new path.
-
-            if (mNatStatus != NAT_TRAVERSAL_UNSUPPORTED
-                    && mIkeSocket.getIkeServerPort() != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
-                getAndSwitchToIkeSocket(
-                        mRemoteAddress instanceof Inet4Address, true /* useEncapPort */);
-            }
-        } catch (RuntimeException e) {
-            // Error occurred while registering the NetworkCallback
-            throw wrapAsIkeException(e);
+        if (mNatStatus != NAT_TRAVERSAL_UNSUPPORTED
+                && mIkeSocket.getIkeServerPort() != IkeSocket.SERVER_PORT_UDP_ENCAPSULATED) {
+            getAndSwitchToIkeSocket(
+                    mRemoteAddress instanceof Inet4Address, true /* useEncapPort */);
         }
     }
 
@@ -744,6 +758,13 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     @Override
     public void onUnderlyingNetworkUpdated(Network network) {
+        if (!mMobilityEnabled) {
+            getIkeLog().d(TAG, "onUnderlyingNetworkUpdated: Unable to handle network update");
+            mCallback.onUnderlyingNetworkDied(mNetwork);
+
+            return;
+        }
+
         Network oldNetwork = mNetwork;
         InetAddress oldLocalAddress = mLocalAddress;
         InetAddress oldRemoteAddress = mRemoteAddress;
