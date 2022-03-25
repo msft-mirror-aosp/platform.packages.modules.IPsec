@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Android Open Source Project
+ * Copyright (C) 2022 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
-package android.net.eap.test;
+package android.eap.cts;
 
-import static android.net.eap.test.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
+import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+
+import android.net.eap.EapAkaInfo;
 
 import org.junit.Test;
 
@@ -28,10 +30,10 @@ import java.nio.charset.StandardCharsets;
 
 public class EapAkaInfoTest {
     private static final byte[] REAUTH_ID_BYTES =
-        "4OLUpQCqFyhm1/UgD56anTzYTqJDckibqjU6PlS4sZaiuLc=".getBytes(StandardCharsets.UTF_8);
+            "4OLUpQCqFyhm1/UgD56anTzYTqJDckibqjU6PlS4sZaiuLc=".getBytes(StandardCharsets.UTF_8);
 
     @Test
-    public void testBuild() {
+    public void testBuildWithReauthId() {
         EapAkaInfo eapAkaInfo =
                 new EapAkaInfo.Builder().setReauthId(REAUTH_ID_BYTES).build();
 
@@ -40,7 +42,7 @@ public class EapAkaInfoTest {
     }
 
     @Test
-    public void testBuildNullReauthId() {
+    public void testBuildWithoutReauthId() {
         EapAkaInfo eapAkaInfo =
                 new EapAkaInfo.Builder().build();
 
