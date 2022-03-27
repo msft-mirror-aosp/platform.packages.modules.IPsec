@@ -23,6 +23,7 @@ import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
 import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96;
 import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_128;
 import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC;
+import static android.os.Build.VERSION_CODES;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -43,8 +44,12 @@ import android.platform.test.annotations.AppModeFull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SdkSuppress;
 
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
+
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
@@ -55,6 +60,8 @@ import java.util.Arrays;
 @AppModeFull(reason = "MANAGE_IPSEC_TUNNELS permission can't be granted to instant apps")
 @SdkSuppress(minSdkVersion = 31, codeName = "S")
 public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
+    @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
+
     private static final String IKE_INIT_RESP =
             "46b8eca1e0d72a189b9f8e0158e1c0a52120222000000000000001d022000030"
                     + "0000002c010100040300000c0100000c800e0080030000080300000803000008"
@@ -286,6 +293,8 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         ikeSession.kill();
     }
 
+    // TODO: Re-enable it on T/T+ when IKE_OPTION_REKEY_MOBILITY is exposed
+    @IgnoreAfter(VERSION_CODES.S_V2)
     @Test
     public void testSetNetworkWithoutMobikeEnabled() throws Exception {
         if (!hasTunnelsFeature()) return;
