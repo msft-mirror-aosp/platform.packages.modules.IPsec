@@ -38,4 +38,17 @@ public abstract class IkeException extends Exception {
     protected IkeException(String message, Throwable cause) {
         super(message, cause);
     }
+
+    /**
+     * Wrap Exception as an IkeException or do nothing if the input is already an IkeException.
+     *
+     * @hide
+     */
+    public static IkeException wrapAsIkeException(Exception exception) {
+        if (exception instanceof IkeException) {
+            return (IkeException) exception;
+        }
+
+        return new IkeInternalException(exception);
+    }
 }
