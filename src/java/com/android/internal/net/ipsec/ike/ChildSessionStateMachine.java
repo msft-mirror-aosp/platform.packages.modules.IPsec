@@ -738,14 +738,14 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
     private void handleChildFatalError(Exception error) {
         IkeException ikeException = wrapAsIkeException(error);
-        executeUserCallback(
-                () -> {
-                    mUserCallback.onClosedWithException(ikeException);
-                });
         loge("Child Session fatal error", ikeException);
 
         // Clean up all SaRecords and quit
         closeAllSaRecords(false /*expectSaClosed*/);
+        executeUserCallback(
+                () -> {
+                    mUserCallback.onClosedWithException(ikeException);
+                });
         quitSessionNow();
     }
 
@@ -762,13 +762,11 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_KILL_SESSION:
+                    closeAllSaRecords(false /*expectSaClosed*/);
                     executeUserCallback(
                             () -> {
                                 mUserCallback.onClosed();
                             });
-
-                    closeAllSaRecords(false /*expectSaClosed*/);
-
                     quitSessionNow();
                     return HANDLED;
                 default:
@@ -1263,8 +1261,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     new OnIpSecSaPairDeletedRunnable(mCurrentChildSaRecord);
             executeUserCallback(
                     () -> {
-                        mUserCallback.onClosed();
                         delRunnable.run();
+                        mUserCallback.onClosed();
                     });
 
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
