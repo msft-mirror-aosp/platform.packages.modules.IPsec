@@ -21,6 +21,7 @@ import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_INITIAL_CONTACT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_REKEY_MOBILITY;
+import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_NO_ADDITIONAL_SAS;
@@ -104,7 +105,6 @@ import android.net.ipsec.ike.IkeSessionParams.IkeAuthPskConfig;
 import android.net.ipsec.ike.TransportModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeException;
-import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidKeException;
@@ -933,8 +933,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                         + " of sync.");
                 executeUserCallback(
                         () -> {
-                            mIkeSessionCallback.onClosedWithException(
-                                    new IkeInternalException(error));
+                            mIkeSessionCallback.onClosedWithException(wrapAsIkeException(error));
                         });
                 loge("Fatal error", error);
 
@@ -1110,7 +1109,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             executeUserCallback(
                     () -> {
-                        mIkeSessionCallback.onClosedWithException(new IkeInternalException(e));
+                        mIkeSessionCallback.onClosedWithException(wrapAsIkeException(e));
                     });
             logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitSessionNow();
@@ -1181,10 +1180,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     }
 
     private void handleIkeFatalError(Exception error) {
-        IkeException ikeException =
-                error instanceof IkeException
-                        ? (IkeException) error
-                        : new IkeInternalException(error);
+        IkeException ikeException = wrapAsIkeException(error);
 
         // Clean up all SaRecords.
         closeAllSaRecords(false /*expectSaClosed*/);
@@ -1224,8 +1220,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         public void enterState() {
             if (mInitialSetupData == null) {
                 handleIkeFatalError(
-                        new IkeInternalException(
-                                new IllegalStateException("mInitialSetupData is null")));
+                        wrapAsIkeException(new IllegalStateException("mInitialSetupData is null")));
                 return;
             }
 
@@ -1234,7 +1229,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                 // TODO(b/191673438): Set a specific tag for VPN.
                 TrafficStats.setThreadStatsTag(Process.myUid());
-            } catch (IkeInternalException e) {
+            } catch (IkeException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -2938,8 +2933,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         public void enterState() {
             if (mInitialSetupData == null) {
                 handleIkeFatalError(
-                        new IkeInternalException(
-                                new IllegalStateException("mInitialSetupData is null")));
+                        wrapAsIkeException(new IllegalStateException("mInitialSetupData is null")));
                 return;
             }
 
@@ -3387,7 +3381,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             try {
                 mIkeConnectionCtrl.handleNatDetectionResultInIkeInit(isNatDetected, initIkeSpi);
-            } catch (IkeInternalException e) {
+            } catch (IkeException e) {
                 handleIkeFatalError(e);
             }
         }
@@ -3495,7 +3489,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         public void enterState() {
             if (mSetupData == null) {
                 handleIkeFatalError(
-                        new IkeInternalException(new IllegalStateException("mSetupData is null")));
+                        wrapAsIkeException(new IllegalStateException("mSetupData is null")));
                 return;
             }
         }
@@ -4670,8 +4664,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 }
 
             } catch (GeneralSecurityException | IOException e) {
-                handleProcessRespOrSaCreationFailureAndQuit(
-                        new IkeInternalException("Error in creating a new IKE SA during rekey", e));
+                handleProcessRespOrSaCreationFailureAndQuit(wrapAsIkeException(e));
             }
         }
 
@@ -5667,7 +5660,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     }
 
     @Override
-    public void onError(IkeInternalException exception) {
+    public void onError(IkeException exception) {
         handleIkeFatalError(exception);
     }
 
