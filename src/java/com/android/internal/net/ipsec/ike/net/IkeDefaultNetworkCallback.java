@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.net;
 
+import android.net.LinkProperties;
 import android.net.Network;
 
 import java.net.InetAddress;
@@ -23,13 +24,16 @@ import java.net.InetAddress;
 /**
  * IkeDefaultNetworkCallback is a network callback used to track the application default Network.
  *
- * <p>This NetworkCallback will notify IkeSessionStateMachine if:
+ * <p>This NetworkCallback will notify IkeNetworkUpdater if:
  *
  * <ul>
  *   <li>the default Network changes, or
  *   <li>the local Address for the default Network is dropped,
  *   <li>the default Network dies with no alternatives available.
  * </ul>
+ *
+ * <p>In the case of default Network changes, the IkeNetworkUpdater will be notified after
+ * onLinkPropertiesChanged is called.
  *
  * <p>MUST be registered with {@link android.net.ConnectivityManager} and specify the
  * IkeSessionStateMachine's Handler to prevent races.
@@ -40,14 +44,20 @@ public class IkeDefaultNetworkCallback extends IkeNetworkCallbackBase {
         super(ikeNetworkUpdater, currNetwork, currAddress);
     }
 
+    /**
+     * This method will be called either on the current default network or after {@link
+     * #onAvailable(Network)} when a new default network is brought up.
+     */
     @Override
-    public void onAvailable(Network network) {
-        // This signal can be ignored if the Network is already the current Network
-        if (mCurrNetwork.equals(network)) {
-            return;
-        }
+    public void onLinkPropertiesChanged(Network network, LinkProperties linkProperties) {
+        logd("onLinkPropertiesChanged: " + network);
 
-        logd("Application default Network changed to " + network);
-        mIkeNetworkUpdater.onUnderlyingNetworkUpdated(network);
+        if (!mCurrNetwork.equals(network)) {
+            mCurrNetwork = network;
+            logd("Application default Network changed to " + network);
+            mIkeNetworkUpdater.onUnderlyingNetworkUpdated(network, linkProperties);
+        } else if (isCurrentAddressLost(linkProperties)) {
+            mIkeNetworkUpdater.onUnderlyingNetworkUpdated(network, linkProperties);
+        }
     }
 }

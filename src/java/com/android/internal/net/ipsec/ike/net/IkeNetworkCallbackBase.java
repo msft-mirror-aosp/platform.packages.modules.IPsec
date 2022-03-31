@@ -53,30 +53,22 @@ public abstract class IkeNetworkCallbackBase extends NetworkCallback {
         mIkeNetworkUpdater.onUnderlyingNetworkDied();
     }
 
-    @Override
-    public void onLinkPropertiesChanged(Network network, LinkProperties linkProperties) {
-        // This LinkProperties update is only meaningful if it's for the current Network
-        if (!mCurrNetwork.equals(network)) {
-            return;
-        }
-
+    protected boolean isCurrentAddressLost(LinkProperties linkProperties) {
         // Use getAllLinkAddresses (instead of getLinkAddresses()) so that the return value also
         // includes addresses of stacked LinkProperties. This is useful for handling the address of
         // a CLAT interface.
         for (LinkAddress linkAddress : linkProperties.getAllLinkAddresses()) {
             if (mCurrAddress.equals(linkAddress.getAddress())) {
-                return;
+                return false;
             }
         }
 
-        // The underlying Network didn't change, but the current address disappeared. A MOBIKE
-        // event is necessary to update the local address and notify the peer of this change.
         logd(
                 "onLinkPropertiesChanged indicates current address "
                         + mCurrAddress
                         + " lost on current Network "
                         + mCurrNetwork.getNetId());
-        mIkeNetworkUpdater.onUnderlyingNetworkUpdated(mCurrNetwork);
+        return true;
     }
 
     /**

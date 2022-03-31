@@ -136,12 +136,12 @@ public abstract class IkeSessionTestBase {
         doReturn(mMockConnectManager)
                 .when(mSpyContext)
                 .getSystemService(Context.CONNECTIVITY_SERVICE);
-        resetMockConnectManager();
 
         mMockIkeLocalAddressGenerator = mock(IkeLocalAddressGenerator.class);
+        resetMockConnectManager();
     }
 
-    protected void resetMockConnectManager() {
+    protected void resetMockConnectManager() throws Exception {
         reset(mMockConnectManager);
         doReturn(mMockDefaultNetwork).when(mMockConnectManager).getActiveNetwork();
         doReturn(mMockSocketKeepalive)
@@ -156,6 +156,8 @@ public abstract class IkeSessionTestBase {
         doReturn(mMockNetworkCapabilities)
                 .when(mMockConnectManager)
                 .getNetworkCapabilities(any(Network.class));
+        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
+        setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
     }
 
     protected void resetDefaultNetwork() throws Exception {
@@ -185,19 +187,20 @@ public abstract class IkeSessionTestBase {
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
                         eq(network), eq(isIpv4), any(), anyInt()))
                 .thenReturn(address);
+
+        LinkAddress mockLinkAddress = mock(LinkAddress.class);
+        when(mockLinkAddress.getAddress()).thenReturn(address);
+        if (address instanceof Inet6Address) {
+            when(mockLinkAddress.isGlobalPreferred()).thenReturn(true);
+        }
+
+        LinkProperties linkProperties = new LinkProperties();
+        linkProperties.addLinkAddress(mockLinkAddress);
+        when(mMockConnectManager.getLinkProperties(eq(network))).thenReturn(linkProperties);
     }
 
     protected void setupRemoteAddressForNetwork(Network network, InetAddress address)
             throws Exception {
-        if (address instanceof Inet6Address) {
-            LinkAddress mockLinkAddressGlobalV6 = mock(LinkAddress.class);
-            when(mockLinkAddressGlobalV6.getAddress()).thenReturn(address);
-            when(mockLinkAddressGlobalV6.isGlobalPreferred()).thenReturn(true);
-
-            LinkProperties linkProperties = new LinkProperties();
-            linkProperties.addLinkAddress(mockLinkAddressGlobalV6);
-            when(mMockConnectManager.getLinkProperties(eq(network))).thenReturn(linkProperties);
-        }
         doAnswer(
                 new Answer() {
                         public Object answer(InvocationOnMock invocation) throws IOException {
