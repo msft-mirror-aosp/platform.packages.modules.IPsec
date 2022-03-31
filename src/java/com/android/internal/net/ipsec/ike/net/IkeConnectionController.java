@@ -353,7 +353,21 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         try {
             resolveAndSetAvailableRemoteAddresses();
-            setRemoteAddress();
+
+            // This is call is directly from the IkeSessionStateMachine, and thus cannot be
+            // accidentally called in a NetworkCallback. See
+            // ConnectivityManager.NetworkCallback#onLinkPropertiesChanged() for discussion of
+            // mixing callbacks and synchronous polling methods.
+            LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
+            if (linkProperties == null) {
+                // Throw NPE to preserve the existing behaviour for backward compatibility
+                throw wrapAsIkeException(
+                        new NullPointerException(
+                                "Attempt setup on network "
+                                        + mNetwork
+                                        + " with null LinkProperties"));
+            }
+            setRemoteAddress(linkProperties);
 
             int remotePort =
                     mForcePort4500
@@ -466,8 +480,13 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return Collections.unmodifiableSet(mIkeSaRecords);
     }
 
-    /** Updates the underlying network */
-    public void setNetwork(Network network) {
+    /**
+     * Updates the underlying network
+     *
+     * <p>This call is always from IkeSessionStateMachine for migrating IKE to a caller configured
+     * network.
+     */
+    public void onNetworkSetByUser(Network network) throws IkeException {
         if (!mMobilityEnabled) {
             // Program error. IkeSessionStateMachine should never call this method before enabling
             // mobility.
@@ -475,7 +494,25 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             return;
         }
 
-        onUnderlyingNetworkUpdated(network);
+        // This is call is directly from the IkeSessionStateMachine, and thus cannot be
+        // accidentally called in a NetworkCallback. See
+        // ConnectivityManager.NetworkCallback#onLinkPropertiesChanged() for discussion of
+        // mixing callbacks and synchronous polling methods.
+        LinkProperties linkProperties = mConnectivityManager.getLinkProperties(network);
+
+        if (linkProperties == null) {
+            // Throw NPE to preserve the existing behaviour for backward compatibility
+            throw wrapAsIkeException(
+                    new NullPointerException(
+                            "Attempt migrating to network "
+                                    + network
+                                    + " with null LinkProperties"));
+
+            // TODO(b/224686889): Notify caller of failed mobility attempt and keep this IKE Session
+            // alive
+        }
+
+        onUnderlyingNetworkUpdated(network, linkProperties);
     }
 
     /** Gets the underlying network */
@@ -732,8 +769,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      *
      * Otherwise, an IPv4 address will be used.
      */
-    private void setRemoteAddress() {
-        LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
+    private void setRemoteAddress(LinkProperties linkProperties) {
         if (!mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address()) {
             // TODO(b/175348096): randomly choose from available addresses
             mRemoteAddress = mRemoteAddressesV6.get(0);
@@ -769,7 +805,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
 
     @Override
-    public void onUnderlyingNetworkUpdated(Network network) {
+    public void onUnderlyingNetworkUpdated(Network network, LinkProperties linkProperties) {
         if (!mMobilityEnabled) {
             getIkeLog().d(TAG, "onUnderlyingNetworkUpdated: Unable to handle network update");
             mCallback.onUnderlyingNetworkDied(mNetwork);
@@ -796,7 +832,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             }
         }
 
-        setRemoteAddress();
+        setRemoteAddress(linkProperties);
 
         boolean isIpv4 = mRemoteAddress instanceof Inet4Address;
 
