@@ -201,7 +201,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         /** Notify the IkeConnectionController caller of the incoming IKE packet */
         void onIkePacketReceived(IkeHeader ikeHeader, byte[] ikePackets);
 
-        /** Notify the IkeConnectionController caller of the IKE error */
+        /** Notify the IkeConnectionController caller of the IKE fatal error */
         void onError(IkeException exception);
     }
 
@@ -739,8 +739,23 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
     }
 
-    @Override
-    public void onUnderlyingNetworkUpdated(Network network) {
+    /**
+     * All the calls that are not initiated from the IkeSessionStateMachine MUST be run in this
+     * method unless there are mechanisms to guarantee these calls will never crash the process.
+     */
+    private void executeWithTryCatch(Runnable r) {
+        try {
+            r.run();
+        } catch (Exception e) {
+            getIkeLog().wtf(TAG, "Unexpected exception");
+
+            // An unexpected exception is an unrecoverable error to IKE Session. Thus fire onError
+            // to notify the IkeSessionStateMachine of this fatal issue.
+            mCallback.onError(wrapAsIkeException(e));
+        }
+    }
+
+    private void handleUnderlyingNetworkUpdate(Network network) {
         Network oldNetwork = mNetwork;
         InetAddress oldLocalAddress = mLocalAddress;
         InetAddress oldRemoteAddress = mRemoteAddress;
@@ -803,18 +818,30 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mNetworkCallback.setNetwork(mNetwork);
         mNetworkCallback.setAddress(mLocalAddress);
 
-        // TODO: Update IkeSocket and NATT keepalive
-
         mCallback.onUnderlyingNetworkUpdated();
     }
 
     @Override
+    public void onUnderlyingNetworkUpdated(Network network) {
+        executeWithTryCatch(
+                () -> {
+                    handleUnderlyingNetworkUpdate(network);
+                });
+    }
+
+    @Override
     public void onUnderlyingNetworkDied() {
-        mCallback.onUnderlyingNetworkDied(mNetwork);
+        executeWithTryCatch(
+                () -> {
+                    mCallback.onUnderlyingNetworkDied(mNetwork);
+                });
     }
 
     @Override
     public void onIkePacketReceived(IkeHeader ikeHeader, byte[] ikePackets) {
-        mCallback.onIkePacketReceived(ikeHeader, ikePackets);
+        executeWithTryCatch(
+                () -> {
+                    mCallback.onIkePacketReceived(ikeHeader, ikePackets);
+                });
     }
 }
