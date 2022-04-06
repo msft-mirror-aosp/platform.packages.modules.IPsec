@@ -2062,6 +2062,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         protected IkeInitData mIkeInitData;
 
         IkeAuthTestPretestBase() {
+            this(new HashSet<>() /* peerSignatureHashAlgorithms */);
+        }
+
+        IkeAuthTestPretestBase(Set<Short> peerSignatureHashAlgorithms) {
             InitialSetupData initialSetupData =
                     new InitialSetupData(
                             mChildSessionParams,
@@ -2075,7 +2079,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                             new byte[0],
                             new IkeNoncePayload(createMockRandomFactory()),
                             new IkeNoncePayload(createMockRandomFactory()),
-                            new HashSet<Short>());
+                            peerSignatureHashAlgorithms);
         }
 
         public void mockIkeInitAndTransitionToIkeAuth() throws Exception {
@@ -2096,6 +2100,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private final class IkeFirstAuthTestPretest extends IkeAuthTestPretestBase {
         IkeFirstAuthTestPretest() {
             super();
+        }
+
+        IkeFirstAuthTestPretest(Set<Short> peerSignatureHashAlgorithms) {
+            super(peerSignatureHashAlgorithms);
         }
 
         @Override
@@ -3199,12 +3207,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
     }
 
-    @Test
-    public void testCreateIkeLocalIkeAuthDigitalSignature() throws Exception {
+    private void verifyCreateIkeLocalIkeAuthDigitalSignature(Set<Short> peerSignatureHashAlgorithms)
+            throws Exception {
         // Quit and restart IKE Session with Digital Signature Auth params
         mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsDigitalSignature());
-        new IkeFirstAuthTestPretest().mockIkeInitAndTransitionToIkeAuth();
+
+        new IkeFirstAuthTestPretest(peerSignatureHashAlgorithms)
+                .mockIkeInitAndTransitionToIkeAuth();
 
         // Build IKE AUTH response with Digital Signature Auth, ID-Responder and config payloads.
         List<IkePayload> authRelatedPayloads = new ArrayList<>();
@@ -3224,6 +3234,20 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 true /*hasChildPayloads*/,
                 true /*hasConfigPayloadInResp*/);
         verifyRetransmissionStopped();
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthRsaDigitalSignature() throws Exception {
+        verifyCreateIkeLocalIkeAuthDigitalSignature(new HashSet<>());
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthGenericDigitalSignature() throws Exception {
+        Set<Short> hashAlgos = new HashSet<Short>();
+        for (short algo : IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES) {
+            hashAlgos.add(algo);
+        }
+        verifyCreateIkeLocalIkeAuthDigitalSignature(hashAlgos);
     }
 
     @Test
