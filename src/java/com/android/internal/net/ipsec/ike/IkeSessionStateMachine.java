@@ -663,7 +663,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         public final IkeNoncePayload ikeRespNoncePayload;
 
         /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
-        public final Set<Short> peerSignatureHashAlgorithms;
+        public final Set<Short> peerSignatureHashAlgorithms = new HashSet<>();
 
         IkeInitData(
                 InitialSetupData initialSetupData,
@@ -677,7 +677,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             this.ikeInitResponseBytes = ikeInitResponseBytes;
             this.ikeInitNoncePayload = ikeInitNoncePayload;
             this.ikeRespNoncePayload = ikeRespNoncePayload;
-            this.peerSignatureHashAlgorithms = peerSignatureHashAlgorithms;
+
+            this.peerSignatureHashAlgorithms.addAll(peerSignatureHashAlgorithms);
         }
 
         IkeInitData(IkeInitData ikeInitData) {
@@ -1181,16 +1182,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void handleIkeFatalError(Exception error) {
         IkeException ikeException = wrapAsIkeException(error);
-
-        // Clean up all SaRecords.
-        closeAllSaRecords(false /*expectSaClosed*/);
-        executeUserCallback(
-                () -> {
-                    mIkeSessionCallback.onClosedWithException(ikeException);
-                });
         loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
-        quitSessionNow();
+        try {
+            // Clean up all SaRecords.
+            closeAllSaRecords(false /*expectSaClosed*/);
+        } catch (Exception e) {
+            logWtf("Unexpected error in #handleIkeFatalError", e);
+        } finally {
+            executeUserCallback(
+                    () -> {
+                        mIkeSessionCallback.onClosedWithException(ikeException);
+                    });
+            quitSessionNow();
+        }
     }
 
     /** Parent state used to delete IKE sessions */
@@ -2921,7 +2926,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         private byte[] mIkeInitResponseBytes;
         private IkeNoncePayload mIkeInitNoncePayload;
         private IkeNoncePayload mIkeRespNoncePayload;
-        private Set<Short> mPeerSignatureHashAlgorithms;
+        private Set<Short> mPeerSignatureHashAlgorithms = new HashSet<>();
 
         private IkeSecurityParameterIndex mLocalIkeSpiResource;
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
@@ -3301,10 +3306,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 mEnabledExtensions.add(EXTENSION_TYPE_FRAGMENTATION);
                                 break;
                             case NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS:
-                                mPeerSignatureHashAlgorithms =
+                                mPeerSignatureHashAlgorithms.addAll(
                                         IkeAuthDigitalSignPayload
                                                 .getSignatureHashAlgorithmsFromIkeNotifyPayload(
-                                                        notifyPayload);
+                                                        notifyPayload));
                                 break;
                             default:
                                 // Unknown and unexpected status notifications are ignored as per
