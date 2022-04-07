@@ -73,6 +73,7 @@ import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_K
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_IKE;
 
+import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
@@ -85,6 +86,7 @@ import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
 import android.net.TrafficStats;
+import android.net.eap.EapInfo;
 import android.net.eap.EapSessionConfig;
 import android.net.ipsec.ike.ChildSessionCallback;
 import android.net.ipsec.ike.ChildSessionParams;
@@ -296,6 +298,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     static final int CMD_SEND_KEEPALIVE = CMD_GENERAL_BASE + 16;
     /** Update the Session's underlying Network */
     static final int CMD_SET_NETWORK = CMD_GENERAL_BASE + 17;
+    /**
+     * Proxy to IkeSessionStateMachine handler to notify of the IKE fatal error hit in a Child
+     * procedure
+     */
+    static final int CMD_IKE_FATAL_ERROR_FROM_CHILD = CMD_GENERAL_BASE + 18;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -326,6 +333,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         CMD_TO_STR.put(CMD_EAP_FINISH_EAP_AUTH, "Finish EAP");
         CMD_TO_STR.put(CMD_ALARM_FIRED, "Alarm Fired");
         CMD_TO_STR.put(CMD_SET_NETWORK, "Update underlying Network");
+        CMD_TO_STR.put(CMD_IKE_FATAL_ERROR_FROM_CHILD, "IKE fatal error from Child");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_IKE, "Create IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_REKEY_IKE, "Rekey IKE");
@@ -643,7 +651,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         public final IkeNoncePayload ikeRespNoncePayload;
 
         /** Set of peer-supported Signature Hash Algorithms. Optionally set in IKE INIT. */
-        public final Set<Short> peerSignatureHashAlgorithms;
+        public final Set<Short> peerSignatureHashAlgorithms = new HashSet<>();
 
         IkeInitData(
                 InitialSetupData initialSetupData,
@@ -657,7 +665,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             this.ikeInitResponseBytes = ikeInitResponseBytes;
             this.ikeInitNoncePayload = ikeInitNoncePayload;
             this.ikeRespNoncePayload = ikeRespNoncePayload;
-            this.peerSignatureHashAlgorithms = peerSignatureHashAlgorithms;
+
+            this.peerSignatureHashAlgorithms.addAll(peerSignatureHashAlgorithms);
         }
 
         IkeInitData(IkeInitData ikeInitData) {
@@ -998,6 +1007,15 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
     }
 
+    /** Class to group parameters for notifying the IKE fatal error. */
+    private static class IkeFatalErrorFromChild {
+        public final Exception exception;
+
+        IkeFatalErrorFromChild(Exception exception) {
+            this.exception = exception;
+        }
+    }
+
     /** Class to group parameters for building an outbound message for ChildSessions. */
     private static class ChildOutboundData {
         @ExchangeType public final int exchangeType;
@@ -1065,9 +1083,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         @Override
-        public void onFatalIkeSessionError(boolean needsNotifyRemote) {
-            // TODO: If needsNotifyRemote is true, send a Delete IKE request and then kill the IKE
-            // Session. Otherwise, directly kill the IKE Session.
+        public void onFatalIkeSessionError(Exception exception) {
+            sendMessage(CMD_IKE_FATAL_ERROR_FROM_CHILD, new IkeFatalErrorFromChild(exception));
         }
     }
 
@@ -2483,6 +2500,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
                     // Let KillIkeSessionParent handle the rest of the cleanup.
                     return NOT_HANDLED;
+                case CMD_IKE_FATAL_ERROR_FROM_CHILD:
+                    IkeFatalErrorFromChild fatalError = (IkeFatalErrorFromChild) message.obj;
+                    handleIkeFatalError(fatalError.exception);
+                    return HANDLED;
                 default:
                     return super.processStateMessage(message);
             }
@@ -2880,7 +2901,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         private byte[] mIkeInitResponseBytes;
         private IkeNoncePayload mIkeInitNoncePayload;
         private IkeNoncePayload mIkeRespNoncePayload;
-        private Set<Short> mPeerSignatureHashAlgorithms;
+        private Set<Short> mPeerSignatureHashAlgorithms = new HashSet<>();
 
         private IkeSecurityParameterIndex mLocalIkeSpiResource;
         private IkeSecurityParameterIndex mRemoteIkeSpiResource;
@@ -3261,10 +3282,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                                 mEnabledExtensions.add(EXTENSION_TYPE_FRAGMENTATION);
                                 break;
                             case NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS:
-                                mPeerSignatureHashAlgorithms =
+                                mPeerSignatureHashAlgorithms.addAll(
                                         IkeAuthDigitalSignPayload
                                                 .getSignatureHashAlgorithmsFromIkeNotifyPayload(
-                                                        notifyPayload);
+                                                        notifyPayload));
                                 break;
                             default:
                                 // Unknown and unexpected status notifications are ignored as per
@@ -3443,6 +3464,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     abstract class CreateIkeLocalIkeAuthBase<T extends IkeInitData> extends DeleteBase {
         protected T mSetupData;
         protected Retransmitter mRetransmitter;
+        protected EapInfo mEapInfo = null;
 
         @Override
         public void enterState() {
@@ -3455,6 +3477,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         public void setIkeSetupData(T setupData) {
             mSetupData = setupData;
+        }
+
+        protected void setEapInfo(EapInfo eapInfo) {
+            mEapInfo = eapInfo;
         }
 
         @Override
@@ -3579,7 +3605,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     mIkeConnectionCtrl.buildIkeSessionConnectionInfo(),
                     configPayload,
                     mRemoteVendorIds,
-                    mEnabledExtensions);
+                    mEnabledExtensions,
+                    mEapInfo);
         }
 
         protected void notifyIkeSessionSetup(IkeMessage msg) {
@@ -4109,8 +4136,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         private class IkeEapCallback implements IEapCallback {
             @Override
-            public void onSuccess(byte[] msk, byte[] emsk) {
+            public void onSuccess(byte[] msk, byte[] emsk, @Nullable EapInfo eapInfo) {
                 // Extended MSK not used in IKEv2, drop.
+                mCreateIkeLocalIkeAuthPostEap.setEapInfo(eapInfo);
                 sendMessage(CMD_EAP_FINISH_EAP_AUTH, msk);
             }
 
@@ -5582,12 +5610,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     @Override
     public void onUnderlyingNetworkDied(Network network) {
-        if (mEnabledExtensions.contains(IKE_OPTION_MOBIKE)) {
-            executeUserCallback(
-                    () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
-        } else {
-            handleIkeFatalError(new IkeInternalException("Network " + network + " disconnected"));
-        }
+        executeUserCallback(
+                () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
     }
 
     @Override
