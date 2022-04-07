@@ -37,12 +37,10 @@ import static org.mockito.Mockito.when;
 
 import android.net.ConnectivityManager.NetworkCallback;
 import android.net.Network;
-import android.net.ipsec.test.ike.IkeManager;
 import android.net.ipsec.test.ike.IkeSessionParams;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.os.Looper;
 
-import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.test.ike.IkeContext;
 import com.android.internal.net.ipsec.test.ike.IkeSessionTestBase;
 import com.android.internal.net.ipsec.test.ike.IkeSocket;
@@ -511,19 +509,5 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     public void testOnUnderlyingNetworkDied() throws Exception {
         mIkeConnectionCtrl.onUnderlyingNetworkDied();
         verify(mMockConnectionCtrlCb).onUnderlyingNetworkDied(eq(mMockDefaultNetwork));
-    }
-
-    @Test
-    public void testCatchUnexpectedExceptionInNetworkUpdate() throws Exception {
-        IkeManager.setIkeLog(
-                TestUtils.makeSpyLogDoLogErrorForWtf(
-                        "testCatchUnexpectedExceptionInNetworkUpdate"));
-
-        IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(null);
-
-        verify(mMockConnectionCtrlCb).onError(any(IkeInternalException.class));
-
-        IkeManager.resetIkeLog();
     }
 }
