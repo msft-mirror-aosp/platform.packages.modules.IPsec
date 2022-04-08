@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.test.ike.message;
+package com.android.internal.net.ipsec.ike.message;
 
 import static org.junit.Assert.fail;
 
-import android.net.ipsec.test.ike.exceptions.AuthenticationFailedException;
-
-import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
 import org.junit.Before;
 import org.junit.Test;

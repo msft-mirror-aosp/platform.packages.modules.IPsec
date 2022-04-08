@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.test.ike;
-
-import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
+package android.net.ipsec.ike;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
@@ -30,11 +28,9 @@ import android.os.Looper;
 import android.os.test.TestLooper;
 import android.util.Log;
 
-import androidx.test.filters.SdkSuppress;
-
-import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine;
-import com.android.internal.net.ipsec.test.ike.IkeSessionStateMachineTest;
-import com.android.internal.net.ipsec.test.ike.IkeSessionTestBase;
+import com.android.internal.net.ipsec.ike.IkeSessionStateMachine;
+import com.android.internal.net.ipsec.ike.IkeSessionStateMachineTest;
+import com.android.internal.net.ipsec.ike.IkeSessionTestBase;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -69,17 +65,14 @@ public final class IkeSessionTest extends IkeSessionTestBase {
 
 
     private IkeSessionParams buildIkeSessionParams() throws Exception {
-        return buildIkeSessionParamsBase().build();
-    }
-
-    private IkeSessionParams.Builder buildIkeSessionParamsBase() throws Exception {
         return new IkeSessionParams.Builder(mMockConnectManager)
                 .setServerHostname(REMOTE_ADDRESS.getHostAddress())
                 .addSaProposal(IkeSessionStateMachineTest.buildSaProposal())
                 .setLocalIdentification(new IkeIpv4AddrIdentification((Inet4Address) LOCAL_ADDRESS))
                 .setRemoteIdentification(
                         new IkeIpv4AddrIdentification((Inet4Address) REMOTE_ADDRESS))
-                .setAuthPsk(new byte[0] /* psk, unused */);
+                .setAuthPsk(new byte[0] /* psk, unused */)
+                .build();
     }
 
     @Test
@@ -186,20 +179,5 @@ public final class IkeSessionTest extends IkeSessionTestBase {
         } catch (Exception expected) {
 
         }
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    @SdkSuppress(minSdkVersion = 31, codeName = "S")
-    public void testThrowWhenSetupMobikeWithTransport() throws Exception {
-        IkeSession ikeSession =
-                new IkeSession(
-                        new TestLooper().getLooper(),
-                        mSpyContext,
-                        mIpSecManager,
-                        buildIkeSessionParamsBase().addIkeOption(IKE_OPTION_MOBIKE).build(),
-                        mock(TransportModeChildSessionParams.class),
-                        mUserCbExecutor,
-                        mMockIkeSessionCb,
-                        mMockChildSessionCb);
     }
 }

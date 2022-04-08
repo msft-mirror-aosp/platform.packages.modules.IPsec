@@ -18,6 +18,8 @@ package com.android.internal.net.ipsec.ike;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
 import android.annotation.Nullable;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
 import android.content.Context;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -25,6 +27,7 @@ import android.net.IpSecManager.SecurityParameterIndex;
 import android.net.IpSecManager.SpiUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.IpSecTransform;
+import android.os.SystemClock;
 import android.util.CloseGuard;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -36,8 +39,6 @@ import com.android.internal.net.ipsec.ike.message.IkeMessage;
 import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultPartial;
 import com.android.internal.net.ipsec.ike.message.IkeNoncePayload;
 import com.android.internal.net.ipsec.ike.message.IkePayload;
-import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
-import com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
 
 import java.io.IOException;
@@ -258,9 +259,7 @@ public abstract class SaRecord implements AutoCloseable {
                             IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class);
 
             return IkeKePayload.getSharedKey(
-                    keLocalPayload.localPrivateKey,
-                    keRemotePayload.keyExchangeData,
-                    keRemotePayload.dhGroup);
+                    keLocalPayload.localPrivateKey, keRemotePayload.keyExchangeData);
         }
 
         /**
@@ -350,38 +349,25 @@ public abstract class SaRecord implements AutoCloseable {
                                     IkeNoncePayload.class,
                                     respPayloads)
                             .nonceData;
-            byte[] sharedDhKey =
-                    getChildSharedKey(reqPayloads, respPayloads, childSaRecordConfig.isLocalInit);
 
-            return makeChildSaRecord(sharedDhKey, nonceInit, nonceResp, childSaRecordConfig);
-        }
-
-        @VisibleForTesting
-        static byte[] getChildSharedKey(
-                List<IkePayload> reqPayloads, List<IkePayload> respPayloads, boolean isLocalInit)
-                throws GeneralSecurityException {
             // Check if KE Payload exists and get DH shared key. Encoding/Decoding of payload list
             // guarantees that there is either no KE payload in the reqPayloads and respPayloads
             // lists, or only one KE payload in each list.
+            byte[] sharedDhKey = new byte[0];
             IkeKePayload keInitPayload =
                     IkePayload.getPayloadForTypeInProvidedList(
                             IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, reqPayloads);
-
-            if (keInitPayload == null) {
-                return new byte[0];
+            if (keInitPayload != null) {
+                IkeKePayload keRespPayload =
+                        IkePayload.getPayloadForTypeInProvidedList(
+                                IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, respPayloads);
+                sharedDhKey =
+                        IkeKePayload.getSharedKey(
+                                keInitPayload.localPrivateKey, keRespPayload.keyExchangeData);
             }
 
-            IkeKePayload keRespPayload =
-                    IkePayload.getPayloadForTypeInProvidedList(
-                            IkePayload.PAYLOAD_TYPE_KE, IkeKePayload.class, respPayloads);
-            IkeKePayload localKePayload = isLocalInit ? keInitPayload : keRespPayload;
-            IkeKePayload remoteKePayload = isLocalInit ? keRespPayload : keInitPayload;
-            return IkeKePayload.getSharedKey(
-                    localKePayload.localPrivateKey,
-                    remoteKePayload.keyExchangeData,
-                    remoteKePayload.dhGroup);
+            return makeChildSaRecord(sharedDhKey, nonceInit, nonceResp, childSaRecordConfig);
         }
-
         /**
          * Package private method for calculating keys, build IpSecTransforms and construct
          * ChildSaRecord.
@@ -534,26 +520,38 @@ public abstract class SaRecord implements AutoCloseable {
     static class SaLifetimeAlarmScheduler {
         private final long mDeleteDelayMs;
         private final long mRekeyDelayMs;
-        private final IkeAlarm mDeleteAlarm;
-        private final IkeAlarm mRekeyAlarm;
+        private final PendingIntent mDeleteSaIntent;
+        private final PendingIntent mRekeySaIntent;
+        private final AlarmManager mAlarmManager;
 
         SaLifetimeAlarmScheduler(
-                IkeAlarmConfig deleteAlarmConfig, IkeAlarmConfig rekeyAlarmConfig) {
-            mDeleteDelayMs = deleteAlarmConfig.delayMs;
-            mRekeyDelayMs = rekeyAlarmConfig.delayMs;
-
-            // Hard lifetime expiry alarm needs to be "setExact" considering the hard lifetime
-            // minimum value is 5 minutes and the inexact alarm might cause at most 75% of the
-            // scheduled interval delay because batching alarms. It is not necessay to wake up
-            // the alarm during doze mode because even the SA expires at that time, the device
-            // can not get access to network and won't expose more vulnerabilities.
-            mDeleteAlarm = IkeAlarm.newExactAlarm(deleteAlarmConfig);
-            mRekeyAlarm = IkeAlarm.newExactAndAllowWhileIdleAlarm(rekeyAlarmConfig);
+                long deleteDelayMs,
+                long rekeyDelayMs,
+                PendingIntent deleteSaIntent,
+                PendingIntent rekeySaIntent,
+                AlarmManager alarmManager) {
+            mDeleteDelayMs = deleteDelayMs;
+            mRekeyDelayMs = rekeyDelayMs;
+            mAlarmManager = alarmManager;
+            mDeleteSaIntent = deleteSaIntent;
+            mRekeySaIntent = rekeySaIntent;
         }
 
         public void scheduleLifetimeExpiryAlarm(String tag) {
-            mDeleteAlarm.schedule();
-            mRekeyAlarm.schedule();
+            // Hard lifetime expiry alarm needs to be "setExact" considering the hard lifetime
+            // minimum value is 5 minutes and the inexact alarm might cause at most 75% of the
+            // scheduled interval delay because batching alarms. It is not necessay to wake up the
+            // alarm during doze mode because even the SA expires at that time, the device can not
+            // get access to network and won't expose more vulnerabilities.
+            mAlarmManager.setExact(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + mDeleteDelayMs,
+                    mDeleteSaIntent);
+            mAlarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + mRekeyDelayMs,
+                    mRekeySaIntent);
+
             getIkeLog()
                     .d(
                             tag,
@@ -565,12 +563,17 @@ public abstract class SaRecord implements AutoCloseable {
         }
 
         public void rescheduleRekey(long retryDelayMs) {
-            mRekeyAlarm.schedule();
+            mAlarmManager.setExactAndAllowWhileIdle(
+                    AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                    SystemClock.elapsedRealtime() + retryDelayMs,
+                    mRekeySaIntent);
         }
 
         public void cancelLifetimeExpiryAlarm(String tag) {
-            mDeleteAlarm.cancel();
-            mRekeyAlarm.cancel();
+            mAlarmManager.cancel(mDeleteSaIntent);
+            mAlarmManager.cancel(mRekeySaIntent);
+            mDeleteSaIntent.cancel();
+            mRekeySaIntent.cancel();
 
             getIkeLog().d(tag, "Hard and soft lifetime alarm cancelled");
         }
@@ -640,7 +643,6 @@ public abstract class SaRecord implements AutoCloseable {
 
         private int mLocalRequestMessageId;
         private int mRemoteRequestMessageId;
-        private int mLastSentRespMsgId;
 
         private DecodeResultPartial mCollectedReqFragments;
         private DecodeResultPartial mCollectedRespFragments;
@@ -682,7 +684,6 @@ public abstract class SaRecord implements AutoCloseable {
 
             mLocalRequestMessageId = 0;
             mRemoteRequestMessageId = 0;
-            mLastSentRespMsgId = -1;
 
             mCollectedReqFragments = null;
             mCollectedRespFragments = null;
@@ -762,19 +763,9 @@ public abstract class SaRecord implements AutoCloseable {
             return mInitiatorSpiResource.getSpi();
         }
 
-        @VisibleForTesting
-        IkeSecurityParameterIndex getInitiatorIkeSecurityParameterIndex() {
-            return mInitiatorSpiResource;
-        }
-
         /** Package private */
         long getResponderSpi() {
             return mResponderSpiResource.getSpi();
-        }
-
-        @VisibleForTesting
-        IkeSecurityParameterIndex getResponderIkeSecurityParameterIndex() {
-            return mResponderSpiResource;
         }
 
         /** Package private */
@@ -901,14 +892,8 @@ public abstract class SaRecord implements AutoCloseable {
         }
 
         /** Update all packets of last sent response. */
-        public void updateLastSentRespAllPackets(List<byte[]> respPacketList, int msgId) {
+        public void updateLastSentRespAllPackets(List<byte[]> respPacketList) {
             mLastSentRespAllPackets = respPacketList;
-            mLastSentRespMsgId = msgId;
-        }
-
-        /** Return the message ID of the last sent out response. */
-        public int getLastSentRespMsgId() {
-            return mLastSentRespMsgId;
         }
 
         /** Returns if received IKE packet is the first packet of a re-transmistted request. */
@@ -927,13 +912,6 @@ public abstract class SaRecord implements AutoCloseable {
             super.close();
             mInitiatorSpiResource.close();
             mResponderSpiResource.close();
-        }
-
-        /** Migrate this IKE SA to the specified address pair. */
-        public void migrate(InetAddress initiatorAddress, InetAddress responderAddress)
-                throws IOException {
-            mInitiatorSpiResource.migrate(initiatorAddress);
-            mResponderSpiResource.migrate(responderAddress);
         }
     }
 

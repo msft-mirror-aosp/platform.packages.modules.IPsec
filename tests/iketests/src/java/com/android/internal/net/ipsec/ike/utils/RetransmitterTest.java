@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.test.ike.utils;
+package com.android.internal.net.ipsec.ike.utils;
 
-import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_RETRANSMIT;
+import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_RETRANSMIT;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -33,7 +33,7 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import android.os.Handler;
 import android.os.Message;
 
-import com.android.internal.net.ipsec.test.ike.message.IkeMessage;
+import com.android.internal.net.ipsec.ike.message.IkeMessage;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -54,7 +54,7 @@ public final class RetransmitterTest {
         }
 
         @Override
-        public void send() {
+        public void send(IkeMessage msg) {
             mSendCallCount++;
         }
 

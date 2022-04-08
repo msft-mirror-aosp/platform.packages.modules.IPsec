@@ -26,7 +26,7 @@ import android.net.ipsec.ike.IkeTrafficSelector;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -148,7 +148,7 @@ public class IkeSessionMschapV2Test extends IkeSessionTestBase {
     private IkeSession openIkeSessionWithRemoteAddress(InetAddress remoteAddress) {
         IkeSessionParams ikeParams =
                 new IkeSessionParams.Builder(sContext)
-                        .setNetwork(mTunNetworkContext.tunNetwork)
+                        .setNetwork(mTunNetwork)
                         .setServerHostname(remoteAddress.getHostAddress())
                         .addSaProposal(SaProposalTest.buildIkeSaProposalWithNormalModeCipher())
                         .addSaProposal(SaProposalTest.buildIkeSaProposalWithCombinedModeCipher())
@@ -171,30 +171,30 @@ public class IkeSessionMschapV2Test extends IkeSessionTestBase {
         // Open IKE Session
         IkeSession ikeSession = openIkeSessionWithRemoteAddress(mRemoteAddress);
         int expectedMsgId = 0;
-        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+        mTunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 false /* expectedUseEncap */,
                 IKE_INIT_RESP);
 
-        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+        mTunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 true /* expectedUseEncap */,
                 IKE_AUTH_RESP_1_FRAG_1,
                 IKE_AUTH_RESP_1_FRAG_2);
 
-        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+        mTunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 true /* expectedUseEncap */,
                 IKE_AUTH_RESP_2);
-        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+        mTunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 true /* expectedUseEncap */,
                 IKE_AUTH_RESP_3);
-        mTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+        mTunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
                 expectedMsgId++,
                 true /* expectedUseEncap */,

@@ -14,30 +14,27 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.test.ike.testutils;
+package com.android.internal.net.ipsec.ike.testutils;
 
 import android.content.Context;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.internal.net.ipsec.test.ike.utils.IkeCertUtils;
+import com.android.org.bouncycastle.util.io.pem.PemObject;
+import com.android.org.bouncycastle.util.io.pem.PemReader;
 
-import java.io.BufferedReader;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.RSAPrivateKey;
-import java.util.Base64;
-import java.util.stream.Collectors;
+import java.security.spec.PKCS8EncodedKeySpec;
 
 /** CertUtils provides utility methods for creating X509 certificate and private key. */
 public final class CertUtils {
     private static final String PEM_FOLDER_NAME = "pem";
     private static final String KEY_FOLDER_NAME = "key";
-    private static final String NEW_LINE_CHAR = "\n";
-    private static final String PEM_TYPE_PRIVATE_KEY = "-----(BEGIN|END) PRIVATE KEY-----";
 
     /** Creates an X509Certificate with a pem file */
     public static X509Certificate createCertFromPemFile(String fileName) throws Exception {
@@ -55,17 +52,10 @@ public final class CertUtils {
         InputStream inputStream =
                 context.getResources().getAssets().open(KEY_FOLDER_NAME + "/" + fileName);
 
-        String pemText =
-                new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))
-                        .lines()
-                        .collect(Collectors.joining(NEW_LINE_CHAR));
+        PemObject pemObject = new PemReader(new InputStreamReader(inputStream)).readPemObject();
 
-        byte[] certificateBytes =
-                Base64.getDecoder()
-                        .decode(
-                                pemText.replaceAll(PEM_TYPE_PRIVATE_KEY, "")
-                                        .replaceAll(NEW_LINE_CHAR, "")
-                                        .getBytes(StandardCharsets.UTF_8));
-        return (RSAPrivateKey) IkeCertUtils.privateKeyFromByteArray(certificateBytes);
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        return (RSAPrivateKey)
+                keyFactory.generatePrivate(new PKCS8EncodedKeySpec(pemObject.getContent()));
     }
 }

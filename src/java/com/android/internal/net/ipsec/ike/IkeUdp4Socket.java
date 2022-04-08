@@ -21,9 +21,12 @@ import static android.system.OsConstants.IPPROTO_UDP;
 import static android.system.OsConstants.SOCK_DGRAM;
 
 import android.net.InetAddresses;
+import android.net.Network;
 import android.os.Handler;
 import android.system.ErrnoException;
 import android.system.Os;
+
+import com.android.internal.annotations.VisibleForTesting;
 
 import java.io.FileDescriptor;
 import java.io.IOException;
@@ -34,48 +37,54 @@ import java.util.Map;
 /**
  * IkeUdp4Socket uses an IPv4-bound {@link FileDescriptor} to send and receive IKE packets.
  *
- * <p>Caller MUST provide one IkeSocketConfig when trying to get an instance of IkeUdp4Socket. Each
- * IkeSocketConfig will only be bound to by one IkeUdp4Socket instance. When caller requests an
- * IkeUdp4Socket with an already bound IkeSocketConfig, the existing instance will be returned.
+ * <p>Caller MUST provide one {@link Network} when trying to get an instance of IkeUdp4Socket. Each
+ * {@link Network} will only be bound to by one IkeUdp4Socket instance. When caller requests an
+ * IkeUdp4Socket with an already bound {@link Network}, the existing instance will be returned.
  */
 public final class IkeUdp4Socket extends IkeUdpSocket {
     private static final String TAG = IkeUdp4Socket.class.getSimpleName();
 
     private static final InetAddress INADDR_ANY = InetAddresses.parseNumericAddress("0.0.0.0");
 
-    // Map from IkeSocketConfig to IkeUdp4Socket instances.
-    private static Map<IkeSocketConfig, IkeUdp4Socket> sConfigToSocketMap = new HashMap<>();
+    // Map from Network to IkeUdp4Socket instances.
+    private static Map<Network, IkeUdp4Socket> sNetworkToUdp4SocketMap = new HashMap<>();
 
-    private IkeUdp4Socket(FileDescriptor socket, IkeSocketConfig sockConfig, Handler handler) {
-        super(socket, sockConfig, handler == null ? new Handler() : handler);
+    private IkeUdp4Socket(FileDescriptor socket, Network network, Handler handler) {
+        super(socket, network, handler == null ? new Handler() : handler);
     }
 
     /**
      * Get an IkeUdp4Socket instance.
      *
-     * <p>Return the existing IkeUdp4Socket instance if it has been created for the input
-     * IkeSocketConfig. Otherwise, create and return a new IkeUdp4Socket instance.
+     * <p>Return the existing IkeUdp4Socket instance if it has been created for the input Network.
+     * Otherwise, create and return a new IkeUdp4Socket instance.
      *
-     * @param sockConfig the socket configuration
+     * @param network the Network this socket will be bound to
      * @param ikeSession the IkeSessionStateMachine that is requesting an IkeUdp4Socket.
-     * @param handler the Handler used to process received packets
      * @return an IkeUdp4Socket instance
      */
-    public static IkeUdp4Socket getInstance(
-            IkeSocketConfig sockConfig, IkeSessionStateMachine ikeSession, Handler handler)
+    public static IkeUdp4Socket getInstance(Network network, IkeSessionStateMachine ikeSession)
             throws ErrnoException, IOException {
-        IkeUdp4Socket ikeSocket = sConfigToSocketMap.get(sockConfig);
+        return getInstance(network, ikeSession, null);
+    }
+
+    // package protected; for testing purposes.
+    @VisibleForTesting
+    static IkeUdp4Socket getInstance(
+            Network network, IkeSessionStateMachine ikeSession, Handler handler)
+            throws ErrnoException, IOException {
+        IkeUdp4Socket ikeSocket = sNetworkToUdp4SocketMap.get(network);
         if (ikeSocket == null) {
             FileDescriptor sock = Os.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
             Os.bind(sock, INADDR_ANY, 0);
-            applySocketConfig(sockConfig, sock, false /* isIpv6 */);
+            network.bindSocket(sock);
 
-            ikeSocket = new IkeUdp4Socket(sock, sockConfig, handler);
+            ikeSocket = new IkeUdp4Socket(sock, network, handler);
 
             // Create and register FileDescriptor for receiving IKE packet on current thread.
             ikeSocket.start();
 
-            sConfigToSocketMap.put(sockConfig, ikeSocket);
+            sNetworkToUdp4SocketMap.put(network, ikeSocket);
         }
         ikeSocket.mAliveIkeSessions.add(ikeSession);
         return ikeSocket;
@@ -84,7 +93,7 @@ public final class IkeUdp4Socket extends IkeUdpSocket {
     /** Implement {@link AutoCloseable#close()} */
     @Override
     public void close() {
-        sConfigToSocketMap.remove(getIkeSocketConfig());
+        sNetworkToUdp4SocketMap.remove(getNetwork());
 
         super.close();
     }

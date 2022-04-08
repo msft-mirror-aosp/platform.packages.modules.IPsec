@@ -14,23 +14,23 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.test.ike.message;
+package com.android.internal.net.ipsec.ike.message;
 
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
-import static com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
-import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_CP;
-import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_APPLICATION_VERSION;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_ADDRESS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DHCP;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_DNS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_NETMASK;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP4_SUBNET;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_ADDRESS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_DNS;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_INTERNAL_IP6_SUBNET;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP4_PCSCF;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_ATTR_IP6_PCSCF;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REPLY;
+import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG_TYPE_REQUEST;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_CP;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -45,27 +45,26 @@ import static org.mockito.Mockito.mock;
 
 import android.net.InetAddresses;
 import android.net.LinkAddress;
-import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
-import android.os.PersistableBundle;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttribute;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeAppVersion;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.IkeConfigAttrIpv4AddressBase;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.IkeConfigAttrIpv6AddressBase;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv4AddressBase;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv6AddrRangeBase;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv6AddressBase;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeAppVersion;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttrIpv4AddressBase;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.IkeConfigAttrIpv6AddressBase;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv4AddressBase;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv6AddrRangeBase;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.TunnelModeChildConfigAttrIpv6AddressBase;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -401,13 +400,6 @@ public final class IkeConfigPayloadTest {
         assertEquals(expectedLinkAddress, attribute.linkAddress);
     }
 
-    private static void verifyPersistableBundleEncodeDecodeIsLossless(ConfigAttribute attribute) {
-        PersistableBundle bundle = attribute.toPersistableBundle();
-        ConfigAttribute resultAttribute = ConfigAttribute.fromPersistableBundle(bundle);
-
-        assertEquals(attribute, resultAttribute);
-    }
-
     @Test
     public void testDecodeIpv4AddressWithValue() throws Exception {
         ConfigAttributeIpv4Address attributeIp4Address =
@@ -451,16 +443,6 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
-    public void testPersistableBundleEncodeDecodeIpv4AddressConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv4Address(IPV4_ADDRESS));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv4AddressConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv4Address());
-    }
-
-    @Test
     public void testEncodeIpv4AddressWithoutValue() throws Exception {
         ConfigAttributeIpv4Address attributeIp4Address = new ConfigAttributeIpv4Address();
 
@@ -500,17 +482,6 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
-    public void testPersistableBundleEncodeDecodeIpv4NetmaskConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv4Netmask(IPV4_NETMASK.getAddress()));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv4NetmaskConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv4Netmask());
-    }
-
-    @Test
     public void testDecodeIpv4DnsWithValue() throws Exception {
         ConfigAttributeIpv4Dns attribute = new ConfigAttributeIpv4Dns(IPV4_DNS.getAddress());
 
@@ -535,17 +506,6 @@ public final class IkeConfigPayloadTest {
                 CONFIG_ATTR_INTERNAL_IP4_DNS,
                 IPV4_DNS_ATTRIBUTE_WITHOUT_VALUE,
                 null /*expectedAddress*/);
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv4DnsConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv4Dns(IPV4_DNS.getAddress()));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv4DnsConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv4Dns());
     }
 
     @Test
@@ -587,17 +547,6 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
-    public void testPersistableBundleEncodeDecodeIpv4DhcpConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv4Dhcp(IPV4_DHCP.getAddress()));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv4DhcpConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv4Dhcp());
-    }
-
-    @Test
     public void testDecodeIpv4SubnetWithValue() throws Exception {
         ConfigAttributeIpv4Subnet attributeIp4Subnet =
                 new ConfigAttributeIpv4Subnet(IPV4_SUBNET_ATTRIBUTE_VALUE);
@@ -636,17 +585,6 @@ public final class IkeConfigPayloadTest {
                 CONFIG_ATTR_INTERNAL_IP4_SUBNET,
                 IPV4_SUBNET_ATTRIBUTE_WITHOUT_VALUE);
         assertNull(attributeIp4Subnet.linkAddress);
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv4SubnetConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv4Subnet(IPV4_SUBNET_ATTRIBUTE_VALUE));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv4SubnetConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv4Subnet());
     }
 
     @Test
@@ -718,17 +656,6 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
-    public void testPersistableBundleEncodeDecodeIpv4PcscfConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv4Pcscf(IPV4_PCSCF_ADDR));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv4PcscfConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv4Pcscf());
-    }
-
-    @Test
     public void testDecodeIpv6AddressWithValue() throws Exception {
         ConfigAttributeIpv6Address attributeIp6Address =
                 new ConfigAttributeIpv6Address(IPV6_ADDRESS_ATTRIBUTE_VALUE);
@@ -782,17 +709,6 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
-    public void testPersistableBundleEncodeDecodeIpv6AddressConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv6Address(IPV6_LINK_ADDRESS));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv6AddressConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv6Address());
-    }
-
-    @Test
     public void testDecodeIpv6SubnetWithValue() throws Exception {
         ConfigAttributeIpv6Subnet attributeIp6Subnet =
                 new ConfigAttributeIpv6Subnet(IPV6_SUBNET_ATTRIBUTE_VALUE);
@@ -821,17 +737,6 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
-    public void testPersistableBundleEncodeDecodeIpv6SubnetConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv6Subnet(IPV6_SUBNET_ATTRIBUTE_VALUE));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv6SubnetConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv6Subnet());
-    }
-
-    @Test
     public void testDecodeIpv6DnsWithValue() throws Exception {
         ConfigAttributeIpv6Dns attribute = new ConfigAttributeIpv6Dns(IPV6_DNS.getAddress());
 
@@ -854,17 +759,6 @@ public final class IkeConfigPayloadTest {
         verifyBuildAndEncodeAttributeCommon(
                 attribute, CONFIG_ATTR_INTERNAL_IP6_DNS, IPV6_DNS_ATTRIBUTE_WITHOUT_VALUE);
         assertNull(attribute.address);
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv6DnsConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv6Dns(IPV6_DNS.getAddress()));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv6DnsConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv6Dns());
     }
 
     @Test
@@ -920,17 +814,6 @@ public final class IkeConfigPayloadTest {
     }
 
     @Test
-    public void testPersistableBundleEncodeDecodeIpv6PscsfConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(
-                new ConfigAttributeIpv6Pcscf(IPV6_PCSCF_ADDR));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeIpv6PscsfConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeIpv6Pcscf());
-    }
-
-    @Test
     public void testDecodeAppVersionWithValue() throws Exception {
         ConfigAttributeAppVersion attribute = new ConfigAttributeAppVersion(APP_VERSION.getBytes());
 
@@ -962,15 +845,5 @@ public final class IkeConfigPayloadTest {
         verifyBuildAndEncodeAttributeCommon(
                 attribute, CONFIG_ATTR_APPLICATION_VERSION, APP_VERSION_ATTRIBUTE_WITHOUT_VALUE);
         assertEquals("", attribute.applicationVersion);
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeAppVersionConfig() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeAppVersion(APP_VERSION));
-    }
-
-    @Test
-    public void testPersistableBundleEncodeDecodeAppVersionConfigEmpty() throws Exception {
-        verifyPersistableBundleEncodeDecodeIsLossless(new ConfigAttributeAppVersion());
     }
 }

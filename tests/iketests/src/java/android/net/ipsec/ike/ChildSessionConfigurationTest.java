@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.test.ike;
+package android.net.ipsec.ike;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -24,17 +24,17 @@ import android.net.InetAddresses;
 import android.net.IpPrefix;
 import android.net.LinkAddress;
 
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttribute;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dhcp;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Dns;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Netmask;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Subnet;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Address;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Dns;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Subnet;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -134,10 +134,7 @@ public final class ChildSessionConfigurationTest {
                 new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
 
         verifySessionConfigCommon(sessionConfig);
-        validateInternalAddrList(sessionConfig);
-    }
 
-    private void validateInternalAddrList(ChildSessionConfiguration sessionConfig) {
         List<LinkAddress> expectedInternalAddrList = new ArrayList<>();
         expectedInternalAddrList.add(IPV4_LINK_ADDRESS);
         expectedInternalAddrList.add(IPV6_LINK_ADDRESS);
@@ -202,10 +199,7 @@ public final class ChildSessionConfigurationTest {
                 new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
 
         verifySessionConfigCommon(sessionConfig);
-        validateDnsAddrList(sessionConfig);
-    }
 
-    private void validateDnsAddrList(ChildSessionConfiguration sessionConfig) {
         List<InetAddress> expectedDnsAddrList = new ArrayList<>();
         expectedDnsAddrList.add(IPV4_ADDRESS);
         expectedDnsAddrList.add(IPV6_ADDRESS);
@@ -228,10 +222,7 @@ public final class ChildSessionConfigurationTest {
                 new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
 
         verifySessionConfigCommon(sessionConfig);
-        validateSubnetAddrList(sessionConfig);
-    }
 
-    private void validateSubnetAddrList(ChildSessionConfiguration sessionConfig) {
         List<IpPrefix> expectedSubnetAddrList = new ArrayList<>();
         expectedSubnetAddrList.add(IPV4_SUBNET_IP_PREFIX_ADDRESS);
         expectedSubnetAddrList.add(IPV6_SUBNET_IP_PREFIX_ADDRESS);
@@ -253,31 +244,8 @@ public final class ChildSessionConfigurationTest {
                 new ChildSessionConfiguration(mMockInTsList, mMockOutTsList, configPayload);
 
         verifySessionConfigCommon(sessionConfig);
-        validateDhcpServers(sessionConfig);
-    }
 
-    private void validateDhcpServers(ChildSessionConfiguration sessionConfig) {
         assertEquals(1, sessionConfig.getInternalDhcpServers().size());
         assertEquals(sessionConfig.getInternalDhcpServers().get(0), IPV4_ADDRESS);
-    }
-
-    @Test
-    public void testBuildChildSessionConfigurationWithBuilder() {
-        ChildSessionConfiguration sessionConfig =
-                new ChildSessionConfiguration.Builder(mMockInTsList, mMockOutTsList)
-                        .addInternalAddress(IPV4_LINK_ADDRESS)
-                        .addInternalAddress(IPV6_LINK_ADDRESS)
-                        .addInternalSubnet(IPV4_SUBNET_IP_PREFIX_ADDRESS)
-                        .addInternalSubnet(IPV6_SUBNET_IP_PREFIX_ADDRESS)
-                        .addInternalDnsServer(IPV4_ADDRESS)
-                        .addInternalDnsServer(IPV6_ADDRESS)
-                        .addInternalDhcpServer(IPV4_ADDRESS)
-                        .build();
-
-        verifySessionConfigCommon(sessionConfig);
-        validateInternalAddrList(sessionConfig);
-        validateSubnetAddrList(sessionConfig);
-        validateDnsAddrList(sessionConfig);
-        validateDhcpServers(sessionConfig);
     }
 }

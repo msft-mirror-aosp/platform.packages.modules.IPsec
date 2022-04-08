@@ -17,18 +17,22 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.net.InetAddresses;
-import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
-import android.os.PersistableBundle;
+import android.annotation.SystemApi;
+
+import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.net.Inet4Address;
 import java.net.UnknownHostException;
 import java.security.cert.X509Certificate;
 import java.util.Objects;
 
-/** IkeIpv4AddrIdentification represents an IKE entity identification based on IPv4 address. */
+/**
+ * IkeIpv4AddrIdentification represents an IKE entity identification based on IPv4 address.
+ *
+ * @hide
+ */
+@SystemApi
 public final class IkeIpv4AddrIdentification extends IkeIdentification {
-    private static final String IP_ADDRESS_KEY = "ipv4Address";
     /** The IPv4 address. */
     @NonNull public final Inet4Address ipv4Address;
 
@@ -49,38 +53,13 @@ public final class IkeIpv4AddrIdentification extends IkeIdentification {
     }
 
     /**
-     * Construct an instance of {@link IkeIpv4AddrIdentification} with an IPv4 address.
+     * Construct an instance of {@link IkeIpv4AddrIdentification} with a IPv4 address.
      *
      * @param address the IPv4 address.
      */
     public IkeIpv4AddrIdentification(@NonNull Inet4Address address) {
         super(ID_TYPE_IPV4_ADDR);
         ipv4Address = address;
-    }
-
-    /**
-     * Constructs this object by deserializing a PersistableBundle
-     *
-     * @hide
-     */
-    @NonNull
-    public static IkeIpv4AddrIdentification fromPersistableBundle(@NonNull PersistableBundle in) {
-        Objects.requireNonNull(in, "PersistableBundle is null");
-
-        return new IkeIpv4AddrIdentification(
-                (Inet4Address) InetAddresses.parseNumericAddress(in.getString(IP_ADDRESS_KEY)));
-    }
-    /**
-     * Serializes this object to a PersistableBundle
-     *
-     * @hide
-     */
-    @Override
-    @NonNull
-    public PersistableBundle toPersistableBundle() {
-        final PersistableBundle result = super.toPersistableBundle();
-        result.putString(IP_ADDRESS_KEY, ipv4Address.getHostAddress());
-        return result;
     }
 
     /** @hide */

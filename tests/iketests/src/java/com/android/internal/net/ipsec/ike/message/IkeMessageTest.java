@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.test.ike.message;
+package com.android.internal.net.ipsec.ike.message;
 
-import static com.android.internal.net.ipsec.test.ike.message.IkeMessage.DECODE_STATUS_OK;
-import static com.android.internal.net.ipsec.test.ike.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
-import static com.android.internal.net.ipsec.test.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
-import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
-import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_ID_INITIATOR;
-import static com.android.internal.net.ipsec.test.ike.message.IkePayload.PAYLOAD_TYPE_NO_NEXT;
-import static com.android.internal.net.ipsec.test.ike.message.IkeTestUtils.makeDummySkfPayload;
+import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_OK;
+import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_PROTECTED_ERROR;
+import static com.android.internal.net.ipsec.ike.message.IkeMessage.DECODE_STATUS_UNPROTECTED_ERROR;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_AUTH;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_ID_INITIATOR;
+import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NO_NEXT;
+import static com.android.internal.net.ipsec.ike.message.IkeTestUtils.makeDummySkfPayload;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -44,21 +44,21 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import android.net.ipsec.test.ike.exceptions.IkeException;
-import android.net.ipsec.test.ike.exceptions.IkeInternalException;
-import android.net.ipsec.test.ike.exceptions.InvalidMessageIdException;
-import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
-import android.net.ipsec.test.ike.exceptions.UnsupportedCriticalPayloadException;
+import android.net.ipsec.ike.exceptions.IkeException;
+import android.net.ipsec.ike.exceptions.IkeInternalException;
 
 import com.android.internal.net.TestUtils;
-import com.android.internal.net.ipsec.test.ike.SaRecord.IkeSaRecord;
-import com.android.internal.net.ipsec.test.ike.crypto.IkeMacIntegrity;
-import com.android.internal.net.ipsec.test.ike.crypto.IkeNormalModeCipher;
-import com.android.internal.net.ipsec.test.ike.message.IkeMessage.DecodeResult;
-import com.android.internal.net.ipsec.test.ike.message.IkeMessage.DecodeResultError;
-import com.android.internal.net.ipsec.test.ike.message.IkeMessage.DecodeResultOk;
-import com.android.internal.net.ipsec.test.ike.message.IkeMessage.DecodeResultPartial;
-import com.android.internal.net.ipsec.test.ike.message.IkePayloadFactory.IIkePayloadDecoder;
+import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
+import com.android.internal.net.ipsec.ike.crypto.IkeMacIntegrity;
+import com.android.internal.net.ipsec.ike.crypto.IkeNormalModeCipher;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidMessageIdException;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
+import com.android.internal.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResult;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultError;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultOk;
+import com.android.internal.net.ipsec.ike.message.IkeMessage.DecodeResultPartial;
+import com.android.internal.net.ipsec.ike.message.IkePayloadFactory.IIkePayloadDecoder;
 
 import org.junit.After;
 import org.junit.Before;
@@ -348,7 +348,7 @@ public final class IkeMessageTest {
                 IkeTestUtils.decodeAndVerifyUnprotectedErrorMsg(
                         inputPacket, UnsupportedCriticalPayloadException.class);
 
-        assertEquals(1, exception.getUnsupportedCriticalPayloadList().size());
+        assertEquals(1, exception.payloadTypeList.size());
     }
 
     @Test

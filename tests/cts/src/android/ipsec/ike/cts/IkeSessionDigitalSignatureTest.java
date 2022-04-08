@@ -25,7 +25,7 @@ import android.net.ipsec.ike.IkeTrafficSelector;
 
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 
-import com.android.internal.net.ipsec.test.ike.testutils.CertUtils;
+import com.android.internal.net.ipsec.ike.testutils.CertUtils;
 
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -150,7 +150,7 @@ public class IkeSessionDigitalSignatureTest extends IkeSessionTestBase {
     private IkeSession openIkeSessionWithRemoteAddress(InetAddress remoteAddress) {
         IkeSessionParams ikeParams =
                 new IkeSessionParams.Builder(sContext)
-                        .setNetwork(mTunNetworkContext.tunNetwork)
+                        .setNetwork(mTunNetwork)
                         .setServerHostname(remoteAddress.getHostAddress())
                         .addSaProposal(SaProposalTest.buildIkeSaProposalWithNormalModeCipher())
                         .addSaProposal(SaProposalTest.buildIkeSaProposalWithCombinedModeCipher())

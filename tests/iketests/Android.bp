@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package {
-    default_applicable_licenses: ["Android-Apache-2.0"],
-}
-
 android_test {
     name: "FrameworksIkeTests",
 
@@ -23,7 +19,7 @@ android_test {
 
     platform_apis: true,
     certificate: "platform",
-    test_suites: ["general-tests", "mts-ipsec"],
+    test_suites: ["device-tests", "mts-ipsec"],
 
     compile_multilib: "both",
 
@@ -37,8 +33,6 @@ android_test {
         "androidx.test.rules",
         "frameworks-base-testutils",
         "mockito-target-inline-minus-junit4",
-        "modules-utils-build",
-        "net-tests-utils",
         "services.core",
     ],
 
@@ -47,6 +41,9 @@ android_test {
         "libstaticjvmtiagent",
         "libmultiplejvmtiagentsinterferenceagent",
     ],
-
-    min_sdk_version: "30",
 }
+
+    filegroup {
+        name: "ike-test-utils",
+        srcs: ["src/java/**/CertUtils.java"],
+    }

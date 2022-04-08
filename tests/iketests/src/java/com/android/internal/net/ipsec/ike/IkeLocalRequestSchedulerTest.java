@@ -14,16 +14,8 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.ipsec.test.ike;
+package com.android.internal.net.ipsec.ike;
 
-import static com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_HIGH;
-import static com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_NORMAL;
-import static com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.REQUEST_PRIORITY_URGENT;
-import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE;
-import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_DELETE_IKE;
-import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_LOCAL_REQUEST_MOBIKE;
-
-import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyInt;
@@ -36,7 +28,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
 
 import android.content.Context;
 import android.os.PowerManager;
@@ -44,9 +35,8 @@ import android.os.PowerManager.WakeLock;
 
 import androidx.test.InstrumentationRegistry;
 
-import com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.IProcedureConsumer;
-import com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.LocalRequest;
-import com.android.internal.net.ipsec.test.ike.IkeLocalRequestScheduler.LocalRequestFactory;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.IProcedureConsumer;
+import com.android.internal.net.ipsec.ike.IkeLocalRequestScheduler.LocalRequest;
 
 import org.junit.Before;
 import org.junit.Test;
@@ -54,14 +44,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 public final class IkeLocalRequestSchedulerTest {
-    private static final int REQUESTS_TO_QUEUE = 10;
-
     private IkeLocalRequestScheduler mScheduler;
 
     private IProcedureConsumer mMockConsumer;
     private LocalRequest[] mMockRequestArray;
-
-    private int mNextRequestId;
 
     private ArgumentCaptor<LocalRequest> mLocalRequestCaptor =
             ArgumentCaptor.forClass(LocalRequest.class);
@@ -83,18 +69,15 @@ public final class IkeLocalRequestSchedulerTest {
 
         mScheduler = new IkeLocalRequestScheduler(mMockConsumer, mSpyContext);
 
-        mNextRequestId = 0;
-
-        mMockRequestArray = new LocalRequest[REQUESTS_TO_QUEUE];
+        mMockRequestArray = new LocalRequest[10];
         for (int i = 0; i < mMockRequestArray.length; i++) {
             mMockRequestArray[i] = mock(LocalRequest.class);
-            when(mMockRequestArray[i].getPriority()).thenReturn(REQUEST_PRIORITY_NORMAL);
         }
     }
 
     @Test
     public void testAddMultipleRequestProcessOnlyOne() {
-        addAllRequestsToScheduler(mMockRequestArray);
+        for (LocalRequest r : mMockRequestArray) mScheduler.addRequest(r);
 
         // Verify that no procedure was preemptively pulled from the queue
         verify(mMockConsumer, never()).onNewProcedureReady(any());
@@ -108,18 +91,11 @@ public final class IkeLocalRequestSchedulerTest {
         }
     }
 
-    private void addAllRequestsToScheduler(LocalRequest[] mockRequests) {
-        for (LocalRequest r : mockRequests) {
-            when(r.getRequestId()).thenReturn(mNextRequestId++);
-            mScheduler.addRequest(r);
-        }
-    }
-
     @Test
     public void testProcessOrder() {
         InOrder inOrder = inOrder(mMockConsumer);
 
-        addAllRequestsToScheduler(mMockRequestArray);
+        for (LocalRequest r : mMockRequestArray) mScheduler.addRequest(r);
         for (int i = 0; i < mMockRequestArray.length; i++) mScheduler.readyForNextProcedure();
 
         for (LocalRequest r : mMockRequestArray) {
@@ -128,59 +104,27 @@ public final class IkeLocalRequestSchedulerTest {
     }
 
     @Test
-    public void testPriorityProcessOrder() {
+    public void testAddRequestToFrontProcessOrder() {
         InOrder inOrder = inOrder(mMockConsumer);
 
-        LocalRequest[] mockUrgentPriorityRequestArray =
-                createMockRequestArrayWithPriority(REQUEST_PRIORITY_URGENT);
-        LocalRequest[] mockHighPriorityRequestArray =
-                createMockRequestArrayWithPriority(REQUEST_PRIORITY_HIGH);
+        LocalRequest[] mockHighPriorityRequestArray = new LocalRequest[10];
+        for (int i = 0; i < mockHighPriorityRequestArray.length; i++) {
+            mockHighPriorityRequestArray[i] = mock(LocalRequest.class);
+        }
 
-        addAllRequestsToScheduler(mMockRequestArray);
-        addAllRequestsToScheduler(mockHighPriorityRequestArray);
-        addAllRequestsToScheduler(mockUrgentPriorityRequestArray);
+        for (LocalRequest r : mMockRequestArray) mScheduler.addRequest(r);
+        for (LocalRequest r : mockHighPriorityRequestArray) mScheduler.addRequestAtFront(r);
 
-        int requestsToHandle =
-                mockUrgentPriorityRequestArray.length
-                        + mockHighPriorityRequestArray.length
-                        + mMockRequestArray.length;
-        for (int i = 0; i < requestsToHandle; i++) {
+        for (int i = 0; i < mockHighPriorityRequestArray.length + mMockRequestArray.length; i++) {
             mScheduler.readyForNextProcedure();
         }
 
-        // Verify processing order: mockUrgentPriorityRequestArray before
-        // mockHighPriorityRequestArray before mMockRequestArray
-        for (LocalRequest r : mockUrgentPriorityRequestArray) {
-            inOrder.verify(mMockConsumer).onNewProcedureReady(r);
-        }
-        for (LocalRequest r : mockHighPriorityRequestArray) {
-            inOrder.verify(mMockConsumer).onNewProcedureReady(r);
+        // Verify processing order. mockHighPriorityRequestArray is processed in reverse order
+        for (int i = mockHighPriorityRequestArray.length - 1; i >= 0; i--) {
+            inOrder.verify(mMockConsumer).onNewProcedureReady(mockHighPriorityRequestArray[i]);
         }
         for (LocalRequest r : mMockRequestArray) {
             inOrder.verify(mMockConsumer).onNewProcedureReady(r);
         }
-    }
-
-    private LocalRequest[] createMockRequestArrayWithPriority(int requestPriority) {
-        LocalRequest[] mockRequestArray = new LocalRequest[REQUESTS_TO_QUEUE];
-        for (int i = 0; i < mockRequestArray.length; i++) {
-            mockRequestArray[i] = mock(LocalRequest.class);
-
-            when(mockRequestArray[i].getPriority()).thenReturn(requestPriority);
-        }
-        return mockRequestArray;
-    }
-
-    @Test
-    public void testProcedureTypeToPriority() {
-        assertEquals(
-                REQUEST_PRIORITY_URGENT,
-                LocalRequestFactory.procedureTypeToPriority(CMD_LOCAL_REQUEST_DELETE_IKE));
-        assertEquals(
-                REQUEST_PRIORITY_HIGH,
-                LocalRequestFactory.procedureTypeToPriority(CMD_LOCAL_REQUEST_MOBIKE));
-        assertEquals(
-                REQUEST_PRIORITY_NORMAL,
-                LocalRequestFactory.procedureTypeToPriority(CMD_LOCAL_REQUEST_CREATE_IKE));
     }
 }

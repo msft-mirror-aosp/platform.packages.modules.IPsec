@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package android.net.ipsec.test.ike;
+package android.net.ipsec.ike;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -25,11 +25,11 @@ import static org.mockito.Mockito.mock;
 
 import android.net.InetAddresses;
 
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttribute;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeAppVersion;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
-import com.android.internal.net.ipsec.test.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttribute;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeAppVersion;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv4Pcscf;
+import com.android.internal.net.ipsec.ike.message.IkeConfigPayload.ConfigAttributeIpv6Pcscf;
 
 import org.junit.Test;
 
@@ -103,29 +103,6 @@ public final class IkeSessionConfigurationTest {
                 new IkeSessionConfiguration(
                         IKE_CONNECT_INFO, configPayload, REMOTE_VENDOR_IDS, ENABLED_EXTENSIONS);
 
-        verifyBuildCommon(config);
-        assertEquals(
-                Arrays.asList(PCSCF_IPV4_ADDRESS, PCSCF_IPV6_ADDRESS), config.getPcscfServers());
-        assertEquals(REMOTE_APP_VERSION, config.getRemoteApplicationVersion());
-    }
-
-    @Test
-    public void testBuildWithBuilder() {
-        IkeSessionConfiguration.Builder builder =
-                new IkeSessionConfiguration.Builder(IKE_CONNECT_INFO)
-                        .addPcscfServer(PCSCF_IPV4_ADDRESS)
-                        .addPcscfServer(PCSCF_IPV6_ADDRESS)
-                        .setRemoteApplicationVersion(REMOTE_APP_VERSION);
-
-        for (byte[] vendorId : REMOTE_VENDOR_IDS) {
-            builder.addRemoteVendorId(vendorId);
-        }
-
-        for (int extension : ENABLED_EXTENSIONS) {
-            builder.addIkeExtension(extension);
-        }
-
-        IkeSessionConfiguration config = builder.build();
         verifyBuildCommon(config);
         assertEquals(
                 Arrays.asList(PCSCF_IPV4_ADDRESS, PCSCF_IPV6_ADDRESS), config.getPcscfServers());

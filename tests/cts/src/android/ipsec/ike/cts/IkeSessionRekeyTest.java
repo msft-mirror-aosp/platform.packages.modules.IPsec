@@ -53,7 +53,7 @@ public class IkeSessionRekeyTest extends IkeSessionTestBase {
     private IkeSession openIkeSessionWithRemoteAddress(InetAddress remoteAddress) {
         IkeSessionParams ikeParams =
                 new IkeSessionParams.Builder(sContext)
-                        .setNetwork(mTunNetworkContext.tunNetwork)
+                        .setNetwork(mTunNetwork)
                         .setServerHostname(remoteAddress.getHostAddress())
                         .addSaProposal(SaProposalTest.buildIkeSaProposalWithNormalModeCipher())
                         .addSaProposal(SaProposalTest.buildIkeSaProposalWithCombinedModeCipher())
@@ -149,13 +149,11 @@ public class IkeSessionRekeyTest extends IkeSessionTestBase {
         verifyCreateIpSecTransformPair(firstTransformRecordA, firstTransformRecordB);
 
         // Inject rekey IKE requests
-        mTunNetworkContext.tunUtils.injectPacket(
-                buildInboundPkt(localRemotePorts, rekeyIkeCreateReq));
-        mTunNetworkContext.tunUtils.awaitResp(
+        mTunUtils.injectPacket(buildInboundPkt(localRemotePorts, rekeyIkeCreateReq));
+        mTunUtils.awaitResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI, expectedRespMsgId++, true /* expectedUseEncap */);
-        mTunNetworkContext.tunUtils.injectPacket(
-                buildInboundPkt(localRemotePorts, rekeyIkeDeleteReq));
-        mTunNetworkContext.tunUtils.awaitResp(
+        mTunUtils.injectPacket(buildInboundPkt(localRemotePorts, rekeyIkeDeleteReq));
+        mTunUtils.awaitResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI, expectedRespMsgId++, true /* expectedUseEncap */);
 
         // IKE has been rekeyed, reset message IDs
@@ -163,8 +161,8 @@ public class IkeSessionRekeyTest extends IkeSessionTestBase {
         expectedRespMsgId = 0;
 
         // Inject delete IKE request
-        mTunNetworkContext.tunUtils.injectPacket(buildInboundPkt(localRemotePorts, deleteIkeReq));
-        mTunNetworkContext.tunUtils.awaitResp(
+        mTunUtils.injectPacket(buildInboundPkt(localRemotePorts, deleteIkeReq));
+        mTunUtils.awaitResp(
                 newIkeDeterministicInitSpi, expectedRespMsgId++, true /* expectedUseEncap */);
 
         verifyDeleteIpSecTransformPair(
@@ -238,13 +236,11 @@ public class IkeSessionRekeyTest extends IkeSessionTestBase {
         verifyCreateIpSecTransformPair(oldTransformRecordA, oldTransformRecordB);
 
         // Inject rekey Child requests
-        mTunNetworkContext.tunUtils.injectPacket(
-                buildInboundPkt(localRemotePorts, rekeyChildCreateReq));
-        mTunNetworkContext.tunUtils.awaitResp(
+        mTunUtils.injectPacket(buildInboundPkt(localRemotePorts, rekeyChildCreateReq));
+        mTunUtils.awaitResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI, expectedRespMsgId++, true /* expectedUseEncap */);
-        mTunNetworkContext.tunUtils.injectPacket(
-                buildInboundPkt(localRemotePorts, rekeyChildDeleteReq));
-        mTunNetworkContext.tunUtils.awaitResp(
+        mTunUtils.injectPacket(buildInboundPkt(localRemotePorts, rekeyChildDeleteReq));
+        mTunUtils.awaitResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI, expectedRespMsgId++, true /* expectedUseEncap */);
 
         // Verify IpSecTransforms are renewed
@@ -257,8 +253,8 @@ public class IkeSessionRekeyTest extends IkeSessionTestBase {
                 mFirstChildSessionCallback, oldTransformRecordA, oldTransformRecordB);
 
         // Inject delete IKE request
-        mTunNetworkContext.tunUtils.injectPacket(buildInboundPkt(localRemotePorts, deleteIkeReq));
-        mTunNetworkContext.tunUtils.awaitResp(
+        mTunUtils.injectPacket(buildInboundPkt(localRemotePorts, deleteIkeReq));
+        mTunUtils.awaitResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI, expectedRespMsgId++, true /* expectedUseEncap */);
 
         verifyDeleteIpSecTransformPair(

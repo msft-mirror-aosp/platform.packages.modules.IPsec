@@ -22,13 +22,13 @@ import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_FAILURE;
 import static com.android.internal.net.eap.message.EapMessage.EAP_CODE_SUCCESS;
 
 import android.annotation.Nullable;
-import android.net.eap.EapSessionConfig.EapMethodConfig.EapMethod;
 
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.eap.EapResult;
 import com.android.internal.net.eap.EapResult.EapError;
 import com.android.internal.net.eap.EapResult.EapFailure;
 import com.android.internal.net.eap.exceptions.EapInvalidRequestException;
+import com.android.internal.net.eap.message.EapData.EapMethod;
 import com.android.internal.net.eap.message.EapMessage;
 import com.android.internal.net.utils.SimpleStateMachine;
 

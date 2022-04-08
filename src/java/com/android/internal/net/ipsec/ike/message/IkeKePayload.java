@@ -16,23 +16,12 @@
 
 package com.android.internal.net.ipsec.ike.message;
 
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_1024_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_1536_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_3072_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_4096_BIT_MODP;
-import static android.net.ipsec.ike.SaProposal.DH_GROUP_CURVE_25519;
-
-import static com.android.internal.net.utils.BigIntegerUtils.unsignedHexStringToBigInteger;
-
 import android.annotation.Nullable;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
-import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
-import android.util.SparseArray;
 
-import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.IkeDhParams;
+import com.android.internal.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.net.utils.BigIntegerUtils;
 
@@ -45,18 +34,15 @@ import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
-import java.security.NoSuchProviderException;
-import java.security.PrivateKey;
 import java.security.ProviderException;
-import java.security.PublicKey;
 import java.security.SecureRandom;
-import java.security.spec.X509EncodedKeySpec;
-import java.util.Arrays;
+import java.security.spec.InvalidKeySpecException;
 
 import javax.crypto.KeyAgreement;
 import javax.crypto.interfaces.DHPrivateKey;
 import javax.crypto.interfaces.DHPublicKey;
 import javax.crypto.spec.DHParameterSpec;
+import javax.crypto.spec.DHPrivateKeySpec;
 import javax.crypto.spec.DHPublicKeySpec;
 
 /**
@@ -73,58 +59,13 @@ public final class IkeKePayload extends IkePayload {
     private static final int KE_HEADER_RESERVED = 0;
 
     // Key exchange data length in octets
-    private static final int DH_GROUP_1024_BIT_MODP_PUBLIC_KEY_LEN = 128;
-    private static final int DH_GROUP_1536_BIT_MODP_PUBLIC_KEY_LEN = 192;
-    private static final int DH_GROUP_2048_BIT_MODP_PUBLIC_KEY_LEN = 256;
-    private static final int DH_GROUP_3072_BIT_MODP_PUBLIC_KEY_LEN = 384;
-    private static final int DH_GROUP_4096_BIT_MODP_PUBLIC_KEY_LEN = 512;
-    private static final int DH_GROUP_CURVE_25519_PUBLIC_KEY_LEN = 32;
-
-    private static final SparseArray<Integer> PUBLIC_KEY_LEN_MAP = new SparseArray<>();
-
-    static {
-        PUBLIC_KEY_LEN_MAP.put(DH_GROUP_1024_BIT_MODP, DH_GROUP_1024_BIT_MODP_PUBLIC_KEY_LEN);
-        PUBLIC_KEY_LEN_MAP.put(DH_GROUP_1536_BIT_MODP, DH_GROUP_1536_BIT_MODP_PUBLIC_KEY_LEN);
-        PUBLIC_KEY_LEN_MAP.put(DH_GROUP_2048_BIT_MODP, DH_GROUP_2048_BIT_MODP_PUBLIC_KEY_LEN);
-        PUBLIC_KEY_LEN_MAP.put(DH_GROUP_3072_BIT_MODP, DH_GROUP_3072_BIT_MODP_PUBLIC_KEY_LEN);
-        PUBLIC_KEY_LEN_MAP.put(DH_GROUP_4096_BIT_MODP, DH_GROUP_4096_BIT_MODP_PUBLIC_KEY_LEN);
-        PUBLIC_KEY_LEN_MAP.put(DH_GROUP_CURVE_25519, DH_GROUP_CURVE_25519_PUBLIC_KEY_LEN);
-    }
-
-    private static final SparseArray<BigInteger> MODP_PRIME_MAP = new SparseArray<>();
-
-    static {
-        MODP_PRIME_MAP.put(
-                DH_GROUP_1024_BIT_MODP,
-                unsignedHexStringToBigInteger(IkeDhParams.PRIME_1024_BIT_MODP));
-        MODP_PRIME_MAP.put(
-                DH_GROUP_1536_BIT_MODP,
-                unsignedHexStringToBigInteger(IkeDhParams.PRIME_1536_BIT_MODP));
-        MODP_PRIME_MAP.put(
-                DH_GROUP_2048_BIT_MODP,
-                unsignedHexStringToBigInteger(IkeDhParams.PRIME_2048_BIT_MODP));
-        MODP_PRIME_MAP.put(
-                DH_GROUP_3072_BIT_MODP,
-                unsignedHexStringToBigInteger(IkeDhParams.PRIME_3072_BIT_MODP));
-        MODP_PRIME_MAP.put(
-                DH_GROUP_4096_BIT_MODP,
-                unsignedHexStringToBigInteger(IkeDhParams.PRIME_4096_BIT_MODP));
-    }
-
-    // Invariable header of an X509 format Curve 25519 public key defined in RFC8410
-    private static final byte[] CURVE_25519_X509_PUB_KEY_HEADER = {
-        (byte) 0x30, (byte) 0x2a, (byte) 0x30, (byte) 0x05,
-        (byte) 0x06, (byte) 0x03, (byte) 0x2b, (byte) 0x65,
-        (byte) 0x6e, (byte) 0x03, (byte) 0x21, (byte) 0x00
-    };
+    private static final int DH_GROUP_1024_BIT_MODP_DATA_LEN = 128;
+    private static final int DH_GROUP_2048_BIT_MODP_DATA_LEN = 256;
+    private static final int DH_GROUP_3072_BIT_MODP_DATA_LEN = 384;
+    private static final int DH_GROUP_4096_BIT_MODP_DATA_LEN = 512;
 
     // Algorithm name of Diffie-Hellman
-    private static final String KEY_EXCHANGE_ALGORITHM_MODP = "DH";
-
-    // Currently java does not support "ECDH", thus using AndroidOpenSSL (Conscrypt) provided "XDH"
-    // who has the same key exchange flow.
-    private static final String KEY_EXCHANGE_ALGORITHM_CURVE = "XDH";
-    private static final String KEY_EXCHANGE_CURVE_PROVIDER = "AndroidOpenSSL";
+    private static final String KEY_EXCHANGE_ALGORITHM = "DH";
 
     // TODO: Create a library initializer that checks if Provider supports DH algorithm.
 
@@ -145,7 +86,7 @@ public final class IkeKePayload extends IkePayload {
      * <p>localPrivateKey of a inbound payload will be set to null. Caller MUST ensure its an
      * outbound payload before using localPrivateKey.
      */
-    @Nullable public final PrivateKey localPrivateKey;
+    @Nullable public final DHPrivateKeySpec localPrivateKey;
 
     /**
      * Construct an instance of IkeKePayload in the context of IkePayloadFactory
@@ -157,8 +98,7 @@ public final class IkeKePayload extends IkePayload {
      * @see <a href="https://tools.ietf.org/html/rfc7296#page-76">RFC 7296, Internet Key Exchange
      *     Protocol Version 2 (IKEv2), Critical.
      */
-    @VisibleForTesting
-    public IkeKePayload(boolean critical, byte[] payloadBody) throws IkeProtocolException {
+    IkeKePayload(boolean critical, byte[] payloadBody) throws IkeProtocolException {
         super(PAYLOAD_TYPE_KE, critical);
 
         isOutbound = false;
@@ -167,32 +107,35 @@ public final class IkeKePayload extends IkePayload {
         ByteBuffer inputBuffer = ByteBuffer.wrap(payloadBody);
 
         dhGroup = Short.toUnsignedInt(inputBuffer.getShort());
-
         // Skip reserved field
         inputBuffer.getShort();
 
         int dataSize = payloadBody.length - KE_HEADER_LEN;
-
-        // If DH group is recognized, check if dataSize matches the DH group type
-        if (PUBLIC_KEY_LEN_MAP.contains(dhGroup) && dataSize != PUBLIC_KEY_LEN_MAP.get(dhGroup)) {
-            throw new InvalidSyntaxException(
-                    "Expecting data size to be "
-                            + PUBLIC_KEY_LEN_MAP.get(dhGroup)
-                            + " but found "
-                            + dataSize);
+        // Check if dataSize matches the DH group type
+        boolean isValidSyntax = true;
+        switch (dhGroup) {
+            case SaProposal.DH_GROUP_1024_BIT_MODP:
+                isValidSyntax = DH_GROUP_1024_BIT_MODP_DATA_LEN == dataSize;
+                break;
+            case SaProposal.DH_GROUP_2048_BIT_MODP:
+                isValidSyntax = DH_GROUP_2048_BIT_MODP_DATA_LEN == dataSize;
+                break;
+            case SaProposal.DH_GROUP_3072_BIT_MODP:
+                isValidSyntax = DH_GROUP_3072_BIT_MODP_DATA_LEN == dataSize;
+                break;
+            case SaProposal.DH_GROUP_4096_BIT_MODP:
+                isValidSyntax = DH_GROUP_4096_BIT_MODP_DATA_LEN == dataSize;
+                break;
+            default:
+                // For unsupported DH group, we cannot check its syntax. Upper layer will ingore
+                // this payload.
+        }
+        if (!isValidSyntax) {
+            throw new InvalidSyntaxException("Invalid KE payload length for provided DH group.");
         }
 
         keyExchangeData = new byte[dataSize];
         inputBuffer.get(keyExchangeData);
-    }
-
-    /** Constructor for building an outbound KE payload. */
-    private IkeKePayload(int dhGroup, byte[] keyExchangeData, PrivateKey localPrivateKey) {
-        super(PAYLOAD_TYPE_KE, true /* critical */);
-        this.dhGroup = dhGroup;
-        this.isOutbound = true;
-        this.keyExchangeData = keyExchangeData;
-        this.localPrivateKey = localPrivateKey;
     }
 
     /**
@@ -208,33 +151,48 @@ public final class IkeKePayload extends IkePayload {
      * @see <a href="https://tools.ietf.org/html/rfc7296#page-76">RFC 7296, Internet Key Exchange
      *     Protocol Version 2 (IKEv2), Critical.
      */
-    public static IkeKePayload createOutboundKePayload(
-            @SaProposal.DhGroup int dh, RandomnessFactory randomnessFactory) {
-        switch (dh) {
-            case SaProposal.DH_GROUP_1024_BIT_MODP: // fall through
-            case SaProposal.DH_GROUP_1536_BIT_MODP: // fall through
-            case SaProposal.DH_GROUP_2048_BIT_MODP: // fall through
-            case SaProposal.DH_GROUP_3072_BIT_MODP: // fall through
-            case SaProposal.DH_GROUP_4096_BIT_MODP: // fall through
-                return createOutboundModpKePayload(dh, randomnessFactory);
-            case SaProposal.DH_GROUP_CURVE_25519:
-                return createOutboundCurveKePayload(dh, randomnessFactory);
-            default:
-                throw new IllegalArgumentException("Unsupported DH group: " + dh);
-        }
-    }
+    public IkeKePayload(@SaProposal.DhGroup int dh, RandomnessFactory randomnessFactory) {
+        super(PAYLOAD_TYPE_KE, false);
 
-    private static IkeKePayload createOutboundModpKePayload(
-            @SaProposal.DhGroup int dh, RandomnessFactory randomnessFactory) {
-        BigInteger prime = MODP_PRIME_MAP.get(dh);
-        int keySize = PUBLIC_KEY_LEN_MAP.get(dh);
+        dhGroup = dh;
+        isOutbound = true;
+
+        BigInteger prime = BigInteger.ZERO;
+        int keySize = 0;
+        switch (dhGroup) {
+            case SaProposal.DH_GROUP_1024_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_1024_BIT_MODP);
+                keySize = DH_GROUP_1024_BIT_MODP_DATA_LEN;
+                break;
+            case SaProposal.DH_GROUP_2048_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_2048_BIT_MODP);
+                keySize = DH_GROUP_2048_BIT_MODP_DATA_LEN;
+                break;
+            case SaProposal.DH_GROUP_3072_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_3072_BIT_MODP);
+                keySize = DH_GROUP_3072_BIT_MODP_DATA_LEN;
+                break;
+            case SaProposal.DH_GROUP_4096_BIT_MODP:
+                prime =
+                        BigIntegerUtils.unsignedHexStringToBigInteger(
+                                IkeDhParams.PRIME_4096_BIT_MODP);
+                keySize = DH_GROUP_4096_BIT_MODP_DATA_LEN;
+                break;
+            default:
+                throw new IllegalArgumentException("DH group not supported: " + dh);
+        }
 
         try {
             BigInteger baseGen = BigInteger.valueOf(IkeDhParams.BASE_GENERATOR_MODP);
             DHParameterSpec dhParams = new DHParameterSpec(prime, baseGen);
 
-            KeyPairGenerator dhKeyPairGen =
-                    KeyPairGenerator.getInstance(KEY_EXCHANGE_ALGORITHM_MODP);
+            KeyPairGenerator dhKeyPairGen = KeyPairGenerator.getInstance(KEY_EXCHANGE_ALGORITHM);
 
             SecureRandom random = randomnessFactory.getRandom();
             random = random == null ? new SecureRandom() : random;
@@ -242,41 +200,19 @@ public final class IkeKePayload extends IkePayload {
 
             KeyPair keyPair = dhKeyPairGen.generateKeyPair();
 
-            PrivateKey localPrivateKey = (DHPrivateKey) keyPair.getPrivate();
+            DHPrivateKey privateKey = (DHPrivateKey) keyPair.getPrivate();
+            DHPrivateKeySpec dhPrivateKeyspec =
+                    new DHPrivateKeySpec(privateKey.getX(), prime, baseGen);
             DHPublicKey publicKey = (DHPublicKey) keyPair.getPublic();
 
             // Zero-pad the public key without the sign bit
-            byte[] keyExchangeData =
+            keyExchangeData =
                     BigIntegerUtils.bigIntegerToUnsignedByteArray(publicKey.getY(), keySize);
-
-            return new IkeKePayload(dh, keyExchangeData, localPrivateKey);
+            localPrivateKey = dhPrivateKeyspec;
         } catch (NoSuchAlgorithmException e) {
-            throw new ProviderException("Failed to obtain " + KEY_EXCHANGE_ALGORITHM_MODP, e);
+            throw new ProviderException("Failed to obtain " + KEY_EXCHANGE_ALGORITHM, e);
         } catch (InvalidAlgorithmParameterException e) {
             throw new IllegalArgumentException("Failed to initialize key generator", e);
-        }
-    }
-
-    private static IkeKePayload createOutboundCurveKePayload(
-            @SaProposal.DhGroup int dh, RandomnessFactory randomnessFactory) {
-        try {
-            KeyPairGenerator dhKeyPairGen =
-                    KeyPairGenerator.getInstance(
-                            KEY_EXCHANGE_ALGORITHM_CURVE, KEY_EXCHANGE_CURVE_PROVIDER);
-            KeyPair keyPair = dhKeyPairGen.generateKeyPair();
-
-            PrivateKey privateKey = keyPair.getPrivate();
-            PublicKey publicKey = keyPair.getPublic();
-            byte[] x509EncodedPubKeyBytes = publicKey.getEncoded();
-            byte[] keyExchangeData =
-                    Arrays.copyOfRange(
-                            x509EncodedPubKeyBytes,
-                            CURVE_25519_X509_PUB_KEY_HEADER.length,
-                            x509EncodedPubKeyBytes.length);
-
-            return new IkeKePayload(dh, keyExchangeData, privateKey);
-        } catch (NoSuchAlgorithmException | NoSuchProviderException e) {
-            throw new ProviderException("Failed to obtain " + KEY_EXCHANGE_ALGORITHM_CURVE, e);
         }
     }
 
@@ -308,46 +244,28 @@ public final class IkeKePayload extends IkePayload {
     /**
      * Calculate the shared secret.
      *
-     * @param privateKey the local private key.
+     * @param privateKeySpec contains the local private key, DH prime and DH base generator.
      * @param remotePublicKey the public key from remote server.
-     * @param dhGroup the DH group.
      * @throws GeneralSecurityException if the remote public key is invalid.
      */
-    public static byte[] getSharedKey(PrivateKey privateKey, byte[] remotePublicKey, int dhGroup)
-            throws GeneralSecurityException {
-        switch (dhGroup) {
-            case SaProposal.DH_GROUP_1024_BIT_MODP: // fall through
-            case SaProposal.DH_GROUP_1536_BIT_MODP: // fall through
-            case SaProposal.DH_GROUP_2048_BIT_MODP: // fall through
-            case SaProposal.DH_GROUP_3072_BIT_MODP: // fall through
-            case SaProposal.DH_GROUP_4096_BIT_MODP: // fall through
-                return getModpSharedKey(privateKey, remotePublicKey, dhGroup);
-            case SaProposal.DH_GROUP_CURVE_25519:
-                return getCurveSharedKey(privateKey, remotePublicKey, dhGroup);
-            default:
-                throw new IllegalArgumentException("Invalid DH group: " + dhGroup);
-        }
-    }
-
-    private static byte[] getModpSharedKey(
-            PrivateKey privateKey, byte[] remotePublicKey, int dhGroup)
+    public static byte[] getSharedKey(DHPrivateKeySpec privateKeySpec, byte[] remotePublicKey)
             throws GeneralSecurityException {
         KeyAgreement dhKeyAgreement;
         KeyFactory dhKeyFactory;
         try {
-            dhKeyAgreement = KeyAgreement.getInstance(KEY_EXCHANGE_ALGORITHM_MODP);
-            dhKeyFactory = KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM_MODP);
-
             // Apply local private key.
+            dhKeyAgreement = KeyAgreement.getInstance(KEY_EXCHANGE_ALGORITHM);
+            dhKeyFactory = KeyFactory.getInstance(KEY_EXCHANGE_ALGORITHM);
+            DHPrivateKey privateKey = (DHPrivateKey) dhKeyFactory.generatePrivate(privateKeySpec);
             dhKeyAgreement.init(privateKey);
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new IllegalArgumentException("Failed to construct or initialize KeyAgreement", e);
+        } catch (NoSuchAlgorithmException | InvalidKeySpecException | InvalidKeyException e) {
+            throw new IllegalArgumentException("Failed to generate DH private key", e);
         }
 
         // Build public key.
         BigInteger publicKeyValue = BigIntegerUtils.unsignedByteArrayToBigInteger(remotePublicKey);
-        BigInteger primeValue = MODP_PRIME_MAP.get(dhGroup);
-        BigInteger baseGenValue = BigInteger.valueOf(IkeDhParams.BASE_GENERATOR_MODP);
+        BigInteger primeValue = privateKeySpec.getP();
+        BigInteger baseGenValue = privateKeySpec.getG();
         DHPublicKeySpec publicKeySpec =
                 new DHPublicKeySpec(publicKeyValue, primeValue, baseGenValue);
 
@@ -357,48 +275,6 @@ public final class IkeKePayload extends IkePayload {
 
         dhKeyAgreement.doPhase(publicKey, true /* Last phase */);
         return dhKeyAgreement.generateSecret();
-    }
-
-    private static byte[] getCurveSharedKey(
-            PrivateKey privateKey, byte[] remotePublicKey, int dhGroup)
-            throws GeneralSecurityException {
-        KeyAgreement keyAgreement;
-        KeyFactory keyFactory;
-        try {
-            keyAgreement =
-                    KeyAgreement.getInstance(
-                            KEY_EXCHANGE_ALGORITHM_CURVE, KEY_EXCHANGE_CURVE_PROVIDER);
-            keyFactory =
-                    KeyFactory.getInstance(
-                            KEY_EXCHANGE_ALGORITHM_CURVE, KEY_EXCHANGE_CURVE_PROVIDER);
-
-            // Apply local private key.
-            keyAgreement.init(privateKey);
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            throw new IllegalArgumentException("Failed to construct or initialize KeyAgreement", e);
-        }
-
-        final byte[] x509EncodedPubKeyBytes =
-                new byte
-                        [CURVE_25519_X509_PUB_KEY_HEADER.length
-                                + DH_GROUP_CURVE_25519_PUBLIC_KEY_LEN];
-        System.arraycopy(
-                CURVE_25519_X509_PUB_KEY_HEADER,
-                0,
-                x509EncodedPubKeyBytes,
-                0,
-                CURVE_25519_X509_PUB_KEY_HEADER.length);
-        System.arraycopy(
-                remotePublicKey,
-                0,
-                x509EncodedPubKeyBytes,
-                CURVE_25519_X509_PUB_KEY_HEADER.length,
-                DH_GROUP_CURVE_25519_PUBLIC_KEY_LEN);
-
-        PublicKey publicKey =
-                keyFactory.generatePublic(new X509EncodedKeySpec(x509EncodedPubKeyBytes));
-        keyAgreement.doPhase(publicKey, true /* Last phase */);
-        return keyAgreement.generateSecret();
     }
 
     /**

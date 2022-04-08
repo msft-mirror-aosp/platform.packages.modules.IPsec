@@ -31,7 +31,6 @@ import javax.crypto.Cipher;
 import javax.crypto.IllegalBlockSizeException;
 import javax.crypto.ShortBufferException;
 import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
@@ -47,34 +46,25 @@ import javax.crypto.spec.SecretKeySpec;
  *     Protocol</a>
  */
 public final class IkeCombinedModeCipher extends IkeCipher {
+    private static final int SALT_LEN_GCM = 4;
+
     private final int mChecksumLen;
+    private final int mSaltLen;
 
     /** Package private */
-    IkeCombinedModeCipher(
-            int algorithmId, int keyLength, int ivLength, String algorithmName, int saltLen) {
-        this(algorithmId, keyLength, ivLength, algorithmName, saltLen, BLOCK_SIZE_NOT_SPECIFIED);
-    }
-
-    /** Package private */
-    IkeCombinedModeCipher(
-            int algorithmId,
-            int keyLength,
-            int ivLength,
-            String algorithmName,
-            int saltLen,
-            int blockSize) {
-        super(algorithmId, keyLength, ivLength, algorithmName, true /*isAead*/, saltLen, blockSize);
+    IkeCombinedModeCipher(int algorithmId, int keyLength, int ivLength, String algorithmName) {
+        super(algorithmId, keyLength, ivLength, algorithmName, true /*isAead*/);
         switch (algorithmId) {
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_8:
+                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 8;
                 break;
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_12:
+                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 12;
                 break;
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
-                mChecksumLen = 16;
-                break;
-            case SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305:
+                mSaltLen = SALT_LEN_GCM;
                 mChecksumLen = 16;
                 break;
             default:
@@ -136,8 +126,6 @@ public final class IkeCombinedModeCipher extends IkeCipher {
                 // Fall through
             case SaProposal.ENCRYPTION_ALGORITHM_AES_GCM_16:
                 return new GCMParameterSpec(mChecksumLen * 8, nonce);
-            case SaProposal.ENCRYPTION_ALGORITHM_CHACHA20_POLY1305:
-                return new IvParameterSpec(nonce);
             default:
                 throw new IllegalArgumentException(
                         "Unrecognized Encryption Algorithm ID: " + getAlgorithmId());
@@ -193,6 +181,16 @@ public final class IkeCombinedModeCipher extends IkeCipher {
     }
 
     /**
+     * Gets key length of this algorithm (in bytes).
+     *
+     * @return the key length (in bytes).
+     */
+    @Override
+    public int getKeyLength() {
+        return super.getKeyLength() + mSaltLen;
+    }
+
+    /**
      * Returns length of checksum.
      *
      * @return the length of checksum in bytes.
@@ -202,7 +200,8 @@ public final class IkeCombinedModeCipher extends IkeCipher {
     }
 
     @Override
-    protected IpSecAlgorithm buildIpSecAlgorithmWithKeyImpl(byte[] key) {
-        return new IpSecAlgorithm(getIpSecAlgorithmName(getAlgorithmId()), key, mChecksumLen * 8);
+    public IpSecAlgorithm buildIpSecAlgorithmWithKey(byte[] key) {
+        validateKeyLenOrThrow(key);
+        return new IpSecAlgorithm(IpSecAlgorithm.AUTH_CRYPT_AES_GCM, key, mChecksumLen * 8);
     }
 }

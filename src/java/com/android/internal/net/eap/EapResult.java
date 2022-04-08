@@ -117,7 +117,7 @@ public abstract class EapResult {
          * Constructs an EapError instance for the given cause.
          *
          * @param cause the Exception that caused the EapError to be returned from the
-         *     EapStateMachine
+         *              EapStateMachine
          */
         public EapError(Exception cause) {
             this.cause = cause;

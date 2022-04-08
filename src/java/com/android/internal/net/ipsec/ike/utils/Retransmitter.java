@@ -54,7 +54,7 @@ public abstract class Retransmitter {
             return;
         }
 
-        send();
+        send(mRetransmitMsg);
 
         long timeout = mRetransmissionTimeouts[mRetransmitCount++];
         mHandler.sendMessageDelayed(mHandler.obtainMessage(CMD_RETRANSMIT, this), timeout);
@@ -74,8 +74,10 @@ public abstract class Retransmitter {
      * Implementation-provided sender
      *
      * <p>For Retransmitter-internal use only.
+     *
+     * @param msg the message to be sent
      */
-    protected abstract void send();
+    protected abstract void send(IkeMessage msg);
 
     /**
      * Callback for implementations to be informed that we have reached the max retransmissions.

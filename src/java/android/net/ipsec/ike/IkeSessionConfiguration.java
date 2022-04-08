@@ -22,7 +22,6 @@ import static com.android.internal.net.ipsec.ike.message.IkeConfigPayload.CONFIG
 
 import android.annotation.IntDef;
 import android.annotation.NonNull;
-import android.annotation.SuppressLint;
 import android.annotation.SystemApi;
 
 import com.android.internal.net.ipsec.ike.message.IkeConfigPayload;
@@ -44,8 +43,11 @@ import java.util.Set;
 /**
  * IkeSessionConfiguration represents the negotiated configuration for a {@link IkeSession}.
  *
- * <p>Configurations include remote application version and enabled IKE extensions.
+ * <p>Configurations include remote application version and enabled IKE extensions..
+ *
+ * @hide
  */
+@SystemApi
 public final class IkeSessionConfiguration {
     /** @hide */
     @Retention(RetentionPolicy.SOURCE)
@@ -57,9 +59,6 @@ public final class IkeSessionConfiguration {
     /** IKEv2 Mobility and Multihoming Protocol */
     public static final int EXTENSION_TYPE_MOBIKE = 2;
 
-    private static final int VALID_EXTENSION_MIN = EXTENSION_TYPE_FRAGMENTATION;
-    private static final int VALID_EXTENSION_MAX = EXTENSION_TYPE_MOBIKE;
-
     private final String mRemoteApplicationVersion;
     private final IkeSessionConnectionInfo mIkeConnInfo;
     private final List<InetAddress> mPcscfServers = new ArrayList<>();
@@ -69,9 +68,7 @@ public final class IkeSessionConfiguration {
     /**
      * Construct an instance of {@link IkeSessionConfiguration}.
      *
-     * <p>IkeSessionConfigurations may contain negotiated configuration information that is included
-     * in a Configure(Reply) Payload. Thus the input configPayload should always be a
-     * Configure(Reply), and never be a Configure(Request).
+     * <p>IkeSessionConfigurations may only be built with a with a Configure(Reply) Payload.
      *
      * @hide
      */
@@ -80,6 +77,11 @@ public final class IkeSessionConfiguration {
             IkeConfigPayload configPayload,
             List<byte[]> remoteVendorIds,
             List<Integer> enabledExtensions) {
+        String errMsg = " not provided";
+        Objects.requireNonNull(ikeConnInfo, "ikeConnInfo" + errMsg);
+        Objects.requireNonNull(remoteVendorIds, "remoteVendorIds" + errMsg);
+        Objects.requireNonNull(enabledExtensions, "enabledExtensions" + errMsg);
+
         mIkeConnInfo = ikeConnInfo;
         mRemoteVendorIds.addAll(remoteVendorIds);
         mEnabledExtensions.addAll(enabledExtensions);
@@ -113,36 +115,6 @@ public final class IkeSessionConfiguration {
             }
         }
         mRemoteApplicationVersion = appVersion;
-        validateOrThrow();
-    }
-
-    /**
-     * Construct an instance of {@link IkeSessionConfiguration}.
-     *
-     * @hide
-     */
-    private IkeSessionConfiguration(
-            IkeSessionConnectionInfo ikeConnInfo,
-            List<InetAddress> pcscfServers,
-            List<byte[]> remoteVendorIds,
-            Set<Integer> enabledExtensions,
-            String remoteApplicationVersion) {
-        mIkeConnInfo = ikeConnInfo;
-        mPcscfServers.addAll(pcscfServers);
-        mRemoteVendorIds.addAll(remoteVendorIds);
-        mEnabledExtensions.addAll(enabledExtensions);
-        mRemoteApplicationVersion = remoteApplicationVersion;
-
-        validateOrThrow();
-    }
-
-    private void validateOrThrow() {
-        String errMsg = " was null";
-        Objects.requireNonNull(mIkeConnInfo, "ikeConnInfo" + errMsg);
-        Objects.requireNonNull(mPcscfServers, "pcscfServers" + errMsg);
-        Objects.requireNonNull(mRemoteVendorIds, "remoteVendorIds" + errMsg);
-        Objects.requireNonNull(mRemoteApplicationVersion, "remoteApplicationVersion" + errMsg);
-        Objects.requireNonNull(mRemoteVendorIds, "remoteVendorIds" + errMsg);
     }
 
     /**
@@ -158,10 +130,6 @@ public final class IkeSessionConfiguration {
 
     /**
      * Returns remote vendor IDs received during IKE Session setup.
-     *
-     * <p>According to the IKEv2 specification (RFC 7296), a vendor ID may indicate the sender is
-     * capable of accepting certain extensions to the protocol, or it may simply identify the
-     * implementation as an aid in debugging.
      *
      * @return the vendor IDs of the remote server, or an empty list if no vendor ID is received
      *     during IKE Session setup.
@@ -188,10 +156,8 @@ public final class IkeSessionConfiguration {
      * Returns the assigned P_CSCF servers.
      *
      * @return the assigned P_CSCF servers, or an empty list when no servers are assigned by the
-     *     remote IKE server.
-     * @hide
+     *     remote IKE server
      */
-    @SystemApi
     @NonNull
     public List<InetAddress> getPcscfServers() {
         return Collections.unmodifiableList(mPcscfServers);
@@ -205,154 +171,5 @@ public final class IkeSessionConfiguration {
     @NonNull
     public IkeSessionConnectionInfo getIkeSessionConnectionInfo() {
         return mIkeConnInfo;
-    }
-
-    /**
-     * This class can be used to incrementally construct a {@link IkeSessionConfiguration}.
-     *
-     * <p>Except for testing, IKE library users normally do not instantiate {@link
-     * IkeSessionConfiguration} themselves but instead get a reference via {@link
-     * IkeSessionCallback}
-     */
-    public static final class Builder {
-        private final IkeSessionConnectionInfo mIkeConnInfo;
-        private final List<InetAddress> mPcscfServers = new ArrayList<>();
-        private final List<byte[]> mRemoteVendorIds = new ArrayList<>();
-        private final Set<Integer> mEnabledExtensions = new HashSet<>();
-        private String mRemoteApplicationVersion = "";
-
-        /**
-         * Constructs a Builder.
-         *
-         * @param ikeConnInfo the connection information
-         */
-        public Builder(@NonNull IkeSessionConnectionInfo ikeConnInfo) {
-            Objects.requireNonNull(ikeConnInfo, "ikeConnInfo was null");
-            mIkeConnInfo = ikeConnInfo;
-        }
-
-        /**
-         * Adds an assigned P_CSCF server for the {@link IkeSessionConfiguration} being built.
-         *
-         * @param pcscfServer an assigned P_CSCF server
-         * @return Builder this, to facilitate chaining
-         * @hide
-         */
-        @SystemApi
-        @NonNull
-        public Builder addPcscfServer(@NonNull InetAddress pcscfServer) {
-            Objects.requireNonNull(pcscfServer, "pcscfServer was null");
-            mPcscfServers.add(pcscfServer);
-            return this;
-        }
-
-        /**
-         * Clear all P_CSCF servers from the {@link IkeSessionConfiguration} being built.
-         *
-         * @return Builder this, to facilitate chaining
-         * @hide
-         */
-        @SystemApi
-        @NonNull
-        public Builder clearPcscfServers() {
-            mPcscfServers.clear();
-            return this;
-        }
-
-        /**
-         * Adds a remote vendor ID for the {@link IkeSessionConfiguration} being built.
-         *
-         * @param remoteVendorId a remote vendor ID
-         * @return Builder this, to facilitate chaining
-         */
-        @NonNull
-        public Builder addRemoteVendorId(@NonNull byte[] remoteVendorId) {
-            Objects.requireNonNull(remoteVendorId, "remoteVendorId was null");
-            mRemoteVendorIds.add(remoteVendorId);
-            return this;
-        }
-
-        /**
-         * Clears all remote vendor IDs from the {@link IkeSessionConfiguration} being built.
-         *
-         * @return Builder this, to facilitate chaining
-         */
-        @NonNull
-        public Builder clearRemoteVendorIds() {
-            mRemoteVendorIds.clear();
-            return this;
-        }
-
-        /**
-         * Sets the remote application version for the {@link IkeSessionConfiguration} being built.
-         *
-         * @param remoteApplicationVersion the remote application version. Defaults to an empty
-         *     string.
-         * @return Builder this, to facilitate chaining
-         */
-        @NonNull
-        public Builder setRemoteApplicationVersion(@NonNull String remoteApplicationVersion) {
-            Objects.requireNonNull(remoteApplicationVersion, "remoteApplicationVersion was null");
-            mRemoteApplicationVersion = remoteApplicationVersion;
-            return this;
-        }
-
-        /**
-         * Clears the remote application version from the {@link IkeSessionConfiguration} being
-         * built.
-         *
-         * @return Builder this, to facilitate chaining
-         */
-        @NonNull
-        public Builder clearRemoteApplicationVersion() {
-            mRemoteApplicationVersion = "";
-            return this;
-        }
-
-        private static void validateExtensionOrThrow(@ExtensionType int extensionType) {
-            if (extensionType >= VALID_EXTENSION_MIN && extensionType <= VALID_EXTENSION_MAX) {
-                return;
-            }
-            throw new IllegalArgumentException("Invalid extension type: " + extensionType);
-        }
-
-        /**
-         * Marks an IKE extension as enabled for the {@link IkeSessionConfiguration} being built.
-         *
-         * @param extensionType the enabled extension
-         * @return Builder this, to facilitate chaining
-         */
-        // MissingGetterMatchingBuilder: Use #isIkeExtensionEnabled instead of #getIkeExtension
-        // because #isIkeExtensionEnabled allows callers to check the presence of an IKE extension
-        // more easily
-        @SuppressLint("MissingGetterMatchingBuilder")
-        @NonNull
-        public Builder addIkeExtension(@ExtensionType int extensionType) {
-            validateExtensionOrThrow(extensionType);
-            mEnabledExtensions.add(extensionType);
-            return this;
-        }
-
-        /**
-         * Clear all enabled IKE extensions from the {@link IkeSessionConfiguration} being built.
-         *
-         * @return Builder this, to facilitate chaining
-         */
-        @NonNull
-        public Builder clearIkeExtensions() {
-            mEnabledExtensions.clear();
-            return this;
-        }
-
-        /** Constructs an {@link IkeSessionConfiguration} instance. */
-        @NonNull
-        public IkeSessionConfiguration build() {
-            return new IkeSessionConfiguration(
-                    mIkeConnInfo,
-                    mPcscfServers,
-                    mRemoteVendorIds,
-                    mEnabledExtensions,
-                    mRemoteApplicationVersion);
-        }
     }
 }

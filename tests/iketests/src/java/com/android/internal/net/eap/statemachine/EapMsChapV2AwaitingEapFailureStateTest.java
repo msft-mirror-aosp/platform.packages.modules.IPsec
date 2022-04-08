@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.test.statemachine;
+package com.android.internal.net.eap.statemachine;
 
 import org.junit.Before;
 

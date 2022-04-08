@@ -17,8 +17,9 @@
 package android.net.ipsec.ike;
 
 import android.annotation.NonNull;
-import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
-import android.os.PersistableBundle;
+import android.annotation.SystemApi;
+
+import com.android.internal.net.ipsec.ike.exceptions.AuthenticationFailedException;
 
 import java.nio.charset.Charset;
 import java.security.cert.X509Certificate;
@@ -27,12 +28,14 @@ import java.util.Objects;
 /**
  * IkeRfc822AddrIdentification represents an IKE entity identification based on a fully-qualified
  * RFC 822 email address ID (e.g. ike@android.com).
+ *
+ * @hide
  */
+@SystemApi
 public final class IkeRfc822AddrIdentification extends IkeIdentification {
     private static final Charset UTF8 = Charset.forName("UTF-8");
-    private static final String RFC822_NAME_KEY = "rfc822Name";
 
-    /** The fully-qualified RFC 822 email address. */
+    /** The fully-qualified RFC 822 email addres. */
     @NonNull public final String rfc822Name;
 
     /**
@@ -55,30 +58,6 @@ public final class IkeRfc822AddrIdentification extends IkeIdentification {
     public IkeRfc822AddrIdentification(@NonNull String rfc822Name) {
         super(ID_TYPE_RFC822_ADDR);
         this.rfc822Name = rfc822Name;
-    }
-
-    /**
-     * Constructs this object by deserializing a PersistableBundle
-     *
-     * @hide
-     */
-    @NonNull
-    public static IkeRfc822AddrIdentification fromPersistableBundle(@NonNull PersistableBundle in) {
-        Objects.requireNonNull(in, "PersistableBundle is null");
-
-        return new IkeRfc822AddrIdentification(in.getString(RFC822_NAME_KEY));
-    }
-    /**
-     * Serializes this object to a PersistableBundle
-     *
-     * @hide
-     */
-    @Override
-    @NonNull
-    public PersistableBundle toPersistableBundle() {
-        final PersistableBundle result = super.toPersistableBundle();
-        result.putString(RFC822_NAME_KEY, rfc822Name);
-        return result;
     }
 
     /** @hide */

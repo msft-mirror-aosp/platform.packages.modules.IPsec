@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package {
-    default_applicable_licenses: ["Android-Apache-2.0"],
-}
-
 java_sdk_library {
     name: "android.net.ipsec.ike",
     installable: true,
     defaults: ["framework-module-defaults"],
+    sdk_version: "module_current",
 
     // ike is used as a shared library.
     shared_library: true,
-    compile_dex: true,
 
     aidl: {
         local_include_dirs: ["src/java"],
@@ -37,26 +33,17 @@ java_sdk_library {
     libs: [
         "unsupportedappusage",
         "framework-annotations-lib",
-        "conscrypt.module.public.api",
-        "framework-connectivity.stubs.module_lib",
     ],
-    stub_only_libs: ["framework-connectivity.stubs.module_lib"],
 
     api_packages: [
         "android.net.eap",
         "android.net.ipsec.ike",
         "android.net.ipsec.ike.exceptions",
-        "android.net.ipsec.ike.exceptions.protocol",
-        "android.net.ipsec.ike.ike3gpp",
     ],
 
     hidden_api_packages: [
         "com.android.internal.net",
     ],
-
-    lint: {
-        strict_updatability_linting: true,
-    },
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
     // being overwritten by the frameworks class copies.
@@ -67,26 +54,19 @@ java_sdk_library {
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
-
-    permitted_packages: [
-       "com.android.internal.net",
-       "android.net.ipsec.ike",
-       "android.net.eap",
-    ],
-    min_sdk_version: "30",
 }
 
 filegroup {
     name: "ike-srcs",
     srcs: [
-        ":ike-internal-srcs",
+        "src/java/**/*.java",
         ":framework-ike-shared-srcs",
     ],
 }
 
 filegroup {
-    name: "ike-internal-srcs",
-    srcs: ["src/java/**/*.java"],
+    name: "ike-api-srcs",
+    srcs: ["src/java/android/**/*.java"],
     path: "src/java/",
 }
 
@@ -102,46 +82,18 @@ java_library {
         "com.android.ipsec",
         "test_com.android.ipsec",
     ],
-    static_libs: [
-        "bouncycastle_ike_digests",
-        "modules-utils-build",],
-    sdk_version: "module_current",
+    static_libs: ["bouncycastle_ike_digests"],
+    sdk_version: "core_current",
 }
 
 java_library {
     name: "ike_test",
     installable: false, // Used only for testing; never installed alone.
     srcs: [":ike-srcs"],
-    libs: [
-        "unsupportedappusage",
-        "conscrypt.module.public.api"
-    ],
+    libs: ["unsupportedappusage"],
     static_libs: ["ike-internals"],
 
     // Shared filegroups of BouncyCastle and frameworks are jar-jar'ed to avoid
-    // being overwritten by the frameworks class copies and break code coverage
-    // reports. IKE source files are jarjared to avoid this test jar being
-    // overshadowed by the IKE jar in framework and bootclasspath which will
-    // cause compiling and runtime errors respectively.
-    jarjar_rules: "jarjar-rules-test.txt",
-}
-
-java_library {
-    name: "ike-test-utils-dependency",
-    installable: false, // Used only for building the "ike-test-utils"
-    srcs: ["src/java/**/IkeCertUtils.java"],
-    jarjar_rules: "jarjar-rules-test.txt",
-}
-
-java_library {
-    name: "ike-test-utils",
-    srcs: ["tests/iketests/src/java/**/CertUtils.java"],
-    static_libs: ["ike-test-utils-dependency"],
-    libs: ["androidx.test.rules"],
-    visibility: ["//packages/modules/IPsec/tests/cts"]
-}
-
-sdk {
-    name: "ipsec-module-sdk",
-    bootclasspath_fragments: ["com.android.ipsec-bootclasspath-fragment"],
+    // being overwritten by the frameworks class copies.
+    jarjar_rules: "jarjar-rules-shared.txt",
 }

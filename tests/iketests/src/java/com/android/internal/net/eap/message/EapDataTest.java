@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-package com.android.internal.net.eap.test.message;
+package com.android.internal.net.eap.message;
 
-import static android.net.eap.test.EapSessionConfig.EapMethodConfig.EAP_TYPE_SIM;
+import static com.android.internal.net.eap.message.EapData.EAP_TYPE_SIM;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
