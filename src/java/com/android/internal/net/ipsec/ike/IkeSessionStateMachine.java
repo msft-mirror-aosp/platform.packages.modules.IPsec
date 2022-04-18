@@ -163,6 +163,7 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
+import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
@@ -2167,7 +2168,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         @Override
         public void handleRetransmissionFailure() {
-            handleIkeFatalError(new IOException("Retransmitting failure"));
+            handleIkeFatalError(
+                    ShimUtils.getInstance()
+                            .getRetransmissionFailedException("Retransmitting failure"));
         }
     }
 
@@ -3414,7 +3417,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             @Override
             public void handleRetransmissionFailure() {
-                handleIkeFatalError(new IOException("Retransmitting IKE INIT request failure"));
+                handleIkeFatalError(
+                        ShimUtils.getInstance()
+                                .getRetransmissionFailedException(
+                                        "Retransmitting IKE INIT request failure"));
             }
         }
     }
