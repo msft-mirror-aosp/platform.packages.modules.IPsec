@@ -38,6 +38,7 @@ import static org.mockito.Mockito.when;
 import android.net.ConnectivityManager.NetworkCallback;
 import android.net.Network;
 import android.net.ipsec.test.ike.IkeSessionParams;
+import android.net.ipsec.test.ike.exceptions.IkeIOException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.os.Looper;
 
@@ -52,6 +53,7 @@ import com.android.internal.net.ipsec.test.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.test.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
+import com.android.modules.utils.build.SdkLevel;
 
 import org.junit.After;
 import org.junit.Before;
@@ -502,7 +504,11 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl.onUnderlyingNetworkUpdated(mock(Network.class));
 
         // Expected to fail due to DNS resolution failure
-        verify(mMockConnectionCtrlCb).onError(any(IkeInternalException.class));
+        if (SdkLevel.isAtLeastT()) {
+            verify(mMockConnectionCtrlCb).onError(any(IkeIOException.class));
+        } else {
+            verify(mMockConnectionCtrlCb).onError(any(IkeInternalException.class));
+        }
     }
 
     @Test
