@@ -15,6 +15,8 @@
  */
 package android.net.ipsec.ike.exceptions;
 
+import com.android.internal.net.ipsec.ike.shim.ShimUtils;
+
 /**
  * IkeException represents a generic exception that includes internal and protocol exceptions.
  */
@@ -45,10 +47,6 @@ public abstract class IkeException extends Exception {
      * @hide
      */
     public static IkeException wrapAsIkeException(Exception exception) {
-        if (exception instanceof IkeException) {
-            return (IkeException) exception;
-        }
-
-        return new IkeInternalException(exception);
+        return ShimUtils.getInstance().getWrappedIkeException(exception);
     }
 }
