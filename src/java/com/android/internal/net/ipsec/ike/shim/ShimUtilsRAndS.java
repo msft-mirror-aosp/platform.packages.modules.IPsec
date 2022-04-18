@@ -16,8 +16,10 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
+import android.net.Network;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
+import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
 
 import java.io.IOException;
 
@@ -45,5 +47,11 @@ public class ShimUtilsRAndS extends ShimUtils {
     @Override
     public IOException getDnsFailedException(String errMsg) {
         return new IOException(errMsg);
+    }
+
+    @Override
+    public void onUnderlyingNetworkDiedWithoutMobility(
+            IIkeSessionStateMachineShim ikeSession, Network network) {
+        ikeSession.onNonFatalError(new IkeNetworkLostException(network));
     }
 }
