@@ -48,6 +48,7 @@ import com.android.internal.net.ipsec.ike.IkeUdpEncapSocket;
 import com.android.internal.net.ipsec.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
+import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -638,12 +639,14 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             }
         }
         if (allRemoteAddresses == null || allRemoteAddresses.length == 0) {
-            throw new IOException(
+            final String errMsg =
                     "DNS resolution for "
                             + mRemoteHostname
                             + " failed after "
                             + MAX_DNS_RESOLUTION_ATTEMPTS
-                            + " attempts");
+                            + " attempts";
+
+            throw ShimUtils.getInstance().getDnsFailedException(errMsg);
         }
 
         getIkeLog()
