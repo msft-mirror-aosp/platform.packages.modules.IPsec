@@ -6084,7 +6084,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testOnlyRfcMobikeEnabled() throws Exception {
         verifyRfcMobikeEnabled(true /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6092,7 +6092,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testOnlyRfcMobikeEnabledPeerUnsupported() throws Exception {
         verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(false /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6100,7 +6100,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testOnlyRekeyMobilityEnabled() throws Exception {
         verifyOnlyRekeyMobilityEnabled();
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6108,7 +6108,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeRekeyMobilityEnabled() throws Exception {
         verifyMobikeRekeyMobilityEnabled(true /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6116,7 +6116,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeRekeyMobilityEnabledPeerUnsupported() throws Exception {
         verifyMobikeRekeyMobilityEnabled(false /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6137,7 +6137,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeEnabledNattSupportedIpv4() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportNatt */, true /* isIpv4 */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6145,7 +6145,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeEnabledNattUnsupportedIpv4() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportNatt */, true /* isIpv4 */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6153,7 +6153,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeEnabledNattUnsupportedIpv6() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportNatt */, false /* isIpv4 */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     /**
@@ -6326,47 +6326,43 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.mEnabledExtensions.contains(EXTENSION_TYPE_MOBIKE));
 
         if (rekeyMobilityEnabled || doesPeerSupportMobike) {
-
-            ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
-                    ArgumentCaptor.forClass(IkeNetworkCallbackBase.class);
-            // Expect different NetworkCallback registrations if there is a caller-configured
-            // Network
-            if (configuredNetwork == null) {
-                verify(mMockConnectManager)
-                        .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
-            } else {
-                verify(mMockConnectManager)
-                        .registerNetworkCallback(any(), networkCallbackCaptor.capture(), any());
-            }
-
-            IkeNetworkCallbackBase networkCallback = networkCallbackCaptor.getValue();
-            Class<? extends IkeNetworkCallbackBase> expectedCallbackType =
-                    configuredNetwork == null
-                            ? IkeDefaultNetworkCallback.class
-                            : IkeSpecificNetworkCallback.class;
-            assertTrue(expectedCallbackType.isInstance(networkCallback));
+            assertTrue(mSpyIkeConnectionCtrl.isMobilityEnabled());
             assertTrue(
                     getExpectedSocketType(
                                     doesPeerSupportNatt || doesEnableForceUdpEncap,
                                     isEnforcePort4500,
                                     isIpv4)
                             .isInstance(mSpyIkeConnectionCtrl.getIkeSocket()));
-            return networkCallback;
         } else {
-            verify(mMockConnectManager, never()).registerDefaultNetworkCallback(any(), any());
-            verify(mMockConnectManager, never()).registerNetworkCallback(any(), any(), any());
-            return null;
+            assertFalse(mSpyIkeConnectionCtrl.isMobilityEnabled());
         }
 
+        ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
+                ArgumentCaptor.forClass(IkeNetworkCallbackBase.class);
+        // Expect different NetworkCallback registrations if there is a caller-configured
+        // Network
+        if (configuredNetwork == null) {
+            verify(mMockConnectManager)
+                    .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
+        } else {
+            verify(mMockConnectManager)
+                    .registerNetworkCallback(any(), networkCallbackCaptor.capture(), any());
+        }
 
+        IkeNetworkCallbackBase networkCallback = networkCallbackCaptor.getValue();
+        Class<? extends IkeNetworkCallbackBase> expectedCallbackType =
+                configuredNetwork == null
+                        ? IkeDefaultNetworkCallback.class
+                        : IkeSpecificNetworkCallback.class;
+        assertTrue(expectedCallbackType.isInstance(networkCallback));
+        return networkCallback;
     }
 
-    private void killSessionAndVerifyNetworkCallback(boolean expectCallbackUnregistered) {
+    private void killSessionAndVerifyNetworkCallback() {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verify(mMockConnectManager, expectCallbackUnregistered ? times(1) : never())
-                .unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
+        verify(mMockConnectManager).unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
     }
 
     /** Restarts the IkeSessionStateMachine with MOBIKE configured in the IkeSessionParams. */
@@ -6387,12 +6383,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             boolean rekeyMobilityEnabled)
             throws Exception {
         mIkeSessionStateMachine.quitNow();
+        mLooper.dispatchAll();
 
-        // makeAndStartIkeSession() expects no use of ConnectivityManager#getActiveNetwork when
-        // there is a configured Network. Use reset() to forget usage in setUp()
-        if (configuredNetwork != null) {
-            resetMockConnectManager();
-        }
+        // Clear ConnectivityManager#getActiveNetwork (#makeAndStartIkeSession() expects no use of
+        // ConnectivityManager#getActiveNetwork when there is a configured Network) and the network
+        // callback registration call in #setUp().
+        resetMockConnectManager();
 
         // Set local and remote address
         Network network = configuredNetwork == null ? mMockDefaultNetwork : configuredNetwork;
@@ -6425,31 +6421,34 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return makeAndStartIkeSession(ikeSessionParamsBuilder.build(), localAddress, remoteAddress);
     }
 
+    private void verifyHandleNetworkChange() throws Exception {
+        if (SdkLevel.isAtLeastT()) {
+            verify(mMockIkeSessionCallback).onClosedWithException(any(IkeException.class));
+            assertNull(mIkeSessionStateMachine.getCurrentState());
+        } else {
+            verify(mMockIkeSessionCallback).onError(any(IkeException.class));
+            assertNotNull(mIkeSessionStateMachine.getCurrentState());
+        }
+    }
+
     @Test
-    @SdkSuppress(minSdkVersion = 31, codeName = "S")
-    public void testMobikeNetworkCallbackRegistrationFails() throws Exception {
-        doThrow(new RuntimeException("Failed to register IKE NetworkCallback"))
-                .when(mMockConnectManager)
-                .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
-
-        mIkeSessionStateMachine = restartStateMachineWithRfcMobikeConfigured();
-        new IkeFirstAuthTestPretest().mockIkeInitAndTransitionToIkeAuth();
-
-        // Send IKE_AUTH resp and indicate MOBIKE support
-        List<IkePayload> authRelatedPayloads = new ArrayList<>();
-        authRelatedPayloads.add(makeSpyRespPskPayload());
-        authRelatedPayloads.add(makeRespIdPayload());
-        authRelatedPayloads.add(new IkeNotifyPayload(NOTIFY_TYPE_MOBIKE_SUPPORTED));
-        ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, authResp);
+    public void testMobilityDisabledNetworkDies() throws Exception {
+        IkeDefaultNetworkCallback callback =
+                verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
+        callback.onLost(mMockDefaultNetwork);
         mLooper.dispatchAll();
 
-        verify(mMockConnectManager)
-                .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
-        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
-        verify(mMockConnectManager).unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
-        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verifyHandleNetworkChange();
+    }
+
+    @Test
+    public void testMobilityDisabledNetworkUpdates() throws Exception {
+        IkeDefaultNetworkCallback callback =
+                verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
+        callback.onAvailable(mock(Network.class));
+        mLooper.dispatchAll();
+
+        verifyHandleNetworkChange();
     }
 
     @Test
