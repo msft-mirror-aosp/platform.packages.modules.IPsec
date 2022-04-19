@@ -1108,7 +1108,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     () -> {
                         mIkeSessionCallback.onClosedWithException(wrapAsIkeException(e));
                     });
-            logWtf("Unexpected exception in " + getCurrentState().getName(), e);
+            logWtf("Unexpected exception in " + getCurrentStateName(), e);
             quitSessionNow();
         }
 
@@ -1185,7 +1185,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 () -> {
                     mIkeSessionCallback.onClosedWithException(ikeException);
                 });
-        loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
+        loge("IKE Session fatal error in " + getCurrentStateName(), ikeException);
 
         quitSessionNow();
     }
@@ -2977,7 +2977,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_SET_NETWORK:
                     // Shouldn't be receiving this command before MOBIKE is active - determined with
                     // last IKE_AUTH response
-                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentStateName());
                     return NOT_HANDLED;
 
                 default:
@@ -3719,7 +3719,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_SET_NETWORK:
                     // Shouldn't be receiving this command before MOBIKE is active - determined with
                     // last IKE_AUTH response
-                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentStateName());
                     return NOT_HANDLED;
 
                 default:
@@ -4104,7 +4104,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_SET_NETWORK:
                     // Shouldn't be receiving this command before MOBIKE is active - determined with
                     // last IKE_AUTH response
-                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentStateName());
                     return NOT_HANDLED;
                 default:
                     return super.processStateMessage(msg);
@@ -4244,7 +4244,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_SET_NETWORK:
                     // Shouldn't be receiving this command before MOBIKE is active - determined with
                     // last IKE_AUTH response
-                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentStateName());
                     return NOT_HANDLED;
                 default:
                     return super.processStateMessage(msg);
@@ -4703,7 +4703,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         public IkeMessage buildRequest() {
             throw new UnsupportedOperationException(
-                    "Do not support sending request in " + getCurrentState().getName());
+                    "Do not support sending request in " + getCurrentStateName());
         }
 
         @Override
