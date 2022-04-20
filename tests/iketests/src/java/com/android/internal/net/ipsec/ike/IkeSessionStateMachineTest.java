@@ -6432,6 +6432,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobilityDisabledNetworkDies() throws Exception {
         IkeDefaultNetworkCallback callback =
                 verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
@@ -6442,6 +6443,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobilityDisabledNetworkUpdates() throws Exception {
         IkeDefaultNetworkCallback callback =
                 verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
