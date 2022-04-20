@@ -689,7 +689,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     () -> {
                         mUserCallback.onClosedWithException(wrapAsIkeException(e));
                     });
-            logWtf("Unexpected exception in " + getCurrentState().getName(), e);
+            logWtf("Unexpected exception in " + getCurrentStateName(), e);
             quitSessionNow();
         }
 
