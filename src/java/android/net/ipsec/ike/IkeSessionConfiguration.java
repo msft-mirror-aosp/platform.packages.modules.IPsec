@@ -217,7 +217,9 @@ public final class IkeSessionConfiguration {
     /**
      * Retrieves the EAP information.
      *
-     * @return the EAP information provided by the server during EAP authentication.
+     * @return the EAP information provided by the server during EAP authentication (e.g. next
+     *    re-authentication ID), or null if the server did not provide any information that will be
+     *    useful after the authentication.
      */
     @Nullable
     public EapInfo getEapInfo() {
