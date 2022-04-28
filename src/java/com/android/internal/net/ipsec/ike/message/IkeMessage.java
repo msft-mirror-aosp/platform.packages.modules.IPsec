@@ -17,6 +17,7 @@
 package com.android.internal.net.ipsec.ike.message;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
 
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_NOTIFY;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PayloadType;
@@ -24,7 +25,6 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PayloadType;
 import android.annotation.IntDef;
 import android.annotation.Nullable;
 import android.net.ipsec.ike.exceptions.IkeException;
-import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidMessageIdException;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -867,7 +867,7 @@ public final class IkeMessage {
             } catch (NegativeArraySizeException | BufferUnderflowException e) {
                 throw new InvalidSyntaxException("Malformed IKE Payload", e);
             } catch (GeneralSecurityException e) {
-                throw new IkeInternalException(e);
+                throw wrapAsIkeException(e);
             }
         }
 
