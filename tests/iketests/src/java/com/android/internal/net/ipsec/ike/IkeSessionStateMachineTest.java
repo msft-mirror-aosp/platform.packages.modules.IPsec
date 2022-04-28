@@ -133,9 +133,11 @@ import android.net.ipsec.test.ike.TransportModeChildSessionParams;
 import android.net.ipsec.test.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.test.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.test.ike.exceptions.IkeException;
+import android.net.ipsec.test.ike.exceptions.IkeIOException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.net.ipsec.test.ike.exceptions.IkeNetworkLostException;
 import android.net.ipsec.test.ike.exceptions.IkeProtocolException;
+import android.net.ipsec.test.ike.exceptions.IkeTimeoutException;
 import android.net.ipsec.test.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.test.ike.exceptions.NoValidProposalChosenException;
 import android.net.ipsec.test.ike.exceptions.UnrecognizedIkeProtocolException;
@@ -213,6 +215,7 @@ import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 import com.android.internal.net.ipsec.test.ike.utils.State;
 import com.android.internal.net.utils.test.Log;
 import com.android.internal.util.HexDump;
+import com.android.modules.utils.build.SdkLevel;
 
 import org.junit.After;
 import org.junit.Before;
@@ -1577,6 +1580,18 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         }).when(network).getAllByName(REMOTE_HOSTNAME);
     }
 
+    private void verifyFireCallbackOnDnsFailure(IkeSessionCallback callback) {
+        if (SdkLevel.isAtLeastT()) {
+            verify(callback).onClosedWithException(
+                    argThat(e -> e instanceof IkeIOException
+                            && e.getCause() instanceof UnknownHostException));
+        } else {
+            verify(callback).onClosedWithException(
+                    argThat(e -> e instanceof IkeInternalException
+                            && e.getCause() instanceof IOException));
+        }
+    }
+
     private void setupAndVerifyDnsResolutionForIkeSession(
             int dnsLookupsForSuccess, int expectedDnsLookups, boolean expectSessionClosed)
             throws Exception {
@@ -1602,12 +1617,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(mMockDefaultNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
         if (expectSessionClosed) {
             assertNull(mIkeSessionStateMachine.getCurrentState());
-            verify(mMockIkeSessionCallback)
-                    .onClosedWithException(
-                            argThat(
-                                    e ->
-                                            e instanceof IkeInternalException
-                                                    && e.getCause() instanceof IOException));
+            verifyFireCallbackOnDnsFailure(mMockIkeSessionCallback);
         }
     }
 
@@ -2062,6 +2072,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         protected IkeInitData mIkeInitData;
 
         IkeAuthTestPretestBase() {
+            this(new HashSet<>() /* peerSignatureHashAlgorithms */);
+        }
+
+        IkeAuthTestPretestBase(Set<Short> peerSignatureHashAlgorithms) {
             InitialSetupData initialSetupData =
                     new InitialSetupData(
                             mChildSessionParams,
@@ -2075,7 +2089,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                             new byte[0],
                             new IkeNoncePayload(createMockRandomFactory()),
                             new IkeNoncePayload(createMockRandomFactory()),
-                            new HashSet<Short>());
+                            peerSignatureHashAlgorithms);
         }
 
         public void mockIkeInitAndTransitionToIkeAuth() throws Exception {
@@ -2096,6 +2110,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private final class IkeFirstAuthTestPretest extends IkeAuthTestPretestBase {
         IkeFirstAuthTestPretest() {
             super();
+        }
+
+        IkeFirstAuthTestPretest(Set<Short> peerSignatureHashAlgorithms) {
+            super(peerSignatureHashAlgorithms);
         }
 
         @Override
@@ -3199,12 +3217,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         instanceof IkeSessionStateMachine.ChildProcedureOngoing);
     }
 
-    @Test
-    public void testCreateIkeLocalIkeAuthDigitalSignature() throws Exception {
+    private void verifyCreateIkeLocalIkeAuthDigitalSignature(Set<Short> peerSignatureHashAlgorithms)
+            throws Exception {
         // Quit and restart IKE Session with Digital Signature Auth params
         mIkeSessionStateMachine.quitNow();
         mIkeSessionStateMachine = makeAndStartIkeSession(buildIkeSessionParamsDigitalSignature());
-        new IkeFirstAuthTestPretest().mockIkeInitAndTransitionToIkeAuth();
+
+        new IkeFirstAuthTestPretest(peerSignatureHashAlgorithms)
+                .mockIkeInitAndTransitionToIkeAuth();
 
         // Build IKE AUTH response with Digital Signature Auth, ID-Responder and config payloads.
         List<IkePayload> authRelatedPayloads = new ArrayList<>();
@@ -3224,6 +3244,20 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 true /*hasChildPayloads*/,
                 true /*hasConfigPayloadInResp*/);
         verifyRetransmissionStopped();
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthRsaDigitalSignature() throws Exception {
+        verifyCreateIkeLocalIkeAuthDigitalSignature(new HashSet<>());
+    }
+
+    @Test
+    public void testCreateIkeLocalIkeAuthGenericDigitalSignature() throws Exception {
+        Set<Short> hashAlgos = new HashSet<Short>();
+        for (short algo : IkeAuthDigitalSignPayload.ALL_SIGNATURE_ALGO_TYPES) {
+            hashAlgos.add(algo);
+        }
+        verifyCreateIkeLocalIkeAuthDigitalSignature(hashAlgos);
     }
 
     @Test
@@ -6050,7 +6084,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testOnlyRfcMobikeEnabled() throws Exception {
         verifyRfcMobikeEnabled(true /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6058,7 +6092,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testOnlyRfcMobikeEnabledPeerUnsupported() throws Exception {
         verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(false /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6066,7 +6100,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testOnlyRekeyMobilityEnabled() throws Exception {
         verifyOnlyRekeyMobilityEnabled();
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6074,7 +6108,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeRekeyMobilityEnabled() throws Exception {
         verifyMobikeRekeyMobilityEnabled(true /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6082,7 +6116,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeRekeyMobilityEnabledPeerUnsupported() throws Exception {
         verifyMobikeRekeyMobilityEnabled(false /* doesPeerSupportMobike */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6103,7 +6137,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeEnabledNattSupportedIpv4() throws Exception {
         verifyMobikeEnabled(true /* doesPeerSupportNatt */, true /* isIpv4 */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6111,7 +6145,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeEnabledNattUnsupportedIpv4() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportNatt */, true /* isIpv4 */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     @Test
@@ -6119,7 +6153,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobikeEnabledNattUnsupportedIpv6() throws Exception {
         verifyMobikeEnabled(false /* doesPeerSupportNatt */, false /* isIpv4 */);
 
-        killSessionAndVerifyNetworkCallback(true /* expectCallbackUnregistered */);
+        killSessionAndVerifyNetworkCallback();
     }
 
     /**
@@ -6292,47 +6326,43 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 mIkeSessionStateMachine.mEnabledExtensions.contains(EXTENSION_TYPE_MOBIKE));
 
         if (rekeyMobilityEnabled || doesPeerSupportMobike) {
-
-            ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
-                    ArgumentCaptor.forClass(IkeNetworkCallbackBase.class);
-            // Expect different NetworkCallback registrations if there is a caller-configured
-            // Network
-            if (configuredNetwork == null) {
-                verify(mMockConnectManager)
-                        .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
-            } else {
-                verify(mMockConnectManager)
-                        .registerNetworkCallback(any(), networkCallbackCaptor.capture(), any());
-            }
-
-            IkeNetworkCallbackBase networkCallback = networkCallbackCaptor.getValue();
-            Class<? extends IkeNetworkCallbackBase> expectedCallbackType =
-                    configuredNetwork == null
-                            ? IkeDefaultNetworkCallback.class
-                            : IkeSpecificNetworkCallback.class;
-            assertTrue(expectedCallbackType.isInstance(networkCallback));
+            assertTrue(mSpyIkeConnectionCtrl.isMobilityEnabled());
             assertTrue(
                     getExpectedSocketType(
                                     doesPeerSupportNatt || doesEnableForceUdpEncap,
                                     isEnforcePort4500,
                                     isIpv4)
                             .isInstance(mSpyIkeConnectionCtrl.getIkeSocket()));
-            return networkCallback;
         } else {
-            verify(mMockConnectManager, never()).registerDefaultNetworkCallback(any(), any());
-            verify(mMockConnectManager, never()).registerNetworkCallback(any(), any(), any());
-            return null;
+            assertFalse(mSpyIkeConnectionCtrl.isMobilityEnabled());
         }
 
+        ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
+                ArgumentCaptor.forClass(IkeNetworkCallbackBase.class);
+        // Expect different NetworkCallback registrations if there is a caller-configured
+        // Network
+        if (configuredNetwork == null) {
+            verify(mMockConnectManager)
+                    .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
+        } else {
+            verify(mMockConnectManager)
+                    .registerNetworkCallback(any(), networkCallbackCaptor.capture(), any());
+        }
 
+        IkeNetworkCallbackBase networkCallback = networkCallbackCaptor.getValue();
+        Class<? extends IkeNetworkCallbackBase> expectedCallbackType =
+                configuredNetwork == null
+                        ? IkeDefaultNetworkCallback.class
+                        : IkeSpecificNetworkCallback.class;
+        assertTrue(expectedCallbackType.isInstance(networkCallback));
+        return networkCallback;
     }
 
-    private void killSessionAndVerifyNetworkCallback(boolean expectCallbackUnregistered) {
+    private void killSessionAndVerifyNetworkCallback() {
         mIkeSessionStateMachine.killSession();
         mLooper.dispatchAll();
 
-        verify(mMockConnectManager, expectCallbackUnregistered ? times(1) : never())
-                .unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
+        verify(mMockConnectManager).unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
     }
 
     /** Restarts the IkeSessionStateMachine with MOBIKE configured in the IkeSessionParams. */
@@ -6353,12 +6383,12 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             boolean rekeyMobilityEnabled)
             throws Exception {
         mIkeSessionStateMachine.quitNow();
+        mLooper.dispatchAll();
 
-        // makeAndStartIkeSession() expects no use of ConnectivityManager#getActiveNetwork when
-        // there is a configured Network. Use reset() to forget usage in setUp()
-        if (configuredNetwork != null) {
-            resetMockConnectManager();
-        }
+        // Clear ConnectivityManager#getActiveNetwork (#makeAndStartIkeSession() expects no use of
+        // ConnectivityManager#getActiveNetwork when there is a configured Network) and the network
+        // callback registration call in #setUp().
+        resetMockConnectManager();
 
         // Set local and remote address
         Network network = configuredNetwork == null ? mMockDefaultNetwork : configuredNetwork;
@@ -6391,31 +6421,36 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         return makeAndStartIkeSession(ikeSessionParamsBuilder.build(), localAddress, remoteAddress);
     }
 
+    private void verifyHandleNetworkChange() throws Exception {
+        if (SdkLevel.isAtLeastT()) {
+            verify(mMockIkeSessionCallback).onClosedWithException(any(IkeException.class));
+            assertNull(mIkeSessionStateMachine.getCurrentState());
+        } else {
+            verify(mMockIkeSessionCallback).onError(any(IkeException.class));
+            assertNotNull(mIkeSessionStateMachine.getCurrentState());
+        }
+    }
+
     @Test
     @SdkSuppress(minSdkVersion = 31, codeName = "S")
-    public void testMobikeNetworkCallbackRegistrationFails() throws Exception {
-        doThrow(new RuntimeException("Failed to register IKE NetworkCallback"))
-                .when(mMockConnectManager)
-                .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
-
-        mIkeSessionStateMachine = restartStateMachineWithRfcMobikeConfigured();
-        new IkeFirstAuthTestPretest().mockIkeInitAndTransitionToIkeAuth();
-
-        // Send IKE_AUTH resp and indicate MOBIKE support
-        List<IkePayload> authRelatedPayloads = new ArrayList<>();
-        authRelatedPayloads.add(makeSpyRespPskPayload());
-        authRelatedPayloads.add(makeRespIdPayload());
-        authRelatedPayloads.add(new IkeNotifyPayload(NOTIFY_TYPE_MOBIKE_SUPPORTED));
-        ReceivedIkePacket authResp = makeIkeAuthRespWithChildPayloads(authRelatedPayloads);
-        mIkeSessionStateMachine.sendMessage(
-                IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET, authResp);
+    public void testMobilityDisabledNetworkDies() throws Exception {
+        IkeDefaultNetworkCallback callback =
+                verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
+        callback.onLost(mMockDefaultNetwork);
         mLooper.dispatchAll();
 
-        verify(mMockConnectManager)
-                .registerDefaultNetworkCallback(any(IkeDefaultNetworkCallback.class), any());
-        verify(mMockIkeSessionCallback).onClosedWithException(any(IkeInternalException.class));
-        verify(mMockConnectManager).unregisterNetworkCallback(any(IkeDefaultNetworkCallback.class));
-        assertNull(mIkeSessionStateMachine.getCurrentState());
+        verifyHandleNetworkChange();
+    }
+
+    @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
+    public void testMobilityDisabledNetworkUpdates() throws Exception {
+        IkeDefaultNetworkCallback callback =
+                verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
+        callback.onAvailable(mock(Network.class));
+        mLooper.dispatchAll();
+
+        verifyHandleNetworkChange();
     }
 
     @Test
@@ -7129,12 +7164,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         verify(newNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
         if (expectSessionClosed) {
             assertNull(mIkeSessionStateMachine.getCurrentState());
-            verify(mMockIkeSessionCallback)
-                    .onClosedWithException(
-                            argThat(
-                                    e ->
-                                            e instanceof IkeInternalException
-                                                    && e.getCause() instanceof IOException));
+            verifyFireCallbackOnDnsFailure(mMockIkeSessionCallback);
         } else {
             assertTrue(mSpyIkeConnectionCtrl.getAllRemoteIpv4Addresses().isEmpty());
             assertEquals(
@@ -7193,5 +7223,29 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         verify(mMockIkeNattKeepalive).start();
+    }
+
+    @Test
+    public void testHandleRetransmissionTimeout() throws Exception {
+        mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
+
+        for (long delay :
+                mIkeSessionStateMachine.mIkeSessionParams.getRetransmissionTimeoutsMillis()) {
+            mLooper.dispatchAll();
+            mLooper.moveTimeForward(delay);
+        }
+
+        mLooper.dispatchAll();
+        assertNull(mIkeSessionStateMachine.getCurrentState());
+
+        if (SdkLevel.isAtLeastT()) {
+            verify(mMockIkeSessionCallback).onClosedWithException(
+                    argThat(e -> e instanceof IkeIOException
+                            && e.getCause() instanceof IkeTimeoutException));
+        } else {
+            verify(mMockIkeSessionCallback).onClosedWithException(
+                    argThat(e -> e instanceof IkeInternalException
+                            && e.getCause() instanceof IOException));
+        }
     }
 }
