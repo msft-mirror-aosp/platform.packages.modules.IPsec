@@ -163,6 +163,8 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.IkeProposal;
 import com.android.internal.net.ipsec.ike.message.IkeVendorPayload;
 import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
+import com.android.internal.net.ipsec.ike.shim.IIkeSessionStateMachineShim;
+import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver;
 import com.android.internal.net.ipsec.ike.utils.IkeSecurityParameterIndex;
@@ -212,7 +214,9 @@ import java.util.concurrent.atomic.AtomicInteger;
  * </pre>
  */
 public class IkeSessionStateMachine extends AbstractSessionStateMachine
-        implements IkeConnectionController.Callback, IkeSocket.Callback {
+        implements IkeConnectionController.Callback,
+                IkeSocket.Callback,
+                IIkeSessionStateMachineShim {
     // Package private
     static final String TAG = "IkeSessionStateMachine";
 
@@ -385,14 +389,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @GuardedBy("mChildCbToSessions")
     final HashMap<ChildSessionCallback, ChildSessionStateMachine> mChildCbToSessions =
             new HashMap<>();
-
-    /**
-     * Indicates IKE Session is able to handle network or address changes.
-     *
-     * <p>This field will be set in IKE AUTH. It will be true if 1) IKE_OPTION_MOBIKE is set and
-     * server sends NOTIFY_TYPE_MOBIKE_SUPPORTED, or 2) IKE_OPTION_REKEY_MOBILITY is set.
-     */
-    @VisibleForTesting boolean mMobilitySupported;
 
     /** Package private IkeSaProposal that represents the negotiated IKE SA proposal. */
     @VisibleForTesting IkeSaProposal mSaProposal;
@@ -1112,7 +1108,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     () -> {
                         mIkeSessionCallback.onClosedWithException(wrapAsIkeException(e));
                     });
-            logWtf("Unexpected exception in " + getCurrentState().getName(), e);
+            logWtf("Unexpected exception in " + getCurrentStateName(), e);
             quitSessionNow();
         }
 
@@ -1182,20 +1178,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void handleIkeFatalError(Exception error) {
         IkeException ikeException = wrapAsIkeException(error);
-        loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
-        try {
-            // Clean up all SaRecords.
-            closeAllSaRecords(false /*expectSaClosed*/);
-        } catch (Exception e) {
-            logWtf("Unexpected error in #handleIkeFatalError", e);
-        } finally {
-            executeUserCallback(
-                    () -> {
-                        mIkeSessionCallback.onClosedWithException(ikeException);
-                    });
-            quitSessionNow();
-        }
+        // Clean up all SaRecords.
+        closeAllSaRecords(false /*expectSaClosed*/);
+        executeUserCallback(
+                () -> {
+                    mIkeSessionCallback.onClosedWithException(ikeException);
+                });
+        loge("IKE Session fatal error in " + getCurrentStateName(), ikeException);
+
+        quitSessionNow();
     }
 
     /** Parent state used to delete IKE sessions */
@@ -1348,7 +1340,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     return NOT_HANDLED;
 
                 case CMD_SET_NETWORK:
-                    if (!mMobilitySupported) {
+                    if (!mIkeConnectionCtrl.isMobilityEnabled()) {
                         logi("setNetwork() called for session without mobility support.");
 
                         // TODO(b/224686889): Notify caller of failed mobility attempt.
@@ -1729,7 +1721,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     return HANDLED;
 
                 case CMD_SET_NETWORK:
-                    if (!mMobilitySupported) {
+                    if (!mIkeConnectionCtrl.isMobilityEnabled()) {
                         logi("setNetwork() called for session without mobility support.");
 
                         // TODO(b/224686889): Notify caller of failed mobility attempt.
@@ -2171,7 +2163,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         @Override
         public void handleRetransmissionFailure() {
-            handleIkeFatalError(new IOException("Retransmitting failure"));
+            handleIkeFatalError(
+                    ShimUtils.getInstance()
+                            .getRetransmissionFailedException("Retransmitting failure"));
         }
     }
 
@@ -2983,7 +2977,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_SET_NETWORK:
                     // Shouldn't be receiving this command before MOBIKE is active - determined with
                     // last IKE_AUTH response
-                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentStateName());
                     return NOT_HANDLED;
 
                 default:
@@ -3418,7 +3412,10 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             @Override
             public void handleRetransmissionFailure() {
-                handleIkeFatalError(new IOException("Retransmitting IKE INIT request failure"));
+                handleIkeFatalError(
+                        ShimUtils.getInstance()
+                                .getRetransmissionFailedException(
+                                        "Retransmitting IKE INIT request failure"));
             }
         }
     }
@@ -3675,20 +3672,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             if (mEnabledExtensions.contains(EXTENSION_TYPE_MOBIKE)) {
                 logd("Enabling RFC4555 MOBIKE mobility");
                 mIkeConnectionCtrl.enableMobility();
-                mMobilitySupported = true;
                 return;
             } else if (mIkeSessionParams.hasIkeOption(IKE_OPTION_REKEY_MOBILITY)) {
                 logd(
                         "Enabling Rekey based mobility: IKE Session will try updating Child SA"
                                 + " addresses with Rekey");
                 mIkeConnectionCtrl.enableMobility();
-                mMobilitySupported = true;
                 return;
             } else {
                 logd(
                         "Mobility not enabled: IKE Session will not be able to handle network or"
                                 + " address changes");
-                mMobilitySupported = false;
             }
         }
     }
@@ -3725,7 +3719,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_SET_NETWORK:
                     // Shouldn't be receiving this command before MOBIKE is active - determined with
                     // last IKE_AUTH response
-                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentStateName());
                     return NOT_HANDLED;
 
                 default:
@@ -4110,7 +4104,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_SET_NETWORK:
                     // Shouldn't be receiving this command before MOBIKE is active - determined with
                     // last IKE_AUTH response
-                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentStateName());
                     return NOT_HANDLED;
                 default:
                     return super.processStateMessage(msg);
@@ -4250,7 +4244,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 case CMD_SET_NETWORK:
                     // Shouldn't be receiving this command before MOBIKE is active - determined with
                     // last IKE_AUTH response
-                    logWtf("Received SET_NETWORK cmd in " + getCurrentState().getName());
+                    logWtf("Received SET_NETWORK cmd in " + getCurrentStateName());
                     return NOT_HANDLED;
                 default:
                     return super.processStateMessage(msg);
@@ -4709,7 +4703,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
         public IkeMessage buildRequest() {
             throw new UnsupportedOperationException(
-                    "Do not support sending request in " + getCurrentState().getName());
+                    "Do not support sending request in " + getCurrentStateName());
         }
 
         @Override
@@ -5648,7 +5642,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
     }
 
-    // This call will be only fired when mMobilitySupported is supported
+    // This call will be only fired when mIkeConnectionCtrl.isMobilityEnabled() is true
     @Override
     public void onUnderlyingNetworkUpdated() {
         // TODO(b/172013873): restart transmission timeouts on IKE SAs after changing networks
@@ -5657,11 +5651,17 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mLocalRequestFactory.getIkeLocalRequest(CMD_LOCAL_REQUEST_MOBIKE));
     }
 
-    // This call will be only fired when mMobilitySupported is supported
     @Override
     public void onUnderlyingNetworkDied(Network network) {
-        executeUserCallback(
-                () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
+        if (mIkeConnectionCtrl.isMobilityEnabled()) {
+            // Do not tear down the session because 1) callers might want to migrate the IKE Session
+            // when another network is available; 2) the termination from IKE Session might be
+            // racing with the termination call from the callers.
+            executeUserCallback(
+                    () -> mIkeSessionCallback.onError(new IkeNetworkLostException(network)));
+        } else {
+            ShimUtils.getInstance().onUnderlyingNetworkDiedWithoutMobility(this, network);
+        }
     }
 
     @Override
@@ -5672,5 +5672,16 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     @Override
     public void onIkePacketReceived(IkeHeader ikeHeader, byte[] ikePacketBytes) {
         sendMessage(CMD_RECEIVE_IKE_PACKET, new ReceivedIkePacket(ikeHeader, ikePacketBytes));
+    }
+
+    // Implementation of IIkeSessionStateMachineShim
+    @Override
+    public void onNonFatalError(Exception e) {
+        executeUserCallback(() -> mIkeSessionCallback.onError(wrapAsIkeException(e)));
+    }
+
+    @Override
+    public void onFatalError(Exception e) {
+        handleIkeFatalError(e);
     }
 }
