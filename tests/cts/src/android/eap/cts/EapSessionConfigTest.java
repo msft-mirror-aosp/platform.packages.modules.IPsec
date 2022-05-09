@@ -106,11 +106,12 @@ public class EapSessionConfigTest {
         assertTrue(NETWORK_NAME, eapAkaPrimeConfig.allowsMismatchedNetworkNames());
         verifyEapUiccConfigCommon(eapAkaPrimeConfig);
 
-        EapMsChapV2Config eapMsChapV2Config = result.getEapMsChapV2onfig();
+        EapMsChapV2Config eapMsChapV2Config = result.getEapMsChapV2Config();
         assertNotNull(eapMsChapV2Config);
         assertEquals(EAP_TYPE_MSCHAP_V2, eapMsChapV2Config.getMethodType());
         assertEquals(EAP_MSCHAPV2_USERNAME, eapMsChapV2Config.getUsername());
         assertEquals(EAP_MSCHAPV2_PASSWORD, eapMsChapV2Config.getPassword());
+        assertEquals(eapMsChapV2Config, result.getEapMsChapV2onfig());
 
         EapTtlsConfig eapTtlsConfig = result.getEapTtlsConfig();
         assertNotNull(eapTtlsConfig);
