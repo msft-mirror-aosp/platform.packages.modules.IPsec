@@ -16,8 +16,6 @@
 
 package android.net.ipsec.test.ike;
 
-import static android.net.eap.EapSessionConfig.EapMethodConfig.EAP_TYPE_AKA;
-
 import static com.android.internal.net.TestUtils.hexStringToByteArray;
 
 import static org.junit.Assert.assertArrayEquals;
@@ -60,7 +58,7 @@ public final class IkeSessionConfigurationTest {
     private static final List<byte[]> REMOTE_VENDOR_IDS;
     private static final List<Integer> ENABLED_EXTENSIONS;
     private static final EapInfo EAP_INFO =
-            new EapAkaInfo.Builder(EAP_TYPE_AKA).setReauthId(REAUTH_ID_BYTES).build();
+            new EapAkaInfo.Builder().setReauthId(REAUTH_ID_BYTES).build();
 
     static {
         REMOTE_VENDOR_IDS = new ArrayList<>();
