@@ -1853,10 +1853,6 @@ public final class IkeSessionParams {
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
-            if (ikeOption == IKE_OPTION_REKEY_MOBILITY) {
-                throw new IllegalArgumentException("Invalid IKE Option: " + ikeOption);
-            }
-
             return addIkeOptionInternal(ikeOption);
         }
 
@@ -1864,13 +1860,13 @@ public final class IkeSessionParams {
         @NonNull
         public Builder addIkeOptionInternal(@IkeOption int ikeOption) {
             validateIkeOptionOrThrow(ikeOption);
-            if (ikeOption == IKE_OPTION_MOBIKE) {
+            if (ikeOption == IKE_OPTION_MOBIKE || ikeOption == IKE_OPTION_REKEY_MOBILITY) {
                 if (!SdkLevel.isAtLeastS()) {
-                    throw new UnsupportedOperationException("MOBIKE only supported for S/S+");
-                } else if (!SdkLevel.isAtLeastT()) {
+                    throw new UnsupportedOperationException("Mobility only supported for S/S+");
+                } else if (!SdkLevel.isAtLeastT() && ikeOption == IKE_OPTION_MOBIKE) {
                     // Automatically enable IKE_OPTION_REKEY_MOBILITY if S <= SDK < T for
                     // compatibility
-                    addIkeOptionInternal(IKE_OPTION_REKEY_MOBILITY);
+                    mIkeOptions |= getOptionBitValue(IKE_OPTION_REKEY_MOBILITY);
                 }
             }
 
