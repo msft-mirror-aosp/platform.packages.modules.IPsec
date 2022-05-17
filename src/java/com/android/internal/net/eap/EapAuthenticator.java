@@ -166,7 +166,9 @@ public class EapAuthenticator extends Handler {
                                                             .getSimpleName());
 
                                     if (finalProcessResponse instanceof EapResponse) {
-                                        mCb.onResponse(((EapResponse) finalProcessResponse).packet);
+                                        mCb.onResponse(
+                                                ((EapResponse) finalProcessResponse).packet,
+                                                ((EapResponse) finalProcessResponse).flagMask);
                                     } else if (finalProcessResponse instanceof EapError) {
                                         EapError eapError = (EapError) finalProcessResponse;
                                         LOG.e(
@@ -178,9 +180,14 @@ public class EapAuthenticator extends Handler {
                                         LOG.d(
                                                 TAG,
                                                 "EapSuccess with"
-                                                        + " MSK=" + LOG.pii(eapSuccess.msk)
-                                                        + " EMSK=" + LOG.pii(eapSuccess.emsk));
-                                        mCb.onSuccess(eapSuccess.msk, eapSuccess.emsk);
+                                                        + " MSK="
+                                                        + LOG.pii(eapSuccess.msk)
+                                                        + " EMSK="
+                                                        + LOG.pii(eapSuccess.emsk));
+                                        mCb.onSuccess(
+                                                eapSuccess.msk,
+                                                eapSuccess.emsk,
+                                                eapSuccess.getEapInfo());
                                     } else { // finalProcessResponse instanceof EapFailure
                                         mCb.onFail();
                                     }
