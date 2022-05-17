@@ -971,11 +971,14 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .newIkeUdp6WithEncapPortSocket(any(), any(), any());
 
         mSpyIkeConnectionCtrl =
-                new IkeConnectionController(
-                        ikeContext,
-                        new IkeConnectionController.Config(
-                                ikeParams, mock(IkeAlarmConfig.class), mockIkeConnectionCtrlCb),
-                        spyIkeConnectionCtrlDeps);
+                spy(
+                        new IkeConnectionController(
+                                ikeContext,
+                                new IkeConnectionController.Config(
+                                        ikeParams,
+                                        mock(IkeAlarmConfig.class),
+                                        mockIkeConnectionCtrlCb),
+                                spyIkeConnectionCtrlDeps));
         mSpyDeps =
                 buildSpyDepsWithChildSession(
                         mMockChildSessionStateMachine, mMockChildSessionCallback);
@@ -1692,6 +1695,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     @Test
     public void testCreateIkeLocalIkeInitNegotiatesDhGroup() throws Exception {
+        // Clear the calls triggered by starting IkeSessionStateMachine in #setup()
+        reset(mSpyIkeConnectionCtrl);
+
         setupFirstIkeSa();
         mIkeSessionStateMachine.sendMessage(IkeSessionStateMachine.CMD_LOCAL_REQUEST_CREATE_IKE);
         mLooper.dispatchAll();
@@ -1709,6 +1715,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         verifyOutboundKePayload(SaProposal.DH_GROUP_2048_BIT_MODP);
+        verify(mSpyIkeConnectionCtrl, atLeast(1)).tearDown();
     }
 
     private ReceivedIkePacket getIkeInitRespWithCookie() throws Exception {
@@ -6432,6 +6439,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobilityDisabledNetworkDies() throws Exception {
         IkeDefaultNetworkCallback callback =
                 verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
@@ -6442,6 +6450,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     }
 
     @Test
+    @SdkSuppress(minSdkVersion = 31, codeName = "S")
     public void testMobilityDisabledNetworkUpdates() throws Exception {
         IkeDefaultNetworkCallback callback =
                 verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
