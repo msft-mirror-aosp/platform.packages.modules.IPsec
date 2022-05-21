@@ -189,8 +189,8 @@ public final class IkeSessionParams {
      * the remote supports rekey-based mobility. Failure to do so may lead to increased disruption
      * during mobility events.
      *
-     * <p>This option may be set together with {@link #OPTION_MOBIKE} as a fallback. If both {@link
-     * #IKE_OPTION_MOBIKE} and {@link #IKE_OPTION_REKEY_MOBILITY} are set:
+     * <p>This option may be set together with {@link #IKE_OPTION_MOBIKE} as a fallback. If both
+     * {@link #IKE_OPTION_MOBIKE} and {@link #IKE_OPTION_REKEY_MOBILITY} are set:
      *
      * <ul>
      *   <li>If the server has indicated MOBIKE support, MOBIKE will be used for mobility
@@ -210,7 +210,7 @@ public final class IkeSessionParams {
      * @see {@link IkeSession#setNetwork(Network)}
      * @hide
      */
-    public static final int IKE_OPTION_REKEY_MOBILITY = 5;
+    @SystemApi public static final int IKE_OPTION_REKEY_MOBILITY = 5;
 
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
     private static final int MAX_IKE_OPTION = IKE_OPTION_REKEY_MOBILITY;
@@ -1853,10 +1853,6 @@ public final class IkeSessionParams {
         @SuppressLint("MissingGetterMatchingBuilder")
         @NonNull
         public Builder addIkeOption(@IkeOption int ikeOption) {
-            if (ikeOption == IKE_OPTION_REKEY_MOBILITY) {
-                throw new IllegalArgumentException("Invalid IKE Option: " + ikeOption);
-            }
-
             return addIkeOptionInternal(ikeOption);
         }
 
@@ -1864,13 +1860,13 @@ public final class IkeSessionParams {
         @NonNull
         public Builder addIkeOptionInternal(@IkeOption int ikeOption) {
             validateIkeOptionOrThrow(ikeOption);
-            if (ikeOption == IKE_OPTION_MOBIKE) {
+            if (ikeOption == IKE_OPTION_MOBIKE || ikeOption == IKE_OPTION_REKEY_MOBILITY) {
                 if (!SdkLevel.isAtLeastS()) {
-                    throw new UnsupportedOperationException("MOBIKE only supported for S/S+");
-                } else if (!SdkLevel.isAtLeastT()) {
+                    throw new UnsupportedOperationException("Mobility only supported for S/S+");
+                } else if (!SdkLevel.isAtLeastT() && ikeOption == IKE_OPTION_MOBIKE) {
                     // Automatically enable IKE_OPTION_REKEY_MOBILITY if S <= SDK < T for
                     // compatibility
-                    addIkeOptionInternal(IKE_OPTION_REKEY_MOBILITY);
+                    mIkeOptions |= getOptionBitValue(IKE_OPTION_REKEY_MOBILITY);
                 }
             }
 
