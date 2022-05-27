@@ -22,21 +22,5 @@
         }
       ]
     }
-  ],
-  "postsubmit": [
-    {
-      "name": "FrameworksIkeTests"
-    },
-    {
-      "name": "CtsIkeTestCases"
-    },
-    {
-      "name": "CtsNetTestCases",
-      "options": [
-        {
-          "include-filter": "android.net.cts.Ikev2VpnTest"
-        }
-      ]
-    }
   ]
 }
