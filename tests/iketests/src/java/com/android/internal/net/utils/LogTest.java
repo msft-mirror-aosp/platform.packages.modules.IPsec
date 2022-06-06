@@ -57,4 +57,14 @@ public class LogTest {
 
         assertEquals(HEX_STRING, Log.byteArrayToHexString(HEX_BYTES));
     }
+
+    @Test
+    public void testWtfNeverCrashNotEngBuild() {
+        final Log log =
+                new Log(TAG,  false /* isEngBuild */, false /* logSensitive */);
+        final String errMsg = "testWtfNeverCrash";
+        log.wtf(TAG, errMsg);
+        log.wtf(TAG, errMsg, new Throwable());
+    }
+
 }
