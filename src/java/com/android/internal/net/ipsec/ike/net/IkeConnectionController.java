@@ -347,6 +347,10 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
     /** Sets up the IkeConnectionController */
     public void setUp() throws IkeException {
+        // Make sure all the resources, especially the NetworkCallback, is released before creating
+        // new one.
+        unregisterResources();
+
         try {
             resolveAndSetAvailableRemoteAddresses();
             setRemoteAddress();
@@ -391,10 +395,10 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         }
     }
 
-    /** Tears down the IkeConnectionController */
-    public void tearDown() {
+    private void unregisterResources() {
         if (mIkeNattKeepalive != null) {
             mIkeNattKeepalive.stop();
+            mIkeNattKeepalive = null;
         }
 
         if (mNetworkCallback != null) {
@@ -402,13 +406,21 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             mNetworkCallback = null;
         }
 
-        for (IkeSaRecord saRecord : mIkeSaRecords) {
-            unregisterIkeSaRecord(saRecord);
+        if (mIkeSocket != null) {
+            for (IkeSaRecord saRecord : mIkeSaRecords) {
+                mIkeSocket.unregisterIke(saRecord.getLocalSpi());
+            }
+
+            mIkeSocket.releaseReference(this);
+            mIkeSocket = null;
         }
 
-        if (mIkeSocket != null) {
-            mIkeSocket.releaseReference(this);
-        }
+        mIkeSaRecords.clear();
+    }
+
+    /** Tears down the IkeConnectionController */
+    public void tearDown() {
+        unregisterResources();
     }
 
     /** Returns the IkeSocket */
