@@ -206,7 +206,7 @@ public class Log {
     /**
      * What a Terrible Failure: Report a condition that should never happen.
      * The error will always be logged at level ASSERT with the call stack.
-     * Depending on system configuration, a report may be added to the
+     * Depending on system and logging configuration, a report may be added to the
      * {@link android.os.DropBoxManager} and/or the process may be terminated
      * immediately with an error dialog.
      *
@@ -214,14 +214,17 @@ public class Log {
      * @param msg the String msg to be logged
      */
     public void wtf(String prefix, String msg) {
-        android.util.Log.wtf(mTAG, prefix + ": " + msg);
-
+        if (mIsEngBuild) {
+            android.util.Log.wtf(mTAG, prefix + ": " + msg);
+        } else {
+            android.util.Log.e(mTAG, prefix + ": " + msg);
+        }
     }
 
     /**
      * What a Terrible Failure: Report a condition that should never happen.
      * The error will always be logged at level ASSERT with the call stack.
-     * Depending on system configuration, a report may be added to the
+     * Depending on system and logging configuration, a report may be added to the
      * {@link android.os.DropBoxManager} and/or the process may be terminated
      * immediately with an error dialog.
      *
@@ -230,7 +233,11 @@ public class Log {
      * @param tr an Exception to log
      */
     public void wtf(String prefix, String msg, Throwable tr) {
-        android.util.Log.wtf(mTAG, prefix + ": " + msg, tr);
+        if (mIsEngBuild) {
+            android.util.Log.wtf(mTAG, prefix + ": " + msg, tr);
+        } else {
+            android.util.Log.e(mTAG, prefix + ": " + msg, tr);
+        }
     }
 
     /**
