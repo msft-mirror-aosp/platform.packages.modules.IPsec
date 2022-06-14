@@ -32,7 +32,7 @@ public class LogTest {
 
     @Test
     public void testPii() {
-        // Log(String tag, boolean isEngBuild, boolean logSensitive);
+        // Log(String tag, boolean isVdbg, boolean logSensitive);
         String result = new Log(TAG, false, false).pii(PII);
         assertEquals(Integer.toString(PII.hashCode()), result);
 
@@ -60,8 +60,7 @@ public class LogTest {
 
     @Test
     public void testWtfNeverCrashNotEngBuild() {
-        final Log log =
-                new Log(TAG,  false /* isEngBuild */, false /* logSensitive */);
+        final Log log = new Log(TAG, false /* isVdbg */, false /* logSensitive */);
         final String errMsg = "testWtfNeverCrash";
         log.wtf(TAG, errMsg);
         log.wtf(TAG, errMsg, new Throwable());
