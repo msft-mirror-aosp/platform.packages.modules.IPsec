@@ -28,7 +28,7 @@ public class Log {
     private static final boolean VDBG = false;
 
     private final String mTAG;
-    private final boolean mIsEngBuild;
+    private final boolean mIsVdbg;
     private final boolean mLogSensitive;
 
     /**
@@ -42,9 +42,9 @@ public class Log {
     }
 
     @VisibleForTesting
-    Log(String tag, boolean isEngBuild, boolean logSensitive) {
+    Log(String tag, boolean isVdbg, boolean logSensitive) {
         this.mTAG = tag;
-        this.mIsEngBuild = isEngBuild;
+        this.mIsVdbg = isVdbg;
         this.mLogSensitive = logSensitive;
     }
 
@@ -214,7 +214,11 @@ public class Log {
      * @param msg the String msg to be logged
      */
     public void wtf(String prefix, String msg) {
-        if (mIsEngBuild) {
+        // TODO: b/235893463 IKE need to depend on mIsVdbg so that IKE can avoid crashing system
+        // server on userdebug build and as the same time to be easily configured to crash on eng
+        // build for development. This check can be removed when there is an API to support
+        // process ID based logging.
+        if (mIsVdbg) {
             android.util.Log.wtf(mTAG, prefix + ": " + msg);
         } else {
             android.util.Log.e(mTAG, prefix + ": " + msg);
@@ -233,7 +237,11 @@ public class Log {
      * @param tr an Exception to log
      */
     public void wtf(String prefix, String msg, Throwable tr) {
-        if (mIsEngBuild) {
+        // TODO: b/235893463 IKE need to depend on mIsVdbg so that IKE can avoid crashing system
+        // server on userdebug build and as the same time to be easily configured to crash on eng
+        // build for development. This check can be removed when there is an API to support
+        // process ID based logging.
+        if (mIsVdbg) {
             android.util.Log.wtf(mTAG, prefix + ": " + msg, tr);
         } else {
             android.util.Log.e(mTAG, prefix + ": " + msg, tr);
@@ -250,7 +258,7 @@ public class Log {
      * @return the String-formatted version of the PII
      */
     public String pii(Object pii) {
-        if (!mIsEngBuild || !mLogSensitive) {
+        if (!mIsVdbg || !mLogSensitive) {
             return String.valueOf(Objects.hashCode(pii));
         } else {
             if (pii instanceof byte[]) {
