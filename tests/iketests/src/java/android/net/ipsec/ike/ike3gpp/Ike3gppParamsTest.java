@@ -39,7 +39,7 @@ public class Ike3gppParamsTest {
         Ike3gppParams ike3gppParams = new Ike3gppParams.Builder().build();
 
         assertEquals(PDU_SESSION_ID_UNSET, ike3gppParams.getPduSessionId());
-        assertEquals(null, ike3gppParams.getMobileDeviceIdentity());
+        assertEquals(null, ike3gppParams.getDeviceIdentity());
     }
 
     @Test
@@ -47,7 +47,7 @@ public class Ike3gppParamsTest {
         Ike3gppParams ike3gppParams =
                 new Ike3gppParams.Builder().setMobileDeviceIdentity(DEVICE_IDENTITY_IMEI).build();
 
-        assertEquals(DEVICE_IDENTITY_IMEI, ike3gppParams.getMobileDeviceIdentity());
+        assertEquals(DEVICE_IDENTITY_IMEI, ike3gppParams.getDeviceIdentity());
     }
 
     @Test
@@ -58,7 +58,7 @@ public class Ike3gppParamsTest {
                         .setMobileDeviceIdentity(null)
                         .build();
 
-        assertEquals(null, ike3gppParams.getMobileDeviceIdentity());
+        assertEquals(null, ike3gppParams.getDeviceIdentity());
     }
 
     @Test

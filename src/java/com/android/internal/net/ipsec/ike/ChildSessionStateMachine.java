@@ -17,7 +17,6 @@ package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 import static android.net.ipsec.ike.SaProposal.DH_GROUP_NONE;
-import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_TEMPORARY_FAILURE;
 
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.BUNDLE_KEY_CHILD_REMOTE_SPI;
@@ -61,6 +60,7 @@ import android.net.ipsec.ike.IkeTrafficSelector;
 import android.net.ipsec.ike.SaProposal;
 import android.net.ipsec.ike.TunnelModeChildSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
+import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidKeException;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
@@ -687,9 +687,9 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
 
             executeUserCallback(
                     () -> {
-                        mUserCallback.onClosedWithException(wrapAsIkeException(e));
+                        mUserCallback.onClosedWithException(new IkeInternalException(e));
                     });
-            logWtf("Unexpected exception in " + getCurrentStateName(), e);
+            logWtf("Unexpected exception in " + getCurrentState().getName(), e);
             quitSessionNow();
         }
 
@@ -737,15 +737,19 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     private void handleChildFatalError(Exception error) {
-        IkeException ikeException = wrapAsIkeException(error);
-        loge("Child Session fatal error", ikeException);
+        IkeException ikeException =
+                error instanceof IkeException
+                        ? (IkeException) error
+                        : new IkeInternalException(error);
 
-        // Clean up all SaRecords and quit
-        closeAllSaRecords(false /*expectSaClosed*/);
         executeUserCallback(
                 () -> {
                     mUserCallback.onClosedWithException(ikeException);
                 });
+        loge("Child Session fatal error", ikeException);
+
+        // Clean up all SaRecords and quit
+        closeAllSaRecords(false /*expectSaClosed*/);
         quitSessionNow();
     }
 
@@ -762,11 +766,13 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
         public boolean processStateMessage(Message message) {
             switch (message.what) {
                 case CMD_KILL_SESSION:
-                    closeAllSaRecords(false /*expectSaClosed*/);
                     executeUserCallback(
                             () -> {
                                 mUserCallback.onClosed();
                             });
+
+                    closeAllSaRecords(false /*expectSaClosed*/);
+
                     quitSessionNow();
                     return HANDLED;
                 default:
@@ -1261,8 +1267,8 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                     new OnIpSecSaPairDeletedRunnable(mCurrentChildSaRecord);
             executeUserCallback(
                     () -> {
-                        delRunnable.run();
                         mUserCallback.onClosed();
+                        delRunnable.run();
                     });
 
             mChildSmCallback.onChildSaDeleted(mCurrentChildSaRecord.getRemoteSpi());
@@ -2418,7 +2424,7 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
                                     "Processing error in received Create Child response", e));
                 } else {
                     return new CreateChildResult(
-                            CREATE_STATUS_CHILD_ERROR_INVALID_MSG, wrapAsIkeException(e));
+                            CREATE_STATUS_CHILD_ERROR_INVALID_MSG, new IkeInternalException(e));
                 }
             }
         }

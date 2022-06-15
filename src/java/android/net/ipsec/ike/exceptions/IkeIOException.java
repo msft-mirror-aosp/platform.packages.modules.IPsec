@@ -25,7 +25,11 @@ import java.io.IOException;
 import java.net.UnknownHostException;
 import java.util.Objects;
 
-/** Wrapper for I/O exceptions encountered during IKE operations. */
+/**
+ * Wrapper for I/O exceptions encountered during IKE operations.
+ *
+ * @hide
+ */
 // Does not make sense to name it IkeIoException since "I" and "O" represent two words. The current
 // name follows the convention set by Java.
 @SuppressLint("AcronymName")
@@ -39,6 +43,7 @@ public final class IkeIOException extends IkeNonProtocolException {
      *
      * @param cause the cause (which is saved for later retrieval by the {@link #getCause()}
      *     method).
+     * @hide
      */
     public IkeIOException(@NonNull IOException cause) {
         super(Objects.requireNonNull(cause, "cause MUST NOT be null"));
@@ -50,6 +55,7 @@ public final class IkeIOException extends IkeNonProtocolException {
      * @return the cause of this IkeIOException. It might be a subclass of IOException that
      *     represents a specific type of I/O issue. For example, {@link UnknownHostException} and
      *     {@link IkeTimeoutException}.
+     * @hide
      */
     @Override
     @NonNull

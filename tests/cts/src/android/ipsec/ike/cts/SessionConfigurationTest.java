@@ -25,7 +25,6 @@ import static android.ipsec.ike.cts.IkeSessionTestBase.EXPECTED_INTERNAL_LINK_AD
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
 
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -33,7 +32,6 @@ import static org.junit.Assert.assertTrue;
 import android.net.InetAddresses;
 import android.net.IpPrefix;
 import android.net.Network;
-import android.net.eap.EapAkaInfo;
 import android.net.ipsec.ike.ChildSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionConfiguration;
 import android.net.ipsec.ike.IkeSessionConnectionInfo;
@@ -45,7 +43,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.net.InetAddress;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -65,8 +62,6 @@ public class SessionConfigurationTest extends IkeTestNetworkBase {
     private static final IpPrefix SUBNET_V6 = new IpPrefix(EXPECTED_INTERNAL_ADDR_V6, 64);
     private static final InetAddress DHCP_SERVER =
             InetAddresses.parseNumericAddress("198.51.100.111");
-    private static final byte[] REAUTH_ID =
-            "testFastReauth@android.net".getBytes(StandardCharsets.UTF_8);
 
     private interface IkeSessionConnectionInfoTestRunner {
         void run(IkeSessionConnectionInfo connectionInfo, Network network) throws Exception;
@@ -99,8 +94,7 @@ public class SessionConfigurationTest extends IkeTestNetworkBase {
                 .addPcscfServer(PCSCF_IPV6_ADDRESS_1)
                 .addRemoteVendorId(REMOTE_VENDOR_ID_1)
                 .addRemoteVendorId(REMOTE_VENDOR_ID_2)
-                .setRemoteApplicationVersion(REMOTE_APP_VERSION)
-                .setEapInfo(new EapAkaInfo.Builder().setReauthId(REAUTH_ID).build());
+                .setRemoteApplicationVersion(REMOTE_APP_VERSION);
     }
 
     @Test
@@ -122,7 +116,6 @@ public class SessionConfigurationTest extends IkeTestNetworkBase {
                             Arrays.asList(REMOTE_VENDOR_ID_1, REMOTE_VENDOR_ID_2),
                             config.getRemoteVendorIds());
                     assertEquals(REMOTE_APP_VERSION, config.getRemoteApplicationVersion());
-                    assertArrayEquals(REAUTH_ID, ((EapAkaInfo) config.getEapInfo()).getReauthId());
                 });
     }
 

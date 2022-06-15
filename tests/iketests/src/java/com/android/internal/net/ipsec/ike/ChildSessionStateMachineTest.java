@@ -59,10 +59,8 @@ import static org.mockito.Matchers.anyObject;
 import static org.mockito.Matchers.anyString;
 import static org.mockito.Matchers.argThat;
 import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
@@ -136,7 +134,6 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
@@ -834,26 +831,9 @@ public final class ChildSessionStateMachineTest {
     }
 
     private void verifyNotifyUsersDeleteSession(Executor spyExecutor) {
-        verifyNotifyUsersDeleteSession(spyExecutor, null);
-    }
-
-    private void verifyNotifyUsersDeleteSession(
-            Executor spyExecutor, Class<? extends IkeException> exceptionClass) {
-        verify(spyExecutor, atLeastOnce()).execute(any(Runnable.class));
+        verify(spyExecutor).execute(any(Runnable.class));
+        verify(mMockChildSessionCallback).onClosed();
         verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
-
-        InOrder orderVerifier = inOrder(mMockChildSessionCallback);
-        orderVerifier
-                .verify(mMockChildSessionCallback, times(2))
-                .onIpSecTransformDeleted(any(), anyInt());
-
-        if (exceptionClass == null) {
-            orderVerifier.verify(mMockChildSessionCallback).onClosed();
-        } else {
-            orderVerifier
-                    .verify(mMockChildSessionCallback)
-                    .onClosedWithException(any(exceptionClass));
-        }
     }
 
     @Test
@@ -1403,7 +1383,8 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify user was notified and state machine has quit.
-        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor, InvalidSyntaxException.class);
+        verifyHandleFatalErrorAndQuit(InvalidSyntaxException.class);
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
 
         // Verify no SPI for provisional Child was registered.
         verify(mMockChildSessionSmCallback, never())
@@ -1444,7 +1425,8 @@ public final class ChildSessionStateMachineTest {
         mLooper.dispatchAll();
 
         // Verify user was notified and state machine has quit.
-        verifyNotifyUsersDeleteSession(mSpyUserCbExecutor, IkeInternalException.class);
+        verifyHandleFatalErrorAndQuit(IkeInternalException.class);
+        verifyNotifyUserDeleteChildSa(mSpyCurrentChildSaRecord);
 
         // Verify SPI for provisional Child was registered and unregistered.
         verify(mMockChildSessionSmCallback)

@@ -67,7 +67,7 @@ class Ike3gppIkeAuth extends Ike3gppExchangeBase {
         List<IkePayload> ike3gppPayloads = new ArrayList<>();
 
         if (mIsDeviceIdentityRequestedByNetwork && serverAuthenticated) {
-            String deviceIdentity = mIke3gppExtension.getIke3gppParams().getMobileDeviceIdentity();
+            String deviceIdentity = mIke3gppExtension.getIke3gppParams().getDeviceIdentity();
             if (deviceIdentity != null) {
                 ike3gppPayloads.add(
                         Ike3gppDeviceIdentityUtils.generateDeviceIdentityPayload(deviceIdentity));

@@ -22,7 +22,6 @@ import android.os.Message;
 import android.util.SparseArray;
 
 import com.android.internal.annotations.VisibleForTesting;
-import com.android.internal.util.IState;
 import com.android.internal.util.State;
 import com.android.internal.util.StateMachine;
 
@@ -207,15 +206,6 @@ abstract class AbstractSessionStateMachine extends StateMachine {
     protected void quitSessionNow() {
         mIsClosing = true;
         quitNow();
-    }
-
-    protected String getCurrentStateName() {
-        final IState state = getCurrentState();
-        if (state != null) {
-            return state.getName();
-        }
-
-        return "Null State";
     }
 
     @Override

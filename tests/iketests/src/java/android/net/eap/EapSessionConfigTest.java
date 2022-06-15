@@ -101,9 +101,9 @@ public class EapSessionConfigTest {
         assertEquals(SUB_ID, eapAkaConfig.getSubId());
         assertEquals(APPTYPE_USIM, eapAkaConfig.getAppType());
         if (withOption) {
-            assertArrayEquals(REAUTH_ID_BYTES, eapAkaConfig.getEapAkaOption().getReauthId());
+            assertArrayEquals(REAUTH_ID_BYTES, eapAkaConfig.getOptions().getReauthId());
         } else {
-            assertNull(eapAkaConfig.getEapAkaOption());
+            assertNull(eapAkaConfig.getOptions());
         }
     }
 
