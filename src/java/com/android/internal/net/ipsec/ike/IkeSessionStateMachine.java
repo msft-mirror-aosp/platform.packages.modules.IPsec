@@ -1213,6 +1213,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     class Initial extends ExceptionHandler {
         private InitialSetupData mInitialSetupData;
 
+        /** Reset resources that might have been created when this state was entered previously */
+        private void reset() {
+            mIkeConnectionCtrl.tearDown();
+        }
+
         @Override
         public void enterState() {
             if (mInitialSetupData == null) {
@@ -1220,6 +1225,8 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         wrapAsIkeException(new IllegalStateException("mInitialSetupData is null")));
                 return;
             }
+
+            reset();
 
             try {
                 mIkeConnectionCtrl.setUp();

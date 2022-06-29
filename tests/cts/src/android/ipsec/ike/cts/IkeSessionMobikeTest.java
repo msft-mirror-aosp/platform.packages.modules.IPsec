@@ -18,12 +18,13 @@ package android.ipsec.ike.cts;
 
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_REKEY_MOBILITY;
 import static android.net.ipsec.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
 import static android.net.ipsec.ike.SaProposal.ENCRYPTION_ALGORITHM_AES_CBC;
 import static android.net.ipsec.ike.SaProposal.INTEGRITY_ALGORITHM_AES_CMAC_96;
 import static android.net.ipsec.ike.SaProposal.KEY_LEN_AES_128;
 import static android.net.ipsec.ike.SaProposal.PSEUDORANDOM_FUNCTION_AES128_CMAC;
-import static android.os.Build.VERSION_CODES;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -44,8 +45,8 @@ import android.platform.test.annotations.AppModeFull;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.filters.SdkSuppress;
 
+import com.android.modules.utils.build.SdkLevel;
 import com.android.testutils.DevSdkIgnoreRule;
-import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
 
 import org.junit.After;
 import org.junit.Before;
@@ -147,8 +148,11 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         if (!hasTunnelsFeature()) return;
 
         final IkeSession ikeSession =
-                setupAndVerifyIkeSessionWithOptionMobike(
-                        IKE_INIT_RESP, IKE_AUTH_RESP, true /* mobikeSupportedByServer */);
+                setupAndVerifyIkeSessionWithMobility(
+                        IKE_INIT_RESP,
+                        IKE_AUTH_RESP,
+                        true /* mobikeSupportedByServer */,
+                        new int[] {IKE_OPTION_MOBIKE});
 
         final IpSecTransformCallRecord firstTransformRecordA =
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();
@@ -182,8 +186,11 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         verifyCloseIkeAndChildBlocking(migrateRecords[0], migrateRecords[1]);
     }
 
-    private IkeSession setupAndVerifyIkeSessionWithOptionMobike(
-            String ikeInitRespHex, String ikeAuthRespHex, boolean mobikeSupportedByServer)
+    private IkeSession setupAndVerifyIkeSessionWithMobility(
+            String ikeInitRespHex,
+            String ikeAuthRespHex,
+            boolean mobikeSupportedByServer,
+            int[] ikeOptions)
             throws Exception {
         final IkeSaProposal saProposal =
                 new IkeSaProposal.Builder()
@@ -192,10 +199,14 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                         .addPseudorandomFunction(PSEUDORANDOM_FUNCTION_AES128_CMAC)
                         .addDhGroup(DH_GROUP_2048_BIT_MODP)
                         .build();
-        final IkeSessionParams ikeParams =
-                createIkeParamsBuilderBase(mRemoteAddress, saProposal)
-                        .addIkeOption(IkeSessionParams.IKE_OPTION_MOBIKE)
-                        .build();
+
+        final IkeSessionParams.Builder ikeParamsBuilder =
+                createIkeParamsBuilderBase(mRemoteAddress, saProposal);
+        for (int option : ikeOptions) {
+            ikeParamsBuilder.addIkeOption(option);
+        }
+
+        final IkeSessionParams ikeParams = ikeParamsBuilder.build();
 
         final IkeSession ikeSession = openIkeSessionWithTunnelModeChild(mRemoteAddress, ikeParams);
         performSetupIkeAndFirstChildBlocking(
@@ -279,8 +290,11 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         if (!hasTunnelsFeature()) return;
 
         final IkeSession ikeSession =
-                setupAndVerifyIkeSessionWithOptionMobike(
-                        IKE_INIT_RESP, IKE_AUTH_RESP, true /* mobikeSupportedByServer */);
+                setupAndVerifyIkeSessionWithMobility(
+                        IKE_INIT_RESP,
+                        IKE_AUTH_RESP,
+                        true /* mobikeSupportedByServer */,
+                        new int[] {IKE_OPTION_MOBIKE});
 
         // Teardown test network to kill the IKE Session
         mTunNetworkContext.close();
@@ -293,8 +307,6 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         ikeSession.kill();
     }
 
-    // TODO: Re-enable it on T/T+ when IKE_OPTION_REKEY_MOBILITY is exposed
-    @IgnoreAfter(VERSION_CODES.S_V2)
     @Test
     public void testSetNetworkWithoutMobikeEnabled() throws Exception {
         if (!hasTunnelsFeature()) return;
@@ -341,11 +353,16 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                         + "59205A0B069A0D6C95B044B16DC655BA28A968463CCBCF60996EE56897C14F2C"
                         + "FF9F15D1120A78DD2DE2E1C9";
 
+        final int[] ikeOptions =
+                SdkLevel.isAtLeastT()
+                        ? new int[] {IKE_OPTION_MOBIKE, IKE_OPTION_REKEY_MOBILITY}
+                        : new int[] {IKE_OPTION_MOBIKE};
         final IkeSession ikeSession =
-                setupAndVerifyIkeSessionWithOptionMobike(
+                setupAndVerifyIkeSessionWithMobility(
                         ikeInitResp,
                         IkeAuthRespWithoutMobikeSupport,
-                        false /* mobikeSupportedByServer */);
+                        false /* mobikeSupportedByServer */,
+                        ikeOptions);
 
         final IpSecTransformCallRecord firstTransformRecordA =
                 mFirstChildSessionCallback.awaitNextCreatedIpSecTransform();

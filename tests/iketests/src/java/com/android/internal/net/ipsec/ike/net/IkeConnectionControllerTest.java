@@ -179,6 +179,11 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verifyKeepalive();
     }
 
+    private void verifyTearDown() {
+        verify(mMockConnectManager).unregisterNetworkCallback(any(NetworkCallback.class));
+        verify(mMockIkeUdp4Socket).releaseReference(mIkeConnectionCtrl);
+    }
+
     private void verifySetupAndTeardownWithNw(Network callerConfiguredNw) throws Exception {
         mIkeConnectionCtrl.tearDown();
 
@@ -202,7 +207,20 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verifySetup(expectedNetwork, LOCAL_ADDRESS, REMOTE_ADDRESS, IkeUdp4Socket.class);
 
         mIkeConnectionCtrl.tearDown();
-        verify(mMockConnectManager).unregisterNetworkCallback(any(NetworkCallback.class));
+        verifyTearDown();
+    }
+
+    private void verifyTearDownInSecondSetup(Network callerConfiguredNw) throws Exception {
+        mIkeConnectionCtrl.tearDown();
+
+        // Clear the network callback registration call in #setUp()
+        resetMockConnectManager();
+
+        mIkeConnectionCtrl = buildIkeConnectionCtrlWithNetwork(callerConfiguredNw);
+        mIkeConnectionCtrl.setUp();
+        mIkeConnectionCtrl.setUp();
+
+        verifyTearDown();
     }
 
     private Class<? extends IkeSocket> getExpectedSocketType(boolean isIpv4, boolean force4500) {
@@ -255,6 +273,16 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Test
     public void testSetupAndTeardownWithConfiguredNw() throws Exception {
         verifySetupAndTeardownWithNw(mMockCallerConfiguredNetwork);
+    }
+
+    @Test
+    public void testTearDownInSecondSetupWithDefaultNw() throws Exception {
+        verifyTearDownInSecondSetup(null /* callerConfiguredNw */);
+    }
+
+    @Test
+    public void testTearDownInSecondSetupWithConfiguredNw() throws Exception {
+        verifyTearDownInSecondSetup(mMockCallerConfiguredNetwork);
     }
 
     @Test
