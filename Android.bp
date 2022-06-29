@@ -102,6 +102,7 @@ filegroup {
 // Provides internal classes needed to build the ike sources.
 java_library {
     name: "ike-internals",
+    min_sdk_version: "30",
     apex_available: [
         "com.android.ipsec",
         "test_com.android.ipsec",
