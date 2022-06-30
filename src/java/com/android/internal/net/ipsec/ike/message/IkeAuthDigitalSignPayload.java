@@ -18,6 +18,7 @@ package com.android.internal.net.ipsec.ike.message;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 
+import android.annotation.NonNull;
 import android.annotation.StringDef;
 import android.net.ipsec.ike.exceptions.AuthenticationFailedException;
 import android.net.ipsec.ike.exceptions.IkeProtocolException;
@@ -342,7 +343,14 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
 
     @Override
     public String getTypeString() {
-        return "Auth(Digital Sign)";
+        switch (authMethod) {
+            case AUTH_METHOD_RSA_DIGITAL_SIGN:
+                return "Auth(RSA Digital Sign)";
+            case AUTH_METHOD_GENERIC_DIGITAL_SIGN:
+                return "Auth(Generic Digital Sign)";
+            default:
+                throw new IllegalArgumentException("Unrecognized authentication method.");
+        }
     }
 
     /**
@@ -354,6 +362,7 @@ public class IkeAuthDigitalSignPayload extends IkeAuthPayload {
      * @throws InvalidSyntaxException if the included Signature Hash Algorithms are not serialized
      *     correctly
      */
+    @NonNull
     public static Set<Short> getSignatureHashAlgorithmsFromIkeNotifyPayload(
             IkeNotifyPayload notifyPayload) throws InvalidSyntaxException {
         if (notifyPayload.notifyType != IkeNotifyPayload.NOTIFY_TYPE_SIGNATURE_HASH_ALGORITHMS) {

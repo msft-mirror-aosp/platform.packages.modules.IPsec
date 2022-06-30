@@ -248,7 +248,7 @@ public final class IkeNotifyPayload extends IkeInformationalPayload {
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_USE_TRANSPORT_MODE, "Use transport mode");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_REKEY_SA, "Rekey SA");
         NOTIFY_TYPE_TO_STRING.put(
-                NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED, "ESP TCP Padding not supported");
+                NOTIFY_TYPE_ESP_TFC_PADDING_NOT_SUPPORTED, "ESP TFC Padding not supported");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_MOBIKE_SUPPORTED, "MOBIKE supported");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_UPDATE_SA_ADDRESSES, "UPDATE_SA_ADDRESSES");
         NOTIFY_TYPE_TO_STRING.put(NOTIFY_TYPE_COOKIE2, "COOKIE2");
