@@ -206,7 +206,7 @@ public class Log {
     /**
      * What a Terrible Failure: Report a condition that should never happen.
      * The error will always be logged at level ASSERT with the call stack.
-     * Depending on system and logging configuration, a report may be added to the
+     * Depending on system configuration, a report may be added to the
      * {@link android.os.DropBoxManager} and/or the process may be terminated
      * immediately with an error dialog.
      *
@@ -214,21 +214,13 @@ public class Log {
      * @param msg the String msg to be logged
      */
     public void wtf(String prefix, String msg) {
-        // TODO: b/235893463 IKE need to depend on mIsVdbg so that IKE can avoid crashing system
-        // server on userdebug build and as the same time to be easily configured to crash on eng
-        // build for development. This check can be removed when there is an API to support
-        // process ID based logging.
-        if (mIsVdbg) {
-            android.util.Log.wtf(mTAG, prefix + ": " + msg);
-        } else {
-            android.util.Log.e(mTAG, prefix + ": " + msg);
-        }
+        android.util.Log.wtf(mTAG, prefix + ": " + msg);
     }
 
     /**
      * What a Terrible Failure: Report a condition that should never happen.
      * The error will always be logged at level ASSERT with the call stack.
-     * Depending on system and logging configuration, a report may be added to the
+     * Depending on system configuration, a report may be added to the
      * {@link android.os.DropBoxManager} and/or the process may be terminated
      * immediately with an error dialog.
      *
@@ -237,15 +229,7 @@ public class Log {
      * @param tr an Exception to log
      */
     public void wtf(String prefix, String msg, Throwable tr) {
-        // TODO: b/235893463 IKE need to depend on mIsVdbg so that IKE can avoid crashing system
-        // server on userdebug build and as the same time to be easily configured to crash on eng
-        // build for development. This check can be removed when there is an API to support
-        // process ID based logging.
-        if (mIsVdbg) {
-            android.util.Log.wtf(mTAG, prefix + ": " + msg, tr);
-        } else {
-            android.util.Log.e(mTAG, prefix + ": " + msg, tr);
-        }
+        android.util.Log.wtf(mTAG, prefix + ": " + msg, tr);
     }
 
     /**
