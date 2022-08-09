@@ -181,7 +181,7 @@ public abstract class IkeSessionTestBase {
         return mockSocket;
     }
 
-    protected void setupLocalAddressForNetwork(Network network, InetAddress address)
+    private LinkAddress setupLocalAddressAndGetLinkAddress(Network network, InetAddress address)
             throws Exception {
         boolean isIpv4 = address instanceof Inet4Address;
         when(mMockIkeLocalAddressGenerator.generateLocalAddress(
@@ -190,21 +190,40 @@ public abstract class IkeSessionTestBase {
 
         LinkAddress mockLinkAddress = mock(LinkAddress.class);
         when(mockLinkAddress.getAddress()).thenReturn(address);
-        if (address instanceof Inet6Address) {
+        if (!isIpv4) {
             when(mockLinkAddress.isGlobalPreferred()).thenReturn(true);
         }
 
+        return mockLinkAddress;
+    }
+
+    protected void setupLocalAddressForNetwork(
+            Network network, Inet4Address addressV4, Inet6Address addressV6) throws Exception {
         LinkProperties linkProperties = new LinkProperties();
-        linkProperties.addLinkAddress(mockLinkAddress);
+        if (addressV4 != null) {
+            linkProperties.addLinkAddress(setupLocalAddressAndGetLinkAddress(network, addressV4));
+        }
+        if (addressV6 != null) {
+            linkProperties.addLinkAddress(setupLocalAddressAndGetLinkAddress(network, addressV6));
+        }
         when(mMockConnectManager.getLinkProperties(eq(network))).thenReturn(linkProperties);
     }
 
-    protected void setupRemoteAddressForNetwork(Network network, InetAddress address)
+    protected void setupLocalAddressForNetwork(Network network, InetAddress address)
+            throws Exception {
+        if (address instanceof Inet4Address) {
+            setupLocalAddressForNetwork(network, (Inet4Address) address, null);
+        } else {
+            setupLocalAddressForNetwork(network, null, (Inet6Address) address);
+        }
+    }
+
+    protected void setupRemoteAddressForNetwork(Network network, InetAddress... addresses)
             throws Exception {
         doAnswer(
                 new Answer() {
                         public Object answer(InvocationOnMock invocation) throws IOException {
-                        return new InetAddress[] {address};
+                            return addresses;
                         }
                 })
                 .when(network)
