@@ -104,7 +104,9 @@ public final class IkeSessionParams {
         IKE_OPTION_MOBIKE,
         IKE_OPTION_FORCE_PORT_4500,
         IKE_OPTION_INITIAL_CONTACT,
-        IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION
+        IKE_OPTION_REKEY_MOBILITY,
+        IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION,
+        IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES
     })
     public @interface IkeOption {}
 
@@ -225,8 +227,18 @@ public final class IkeSessionParams {
      */
     public static final int IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION = 6;
 
+    /**
+     * If set, the IKE session will select the NATT keepalive timers automatically.
+     *
+     * <p>NATT keepalive timers will be selected and adjusted based on the underlying network
+     * configurations, and updated as underlying network configurations change.
+     *
+     * @hide
+     */
+    public static final int IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES = 7;
+
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes

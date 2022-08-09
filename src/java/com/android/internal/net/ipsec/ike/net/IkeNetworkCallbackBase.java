@@ -22,6 +22,7 @@ import android.net.ConnectivityManager.NetworkCallback;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 
 import com.android.internal.annotations.VisibleForTesting;
 
@@ -33,12 +34,20 @@ public abstract class IkeNetworkCallbackBase extends NetworkCallback {
 
     protected final IkeNetworkUpdater mIkeNetworkUpdater;
     protected Network mCurrNetwork;
-    private InetAddress mCurrAddress;
+    protected LinkProperties mCurrLp;
+    protected NetworkCapabilities mCurrNc;
+    protected InetAddress mCurrAddress;
 
     protected IkeNetworkCallbackBase(
-            IkeNetworkUpdater ikeNetworkUpdater, Network currNetwork, InetAddress currAddress) {
+            IkeNetworkUpdater ikeNetworkUpdater,
+            Network currNetwork,
+            InetAddress currAddress,
+            LinkProperties currLp,
+            NetworkCapabilities currNc) {
         mIkeNetworkUpdater = ikeNetworkUpdater;
         mCurrNetwork = currNetwork;
+        mCurrLp = currLp;
+        mCurrNc = currNc;
         mCurrAddress = currAddress;
     }
 
@@ -54,6 +63,10 @@ public abstract class IkeNetworkCallbackBase extends NetworkCallback {
     }
 
     protected boolean isCurrentAddressLost(LinkProperties linkProperties) {
+        if (mCurrAddress == null) {
+            return true;
+        }
+
         // Use getAllLinkAddresses (instead of getLinkAddresses()) so that the return value also
         // includes addresses of stacked LinkProperties. This is useful for handling the address of
         // a CLAT interface.
@@ -77,8 +90,11 @@ public abstract class IkeNetworkCallbackBase extends NetworkCallback {
      * <p>MUST be called on the Handler specified when registering this NetworkCallback with {@link
      * ConnectivityManager}.
      */
-    public void setNetwork(Network network) {
+    public void setNetwork(Network network, LinkProperties lp, NetworkCapabilities nc) {
         mCurrNetwork = network;
+        mCurrLp = lp;
+        mCurrNc = nc;
+        mCurrAddress = null;
     }
 
     /** Returns the current Network that this NetworkCallback is monitoring for. */
@@ -105,5 +121,9 @@ public abstract class IkeNetworkCallbackBase extends NetworkCallback {
 
     protected void logd(String msg) {
         getIkeLog().d(TAG, msg);
+    }
+
+    protected void logWtf(String msg) {
+        getIkeLog().wtf(TAG, msg);
     }
 }
