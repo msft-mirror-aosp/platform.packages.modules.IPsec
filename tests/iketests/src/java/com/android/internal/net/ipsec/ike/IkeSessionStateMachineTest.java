@@ -245,6 +245,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private static final String TAG = "IkeSessionStateMachineTest";
@@ -5302,6 +5303,38 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mLooper.dispatchAll();
 
         verifySessionKilledWithException(false /* hasDeleteRequestSent */, exception);
+    }
+
+    @Test
+    public void testScheduleDpd() throws Exception {
+        setupIdleStateMachine();
+
+        ArgumentCaptor<IkeAlarmConfig> captor = ArgumentCaptor.forClass(IkeAlarmConfig.class);
+        verify(mSpyDeps).newExactAndAllowWhileIdleAlarm(captor.capture());
+        assertEquals(
+                TimeUnit.SECONDS.toMillis(
+                        mIkeSessionStateMachine.mIkeSessionParams.getDpdDelaySeconds()),
+                captor.getValue().delayMs);
+    }
+
+    @Test
+    public void testDisableDpd() throws Exception {
+        mIkeSessionStateMachine.quitNow();
+        mLooper.dispatchAll();
+
+        // Clear the wakelock call in quitNow() for setupIdleStateMachine() to pass
+        reset(mMockBusyWakelock);
+
+        // Restart IKE Session with DPD disabled
+        IkeSessionParams ikeSessionParams =
+                buildIkeSessionParamsCommon()
+                        .setAuthPsk(mPsk)
+                        .setDpdDelaySeconds(Integer.MAX_VALUE)
+                        .build();
+        mIkeSessionStateMachine = makeAndStartIkeSession(ikeSessionParams);
+        setupIdleStateMachine();
+
+        verify(mSpyDeps, never()).newExactAndAllowWhileIdleAlarm(any());
     }
 
     private IkeMessage verifyAndGetOutboundEncryptedResp(int exchangeType) {
