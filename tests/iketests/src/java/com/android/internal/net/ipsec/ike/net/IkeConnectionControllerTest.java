@@ -25,6 +25,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
@@ -39,6 +40,7 @@ import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.ipsec.test.ike.IkeSessionParams;
+import android.net.ipsec.test.ike.exceptions.IkeException;
 import android.net.ipsec.test.ike.exceptions.IkeIOException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.os.Looper;
@@ -379,7 +381,10 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
     @Test
     public void testNetworkUpdateWhenMobilityDisabled() throws Exception {
-        getDefaultNetworkCallback().onAvailable(mock(Network.class));
+        final IkeDefaultNetworkCallback callback = getDefaultNetworkCallback();
+        final Network newNetwork = mock(Network.class);
+        callback.onAvailable(newNetwork);
+        callback.onLinkPropertiesChanged(newNetwork, mock(LinkProperties.class));
         verify(mMockConnectionCtrlCb).onUnderlyingNetworkDied(eq(mMockDefaultNetwork));
     }
 
@@ -479,7 +484,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         setupRemoteAddressForNetwork(newNetwork, REMOTE_ADDRESS);
 
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(newNetwork);
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                newNetwork, mMockConnectManager.getLinkProperties(newNetwork));
 
         verifyNetworkAndAddressesAfterMobilityEvent(
                 newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
@@ -494,7 +500,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
 
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(mMockDefaultNetwork);
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                mMockDefaultNetwork, mMockConnectManager.getLinkProperties(mMockDefaultNetwork));
 
         verifyNetworkAndAddressesAfterMobilityEvent(
                 mMockDefaultNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
@@ -537,7 +544,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         // Clear call in IkeConnectionController#setUp() and
         // IkeConnectionController#enableMobility()
         reset(mMockConnectionCtrlCb);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(newNetwork);
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                newNetwork, mMockConnectManager.getLinkProperties(newNetwork));
 
         // Validation
         verifyNetworkAndAddressesAfterMobilityEvent(
@@ -581,13 +589,27 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Test
     public void testOnUnderlyingNetworkUpdatedFail() throws Exception {
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(mock(Network.class));
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                mock(Network.class), mock(LinkProperties.class));
 
         // Expected to fail due to DNS resolution failure
         if (SdkLevel.isAtLeastT()) {
             verify(mMockConnectionCtrlCb).onError(any(IkeIOException.class));
         } else {
             verify(mMockConnectionCtrlCb).onError(any(IkeInternalException.class));
+        }
+    }
+
+    @Test
+    public void testOnNetworkSetByExternalCallerWithNullLp() throws Exception {
+        enableMobilityAndReturnCb(true /* isDefaultNetwork */);
+
+        try {
+            mIkeConnectionCtrl.onNetworkSetByUser(mock(Network.class));
+            fail("Expected to fail due to null LinkProperties");
+        } catch (IkeException expected) {
+            assertTrue(expected instanceof IkeInternalException);
+            assertTrue(expected.getCause() instanceof NullPointerException);
         }
     }
 

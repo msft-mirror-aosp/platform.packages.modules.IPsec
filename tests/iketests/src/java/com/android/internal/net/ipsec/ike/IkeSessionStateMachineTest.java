@@ -401,8 +401,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     private IkeUdp6Socket mMockIkeUdp6Socket;
     private IkeSocket mMockCurrentIkeSocket;
 
-    private LinkAddress mMockLinkAddressGlobalV6;
-
     private IkeNattKeepalive mMockIkeNattKeepalive;
 
     private TestLooper mLooper;
@@ -789,10 +787,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         .build();
         setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
         setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS_V6);
-
-        mMockLinkAddressGlobalV6 = mock(LinkAddress.class);
-        when(mMockLinkAddressGlobalV6.getAddress()).thenReturn(UPDATED_LOCAL_ADDRESS_V6);
-        when(mMockLinkAddressGlobalV6.isGlobalPreferred()).thenReturn(true);
 
         mMockEapAuthenticator = mock(EapAuthenticator.class);
         mMockChildSessionStateMachine = mock(ChildSessionStateMachine.class);
@@ -1665,6 +1659,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         // Clear #getActiveNetwork() call in #setUp() to pass the verification in
         // #makeAndStartIkeSession()
         resetMockConnectManager();
+        setupLocalAddressForNetwork(network, LOCAL_ADDRESS);
+        setupRemoteAddressForNetwork(network, REMOTE_ADDRESS);
         IkeSessionStateMachine ikeSession = makeAndStartIkeSession(ikeParams);
 
         SecureRandom random = ikeSession.mIkeContext.getRandomnessFactory().getRandom();
@@ -6487,7 +6483,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
     public void testMobilityDisabledNetworkUpdates() throws Exception {
         IkeDefaultNetworkCallback callback =
                 verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
-        callback.onAvailable(mock(Network.class));
+        Network newNetwork = mock(Network.class);
+        callback.onAvailable(newNetwork);
+        callback.onLinkPropertiesChanged(newNetwork, mock(LinkProperties.class));
+
         mLooper.dispatchAll();
 
         verifyHandleNetworkChange();
@@ -6521,6 +6520,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         Network newNetwork = mockNewNetworkAndAddress(true /* isIpv4 */);
 
         callback.onAvailable(newNetwork);
+        callback.onLinkPropertiesChanged(
+                newNetwork, mMockConnectManager.getLinkProperties(newNetwork));
         mLooper.dispatchAll();
 
         verifyNetworkAndLocalAddressUpdated(
@@ -6569,10 +6570,16 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         Network newNetwork = mock(Network.class);
 
         mSpyIkeConnectionCtrl.addRemoteAddress(remoteAddress);
+
+        LinkAddress linkAddress = mock(LinkAddress.class);
+        when(linkAddress.getAddress()).thenReturn(localAddress);
+
+        LinkProperties linkProperties = new LinkProperties();
+        linkProperties.addLinkAddress(linkAddress);
+        when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
+
         if (!isIpv4) {
-            LinkProperties linkProperties = new LinkProperties();
-            linkProperties.addLinkAddress(mMockLinkAddressGlobalV6);
-            when(mMockConnectManager.getLinkProperties(eq(newNetwork))).thenReturn(linkProperties);
+            when(linkAddress.isGlobalPreferred()).thenReturn(true);
         }
 
         setupDnsResolutionForNetwork(newNetwork, dnsLookups, remoteAddress);
