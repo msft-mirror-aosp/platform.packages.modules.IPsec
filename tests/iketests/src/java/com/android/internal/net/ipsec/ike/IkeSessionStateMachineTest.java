@@ -785,8 +785,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 new EapSessionConfig.Builder()
                         .setEapSimConfig(EAP_SIM_SUB_ID, TelephonyManager.APPTYPE_USIM)
                         .build();
-        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
-        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS_V6);
+        setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS, LOCAL_ADDRESS_V6);
 
         mMockEapAuthenticator = mock(EapAuthenticator.class);
         mMockChildSessionStateMachine = mock(ChildSessionStateMachine.class);

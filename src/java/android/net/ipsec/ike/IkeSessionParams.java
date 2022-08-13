@@ -103,7 +103,8 @@ public final class IkeSessionParams {
         IKE_OPTION_EAP_ONLY_AUTH,
         IKE_OPTION_MOBIKE,
         IKE_OPTION_FORCE_PORT_4500,
-        IKE_OPTION_INITIAL_CONTACT
+        IKE_OPTION_INITIAL_CONTACT,
+        IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION
     })
     public @interface IkeOption {}
 
@@ -212,8 +213,20 @@ public final class IkeSessionParams {
      */
     @SystemApi public static final int IKE_OPTION_REKEY_MOBILITY = 5;
 
+    /**
+     * If set, IKE Session will automatically select address families.
+     *
+     * <p>IP address families often have different performance characteristics on any given network.
+     * For example, IPv6 ESP may not be hardware-accelerated by middleboxes, or completely
+     * black-holed. This option allows the IKE session to automatically select based on the IP
+     * address family it perceives as the most likely to work well.
+     *
+     * @hide
+     */
+    public static final int IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION = 6;
+
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_REKEY_MOBILITY;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
