@@ -1365,7 +1365,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         // TODO(b/224686889): Notify caller of failed mobility attempt.
                         return HANDLED;
                     }
-                    mIkeConnectionCtrl.setNetwork((Network) message.obj);
+
+                    try {
+                        mIkeConnectionCtrl.onNetworkSetByUser((Network) message.obj);
+                    } catch (IkeException e) {
+                        handleIkeFatalError(e);
+                    }
+
                     return HANDLED;
 
                 default:
@@ -1746,7 +1752,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         // TODO(b/224686889): Notify caller of failed mobility attempt.
                         return HANDLED;
                     }
-                    mIkeConnectionCtrl.setNetwork((Network) message.obj);
+
+                    try {
+                        mIkeConnectionCtrl.onNetworkSetByUser((Network) message.obj);
+                    } catch (IkeException e) {
+                        handleIkeFatalError(e);
+                    }
                     return HANDLED;
 
                 default:
