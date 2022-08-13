@@ -114,6 +114,7 @@ import android.annotation.Nullable;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.eap.test.EapAkaInfo;
 import android.net.eap.test.EapSessionConfig;
 import android.net.ipsec.test.ike.ChildSaProposal;
@@ -943,7 +944,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         return mMockIkeNattKeepalive;
                 })
                 .when(spyIkeConnectionCtrlDeps)
-                .newIkeNattKeepalive(any(), any(), any(), any(), any(), any());
+                .newIkeNattKeepalive(any(), any());
 
         // Setup socket instances used by the IkeSessionStateMachine
         mMockIkeUdp4Socket = newMockIkeSocket(IkeUdp4Socket.class);
@@ -6484,6 +6485,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 verifyRfcMobikeEnabled(false /* doesPeerSupportMobike */);
         Network newNetwork = mock(Network.class);
         callback.onAvailable(newNetwork);
+        callback.onCapabilitiesChanged(newNetwork, mock(NetworkCapabilities.class));
         callback.onLinkPropertiesChanged(newNetwork, mock(LinkProperties.class));
 
         mLooper.dispatchAll();
@@ -6519,6 +6521,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         Network newNetwork = mockNewNetworkAndAddress(true /* isIpv4 */);
 
         callback.onAvailable(newNetwork);
+        callback.onCapabilitiesChanged(newNetwork, mock(NetworkCapabilities.class));
         callback.onLinkPropertiesChanged(
                 newNetwork, mMockConnectManager.getLinkProperties(newNetwork));
         mLooper.dispatchAll();

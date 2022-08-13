@@ -16,8 +16,10 @@
 
 package com.android.internal.net.ipsec.ike.net;
 
+import android.annotation.NonNull;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 
 import java.net.InetAddress;
 
@@ -32,16 +34,32 @@ import java.net.InetAddress;
  *   <li>the default Network dies with no alternatives available.
  * </ul>
  *
- * <p>In the case of default Network changes, the IkeNetworkUpdater will be notified after
- * onLinkPropertiesChanged is called.
+ * <p>In the case of default Network changes, the IkeNetworkUpdater will be notified after both
+ * onCapabilitiesChanged and onLinkPropertiesChanged are called.
  *
  * <p>MUST be registered with {@link android.net.ConnectivityManager} and specify the
  * IkeSessionStateMachine's Handler to prevent races.
  */
 public class IkeDefaultNetworkCallback extends IkeNetworkCallbackBase {
     public IkeDefaultNetworkCallback(
-            IkeNetworkUpdater ikeNetworkUpdater, Network currNetwork, InetAddress currAddress) {
-        super(ikeNetworkUpdater, currNetwork, currAddress);
+            IkeNetworkUpdater ikeNetworkUpdater,
+            Network currNetwork,
+            InetAddress currAddress,
+            LinkProperties currLp,
+            NetworkCapabilities currNc) {
+        super(ikeNetworkUpdater, currNetwork, currAddress, currLp, currNc);
+    }
+
+    /**
+     * This method will always immediately be followed by a call to {@link
+     * #onCapabilitiesChanged(Network, NetworkCapabilities)} then by a call to {@link
+     * #onLinkPropertiesChanged(Network, LinkProperties)}
+     */
+    @Override
+    public void onAvailable(@NonNull Network network) {
+        logd("onAvailable: " + network);
+        resetNetwork();
+        mCurrNetwork = network;
     }
 
     /**
@@ -49,15 +67,70 @@ public class IkeDefaultNetworkCallback extends IkeNetworkCallbackBase {
      * #onAvailable(Network)} when a new default network is brought up.
      */
     @Override
-    public void onLinkPropertiesChanged(Network network, LinkProperties linkProperties) {
+    public void onCapabilitiesChanged(
+            @NonNull Network network, @NonNull NetworkCapabilities networkCapabilities) {
+        logd("onCapabilitiesChanged: " + network);
+
+        if (!mCurrNetwork.equals(network)) {
+            resetNetwork();
+            logWtf("onCapabilitiesChanged for new network, without onAvailable being called first");
+            return;
+        }
+
+        boolean isNcChangedForNewNetwork = isCallbackForNewNetwork();
+        mCurrNc = networkCapabilities;
+        if (isReadyForUpdate()) {
+            if (isNcChangedForNewNetwork) {
+                logd("Application default Network changed to " + network);
+                mIkeNetworkUpdater.onUnderlyingNetworkUpdated(mCurrNetwork, mCurrLp, mCurrNc);
+            } else {
+                // Handling onCapabilitiesUpdated does not require IKE Session to support mobility
+                mIkeNetworkUpdater.onCapabilitiesUpdated(mCurrNc);
+            }
+        }
+    }
+
+    /**
+     * This method will be called either on the current default network or after {@link
+     * #onAvailable(Network)} when a new default network is brought up.
+     */
+    @Override
+    public void onLinkPropertiesChanged(
+            @NonNull Network network, @NonNull LinkProperties linkProperties) {
         logd("onLinkPropertiesChanged: " + network);
 
         if (!mCurrNetwork.equals(network)) {
-            mCurrNetwork = network;
-            logd("Application default Network changed to " + network);
-            mIkeNetworkUpdater.onUnderlyingNetworkUpdated(network, linkProperties);
-        } else if (isCurrentAddressLost(linkProperties)) {
-            mIkeNetworkUpdater.onUnderlyingNetworkUpdated(network, linkProperties);
+            resetNetwork();
+            logWtf(
+                    "onLinkPropertiesChanged for new network, without onAvailable being called"
+                            + " first");
+            return;
         }
+
+        boolean isLpChangedForNewNetwork = isCallbackForNewNetwork();
+        mCurrLp = linkProperties;
+        if (isReadyForUpdate()) {
+            if (isLpChangedForNewNetwork) {
+                logd("Application default Network changed to " + network);
+                mIkeNetworkUpdater.onUnderlyingNetworkUpdated(mCurrNetwork, mCurrLp, mCurrNc);
+            } else if (isCurrentAddressLost(linkProperties)) {
+                mIkeNetworkUpdater.onUnderlyingNetworkUpdated(mCurrNetwork, mCurrLp, mCurrNc);
+            }
+        }
+    }
+
+    private void resetNetwork() {
+        mCurrNetwork = null;
+        mCurrLp = null;
+        mCurrNc = null;
+        mCurrAddress = null;
+    }
+
+    private boolean isCallbackForNewNetwork() {
+        return mCurrNetwork != null && (mCurrNc == null || mCurrLp == null);
+    }
+
+    private boolean isReadyForUpdate() {
+        return mCurrNetwork != null && mCurrNc != null && mCurrLp != null;
     }
 }

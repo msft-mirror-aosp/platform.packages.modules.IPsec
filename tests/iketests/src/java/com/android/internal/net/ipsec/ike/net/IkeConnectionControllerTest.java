@@ -40,6 +40,7 @@ import android.net.ConnectivityManager.NetworkCallback;
 import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.ipsec.test.ike.IkeSessionParams;
 import android.net.ipsec.test.ike.exceptions.IkeException;
 import android.net.ipsec.test.ike.exceptions.IkeIOException;
@@ -93,7 +94,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         when(mMockConnectionCtrlDeps.newIkeLocalAddressGenerator())
                 .thenReturn(mMockIkeLocalAddressGenerator);
-        when(mMockConnectionCtrlDeps.newIkeNattKeepalive(any(), any(), any(), any(), any(), any()))
+        when(mMockConnectionCtrlDeps.newIkeNattKeepalive(any(), any()))
                 .thenReturn(mMockIkeNattKeepalive);
 
         when(mMockConnectionCtrlDeps.newIkeUdp4Socket(any(), any(), any()))
@@ -489,6 +490,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         final IkeDefaultNetworkCallback callback = getDefaultNetworkCallback();
         final Network newNetwork = mock(Network.class);
         callback.onAvailable(newNetwork);
+        callback.onCapabilitiesChanged(newNetwork, mock(NetworkCapabilities.class));
         callback.onLinkPropertiesChanged(newNetwork, mock(LinkProperties.class));
         verify(mMockConnectionCtrlCb).onUnderlyingNetworkDied(eq(mMockDefaultNetwork));
     }
@@ -589,8 +591,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         setupRemoteAddressForNetwork(newNetwork, REMOTE_ADDRESS);
 
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
-                newNetwork, mMockConnectManager.getLinkProperties(newNetwork));
+        mIkeConnectionCtrl.onNetworkSetByUser(newNetwork);
 
         verifyNetworkAndAddressesAfterMobilityEvent(
                 newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
@@ -606,7 +607,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
         mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
-                mMockDefaultNetwork, mMockConnectManager.getLinkProperties(mMockDefaultNetwork));
+                mMockDefaultNetwork,
+                mMockConnectManager.getLinkProperties(mMockDefaultNetwork),
+                mMockNetworkCapabilities);
 
         verifyNetworkAndAddressesAfterMobilityEvent(
                 mMockDefaultNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
@@ -649,8 +652,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         // Clear call in IkeConnectionController#setUp() and
         // IkeConnectionController#enableMobility()
         reset(mMockConnectionCtrlCb);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
-                newNetwork, mMockConnectManager.getLinkProperties(newNetwork));
+        mIkeConnectionCtrl.onNetworkSetByUser(newNetwork);
 
         // Validation
         verifyNetworkAndAddressesAfterMobilityEvent(
@@ -695,7 +697,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     public void testOnUnderlyingNetworkUpdatedFail() throws Exception {
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
         mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
-                mock(Network.class), mock(LinkProperties.class));
+                mock(Network.class), mock(LinkProperties.class), mock(NetworkCapabilities.class));
 
         // Expected to fail due to DNS resolution failure
         if (SdkLevel.isAtLeastT()) {
@@ -717,6 +719,12 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
             assertTrue(expected.getCause() instanceof NullPointerException);
         }
     }
+
+    @Test
+    public void testOnCapabilitiesUpdatedWithAutoKeepalives() throws Exception {}
+
+    @Test
+    public void testOnCapabilitiesUpdatedWithoutAutoKeepalives() throws Exception {}
 
     @Test
     public void testOnUnderlyingNetworkDied() throws Exception {
