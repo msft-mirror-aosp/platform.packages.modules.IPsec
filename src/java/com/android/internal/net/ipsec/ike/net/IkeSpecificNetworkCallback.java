@@ -16,6 +16,7 @@
 
 package com.android.internal.net.ipsec.ike.net;
 
+import android.net.LinkProperties;
 import android.net.Network;
 
 import java.net.InetAddress;
@@ -37,5 +38,18 @@ public class IkeSpecificNetworkCallback extends IkeNetworkCallbackBase {
     public IkeSpecificNetworkCallback(
             IkeNetworkUpdater ikeNetworkUpdater, Network currNetwork, InetAddress currAddress) {
         super(ikeNetworkUpdater, currNetwork, currAddress);
+    }
+
+    @Override
+    public void onLinkPropertiesChanged(Network network, LinkProperties linkProperties) {
+        // This LinkProperties update is only meaningful if it's for the current Network
+        if (!mCurrNetwork.equals(network)) {
+            return;
+        }
+
+        logd("onLinkPropertiesChanged: " + network);
+        if (isCurrentAddressLost(linkProperties)) {
+            mIkeNetworkUpdater.onUnderlyingNetworkUpdated(mCurrNetwork, linkProperties);
+        }
     }
 }
