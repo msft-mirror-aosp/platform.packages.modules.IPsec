@@ -17,6 +17,7 @@
 package com.android.internal.net.ipsec.ike.net;
 
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
 
@@ -28,6 +29,7 @@ import android.net.ConnectivityManager;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
 import android.net.IpSecManager.UdpEncapsulationSocket;
+import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkRequest;
@@ -114,6 +116,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private final boolean mUseCallerConfiguredNetwork;
     private final String mRemoteHostname;
     private final int mDscp = 0;
+    private final IkeSessionParams mIkeParams;
     private final IkeAlarmConfig mKeepaliveAlarmConfig;
 
     private IkeSocket mIkeSocket;
@@ -154,6 +157,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mIkeLocalAddressGenerator = dependencies.newIkeLocalAddressGenerator();
         mCallback = config.callback;
 
+        mIkeParams = config.ikeParams;
         mForcePort4500 = config.ikeParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500);
         mRemoteHostname = config.ikeParams.getServerHostname();
         mUseCallerConfiguredNetwork = config.ikeParams.getConfiguredNetwork() != null;
@@ -757,29 +761,43 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         }
     }
 
+    private static boolean hasLocalIpV4Address(LinkProperties linkProperties) {
+        for (LinkAddress linkAddress : linkProperties.getAllLinkAddresses()) {
+            if (linkAddress.getAddress() instanceof Inet4Address) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /**
      * Set the remote address for the peer.
      *
-     * <p>Prefers IPv6 addresses if:
+     * <p>The selection of IP address is as follows:
      *
      * <ul>
-     *   <li>an IPv6 address is known for the peer, and
-     *   <li>the current underlying Network has a global (non-link local) IPv6 address available
+     *   <li>If auto IP family selection is enabled, select based on network-specific tuning
+     *       information
+     *   <li>Otherwise, always prefer IPv6 over IPv4
      * </ul>
      *
      * Otherwise, an IPv4 address will be used.
      */
     private void setRemoteAddress(LinkProperties linkProperties) {
-        if (!mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address()) {
-            // TODO(b/175348096): randomly choose from available addresses
-            mRemoteAddress = mRemoteAddressesV6.get(0);
-        } else {
-            if (mRemoteAddressesV4.isEmpty()) {
-                throw new IllegalArgumentException("No valid IPv4 or IPv6 addresses for peer");
-            }
-
-            // TODO(b/175348096): randomly choose from available addresses
+        // TODO(b/175348096): Randomly choose from available addresses when the IP family is
+        // decided.
+        final boolean canConnectWithIpv4 =
+                !mRemoteAddressesV4.isEmpty() && hasLocalIpV4Address(linkProperties);
+        if (mIkeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)
+                && canConnectWithIpv4) {
             mRemoteAddress = mRemoteAddressesV4.get(0);
+        } else if (!mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address()) {
+            mRemoteAddress = mRemoteAddressesV6.get(0);
+        } else if (canConnectWithIpv4) {
+            mRemoteAddress = mRemoteAddressesV4.get(0);
+        } else {
+            throw new IllegalArgumentException("No valid IPv4 or IPv6 addresses for peer");
         }
     }
 
