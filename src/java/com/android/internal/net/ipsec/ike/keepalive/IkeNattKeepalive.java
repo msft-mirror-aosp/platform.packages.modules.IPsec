@@ -16,17 +16,24 @@
 
 package com.android.internal.net.ipsec.ike.keepalive;
 
+import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
+import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.ipsec.ike.IkeSessionParams;
 
+import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 
 import java.io.IOException;
 import java.net.Inet4Address;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class provides methods to manage NAT-T keepalive for a UdpEncapsulationSocket.
@@ -37,55 +44,86 @@ import java.net.Inet4Address;
 public class IkeNattKeepalive {
     private static final String TAG = "IkeNattKeepalive";
 
+    @VisibleForTesting public static final int AUTO_KEEPALIVE_DELAY_SEC_WIFI = 15;
+    @VisibleForTesting public static final int AUTO_KEEPALIVE_DELAY_SEC_CELL = 150;
+
     private final Dependencies mDeps;
 
     private NattKeepalive mNattKeepalive;
 
     /** Construct an instance of IkeNattKeepalive */
     public IkeNattKeepalive(
-            Context context,
-            ConnectivityManager connectMgr,
-            int keepaliveDelaySeconds,
-            Inet4Address src,
-            Inet4Address dest,
-            UdpEncapsulationSocket socket,
-            Network network,
-            IkeAlarmConfig ikeAlarmConfig)
+            Context context, ConnectivityManager connectMgr, KeepaliveConfig nattKeepaliveConfig)
             throws IOException {
-        this(
-                context,
-                connectMgr,
-                keepaliveDelaySeconds,
-                src,
-                dest,
-                socket,
-                network,
-                ikeAlarmConfig,
-                new Dependencies());
+        this(context, connectMgr, nattKeepaliveConfig, new Dependencies());
     }
 
     IkeNattKeepalive(
             Context context,
             ConnectivityManager connectMgr,
-            int keepaliveDelaySeconds,
-            Inet4Address src,
-            Inet4Address dest,
-            UdpEncapsulationSocket socket,
-            Network network,
-            IkeAlarmConfig ikeAlarmConfig,
+            KeepaliveConfig nattKeepaliveConfig,
             Dependencies deps)
             throws IOException {
+        IkeSessionParams ikeParams = nattKeepaliveConfig.ikeParams;
+
+        int keepaliveDelaySeconds = ikeParams.getNattKeepAliveDelaySeconds();
+
+        if (ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES)) {
+            if (nattKeepaliveConfig.nc.hasTransport(TRANSPORT_WIFI)) {
+                // Choose the most conservative value when the NeworkCapabilities to have both
+                // TRANSPORT_WIFI and TRANSPORT_CELLULAR
+                keepaliveDelaySeconds =
+                        deps.getAutoKeepaliveDelaySec(ikeParams, AUTO_KEEPALIVE_DELAY_SEC_WIFI);
+            } else if (nattKeepaliveConfig.nc.hasTransport(TRANSPORT_CELLULAR)) {
+                keepaliveDelaySeconds =
+                        deps.getAutoKeepaliveDelaySec(ikeParams, AUTO_KEEPALIVE_DELAY_SEC_CELL);
+            }
+        }
+
         mNattKeepalive =
                 new HardwareKeepaliveImpl(
                         context,
                         connectMgr,
                         keepaliveDelaySeconds,
-                        src,
-                        dest,
-                        socket,
-                        network,
-                        new HardwareKeepaliveCb(context, dest, socket, ikeAlarmConfig));
+                        nattKeepaliveConfig.src,
+                        nattKeepaliveConfig.dest,
+                        nattKeepaliveConfig.socket,
+                        nattKeepaliveConfig.network,
+                        new HardwareKeepaliveCb(
+                                context,
+                                nattKeepaliveConfig.dest,
+                                nattKeepaliveConfig.socket,
+                                nattKeepaliveConfig.ikeAlarmConfig.buildCopyWithDelayMs(
+                                        TimeUnit.SECONDS.toMillis((long) keepaliveDelaySeconds))));
         mDeps = deps;
+    }
+
+    /** Configuration object for constructing an IkeNattKeepalive instance */
+    public static class KeepaliveConfig {
+        public final Inet4Address src;
+        public final Inet4Address dest;
+        public final UdpEncapsulationSocket socket;
+        public final Network network;
+        public final IkeAlarmConfig ikeAlarmConfig;
+        public final IkeSessionParams ikeParams;
+        public final NetworkCapabilities nc;
+
+        public KeepaliveConfig(
+                Inet4Address src,
+                Inet4Address dest,
+                UdpEncapsulationSocket socket,
+                Network network,
+                IkeAlarmConfig ikeAlarmConfig,
+                IkeSessionParams ikeParams,
+                NetworkCapabilities nc) {
+            this.src = src;
+            this.dest = dest;
+            this.socket = socket;
+            this.network = network;
+            this.ikeAlarmConfig = ikeAlarmConfig;
+            this.ikeParams = ikeParams;
+            this.nc = nc;
+        }
     }
 
     /** Start keepalive */
@@ -124,6 +162,10 @@ public class IkeNattKeepalive {
                 UdpEncapsulationSocket socket,
                 IkeAlarmConfig alarmConfig) {
             return new SoftwareKeepaliveImpl(context, dest, socket, alarmConfig);
+        }
+
+        int getAutoKeepaliveDelaySec(IkeSessionParams ikeParams, int autoKeepaliveDelaySeconds) {
+            return Math.min(ikeParams.getNattKeepAliveDelaySeconds(), autoKeepaliveDelaySeconds);
         }
     }
 
