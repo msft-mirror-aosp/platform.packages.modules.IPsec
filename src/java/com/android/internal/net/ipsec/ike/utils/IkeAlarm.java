@@ -173,5 +173,10 @@ public abstract class IkeAlarm {
             this.message = message;
             this.pendingIntent = pendingIntent;
         }
+
+        /** Create a copy with a different delay */
+        public IkeAlarmConfig buildCopyWithDelayMs(long updatedDelayMs) {
+            return new IkeAlarmConfig(context, tag, updatedDelayMs, pendingIntent, message);
+        }
     }
 }
