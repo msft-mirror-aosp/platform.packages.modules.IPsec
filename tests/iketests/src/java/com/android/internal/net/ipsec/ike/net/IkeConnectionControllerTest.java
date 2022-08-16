@@ -16,6 +16,8 @@
 
 package com.android.internal.net.ipsec.test.ike.net;
 
+import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
+import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 
@@ -30,6 +32,8 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.reset;
@@ -141,11 +145,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mMockIkeUdpEncapSocket = newMockIkeSocket(IkeUdpEncapSocket.class);
         mMockIkeUdp6WithEncapPortSocket = newMockIkeSocket(IkeUdp6WithEncapPortSocket.class);
 
-        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(false);
-        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)))
-                .thenReturn(false);
-        when(mMockIkeParams.getServerHostname()).thenReturn(REMOTE_HOSTNAME);
-        when(mMockIkeParams.getConfiguredNetwork()).thenReturn(null);
+        resetMockIkeParams();
 
         setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
         setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
@@ -155,6 +155,16 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
         mIkeConnectionCtrl.setUp();
         mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
+    }
+
+    private void resetMockIkeParams() {
+        reset(mMockIkeParams);
+        mMockIkeParams = mock(IkeSessionParams.class);
+        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(false);
+        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)))
+                .thenReturn(false);
+        when(mMockIkeParams.getServerHostname()).thenReturn(REMOTE_HOSTNAME);
+        when(mMockIkeParams.getConfiguredNetwork()).thenReturn(null);
     }
 
     @After
@@ -184,6 +194,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertTrue(socketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
         assertEquals(NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, mIkeConnectionCtrl.getNatStatus());
         verifyKeepalive();
+        verify(mMockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
     }
 
     private void verifyTearDown() {
@@ -194,8 +205,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     private void verifySetupAndTeardownWithNw(Network callerConfiguredNw) throws Exception {
         mIkeConnectionCtrl.tearDown();
 
-        // Clear the network callback registration call in #setUp()
+        // Clear the network callback registration and IkeSessionParams query in #setUp()
         resetMockConnectManager();
+        resetMockIkeParams();
 
         mIkeConnectionCtrl = buildIkeConnectionCtrlWithNetwork(callerConfiguredNw);
         mIkeConnectionCtrl.setUp();
@@ -250,8 +262,9 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
             throws Exception {
         mIkeConnectionCtrl.tearDown();
 
-        // Clear the network callback registration call in #setUp()
+        // Clear the network callback registration and IkeSessionParams query in #setUp()
         resetMockConnectManager();
+        resetMockIkeParams();
 
         when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(force4500);
 
@@ -312,16 +325,13 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verifySetupAndTeardownWithIpVersionAndPort(false /* isIpv4 */, false /* force4500 */);
     }
 
-    private void verifySetupAndTeardownWithAutoIpFamilySelection(
-            boolean autoIpFamilySelection, boolean remoteHasV4, boolean remoteHasV6)
-            throws Exception {
+    private void verifyIpFamilySelection(
+            boolean isIpV4Preferred, boolean remoteHasV4, boolean remoteHasV6) throws Exception {
         mIkeConnectionCtrl.tearDown();
 
-        // Clear the network callback registration call in #setUp()
+        // Clear the network callback registration and IkeSessionParams query in #setUp()
         resetMockConnectManager();
-
-        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)))
-                .thenReturn(autoIpFamilySelection);
+        resetMockIkeParams();
 
         final InetAddress expectedLocalAddress;
         final InetAddress expectedRemoteAddress;
@@ -329,8 +339,8 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         if (remoteHasV4 && remoteHasV6) {
             setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS, LOCAL_ADDRESS_V6);
             setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS, REMOTE_ADDRESS_V6);
-            expectedLocalAddress = autoIpFamilySelection ? LOCAL_ADDRESS : LOCAL_ADDRESS_V6;
-            expectedRemoteAddress = autoIpFamilySelection ? REMOTE_ADDRESS : REMOTE_ADDRESS_V6;
+            expectedLocalAddress = isIpV4Preferred ? LOCAL_ADDRESS : LOCAL_ADDRESS_V6;
+            expectedRemoteAddress = isIpV4Preferred ? REMOTE_ADDRESS : REMOTE_ADDRESS_V6;
         } else if (remoteHasV4) {
             setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
             setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
@@ -343,6 +353,15 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
             expectedRemoteAddress = REMOTE_ADDRESS_V6;
         } else {
             throw new IllegalArgumentException("Invalid test setup");
+        }
+
+        if (isIpV4Preferred) {
+            when(mMockIkeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION))
+                    .thenReturn(true);
+            when(mMockNetworkCapabilities.hasTransport(TRANSPORT_CELLULAR)).thenReturn(false);
+        } else {
+            when(mMockIkeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION))
+                    .thenReturn(false);
         }
 
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
@@ -360,39 +379,95 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testAutoIpFamilySelectionWithIpV4IpV6Remote() throws Exception {
-        verifySetupAndTeardownWithAutoIpFamilySelection(
-                true /* autoIpFamilySelection */, true /* remoteHasV4 */, true /* remoteHasV6 */);
+    public void testIpFamilySelectionWithIpV4IpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                true /* isIpV4Preferred */, true /* remoteHasV4 */, true /* remoteHasV6 */);
     }
 
     @Test
-    public void testAutoIpFamilySelectionWithIpV4Remote() throws Exception {
-        verifySetupAndTeardownWithAutoIpFamilySelection(
-                true /* autoIpFamilySelection */, true /* remoteHasV4 */, false /* remoteHasV6 */);
+    public void testIpFamilySelectionWithIpV4Remote() throws Exception {
+        verifyIpFamilySelection(
+                true /* isIpV4Preferred */, true /* remoteHasV4 */, false /* remoteHasV6 */);
     }
 
     @Test
-    public void testAutoIpFamilySelectionWithIpV6Remote() throws Exception {
-        verifySetupAndTeardownWithAutoIpFamilySelection(
-                true /* autoIpFamilySelection */, false /* remoteHasV4 */, true /* remoteHasV6 */);
+    public void testIpFamilySelectionWithIpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                true /* isIpV4Preferred */, false /* remoteHasV4 */, true /* remoteHasV6 */);
     }
 
     @Test
-    public void testAutoIpFamilySelectionDisabledWithIpV4IpV6Remote() throws Exception {
-        verifySetupAndTeardownWithAutoIpFamilySelection(
-                false /* autoIpFamilySelection */, true /* remoteHasV4 */, true /* remoteHasV6 */);
+    public void testIpFamilySelectionDisabledWithIpV4IpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                false /* isIpV4Preferred */, true /* remoteHasV4 */, true /* remoteHasV6 */);
     }
 
     @Test
-    public void testAutoIpFamilySelectionDisabledWithIpV4Remote() throws Exception {
-        verifySetupAndTeardownWithAutoIpFamilySelection(
-                false /* autoIpFamilySelection */, true /* remoteHasV4 */, false /* remoteHasV6 */);
+    public void testIpFamilySelectionDisabledWithIpV4Remote() throws Exception {
+        verifyIpFamilySelection(
+                false /* isIpV4Preferred */, true /* remoteHasV4 */, false /* remoteHasV6 */);
     }
 
     @Test
-    public void testAutoIpFamilySelectionDisabledWithIpV6Remote() throws Exception {
-        verifySetupAndTeardownWithAutoIpFamilySelection(
-                false /* autoIpFamilySelection */, false /* remoteHasV4 */, true /* remoteHasV6 */);
+    public void testIpFamilySelectionDisabledWithIpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                false /* isIpV4Preferred */, false /* remoteHasV4 */, true /* remoteHasV6 */);
+    }
+
+    private void verifyIsIpV4PreferredAutoSelect(
+            boolean isAutoSelectionEnabled,
+            boolean preferV4OnCell,
+            int tranportType,
+            boolean expectPreferIpV4) {
+        final IkeContext mockIkeContext = mock(IkeContext.class);
+        final IkeSessionParams mockIkeParams = mock(IkeSessionParams.class);
+        final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
+
+        when(mockIkeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION))
+                .thenReturn(isAutoSelectionEnabled);
+        when(mockNc.hasTransport(tranportType)).thenReturn(true);
+        when(mockIkeContext.getDeviceConfigPropertyBoolean(anyString(), anyBoolean()))
+                .thenReturn(preferV4OnCell);
+
+        final boolean result =
+                IkeConnectionController.isIpV4Preferred(mockIkeContext, mockIkeParams, mockNc);
+
+        assertEquals(expectPreferIpV4, result);
+
+        verify(mockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
+        if (isAutoSelectionEnabled) {
+            verify(mockNc).hasTransport(TRANSPORT_CELLULAR);
+        }
+        if (isAutoSelectionEnabled && tranportType == TRANSPORT_CELLULAR) {
+            verify(mockIkeContext).getDeviceConfigPropertyBoolean(anyString(), eq(true));
+        }
+    }
+
+    @Test
+    public void testIsIpV4PreferredAutoSelectDisabled() {
+        verifyIsIpV4PreferredAutoSelect(
+                false /* isAutoSelectionEnabled */,
+                true /* preferV4OnCell */,
+                TRANSPORT_WIFI,
+                false /* expectPreferIpV4 */);
+    }
+
+    @Test
+    public void testIsIpV4PreferredAutoSelectEnabledOnWifi() {
+        verifyIsIpV4PreferredAutoSelect(
+                true /* isAutoSelectionEnabled */,
+                true /* preferV4OnCell */,
+                TRANSPORT_WIFI,
+                true /* expectPreferIpV4 */);
+    }
+
+    @Test
+    public void testIsIpV4PreferredAutoSelectEnabledOnCell() {
+        verifyIsIpV4PreferredAutoSelect(
+                true /* isAutoSelectionEnabled */,
+                false /* preferV4OnCell */,
+                TRANSPORT_CELLULAR,
+                false /* expectPreferIpV4 */);
     }
 
     @Test
@@ -719,12 +794,6 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
             assertTrue(expected.getCause() instanceof NullPointerException);
         }
     }
-
-    @Test
-    public void testOnCapabilitiesUpdatedWithAutoKeepalives() throws Exception {}
-
-    @Test
-    public void testOnCapabilitiesUpdatedWithoutAutoKeepalives() throws Exception {}
 
     @Test
     public void testOnUnderlyingNetworkDied() throws Exception {

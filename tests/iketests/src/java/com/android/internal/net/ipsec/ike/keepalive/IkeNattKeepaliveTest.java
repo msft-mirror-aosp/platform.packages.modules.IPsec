@@ -17,12 +17,13 @@
 package com.android.internal.net.ipsec.test.ike.keepalive;
 
 import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
-import static android.net.NetworkCapabilities.TRANSPORT_TEST;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
-import static android.net.SocketKeepalive.ERROR_HARDWARE_ERROR;
 import static android.net.SocketKeepalive.ERROR_INVALID_IP_ADDRESS;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
 
+import static com.android.internal.net.ipsec.test.ike.IkeContext.CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS;
 import static com.android.internal.net.ipsec.test.ike.keepalive.IkeNattKeepalive.AUTO_KEEPALIVE_DELAY_SEC_CELL;
 import static com.android.internal.net.ipsec.test.ike.keepalive.IkeNattKeepalive.AUTO_KEEPALIVE_DELAY_SEC_WIFI;
 import static com.android.internal.net.ipsec.test.ike.keepalive.IkeNattKeepalive.KeepaliveConfig;
@@ -32,6 +33,8 @@ import static org.junit.Assert.assertEquals;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.anyInt;
 import static org.mockito.Matchers.anyObject;
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -48,6 +51,7 @@ import android.net.SocketKeepalive;
 import android.net.ipsec.test.ike.IkeSessionParams;
 import android.os.Message;
 
+import com.android.internal.net.ipsec.test.ike.IkeContext;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
 
 import org.junit.After;
@@ -59,10 +63,10 @@ import java.net.Inet4Address;
 import java.util.concurrent.TimeUnit;
 
 public class IkeNattKeepaliveTest {
-    private static final int KEEPALIVE_DELAY = 20;
-    private static final int AUTO_KEEPALIVE_DELAY = 50;
+    private static final int KEEPALIVE_DELAY_CALLER_CONFIGURED = 50;
 
     private ConnectivityManager mMockConnectManager;
+    private IkeSessionParams mMockIkeParams;
     private IkeNattKeepalive.Dependencies mMockDeps;
     private SocketKeepalive mMockSocketKeepalive;
     private SoftwareKeepaliveImpl mMockSoftwareKeepalive;
@@ -71,6 +75,11 @@ public class IkeNattKeepaliveTest {
 
     @Before
     public void setUp() throws Exception {
+        mMockIkeParams = mock(IkeSessionParams.class);
+        doReturn(KEEPALIVE_DELAY_CALLER_CONFIGURED)
+                .when(mMockIkeParams)
+                .getNattKeepAliveDelaySeconds();
+
         mMockConnectManager = mock(ConnectivityManager.class);
         mMockSocketKeepalive = mock(SocketKeepalive.class);
         resetMockConnectManager();
@@ -79,10 +88,9 @@ public class IkeNattKeepaliveTest {
         mMockSoftwareKeepalive = mock(SoftwareKeepaliveImpl.class);
         resetMockDeps();
 
-        IkeSessionParams mockIkeParams = mock(IkeSessionParams.class);
-        doReturn(KEEPALIVE_DELAY).when(mockIkeParams).getNattKeepAliveDelaySeconds();
-
-        mIkeNattKeepalive = createIkeNattKeepalive(mockIkeParams, mock(NetworkCapabilities.class));
+        mIkeNattKeepalive =
+                createIkeNattKeepalive(
+                        mock(IkeContext.class), mMockIkeParams, mock(NetworkCapabilities.class));
     }
 
     private void resetMockConnectManager() {
@@ -103,14 +111,13 @@ public class IkeNattKeepaliveTest {
         doReturn(mMockSoftwareKeepalive)
                 .when(mMockDeps)
                 .createSoftwareKeepaliveImpl(anyObject(), anyObject(), anyObject(), anyObject());
-        doReturn(AUTO_KEEPALIVE_DELAY).when(mMockDeps).getAutoKeepaliveDelaySec(any(), anyInt());
     }
 
     private IkeNattKeepalive createIkeNattKeepalive(
-            IkeSessionParams mockIkeParams, NetworkCapabilities mockNc) throws Exception {
-        final Context mMockContext = mock(Context.class);
+            IkeContext mockIkeContext, IkeSessionParams mockIkeParams, NetworkCapabilities mockNc)
+            throws Exception {
         return new IkeNattKeepalive(
-                mock(Context.class),
+                mockIkeContext,
                 mMockConnectManager,
                 new KeepaliveConfig(
                         mock(Inet4Address.class),
@@ -118,9 +125,9 @@ public class IkeNattKeepaliveTest {
                         mock(UdpEncapsulationSocket.class),
                         mock(Network.class),
                         new IkeAlarmConfig(
-                                mMockContext,
+                                mock(Context.class),
                                 "TEST",
-                                KEEPALIVE_DELAY,
+                                KEEPALIVE_DELAY_CALLER_CONFIGURED,
                                 mock(PendingIntent.class),
                                 mock(Message.class)),
                         mockIkeParams,
@@ -135,8 +142,11 @@ public class IkeNattKeepaliveTest {
 
     @Test
     public void testStartStopHardwareKeepalive() throws Exception {
+        verify(mMockIkeParams).getNattKeepAliveDelaySeconds();
+        verify(mMockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES);
+
         mIkeNattKeepalive.start();
-        verify(mMockSocketKeepalive).start(KEEPALIVE_DELAY);
+        verify(mMockSocketKeepalive).start(KEEPALIVE_DELAY_CALLER_CONFIGURED);
 
         mIkeNattKeepalive.stop();
         verify(mMockSocketKeepalive).stop();
@@ -166,108 +176,116 @@ public class IkeNattKeepaliveTest {
         socketKeepaliveCb.onError(ERROR_INVALID_IP_ADDRESS);
 
         verify(mMockSocketKeepalive).stop();
+
+        ArgumentCaptor<IkeAlarmConfig> alarmConfigCaptor =
+                ArgumentCaptor.forClass(IkeAlarmConfig.class);
         verify(mMockDeps)
-                .createSoftwareKeepaliveImpl(anyObject(), anyObject(), anyObject(), anyObject());
+                .createSoftwareKeepaliveImpl(any(), any(), any(), alarmConfigCaptor.capture());
+        assertEquals(
+                TimeUnit.SECONDS.toMillis((long) KEEPALIVE_DELAY_CALLER_CONFIGURED),
+                alarmConfigCaptor.getValue().delayMs);
 
         mIkeNattKeepalive.stop();
         verify(mMockSocketKeepalive).stop();
         verify(mMockSoftwareKeepalive).stop();
     }
 
-    private static int getAutoDelaySeconds(int transportType) throws Exception {
-        switch (transportType) {
-            case TRANSPORT_WIFI:
-                return AUTO_KEEPALIVE_DELAY_SEC_WIFI;
-            case TRANSPORT_CELLULAR:
-                return AUTO_KEEPALIVE_DELAY_SEC_CELL;
-            default:
-                throw new IllegalArgumentException(
-                        "Auto keepalives not enabled for transportType " + transportType);
-        }
-    }
-
-    private void verifyAutoKeepalive(int transportType, int expectedDelaySec) throws Exception {
+    private void verifyGetKeepaliveDelaySec(
+            boolean autoKeepalivesEnabled,
+            int transportType,
+            int callerConfiguredDelay,
+            int cellDeviceKeepaliveDelay,
+            int expectedDelay)
+            throws Exception {
+        final IkeContext mockIkeContext = mock(IkeContext.class);
         final IkeSessionParams mockIkeParams = mock(IkeSessionParams.class);
-        doReturn(true).when(mockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES);
-        doReturn(KEEPALIVE_DELAY).when(mockIkeParams).getNattKeepAliveDelaySeconds();
-
         final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
+
+        doReturn(cellDeviceKeepaliveDelay)
+                .when(mockIkeContext)
+                .getDeviceConfigPropertyInt(anyString(), anyInt(), anyInt(), anyInt());
+        doReturn(autoKeepalivesEnabled)
+                .when(mockIkeParams)
+                .hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES);
+        doReturn(callerConfiguredDelay).when(mockIkeParams).getNattKeepAliveDelaySeconds();
         doReturn(true).when(mockNc).hasTransport(transportType);
 
-        // Forget the call in setup()
-        reset(mMockSocketKeepalive);
-        resetMockConnectManager();
-        resetMockDeps();
+        final int actualDelay =
+                IkeNattKeepalive.getKeepaliveDelaySec(mockIkeContext, mockIkeParams, mockNc);
 
-        IkeNattKeepalive nattKeepAlive = createIkeNattKeepalive(mockIkeParams, mockNc);
+        // Verification
+        assertEquals(expectedDelay, actualDelay);
+        verify(mockIkeParams).getNattKeepAliveDelaySeconds();
 
-        if (transportType == TRANSPORT_WIFI || transportType == TRANSPORT_CELLULAR) {
-            verify(mMockDeps)
-                    .getAutoKeepaliveDelaySec(mockIkeParams, getAutoDelaySeconds(transportType));
-        } else {
-            verify(mMockDeps, never()).getAutoKeepaliveDelaySec(any(), anyInt());
+        if (autoKeepalivesEnabled) {
+            verify(mockNc).hasTransport(TRANSPORT_WIFI);
+            if (transportType == TRANSPORT_CELLULAR) {
+                verify(mockNc).hasTransport(TRANSPORT_CELLULAR);
+            }
         }
 
-        // Verify hardware keepalive
-        nattKeepAlive.start();
-        verify(mMockSocketKeepalive).start(expectedDelaySec);
-
-        // Verify software keepalive
-        SocketKeepalive.Callback socketKeepaliveCb =
-                verifyHardwareKeepaliveAndGetCb(mMockConnectManager);
-        socketKeepaliveCb.onError(ERROR_HARDWARE_ERROR);
-
-        ArgumentCaptor<IkeAlarmConfig> alarmConfigCaptor =
-                ArgumentCaptor.forClass(IkeAlarmConfig.class);
-
-        verify(mMockDeps)
-                .createSoftwareKeepaliveImpl(any(), any(), any(), alarmConfigCaptor.capture());
-        assertEquals(
-                TimeUnit.SECONDS.toMillis((long) expectedDelaySec),
-                alarmConfigCaptor.getValue().delayMs);
-
-        mIkeNattKeepalive.stop();
+        final boolean expectReadDevice =
+                autoKeepalivesEnabled && transportType == TRANSPORT_CELLULAR;
+        if (expectReadDevice) {
+            verify(mockIkeContext)
+                    .getDeviceConfigPropertyInt(
+                            eq(CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS),
+                            eq(IKE_NATT_KEEPALIVE_DELAY_SEC_MIN),
+                            eq(IKE_NATT_KEEPALIVE_DELAY_SEC_MAX),
+                            eq(AUTO_KEEPALIVE_DELAY_SEC_CELL));
+        } else {
+            verify(mockIkeContext, never())
+                    .getDeviceConfigPropertyInt(anyString(), anyInt(), anyInt(), anyInt());
+        }
     }
 
     @Test
-    public void testAutoKeepaliveOnWifi() throws Exception {
-        verifyAutoKeepalive(TRANSPORT_WIFI, AUTO_KEEPALIVE_DELAY);
+    public void testGetKeepaliveDelaySecAutoKeepalivesDisabled() throws Exception {
+        verifyGetKeepaliveDelaySec(
+                false /* autoKeepalivesEnabled */,
+                TRANSPORT_WIFI,
+                KEEPALIVE_DELAY_CALLER_CONFIGURED,
+                AUTO_KEEPALIVE_DELAY_SEC_CELL,
+                KEEPALIVE_DELAY_CALLER_CONFIGURED);
     }
 
     @Test
-    public void testAutoKeepaliveOnCell() throws Exception {
-        verifyAutoKeepalive(TRANSPORT_CELLULAR, AUTO_KEEPALIVE_DELAY);
-    }
-
-    @Test
-    public void testAutoKeepaliveOnNonWifiOrCell() throws Exception {
-        verifyAutoKeepalive(TRANSPORT_TEST, KEEPALIVE_DELAY);
-    }
-
-    private void verifyGetAutoKeepaliveDelaySec(
-            int callerConfiguredDelay, int autoKeepaliveDelay, int expectedDelay) throws Exception {
-        final IkeSessionParams mockIkeParams = mock(IkeSessionParams.class);
-        doReturn(callerConfiguredDelay).when(mockIkeParams).getNattKeepAliveDelaySeconds();
-
-        final int actualDelay =
-                new IkeNattKeepalive.Dependencies()
-                        .getAutoKeepaliveDelaySec(mockIkeParams, autoKeepaliveDelay);
-        assertEquals(expectedDelay, actualDelay);
-    }
-
-    @Test
-    public void testGetAutoKeepaliveDelaySecCallerOverride() throws Exception {
-        verifyGetAutoKeepaliveDelaySec(
+    public void testWifiGetAutoKeepaliveDelaySecCallerOverride() throws Exception {
+        verifyGetKeepaliveDelaySec(
+                true /* autoKeepalivesEnabled */,
+                TRANSPORT_WIFI,
                 10 /* callerConfiguredDelay */,
-                20 /* autoKeepaliveDelay */,
+                AUTO_KEEPALIVE_DELAY_SEC_CELL,
                 10 /* expectedDelay */);
     }
 
     @Test
-    public void testGetAutoKeepaliveDelaySecNoCallerOverride() throws Exception {
-        verifyGetAutoKeepaliveDelaySec(
-                30 /* callerConfiguredDelay */,
-                20 /* autoKeepaliveDelay */,
-                20 /* expectedDelay */);
+    public void testWifiGetAutoKeepaliveDelaySecNoCallerOverride() throws Exception {
+        verifyGetKeepaliveDelaySec(
+                true /* autoKeepalivesEnabled */,
+                TRANSPORT_WIFI,
+                20 /* callerConfiguredDelay */,
+                AUTO_KEEPALIVE_DELAY_SEC_CELL,
+                AUTO_KEEPALIVE_DELAY_SEC_WIFI);
+    }
+
+    @Test
+    public void testCellGetAutoKeepaliveDelaySecCallerOverride() throws Exception {
+        verifyGetKeepaliveDelaySec(
+                true /* autoKeepalivesEnabled */,
+                TRANSPORT_CELLULAR,
+                10 /* callerConfiguredDelay */,
+                90 /* cellDeviceKeepaliveDelay */,
+                10 /* expectedDelay */);
+    }
+
+    @Test
+    public void testCellGetAutoKeepaliveDelaySecNoCallerOverride() throws Exception {
+        verifyGetKeepaliveDelaySec(
+                true /* autoKeepalivesEnabled */,
+                TRANSPORT_CELLULAR,
+                100 /* callerConfiguredDelay */,
+                90 /* cellDeviceKeepaliveDelay */,
+                90 /* expectedDelay */);
     }
 }
