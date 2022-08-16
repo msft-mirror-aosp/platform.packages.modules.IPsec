@@ -760,6 +760,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         public LocalRequestFactory newLocalRequestFactory() {
             return new LocalRequestFactory();
         }
+
+        /**
+         * Creates an alarm to be delivered precisely at the stated time, even when the system is in
+         * low-power idle (a.k.a. doze) modes.
+         */
+        public IkeAlarm newExactAndAllowWhileIdleAlarm(IkeAlarmConfig alarmConfig) {
+            return IkeAlarm.newExactAndAllowWhileIdleAlarm(alarmConfig);
+        }
     }
 
     private boolean hasChildSessionCallback(ChildSessionCallback callback) {
@@ -1277,8 +1285,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 mBusyWakeLock.release();
             }
 
-            long dpdDelayMs = TimeUnit.SECONDS.toMillis(mIkeSessionParams.getDpdDelaySeconds());
+            int dpdDelaySeconds = mIkeSessionParams.getDpdDelaySeconds();
+            if (dpdDelaySeconds == IkeSessionParams.IKE_DPD_DELAY_SEC_DISABLED) {
+                return;
+            }
 
+            long dpdDelayMs = TimeUnit.SECONDS.toMillis(dpdDelaySeconds);
             long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
             Message intentIkeMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi);
             PendingIntent dpdIntent =
@@ -1296,7 +1308,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             // can be at most 75% for the alarm timeout (@see AlarmManagerService#maxTriggerTime).
             // Please check AlarmManager#setExactAndAllowWhileIdle for more details.
             mDpdAlarm =
-                    IkeAlarm.newExactAndAllowWhileIdleAlarm(
+                    mDeps.newExactAndAllowWhileIdleAlarm(
                             new IkeAlarmConfig(
                                     mIkeContext.getContext(),
                                     ACTION_DPD,
@@ -1353,7 +1365,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         // TODO(b/224686889): Notify caller of failed mobility attempt.
                         return HANDLED;
                     }
-                    mIkeConnectionCtrl.setNetwork((Network) message.obj);
+
+                    try {
+                        mIkeConnectionCtrl.onNetworkSetByUser((Network) message.obj);
+                    } catch (IkeException e) {
+                        handleIkeFatalError(e);
+                    }
+
                     return HANDLED;
 
                 default:
@@ -1734,7 +1752,12 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         // TODO(b/224686889): Notify caller of failed mobility attempt.
                         return HANDLED;
                     }
-                    mIkeConnectionCtrl.setNetwork((Network) message.obj);
+
+                    try {
+                        mIkeConnectionCtrl.onNetworkSetByUser((Network) message.obj);
+                    } catch (IkeException e) {
+                        handleIkeFatalError(e);
+                    }
                     return HANDLED;
 
                 default:
