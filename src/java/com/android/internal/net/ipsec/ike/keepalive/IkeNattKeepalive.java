@@ -16,17 +16,29 @@
 
 package com.android.internal.net.ipsec.ike.keepalive;
 
+import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
+import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
+
+import static com.android.internal.net.ipsec.ike.IkeContext.CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS;
 
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
 import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.net.ipsec.ike.IkeSessionParams;
 
+import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.net.ipsec.ike.IkeContext;
 import com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
 
 import java.io.IOException;
 import java.net.Inet4Address;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This class provides methods to manage NAT-T keepalive for a UdpEncapsulationSocket.
@@ -37,55 +49,102 @@ import java.net.Inet4Address;
 public class IkeNattKeepalive {
     private static final String TAG = "IkeNattKeepalive";
 
+    @VisibleForTesting public static final int AUTO_KEEPALIVE_DELAY_SEC_WIFI = 15;
+    @VisibleForTesting public static final int AUTO_KEEPALIVE_DELAY_SEC_CELL = 150;
+
     private final Dependencies mDeps;
 
     private NattKeepalive mNattKeepalive;
 
     /** Construct an instance of IkeNattKeepalive */
     public IkeNattKeepalive(
-            Context context,
+            IkeContext ikeContext,
             ConnectivityManager connectMgr,
-            int keepaliveDelaySeconds,
-            Inet4Address src,
-            Inet4Address dest,
-            UdpEncapsulationSocket socket,
-            Network network,
-            IkeAlarmConfig ikeAlarmConfig)
+            KeepaliveConfig nattKeepaliveConfig)
             throws IOException {
-        this(
-                context,
-                connectMgr,
-                keepaliveDelaySeconds,
-                src,
-                dest,
-                socket,
-                network,
-                ikeAlarmConfig,
-                new Dependencies());
+        this(ikeContext, connectMgr, nattKeepaliveConfig, new Dependencies());
     }
 
     IkeNattKeepalive(
-            Context context,
+            IkeContext ikeContext,
             ConnectivityManager connectMgr,
-            int keepaliveDelaySeconds,
-            Inet4Address src,
-            Inet4Address dest,
-            UdpEncapsulationSocket socket,
-            Network network,
-            IkeAlarmConfig ikeAlarmConfig,
+            KeepaliveConfig nattKeepaliveConfig,
             Dependencies deps)
             throws IOException {
+        int keepaliveDelaySeconds =
+                getKeepaliveDelaySec(
+                        ikeContext, nattKeepaliveConfig.ikeParams, nattKeepaliveConfig.nc);
+
         mNattKeepalive =
                 new HardwareKeepaliveImpl(
-                        context,
+                        ikeContext.getContext(),
                         connectMgr,
                         keepaliveDelaySeconds,
-                        src,
-                        dest,
-                        socket,
-                        network,
-                        new HardwareKeepaliveCb(context, dest, socket, ikeAlarmConfig));
+                        nattKeepaliveConfig.src,
+                        nattKeepaliveConfig.dest,
+                        nattKeepaliveConfig.socket,
+                        nattKeepaliveConfig.network,
+                        new HardwareKeepaliveCb(
+                                ikeContext.getContext(),
+                                nattKeepaliveConfig.dest,
+                                nattKeepaliveConfig.socket,
+                                nattKeepaliveConfig.ikeAlarmConfig.buildCopyWithDelayMs(
+                                        TimeUnit.SECONDS.toMillis((long) keepaliveDelaySeconds))));
         mDeps = deps;
+    }
+
+    @VisibleForTesting
+    static int getKeepaliveDelaySec(
+            IkeContext ikeContext, IkeSessionParams ikeParams, NetworkCapabilities nc) {
+        int keepaliveDelaySeconds = ikeParams.getNattKeepAliveDelaySeconds();
+
+        if (ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES)) {
+            if (nc.hasTransport(TRANSPORT_WIFI)) {
+                // Most of the time, IKE Session will use shorter keepalive timer on WiFi. Thus
+                // choose the Wifi timer as a more conservative value when the NeworkCapabilities
+                // have both TRANSPORT_WIFI and TRANSPORT_CELLULAR
+                final int autoDelaySeconds = AUTO_KEEPALIVE_DELAY_SEC_WIFI;
+                keepaliveDelaySeconds = Math.min(keepaliveDelaySeconds, autoDelaySeconds);
+            } else if (nc.hasTransport(TRANSPORT_CELLULAR)) {
+                final int autoDelaySeconds =
+                        ikeContext.getDeviceConfigPropertyInt(
+                                CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS,
+                                IKE_NATT_KEEPALIVE_DELAY_SEC_MIN,
+                                IKE_NATT_KEEPALIVE_DELAY_SEC_MAX,
+                                AUTO_KEEPALIVE_DELAY_SEC_CELL);
+                keepaliveDelaySeconds = Math.min(keepaliveDelaySeconds, autoDelaySeconds);
+            }
+        }
+
+        return keepaliveDelaySeconds;
+    }
+
+    /** Configuration object for constructing an IkeNattKeepalive instance */
+    public static class KeepaliveConfig {
+        public final Inet4Address src;
+        public final Inet4Address dest;
+        public final UdpEncapsulationSocket socket;
+        public final Network network;
+        public final IkeAlarmConfig ikeAlarmConfig;
+        public final IkeSessionParams ikeParams;
+        public final NetworkCapabilities nc;
+
+        public KeepaliveConfig(
+                Inet4Address src,
+                Inet4Address dest,
+                UdpEncapsulationSocket socket,
+                Network network,
+                IkeAlarmConfig ikeAlarmConfig,
+                IkeSessionParams ikeParams,
+                NetworkCapabilities nc) {
+            this.src = src;
+            this.dest = dest;
+            this.socket = socket;
+            this.network = network;
+            this.ikeAlarmConfig = ikeAlarmConfig;
+            this.ikeParams = ikeParams;
+            this.nc = nc;
+        }
     }
 
     /** Start keepalive */

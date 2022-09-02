@@ -16,6 +16,9 @@
 
 package com.android.internal.net.ipsec.test.ike.net;
 
+import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
+import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 
 import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionController.NAT_TRAVERSAL_SUPPORT_NOT_CHECKED;
@@ -25,19 +28,26 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import android.net.ConnectivityManager.NetworkCallback;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
 import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.net.ipsec.test.ike.IkeSessionParams;
+import android.net.ipsec.test.ike.exceptions.IkeException;
+import android.net.ipsec.test.ike.exceptions.IkeIOException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
 import android.os.Looper;
 
@@ -52,12 +62,14 @@ import com.android.internal.net.ipsec.test.ike.SaRecord.IkeSaRecord;
 import com.android.internal.net.ipsec.test.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
+import com.android.modules.utils.build.SdkLevel;
 
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.util.HashSet;
 
@@ -86,7 +98,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         when(mMockConnectionCtrlDeps.newIkeLocalAddressGenerator())
                 .thenReturn(mMockIkeLocalAddressGenerator);
-        when(mMockConnectionCtrlDeps.newIkeNattKeepalive(any(), any(), any(), any(), any(), any()))
+        when(mMockConnectionCtrlDeps.newIkeNattKeepalive(any(), any()))
                 .thenReturn(mMockIkeNattKeepalive);
 
         when(mMockConnectionCtrlDeps.newIkeUdp4Socket(any(), any(), any()))
@@ -133,9 +145,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mMockIkeUdpEncapSocket = newMockIkeSocket(IkeUdpEncapSocket.class);
         mMockIkeUdp6WithEncapPortSocket = newMockIkeSocket(IkeUdp6WithEncapPortSocket.class);
 
-        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(false);
-        when(mMockIkeParams.getServerHostname()).thenReturn(REMOTE_HOSTNAME);
-        when(mMockIkeParams.getConfiguredNetwork()).thenReturn(null);
+        resetMockIkeParams();
 
         setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
         setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
@@ -145,6 +155,16 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
         mIkeConnectionCtrl.setUp();
         mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
+    }
+
+    private void resetMockIkeParams() {
+        reset(mMockIkeParams);
+        mMockIkeParams = mock(IkeSessionParams.class);
+        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(false);
+        when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)))
+                .thenReturn(false);
+        when(mMockIkeParams.getServerHostname()).thenReturn(REMOTE_HOSTNAME);
+        when(mMockIkeParams.getConfiguredNetwork()).thenReturn(null);
     }
 
     @After
@@ -174,19 +194,52 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertTrue(socketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
         assertEquals(NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, mIkeConnectionCtrl.getNatStatus());
         verifyKeepalive();
+        verify(mMockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
+    }
+
+    private void verifyTearDown() {
+        verify(mMockConnectManager).unregisterNetworkCallback(any(NetworkCallback.class));
+        verify(mMockIkeUdp4Socket).releaseReference(mIkeConnectionCtrl);
     }
 
     private void verifySetupAndTeardownWithNw(Network callerConfiguredNw) throws Exception {
         mIkeConnectionCtrl.tearDown();
+
+        // Clear the network callback registration and IkeSessionParams query in #setUp()
+        resetMockConnectManager();
+        resetMockIkeParams();
+
         mIkeConnectionCtrl = buildIkeConnectionCtrlWithNetwork(callerConfiguredNw);
         mIkeConnectionCtrl.setUp();
 
         Network expectedNetwork =
                 callerConfiguredNw == null ? mMockDefaultNetwork : callerConfiguredNw;
+
+        if (callerConfiguredNw == null) {
+            verify(mMockConnectManager)
+                    .registerDefaultNetworkCallback(any(NetworkCallback.class), any());
+        } else {
+            verify(mMockConnectManager)
+                    .registerNetworkCallback(any(), any(NetworkCallback.class), any());
+        }
+
         verifySetup(expectedNetwork, LOCAL_ADDRESS, REMOTE_ADDRESS, IkeUdp4Socket.class);
 
         mIkeConnectionCtrl.tearDown();
-        verify(mMockConnectManager, never()).unregisterNetworkCallback(any(NetworkCallback.class));
+        verifyTearDown();
+    }
+
+    private void verifyTearDownInSecondSetup(Network callerConfiguredNw) throws Exception {
+        mIkeConnectionCtrl.tearDown();
+
+        // Clear the network callback registration call in #setUp()
+        resetMockConnectManager();
+
+        mIkeConnectionCtrl = buildIkeConnectionCtrlWithNetwork(callerConfiguredNw);
+        mIkeConnectionCtrl.setUp();
+        mIkeConnectionCtrl.setUp();
+
+        verifyTearDown();
     }
 
     private Class<? extends IkeSocket> getExpectedSocketType(boolean isIpv4, boolean force4500) {
@@ -208,6 +261,11 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     private void verifySetupAndTeardownWithIpVersionAndPort(boolean isIpv4, boolean force4500)
             throws Exception {
         mIkeConnectionCtrl.tearDown();
+
+        // Clear the network callback registration and IkeSessionParams query in #setUp()
+        resetMockConnectManager();
+        resetMockIkeParams();
+
         when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(force4500);
 
         InetAddress expectedLocalAddress = isIpv4 ? LOCAL_ADDRESS : LOCAL_ADDRESS_V6;
@@ -224,7 +282,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 getExpectedSocketType(isIpv4, force4500));
 
         mIkeConnectionCtrl.tearDown();
-        verify(mMockConnectManager, never()).unregisterNetworkCallback(any(NetworkCallback.class));
+        verify(mMockConnectManager).unregisterNetworkCallback(any(NetworkCallback.class));
     }
 
     @Test
@@ -235,6 +293,16 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Test
     public void testSetupAndTeardownWithConfiguredNw() throws Exception {
         verifySetupAndTeardownWithNw(mMockCallerConfiguredNetwork);
+    }
+
+    @Test
+    public void testTearDownInSecondSetupWithDefaultNw() throws Exception {
+        verifyTearDownInSecondSetup(null /* callerConfiguredNw */);
+    }
+
+    @Test
+    public void testTearDownInSecondSetupWithConfiguredNw() throws Exception {
+        verifyTearDownInSecondSetup(mMockCallerConfiguredNetwork);
     }
 
     @Test
@@ -255,6 +323,169 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Test
     public void testSetupAndTeardownIpv6NotForce4500() throws Exception {
         verifySetupAndTeardownWithIpVersionAndPort(false /* isIpv4 */, false /* force4500 */);
+    }
+
+    private void verifyIpFamilySelection(
+            boolean isIpV4Preferred, boolean remoteHasV4, boolean remoteHasV6) throws Exception {
+        mIkeConnectionCtrl.tearDown();
+
+        // Clear the network callback registration and IkeSessionParams query in #setUp()
+        resetMockConnectManager();
+        resetMockIkeParams();
+
+        final InetAddress expectedLocalAddress;
+        final InetAddress expectedRemoteAddress;
+
+        if (remoteHasV4 && remoteHasV6) {
+            setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS, LOCAL_ADDRESS_V6);
+            setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS, REMOTE_ADDRESS_V6);
+            expectedLocalAddress = isIpV4Preferred ? LOCAL_ADDRESS : LOCAL_ADDRESS_V6;
+            expectedRemoteAddress = isIpV4Preferred ? REMOTE_ADDRESS : REMOTE_ADDRESS_V6;
+        } else if (remoteHasV4) {
+            setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS);
+            setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
+            expectedLocalAddress = LOCAL_ADDRESS;
+            expectedRemoteAddress = REMOTE_ADDRESS;
+        } else if (remoteHasV6) {
+            setupLocalAddressForNetwork(mMockDefaultNetwork, LOCAL_ADDRESS_V6);
+            setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS_V6);
+            expectedLocalAddress = LOCAL_ADDRESS_V6;
+            expectedRemoteAddress = REMOTE_ADDRESS_V6;
+        } else {
+            throw new IllegalArgumentException("Invalid test setup");
+        }
+
+        if (isIpV4Preferred) {
+            when(mMockIkeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION))
+                    .thenReturn(true);
+            when(mMockNetworkCapabilities.hasTransport(TRANSPORT_CELLULAR)).thenReturn(false);
+        } else {
+            when(mMockIkeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION))
+                    .thenReturn(false);
+        }
+
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+        mIkeConnectionCtrl.setUp();
+
+        boolean ipV4Expected = expectedLocalAddress instanceof Inet4Address;
+        verifySetup(
+                mMockDefaultNetwork,
+                expectedLocalAddress,
+                expectedRemoteAddress,
+                getExpectedSocketType(ipV4Expected, false /* force4500 */));
+
+        mIkeConnectionCtrl.tearDown();
+        verify(mMockConnectManager).unregisterNetworkCallback(any(NetworkCallback.class));
+    }
+
+    @Test
+    public void testIpFamilySelectionWithIpV4IpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                true /* isIpV4Preferred */, true /* remoteHasV4 */, true /* remoteHasV6 */);
+    }
+
+    @Test
+    public void testIpFamilySelectionWithIpV4Remote() throws Exception {
+        verifyIpFamilySelection(
+                true /* isIpV4Preferred */, true /* remoteHasV4 */, false /* remoteHasV6 */);
+    }
+
+    @Test
+    public void testIpFamilySelectionWithIpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                true /* isIpV4Preferred */, false /* remoteHasV4 */, true /* remoteHasV6 */);
+    }
+
+    @Test
+    public void testIpFamilySelectionDisabledWithIpV4IpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                false /* isIpV4Preferred */, true /* remoteHasV4 */, true /* remoteHasV6 */);
+    }
+
+    @Test
+    public void testIpFamilySelectionDisabledWithIpV4Remote() throws Exception {
+        verifyIpFamilySelection(
+                false /* isIpV4Preferred */, true /* remoteHasV4 */, false /* remoteHasV6 */);
+    }
+
+    @Test
+    public void testIpFamilySelectionDisabledWithIpV6Remote() throws Exception {
+        verifyIpFamilySelection(
+                false /* isIpV4Preferred */, false /* remoteHasV4 */, true /* remoteHasV6 */);
+    }
+
+    private void verifyIsIpV4PreferredAutoSelect(
+            boolean isAutoSelectionEnabled,
+            boolean preferV4OnCell,
+            int tranportType,
+            boolean expectPreferIpV4) {
+        final IkeContext mockIkeContext = mock(IkeContext.class);
+        final IkeSessionParams mockIkeParams = mock(IkeSessionParams.class);
+        final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
+
+        when(mockIkeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION))
+                .thenReturn(isAutoSelectionEnabled);
+        when(mockNc.hasTransport(tranportType)).thenReturn(true);
+        when(mockIkeContext.getDeviceConfigPropertyBoolean(anyString(), anyBoolean()))
+                .thenReturn(preferV4OnCell);
+
+        final boolean result =
+                IkeConnectionController.isIpV4Preferred(mockIkeContext, mockIkeParams, mockNc);
+
+        assertEquals(expectPreferIpV4, result);
+
+        verify(mockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
+        if (isAutoSelectionEnabled) {
+            verify(mockNc).hasTransport(TRANSPORT_CELLULAR);
+        }
+        if (isAutoSelectionEnabled && tranportType == TRANSPORT_CELLULAR) {
+            verify(mockIkeContext).getDeviceConfigPropertyBoolean(anyString(), eq(true));
+        }
+    }
+
+    @Test
+    public void testIsIpV4PreferredAutoSelectDisabled() {
+        verifyIsIpV4PreferredAutoSelect(
+                false /* isAutoSelectionEnabled */,
+                true /* preferV4OnCell */,
+                TRANSPORT_WIFI,
+                false /* expectPreferIpV4 */);
+    }
+
+    @Test
+    public void testIsIpV4PreferredAutoSelectEnabledOnWifi() {
+        verifyIsIpV4PreferredAutoSelect(
+                true /* isAutoSelectionEnabled */,
+                true /* preferV4OnCell */,
+                TRANSPORT_WIFI,
+                true /* expectPreferIpV4 */);
+    }
+
+    @Test
+    public void testIsIpV4PreferredAutoSelectEnabledOnCell() {
+        verifyIsIpV4PreferredAutoSelect(
+                true /* isAutoSelectionEnabled */,
+                false /* preferV4OnCell */,
+                TRANSPORT_CELLULAR,
+                false /* expectPreferIpV4 */);
+    }
+
+    @Test
+    public void testSetupWithDnsFailure() throws Exception {
+        mIkeConnectionCtrl.tearDown();
+
+        // Clear the network callback registration call in #setUp()
+        resetMockConnectManager();
+
+        setupRemoteAddressForNetwork(mMockDefaultNetwork, new InetAddress[0]);
+        mIkeConnectionCtrl = buildIkeConnectionCtrl();
+
+        try {
+            mIkeConnectionCtrl.setUp();
+            fail("Expected to fail due to DNS failure");
+        } catch (Exception expected) {
+
+        }
     }
 
     @Test
@@ -300,7 +531,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void handleNatDetectionResultInIkeInit() throws Exception {
+    public void testHandleNatDetectionResultInIkeInit() throws Exception {
         // Clear call in IkeConnectionController#setUp()
         reset(mMockConnectionCtrlCb);
 
@@ -311,6 +542,40 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
 
         assertTrue(mIkeConnectionCtrl.getIkeSocket() instanceof IkeUdpEncapSocket);
         verifyKeepalive();
+    }
+
+    private IkeDefaultNetworkCallback getDefaultNetworkCallback() throws Exception {
+        ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
+                ArgumentCaptor.forClass(IkeNetworkCallbackBase.class);
+
+        verify(mMockConnectManager)
+                .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
+
+        return (IkeDefaultNetworkCallback) networkCallbackCaptor.getValue();
+    }
+
+    @Test
+    public void testNetworkLossWhenMobilityDisabled() throws Exception {
+        getDefaultNetworkCallback().onLost(mMockDefaultNetwork);
+        verify(mMockConnectionCtrlCb).onUnderlyingNetworkDied(eq(mMockDefaultNetwork));
+    }
+
+    @Test
+    public void testNetworkUpdateWhenMobilityDisabled() throws Exception {
+        final IkeDefaultNetworkCallback callback = getDefaultNetworkCallback();
+        final Network newNetwork = mock(Network.class);
+        callback.onAvailable(newNetwork);
+        callback.onCapabilitiesChanged(newNetwork, mock(NetworkCapabilities.class));
+        callback.onLinkPropertiesChanged(newNetwork, mock(LinkProperties.class));
+        verify(mMockConnectionCtrlCb).onUnderlyingNetworkDied(eq(mMockDefaultNetwork));
+    }
+
+    @Test
+    public void testLinkPropertiesUpdateWhenMobilityDisabled() throws Exception {
+        LinkProperties linkProperties = new LinkProperties();
+        linkProperties.addLinkAddress(mock(LinkAddress.class));
+        getDefaultNetworkCallback().onLinkPropertiesChanged(mMockDefaultNetwork, linkProperties);
+        verify(mMockConnectionCtrlCb).onUnderlyingNetworkDied(eq(mMockDefaultNetwork));
     }
 
     private IkeNetworkCallbackBase enableMobilityAndReturnCb(boolean isDefaultNetwork)
@@ -401,7 +666,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         setupRemoteAddressForNetwork(newNetwork, REMOTE_ADDRESS);
 
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(newNetwork);
+        mIkeConnectionCtrl.onNetworkSetByUser(newNetwork);
 
         verifyNetworkAndAddressesAfterMobilityEvent(
                 newNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
@@ -416,7 +681,10 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         setupRemoteAddressForNetwork(mMockDefaultNetwork, REMOTE_ADDRESS);
 
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(mMockDefaultNetwork);
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                mMockDefaultNetwork,
+                mMockConnectManager.getLinkProperties(mMockDefaultNetwork),
+                mMockNetworkCapabilities);
 
         verifyNetworkAndAddressesAfterMobilityEvent(
                 mMockDefaultNetwork, UPDATED_LOCAL_ADDRESS, REMOTE_ADDRESS, callback);
@@ -432,8 +700,12 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
             throws Exception {
         mIkeConnectionCtrl.tearDown();
 
+        // Clear the network callback registration call in #setUp()
+        resetMockConnectManager();
+
         // Set up mIkeConnectionCtrl for the test case
         when(mMockIkeParams.hasIkeOption(eq(IKE_OPTION_FORCE_PORT_4500))).thenReturn(force4500);
+
         mIkeConnectionCtrl = buildIkeConnectionCtrl();
         mIkeConnectionCtrl.setUp();
         mIkeConnectionCtrl.registerIkeSaRecord(mMockIkeSaRecord);
@@ -455,7 +727,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         // Clear call in IkeConnectionController#setUp() and
         // IkeConnectionController#enableMobility()
         reset(mMockConnectionCtrlCb);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(newNetwork);
+        mIkeConnectionCtrl.onNetworkSetByUser(newNetwork);
 
         // Validation
         verifyNetworkAndAddressesAfterMobilityEvent(
@@ -499,10 +771,28 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     @Test
     public void testOnUnderlyingNetworkUpdatedFail() throws Exception {
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(mock(Network.class));
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                mock(Network.class), mock(LinkProperties.class), mock(NetworkCapabilities.class));
 
         // Expected to fail due to DNS resolution failure
-        verify(mMockConnectionCtrlCb).onError(any(IkeInternalException.class));
+        if (SdkLevel.isAtLeastT()) {
+            verify(mMockConnectionCtrlCb).onError(any(IkeIOException.class));
+        } else {
+            verify(mMockConnectionCtrlCb).onError(any(IkeInternalException.class));
+        }
+    }
+
+    @Test
+    public void testOnNetworkSetByExternalCallerWithNullLp() throws Exception {
+        enableMobilityAndReturnCb(true /* isDefaultNetwork */);
+
+        try {
+            mIkeConnectionCtrl.onNetworkSetByUser(mock(Network.class));
+            fail("Expected to fail due to null LinkProperties");
+        } catch (IkeException expected) {
+            assertTrue(expected instanceof IkeInternalException);
+            assertTrue(expected.getCause() instanceof NullPointerException);
+        }
     }
 
     @Test
