@@ -152,9 +152,5 @@ java_library {
 
 sdk {
     name: "ipsec-module-sdk",
-    apexes: [
-        // Adds exportable dependencies of the APEX to the sdk,
-        // e.g. *classpath_fragments.
-        "com.android.ipsec",
-    ],
+    bootclasspath_fragments: ["com.android.ipsec-bootclasspath-fragment"],
 }
