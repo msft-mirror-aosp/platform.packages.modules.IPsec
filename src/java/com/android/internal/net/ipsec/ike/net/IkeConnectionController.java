@@ -217,7 +217,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         /** Notify the IkeConnectionController caller of the incoming IKE packet */
         void onIkePacketReceived(IkeHeader ikeHeader, byte[] ikePackets);
 
-        /** Notify the IkeConnectionController caller of the IKE error */
+        /** Notify the IkeConnectionController caller of the IKE fatal error */
         void onError(IkeException exception);
     }
 
@@ -541,7 +541,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         // Switch to monitor a new network. This call is never expected to trigger a callback
         mNetworkCallback.setNetwork(network, linkProperties, networkCapabilities);
-        onUnderlyingNetworkUpdated(network, linkProperties, networkCapabilities);
+        handleUnderlyingNetworkUpdated(network, linkProperties, networkCapabilities);
     }
 
     /** Gets the underlying network */
@@ -847,11 +847,18 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         return new IkeSessionConnectionInfo(mLocalAddress, mRemoteAddress, mNetwork);
     }
 
+    /**
+     * All the calls that are not initiated from the IkeSessionStateMachine MUST be run in this
+     * method unless there are mechanisms to guarantee these calls will never crash the process.
+     */
+    private void executeOrSendFatalError(Runnable r) {
+        ShimUtils.getInstance().executeOrSendFatalError(r, mCallback);
+    }
+
     // This method is never expected be called due to the capabilities change of the existing
     // underlying network. Only explicit user requests, network changes, or addresses changes will
     // call into this method.
-    @Override
-    public void onUnderlyingNetworkUpdated(
+    private void handleUnderlyingNetworkUpdated(
             Network network,
             LinkProperties linkProperties,
             NetworkCapabilities networkCapabilities) {
@@ -928,20 +935,40 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
 
     @Override
-    public void onCapabilitiesUpdated(NetworkCapabilities networkCapabilities) {
-        mNc = networkCapabilities;
+    public void onUnderlyingNetworkUpdated(
+            Network network,
+            LinkProperties linkProperties,
+            NetworkCapabilities networkCapabilities) {
+        executeOrSendFatalError(
+                () -> {
+                    handleUnderlyingNetworkUpdated(network, linkProperties, networkCapabilities);
+                });
+    }
 
-        // No action. There is no known use case to perform mobility or update keepalive
-        // timer when NetworkCapabilities changes.
+    @Override
+    public void onCapabilitiesUpdated(NetworkCapabilities networkCapabilities) {
+        executeOrSendFatalError(
+                () -> {
+                    mNc = networkCapabilities;
+
+                    // No action. There is no known use case to perform mobility or update keepalive
+                    // timer when NetworkCapabilities changes.
+                });
     }
 
     @Override
     public void onUnderlyingNetworkDied() {
-        mCallback.onUnderlyingNetworkDied(mNetwork);
+        executeOrSendFatalError(
+                () -> {
+                    mCallback.onUnderlyingNetworkDied(mNetwork);
+                });
     }
 
     @Override
     public void onIkePacketReceived(IkeHeader ikeHeader, byte[] ikePackets) {
-        mCallback.onIkePacketReceived(ikeHeader, ikePackets);
+        executeOrSendFatalError(
+                () -> {
+                    mCallback.onIkePacketReceived(ikeHeader, ikePackets);
+                });
     }
 }
