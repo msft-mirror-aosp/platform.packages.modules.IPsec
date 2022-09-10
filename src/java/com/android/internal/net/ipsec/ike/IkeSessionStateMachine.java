@@ -1157,16 +1157,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void handleIkeFatalError(Exception error) {
         IkeException ikeException = wrapAsIkeException(error);
+        loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
-        // Clean up all SaRecords.
-        closeAllSaRecords(false /*expectSaClosed*/);
-        executeUserCallback(
-                () -> {
-                    mIkeSessionCallback.onClosedWithException(ikeException);
-                });
-        loge("IKE Session fatal error in " + getCurrentStateName(), ikeException);
-
-        quitSessionNow();
+        try {
+            // Clean up all SaRecords.
+            closeAllSaRecords(false /*expectSaClosed*/);
+        } catch (Exception e) {
+            // This try catch block is to add a protection in case there is a program error. The
+            // error is not actionable to IKE callers.
+            logWtf("Unexpected error in #handleIkeFatalError", e);
+        } finally {
+            executeUserCallback(
+                    () -> {
+                        mIkeSessionCallback.onClosedWithException(ikeException);
+                    });
+            quitSessionNow();
+        }
     }
 
     /** Parent state used to delete IKE sessions */
