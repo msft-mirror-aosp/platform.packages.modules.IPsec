@@ -231,9 +231,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     // TODO: b/140579254 Allow users to configure fragment size.
 
-    private static final Object IKE_SESSION_LOCK = new Object();
-
-    @GuardedBy("IKE_SESSION_LOCK")
     private static final HashMap<Context, Set<IkeSessionStateMachine>> sContextToIkeSmMap =
             new HashMap<>();
 
@@ -241,6 +238,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     private static final IkeAlarmReceiver sIkeAlarmReceiver = new IkeAlarmReceiver();
 
     /** Intent filter for all Intents that should be received by sIkeAlarmReceiver */
+    // The only read/write operation is in a static block which is thread safe.
     private static final IntentFilter sIntentFilter = new IntentFilter();
 
     static {
@@ -486,30 +484,14 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             }
         }
 
-        synchronized (IKE_SESSION_LOCK) {
-            if (!sContextToIkeSmMap.containsKey(context)) {
-                int flags = SdkLevel.isAtLeastT() ? Context.RECEIVER_NOT_EXPORTED : 0;
-                // Pass in a Handler so #onReceive will run on the StateMachine thread
-                context.registerReceiver(
-                        sIkeAlarmReceiver,
-                        sIntentFilter,
-                        null /*broadcastPermission*/,
-                        new Handler(looper),
-                        flags);
-                sContextToIkeSmMap.put(context, new HashSet<IkeSessionStateMachine>());
-            }
-            sContextToIkeSmMap.get(context).add(this);
-
-            // TODO: Statically store the ikeSessionCallback to prevent user from providing the same
-            // callback instance in the future
-        }
+        // TODO: Statically store the ikeSessionCallback to prevent user from providing the
+        // same callback instance in the future
 
         PowerManager pm = context.getSystemService(PowerManager.class);
         mBusyWakeLock = pm.newWakeLock(PARTIAL_WAKE_LOCK, TAG + BUSY_WAKE_LOCK_TAG);
         mBusyWakeLock.setReferenceCounted(false);
 
         mIkeSessionId = sIkeSessionIdGenerator.getAndIncrement();
-        sIkeAlarmReceiver.registerIkeSession(mIkeSessionId, getHandler());
 
         mIkeSessionParams = ikeParams;
 
@@ -1141,18 +1123,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
 
         mIkeConnectionCtrl.tearDown();
-
-        sIkeAlarmReceiver.unregisterIkeSession(mIkeSessionId);
-
-        synchronized (IKE_SESSION_LOCK) {
-            Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(mIkeContext.getContext());
-            ikeSet.remove(this);
-            if (ikeSet.isEmpty()) {
-                mIkeContext.getContext().unregisterReceiver(sIkeAlarmReceiver);
-                sContextToIkeSmMap.remove(mIkeContext.getContext());
-            }
-            // TODO: Remove the stored ikeSessionCallback
-        }
+        releaseAlarmReceiver(mIkeContext.getContext(), this, mIkeSessionId);
 
         mIke3gppExtensionExchange.close();
 
@@ -1186,16 +1157,22 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
     private void handleIkeFatalError(Exception error) {
         IkeException ikeException = wrapAsIkeException(error);
+        loge("IKE Session fatal error in " + getCurrentState().getName(), ikeException);
 
-        // Clean up all SaRecords.
-        closeAllSaRecords(false /*expectSaClosed*/);
-        executeUserCallback(
-                () -> {
-                    mIkeSessionCallback.onClosedWithException(ikeException);
-                });
-        loge("IKE Session fatal error in " + getCurrentStateName(), ikeException);
-
-        quitSessionNow();
+        try {
+            // Clean up all SaRecords.
+            closeAllSaRecords(false /*expectSaClosed*/);
+        } catch (Exception e) {
+            // This try catch block is to add a protection in case there is a program error. The
+            // error is not actionable to IKE callers.
+            logWtf("Unexpected error in #handleIkeFatalError", e);
+        } finally {
+            executeUserCallback(
+                    () -> {
+                        mIkeSessionCallback.onClosedWithException(ikeException);
+                    });
+            quitSessionNow();
+        }
     }
 
     /** Parent state used to delete IKE sessions */
@@ -1214,6 +1191,38 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                 default:
                     return NOT_HANDLED;
             }
+        }
+    }
+
+    // This method should always run on the IKE worker thread
+    private static void setupAlarmReceiver(
+            Handler ikeHandler, Context context, IkeSessionStateMachine ike, int ikeSessionId) {
+        if (!sContextToIkeSmMap.containsKey(context)) {
+            int flags = SdkLevel.isAtLeastT() ? Context.RECEIVER_NOT_EXPORTED : 0;
+            // Pass in a Handler so #onReceive will run on the StateMachine thread
+            context.registerReceiver(
+                    sIkeAlarmReceiver,
+                    sIntentFilter,
+                    null /* broadcastPermission */,
+                    ikeHandler,
+                    flags);
+            sContextToIkeSmMap.put(context, new HashSet<IkeSessionStateMachine>());
+        }
+        sContextToIkeSmMap.get(context).add(ike);
+
+        sIkeAlarmReceiver.registerIkeSession(ikeSessionId, ikeHandler);
+    }
+
+    // This method should always run on the IKE worker thread
+    private static void releaseAlarmReceiver(
+            Context context, IkeSessionStateMachine ike, int ikeSessionId) {
+        sIkeAlarmReceiver.unregisterIkeSession(ikeSessionId);
+
+        Set<IkeSessionStateMachine> ikeSet = sContextToIkeSmMap.get(context);
+        ikeSet.remove(ike);
+        if (ikeSet.isEmpty()) {
+            context.unregisterReceiver(sIkeAlarmReceiver);
+            sContextToIkeSmMap.remove(context);
         }
     }
 
@@ -1236,6 +1245,11 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             reset();
 
+            setupAlarmReceiver(
+                    getHandler(),
+                    mIkeContext.getContext(),
+                    IkeSessionStateMachine.this,
+                    mIkeSessionId);
             try {
                 mIkeConnectionCtrl.setUp();
 
