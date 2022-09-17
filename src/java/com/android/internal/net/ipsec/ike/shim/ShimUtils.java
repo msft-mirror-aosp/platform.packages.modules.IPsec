@@ -19,6 +19,7 @@ package com.android.internal.net.ipsec.ike.shim;
 import android.net.Network;
 import android.net.ipsec.ike.exceptions.IkeException;
 
+import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
 import com.android.modules.utils.build.SdkLevel;
 
 import java.io.IOException;
@@ -64,4 +65,10 @@ public abstract class ShimUtils {
     /** Handle network loss on an IkeSessionStateMachine without mobility */
     public abstract void onUnderlyingNetworkDiedWithoutMobility(
             IIkeSessionStateMachineShim ikeSession, Network network);
+
+    /**
+     * Handle all IkeConnectionController calls that are not initiated from the
+     * IkeSessionStateMachine.
+     */
+    public abstract void executeOrSendFatalError(Runnable r, IkeConnectionController.Callback cb);
 }
