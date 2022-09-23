@@ -103,7 +103,10 @@ public final class IkeSessionParams {
         IKE_OPTION_EAP_ONLY_AUTH,
         IKE_OPTION_MOBIKE,
         IKE_OPTION_FORCE_PORT_4500,
-        IKE_OPTION_INITIAL_CONTACT
+        IKE_OPTION_INITIAL_CONTACT,
+        IKE_OPTION_REKEY_MOBILITY,
+        IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION,
+        IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES
     })
     public @interface IkeOption {}
 
@@ -212,8 +215,30 @@ public final class IkeSessionParams {
      */
     @SystemApi public static final int IKE_OPTION_REKEY_MOBILITY = 5;
 
+    /**
+     * If set, IKE Session will automatically select address families.
+     *
+     * <p>IP address families often have different performance characteristics on any given network.
+     * For example, IPv6 ESP may not be hardware-accelerated by middleboxes, or completely
+     * black-holed. This option allows the IKE session to automatically select based on the IP
+     * address family it perceives as the most likely to work well.
+     *
+     * @hide
+     */
+    public static final int IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION = 6;
+
+    /**
+     * If set, the IKE session will select the NATT keepalive timers automatically.
+     *
+     * <p>NATT keepalive timers will be selected and adjusted based on the underlying network
+     * configurations, and updated as underlying network configurations change.
+     *
+     * @hide
+     */
+    public static final int IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES = 7;
+
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_REKEY_MOBILITY;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
@@ -237,11 +262,13 @@ public final class IkeSessionParams {
     @VisibleForTesting static final int IKE_DPD_DELAY_SEC_MAX = 1800; // 30 minutes
     /** @hide */
     @VisibleForTesting static final int IKE_DPD_DELAY_SEC_DEFAULT = 120; // 2 minutes
+    /** @hide */
+    public static final int IKE_DPD_DELAY_SEC_DISABLED = Integer.MAX_VALUE;
 
     /** @hide */
-    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MIN = 10;
+    @VisibleForTesting public static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MIN = 10;
     /** @hide */
-    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MAX = 3600;
+    @VisibleForTesting public static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MAX = 3600;
     /** @hide */
     @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT = 10;
 
@@ -645,7 +672,12 @@ public final class IkeSessionParams {
         return (ikeOptionsRecord & getOptionBitValue(ikeOption)) != 0;
     }
 
-    /** Checks if the given IKE Session negotiation option is set */
+    /**
+     * Checks if the given IKE Session negotiation option is set
+     *
+     * @param ikeOption the option to check.
+     * @throws IllegalArgumentException if the provided option is invalid.
+     */
     public boolean hasIkeOption(@IkeOption int ikeOption) {
         return hasIkeOption(mIkeOptions, ikeOption);
     }
@@ -1720,15 +1752,16 @@ public final class IkeSessionParams {
          *
          * @param dpdDelaySeconds number of seconds after which IKE SA will initiate DPD if no
          *     inbound cryptographically protected IKE message was received. Defaults to 120
-         *     seconds. MUST be a value from 20 seconds to 1800 seconds, inclusive.
+         *     seconds. MUST be a value greater than or equal to than 20 seconds. Setting the value
+         *     to {@link java.lang.Integer#MAX_VALUE} will disable DPD.
          * @return Builder this, to facilitate chaining.
          */
+        // TODO: b/240206579 Align the @IntRange with the implementation.
         @NonNull
         public Builder setDpdDelaySeconds(
                 @IntRange(from = IKE_DPD_DELAY_SEC_MIN, to = IKE_DPD_DELAY_SEC_MAX)
                         int dpdDelaySeconds) {
-            if (dpdDelaySeconds < IKE_DPD_DELAY_SEC_MIN
-                    || dpdDelaySeconds > IKE_DPD_DELAY_SEC_MAX) {
+            if (dpdDelaySeconds < IKE_DPD_DELAY_SEC_MIN) {
                 throw new IllegalArgumentException("Invalid DPD delay value");
             }
             mDpdDelaySec = dpdDelaySeconds;
@@ -1847,6 +1880,7 @@ public final class IkeSessionParams {
          *
          * @param ikeOption the option to be enabled.
          * @return Builder this, to facilitate chaining.
+         * @throws IllegalArgumentException if the provided option is invalid.
          */
         // Use #hasIkeOption instead of @getIkeOptions because #hasIkeOption allows callers to check
         // the presence of one IKE option more easily
@@ -1879,6 +1913,7 @@ public final class IkeSessionParams {
          *
          * @param ikeOption the option to be disabled.
          * @return Builder this, to facilitate chaining.
+         * @throws IllegalArgumentException if the provided option is invalid.
          */
         // Use #removeIkeOption instead of #clearIkeOption because "clear" sounds indicating
         // clearing all enabled IKE options
