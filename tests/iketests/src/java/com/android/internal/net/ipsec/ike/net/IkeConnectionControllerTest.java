@@ -37,6 +37,7 @@ import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -225,15 +226,27 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         Network expectedNetwork =
                 callerConfiguredNw == null ? mMockDefaultNetwork : callerConfiguredNw;
 
+        ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
+                ArgumentCaptor.forClass(IkeNetworkCallbackBase.class);
+
         if (callerConfiguredNw == null) {
             verify(mMockConnectManager)
-                    .registerDefaultNetworkCallback(any(NetworkCallback.class), any());
+                    .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
         } else {
             verify(mMockConnectManager)
-                    .registerNetworkCallback(any(), any(NetworkCallback.class), any());
+                    .registerNetworkCallback(any(), networkCallbackCaptor.capture(), any());
         }
 
+        IkeNetworkCallbackBase nwCallback = networkCallbackCaptor.getValue();
+        nwCallback.onAvailable(expectedNetwork);
+        nwCallback.onLinkPropertiesChanged(
+                expectedNetwork, mMockConnectManager.getLinkProperties(expectedNetwork));
+        nwCallback.onCapabilitiesChanged(
+                expectedNetwork, mMockConnectManager.getNetworkCapabilities(expectedNetwork));
+
         verifySetup(expectedNetwork, LOCAL_ADDRESS, REMOTE_ADDRESS, IkeUdp4Socket.class);
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkDied(any());
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkUpdated();
 
         mIkeConnectionCtrl.tearDown();
         verifyTearDown();
