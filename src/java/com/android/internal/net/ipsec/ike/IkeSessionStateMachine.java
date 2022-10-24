@@ -111,6 +111,7 @@ import android.net.ipsec.ike.exceptions.IkeProtocolException;
 import android.net.ipsec.ike.exceptions.InvalidKeException;
 import android.net.ipsec.ike.exceptions.InvalidSyntaxException;
 import android.net.ipsec.ike.exceptions.NoValidProposalChosenException;
+import android.net.ipsec.ike.exceptions.UnsupportedCriticalPayloadException;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -3795,12 +3796,29 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
 
             if (authRespResult.getResult() != MsgValidationResult.RESULT_OK) {
                 final IkeException e = authRespResult.getException();
-                if (!isServerExpectingMoreEap) {
+                if (!isServerExpectingMoreEap && !shouldSilentlyDelete(authRespResult)) {
                     // Notify the remote because they may have set up the IKE SA.
                     sendEncryptedIkeMessage(buildIkeDeleteReq(mCurrentIkeSaRecord));
                 }
-                handleIkeFatalError(e);
+                handleIkeFatalError(authRespResult.getException());
             }
+        }
+
+        /**
+         * Returns if this validation result indicates IKE termination without Delete exchange.
+         *
+         * <p>Receiving a fatal error notification in IKE AUTH should cause the IKE SA to be killed
+         * without sending a Delete request.
+         */
+        protected boolean shouldSilentlyDelete(MsgValidationResult authRespResult) {
+            if (authRespResult.getResult() != MsgValidationResult.RESULT_ERROR_RCV_NOTIFY) {
+                return false;
+            }
+
+            final IkeException e = authRespResult.getException();
+            return (e instanceof InvalidSyntaxException
+                    || e instanceof AuthenticationFailedException
+                    || e instanceof UnsupportedCriticalPayloadException);
         }
 
         protected void maybeEnableMobility() throws IkeException {

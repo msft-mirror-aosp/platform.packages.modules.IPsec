@@ -3357,6 +3357,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockAuthFailPacket);
         mLooper.dispatchAll();
 
+        // Verify Delete request was never sent
+        verifyEncryptAndEncodeNeverCalled();
+
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
         verify(mMockIkeSessionCallback)
@@ -3375,6 +3378,11 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         Arrays.asList(new IkeNotifyPayload(ERROR_TYPE_INTERNAL_ADDRESS_FAILURE)));
         mIkeSessionStateMachine.sendMessage(CMD_RECEIVE_IKE_PACKET, mockAuthFailPacket);
         mLooper.dispatchAll();
+
+        // Verify Delete request was sent
+        List<IkePayload> payloads = verifyOutInfoMsgHeaderAndGetPayloads(false /*isResp*/);
+        assertEquals(1, payloads.size());
+        assertEquals(IkePayload.PAYLOAD_TYPE_DELETE, payloads.get(0).payloadType);
 
         // Verify IKE Session is closed properly
         assertNull(mIkeSessionStateMachine.getCurrentState());
