@@ -57,9 +57,11 @@ public class IkeDefaultNetworkCallback extends IkeNetworkCallbackBase {
      */
     @Override
     public void onAvailable(@NonNull Network network) {
-        logd("onAvailable: " + network);
-        resetNetwork();
-        mCurrNetwork = network;
+        if (!network.equals(mCurrNetwork)) {
+            logd("onAvailable: " + network);
+            resetNetwork();
+            mCurrNetwork = network;
+        }
     }
 
     /**
