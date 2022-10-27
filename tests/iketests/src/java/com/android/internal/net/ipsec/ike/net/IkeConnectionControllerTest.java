@@ -34,8 +34,10 @@ import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyBoolean;
 import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -45,12 +47,15 @@ import android.net.LinkAddress;
 import android.net.LinkProperties;
 import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.ipsec.test.ike.IkeManager;
 import android.net.ipsec.test.ike.IkeSessionParams;
 import android.net.ipsec.test.ike.exceptions.IkeException;
 import android.net.ipsec.test.ike.exceptions.IkeIOException;
 import android.net.ipsec.test.ike.exceptions.IkeInternalException;
+import android.os.Build.VERSION_CODES;
 import android.os.Looper;
 
+import com.android.internal.net.TestUtils;
 import com.android.internal.net.ipsec.test.ike.IkeContext;
 import com.android.internal.net.ipsec.test.ike.IkeSessionTestBase;
 import com.android.internal.net.ipsec.test.ike.IkeSocket;
@@ -63,9 +68,13 @@ import com.android.internal.net.ipsec.test.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
 import com.android.internal.net.ipsec.test.ike.utils.RandomnessFactory;
 import com.android.modules.utils.build.SdkLevel;
+import com.android.testutils.DevSdkIgnoreRule;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreAfter;
+import com.android.testutils.DevSdkIgnoreRule.IgnoreUpTo;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -74,6 +83,8 @@ import java.net.InetAddress;
 import java.util.HashSet;
 
 public class IkeConnectionControllerTest extends IkeSessionTestBase {
+    @Rule public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
+
     private static final long IKE_LOCAL_SPI = 11L;
 
     private IkeSessionParams mMockIkeParams;
@@ -215,15 +226,27 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         Network expectedNetwork =
                 callerConfiguredNw == null ? mMockDefaultNetwork : callerConfiguredNw;
 
+        ArgumentCaptor<IkeNetworkCallbackBase> networkCallbackCaptor =
+                ArgumentCaptor.forClass(IkeNetworkCallbackBase.class);
+
         if (callerConfiguredNw == null) {
             verify(mMockConnectManager)
-                    .registerDefaultNetworkCallback(any(NetworkCallback.class), any());
+                    .registerDefaultNetworkCallback(networkCallbackCaptor.capture(), any());
         } else {
             verify(mMockConnectManager)
-                    .registerNetworkCallback(any(), any(NetworkCallback.class), any());
+                    .registerNetworkCallback(any(), networkCallbackCaptor.capture(), any());
         }
 
+        IkeNetworkCallbackBase nwCallback = networkCallbackCaptor.getValue();
+        nwCallback.onAvailable(expectedNetwork);
+        nwCallback.onLinkPropertiesChanged(
+                expectedNetwork, mMockConnectManager.getLinkProperties(expectedNetwork));
+        nwCallback.onCapabilitiesChanged(
+                expectedNetwork, mMockConnectManager.getNetworkCapabilities(expectedNetwork));
+
         verifySetup(expectedNetwork, LOCAL_ADDRESS, REMOTE_ADDRESS, IkeUdp4Socket.class);
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkDied(any());
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkUpdated();
 
         mIkeConnectionCtrl.tearDown();
         verifyTearDown();
@@ -799,5 +822,47 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     public void testOnUnderlyingNetworkDied() throws Exception {
         mIkeConnectionCtrl.onUnderlyingNetworkDied();
         verify(mMockConnectionCtrlCb).onUnderlyingNetworkDied(eq(mMockDefaultNetwork));
+    }
+
+    @IgnoreUpTo(VERSION_CODES.S_V2)
+    @Test
+    public void testCatchUnexpectedExceptionInNetworkUpdate() throws Exception {
+        IkeManager.setIkeLog(
+                TestUtils.makeSpyLogDoLogErrorForWtf(
+                        "testCatchUnexpectedExceptionInNetworkUpdate"));
+
+        enableMobilityAndReturnCb(true /* isDefaultNetwork */);
+
+        Network mockNetwork = mock(Network.class);
+        Exception testException =
+                new IllegalStateException("testCatchUnexpectedExceptionInNetworkUpdate");
+        doThrow(testException).when(mockNetwork).getAllByName(anyString());
+
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                mockNetwork, mock(LinkProperties.class), mock(NetworkCapabilities.class));
+
+        ArgumentCaptor<IkeInternalException> captor =
+                ArgumentCaptor.forClass(IkeInternalException.class);
+        verify(mMockConnectionCtrlCb).onError(captor.capture());
+        assertEquals(testException, captor.getValue().getCause());
+
+        IkeManager.resetIkeLog();
+    }
+
+    @IgnoreAfter(VERSION_CODES.S_V2)
+    @Test
+    public void testThrowInNetworkUpdate() throws Exception {
+        enableMobilityAndReturnCb(true /* isDefaultNetwork */);
+
+        Network mockNetwork = mock(Network.class);
+        Exception testException = new IllegalStateException("testThrowNetworkUpdate");
+        doThrow(testException).when(mockNetwork).getAllByName(anyString());
+
+        try {
+            mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                    mockNetwork, mock(LinkProperties.class), mock(NetworkCapabilities.class));
+            fail("Expected to throw IllegalStateException");
+        } catch (IllegalStateException expected) {
+        }
     }
 }
