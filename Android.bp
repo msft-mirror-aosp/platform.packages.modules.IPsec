@@ -160,3 +160,12 @@ sdk {
         "com.android.ipsec",
     ],
 }
+
+java_api_contribution {
+    name: "android-net-ipsec-ike-public-stubs",
+    api_surface: "public",
+    api_file: "api/current.txt",
+    visibility: [
+        "//build/orchestrator/apis",
+    ],
+}
