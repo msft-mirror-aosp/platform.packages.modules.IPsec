@@ -266,9 +266,9 @@ public final class IkeSessionParams {
     public static final int IKE_DPD_DELAY_SEC_DISABLED = Integer.MAX_VALUE;
 
     /** @hide */
-    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MIN = 10;
+    @VisibleForTesting public static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MIN = 10;
     /** @hide */
-    @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MAX = 3600;
+    @VisibleForTesting public static final int IKE_NATT_KEEPALIVE_DELAY_SEC_MAX = 3600;
     /** @hide */
     @VisibleForTesting static final int IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT = 10;
 
@@ -672,7 +672,12 @@ public final class IkeSessionParams {
         return (ikeOptionsRecord & getOptionBitValue(ikeOption)) != 0;
     }
 
-    /** Checks if the given IKE Session negotiation option is set */
+    /**
+     * Checks if the given IKE Session negotiation option is set
+     *
+     * @param ikeOption the option to check.
+     * @throws IllegalArgumentException if the provided option is invalid.
+     */
     public boolean hasIkeOption(@IkeOption int ikeOption) {
         return hasIkeOption(mIkeOptions, ikeOption);
     }
@@ -1875,6 +1880,7 @@ public final class IkeSessionParams {
          *
          * @param ikeOption the option to be enabled.
          * @return Builder this, to facilitate chaining.
+         * @throws IllegalArgumentException if the provided option is invalid.
          */
         // Use #hasIkeOption instead of @getIkeOptions because #hasIkeOption allows callers to check
         // the presence of one IKE option more easily
@@ -1907,6 +1913,7 @@ public final class IkeSessionParams {
          *
          * @param ikeOption the option to be disabled.
          * @return Builder this, to facilitate chaining.
+         * @throws IllegalArgumentException if the provided option is invalid.
          */
         // Use #removeIkeOption instead of #clearIkeOption because "clear" sounds indicating
         // clearing all enabled IKE options
