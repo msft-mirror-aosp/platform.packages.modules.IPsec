@@ -17,10 +17,19 @@ package com.android.internal.net.ipsec.ike;
 
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_AUTO;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_NONE;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_UDP;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_AUTO;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV4;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_EAP_ONLY_AUTH;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_INITIAL_CONTACT;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_REKEY_MOBILITY;
+import static android.net.ipsec.ike.IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO;
 import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_CHILD_SA_NOT_FOUND;
 import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_INVALID_SYNTAX;
@@ -301,13 +310,23 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     static final int CMD_ALARM_FIRED = CMD_GENERAL_BASE + 15;
     /** Send keepalive packet */
     static final int CMD_SEND_KEEPALIVE = CMD_GENERAL_BASE + 16;
-    /** Update the Session's underlying Network */
+    /**
+     * Update the Session's underlying Network
+     * obj = Network : the underlying network
+     * arg1 = espProtocolParams : ESP protocol params (IP version and encap type)
+     * arg2 = keepaliveDelaySeconds : the delay, in seconds
+     **/
     static final int CMD_SET_NETWORK = CMD_GENERAL_BASE + 17;
     /**
      * Proxy to IkeSessionStateMachine handler to notify of the IKE fatal error hit in a Child
      * procedure
      */
     static final int CMD_IKE_FATAL_ERROR_FROM_CHILD = CMD_GENERAL_BASE + 18;
+    /**
+     * Set the underpinned network
+     * obj = Network : the underpinned network
+     */
+    static final int CMD_SET_UNDERPINNED_NETWORK = CMD_GENERAL_BASE + 19;
     /** Force state machine to a target state for testing purposes. */
     static final int CMD_FORCE_TRANSITION = CMD_GENERAL_BASE + 99;
 
@@ -338,6 +357,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         CMD_TO_STR.put(CMD_EAP_FINISH_EAP_AUTH, "Finish EAP");
         CMD_TO_STR.put(CMD_ALARM_FIRED, "Alarm Fired");
         CMD_TO_STR.put(CMD_SET_NETWORK, "Update underlying Network");
+        CMD_TO_STR.put(CMD_SET_UNDERPINNED_NETWORK, "Set underpinned Network");
         CMD_TO_STR.put(CMD_IKE_FATAL_ERROR_FROM_CHILD, "IKE fatal error from Child");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_CREATE_IKE, "Create IKE");
         CMD_TO_STR.put(CMD_LOCAL_REQUEST_DELETE_IKE, "Delete IKE");
@@ -856,9 +876,31 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     }
 
     /** Update the IkeSessionStateMachine to use the specified Network. */
-    public void setNetwork(Network network) {
+    public void setNetwork(
+            Network network,
+            @IkeSessionParams.EspIpVersion int ipVersion,
+            @IkeSessionParams.EspEncapType int encapType,
+            int keepaliveDelaySeconds) {
         if (network == null) {
             throw new IllegalArgumentException("network must not be null");
+        }
+
+        if (ipVersion != ESP_IP_VERSION_AUTO
+                && ipVersion != ESP_IP_VERSION_IPV4
+                && ipVersion != ESP_IP_VERSION_IPV6) {
+            throw new IllegalArgumentException("Invalid IP version: " + ipVersion);
+        }
+
+        if (encapType != ESP_ENCAP_TYPE_AUTO
+                && encapType != ESP_ENCAP_TYPE_NONE
+                && encapType != ESP_ENCAP_TYPE_UDP) {
+            throw new IllegalArgumentException("Invalid encap type: " + encapType);
+        }
+
+        if (keepaliveDelaySeconds != NATT_KEEPALIVE_INTERVAL_AUTO
+                && (keepaliveDelaySeconds < IKE_NATT_KEEPALIVE_DELAY_SEC_MIN
+                || keepaliveDelaySeconds > IKE_NATT_KEEPALIVE_DELAY_SEC_MAX)) {
+            throw new IllegalArgumentException("Invalid NATT keepalive delay value");
         }
 
         if (!mIkeSessionParams.hasIkeOption(IKE_OPTION_MOBIKE)
@@ -873,7 +915,18 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                             + " network instead of default network");
         }
 
-        sendMessage(CMD_SET_NETWORK, network);
+        sendMessage(CMD_SET_NETWORK,
+                new NetworkParams(network, ipVersion, encapType, keepaliveDelaySeconds));
+    }
+
+    /**
+     * Update the IkeSessionMachine to know that it underpins the specified Network.
+     *
+     * In particular, this is used to tell the system to stop keepalives when there are no
+     * open connections on the underpinned network, if automatic on/off keepalives are turned on.
+     */
+    public void setUnderpinnedNetwork(@NonNull Network underpinnedNetwork) {
+        sendMessage(CMD_SET_UNDERPINNED_NETWORK, underpinnedNetwork);
     }
 
     private void scheduleRetry(LocalRequest localRequest) {
@@ -891,6 +944,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         // the IKE library MUST enforce UDP Encap to ensure that the server only sends UDP-encap
         // packets in order to avoid dropping packets.
         return (mIkeConnectionCtrl.getRemoteAddress() instanceof Inet4Address);
+    }
+
+    private static class NetworkParams {
+        public final Network network;
+        public final int ipVersion;
+        public final int encapType;
+        public final int keepaliveDelaySeconds;
+        NetworkParams(Network network, int ipVersion, int encapType,
+                int keepaliveDelaySeconds) {
+            this.network = network;
+            this.ipVersion = ipVersion;
+            this.encapType = encapType;
+            this.keepaliveDelaySeconds = keepaliveDelaySeconds;
+        }
     }
 
     // TODO: Support initiating Delete IKE exchange when IKE SA expires
@@ -1383,11 +1450,24 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     }
 
                     try {
-                        mIkeConnectionCtrl.onNetworkSetByUser((Network) message.obj);
+                        final NetworkParams params = (NetworkParams) message.obj;
+                        mIkeConnectionCtrl.onNetworkSetByUser(
+                                params.network,
+                                params.ipVersion,
+                                params.encapType,
+                                params.keepaliveDelaySeconds);
                     } catch (IkeException e) {
                         handleIkeFatalError(e);
                     }
 
+                    return HANDLED;
+
+                case CMD_SET_UNDERPINNED_NETWORK:
+                    try {
+                        mIkeConnectionCtrl.onUnderpinnedNetworkSetByUser((Network) message.obj);
+                    } catch (IkeException e) {
+                        handleIkeFatalError(e);
+                    }
                     return HANDLED;
 
                 default:
@@ -1770,7 +1850,20 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                     }
 
                     try {
-                        mIkeConnectionCtrl.onNetworkSetByUser((Network) message.obj);
+                        final NetworkParams params = (NetworkParams) message.obj;
+                        mIkeConnectionCtrl.onNetworkSetByUser(
+                                params.network,
+                                params.ipVersion,
+                                params.encapType,
+                                params.keepaliveDelaySeconds);
+                    } catch (IkeException e) {
+                        handleIkeFatalError(e);
+                    }
+                    return HANDLED;
+
+                case CMD_SET_UNDERPINNED_NETWORK:
+                    try {
+                        mIkeConnectionCtrl.onUnderpinnedNetworkSetByUser((Network) message.obj);
                     } catch (IkeException e) {
                         handleIkeFatalError(e);
                     }

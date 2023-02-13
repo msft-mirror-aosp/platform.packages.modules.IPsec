@@ -262,6 +262,83 @@ public final class IkeSessionParams {
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
     private static final int MAX_IKE_OPTION = IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF;
 
+    /**
+     * Automatically choose the IP version for ESP packets.
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    public static final int ESP_IP_VERSION_AUTO = 0;
+
+    /**
+     * Use IPv4 for ESP packets.
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    public static final int ESP_IP_VERSION_IPV4 = 4;
+
+    /**
+     * Use IPv6 for ESP packets.
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    public static final int ESP_IP_VERSION_IPV6 = 6;
+
+    // IP version to store in mEspIpVersion.
+    /** @hide */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            ESP_IP_VERSION_AUTO,
+            ESP_IP_VERSION_IPV4,
+            ESP_IP_VERSION_IPV6,
+    })
+    public @interface EspIpVersion {}
+
+    /**
+     * Automatically choose the encapsulation type for ESP packets.
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    public static final int ESP_ENCAP_TYPE_AUTO = 0;
+
+    /**
+     * Do not encapsulate ESP packets in transport layer protocol.
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    public static final int ESP_ENCAP_TYPE_NONE = -1;
+
+    /**
+     * Encapsulate ESP packets in UDP.
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    public static final int ESP_ENCAP_TYPE_UDP = 17;
+
+    // Encap type to store in mEspEncapType.
+    /** @hide */
+    @Retention(RetentionPolicy.SOURCE)
+    @IntDef({
+            ESP_ENCAP_TYPE_AUTO,
+            ESP_ENCAP_TYPE_NONE,
+            ESP_ENCAP_TYPE_UDP,
+    })
+    public @interface EspEncapType {}
+
+    /**
+     * Do not change the keepalive delay from what was previously set.
+     *
+     * This constant can be passed to
+     * {@link com.android.internal.net.ipsec.ike.IkeSessionStateMachine#setNetwork} to signify
+     * that the keepalive delay should not be changed from a previous call to this method, or
+     * if none, what was set from the original IkeSessionParams object.
+     * Note that in the Config object this constant is illegal.
+     *
+     * @see #getNattKeepAliveDelaySeconds
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    public static final int NATT_KEEPALIVE_INTERVAL_AUTO = -1;
+
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
     /** @hide */
@@ -328,6 +405,8 @@ public final class IkeSessionParams {
     private static final String NATT_KEEPALIVE_DELAY_SEC_KEY = "mNattKeepaliveDelaySec";
     private static final String DSCP_KEY = "mDscp";
     private static final String IS_IKE_FRAGMENT_SUPPORTED_KEY = "mIsIkeFragmentationSupported";
+    private static final String IP_VERSION_KEY = "mIpVersion";
+    private static final String ENCAP_TYPE_KEY = "mEncapType";
 
     @NonNull private final String mServerHostname;
 
@@ -364,6 +443,8 @@ public final class IkeSessionParams {
     private final int mDpdDelaySec;
     private final int mNattKeepaliveDelaySec;
     private final int mDscp;
+    @EspIpVersion private final int mIpVersion;
+    @EspEncapType private final int mEncapType;
 
     private final boolean mIsIkeFragmentationSupported;
 
@@ -385,6 +466,8 @@ public final class IkeSessionParams {
             int dpdDelaySec,
             int nattKeepaliveDelaySec,
             int dscp,
+            @EspIpVersion int espIpVersion,
+            @EspEncapType int espEncapType,
             boolean isIkeFragmentationSupported) {
         mServerHostname = serverHostname;
         mDefaultOrConfiguredNetwork = defaultOrConfiguredNetwork;
@@ -412,6 +495,9 @@ public final class IkeSessionParams {
         mDpdDelaySec = dpdDelaySec;
         mNattKeepaliveDelaySec = nattKeepaliveDelaySec;
         mDscp = dscp;
+
+        mIpVersion = espIpVersion;
+        mEncapType = espEncapType;
 
         mIsIkeFragmentationSupported = isIkeFragmentationSupported;
     }
@@ -482,6 +568,9 @@ public final class IkeSessionParams {
         builder.setDpdDelaySeconds(in.getInt(DPD_DELAY_SEC_KEY));
         builder.setNattKeepAliveDelaySeconds(in.getInt(NATT_KEEPALIVE_DELAY_SEC_KEY));
 
+        builder.setIpVersion(in.getInt(IP_VERSION_KEY));
+        builder.setEncapType(in.getInt(ENCAP_TYPE_KEY));
+
         // Fragmentation policy is not configurable. IkeSessionParams will always be constructed to
         // support fragmentation.
         if (!in.getBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY)) {
@@ -529,6 +618,8 @@ public final class IkeSessionParams {
         result.putInt(NATT_KEEPALIVE_DELAY_SEC_KEY, mNattKeepaliveDelaySec);
         result.putInt(DSCP_KEY, mDscp);
         result.putBoolean(IS_IKE_FRAGMENT_SUPPORTED_KEY, mIsIkeFragmentationSupported);
+        result.putInt(IP_VERSION_KEY, mIpVersion);
+        result.putInt(ENCAP_TYPE_KEY, mEncapType);
 
         return result;
     }
@@ -669,6 +760,24 @@ public final class IkeSessionParams {
     }
 
     /**
+     * Retrieves the IP version.
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    @EspIpVersion public int getIpVersion() {
+        return mIpVersion;
+    }
+
+    /**
+     * Retrieves the encap type.
+     * @hide
+     */
+    @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+    @EspEncapType public int getEncapType() {
+        return mEncapType;
+    }
+
+    /**
      * Retrieves the relative retransmission timeout list in milliseconds
      *
      * <p>@see {@link Builder#setRetransmissionTimeoutsMillis(int[])}
@@ -755,7 +864,9 @@ public final class IkeSessionParams {
                 mDpdDelaySec,
                 mNattKeepaliveDelaySec,
                 mDscp,
-                mIsIkeFragmentationSupported);
+                mIsIkeFragmentationSupported,
+                mIpVersion,
+                mEncapType);
     }
 
     /** @hide */
@@ -783,7 +894,9 @@ public final class IkeSessionParams {
                 && mDpdDelaySec == other.mDpdDelaySec
                 && mNattKeepaliveDelaySec == other.mNattKeepaliveDelaySec
                 && mDscp == other.mDscp
-                && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported;
+                && mIsIkeFragmentationSupported == other.mIsIkeFragmentationSupported
+                && mIpVersion == other.mIpVersion
+                && mEncapType == other.mEncapType;
     }
 
     /**
@@ -1325,8 +1438,10 @@ public final class IkeSessionParams {
         private int mDpdDelaySec = IKE_DPD_DELAY_SEC_DEFAULT;
         private int mNattKeepaliveDelaySec = IKE_NATT_KEEPALIVE_DELAY_SEC_DEFAULT;
         private int mDscp = DSCP_DEFAULT;
-
         private final boolean mIsIkeFragmentationSupported = true;
+
+        @EspIpVersion private int mIpVersion = ESP_IP_VERSION_AUTO;
+        @EspEncapType private int mEncapType = ESP_ENCAP_TYPE_AUTO;
 
         /**
          * Construct Builder
@@ -1392,6 +1507,8 @@ public final class IkeSessionParams {
             mDpdDelaySec = ikeSessionParams.getDpdDelaySeconds();
             mNattKeepaliveDelaySec = ikeSessionParams.getNattKeepAliveDelaySeconds();
             mDscp = ikeSessionParams.getDscp();
+            mIpVersion = ikeSessionParams.getIpVersion();
+            mEncapType = ikeSessionParams.getEncapType();
 
             mIkeOptions = ikeSessionParams.mIkeOptions;
 
@@ -1842,6 +1959,34 @@ public final class IkeSessionParams {
         }
 
         /**
+         * Sets the IP version to use for ESP packets.
+         *
+         * @param ipVersion the IP version to use.
+         * @return the {@code Builder} to facilitate chaining.
+         * @hide
+         */
+        @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+        @NonNull
+        public Builder setIpVersion(@EspIpVersion int ipVersion) {
+            mIpVersion = ipVersion;
+            return this;
+        }
+
+        /**
+         * Sets the encapsulation type to use for ESP packets.
+         *
+         * @param encapType the IP version to use.
+         * @return the {@code Builder} to facilitate chaining.
+         * @hide
+         */
+        @SystemApi(client = SystemApi.Client.MODULE_LIBRARIES)
+        @NonNull
+        public Builder setEncapType(@EspEncapType int encapType) {
+            mEncapType = encapType;
+            return this;
+        }
+
+        /**
          * Sets the retransmission timeout list in milliseconds.
          *
          * <p>Configures the retransmission by providing an array of relative retransmission
@@ -2030,6 +2175,8 @@ public final class IkeSessionParams {
                     mDpdDelaySec,
                     mNattKeepaliveDelaySec,
                     mDscp,
+                    mIpVersion,
+                    mEncapType,
                     mIsIkeFragmentationSupported);
         }
 

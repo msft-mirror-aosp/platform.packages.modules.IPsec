@@ -79,5 +79,5 @@ public abstract class ShimUtils {
      * Start the given Socketkeepalive.
      */
     public abstract void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
-            int keepaliveOptions);
+            int keepaliveOptions, Network underpinnedNetwork);
 }
