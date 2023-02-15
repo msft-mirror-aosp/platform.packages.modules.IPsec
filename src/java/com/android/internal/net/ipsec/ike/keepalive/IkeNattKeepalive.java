@@ -80,6 +80,7 @@ public class IkeNattKeepalive {
                         ikeContext.getContext(),
                         connectMgr,
                         keepaliveDelaySeconds,
+                        nattKeepaliveConfig.ikeParams,
                         nattKeepaliveConfig.src,
                         nattKeepaliveConfig.dest,
                         nattKeepaliveConfig.socket,
