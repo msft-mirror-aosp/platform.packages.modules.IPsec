@@ -106,7 +106,8 @@ public final class IkeSessionParams {
         IKE_OPTION_INITIAL_CONTACT,
         IKE_OPTION_REKEY_MOBILITY,
         IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION,
-        IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES
+        IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES,
+        IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF
     })
     public @interface IkeOption {}
 
@@ -237,8 +238,29 @@ public final class IkeSessionParams {
      */
     public static final int IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES = 7;
 
+    /**
+     * If set, the IKE session will start the NATT keepalive with a power optimization flag.
+     *
+     * <p>IKE session will start the keepalive with {@link SocketKeepalive#FLAG_AUTOMATIC_ON_OFF}.
+     * The system will automatically disable keepalives when no TCP connections are open on the
+     * network that is associated with the IKE session.
+     *
+     * <p>For callers relying on long-lived UDP port mappings through the IPsec layer, this flag
+     * should never be used since the keepalive may be stopped unexpectedly.
+     *
+     * <p>This option applies to only hardware keepalive. When keepalive switches to software
+     * keepalive because of errors on hardware keepalive, this option may be ignored.
+     *
+     * @hide
+     */
+    // TODO(b/269200616): Move software keepalive mechanism to other place with the required
+    //  permission to get TCP socket status via netlink commands to also get benefit from this
+    //  option.
+    @SystemApi
+    public static final int IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF = 8;
+
     private static final int MIN_IKE_OPTION = IKE_OPTION_ACCEPT_ANY_REMOTE_ID;
-    private static final int MAX_IKE_OPTION = IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
+    private static final int MAX_IKE_OPTION = IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF;
 
     /** @hide */
     @VisibleForTesting static final int IKE_HARD_LIFETIME_SEC_MINIMUM = 300; // 5 minutes
