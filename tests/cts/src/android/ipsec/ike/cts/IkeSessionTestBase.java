@@ -54,6 +54,7 @@ import org.junit.Before;
 import org.junit.runner.RunWith;
 
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -129,6 +130,13 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
     private static final byte[] NEXT_AVAILABLE_IP4_ADDR_LOCAL = INITIAL_AVAILABLE_IP4_ADDR_LOCAL;
     private static final byte[] NEXT_AVAILABLE_IP4_ADDR_REMOTE = INITIAL_AVAILABLE_IP4_ADDR_REMOTE;
 
+    private static final byte[] INITIAL_AVAILABLE_IP6_ADDR_LOCAL =
+            InetAddresses.parseNumericAddress("2a00:1000::0").getAddress();
+    private static final byte[] INITIAL_AVAILABLE_IP6_ADDR_REMOTE =
+            InetAddresses.parseNumericAddress("2404:6800:4004:820::2004").getAddress();
+    private static final byte[] NEXT_AVAILABLE_IP6_ADDR_LOCAL = INITIAL_AVAILABLE_IP6_ADDR_LOCAL;
+    private static final byte[] NEXT_AVAILABLE_IP6_ADDR_REMOTE = INITIAL_AVAILABLE_IP6_ADDR_REMOTE;
+
     TunNetworkContext mTunNetworkContext;
 
     InetAddress mLocalAddress;
@@ -185,6 +193,22 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
                         NEXT_AVAILABLE_IP4_ADDR_REMOTE,
                         INITIAL_AVAILABLE_IP4_ADDR_REMOTE,
                         false /* isIp6 */);
+    }
+
+    Inet6Address getNextAvailableIpv6AddressLocal() throws Exception {
+        return (Inet6Address)
+                getNextAvailableAddress(
+                        NEXT_AVAILABLE_IP6_ADDR_LOCAL,
+                        INITIAL_AVAILABLE_IP6_ADDR_LOCAL,
+                        true /* isIp6 */);
+    }
+
+    Inet6Address getNextAvailableIpv6AddressRemote() throws Exception {
+        return (Inet6Address)
+                getNextAvailableAddress(
+                        NEXT_AVAILABLE_IP6_ADDR_REMOTE,
+                        INITIAL_AVAILABLE_IP6_ADDR_REMOTE,
+                        true /* isIp6 */);
     }
 
     InetAddress getNextAvailableAddress(
