@@ -29,6 +29,7 @@ import static android.net.SocketKeepalive.ERROR_UNSUPPORTED;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF;
 
+import android.annotation.Nullable;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -55,6 +56,8 @@ public class HardwareKeepaliveImpl implements IkeNattKeepalive.NattKeepalive {
      * This must be a value from {@link SocketKeepalive#StartFlags}.
      */
     private final int mKeepaliveOptions;
+    /** Network underpinned by the IKE session, which can be monitored for automatic keepalive */
+    @Nullable private final Network mUnderpinnedNetwork;
 
     /** Construct an instance of HardwareKeepaliveImpl */
     public HardwareKeepaliveImpl(
@@ -66,6 +69,7 @@ public class HardwareKeepaliveImpl implements IkeNattKeepalive.NattKeepalive {
             Inet4Address dest,
             UdpEncapsulationSocket socket,
             Network network,
+            Network underpinnedNetwork,
             HardwareKeepaliveCallback hardwareKeepaliveCb)
             throws IOException {
         // Setup for hardware offload keepalive. Fail to create mSocketKeepalive will cause
@@ -73,6 +77,7 @@ public class HardwareKeepaliveImpl implements IkeNattKeepalive.NattKeepalive {
         mKeepaliveDelaySeconds = keepaliveDelaySeconds;
         mHardwareKeepaliveCb = hardwareKeepaliveCb;
         mKeepaliveOptions = getKeepaliveStartOptions(ikeParams);
+        mUnderpinnedNetwork = underpinnedNetwork;
 
         mSocketKeepalive =
                 connectMgr.createSocketKeepalive(
@@ -87,7 +92,7 @@ public class HardwareKeepaliveImpl implements IkeNattKeepalive.NattKeepalive {
     @Override
     public void start() {
         ShimUtils.getInstance().startKeepalive(
-                mSocketKeepalive, mKeepaliveDelaySeconds, mKeepaliveOptions);
+                mSocketKeepalive, mKeepaliveDelaySeconds, mKeepaliveOptions, mUnderpinnedNetwork);
     }
 
     @Override
