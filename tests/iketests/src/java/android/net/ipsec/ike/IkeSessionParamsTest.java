@@ -16,6 +16,8 @@
 
 package android.net.ipsec.test.ike;
 
+import static android.net.ipsec.test.ike.IkeSessionParams.ESP_ENCAP_TYPE_UDP;
+import static android.net.ipsec.test.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_DPD_DELAY_SEC_DEFAULT;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_DEFAULT;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_HARD_LIFETIME_SEC_MAXIMUM;
@@ -273,6 +275,32 @@ public final class IkeSessionParamsTest {
         verifyAuthPskConfig(sessionParams);
 
         assertFalse(sessionParams.hasIkeOption(IKE_OPTION_ACCEPT_ANY_REMOTE_ID));
+    }
+
+    @Test
+    public void testSetIpVersion() throws Exception {
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setIpVersion(ESP_IP_VERSION_IPV6)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        assertEquals(ESP_IP_VERSION_IPV6, sessionParams.getIpVersion());
+    }
+
+    @Test
+    public void testSetEncapType() throws Exception {
+        IkeSessionParams sessionParams =
+                buildWithPskCommon(REMOTE_IPV4_HOST_ADDRESS)
+                        .setEncapType(ESP_ENCAP_TYPE_UDP)
+                        .build();
+
+        verifyIkeSessionParamsCommon(sessionParams);
+        verifyAuthPskConfig(sessionParams);
+
+        assertEquals(ESP_ENCAP_TYPE_UDP, sessionParams.getEncapType());
     }
 
     @Test
