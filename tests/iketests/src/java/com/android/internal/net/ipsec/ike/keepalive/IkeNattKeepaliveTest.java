@@ -131,6 +131,7 @@ public class IkeNattKeepaliveTest {
                         mock(Inet4Address.class),
                         mock(UdpEncapsulationSocket.class),
                         mock(Network.class),
+                        mock(Network.class),
                         new IkeAlarmConfig(
                                 mock(Context.class),
                                 "TEST",
