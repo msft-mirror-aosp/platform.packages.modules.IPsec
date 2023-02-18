@@ -18,6 +18,8 @@ package android.ipsec.ike.cts;
 
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_FRAGMENTATION;
 import static android.net.ipsec.ike.IkeSessionConfiguration.EXTENSION_TYPE_MOBIKE;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_AUTO;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_AUTO;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_MOBIKE;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_REKEY_MOBILITY;
 import static android.net.ipsec.ike.SaProposal.DH_GROUP_2048_BIT_MODP;
@@ -151,6 +153,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                 setupAndVerifyIkeSessionWithMobility(
                         IKE_INIT_RESP,
                         IKE_AUTH_RESP,
+                        mRemoteAddress,
                         true /* mobikeSupportedByServer */,
                         new int[] {IKE_OPTION_MOBIKE});
 
@@ -165,7 +168,9 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         int expectedMsgId = 2;
 
         setNetworkAndVerifyConnectionInfoChange(
-                ikeSession, mSecondaryTunNetworkContext, expectedMsgId++, IKE_UPDATE_SA_RESP);
+                ikeSession, mSecondaryTunNetworkContext, expectedMsgId++, IKE_UPDATE_SA_RESP,
+                ESP_IP_VERSION_AUTO, mSecondaryLocalAddr,
+                mRemoteAddress);
         final IpSecTransformCallRecord[] migrateRecords =
                 injectCreateChildRespAndVerifyTransformsMigrated(
                         mSecondaryTunNetworkContext, expectedMsgId++, IKE_CREATE_CHILD_RESP);
@@ -189,6 +194,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
     private IkeSession setupAndVerifyIkeSessionWithMobility(
             String ikeInitRespHex,
             String ikeAuthRespHex,
+            InetAddress remoteAddress,
             boolean mobikeSupportedByServer,
             int[] ikeOptions)
             throws Exception {
@@ -201,14 +207,14 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                         .build();
 
         final IkeSessionParams.Builder ikeParamsBuilder =
-                createIkeParamsBuilderBase(mRemoteAddress, saProposal);
+                createIkeParamsBuilderBase(remoteAddress, saProposal);
         for (int option : ikeOptions) {
             ikeParamsBuilder.addIkeOption(option);
         }
 
         final IkeSessionParams ikeParams = ikeParamsBuilder.build();
 
-        final IkeSession ikeSession = openIkeSessionWithTunnelModeChild(mRemoteAddress, ikeParams);
+        final IkeSession ikeSession = openIkeSessionWithTunnelModeChild(remoteAddress, ikeParams);
         performSetupIkeAndFirstChildBlocking(
                 ikeInitRespHex, true /* expectedAuthUseEncap */, ikeAuthRespHex);
         if (mobikeSupportedByServer) {
@@ -229,9 +235,13 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
             IkeSession ikeSession,
             TunNetworkContext tunNetworkContext,
             int expectedMsgId,
-            String ikeUpdateSaResp)
+            String ikeUpdateSaResp,
+            int ipVersion,
+            InetAddress expectedLocalAddress,
+            InetAddress expectedRemoteAddress)
             throws Exception {
-        ikeSession.setNetwork(tunNetworkContext.tunNetwork);
+        ikeSession.setNetwork(tunNetworkContext.tunNetwork, ipVersion, ESP_ENCAP_TYPE_AUTO,
+                IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO);
 
         tunNetworkContext.tunUtils.awaitReqAndInjectResp(
                 IKE_DETERMINISTIC_INITIATOR_SPI,
@@ -239,17 +249,20 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                 true /* expectedUseEncap */,
                 ikeUpdateSaResp);
 
-        verifyConnectionInfoChange(tunNetworkContext.tunNetwork, mSecondaryLocalAddr);
+        verifyConnectionInfoChange(tunNetworkContext.tunNetwork, expectedLocalAddress,
+                expectedRemoteAddress);
     }
 
     private void verifyConnectionInfoChange(
-            Network expectedNetwork, InetAddress expectedLocalAddress) throws Exception {
+            Network expectedNetwork,
+            InetAddress expectedLocalAddress,
+            InetAddress expectedRemoteAddress) throws Exception {
         final IkeSessionConnectionInfo connectionInfo =
                 mIkeSessionCallback.awaitOnIkeSessionConnectionInfoChanged();
         assertNotNull(connectionInfo);
         assertEquals(expectedNetwork, connectionInfo.getNetwork());
         assertEquals(expectedLocalAddress, connectionInfo.getLocalAddress());
-        assertEquals(mRemoteAddress, connectionInfo.getRemoteAddress());
+        assertEquals(expectedRemoteAddress, connectionInfo.getRemoteAddress());
     }
 
     private IpSecTransformCallRecord[] injectCreateChildRespAndVerifyTransformsMigrated(
@@ -293,6 +306,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                 setupAndVerifyIkeSessionWithMobility(
                         IKE_INIT_RESP,
                         IKE_AUTH_RESP,
+                        mRemoteAddress,
                         true /* mobikeSupportedByServer */,
                         new int[] {IKE_OPTION_MOBIKE});
 
@@ -361,6 +375,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                 setupAndVerifyIkeSessionWithMobility(
                         ikeInitResp,
                         IkeAuthRespWithoutMobikeSupport,
+                        mRemoteAddress,
                         false /* mobikeSupportedByServer */,
                         ikeOptions);
 
@@ -372,7 +387,8 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
 
         // Rekey-based mobility
         ikeSession.setNetwork(mSecondaryTunNetworkContext.tunNetwork);
-        verifyConnectionInfoChange(mSecondaryTunNetworkContext.tunNetwork, mSecondaryLocalAddr);
+        verifyConnectionInfoChange(mSecondaryTunNetworkContext.tunNetwork, mSecondaryLocalAddr,
+                mRemoteAddress);
 
         // Local request message ID starts from 2 because there is one IKE_INIT message and a single
         // IKE_AUTH message.

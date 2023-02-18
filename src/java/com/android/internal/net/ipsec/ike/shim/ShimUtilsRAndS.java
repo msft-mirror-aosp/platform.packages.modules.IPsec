@@ -67,7 +67,7 @@ public class ShimUtilsRAndS extends ShimUtils {
 
     @Override
     public void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
-            int keepaliveOptions) {
+            int keepaliveOptions, Network underpinnedNetwork) {
         keepalive.start(keepaliveDelaySeconds);
     }
 }
