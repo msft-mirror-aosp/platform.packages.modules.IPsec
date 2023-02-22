@@ -16,10 +16,19 @@
 
 package com.android.internal.net.ipsec.ike.shim;
 
+import android.net.Network;
+import android.net.SocketKeepalive;
+
 /** Shim utilities for SDK U and above */
 public class ShimUtilsMinU extends ShimUtilsT {
     // Package protected constructor for ShimUtils to access
     ShimUtilsMinU() {
         super();
+    }
+
+    @Override
+    public void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
+            int keepaliveOptions, Network underpinnedNetwork) {
+        keepalive.start(keepaliveDelaySeconds, keepaliveOptions, underpinnedNetwork);
     }
 }

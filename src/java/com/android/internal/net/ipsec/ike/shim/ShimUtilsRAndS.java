@@ -17,6 +17,7 @@
 package com.android.internal.net.ipsec.ike.shim;
 
 import android.net.Network;
+import android.net.SocketKeepalive;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.net.ipsec.ike.exceptions.IkeInternalException;
 import android.net.ipsec.ike.exceptions.IkeNetworkLostException;
@@ -62,5 +63,11 @@ public class ShimUtilsRAndS extends ShimUtils {
     @Override
     public void executeOrSendFatalError(Runnable r, IkeConnectionController.Callback cb) {
         r.run();
+    }
+
+    @Override
+    public void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
+            int keepaliveOptions, Network underpinnedNetwork) {
+        keepalive.start(keepaliveDelaySeconds);
     }
 }

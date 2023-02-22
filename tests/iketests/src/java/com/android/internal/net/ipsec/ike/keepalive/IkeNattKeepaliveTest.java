@@ -21,6 +21,7 @@ import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.SocketKeepalive.ERROR_INVALID_IP_ADDRESS;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
+import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF;
 import static android.net.ipsec.test.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
 
 import static com.android.internal.net.ipsec.test.ike.IkeContext.CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS;
@@ -49,13 +50,16 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.SocketKeepalive;
 import android.net.ipsec.test.ike.IkeSessionParams;
+import android.os.Build;
 import android.os.Message;
 
 import com.android.internal.net.ipsec.test.ike.IkeContext;
 import com.android.internal.net.ipsec.test.ike.utils.IkeAlarm.IkeAlarmConfig;
+import com.android.testutils.DevSdkIgnoreRule;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -64,6 +68,9 @@ import java.util.concurrent.TimeUnit;
 
 public class IkeNattKeepaliveTest {
     private static final int KEEPALIVE_DELAY_CALLER_CONFIGURED = 50;
+
+    @Rule
+    public final DevSdkIgnoreRule ignoreRule = new DevSdkIgnoreRule();
 
     private ConnectivityManager mMockConnectManager;
     private IkeSessionParams mMockIkeParams;
@@ -124,6 +131,7 @@ public class IkeNattKeepaliveTest {
                         mock(Inet4Address.class),
                         mock(UdpEncapsulationSocket.class),
                         mock(Network.class),
+                        mock(Network.class),
                         new IkeAlarmConfig(
                                 mock(Context.class),
                                 "TEST",
@@ -140,16 +148,57 @@ public class IkeNattKeepaliveTest {
         mIkeNattKeepalive.stop();
     }
 
+    @DevSdkIgnoreRule.IgnoreAfter(Build.VERSION_CODES.TIRAMISU)
     @Test
-    public void testStartStopHardwareKeepalive() throws Exception {
+    public void testStartStopHardwareKeepaliveBeforeU() throws Exception {
+        testStartStopHardwareKeepalive(true);
+    }
+
+    @DevSdkIgnoreRule.IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    @Test
+    public void testStartStopHardwareKeepaliveAfterU() throws Exception {
+        testStartStopHardwareKeepalive(false);
+    }
+
+    private void testStartStopHardwareKeepalive(boolean beforeU) throws Exception {
         verify(mMockIkeParams).getNattKeepAliveDelaySeconds();
         verify(mMockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES);
 
         mIkeNattKeepalive.start();
-        verify(mMockSocketKeepalive).start(KEEPALIVE_DELAY_CALLER_CONFIGURED);
+        if (beforeU) {
+            verify(mMockSocketKeepalive).start(eq(KEEPALIVE_DELAY_CALLER_CONFIGURED));
+        } else {
+            verify(mMockSocketKeepalive).start(eq(KEEPALIVE_DELAY_CALLER_CONFIGURED),
+                    anyInt(), any());
+        }
 
         mIkeNattKeepalive.stop();
         verify(mMockSocketKeepalive).stop();
+    }
+
+    private IkeNattKeepalive setupKeepaliveWithDisableKeepaliveNoTcpConnectionsOption()
+            throws Exception {
+        doReturn(true).when(mMockIkeParams)
+                .hasIkeOption(IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF);
+        return createIkeNattKeepalive(
+                mock(IkeContext.class), mMockIkeParams, mock(NetworkCapabilities.class));
+    }
+
+    @DevSdkIgnoreRule.IgnoreUpTo(Build.VERSION_CODES.TIRAMISU)
+    @Test
+    public void testKeepaliveWithDisableKeepaliveNoTcpConnectionsOption() throws Exception {
+        final IkeNattKeepalive ikeNattKeepalive =
+                setupKeepaliveWithDisableKeepaliveNoTcpConnectionsOption();
+
+        try {
+            ikeNattKeepalive.start();
+            verify(mMockSocketKeepalive).start(
+                    eq(KEEPALIVE_DELAY_CALLER_CONFIGURED),
+                    eq(SocketKeepalive.FLAG_AUTOMATIC_ON_OFF),
+                    any());
+        } finally {
+            ikeNattKeepalive.stop();
+        }
     }
 
     private static SocketKeepalive.Callback verifyHardwareKeepaliveAndGetCb(
