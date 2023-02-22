@@ -168,8 +168,9 @@ public class IkeNattKeepaliveTest {
         if (beforeU) {
             verify(mMockSocketKeepalive).start(eq(KEEPALIVE_DELAY_CALLER_CONFIGURED));
         } else {
+            // Flag should be 0 if IKE_OPTION_AUTOMATIC_KEEPALIVE_ON_OFF is not set.
             verify(mMockSocketKeepalive).start(eq(KEEPALIVE_DELAY_CALLER_CONFIGURED),
-                    anyInt(), any());
+                    eq(0), any());
         }
 
         mIkeNattKeepalive.stop();
