@@ -25,6 +25,7 @@ import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_K
 
 import static com.android.internal.net.ipsec.ike.IkeContext.CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS;
 
+import android.annotation.Nullable;
 import android.content.Context;
 import android.net.ConnectivityManager;
 import android.net.IpSecManager.UdpEncapsulationSocket;
@@ -80,10 +81,12 @@ public class IkeNattKeepalive {
                         ikeContext.getContext(),
                         connectMgr,
                         keepaliveDelaySeconds,
+                        nattKeepaliveConfig.ikeParams,
                         nattKeepaliveConfig.src,
                         nattKeepaliveConfig.dest,
                         nattKeepaliveConfig.socket,
                         nattKeepaliveConfig.network,
+                        nattKeepaliveConfig.underpinnedNetwork,
                         new HardwareKeepaliveCb(
                                 ikeContext.getContext(),
                                 nattKeepaliveConfig.dest,
@@ -125,6 +128,8 @@ public class IkeNattKeepalive {
         public final Inet4Address dest;
         public final UdpEncapsulationSocket socket;
         public final Network network;
+        @Nullable
+        public final Network underpinnedNetwork;
         public final IkeAlarmConfig ikeAlarmConfig;
         public final IkeSessionParams ikeParams;
         public final NetworkCapabilities nc;
@@ -134,6 +139,7 @@ public class IkeNattKeepalive {
                 Inet4Address dest,
                 UdpEncapsulationSocket socket,
                 Network network,
+                Network underpinnedNetwork,
                 IkeAlarmConfig ikeAlarmConfig,
                 IkeSessionParams ikeParams,
                 NetworkCapabilities nc) {
@@ -141,6 +147,7 @@ public class IkeNattKeepalive {
             this.dest = dest;
             this.socket = socket;
             this.network = network;
+            this.underpinnedNetwork = underpinnedNetwork;
             this.ikeAlarmConfig = ikeAlarmConfig;
             this.ikeParams = ikeParams;
             this.nc = nc;
