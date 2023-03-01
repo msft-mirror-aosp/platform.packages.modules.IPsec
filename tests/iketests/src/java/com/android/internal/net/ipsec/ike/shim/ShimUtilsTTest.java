@@ -28,8 +28,8 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.UnknownHostException;
 
-public class ShimUtilsMinTTest {
-    private ShimUtilsMinT mShim = new ShimUtilsMinT();
+public class ShimUtilsTTest {
+    private ShimUtilsT mShim = new ShimUtilsT();
 
     @Test
     public void testGetWrappedIkeException() {

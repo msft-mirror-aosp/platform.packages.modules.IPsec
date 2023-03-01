@@ -57,7 +57,7 @@ public class ShimUtilsRAndS extends ShimUtils {
         ikeSession.onNonFatalError(new IkeNetworkLostException(network));
     }
 
-    // TODO:b/245591890 Remove this method and have the same behaviour as ShimUtilsMinT across all
+    // TODO:b/245591890 Remove this method and have the same behaviour as ShimUtilsT across all
     // SDKs when it is proven to be safe.
     @Override
     public void executeOrSendFatalError(Runnable r, IkeConnectionController.Callback cb) {
