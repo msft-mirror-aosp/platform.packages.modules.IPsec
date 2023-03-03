@@ -38,11 +38,10 @@ import static com.android.internal.net.ipsec.test.ike.net.IkeConnectionControlle
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.doReturn;
@@ -91,7 +90,9 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.io.IOException;
 import java.net.Inet4Address;
+import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.util.HashSet;
 
@@ -469,10 +470,10 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
     }
 
     @Test
-    public void testIpFamilySelectionWithIpV6Remote() throws Exception {
+    public void testIpFamilySelectionV6WithIpV6Remote() throws Exception {
         verifyIpFamilySelection(
-                ESP_IP_VERSION_IPV4, false /* remoteHasV4 */, true /* remoteHasV6 */,
-                ESP_IP_VERSION_NONE /* expectedIpVersion */);
+                ESP_IP_VERSION_IPV6, false /* remoteHasV4 */, true /* remoteHasV6 */,
+                ESP_IP_VERSION_IPV6 /* expectedIpVersion */);
     }
 
     @Test
@@ -503,76 +504,191 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 ESP_IP_VERSION_IPV6 /* expectedIpVersion */);
     }
 
-    private void verifyIsIpV4PreferredAutoSelect(
+    private void verifyIsIpV4Preferred(
             boolean isAutoSelectionEnabled,
-            int ipVersion,
             int transportType,
-            boolean expectPreferIpV4) {
-        final IkeContext mockIkeContext = mock(IkeContext.class);
+            boolean expected) throws Exception {
         final IkeSessionParams mockIkeParams = mock(IkeSessionParams.class);
         final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
+        doReturn(isAutoSelectionEnabled).when(mockIkeParams)
+                .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
+        doReturn(ESP_IP_VERSION_AUTO).when(mockIkeParams).getIpVersion();
+        doReturn(true).when(mockNc).hasTransport(transportType);
 
-        when(mockIkeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION))
-                .thenReturn(isAutoSelectionEnabled);
-        when(mockNc.hasTransport(transportType)).thenReturn(true);
+        assertEquals(expected, IkeConnectionController.isIpV4Preferred(mockIkeParams, mockNc));
+    }
 
-        final boolean result =
-                IkeConnectionController.isIpV4Preferred(mockIkeParams, mockNc);
+    @Test
+    public void testIsIpV4Preferred_Auto_Wifi() throws Exception {
+        verifyIsIpV4Preferred(true /* autoEnabled */, TRANSPORT_WIFI, true /* expected */);
+    }
 
-        assertEquals(expectPreferIpV4, result);
+    @Test
+    public void testIsIpV4Preferred_NotAuto_Wifi() throws Exception {
+        verifyIsIpV4Preferred(false /* autoEnabled */, TRANSPORT_WIFI, false /* expected */);
+    }
 
-        if (ipVersion == ESP_IP_VERSION_IPV4) {
-            verify(mockIkeParams, never())
+    @Test
+    public void testIsIpV4Preferred_Auto_Cell() throws Exception {
+        verifyIsIpV4Preferred(true /* autoEnabled */, TRANSPORT_CELLULAR, false /* expected */);
+    }
+
+    @Test
+    public void testIsIpV4Preferred_NotAuto_Cell() throws Exception {
+        verifyIsIpV4Preferred(false /* autoEnabled */, TRANSPORT_CELLULAR, false /* expected */);
+    }
+
+    private void verifyUsedIpVersion(
+            int requiredIpVersion,
+            boolean isAutoSelectionEnabled,
+            int transportType,
+            boolean v4Available,
+            int expectedIpVersion) throws Exception {
+        mMockIkeParams = mock(IkeSessionParams.class);
+        final NetworkCapabilities mockNc = mock(NetworkCapabilities.class);
+
+        doReturn(requiredIpVersion).when(mMockIkeParams).getIpVersion();
+        doReturn(isAutoSelectionEnabled).when(mMockIkeParams)
+                .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
+        doReturn(true).when(mockNc).hasTransport(transportType);
+
+        final LinkProperties lp = new LinkProperties();
+        final LinkAddress v4Addr = new LinkAddress("198.51.100.1/24");
+        final LinkAddress v6Addr = new LinkAddress("2001:db8:1:3::1/64");
+        if (v4Available) lp.addLinkAddress(v4Addr);
+        lp.addLinkAddress(v6Addr);
+
+        final IkeConnectionController controller = buildIkeConnectionCtrl();
+        if (v4Available) controller.addRemoteAddress(v4Addr.getAddress());
+        controller.addRemoteAddress(v6Addr.getAddress());
+        controller.onCapabilitiesUpdated(mockNc);
+        controller.selectAndSetRemoteAddress(lp);
+        final InetAddress resultAddr = controller.getRemoteAddress();
+        final int result;
+        if (resultAddr instanceof Inet4Address) {
+            result = ESP_IP_VERSION_IPV4;
+        } else if (resultAddr instanceof Inet6Address) {
+            result = ESP_IP_VERSION_IPV6;
+        } else { // null, or some UFO address
+            result = ESP_IP_VERSION_NONE;
+        }
+        assertEquals(expectedIpVersion, result);
+
+        if (ESP_IP_VERSION_AUTO == requiredIpVersion) {
+            verify(mMockIkeParams).hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
+            if (isAutoSelectionEnabled) verify(mockNc).hasTransport(TRANSPORT_WIFI);
+        } else {
+            verify(mMockIkeParams, never())
                     .hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION);
         }
-        if (isAutoSelectionEnabled && ipVersion != ESP_IP_VERSION_IPV4) {
-            verify(mockNc).hasTransport(TRANSPORT_WIFI);
-        }
     }
 
-    @Test
-    public void testIsIpV4PreferredPreferV4AutoSelectDisabledOnWifi() {
-        verifyIsIpV4PreferredAutoSelect(
+    private void verifyUsedIpVersion_withRequiredVersion(
+            int requiredVersion,
+            boolean hasV4,
+            int expect) throws Exception {
+        verifyUsedIpVersion(
+                requiredVersion,
+                true /* isAutoSelectionEnabled */,
+                TRANSPORT_WIFI /* arbitrarily selected, doesn't really matter much */,
+                hasV4,
+                expect);
+    }
+
+    private void verifyUsedIpVersion_withAutoSelect(int transportType, boolean hasV4, int expect)
+            throws Exception {
+        verifyUsedIpVersion(
+                ESP_IP_VERSION_AUTO,
+                true /* isAutoSelectionEnabled */,
+                transportType,
+                hasV4,
+                expect);
+    }
+
+    private void verifyUsedIpVersion_Default(boolean hasV4, int expect) throws Exception {
+        verifyUsedIpVersion(
+                ESP_IP_VERSION_AUTO,
                 false /* isAutoSelectionEnabled */,
-                ESP_IP_VERSION_AUTO,
-                TRANSPORT_WIFI,
-                false /* expectPreferIpV4 */);
+                TRANSPORT_WIFI /* arbitrarily selected */,
+                hasV4,
+                expect);
+    }
+
+    // To save test time and maintenance, don't test all combinations. Arbitrarily select a
+    // representative combination of parameters that provide good coverage.
+    @Test
+    public void testIpVersion_withRequiredVersion_V4Required_HasV4() throws Exception {
+        verifyUsedIpVersion_withRequiredVersion(
+                ESP_IP_VERSION_IPV4 /* required */,
+                true /* has v4 */,
+                ESP_IP_VERSION_IPV4 /* expected */);
     }
 
     @Test
-    public void testIsIpV4PreferredPreferV4AutoSelectEnabledOnWifi() {
-        verifyIsIpV4PreferredAutoSelect(
-                true /* isAutoSelectionEnabled */,
-                ESP_IP_VERSION_AUTO,
-                TRANSPORT_WIFI,
-                true /* expectPreferIpV4 */);
+    public void testIpVersion_withRequiredVersion_V6Required_HasV4() throws Exception {
+        verifyUsedIpVersion_withRequiredVersion(
+                ESP_IP_VERSION_IPV6 /* required */,
+                true /* has v4 */,
+                ESP_IP_VERSION_IPV6 /* expected */);
     }
 
     @Test
-    public void testIsIpV4PreferredPreferV6AutoSelectDisabledOnWifi() {
-        verifyIsIpV4PreferredAutoSelect(
-                false /* isAutoSelectionEnabled */,
-                ESP_IP_VERSION_IPV6,
-                TRANSPORT_WIFI,
-                false /* expectPreferIpV4 */);
+    public void testIpVersion_withRequiredVersion_V4Required_NotHasV4() throws Exception {
+        assertThrows(IOException.class, () ->
+                verifyUsedIpVersion_withRequiredVersion(
+                        ESP_IP_VERSION_IPV4 /* required */,
+                        false /* has v4 */,
+                        ESP_IP_VERSION_NONE /* expected */));
     }
 
     @Test
-    public void testIsIpV4PreferredAutoSelectEnabledOnWifi() {
-        verifyIsIpV4PreferredAutoSelect(
-                true /* isAutoSelectionEnabled */,
-                ESP_IP_VERSION_AUTO,
-                TRANSPORT_WIFI,
-                true /* expectPreferIpV4 */);
+    public void testIpVersion_withRequiredVersion_V6Required_NotHasV4() throws Exception {
+        verifyUsedIpVersion_withRequiredVersion(
+                ESP_IP_VERSION_IPV6 /* required */,
+                false /* has v4 */,
+                ESP_IP_VERSION_IPV6 /* expected */);
     }
 
     @Test
-    public void testIsIpV4PreferredAutoSelectEnabledOnCell() {
-        verifyIsIpV4PreferredAutoSelect(
-                true /* isAutoSelectionEnabled */,
-                ESP_IP_VERSION_IPV6,
+    public void testIpVersion_withAutoSelect_Cell_HasV4() throws Exception {
+        verifyUsedIpVersion_withAutoSelect(
                 TRANSPORT_CELLULAR,
-                false /* expectPreferIpV4 */);
+                true /* has v4 */,
+                ESP_IP_VERSION_IPV6 /* expected */);
+    }
+
+    @Test
+    public void testIpVersion_withAutoSelect_WiFi_HasV4() throws Exception {
+        verifyUsedIpVersion_withAutoSelect(
+                TRANSPORT_WIFI,
+                true /* has v4 */,
+                ESP_IP_VERSION_IPV4 /* expected */);
+    }
+
+    @Test
+    public void testIpVersion_withAutoSelect_Cell_NotHasV4() throws Exception {
+        verifyUsedIpVersion_withAutoSelect(
+                TRANSPORT_CELLULAR,
+                false /* has v4 */,
+                ESP_IP_VERSION_IPV6 /* expected */);
+    }
+
+    @Test
+    public void testIpVersion_withAutoSelect_WiFi_NotHasV4() throws Exception {
+        verifyUsedIpVersion_withAutoSelect(
+                TRANSPORT_WIFI,
+                false /* has v4 */,
+                ESP_IP_VERSION_IPV6 /* expected */);
+    }
+
+    @Test
+    public void testIpVersion_Default_HasV4() throws Exception {
+        verifyUsedIpVersion_Default(true /* has V4 */, ESP_IP_VERSION_IPV6 /* expected */);
+    }
+
+    @Test
+    public void testIpVersion_Default_NotHasV4() throws Exception {
+        verifyUsedIpVersion_Default(false /* has V4 */, ESP_IP_VERSION_IPV6 /* expected */);
     }
 
     @Test

@@ -929,7 +929,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      *
      * Otherwise, an IPv4 address will be used.
      */
-    private void selectAndSetRemoteAddress(LinkProperties linkProperties) throws IOException {
+    @VisibleForTesting
+    public void selectAndSetRemoteAddress(LinkProperties linkProperties) throws IOException {
         // TODO(b/175348096): Randomly choose from available addresses when the IP family is
         // decided.
         final boolean canConnectWithIpv4 =
@@ -937,18 +938,20 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         final boolean canConnectWithIpv6 =
                 !mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address();
 
-        if (isIpV4Preferred(mIkeParams, mNc)) {
+        if (isIpVersionRequired(ESP_IP_VERSION_IPV4)) {
             if (!canConnectWithIpv4) {
                 throw ShimUtils.getInstance().getDnsFailedException(
-                        "IPv4 requested but no IPv4 address available");
+                        "IPv4 required but no IPv4 address available");
             }
             mRemoteAddress = mRemoteAddressesV4.get(0);
-        } else if (mIpVersion == ESP_IP_VERSION_IPV6) {
+        } else if (isIpVersionRequired(ESP_IP_VERSION_IPV6)) {
             if (!canConnectWithIpv6) {
                 throw ShimUtils.getInstance().getDnsFailedException(
-                        "IPv6 requested but no global IPv6 address available");
+                        "IPv6 required but no global IPv6 address available");
             }
             mRemoteAddress = mRemoteAddressesV6.get(0);
+        } else if (isIpV4Preferred(mIkeParams, mNc) && canConnectWithIpv4) {
+            mRemoteAddress = mRemoteAddressesV4.get(0);
         } else if (canConnectWithIpv6) {
             mRemoteAddress = mRemoteAddressesV6.get(0);
         } else if (canConnectWithIpv4) {
@@ -959,15 +962,15 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         }
     }
 
-    /** Returns whether v4 is preferred for a set of preference, params and capabilities */
+    private boolean isIpVersionRequired(final int ipVersion) {
+        return ipVersion == mIpVersion;
+    }
+
     @VisibleForTesting
     public static boolean isIpV4Preferred(IkeSessionParams ikeParams, NetworkCapabilities nc) {
-        // FIXME: update to differentiate between "require" IPv4 (caller passes in
-        // ESP_IP_VERSION_IPv4) and "prefer" IPv4 (IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION).
-        return ikeParams.getIpVersion() == ESP_IP_VERSION_IPV4
-                || (ikeParams.getIpVersion() == ESP_IP_VERSION_AUTO
-                        && ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)
-                        && nc.hasTransport(TRANSPORT_WIFI));
+        return ikeParams.getIpVersion() == ESP_IP_VERSION_AUTO
+                && ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)
+                && nc.hasTransport(TRANSPORT_WIFI);
     }
 
     /**
