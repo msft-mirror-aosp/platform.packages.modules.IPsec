@@ -39,8 +39,10 @@ import static android.system.OsConstants.AF_INET6;
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.eap.test.EapResult.EapResponse.RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED;
 import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_ALARM_FIRED;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_SEND_KEEPALIVE;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IkeAuthData;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IkeInitData;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.InitialSetupData;
@@ -373,6 +375,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private static final byte[] COOKIE_DATA = new byte[COOKIE_DATA_LEN];
     private static final byte[] COOKIE2_DATA = new byte[COOKIE2_DATA_LEN];
+
+    private static final int FAKE_SESSION_ID = 0;
 
     private static final int NATT_KEEPALIVE_DELAY = 20;
 
@@ -975,7 +979,9 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                                 ikeContext,
                                 new IkeConnectionController.Config(
                                         ikeParams,
-                                        alarmConfig,
+                                        FAKE_SESSION_ID,
+                                        CMD_ALARM_FIRED,
+                                        CMD_SEND_KEEPALIVE,
                                         mockIkeConnectionCtrlCb),
                                 spyIkeConnectionCtrlDeps));
         mSpyDeps =
