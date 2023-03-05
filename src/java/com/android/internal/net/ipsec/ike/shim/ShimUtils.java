@@ -17,6 +17,7 @@
 package com.android.internal.net.ipsec.ike.shim;
 
 import android.net.Network;
+import android.net.SocketKeepalive;
 import android.net.ipsec.ike.exceptions.IkeException;
 
 import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
@@ -36,8 +37,10 @@ public abstract class ShimUtils {
     private static final ShimUtils INSTANCE;
 
     static {
-        if (SdkLevel.isAtLeastT()) {
-            INSTANCE = new ShimUtilsMinT();
+        if (SdkLevel.isAtLeastU()) {
+            INSTANCE = new ShimUtilsMinU();
+        } else if (SdkLevel.isAtLeastT()) {
+            INSTANCE = new ShimUtilsT();
         } else {
             INSTANCE = new ShimUtilsRAndS();
         }
@@ -71,4 +74,10 @@ public abstract class ShimUtils {
      * IkeSessionStateMachine.
      */
     public abstract void executeOrSendFatalError(Runnable r, IkeConnectionController.Callback cb);
+
+    /**
+     * Start the given Socketkeepalive.
+     */
+    public abstract void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
+            int keepaliveOptions, Network underpinnedNetwork);
 }
