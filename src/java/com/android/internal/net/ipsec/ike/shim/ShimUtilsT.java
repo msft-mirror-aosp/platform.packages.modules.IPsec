@@ -31,10 +31,10 @@ import com.android.internal.net.ipsec.ike.net.IkeConnectionController;
 import java.io.IOException;
 import java.net.UnknownHostException;
 
-/** Shim utilities for SDK T and above */
-public class ShimUtilsMinT extends ShimUtils {
+/** Shim utilities for SDK T */
+public class ShimUtilsT extends ShimUtilsRAndS {
     // Package protected constructor for ShimUtils to access
-    ShimUtilsMinT() {
+    ShimUtilsT() {
         super();
     }
 
