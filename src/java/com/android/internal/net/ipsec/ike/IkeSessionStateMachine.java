@@ -89,7 +89,6 @@ import android.annotation.Nullable;
 import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
 import android.content.IntentFilter;
 import android.net.ConnectivityManager;
 import android.net.IpSecManager;
@@ -535,11 +534,9 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         mIkeContext,
                         new IkeConnectionController.Config(
                                 mIkeSessionParams,
-                                buildKeepaliveAlarmConfig(
-                                        getHandler(),
-                                        context,
-                                        mIkeSessionId,
-                                        mIkeSessionParams.getNattKeepAliveDelaySeconds()),
+                                mIkeSessionId,
+                                CMD_ALARM_FIRED,
+                                CMD_SEND_KEEPALIVE,
                                 this));
         mIkeSpiGenerator = new IkeSpiGenerator(mIkeContext.getRandomnessFactory());
         mIpSecSpiGenerator =
@@ -1377,7 +1374,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
             long remoteIkeSpi = mCurrentIkeSaRecord.getRemoteSpi();
             Message intentIkeMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_DPD, remoteIkeSpi);
             PendingIntent dpdIntent =
-                    buildIkeAlarmIntent(
+                    IkeAlarm.buildIkeAlarmIntent(
                             mIkeContext.getContext(),
                             ACTION_DPD,
                             getIntentIdentifier(mIkeSessionId, remoteIkeSpi),
@@ -1542,10 +1539,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         }
     }
 
-    private static String getIntentIdentifier(int ikeSessionId) {
-        return TAG + "_" + ikeSessionId;
-    }
-
     private static String getIntentIdentifier(int ikeSessionId, long remoteIkeSpi) {
         return TAG + "_" + ikeSessionId + "_" + remoteIkeSpi;
     }
@@ -1563,13 +1556,13 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
         Message rekeyMsg = getIntentIkeSmMsg(CMD_LOCAL_REQUEST_REKEY_IKE, remoteSpi);
 
         PendingIntent deleteSaIntent =
-                buildIkeAlarmIntent(
+                IkeAlarm.buildIkeAlarmIntent(
                         mIkeContext.getContext(),
                         ACTION_DELETE_IKE,
                         getIntentIdentifier(mIkeSessionId, remoteSpi),
                         deleteMsg);
         PendingIntent rekeySaIntent =
-                buildIkeAlarmIntent(
+                IkeAlarm.buildIkeAlarmIntent(
                         mIkeContext.getContext(),
                         ACTION_REKEY_IKE,
                         getIntentIdentifier(mIkeSessionId, remoteSpi),
@@ -1588,37 +1581,6 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
                         mIkeSessionParams.getSoftLifetimeMsInternal(),
                         rekeySaIntent,
                         rekeyMsg));
-    }
-
-    // Package private. Accessible to ChildSessionStateMachine
-    static PendingIntent buildIkeAlarmIntent(
-            Context context, String intentAction, String intentId, Message ikeSmMsg) {
-        Intent intent = new Intent(intentAction);
-        intent.setIdentifier(intentId);
-        intent.setPackage(context.getPackageName());
-
-        Bundle bundle = new Bundle();
-        bundle.putParcelable(IkeAlarmReceiver.PARCELABLE_NAME_IKE_SESSION_MSG, ikeSmMsg);
-        intent.putExtras(bundle);
-
-        return PendingIntent.getBroadcast(
-                context, 0 /* requestCode; unused */, intent, PendingIntent.FLAG_IMMUTABLE);
-    }
-
-    private static IkeAlarmConfig buildKeepaliveAlarmConfig(
-            Handler handler, Context context, int ikeSessionId, int keepaliveDelaySeconds) {
-        Message keepaliveMsg =
-                handler.obtainMessage(CMD_ALARM_FIRED, ikeSessionId, CMD_SEND_KEEPALIVE);
-        PendingIntent keepaliveIntent =
-                buildIkeAlarmIntent(
-                        context, ACTION_KEEPALIVE, getIntentIdentifier(ikeSessionId), keepaliveMsg);
-
-        return new IkeAlarmConfig(
-                context,
-                ACTION_KEEPALIVE,
-                TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds),
-                keepaliveIntent,
-                keepaliveMsg);
     }
 
     // Sends the provided IkeMessage using the current IKE SA record
