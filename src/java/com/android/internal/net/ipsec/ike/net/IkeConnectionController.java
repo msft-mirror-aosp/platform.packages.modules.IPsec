@@ -16,18 +16,25 @@
 
 package com.android.internal.net.ipsec.ike.net;
 
+import static android.net.NetworkCapabilities.TRANSPORT_CELLULAR;
 import static android.net.NetworkCapabilities.TRANSPORT_WIFI;
 import static android.net.ipsec.ike.IkeManager.getIkeLog;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_AUTO;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV4;
 import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION;
+import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_OPTION_FORCE_PORT_4500;
 import static android.net.ipsec.ike.exceptions.IkeException.wrapAsIkeException;
 
+import static com.android.internal.net.ipsec.ike.IkeContext.CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_KEEPALIVE;
 
 import android.annotation.IntDef;
+import android.app.PendingIntent;
 import android.net.ConnectivityManager;
 import android.net.IpSecManager;
 import android.net.IpSecManager.ResourceUnavailableException;
@@ -40,6 +47,7 @@ import android.net.ipsec.ike.IkeSessionConnectionInfo;
 import android.net.ipsec.ike.IkeSessionParams;
 import android.net.ipsec.ike.exceptions.IkeException;
 import android.os.Handler;
+import android.os.Message;
 import android.system.ErrnoException;
 
 import com.android.internal.annotations.VisibleForTesting;
@@ -55,6 +63,7 @@ import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive;
 import com.android.internal.net.ipsec.ike.keepalive.IkeNattKeepalive.KeepaliveConfig;
 import com.android.internal.net.ipsec.ike.message.IkeHeader;
 import com.android.internal.net.ipsec.ike.shim.ShimUtils;
+import com.android.internal.net.ipsec.ike.utils.IkeAlarm;
 
 import java.io.IOException;
 import java.lang.annotation.Retention;
@@ -88,10 +97,11 @@ import java.util.concurrent.TimeUnit;
 public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Callback {
     private static final String TAG = IkeConnectionController.class.getSimpleName();
 
-    private static final boolean AUTO_IP_FAMILY_SELECTION_PREFER_V4_DEFAULT = true;
-
     // The maximum number of attempts allowed for a single DNS resolution.
     private static final int MAX_DNS_RESOLUTION_ATTEMPTS = 3;
+
+    @VisibleForTesting public static final int AUTO_KEEPALIVE_DELAY_SEC_WIFI = 15;
+    @VisibleForTesting public static final int AUTO_KEEPALIVE_DELAY_SEC_CELL = 150;
 
     @Retention(RetentionPolicy.SOURCE)
     @IntDef({
@@ -112,6 +122,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     public static final int NAT_DETECTED = 3;
 
     private final IkeContext mIkeContext;
+    private final Config mConfig;
     private final ConnectivityManager mConnectivityManager;
     private final IpSecManager mIpSecManager;
     private final Dependencies mDependencies;
@@ -169,6 +180,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     public IkeConnectionController(
             IkeContext ikeContext, Config config, Dependencies dependencies) {
         mIkeContext = ikeContext;
+        mConfig = config;
         mConnectivityManager = mIkeContext.getContext().getSystemService(ConnectivityManager.class);
         mIpSecManager = mIkeContext.getContext().getSystemService(IpSecManager.class);
         mDependencies = dependencies;
@@ -179,8 +191,6 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mForcePort4500 = config.ikeParams.hasIkeOption(IKE_OPTION_FORCE_PORT_4500);
         mRemoteHostname = config.ikeParams.getServerHostname();
         mUseCallerConfiguredNetwork = config.ikeParams.getConfiguredNetwork() != null;
-        mKeepaliveAlarmConfig = config.keepaliveAlarmConfig;
-
         mIpVersion = config.ikeParams.getIpVersion();
         mEncapType = config.ikeParams.getEncapType();
         mUnderpinnedNetwork = null;
@@ -207,16 +217,22 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     /** Config includes all configurations to build an IkeConnectionController */
     public static class Config {
         public final IkeSessionParams ikeParams;
-        public final IkeAlarmConfig keepaliveAlarmConfig;
+        public final int ikeSessionId;
+        public final int alarmCmd;
+        public final int sendKeepaliveCmd;
         public final Callback callback;
 
         /** Constructor for IkeConnectionController.Config */
         public Config(
                 IkeSessionParams ikeParams,
-                IkeAlarmConfig keepaliveAlarmConfig,
+                int ikeSessionId,
+                int alarmCmd,
+                int sendKeepaliveCmd,
                 Callback callback) {
             this.ikeParams = ikeParams;
-            this.keepaliveAlarmConfig = keepaliveAlarmConfig;
+            this.ikeSessionId = ikeSessionId;
+            this.alarmCmd = alarmCmd;
+            this.sendKeepaliveCmd = sendKeepaliveCmd;
             this.callback = callback;
         }
     }
@@ -287,6 +303,71 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             return IkeUdpEncapSocket.getIkeUdpEncapSocket(
                     sockConfig, ipSecManager, callback, handler.getLooper());
         }
+    }
+
+    /**
+     * Get the keepalive delay from params, transports and device config.
+     *
+     * If the AUTOMATIC_NATT_KEEPALIVES option is set, look up the transport in the network
+     * capabilities ; if Wi-Fi use the fixed delay, if cell use the device property int
+     * (or a fixed delay in the absence of the permission to read device properties).
+     * For other transports, or if the AUTOMATIC_NATT_KEEPALIVES option is not set, use the
+     * delay from the session params.
+     *
+     * @param ikeContext Context to read the device config, if necessary.
+     * @param ikeParams the session params
+     * @param nc the capabilities of the underlying network
+     * @return the keepalive delay to use, in seconds.
+     */
+    @VisibleForTesting
+    public static int getKeepaliveDelaySec(
+            IkeContext ikeContext, IkeSessionParams ikeParams, NetworkCapabilities nc) {
+        int keepaliveDelaySeconds = ikeParams.getNattKeepAliveDelaySeconds();
+
+        if (ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_NATT_KEEPALIVES)) {
+            if (nc.hasTransport(TRANSPORT_WIFI)) {
+                // Most of the time, IKE Session will use shorter keepalive timer on WiFi. Thus
+                // choose the Wifi timer as a more conservative value when the NetworkCapabilities
+                // have both TRANSPORT_WIFI and TRANSPORT_CELLULAR
+                final int autoDelaySeconds = AUTO_KEEPALIVE_DELAY_SEC_WIFI;
+                keepaliveDelaySeconds = Math.min(keepaliveDelaySeconds, autoDelaySeconds);
+            } else if (nc.hasTransport(TRANSPORT_CELLULAR)) {
+                final int autoDelaySeconds =
+                        ikeContext.getDeviceConfigPropertyInt(
+                                CONFIG_AUTO_NATT_KEEPALIVES_CELLULAR_TIMEOUT_OVERRIDE_SECONDS,
+                                IKE_NATT_KEEPALIVE_DELAY_SEC_MIN,
+                                IKE_NATT_KEEPALIVE_DELAY_SEC_MAX,
+                                AUTO_KEEPALIVE_DELAY_SEC_CELL);
+                keepaliveDelaySeconds = Math.min(keepaliveDelaySeconds, autoDelaySeconds);
+            }
+        }
+
+        return keepaliveDelaySeconds;
+    }
+
+    private static IkeAlarmConfig buildInitialKeepaliveAlarmConfig(
+            Handler handler,
+            IkeContext ikeContext,
+            Config config,
+            IkeSessionParams ikeParams,
+            NetworkCapabilities nc) {
+        final Message keepaliveMsg = handler.obtainMessage(
+                config.alarmCmd /* what */,
+                config.ikeSessionId /* arg1 */,
+                config.sendKeepaliveCmd /* arg2 */);
+        final PendingIntent keepaliveIntent = IkeAlarm.buildIkeAlarmIntent(ikeContext.getContext(),
+                ACTION_KEEPALIVE, getIntentIdentifier(config.ikeSessionId), keepaliveMsg);
+
+        return new IkeAlarmConfig(
+                ikeContext.getContext(),
+                ACTION_KEEPALIVE,
+                TimeUnit.SECONDS.toMillis(getKeepaliveDelaySec(ikeContext, ikeParams, nc)),
+                keepaliveIntent,
+                keepaliveMsg);
+    }
+
+    private static String getIntentIdentifier(int ikeSessionId) {
+        return TAG + "_" + ikeSessionId;
     }
 
     /** Starts NAT-T keepalive for current IkeUdpEncapSocket */
@@ -379,6 +460,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         // mixing callbacks and synchronous polling methods.
         LinkProperties linkProperties = mConnectivityManager.getLinkProperties(mNetwork);
         mNc = mConnectivityManager.getNetworkCapabilities(mNetwork);
+        mKeepaliveAlarmConfig = buildInitialKeepaliveAlarmConfig(
+                new Handler(mIkeContext.getLooper()), mIkeContext, mConfig, mIkeParams, mNc);
         try {
             if (linkProperties == null || mNc == null) {
                 // Throw NPE to preserve the existing behaviour for backward compatibility
@@ -550,7 +633,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         mEncapType = encapType;
 
         if (keepaliveDelaySeconds == IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO) {
-            keepaliveDelaySeconds = mIkeParams.getNattKeepAliveDelaySeconds();
+            keepaliveDelaySeconds = getKeepaliveDelaySec(mIkeContext, mIkeParams, mNc);
         }
         final long keepaliveDelayMs = TimeUnit.SECONDS.toMillis(keepaliveDelaySeconds);
         if (keepaliveDelayMs != mKeepaliveAlarmConfig.delayMs) {
