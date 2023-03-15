@@ -80,4 +80,10 @@ public abstract class ShimUtils {
      */
     public abstract void startKeepalive(SocketKeepalive keepalive, int keepaliveDelaySeconds,
             int keepaliveOptions, Network underpinnedNetwork);
+
+    /**
+     * Return if IkeConnectionController can skip a mobility update when the underlying network and
+     * addresses do not change
+     */
+    public abstract boolean shouldSkipIfSameNetwork(boolean skipIfSameNetwork);
 }

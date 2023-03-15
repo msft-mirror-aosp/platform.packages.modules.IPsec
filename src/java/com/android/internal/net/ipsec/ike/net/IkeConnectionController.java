@@ -309,7 +309,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      * Get the keepalive delay from params, transports and device config.
      *
      * If the AUTOMATIC_NATT_KEEPALIVES option is set, look up the transport in the network
-     * capabilities ; if Wi-Fi use the fixed delay, if cell use the device property int
+     * capabilities ; if Wi-Fi use the fixed delay, if cell use the device property int
      * (or a fixed delay in the absence of the permission to read device properties).
      * For other transports, or if the AUTOMATIC_NATT_KEEPALIVES option is not set, use the
      * delay from the session params.
@@ -643,7 +643,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         // Switch to monitor a new network. This call is never expected to trigger a callback
         mNetworkCallback.setNetwork(network, linkProperties, networkCapabilities);
-        handleUnderlyingNetworkUpdated(network, linkProperties, networkCapabilities);
+        handleUnderlyingNetworkUpdated(
+                network, linkProperties, networkCapabilities, false /* skipIfSameNetwork */);
     }
 
     /** Called when the underpinned network is set by the user */
@@ -1005,7 +1006,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private void handleUnderlyingNetworkUpdated(
             Network network,
             LinkProperties linkProperties,
-            NetworkCapabilities networkCapabilities) {
+            NetworkCapabilities networkCapabilities,
+            boolean skipIfSameNetwork) {
         if (!mMobilityEnabled) {
             getIkeLog().d(TAG, "onUnderlyingNetworkUpdated: Unable to handle network update");
             mCallback.onUnderlyingNetworkDied(mNetwork);
@@ -1054,14 +1056,16 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
                     mIkeLocalAddressGenerator.generateLocalAddress(
                             mNetwork, isIpv4, mRemoteAddress, serverPort);
 
-            if (mNetwork.equals(oldNetwork)
+            if (ShimUtils.getInstance().shouldSkipIfSameNetwork(skipIfSameNetwork)
+                    && mNetwork.equals(oldNetwork)
                     && mLocalAddress.equals(oldLocalAddress)
                     && mRemoteAddress.equals(oldRemoteAddress)) {
                 getIkeLog()
                         .d(
                                 TAG,
                                 "onUnderlyingNetworkUpdated: None of network, local or remote"
-                                        + " address has changed. No action needed here.");
+                                    + " address has changed, and the update is skippable. No action"
+                                    + " needed here.");
                 return;
             }
 
@@ -1090,7 +1094,11 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             NetworkCapabilities networkCapabilities) {
         executeOrSendFatalError(
                 () -> {
-                    handleUnderlyingNetworkUpdated(network, linkProperties, networkCapabilities);
+                    handleUnderlyingNetworkUpdated(
+                            network,
+                            linkProperties,
+                            networkCapabilities,
+                            true /* skipIfSameNetwork */);
                 });
     }
 
