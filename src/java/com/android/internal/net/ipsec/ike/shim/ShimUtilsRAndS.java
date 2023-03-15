@@ -70,4 +70,9 @@ public class ShimUtilsRAndS extends ShimUtils {
             int keepaliveOptions, Network underpinnedNetwork) {
         keepalive.start(keepaliveDelaySeconds);
     }
+
+    @Override
+    public boolean shouldSkipIfSameNetwork(boolean skipIfSameNetwork) {
+        return true;
+    }
 }
