@@ -22,7 +22,6 @@ import static android.net.ipsec.ike.exceptions.IkeProtocolException.ERROR_TYPE_T
 
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.BUNDLE_KEY_CHILD_REMOTE_SPI;
 import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.CMD_ALARM_FIRED;
-import static com.android.internal.net.ipsec.ike.IkeSessionStateMachine.buildIkeAlarmIntent;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_CREATE_CHILD_SA;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_IKE_AUTH;
 import static com.android.internal.net.ipsec.ike.message.IkeHeader.EXCHANGE_TYPE_INFORMATIONAL;
@@ -41,6 +40,7 @@ import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PAYLOAD_TYPE_TS_RESPONDER;
 import static com.android.internal.net.ipsec.ike.message.IkePayload.PROTOCOL_ID_ESP;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.IkeAlarmConfig;
+import static com.android.internal.net.ipsec.ike.utils.IkeAlarm.buildIkeAlarmIntent;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_DELETE_CHILD;
 import static com.android.internal.net.ipsec.ike.utils.IkeAlarmReceiver.ACTION_REKEY_CHILD;
 
