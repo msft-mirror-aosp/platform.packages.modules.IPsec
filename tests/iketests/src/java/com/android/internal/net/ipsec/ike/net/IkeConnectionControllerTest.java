@@ -751,6 +751,12 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         verifyKeepalive();
     }
 
+    private void onNetworkSetByUserWithDefaultParams(
+            IkeConnectionController ikeConnectionCtrl, Network network) throws Exception {
+        ikeConnectionCtrl.onNetworkSetByUser(
+                network, ESP_IP_VERSION_AUTO, ESP_ENCAP_TYPE_AUTO, NATT_KEEPALIVE_INTERVAL_AUTO);
+    }
+
     private void verifyNetworkAndAddressesAfterMobilityEvent(
             Network expectedNetwork,
             InetAddress expectedLocalAddress,
@@ -771,10 +777,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         setupRemoteAddressForNetwork(newNetwork, REMOTE_ADDRESS);
 
         IkeNetworkCallbackBase callback = enableMobilityAndReturnCb(true /* isDefaultNetwork */);
-        mIkeConnectionCtrl.onNetworkSetByUser(newNetwork,
-                ESP_IP_VERSION_AUTO,
-                ESP_ENCAP_TYPE_AUTO,
-                NATT_KEEPALIVE_INTERVAL_AUTO);
+        onNetworkSetByUserWithDefaultParams(mIkeConnectionCtrl, newNetwork);
 
         // hasIkeOption and getNattKeepAliveDelaySeconds were already called once by
         // IkeConnectionController#setUp() so check they were called a second time
@@ -902,10 +905,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         enableMobilityAndReturnCb(true /* isDefaultNetwork */);
 
         try {
-            mIkeConnectionCtrl.onNetworkSetByUser(mock(Network.class),
-                    ESP_IP_VERSION_AUTO,
-                    ESP_ENCAP_TYPE_AUTO,
-                    NATT_KEEPALIVE_INTERVAL_AUTO);
+            onNetworkSetByUserWithDefaultParams(mIkeConnectionCtrl, mock(Network.class));
             fail("Expected to fail due to null LinkProperties");
         } catch (IkeException expected) {
             assertTrue(expected instanceof IkeInternalException);
@@ -1058,5 +1058,37 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
                 100 /* callerConfiguredDelay */,
                 90 /* cellDeviceKeepaliveDelay */,
                 90 /* expectedDelay */);
+    }
+
+    @IgnoreUpTo(VERSION_CODES.TIRAMISU)
+    @Test
+    public void testForceUpdateOnNetworkSetByUser() throws Exception {
+        mIkeConnectionCtrl.enableMobility();
+        onNetworkSetByUserWithDefaultParams(mIkeConnectionCtrl, mMockDefaultNetwork);
+
+        verify(mMockConnectionCtrlCb).onUnderlyingNetworkUpdated();
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkDied(any());
+    }
+
+    @IgnoreAfter(VERSION_CODES.TIRAMISU)
+    @Test
+    public void testSkipUpdateOnNetworkSetByUser() throws Exception {
+        mIkeConnectionCtrl.enableMobility();
+        onNetworkSetByUserWithDefaultParams(mIkeConnectionCtrl, mMockDefaultNetwork);
+
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkUpdated();
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkDied(any());
+    }
+
+    @Test
+    public void testSkipUpdateOnNetworkCallbackChange() throws Exception {
+        mIkeConnectionCtrl.enableMobility();
+        mIkeConnectionCtrl.onUnderlyingNetworkUpdated(
+                mMockDefaultNetwork,
+                mMockConnectManager.getLinkProperties(mMockDefaultNetwork),
+                mMockConnectManager.getNetworkCapabilities(mMockDefaultNetwork));
+
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkUpdated();
+        verify(mMockConnectionCtrlCb, never()).onUnderlyingNetworkDied(any());
     }
 }
