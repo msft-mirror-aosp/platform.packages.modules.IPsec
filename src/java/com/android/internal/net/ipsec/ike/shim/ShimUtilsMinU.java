@@ -31,4 +31,9 @@ public class ShimUtilsMinU extends ShimUtilsT {
             int keepaliveOptions, Network underpinnedNetwork) {
         keepalive.start(keepaliveDelaySeconds, keepaliveOptions, underpinnedNetwork);
     }
+
+    @Override
+    public boolean shouldSkipIfSameNetwork(boolean skipIfSameNetwork) {
+        return skipIfSameNetwork;
+    }
 }
