@@ -83,6 +83,7 @@ java_sdk_library {
 
 filegroup {
     name: "ike-srcs",
+    defaults: ["framework-sources-module-defaults"],
     srcs: [
         ":ike-internal-srcs",
         ":framework-ike-shared-srcs",
