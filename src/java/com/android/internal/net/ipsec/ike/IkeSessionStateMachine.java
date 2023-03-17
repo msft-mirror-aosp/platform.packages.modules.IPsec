@@ -200,6 +200,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
@@ -311,9 +312,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
     static final int CMD_SEND_KEEPALIVE = CMD_GENERAL_BASE + 16;
     /**
      * Update the Session's underlying Network
-     * obj = Network : the underlying network
-     * arg1 = espProtocolParams : ESP protocol params (IP version and encap type)
-     * arg2 = keepaliveDelaySeconds : the delay, in seconds
+     * obj = NetworkParams : params containing network, IP version, encap type and keepalive delay.
      **/
     static final int CMD_SET_NETWORK = CMD_GENERAL_BASE + 17;
     /**
@@ -923,6 +922,7 @@ public class IkeSessionStateMachine extends AbstractSessionStateMachine
      * open connections on the underpinned network, if automatic on/off keepalives are turned on.
      */
     public void setUnderpinnedNetwork(@NonNull Network underpinnedNetwork) {
+        Objects.requireNonNull(underpinnedNetwork);
         sendMessage(CMD_SET_UNDERPINNED_NETWORK, underpinnedNetwork);
     }
 
