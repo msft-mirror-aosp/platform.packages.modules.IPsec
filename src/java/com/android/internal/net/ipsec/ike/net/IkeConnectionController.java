@@ -309,7 +309,7 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      * Get the keepalive delay from params, transports and device config.
      *
      * If the AUTOMATIC_NATT_KEEPALIVES option is set, look up the transport in the network
-     * capabilities ; if Wi-Fi use the fixed delay, if cell use the device property int
+     * capabilities ; if Wi-Fi use the fixed delay, if cell use the device property int
      * (or a fixed delay in the absence of the permission to read device properties).
      * For other transports, or if the AUTOMATIC_NATT_KEEPALIVES option is not set, use the
      * delay from the session params.
@@ -643,7 +643,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
         // Switch to monitor a new network. This call is never expected to trigger a callback
         mNetworkCallback.setNetwork(network, linkProperties, networkCapabilities);
-        handleUnderlyingNetworkUpdated(network, linkProperties, networkCapabilities);
+        handleUnderlyingNetworkUpdated(
+                network, linkProperties, networkCapabilities, false /* skipIfSameNetwork */);
     }
 
     /** Called when the underpinned network is set by the user */
@@ -929,7 +930,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
      *
      * Otherwise, an IPv4 address will be used.
      */
-    private void selectAndSetRemoteAddress(LinkProperties linkProperties) throws IOException {
+    @VisibleForTesting
+    public void selectAndSetRemoteAddress(LinkProperties linkProperties) throws IOException {
         // TODO(b/175348096): Randomly choose from available addresses when the IP family is
         // decided.
         final boolean canConnectWithIpv4 =
@@ -937,18 +939,20 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         final boolean canConnectWithIpv6 =
                 !mRemoteAddressesV6.isEmpty() && linkProperties.hasGlobalIpv6Address();
 
-        if (isIpV4Preferred(mIkeParams, mNc)) {
+        if (isIpVersionRequired(ESP_IP_VERSION_IPV4)) {
             if (!canConnectWithIpv4) {
                 throw ShimUtils.getInstance().getDnsFailedException(
-                        "IPv4 requested but no IPv4 address available");
+                        "IPv4 required but no IPv4 address available");
             }
             mRemoteAddress = mRemoteAddressesV4.get(0);
-        } else if (mIpVersion == ESP_IP_VERSION_IPV6) {
+        } else if (isIpVersionRequired(ESP_IP_VERSION_IPV6)) {
             if (!canConnectWithIpv6) {
                 throw ShimUtils.getInstance().getDnsFailedException(
-                        "IPv6 requested but no global IPv6 address available");
+                        "IPv6 required but no global IPv6 address available");
             }
             mRemoteAddress = mRemoteAddressesV6.get(0);
+        } else if (isIpV4Preferred(mIkeParams, mNc) && canConnectWithIpv4) {
+            mRemoteAddress = mRemoteAddressesV4.get(0);
         } else if (canConnectWithIpv6) {
             mRemoteAddress = mRemoteAddressesV6.get(0);
         } else if (canConnectWithIpv4) {
@@ -959,15 +963,15 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         }
     }
 
-    /** Returns whether v4 is preferred for a set of preference, params and capabilities */
+    private boolean isIpVersionRequired(final int ipVersion) {
+        return ipVersion == mIpVersion;
+    }
+
     @VisibleForTesting
     public static boolean isIpV4Preferred(IkeSessionParams ikeParams, NetworkCapabilities nc) {
-        // FIXME: update to differentiate between "require" IPv4 (caller passes in
-        // ESP_IP_VERSION_IPv4) and "prefer" IPv4 (IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION).
-        return ikeParams.getIpVersion() == ESP_IP_VERSION_IPV4
-                || (ikeParams.getIpVersion() == ESP_IP_VERSION_AUTO
-                        && ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)
-                        && nc.hasTransport(TRANSPORT_WIFI));
+        return ikeParams.getIpVersion() == ESP_IP_VERSION_AUTO
+                && ikeParams.hasIkeOption(IKE_OPTION_AUTOMATIC_ADDRESS_FAMILY_SELECTION)
+                && nc.hasTransport(TRANSPORT_WIFI);
     }
 
     /**
@@ -1005,7 +1009,8 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     private void handleUnderlyingNetworkUpdated(
             Network network,
             LinkProperties linkProperties,
-            NetworkCapabilities networkCapabilities) {
+            NetworkCapabilities networkCapabilities,
+            boolean skipIfSameNetwork) {
         if (!mMobilityEnabled) {
             getIkeLog().d(TAG, "onUnderlyingNetworkUpdated: Unable to handle network update");
             mCallback.onUnderlyingNetworkDied(mNetwork);
@@ -1054,14 +1059,16 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
                     mIkeLocalAddressGenerator.generateLocalAddress(
                             mNetwork, isIpv4, mRemoteAddress, serverPort);
 
-            if (mNetwork.equals(oldNetwork)
+            if (ShimUtils.getInstance().shouldSkipIfSameNetwork(skipIfSameNetwork)
+                    && mNetwork.equals(oldNetwork)
                     && mLocalAddress.equals(oldLocalAddress)
                     && mRemoteAddress.equals(oldRemoteAddress)) {
                 getIkeLog()
                         .d(
                                 TAG,
                                 "onUnderlyingNetworkUpdated: None of network, local or remote"
-                                        + " address has changed. No action needed here.");
+                                    + " address has changed, and the update is skippable. No action"
+                                    + " needed here.");
                 return;
             }
 
@@ -1090,7 +1097,11 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
             NetworkCapabilities networkCapabilities) {
         executeOrSendFatalError(
                 () -> {
-                    handleUnderlyingNetworkUpdated(network, linkProperties, networkCapabilities);
+                    handleUnderlyingNetworkUpdated(
+                            network,
+                            linkProperties,
+                            networkCapabilities,
+                            true /* skipIfSameNetwork */);
                 });
     }
 
