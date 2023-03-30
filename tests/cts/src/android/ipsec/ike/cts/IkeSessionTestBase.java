@@ -535,11 +535,14 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         }
     }
 
-    void verifyIkeSessionSetupBlocking() throws Exception {
-        verifyIkeSessionSetupBlocking(EXTENSION_TYPE_FRAGMENTATION);
+    // TODO: b/275938211 Rename the method to reflect that it will return a value besides doing
+    // validations
+    IkeSessionConnectionInfo verifyIkeSessionSetupBlocking() throws Exception {
+        return verifyIkeSessionSetupBlocking(EXTENSION_TYPE_FRAGMENTATION);
     }
 
-    void verifyIkeSessionSetupBlocking(int... expectedIkeExtensions) throws Exception {
+    IkeSessionConnectionInfo verifyIkeSessionSetupBlocking(int... expectedIkeExtensions)
+            throws Exception {
         IkeSessionConfiguration ikeConfig = mIkeSessionCallback.awaitIkeConfig();
         assertNotNull(ikeConfig);
         assertEquals(EXPECTED_REMOTE_APP_VERSION_EMPTY, ikeConfig.getRemoteApplicationVersion());
@@ -554,15 +557,17 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         assertEquals(mLocalAddress, ikeConnectInfo.getLocalAddress());
         assertEquals(mRemoteAddress, ikeConnectInfo.getRemoteAddress());
         assertEquals(mTunNetworkContext.tunNetwork, ikeConnectInfo.getNetwork());
+
+        return ikeConnectInfo;
     }
 
-    void verifyChildSessionSetupBlocking(
+    ChildSessionConfiguration verifyChildSessionSetupBlocking(
             TestChildSessionCallback childCallback,
             List<IkeTrafficSelector> expectedInboundTs,
             List<IkeTrafficSelector> expectedOutboundTs,
             List<LinkAddress> expectedInternalAddresses)
             throws Exception {
-        verifyChildSessionSetupBlocking(
+        return verifyChildSessionSetupBlocking(
                 childCallback,
                 expectedInboundTs,
                 expectedOutboundTs,
@@ -570,7 +575,7 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
                 new ArrayList<InetAddress>() /* expectedDnsServers */);
     }
 
-    void verifyChildSessionSetupBlocking(
+    ChildSessionConfiguration verifyChildSessionSetupBlocking(
             TestChildSessionCallback childCallback,
             List<IkeTrafficSelector> expectedInboundTs,
             List<IkeTrafficSelector> expectedOutboundTs,
@@ -585,6 +590,7 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         assertEquals(expectedDnsServers, childConfig.getInternalDnsServers());
         assertTrue(childConfig.getInternalSubnets().isEmpty());
         assertTrue(childConfig.getInternalDhcpServers().isEmpty());
+        return childConfig;
     }
 
     void verifyCloseIkeAndChildBlocking(
