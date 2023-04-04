@@ -44,6 +44,7 @@ import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.eq;
@@ -219,6 +220,10 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         }
     }
 
+    private void verifySocketBoundToNetwork(IkeSocket socket, Network network) throws Exception {
+        verify(socket, atLeastOnce()).bindToNetwork(network);
+    }
+
     private void verifySetup(
             Network expectedNetwork,
             InetAddress expectedLocalAddress,
@@ -231,6 +236,15 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         assertTrue(socketType.isInstance(mIkeConnectionCtrl.getIkeSocket()));
         assertEquals(NAT_TRAVERSAL_SUPPORT_NOT_CHECKED, mIkeConnectionCtrl.getNatStatus());
         verifyKeepalive();
+
+        verifySocketBoundToNetwork(mIkeConnectionCtrl.getIkeSocket(), expectedNetwork);
+    }
+
+    private void resetMockIkeSockets() {
+        resetMockIkeSocket(mMockIkeUdp4Socket);
+        resetMockIkeSocket(mMockIkeUdp6Socket);
+        resetMockIkeSocket(mMockIkeUdpEncapSocket);
+        resetMockIkeSocket(mMockIkeUdp6WithEncapPortSocket);
     }
 
     private void verifyTearDown() {
@@ -244,6 +258,7 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
         // Clear the network callback registration and IkeSessionParams query in #setUp()
         resetMockConnectManager();
         resetMockIkeParams();
+        resetMockIkeSockets();
 
         mIkeConnectionCtrl = buildIkeConnectionCtrlWithNetwork(callerConfiguredNw);
         mIkeConnectionCtrl.setUp();
@@ -877,13 +892,15 @@ public class IkeConnectionControllerTest extends IkeSessionTestBase {
             Network expectedNetwork,
             InetAddress expectedLocalAddress,
             InetAddress expectedRemoteAddress,
-            IkeNetworkCallbackBase callback) {
+            IkeNetworkCallbackBase callback)
+            throws Exception {
         assertEquals(expectedNetwork, mIkeConnectionCtrl.getNetwork());
         assertEquals(expectedLocalAddress, mIkeConnectionCtrl.getLocalAddress());
         assertEquals(expectedRemoteAddress, mIkeConnectionCtrl.getRemoteAddress());
 
         assertEquals(expectedNetwork, callback.getNetwork());
         assertEquals(expectedLocalAddress, callback.getAddress());
+        verifySocketBoundToNetwork(mIkeConnectionCtrl.getIkeSocket(), expectedNetwork);
     }
 
     @Test
