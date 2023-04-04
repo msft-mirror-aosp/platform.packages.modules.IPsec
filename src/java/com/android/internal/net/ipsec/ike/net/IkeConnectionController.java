@@ -390,26 +390,34 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
     }
 
     private IkeSocket getIkeSocket(boolean isIpv4, boolean useEncapPort) throws IkeException {
-        IkeSocketConfig sockConfig = new IkeSocketConfig(mNetwork, mDscp);
+        IkeSocketConfig sockConfig = new IkeSocketConfig(this, mDscp);
+        IkeSocket result = null;
 
         try {
             if (useEncapPort) {
                 if (isIpv4) {
-                    return mDependencies.newIkeUdpEncapSocket(
+                    result = mDependencies.newIkeUdpEncapSocket(
                             sockConfig, mIpSecManager, this, new Handler(mIkeContext.getLooper()));
                 } else {
-                    return mDependencies.newIkeUdp6WithEncapPortSocket(
+                    result = mDependencies.newIkeUdp6WithEncapPortSocket(
                             sockConfig, this, new Handler(mIkeContext.getLooper()));
                 }
             } else {
                 if (isIpv4) {
-                    return mDependencies.newIkeUdp4Socket(
+                    result = mDependencies.newIkeUdp4Socket(
                             sockConfig, this, new Handler(mIkeContext.getLooper()));
                 } else {
-                    return mDependencies.newIkeUdp6Socket(
+                    result = mDependencies.newIkeUdp6Socket(
                             sockConfig, this, new Handler(mIkeContext.getLooper()));
                 }
             }
+
+            if (result == null) {
+                throw new IOException("No socket created");
+            }
+
+            result.bindToNetwork(mNetwork);
+            return result;
         } catch (ErrnoException | IOException | ResourceUnavailableException e) {
             throw wrapAsIkeException(e);
         }
@@ -422,21 +430,19 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
 
     private void getAndSwitchToIkeSocket(boolean isIpv4, boolean useEncapPort) throws IkeException {
         IkeSocket newSocket = getIkeSocket(isIpv4, useEncapPort);
-        if (newSocket == mIkeSocket) {
-            // Attempting to switch to current socket - ignore.
-            return;
-        }
 
         if (mIkeNattKeepalive != null) {
             mIkeNattKeepalive.stop();
             mIkeNattKeepalive = null;
         }
 
-        for (IkeSaRecord saRecord : mIkeSaRecords) {
-            migrateSpiToIkeSocket(saRecord.getLocalSpi(), mIkeSocket, newSocket);
+        if (newSocket != mIkeSocket) {
+            for (IkeSaRecord saRecord : mIkeSaRecords) {
+                migrateSpiToIkeSocket(saRecord.getLocalSpi(), mIkeSocket, newSocket);
+            }
+            mIkeSocket.releaseReference(this);
+            mIkeSocket = newSocket;
         }
-        mIkeSocket.releaseReference(this);
-        mIkeSocket = newSocket;
 
         try {
             if (mIkeSocket instanceof IkeUdpEncapSocket) {
@@ -761,19 +767,17 @@ public class IkeConnectionController implements IkeNetworkUpdater, IkeSocket.Cal
         getIkeLog().d(TAG, "Switching to send to remote port 4500 if it's not already");
 
         IkeSocket newSocket = getIkeSocket(true /* isIpv4 */, true /* useEncapPort */);
-        if (newSocket == mIkeSocket) {
-            // Attempting to switch to current socket - ignore.
-            return;
-        }
 
         if (mIkeNattKeepalive != null) {
             mIkeNattKeepalive.stop();
             mIkeNattKeepalive = null;
         }
 
-        migrateSpiToIkeSocket(localSpi, mIkeSocket, newSocket);
-        mIkeSocket.releaseReference(this);
-        mIkeSocket = newSocket;
+        if (newSocket != mIkeSocket) {
+            migrateSpiToIkeSocket(localSpi, mIkeSocket, newSocket);
+            mIkeSocket.releaseReference(this);
+            mIkeSocket = newSocket;
+        }
 
         try {
             if (mIkeSocket instanceof IkeUdpEncapSocket) {
