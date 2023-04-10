@@ -39,8 +39,10 @@ import static android.system.OsConstants.AF_INET6;
 import static com.android.internal.net.TestUtils.createMockRandomFactory;
 import static com.android.internal.net.eap.test.EapResult.EapResponse.RESPONSE_FLAG_EAP_AKA_SERVER_AUTHENTICATED;
 import static com.android.internal.net.ipsec.test.ike.AbstractSessionStateMachine.RETRY_INTERVAL_MS;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_ALARM_FIRED;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_FORCE_TRANSITION;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_RECEIVE_IKE_PACKET;
+import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.CMD_SEND_KEEPALIVE;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IkeAuthData;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.IkeInitData;
 import static com.android.internal.net.ipsec.test.ike.IkeSessionStateMachine.InitialSetupData;
@@ -373,6 +375,8 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
     private static final byte[] COOKIE_DATA = new byte[COOKIE_DATA_LEN];
     private static final byte[] COOKIE2_DATA = new byte[COOKIE2_DATA_LEN];
+
+    private static final int FAKE_SESSION_ID = 0;
 
     private static final int NATT_KEEPALIVE_DELAY = 20;
 
@@ -965,13 +969,19 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .when(spyIkeConnectionCtrlDeps)
                 .newIkeUdp6WithEncapPortSocket(any(), any(), any());
 
+        // Can't use a mock object because delayMs must be nonzero. Otherwise, setNetwork will
+        // spuriously restart keepalives, thinking that the current delay is zero.
+        final IkeAlarmConfig alarmConfig = spy(new IkeAlarmConfig(mSpyContext,
+                "mock", NATT_KEEPALIVE_DELAY * 1_000, null, null));
         mSpyIkeConnectionCtrl =
                 spy(
                         new IkeConnectionController(
                                 ikeContext,
                                 new IkeConnectionController.Config(
                                         ikeParams,
-                                        mock(IkeAlarmConfig.class),
+                                        FAKE_SESSION_ID,
+                                        CMD_ALARM_FIRED,
+                                        CMD_SEND_KEEPALIVE,
                                         mockIkeConnectionCtrlCb),
                                 spyIkeConnectionCtrlDeps));
         mSpyDeps =
@@ -1029,6 +1039,7 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 .addSaProposal(buildSaProposal())
                 .setLocalIdentification(LOCAL_ID_IPV4)
                 .setRemoteIdentification(REMOTE_ID_FQDN)
+                .setNattKeepAliveDelaySeconds(NATT_KEEPALIVE_DELAY)
                 .addPcscfServerRequest(AF_INET)
                 .addPcscfServerRequest(AF_INET6)
                 .setRetransmissionTimeoutsMillis(
@@ -6626,16 +6637,23 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                 remoteAddress, saRecord.getResponderIkeSecurityParameterIndex().getSourceAddress());
     }
 
+    // TODO : this should be NullPointerException
     @Test(expected = IllegalArgumentException.class)
     public void testSetNetworkNull() throws Exception {
-        mIkeSessionStateMachine.setNetwork(null);
+        mIkeSessionStateMachine.setNetwork(null,
+                IkeSessionParams.ESP_IP_VERSION_AUTO,
+                IkeSessionParams.ESP_ENCAP_TYPE_AUTO,
+                IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO);
     }
 
     @Test(expected = IllegalStateException.class)
     public void testSetNetworkMobikeNotActive() throws Exception {
         Network newNetwork = mock(Network.class);
 
-        mIkeSessionStateMachine.setNetwork(newNetwork);
+        mIkeSessionStateMachine.setNetwork(newNetwork,
+                IkeSessionParams.ESP_IP_VERSION_AUTO,
+                IkeSessionParams.ESP_ENCAP_TYPE_AUTO,
+                IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -6645,7 +6663,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
 
         verifyRfcMobikeEnabled(true /* doesPeerSupportMobike */);
 
-        mIkeSessionStateMachine.setNetwork(newNetwork);
+        mIkeSessionStateMachine.setNetwork(newNetwork,
+                IkeSessionParams.ESP_IP_VERSION_AUTO,
+                IkeSessionParams.ESP_ENCAP_TYPE_AUTO,
+                IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO);
     }
 
     private void verifySetNetwork(
@@ -6662,7 +6683,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
             throws Exception {
         Network newNetwork = mockNewNetworkAndAddress(isIpv4);
 
-        mIkeSessionStateMachine.setNetwork(newNetwork);
+        mIkeSessionStateMachine.setNetwork(newNetwork,
+                IkeSessionParams.ESP_IP_VERSION_AUTO,
+                IkeSessionParams.ESP_ENCAP_TYPE_AUTO,
+                IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO);
         mLooper.dispatchAll();
 
         InetAddress expectedUpdatedLocalAddress =
@@ -7215,7 +7239,10 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
                         REMOTE_ADDRESS_V6,
                         dnsLookupsForSuccess);
 
-        mIkeSessionStateMachine.setNetwork(newNetwork);
+        mIkeSessionStateMachine.setNetwork(newNetwork,
+                IkeSessionParams.ESP_IP_VERSION_AUTO,
+                IkeSessionParams.ESP_ENCAP_TYPE_AUTO,
+                IkeSessionParams.NATT_KEEPALIVE_INTERVAL_AUTO);
         mLooper.dispatchAll();
 
         verify(newNetwork, times(expectedDnsLookups)).getAllByName(REMOTE_HOSTNAME);
@@ -7265,7 +7292,6 @@ public final class IkeSessionStateMachineTest extends IkeSessionTestBase {
         IkeSessionParams sessionParams =
                 buildIkeSessionParamsCommon()
                         .setAuthPsk(mPsk)
-                        .setNattKeepAliveDelaySeconds(NATT_KEEPALIVE_DELAY)
                         .build();
 
         // Restart IkeSessionStateMachine with NATT Keepalive delay configured
