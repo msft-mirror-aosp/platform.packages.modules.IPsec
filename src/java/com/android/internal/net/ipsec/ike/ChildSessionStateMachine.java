@@ -94,7 +94,6 @@ import com.android.internal.net.ipsec.ike.message.IkeSaPayload;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.ChildProposal;
 import com.android.internal.net.ipsec.ike.message.IkeSaPayload.DhGroupTransform;
 import com.android.internal.net.ipsec.ike.message.IkeTsPayload;
-import com.android.internal.net.ipsec.ike.shim.ShimUtils;
 import com.android.internal.net.ipsec.ike.utils.IpSecSpiGenerator;
 import com.android.internal.net.ipsec.ike.utils.RandomnessFactory;
 import com.android.internal.util.State;
@@ -453,51 +452,6 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
     }
 
     /**
-     * Update IPsec SAs via MOBIKE.
-     *
-     * <p>This method is called synchronously from IkeStateMachine, and may complete synchronously
-     * if kernel MOBIKE can be used. Otherwise, it will fall back to using rekeys to synchronize
-     * IPsec state.
-     *
-     * @param localAddress The local (outer) address from which traffic will originate.
-     * @param remoteAddress The remote (outer) address to which traffic will be sent.
-     * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
-     */
-    public void performMigration(
-            InetAddress localAddress,
-            InetAddress remoteAddress,
-            UdpEncapsulationSocket udpEncapSocket) {
-
-        final UdpEncapsulationSocket oldEncapSocket = mUdpEncapSocket;
-
-        this.mLocalAddress = localAddress;
-        this.mRemoteAddress = remoteAddress;
-        this.mUdpEncapSocket = udpEncapSocket;
-
-        if (oldEncapSocket == mUdpEncapSocket
-                && ShimUtils.getInstance()
-                        .supportsSameSocketKernelMigration(mIkeContext.getContext())) {
-            mIpSecManager.startTunnelModeTransformMigration(
-                    mCurrentChildSaRecord.getInboundIpSecTransform(),
-                    mRemoteAddress,
-                    mLocalAddress);
-            mIpSecManager.startTunnelModeTransformMigration(
-                    mCurrentChildSaRecord.getOutboundIpSecTransform(),
-                    mLocalAddress,
-                    mRemoteAddress);
-            executeUserCallback(() -> {
-                mUserCallback.onIpSecTransformsMigrated(
-                        mCurrentChildSaRecord.getInboundIpSecTransform(),
-                        mCurrentChildSaRecord.getOutboundIpSecTransform());
-            });
-
-            mChildSmCallback.onProcedureFinished(ChildSessionStateMachine.this);
-        } else {
-            performRekeyMigration(localAddress, remoteAddress, udpEncapSocket);
-        }
-    }
-
-    /**
      * Initiate Rekey Child procedure for MOBIKE (instead of migrating IPsec SAs).
      *
      * <p>This method should only be used as a fallback mode for devices that do not have
@@ -515,11 +469,10 @@ public class ChildSessionStateMachine extends AbstractSessionStateMachine {
      * @param remoteAddress The remote (outer) address to which traffic will be sent.
      * @param udpEncapSocket The socket to use for UDP encapsulation, or NULL if no encap needed.
      */
-    public void performRekeyMigration(
+    public void rekeyChildSessionForMobike(
             InetAddress localAddress,
             InetAddress remoteAddress,
             UdpEncapsulationSocket udpEncapSocket) {
-
         this.mLocalAddress = localAddress;
         this.mRemoteAddress = remoteAddress;
         this.mUdpEncapSocket = udpEncapSocket;
