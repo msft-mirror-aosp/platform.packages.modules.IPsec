@@ -642,11 +642,5 @@ abstract class IkeSessionTestBase extends IkeTestNetworkBase {
         return sContext.getPackageManager().hasSystemFeature(PackageManager.FEATURE_IPSEC_TUNNELS);
     }
 
-    /** Package private method to check if device has IPsec tunnel migration feature */
-    static boolean hasTunnelMigrationFeature() {
-        return sContext.getPackageManager()
-                .hasSystemFeature(PackageManager.FEATURE_IPSEC_TUNNEL_MIGRATION);
-    }
-
     // TODO(b/148689509): Verify hostname based creation
 }
