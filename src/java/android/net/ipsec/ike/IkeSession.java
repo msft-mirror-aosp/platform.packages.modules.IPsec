@@ -15,6 +15,10 @@
  */
 package android.net.ipsec.ike;
 
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_NONE;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_ENCAP_TYPE_UDP;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV4;
+import static android.net.ipsec.ike.IkeSessionParams.ESP_IP_VERSION_IPV6;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MAX;
 import static android.net.ipsec.ike.IkeSessionParams.IKE_NATT_KEEPALIVE_DELAY_SEC_MIN;
 
@@ -326,6 +330,7 @@ public final class IkeSession implements AutoCloseable {
      *                              to choose the value automatically based on the network.
      * @throws IllegalStateException if {@link IkeSessionParams#IKE_OPTION_MOBIKE} is not configured
      *     in IkeSessionParams, or if the Network was not specified in IkeSessionParams.
+     * @throws UnsupportedOperationException if the provided option is not supported.
      * @see IkeSessionParams#getNattKeepAliveDelaySeconds()
      * @hide
      */
@@ -339,6 +344,12 @@ public final class IkeSession implements AutoCloseable {
                     from = IKE_NATT_KEEPALIVE_DELAY_SEC_MIN,
                     to = IKE_NATT_KEEPALIVE_DELAY_SEC_MAX)
             int keepaliveDelaySeconds) {
+        if ((ipVersion ==  ESP_IP_VERSION_IPV4 && encapType == ESP_ENCAP_TYPE_NONE)
+                || (ipVersion == ESP_IP_VERSION_IPV6 && encapType == ESP_ENCAP_TYPE_UDP)) {
+            throw new UnsupportedOperationException("Sending packets with IPv4 ESP or IPv6 UDP"
+                    + " are not supported");
+        }
+
         mIkeSessionStateMachine.setNetwork(Objects.requireNonNull(network),
                 ipVersion, encapType, keepaliveDelaySeconds);
     }
