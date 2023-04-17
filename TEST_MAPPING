@@ -15,6 +15,9 @@
       "name": "CtsIkeTestCases"
     },
     {
+      "name": "CtsVcnTestCases"
+    },
+    {
       "name": "CtsNetTestCases",
       "options": [
         {
