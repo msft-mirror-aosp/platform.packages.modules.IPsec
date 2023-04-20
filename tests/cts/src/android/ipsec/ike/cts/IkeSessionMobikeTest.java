@@ -146,7 +146,7 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
     }
 
     @Test
-    public void testMigrateNetworksWithoutXfrmMigrate() throws Exception {
+    public void testMigrateNetworks() throws Exception {
         if (!hasTunnelsFeature()) return;
 
         final IkeSession ikeSession =
@@ -167,28 +167,42 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
         // IKE_AUTH message.
         int expectedMsgId = 2;
 
+        // TODO (b/277662795): Generate canned values and add testing for encap-type-change
+        // migrations
         setNetworkAndVerifyConnectionInfoChange(
-                ikeSession, mSecondaryTunNetworkContext, expectedMsgId++, IKE_UPDATE_SA_RESP,
-                ESP_IP_VERSION_AUTO, mSecondaryLocalAddr,
-                mRemoteAddress);
-        final IpSecTransformCallRecord[] migrateRecords =
-                injectCreateChildRespAndVerifyTransformsMigrated(
-                        mSecondaryTunNetworkContext, expectedMsgId++, IKE_CREATE_CHILD_RESP);
-        injectDeleteChildRespAndVerifyTransformsDeleted(
+                ikeSession,
                 mSecondaryTunNetworkContext,
                 expectedMsgId++,
-                IKE_DELETE_CHILD_RESP,
-                firstTransformRecordA,
-                firstTransformRecordB);
+                IKE_UPDATE_SA_RESP,
+                ESP_IP_VERSION_AUTO,
+                mSecondaryLocalAddr,
+                mRemoteAddress);
 
-        // Close IKE Session
-        ikeSession.close();
-        mSecondaryTunNetworkContext.tunUtils.awaitReqAndInjectResp(
-                IKE_DETERMINISTIC_INITIATOR_SPI,
-                expectedMsgId++,
-                true /* expectedUseEncap */,
-                DELETE_IKE_RESP);
-        verifyCloseIkeAndChildBlocking(migrateRecords[0], migrateRecords[1]);
+        if (hasTunnelMigrationFeature()) {
+            verifyTransformsMigratedAndGetTransforms();
+
+            // TODO (b/277662795): Verify closing IKE session. Will require regenerating
+            // DELETE_IKE_RESP for the kernel-MOBIKE case, where the message ID is 3 instead of 5
+        } else {
+            final IpSecTransformCallRecord[] migrateRecords =
+                    injectCreateChildRespAndVerifyTransformsMigrated(
+                            mSecondaryTunNetworkContext, expectedMsgId++, IKE_CREATE_CHILD_RESP);
+            injectDeleteChildRespAndVerifyTransformsDeleted(
+                    mSecondaryTunNetworkContext,
+                    expectedMsgId++,
+                    IKE_DELETE_CHILD_RESP,
+                    firstTransformRecordA,
+                    firstTransformRecordB);
+
+            // Close IKE Session
+            ikeSession.close();
+            mSecondaryTunNetworkContext.tunUtils.awaitReqAndInjectResp(
+                    IKE_DETERMINISTIC_INITIATOR_SPI,
+                    expectedMsgId++,
+                    true /* expectedUseEncap */,
+                    DELETE_IKE_RESP);
+            verifyCloseIkeAndChildBlocking(migrateRecords[0], migrateRecords[1]);
+        }
     }
 
     private IkeSession setupAndVerifyIkeSessionWithMobility(
@@ -274,6 +288,10 @@ public class IkeSessionMobikeTest extends IkeSessionPskTestBase {
                 true /* expectedUseEncap */,
                 ikeCreateChildResp);
 
+        return verifyTransformsMigratedAndGetTransforms();
+    }
+
+    private IpSecTransformCallRecord[] verifyTransformsMigratedAndGetTransforms() throws Exception {
         final IpSecTransformCallRecord[] migrateRecords =
                 mFirstChildSessionCallback.awaitNextMigratedIpSecTransform();
         assertNotNull(migrateRecords);
