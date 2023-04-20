@@ -170,13 +170,18 @@ public abstract class IkeSessionTestBase {
                 .getAllByName(REMOTE_ADDRESS.getHostAddress());
     }
 
-    protected <T extends IkeSocket> T newMockIkeSocket(Class<T> socketClass) {
-        T mockSocket = mock(socketClass);
-        if (socketClass == IkeUdp4Socket.class || socketClass == IkeUdp6Socket.class) {
+    protected void resetMockIkeSocket(IkeSocket mockSocket) {
+        reset(mockSocket);
+        if (mockSocket instanceof IkeUdp4Socket || mockSocket instanceof IkeUdp6Socket) {
             when(mockSocket.getIkeServerPort()).thenReturn(SERVER_PORT_NON_UDP_ENCAPSULATED);
         } else {
             when(mockSocket.getIkeServerPort()).thenReturn(SERVER_PORT_UDP_ENCAPSULATED);
         }
+    }
+
+    protected <T extends IkeSocket> T newMockIkeSocket(Class<T> socketClass) {
+        T mockSocket = mock(socketClass);
+        resetMockIkeSocket(mockSocket);
 
         return mockSocket;
     }
